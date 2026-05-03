@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron';
 import path from 'path';
 import { setupSecurity } from './security';
 import { setupDatabase } from './database';
@@ -66,6 +66,17 @@ const createWindow = (): void => {
   });
 };
 
+// Função para alternar DevTools
+const toggleDevTools = () => {
+  if (mainWindow) {
+    if (mainWindow.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools();
+    } else {
+      mainWindow.webContents.openDevTools();
+    }
+  }
+};
+
 // Este método será chamado quando o Electron terminar de inicializar
 app.whenReady().then(async () => {
   try {
@@ -80,6 +91,25 @@ app.whenReady().then(async () => {
     // Criar janela
     createWindow();
 
+    // Registrar atalhos de teclado para DevTools
+    // Ctrl+Shift+I - Alternar DevTools (padrão Chrome/Electron)
+    // F12 - Alternar DevTools (alternativo)
+    // Ctrl+Shift+D - Alternar DevTools (alternativo)
+    const shortcuts = [
+      'CommandOrControl+Shift+I',
+      'F12',
+      'CommandOrControl+Shift+D'
+    ];
+
+    shortcuts.forEach(shortcut => {
+      const ret = globalShortcut.register(shortcut, toggleDevTools);
+      if (!ret) {
+        console.warn(`❌ Não foi possível registrar atalho: ${shortcut}`);
+      } else {
+        console.log(`✅ Atalho registrado: ${shortcut}`);
+      }
+    });
+
     console.log('✅ Aplicação Electron inicializada com sucesso');
   } catch (error) {
     console.error('❌ Erro ao inicializar aplicação:', error);
@@ -89,6 +119,10 @@ app.whenReady().then(async () => {
 
 // Sair quando todas as janelas forem fechadas
 app.on('window-all-closed', () => {
+  // Desregistrar todos os atalhos de teclado
+  globalShortcut.unregisterAll();
+  console.log('🔧 Atalhos de teclado desregistrados');
+
   if (process.platform !== 'darwin') {
     app.quit();
   }
