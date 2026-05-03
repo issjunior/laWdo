@@ -1,0 +1,40 @@
+# Tratar arquivos grandes como binários
+*.db -text
+*.sqlite -text
+*.sqlite3 -text
+*.db-shm -text
+*.db-wal -text
+# Arquivos do Electron/Node
+package-lock.json -text
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.dmg binary
+*.AppImage binary
+*.deb binary
+*.rpm binary
+# Python
+*.pyc binary
+*.pyo binary
+*.pyd binary
+__pycache__/ -text
+# Assets grandes
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.ico -text
+*.icns -text
+# Documentos
+*.pdf -text
+*.docx -text
+*.odt -text
+# Arquivos do Windows
+Thumbs.db -text
+desktop.ini -text
+# Não versionar arquivos temporários
+*.tmp -text
+*.log -text
+# Não comprimir arquivos já comprimidos
+*.zip binary
+*.gz binary
+*.tar binary
+*.tgz binary
+*.dll filter=lfs diff=lfs merge=lfs -text

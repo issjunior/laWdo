@@ -1,0 +1,93 @@
+# --- PROJETO ANTERIOR (REFERÊNCIA) ---
+laudo-streamlit/
+
+# --- DEPENDÊNCIAS ---
+node_modules/
+jspm_packages/
+.pnp/
+.pnp.js
+
+# --- BUILD E OUTPUTS ---
+out/
+dist/
+build/
+release/
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.zip
+*.tar.gz
+
+# --- PYTHON & AMBIENTE VIRTUAL ---
+venv/
+.venv/
+env/
+.env/
+bin/
+lib/
+lib64/
+include/
+share/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.pyo
+.python-version
+
+# --- DADOS E LOGS ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# --- VARIÁVEIS DE AMBIENTE ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# --- IDE & EDITORES ---
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.project
+.settings/
+.classpath
+.factorypath
+
+# --- SISTEMA OPERACIONAL ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- TYPESCRIPT ---
+*.tsbuildinfo
+
+# --- TEMPORÁRIOS ---
+tmp/
+temp/

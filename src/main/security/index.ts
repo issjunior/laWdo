@@ -1,0 +1,214 @@
+import { app, session } from 'electron';
+import { logInfo, logWarning } from '../utils/logger';
+
+/**
+ * Configuração de segurança para a aplicação Electron
+ * Segue as melhores práticas de segurança do Electron
+ * https://www.electronjs.org/docs/latest/tutorial/security
+ */
+
+export const setupSecurity = (): void => {
+  logInfo('Configurando medidas de segurança...');
+
+  // 1. Configurar Content Security Policy (CSP)
+  setupContentSecurityPolicy();
+
+  // 2. Configurar permissões da sessão
+  setupSessionPermissions();
+
+  // 3. Configurar headers de segurança
+  setupSecurityHeaders();
+
+  // 4. Configurar proteções adicionais
+  setupAdditionalProtections();
+
+  logInfo('Medidas de segurança configuradas com sucesso');
+};
+
+/**
+ * Configura Content Security Policy (CSP)
+ * Restringe quais recursos podem ser carregados
+ */
+const setupContentSecurityPolicy = (): void => {
+  const csp = `
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: blob:;
+    connect-src 'self';
+    frame-src 'none';
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+  `.replace(/\s+/g, ' ').trim();
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    });
+  });
+
+  logInfo('Content Security Policy configurada');
+};
+
+/**
+ * Configura permissões da sessão
+ */
+const setupSessionPermissions = (): void => {
+  // Revogar permissões desnecessárias
+  session.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      const allowedPermissions = ['media', 'geolocation', 'notifications', 'midiSysex'];
+
+      if (allowedPermissions.includes(permission)) {
+        logWarning(`Permissão ${permission} solicitada - negada por padrão`);
+        callback(false); // Negar todas as permissões por padrão
+      } else {
+        logWarning(`Permissão desconhecida ${permission} solicitada - negada`);
+        callback(false);
+      }
+    }
+  );
+
+  // Configurar limitações de protocolo
+  session.defaultSession.protocol.registerSchemesAsPrivileged([
+    {
+      scheme: 'app',
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+      },
+    },
+  ]);
+
+  logInfo('Permissões da sessão configuradas');
+};
+
+/**
+ * Configura headers de segurança HTTP
+ */
+const setupSecurityHeaders = (): void => {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const securityHeaders = {
+      'X-Content-Type-Options': ['nosniff'],
+      'X-Frame-Options': ['DENY'],
+      'X-XSS-Protection': ['1; mode=block'],
+      'Referrer-Policy': ['strict-origin-when-cross-origin'],
+      'Permissions-Policy': [
+        'geolocation=(), microphone=(), camera=(), payment=()'
+      ],
+    };
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        ...securityHeaders,
+      },
+    });
+  });
+
+  logInfo('Headers de segurança configurados');
+};
+
+/**
+ * Configura proteções adicionais
+ */
+const setupAdditionalProtections = (): void => {
+  // Desabilitar funcionalidades perigosas
+  app.commandLine.appendSwitch('disable-features', 'CrossOriginOpenerPolicy');
+
+  // Habilitar sandbox para processos de renderização
+  app.commandLine.appendSwitch('enable-sandbox');
+
+  // Configurar limitações de nodeIntegration
+  app.commandLine.appendSwitch('disable-node-integration-in-workers', 'true');
+  app.commandLine.appendSwitch('disable-node-integration-in-subframes', 'true');
+
+  // Configurar política de origem cruzada
+  app.commandLine.appendSwitch('disable-site-isolation-trials', 'true');
+
+  logInfo('Proteções adicionais configuradas');
+};
+
+/**
+ * Valida entrada de dados (proteção contra injeção)
+ */
+export const sanitizeInput = (input: string): string => {
+  if (typeof input !== 'string') {
+    return '';
+  }
+
+  // Remover caracteres potencialmente perigosos
+  return input
+    .replace(/[<>]/g, '') // Remove < e >
+    .replace(/javascript:/gi, '') // Remove javascript:
+    .replace(/data:/gi, '') // Remove data:
+    .trim()
+    .substring(0, 1000); // Limitar comprimento
+};
+
+/**
+ * Valida se uma query SQL é segura (proteção básica)
+ */
+export const validateSqlQuery = (query: string): boolean => {
+  if (typeof query !== 'string') {
+    return false;
+  }
+
+  const trimmedQuery = query.trim().toUpperCase();
+
+  // Lista de comandos perigosos
+  const dangerousCommands = [
+    'DROP',
+    'DELETE',
+    'UPDATE',
+    'INSERT',
+    'ALTER',
+    'TRUNCATE',
+    'CREATE',
+    'EXEC',
+    'EXECUTE',
+    'SHUTDOWN',
+    'GRANT',
+    'REVOKE',
+  ];
+
+  // Verificar se a query contém comandos perigosos
+  const containsDangerousCommand = dangerousCommands.some(cmd =>
+    trimmedQuery.includes(cmd) &&
+    !trimmedQuery.includes(`-- ${cmd}`) // Ignorar comentários
+  );
+
+  if (containsDangerousCommand) {
+    logWarning(`Query potencialmente perigosa detectada: ${query.substring(0, 100)}`);
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * Configura validação de certificados SSL (apenas em produção)
+ */
+export const setupCertificateValidation = (): void => {
+  if (process.env.NODE_ENV === 'production') {
+    app.commandLine.appendSwitch('ignore-certificate-errors', 'false');
+    logInfo('Validação de certificados SSL habilitada');
+  } else {
+    app.commandLine.appendSwitch('ignore-certificate-errors', 'true');
+    logWarning('Validação de certificados SSL desabilitada (modo desenvolvimento)');
+  }
+};
+
+// Exportar funções principais
+export const security = {
+  setupSecurity,
+  sanitizeInput,
+  validateSqlQuery,
+  setupCertificateValidation,
+};

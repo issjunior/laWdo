@@ -1,0 +1,112 @@
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import path from 'path';
+import { setupSecurity } from './security';
+import { setupDatabase } from './database';
+import { setupLogging } from './utils/logger';
+import { registerIpcHandlers } from './ipc';
+
+// Configurações de segurança
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
+// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
+// Variável global para a janela principal
+let mainWindow: BrowserWindow | null = null;
+
+const createWindow = (): void => {
+  // Criar a janela do navegador
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 1024,
+    minHeight: 768,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+    icon: path.join(__dirname, '../../public/assets/icon.png'),
+    title: 'Laudo Pericial PCP',
+    show: false, // Mostrar apenas quando estiver pronto
+  });
+
+  // Carregar a aplicação React
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+  }
+
+  // Mostrar quando estiver pronto
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow) {
+      mainWindow.show();
+    }
+  });
+
+  // Abrir links externos no navegador padrão
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
+  // Lidar com fechamento da janela
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+};
+
+// Este método será chamado quando o Electron terminar de inicializar
+app.whenReady().then(async () => {
+  try {
+    // Inicializar sistemas
+    setupSecurity();
+    await setupDatabase();
+    setupLogging();
+
+    // Registrar handlers IPC
+    registerIpcHandlers();
+
+    // Criar janela
+    createWindow();
+
+    console.log('✅ Aplicação Electron inicializada com sucesso');
+  } catch (error) {
+    console.error('❌ Erro ao inicializar aplicação:', error);
+    app.quit();
+  }
+});
+
+// Sair quando todas as janelas forem fechadas
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  // No macOS, recriar uma janela no app quando
+  // o ícone do dock for clicado e não houver janelas abertas
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+
+// Capturar erros não tratados
+process.on('uncaughtException', (error) => {
+  console.error('❌ Erro não tratado:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Promise rejeitada não tratada:', reason);
+});

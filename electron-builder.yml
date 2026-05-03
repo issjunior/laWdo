@@ -1,0 +1,48 @@
+appId: br.gov.pr.pcp.laudopericial
+productName: Laudo Pericial PCP
+copyright: Copyright © 2024 Polícia Científica do Paraná
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - 'out/**/*'
+  - 'public/**/*'
+  - '!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}'
+  - '!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}'
+  - '!**/node_modules/*.d.ts'
+  - '!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}'
+  - '!.editorconfig'
+  - '!**/._*'
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  publisherName: Polícia Científica do Paraná
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Laudo Pericial PCP
+
+mac:
+  target: dmg
+  icon: build/icon.icns
+  category: public.app-category.productivity
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+  maintainer: Polícia Científica do Paraná
+
+publish: null
