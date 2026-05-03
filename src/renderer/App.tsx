@@ -1,11 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import './styles/globals.css';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { PerfilPeritoForm } from './components/forms/PerfilPeritoForm';
-import { Button } from './components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
+import {
+  PerfilPage,
+  SolicitantesPage,
+  TiposExamePage,
+  DashboardPage,
+} from '@/pages';
+import './styles/globals.css';
 
-// Componentes básicos
+// Layout component
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <div className="app">
+      <Header />
+      <div className="app-body">
+        <Sidebar />
+        <main className="main-content">{children}</main>
+      </div>
+      <Footer />
+    </div>
+  );
+};
+
+// Header component
 const Header = () => (
   <header className="header">
     <div className="header-content">
@@ -21,181 +40,41 @@ const Header = () => (
   </header>
 );
 
-const Sidebar = () => (
-  <aside className="sidebar">
-    <nav className="nav">
-      <ul>
-        <li className="nav-item active">
-          <span className="nav-icon">📊</span>
-          <span className="nav-text">Dashboard</span>
-        </li>
-        <li className="nav-item">
-          <span className="nav-icon">📋</span>
-          <span className="nav-text">REPs</span>
-        </li>
-        <li className="nav-item">
-          <span className="nav-icon">📝</span>
-          <span className="nav-text">Laudos</span>
-        </li>
-        <li className="nav-item">
-          <span className="nav-icon">👤</span>
-          <span className="nav-text">Perfil</span>
-        </li>
-        <li className="nav-item">
-          <span className="nav-icon">⚙️</span>
-          <span className="nav-text">Configurações</span>
-        </li>
-      </ul>
-    </nav>
-  </aside>
-);
+// Sidebar component
+const Sidebar = () => {
+  const { pathname: currentPath } = useLocation();
 
-const MainContent = () => {
-  const [appInfo, setAppInfo] = useState<{ version: string; name: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchAppInfo = async () => {
-      try {
-        if (window.ipcAPI) {
-          const info = await window.ipcAPI.getAppInfo();
-          setAppInfo(info);
-        }
-      } catch (error) {
-        console.error('Erro ao buscar informações do app:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAppInfo();
-  }, []);
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: '📊' },
+    { path: '/solicitantes', label: 'Solicitantes', icon: '🏛️' },
+    { path: '/tipos-exame', label: 'Tipos de Exame', icon: '🔬' },
+    { path: '/reps', label: 'REPs', icon: '📋' },
+    { path: '/laudos', label: 'Laudos', icon: '📝' },
+    { path: '/perfil', label: 'Perfil', icon: '👤' },
+  ];
 
   return (
-    <main className="main-content">
-      <div className="welcome-card">
-        <h2>🚀 Bem-vindo ao Laudo Pericial PCP</h2>
-        <p className="welcome-text">
-          Esta é a nova versão desktop do sistema de laudos periciais. A migração está em andamento
-          seguindo o plano de sprints.
-        </p>
-
-        <div className="info-grid">
-          <div className="info-card">
-            <h3>📋 Status do Projeto</h3>
-            <p>
-              <strong>Sprint atual:</strong> 1 - Arquitetura Base
-            </p>
-            <p>
-              <strong>Status:</strong> 🔄 Em andamento
-            </p>
-            <p>
-              <strong>Progresso:</strong> Shadcn/ui configurado
-            </p>
-          </div>
-
-          <div className="info-card">
-            <h3>⚡ Tecnologias</h3>
-            <ul>
-              <li>Electron + Vite + TypeScript</li>
-              <li>React + Shadcn/ui ✅</li>
-              <li>SQLite (local) ✅</li>
-              <li>Node.js (main process) ✅</li>
-              <li>React Hook Form + Zod 🔄</li>
-            </ul>
-          </div>
-
-          <div className="info-card">
-            <h3>🔧 Informações do Sistema</h3>
-            {loading ? (
-              <p>Carregando...</p>
-            ) : appInfo ? (
-              <>
-                <p>
-                  <strong>Nome:</strong> {appInfo.name}
-                </p>
-                <p>
-                  <strong>Versão:</strong> {appInfo.version}
-                </p>
-                <p>
-                  <strong>Ambiente:</strong> {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}
-                </p>
-              </>
-            ) : (
-              <p>Informações não disponíveis</p>
-            )}
-          </div>
-        </div>
-
-        <div className="action-buttons">
-          <button
-            className="btn primary"
-            onClick={() => window.ipcAPI?.logInfo?.('Botão Teste clicado')}
-          >
-            Testar Log
-          </button>
-          <button className="btn secondary" onClick={() => window.ipcAPI?.openDevTools?.()}>
-            Abrir DevTools
-          </button>
-          <button
-            className="btn outline"
-            onClick={async () => {
-              try {
-                const result = await window.ipcAPI?.ping?.();
-                alert(`Ping: ${result}`);
-              } catch (error) {
-                alert('Erro ao fazer ping');
-              }
-            }}
-          >
-            Testar Conexão
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>🎨 Demonstração: Formulário Shadcn/ui</CardTitle>
-            <CardDescription>
-              Exemplo de formulário usando Shadcn/ui, React Hook Form e validação Zod.
-              Esta é uma prévia dos componentes que serão usados no sistema.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <PerfilPeritoForm
-                onSubmit={(data) => {
-                  console.log('Dados do formulário:', data);
-                  alert('Formulário enviado! Verifique o console para ver os dados.');
-                }}
-              />
-              <div className="text-sm text-muted-foreground">
-                <p>✅ Componentes Shadcn/ui funcionando</p>
-                <p>✅ Validação com Zod integrada</p>
-                <p>✅ React Hook Form para gerenciamento de estado</p>
-                <p>✅ Estilos consistentes com tema dark/light</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="sprint-info">
-        <h3>📅 Progresso da Sprint 1</h3>
+    <aside className="sidebar">
+      <nav className="nav">
         <ul>
-          <li>✅ Configurar Shadcn/ui components</li>
-          <li>✅ Criar tema claro/escuro</li>
-          <li>🔄 Implementar schemas Zod para entidades</li>
-          <li>🔲 Integrar formulários com validação</li>
-          <li>🔲 Criar handlers IPC específicos</li>
-          <li>🔲 Configurar testes unitários</li>
+          {navItems.map((item) => (
+            <li
+              key={item.path}
+              className={`nav-item ${currentPath === item.path ? 'active' : ''}`}
+            >
+              <Link to={item.path} className="nav-link">
+                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-text">{item.label}</span>
+              </Link>
+            </li>
+          ))}
         </ul>
-      </div>
-    </main>
+      </nav>
+    </aside>
   );
 };
 
+// Footer component
 const Footer = () => (
   <footer className="footer">
     <div className="footer-content">
@@ -203,7 +82,7 @@ const Footer = () => (
       <p className="footer-links">
         <span>v0.1.0-alpha</span>
         <span>•</span>
-        <span>Branch: migracao-electron</span>
+        <span>Branch: main</span>
         <span>•</span>
         <span>Electron + React + TypeScript</span>
       </p>
@@ -211,18 +90,61 @@ const Footer = () => (
   </footer>
 );
 
+// Main App component
 const App = () => {
   return (
     <ErrorBoundary>
-      <div className="app">
-        <Header />
-        <div className="app-body">
-          <Sidebar />
-          <MainContent />
-        </div>
-        <Footer />
-      </div>
+      <HashRouter>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/solicitantes" element={<SolicitantesPage />} />
+            <Route path="/tipos-exame" element={<TiposExamePage />} />
+            <Route path="/perfil" element={<PerfilPage />} />
+            <Route path="/reps" element={<PlaceholderPage title="REPs" description="Gestão de Requisições de Exame Pericial" />} />
+            <Route path="/laudos" element={<PlaceholderPage title="Laudos" description="Criação e gestão de laudos periciais" />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Layout>
+      </HashRouter>
     </ErrorBoundary>
+  );
+};
+
+// Componente para páginas em desenvolvimento
+const PlaceholderPage: React.FC<{ title: string; description: string }> = ({ title, description }) => {
+  return (
+    <div className="container mx-auto p-6">
+      <div className="text-center py-16">
+        <h1 className="text-3xl font-bold mb-4">{title}</h1>
+        <p className="text-gray-600 mb-8">{description}</p>
+        <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-lg max-w-md mx-auto">
+          <h3 className="font-semibold text-yellow-800 mb-2">🚧 Em Desenvolvimento</h3>
+          <p className="text-yellow-700">
+            Esta funcionalidade será implementada nas próximas sprints.
+            Por enquanto, você pode acessar as páginas já disponíveis.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Página 404
+const NotFoundPage = () => {
+  return (
+    <div className="container mx-auto p-6">
+      <div className="text-center py-16">
+        <h1 className="text-3xl font-bold mb-4">404 - Página não encontrada</h1>
+        <p className="text-gray-600 mb-8">A página que você está procurando não existe.</p>
+        <Link
+          to="/"
+          className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        >
+          Ir para Dashboard
+        </Link>
+      </div>
+    </div>
   );
 };
 
