@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import './styles/globals.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PerfilPeritoForm } from './components/forms/PerfilPeritoForm';
+import { Button } from './components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
 
 // Componentes básicos
 const Header = () => (
@@ -81,13 +84,13 @@ const MainContent = () => {
           <div className="info-card">
             <h3>📋 Status do Projeto</h3>
             <p>
-              <strong>Sprint atual:</strong> 0 - Fundação
+              <strong>Sprint atual:</strong> 1 - Arquitetura Base
             </p>
             <p>
-              <strong>Próxima sprint:</strong> 1 - Arquitetura Base
+              <strong>Status:</strong> 🔄 Em andamento
             </p>
             <p>
-              <strong>Progresso:</strong> 🔵 Iniciando
+              <strong>Progresso:</strong> Shadcn/ui configurado
             </p>
           </div>
 
@@ -95,9 +98,10 @@ const MainContent = () => {
             <h3>⚡ Tecnologias</h3>
             <ul>
               <li>Electron + Vite + TypeScript</li>
-              <li>React + Shadcn/ui</li>
-              <li>SQLite (local)</li>
-              <li>Node.js (main process)</li>
+              <li>React + Shadcn/ui ✅</li>
+              <li>SQLite (local) ✅</li>
+              <li>Node.js (main process) ✅</li>
+              <li>React Hook Form + Zod 🔄</li>
             </ul>
           </div>
 
@@ -149,15 +153,43 @@ const MainContent = () => {
         </div>
       </div>
 
+      <div className="mt-8">
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>🎨 Demonstração: Formulário Shadcn/ui</CardTitle>
+            <CardDescription>
+              Exemplo de formulário usando Shadcn/ui, React Hook Form e validação Zod.
+              Esta é uma prévia dos componentes que serão usados no sistema.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <PerfilPeritoForm
+                onSubmit={(data) => {
+                  console.log('Dados do formulário:', data);
+                  alert('Formulário enviado! Verifique o console para ver os dados.');
+                }}
+              />
+              <div className="text-sm text-muted-foreground">
+                <p>✅ Componentes Shadcn/ui funcionando</p>
+                <p>✅ Validação com Zod integrada</p>
+                <p>✅ React Hook Form para gerenciamento de estado</p>
+                <p>✅ Estilos consistentes com tema dark/light</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="sprint-info">
-        <h3>📅 Próximas Etapas (Sprint 0)</h3>
+        <h3>📅 Progresso da Sprint 1</h3>
         <ul>
-          <li>✅ Criar estrutura de pastas</li>
-          <li>✅ Configurar TypeScript + ESLint + Prettier</li>
-          <li>🔲 Configurar banco de dados SQLite</li>
-          <li>🔲 Implementar segurança básica</li>
-          <li>🔲 Configurar sistema de logs</li>
-          <li>🔲 Criar página de tratamento de erros</li>
+          <li>✅ Configurar Shadcn/ui components</li>
+          <li>✅ Criar tema claro/escuro</li>
+          <li>🔄 Implementar schemas Zod para entidades</li>
+          <li>🔲 Integrar formulários com validação</li>
+          <li>🔲 Criar handlers IPC específicos</li>
+          <li>🔲 Configurar testes unitários</li>
         </ul>
       </div>
     </main>

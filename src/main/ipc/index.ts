@@ -1,6 +1,9 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { logInfo, logError, logDebug, logWarning } from '../utils/logger';
 import { sanitizeInput, validateSqlQuery } from '../security';
+import { registerUserHandlers } from './handlers/user.handlers';
+import { registerSolicitanteHandlers } from './handlers/solicitante.handlers';
+import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers';
 
 /**
  * Registra todos os handlers IPC para comunicação entre main e renderer processes
@@ -29,6 +32,11 @@ export const registerIpcHandlers = (): void => {
 
   // Autenticação
   registerAuthHandlers();
+
+  // Handlers específicos por entidade
+  registerUserHandlers();
+  registerSolicitanteHandlers();
+  registerTipoExameHandlers();
 
   logInfo('Handlers IPC registrados com sucesso');
 };
@@ -75,6 +83,15 @@ const registerLogHandlers = (): void => {
       logError(`[Renderer] ${sanitizeInput(message)}`, error);
     } else {
       logError('Tentativa de log de erro com mensagem inválida', { message, error });
+    }
+  });
+
+  // Log de warning
+  ipcMain.on('log-warning', (event, message: string) => {
+    if (typeof message === 'string') {
+      logWarning(`[Renderer] ${sanitizeInput(message)}`);
+    } else {
+      logError('Tentativa de log de warning com mensagem inválida', message);
     }
   });
 };

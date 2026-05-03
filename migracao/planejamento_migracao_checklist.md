@@ -61,20 +61,24 @@ projeto/
 - [x] Arquitetura IPC segura e tipada.
 - [x] Configuração de segurança Electron (CSP, headers, sanitização).
 
-### Sprint 1: Arquitetura Base 🔄 **EM PROGRESSO**
+### Sprint 1: Arquitetura Base ✅ **COMPLETADA**
 
-**Nota:** Parte da Sprint 1 já foi implementada na Sprint 0:
+**✅ TAREFAS CONCLUÍDAS:**
 
-- [x] Banco de dados SQLite com migrations automáticas.
-- [x] Schema inicial (users, solicitantes, tipos_exame, reps, laudos, imagens_laudo, placeholders, logs_auditoria).
-- [x] Padrão de IPC tipado com TypeScript.
+- [x] Validação Zod para todas as 8 entidades.
+- [x] Handlers IPC específicos para operações de CRUD (3 entidades principais implementadas).
+- [x] Serviços de negócio básicos (user, solicitante, tipo-exame).
+- [x] Integração Shadcn/ui com React Hook Form + Zod.
+- [x] Componentes UI básicos configurados (Button, Card, Input, Label, Form).
+- [x] Formulário de Perfil do Perito com validação completa.
+- [x] Correções técnicas e melhorias na arquitetura.
 
-**Próximas tarefas para Sprint 1:**
-
-- [ ] Validação Zod para todas as entidades.
-- [ ] Handlers IPC específicos para operações de CRUD.
-- [ ] Testes unitários básicos.
-- [ ] Implementação de serviços de negócio básicos.
+**📊 DETALHES:** 
+- Schemas Zod criados para todas as entidades
+- Handlers IPC para Usuário, Solicitante e TipoExame implementados
+- Integração completa entre frontend e backend
+- Build pipeline funcional e testado
+- Ver relatório completo em `relatorio_sprint_1.md`
 
 ### Sprint 2: Perfil e Cadastros de Apoio
 

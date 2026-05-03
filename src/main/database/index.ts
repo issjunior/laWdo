@@ -74,8 +74,12 @@ const createDatabaseSchema = async (): Promise<void> => {
         matricula TEXT,
         telefone TEXT,
         cargo TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        lotacao TEXT,
+        username TEXT NOT NULL UNIQUE,
+        senha_hash TEXT NOT NULL,
+        ativo BOOLEAN DEFAULT 1,
+        data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+        data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
