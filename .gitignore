@@ -75,6 +75,7 @@ lerna-debug.log*
 .settings/
 .classpath
 .factorypath
+.openclaude/
 
 # --- SISTEMA OPERACIONAL ---
 .DS_Store
@@ -90,4 +91,4 @@ Thumbs.db
 
 # --- TEMPORÁRIOS ---
 tmp/
-temp/
+temp/
