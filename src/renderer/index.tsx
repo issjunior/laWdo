@@ -15,26 +15,30 @@ const isElectron = typeof window !== 'undefined' && window.ipcAPI;
 
 // Componente de carregamento inicial
 const LoadingScreen = () => (
-  <div style={{
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
-    textAlign: 'center',
-    padding: '20px'
-  }}>
-    <div style={{
-      width: '60px',
-      height: '60px',
-      border: '4px solid rgba(255,255,255,0.3)',
-      borderTop: '4px solid white',
-      borderRadius: '50%',
-      animation: 'spin 1s linear infinite',
-      marginBottom: '20px'
-    }} />
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: 'white',
+      textAlign: 'center',
+      padding: '20px',
+    }}
+  >
+    <div
+      style={{
+        width: '60px',
+        height: '60px',
+        border: '4px solid rgba(255,255,255,0.3)',
+        borderTop: '4px solid white',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite',
+        marginBottom: '20px',
+      }}
+    />
     <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>Laudo Pericial PCP</h1>
     <p style={{ fontSize: '16px', opacity: 0.8 }}>
       {isElectron ? 'Inicializando aplicação...' : 'Aguardando conexão...'}
@@ -65,7 +69,9 @@ const initApp = async () => {
   try {
     // Verificar se estamos no Electron
     if (!isElectron) {
-      console.warn('⚠️ Não está no contexto do Electron. Algumas funcionalidades podem não funcionar.');
+      console.warn(
+        '⚠️ Não está no contexto do Electron. Algumas funcionalidades podem não funcionar.'
+      );
 
       // Mock para desenvolvimento
       window.ipcAPI = {
@@ -94,36 +100,39 @@ const initApp = async () => {
         <App />
       </React.StrictMode>
     );
-
   } catch (error) {
     console.error('❌ Erro ao inicializar aplicação:', error);
 
     // Mostrar tela de erro
     root.render(
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        background: '#f8f9fa',
-        color: '#dc3545',
-        textAlign: 'center',
-        padding: '40px'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: '#f8f9fa',
+          color: '#dc3545',
+          textAlign: 'center',
+          padding: '40px',
+        }}
+      >
         <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>❌ Erro ao Inicializar</h1>
         <p style={{ fontSize: '16px', marginBottom: '20px', maxWidth: '600px' }}>
           Ocorreu um erro ao inicializar a aplicação. Por favor, reinicie o aplicativo.
         </p>
-        <pre style={{
-          background: '#f1f3f5',
-          padding: '15px',
-          borderRadius: '8px',
-          maxWidth: '600px',
-          overflow: 'auto',
-          textAlign: 'left',
-          fontSize: '14px'
-        }}>
+        <pre
+          style={{
+            background: '#f1f3f5',
+            padding: '15px',
+            borderRadius: '8px',
+            maxWidth: '600px',
+            overflow: 'auto',
+            textAlign: 'left',
+            fontSize: '14px',
+          }}
+        >
           {error instanceof Error ? error.message : String(error)}
         </pre>
         {isElectron && (
@@ -137,7 +146,7 @@ const initApp = async () => {
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '16px'
+              fontSize: '16px',
             }}
           >
             Reiniciar Aplicativo

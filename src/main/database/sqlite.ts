@@ -72,10 +72,7 @@ export const closeDatabase = async (): Promise<void> => {
 /**
  * Executa uma query SQL com parâmetros
  */
-export const executeQuery = async <T = any>(
-  sql: string,
-  params: any[] = []
-): Promise<T[]> => {
+export const executeQuery = async <T = any>(sql: string, params: any[] = []): Promise<T[]> => {
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
@@ -100,10 +97,7 @@ export const executeQuery = async <T = any>(
 /**
  * Executa uma query que não retorna resultado (INSERT, UPDATE, DELETE)
  */
-export const executeNonQuery = async (
-  sql: string,
-  params: any[] = []
-): Promise<void> => {
+export const executeNonQuery = async (sql: string, params: any[] = []): Promise<void> => {
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
@@ -180,9 +174,7 @@ export const rollbackTransaction = async (): Promise<void> => {
 /**
  * Executa uma função dentro de uma transação
  */
-export const withTransaction = async <T>(
-  fn: () => Promise<T>
-): Promise<T> => {
+export const withTransaction = async <T>(fn: () => Promise<T>): Promise<T> => {
   await beginTransaction();
 
   try {

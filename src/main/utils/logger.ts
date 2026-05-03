@@ -52,10 +52,7 @@ export const logger = winston.createLogger({
 if (process.env.NODE_ENV === 'development') {
   logger.add(
     new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        logFormat
-      ),
+      format: winston.format.combine(winston.format.colorize(), logFormat),
     })
   );
 }
@@ -90,7 +87,7 @@ export const setupLogging = () => {
   });
 
   // Capturar erros não tratados
-  process.on('uncaughtException', (error) => {
+  process.on('uncaughtException', error => {
     logError('Erro não tratado', error);
   });
 
@@ -121,7 +118,7 @@ export const cleanupOldLogs = () => {
   try {
     const files = fs.readdirSync(LOGS_DIR);
     const now = Date.now();
-    const sixMonthsAgo = now - (6 * 30 * 24 * 60 * 60 * 1000); // 6 meses em milissegundos
+    const sixMonthsAgo = now - 6 * 30 * 24 * 60 * 60 * 1000; // 6 meses em milissegundos
 
     files.forEach(file => {
       const filePath = path.join(LOGS_DIR, file);

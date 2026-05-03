@@ -94,7 +94,7 @@ const registerSystemHandlers = (): void => {
   });
 
   // Abrir DevTools
-  ipcMain.on('open-dev-tools', (event) => {
+  ipcMain.on('open-dev-tools', event => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window) {
       window.webContents.openDevTools({ mode: 'detach' });
@@ -147,7 +147,6 @@ const registerDatabaseHandlers = (): void => {
         message: 'Banco de dados em configuração',
         queryExecuted: query.substring(0, 100) + '...',
       };
-
     } catch (error) {
       logError('Erro ao executar query', { query, error });
       return {
@@ -224,7 +223,6 @@ const registerAuthHandlers = (): void => {
         success: false,
         error: 'Usuário ou senha incorretos',
       };
-
     } catch (error) {
       logError('Erro no processo de login', error);
       return {

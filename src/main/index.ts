@@ -103,7 +103,7 @@ app.on('activate', () => {
 });
 
 // Capturar erros não tratados
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error('❌ Erro não tratado:', error);
 });
 

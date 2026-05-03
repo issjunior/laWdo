@@ -12,18 +12,18 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: {
-        main: path.join(__dirname, 'src/renderer/index.html')
-      }
-    }
+        main: path.join(__dirname, 'src/renderer/index.html'),
+      },
+    },
   },
   server: {
     port: 3000,
-    strictPort: true
+    strictPort: true,
   },
   resolve: {
     alias: {
       '@': path.join(__dirname, 'src/renderer'),
-      '@shared': path.join(__dirname, 'src/shared')
-    }
-  }
+      '@shared': path.join(__dirname, 'src/shared'),
+    },
+  },
 });

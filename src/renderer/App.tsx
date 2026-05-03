@@ -73,16 +73,22 @@ const MainContent = () => {
       <div className="welcome-card">
         <h2>🚀 Bem-vindo ao Laudo Pericial PCP</h2>
         <p className="welcome-text">
-          Esta é a nova versão desktop do sistema de laudos periciais.
-          A migração está em andamento seguindo o plano de sprints.
+          Esta é a nova versão desktop do sistema de laudos periciais. A migração está em andamento
+          seguindo o plano de sprints.
         </p>
 
         <div className="info-grid">
           <div className="info-card">
             <h3>📋 Status do Projeto</h3>
-            <p><strong>Sprint atual:</strong> 0 - Fundação</p>
-            <p><strong>Próxima sprint:</strong> 1 - Arquitetura Base</p>
-            <p><strong>Progresso:</strong> 🔵 Iniciando</p>
+            <p>
+              <strong>Sprint atual:</strong> 0 - Fundação
+            </p>
+            <p>
+              <strong>Próxima sprint:</strong> 1 - Arquitetura Base
+            </p>
+            <p>
+              <strong>Progresso:</strong> 🔵 Iniciando
+            </p>
           </div>
 
           <div className="info-card">
@@ -101,9 +107,15 @@ const MainContent = () => {
               <p>Carregando...</p>
             ) : appInfo ? (
               <>
-                <p><strong>Nome:</strong> {appInfo.name}</p>
-                <p><strong>Versão:</strong> {appInfo.version}</p>
-                <p><strong>Ambiente:</strong> {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}</p>
+                <p>
+                  <strong>Nome:</strong> {appInfo.name}
+                </p>
+                <p>
+                  <strong>Versão:</strong> {appInfo.version}
+                </p>
+                <p>
+                  <strong>Ambiente:</strong> {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}
+                </p>
               </>
             ) : (
               <p>Informações não disponíveis</p>
@@ -118,10 +130,7 @@ const MainContent = () => {
           >
             Testar Log
           </button>
-          <button
-            className="btn secondary"
-            onClick={() => window.ipcAPI?.openDevTools?.()}
-          >
+          <button className="btn secondary" onClick={() => window.ipcAPI?.openDevTools?.()}>
             Abrir DevTools
           </button>
           <button

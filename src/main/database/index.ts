@@ -2,7 +2,12 @@ import { logInfo, logError } from '../utils/logger';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
-import { getDatabase, executeNonQuery, executeQuery, backupDatabase as sqliteBackup } from './sqlite';
+import {
+  getDatabase,
+  executeNonQuery,
+  executeQuery,
+  backupDatabase as sqliteBackup,
+} from './sqlite';
 
 // Diretório do banco de dados
 const DB_DIR = app.getPath('userData');
@@ -38,7 +43,6 @@ export const setupDatabase = async (): Promise<void> => {
     await testDatabaseConnection();
 
     logInfo('Banco de dados inicializado com sucesso');
-
   } catch (error) {
     logError('Erro ao inicializar banco de dados', error);
     throw error;
@@ -184,15 +188,22 @@ const createDatabaseSchema = async (): Promise<void> => {
 
     // Criar índices
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_status ON reps(status)');
-    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_solicitante ON reps(solicitante_id)');
+    await executeNonQuery(
+      'CREATE INDEX IF NOT EXISTS idx_reps_solicitante ON reps(solicitante_id)'
+    );
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_status ON laudos(status)');
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_rep ON laudos(rep_id)');
-    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo ON imagens_laudo(laudo_id)');
-    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_logs_auditoria_usuario ON logs_auditoria(usuario_id)');
-    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_logs_auditoria_created ON logs_auditoria(created_at)');
+    await executeNonQuery(
+      'CREATE INDEX IF NOT EXISTS idx_imagens_laudo ON imagens_laudo(laudo_id)'
+    );
+    await executeNonQuery(
+      'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_usuario ON logs_auditoria(usuario_id)'
+    );
+    await executeNonQuery(
+      'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_created ON logs_auditoria(created_at)'
+    );
 
     logInfo('Schema inicial criado com sucesso');
-
   } catch (error) {
     logError('Erro ao criar schema inicial', error);
     throw error;
@@ -203,10 +214,7 @@ const createDatabaseSchema = async (): Promise<void> => {
  * Define a versão do schema
  */
 const setSchemaVersion = async (version: number): Promise<void> => {
-  await executeNonQuery(
-    'INSERT INTO schema_version (version) VALUES (?)',
-    [version]
-  );
+  await executeNonQuery('INSERT INTO schema_version (version) VALUES (?)', [version]);
   logInfo(`Schema version definida para ${version}`);
 };
 
@@ -290,7 +298,6 @@ export const backupDatabase = async (backupPath?: string): Promise<string> => {
 
     logInfo(`Backup criado: ${backupFilePath}`);
     return backupFilePath;
-
   } catch (error) {
     logError('Erro ao criar backup do banco de dados', error);
     throw error;
@@ -316,7 +323,6 @@ export const restoreDatabase = async (backupPath: string): Promise<void> => {
     fs.copyFileSync(backupPath, DB_PATH);
 
     logInfo(`Banco de dados restaurado de: ${backupPath}`);
-
   } catch (error) {
     logError('Erro ao restaurar banco de dados', error);
     throw error;

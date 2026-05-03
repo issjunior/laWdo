@@ -1,9 +1,11 @@
 # 🚀 Planejamento de Migração: Laudo Pericial
+
 ### 🐍 Python/Streamlit ➔ ⚛️ Electron + React
 
 ## 📈 **STATUS ATUAL DO PROJETO** (03/05/2026)
 
 ### ✅ **SPRINT 0: COMPLETA**
+
 - **Infraestrutura:** Electron + Vite + TypeScript funcionando
 - **Banco de Dados:** SQLite com schema completo (8 tabelas)
 - **Segurança:** Criptografia AES-256-GCM + bcrypt implementada
@@ -11,6 +13,7 @@
 - **Comunicação:** IPC bridge segura e tipada implementada
 
 ### 🔄 **SPRINT 1: EM ANDAMENTO**
+
 - **Validação:** Implementando Zod schemas para todas as entidades
 - **UI:** Configurando Shadcn/ui components
 - **Serviços:** Desenvolvendo lógica de negócio específica
@@ -24,58 +27,61 @@ Em caso de consulta do projeto em python + streamlit, acesse o diretorio laudo-s
 ---
 
 ## 📋 Sumário
+
 - [🔄 Ciclo de Vida e Estados](#-ciclo-de-vida-e-estados)
 - [🛠️ Stack Tecnológico](#️-stack-tecnológico)
 - [🏗️ Arquitetura e Estrutura](#️-arquitetura-e-estrutura)
 - [🎨 Design System](#-design-system)
 - [🖼️ Gestão de Imagens](#️-gestão-de-imagens)
 - [📅 Roadmap de Sprints](#-roadmap-de-sprints)
-    - [Sprint 0: Fundação & Segurança](#sprint-0-fundação-segurança-e-infraestrutura-crítica)
-    - [Sprint 1: Arquitetura Base](#sprint-1-fundação-e-arquitetura-base)
-    - [Sprint 2: Cadastros Estruturais](#sprint-2-perfil-do-perito-e-cadastros-estruturais-de-apoio-com-shadcnui)
-    - [Sprint 3: Gestão de REPs](#sprint-3-gestão-de-requisições-rep-com-shadcnui)
-    - [Sprint 4: Edição de Laudos](#sprint-4-núcleo-do-sistema---edição-de-laudos-com-imagens-e-legendas)
-    - [Sprint 5: Placeholders](#sprint-5-motor-de-placeholders-e-dinamismo)
-    - [Sprint 6: Assistência IA](#sprint-6-assistência-inteligente-ia---opcional-e-configurável)
-    - [Sprint 7: Exportação](#sprint-7-exportação-e-documento-final)
-    - [Sprint 8: Auditoria & Backup](#sprint-8-histórico-auditoria-e-backuprestauração)
-    - [Sprint 9: Performance](#sprint-9-otimização-de-performance-e-experiência-do-usuário)
-    - [Sprint 10: Distribuição](#sprint-10-utilidades-polimento-final-e-distribuição)
+  - [Sprint 0: Fundação & Segurança](#sprint-0-fundação-segurança-e-infraestrutura-crítica)
+  - [Sprint 1: Arquitetura Base](#sprint-1-fundação-e-arquitetura-base)
+  - [Sprint 2: Cadastros Estruturais](#sprint-2-perfil-do-perito-e-cadastros-estruturais-de-apoio-com-shadcnui)
+  - [Sprint 3: Gestão de REPs](#sprint-3-gestão-de-requisições-rep-com-shadcnui)
+  - [Sprint 4: Edição de Laudos](#sprint-4-núcleo-do-sistema---edição-de-laudos-com-imagens-e-legendas)
+  - [Sprint 5: Placeholders](#sprint-5-motor-de-placeholders-e-dinamismo)
+  - [Sprint 6: Assistência IA](#sprint-6-assistência-inteligente-ia---opcional-e-configurável)
+  - [Sprint 7: Exportação](#sprint-7-exportação-e-documento-final)
+  - [Sprint 8: Auditoria & Backup](#sprint-8-histórico-auditoria-e-backuprestauração)
+  - [Sprint 9: Performance](#sprint-9-otimização-de-performance-e-experiência-do-usuário)
+  - [Sprint 10: Distribuição](#sprint-10-utilidades-polimento-final-e-distribuição)
 
 ---
 
 ## 🔄 Ciclo de Vida e Estados
+
 > [!NOTE]
 > O ciclo de vida base governa as regras de transição de dados entre os módulos de requisição e laudo.
 
-| Entidade | Status Disponíveis | Observação |
-| :--- | :--- | :--- |
-| **REP** | `Pendente`, `Em Andamento`, `Concluído` | Requisição de Exame Pericial |
+| Entidade  | Status Disponíveis                      | Observação                                    |
+| :-------- | :-------------------------------------- | :-------------------------------------------- |
+| **REP**   | `Pendente`, `Em Andamento`, `Concluído` | Requisição de Exame Pericial                  |
 | **Laudo** | `Em andamento`, `Concluído`, `Entregue` | "Nasce" como `Em andamento` ao vincular à REP |
 
 ---
 
 ## 🛠️ Stack Tecnológico
 
-| Camada | Tecnologia | Descrição |
-| :--- | :--- | :--- |
-| **Runtime Desktop** | [Electron](https://www.electronjs.org/) | Container para aplicação desktop |
-| **Build Tool** | [Vite](https://vitejs.dev/) | Bundler ultrarrápido com HMR |
-| **Linguagem** | [TypeScript](https://www.typescriptlang.org/) | Tipagem estática para robustez |
-| **Frontend** | [React](https://react.dev/) | Biblioteca de UI declarativa |
-| **Backend (Main)** | [Node.js](https://nodejs.org/) | Processo principal do Electron |
-| **Banco de Dados** | [SQLite](https://www.sqlite.org/) | Armazenamento local leve e confiável |
-| **UI Components** | [Shadcn/ui](https://ui.shadcn.com/) | Componentes acessíveis com Tailwind CSS |
-| **Editor Rich Text** | [TinyMCE](https://www.tinymce.com/) | Editor de texto robusto para laudos |
-| **Validação** | [Zod](https://zod.dev/) + [React Hook Form](https://react-hook-form.com/) | Esquemas de dados e gestão de formulários |
-| **Logging** | [Winston](https://github.com/winstonjs/winston) | Logs estruturados com rotação automática |
-| **Criptografia** | Node.js `crypto` + `bcrypt` | AES-256-GCM + PBKDF2 para dados sensíveis |
+| Camada               | Tecnologia                                                                | Descrição                                 |
+| :------------------- | :------------------------------------------------------------------------ | :---------------------------------------- |
+| **Runtime Desktop**  | [Electron](https://www.electronjs.org/)                                   | Container para aplicação desktop          |
+| **Build Tool**       | [Vite](https://vitejs.dev/)                                               | Bundler ultrarrápido com HMR              |
+| **Linguagem**        | [TypeScript](https://www.typescriptlang.org/)                             | Tipagem estática para robustez            |
+| **Frontend**         | [React](https://react.dev/)                                               | Biblioteca de UI declarativa              |
+| **Backend (Main)**   | [Node.js](https://nodejs.org/)                                            | Processo principal do Electron            |
+| **Banco de Dados**   | [SQLite](https://www.sqlite.org/)                                         | Armazenamento local leve e confiável      |
+| **UI Components**    | [Shadcn/ui](https://ui.shadcn.com/)                                       | Componentes acessíveis com Tailwind CSS   |
+| **Editor Rich Text** | [TinyMCE](https://www.tinymce.com/)                                       | Editor de texto robusto para laudos       |
+| **Validação**        | [Zod](https://zod.dev/) + [React Hook Form](https://react-hook-form.com/) | Esquemas de dados e gestão de formulários |
+| **Logging**          | [Winston](https://github.com/winstonjs/winston)                           | Logs estruturados com rotação automática  |
+| **Criptografia**     | Node.js `crypto` + `bcrypt`                                               | AES-256-GCM + PBKDF2 para dados sensíveis |
 
 ---
 
 ## 🏗️ Arquitetura e Estrutura
 
 ### 🗺️ Fluxo de Comunicação (IPC)
+
 ```mermaid
 graph TD
     subgraph "Renderer Process (UI)"
@@ -83,7 +89,7 @@ graph TD
         B --> C[Custom Hooks]
         C --> D[IPC Bridge/Preload]
     end
-    
+
     subgraph "Main Process (Backend)"
         D -- "Invokes/Sends" --> E[IPC Handlers]
         E --> F[Business Logic/Services]
@@ -91,7 +97,7 @@ graph TD
         F --> H[Security/Encryption]
         F --> I[Python Child Process]
     end
-    
+
     subgraph "File System"
         G --> J[app.db]
         F --> K[Local Images Folder]
@@ -100,6 +106,7 @@ graph TD
 ```
 
 ### 📁 Estrutura de Diretórios (ATUAL)
+
 ```text
 laudopericial/ (raiz do projeto)
 ├── src/
@@ -132,6 +139,7 @@ laudopericial/ (raiz do projeto)
 > O uso do **Shadcn/ui** garante uma interface moderna e profissional ("Premium Design") com pouco esforço de estilo customizado.
 
 ### Componentes Chave:
+
 - **Form/Input/Select**: Para cadastros técnicos rigorosos.
 - **Table/Badge**: Para dashboard de REPs e status.
 - **Dialog/AlertDialog**: Para confirmações críticas e inserção de imagens.
@@ -142,20 +150,22 @@ laudopericial/ (raiz do projeto)
 ## 🖼️ Gestão de Imagens
 
 ### 📄 Modelo de Dados
+
 ```typescript
 interface ImagemLaudo {
   id: string;
   laudo_id: string;
-  caminho: string;                    // public/images/laudo_123_img_001.jpg
-  legenda: string;                    // "Figura X: descrição"
-  numero_figura: number;              // 1, 2, 3... (auto-incrementado)
-  sequencia: number;                  // Ordem de exibição manual
-  gps?: { latitude: number; longitude: number; };
+  caminho: string; // public/images/laudo_123_img_001.jpg
+  legenda: string; // "Figura X: descrição"
+  numero_figura: number; // 1, 2, 3... (auto-incrementado)
+  sequencia: number; // Ordem de exibição manual
+  gps?: { latitude: number; longitude: number };
   dataCaptura: Date;
 }
 ```
 
 ### 🛠️ Fluxo de Inserção
+
 1. **Manual (TinyMCE)**: Diálogo modal para upload + legenda instantânea.
 2. **Automática (Side Panel)**: Painel com Cards, reordenação via Drag-and-Drop e geração automática de seção "Figuras" ao final.
 
@@ -164,16 +174,19 @@ interface ImagemLaudo {
 ## 📅 Roadmap de Sprints
 
 ### 🏗️ Sprint 0: Fundação, Segurança e Infraestrutura Crítica ✅ **COMPLETADA**
+
 **Objetivo:** Garantir a base sólida antes de qualquer interface funcional. **CONCLUÍDO**
 
 **✅ IMPLEMENTAÇÕES COMPLETAS:**
 
 #### 1. **Infraestrutura Electron + Vite + TypeScript**
+
 - [x] Projeto configurado na raiz do repositório
 - [x] Build system completo (Vite + TypeScript + Electron)
 - [x] Ambiente de desenvolvimento funcional (`npm run dev`)
 
 #### 2. **Banco de Dados SQLite Avançado**
+
 - [x] Driver SQLite3 nativo no main process
 - [x] **Schema completo com 8 tabelas:**
   - `users` (peritos)
@@ -190,6 +203,7 @@ interface ImagemLaudo {
 - [x] **Índices otimizados** para performance
 
 #### 3. **Segurança de Alto Nível**
+
 - [x] **Criptografia AES-256-GCM** com PBKDF2 para dados sensíveis
 - [x] **Hash bcrypt** para senhas (salt rounds = 10)
 - [x] **Content Security Policy (CSP)** configurada
@@ -199,6 +213,7 @@ interface ImagemLaudo {
 - [x] **Sanitização de queries** perigosas (DROP, DELETE, etc.)
 
 #### 4. **Tratamento de Erros Profissional**
+
 - [x] **ErrorBoundary React** com UI amigável
 - [x] **4 opções de recuperação:**
   - Reiniciar aplicação
@@ -209,6 +224,7 @@ interface ImagemLaudo {
 - [x] Captura de erros não tratados (uncaughtException)
 
 #### 5. **Arquitetura Comunicação IPC**
+
 - [x] **Bridge IPC tipada** entre main/renderer
 - [x] **Handlers para:**
   - Utilitários (ping, app info)
@@ -219,6 +235,7 @@ interface ImagemLaudo {
 - [x] **Separação clara** de responsabilidades
 
 #### 6. **Interface React Funcional**
+
 - [x] **Dashboard** com layout profissional
 - [x] **Sidebar navigation** com itens principais
 - [x] **Integration** com sistema IPC
@@ -227,9 +244,11 @@ interface ImagemLaudo {
 ---
 
 ### 🧱 Sprint 1: Arquitetura Base 🔄 **EM PROGRESSO**
+
 **Objetivo:** Estabelecer os padrões de desenvolvimento e validação sobre a fundação sólida.
 
 **✅ PARTIALMENTE IMPLEMENTADO (da Sprint 0):**
+
 - [x] Validar schema inicial (8 tabelas completas com índices).
 - [x] Estabelecer padrão de **IPC Tipado** para segurança total na comunicação.
 - [x] Implementar prepared statements contra SQL Injection.
@@ -238,6 +257,7 @@ interface ImagemLaudo {
 **🔄 PRÓXIMAS TAREFAS PARA SPRINT 1:**
 
 #### 1. **Validação com Zod**
+
 - [ ] Criar schemas Zod para todas as entidades:
   - Usuário (perito)
   - Solicitante
@@ -249,6 +269,7 @@ interface ImagemLaudo {
   - Log de Auditoria
 
 #### 2. **Handlers IPC Específicos**
+
 - [ ] Implementar operações CRUD completas via IPC:
   - CRUD de Usuários
   - CRUD de Solicitantes
@@ -259,6 +280,7 @@ interface ImagemLaudo {
   - CRUD de Placeholders
 
 #### 3. **Serviços de Negócio**
+
 - [ ] Criar serviços para lógica complexa:
   - Gerenciamento de status de REP (Pendente → Em Andamento → Concluído)
   - Transição de status de Laudo (Em andamento → Concluído → Entregue)
@@ -266,12 +288,14 @@ interface ImagemLaudo {
   - Gerenciamento de versões de laudo
 
 #### 4. **Testes Unitários**
+
 - [ ] Configurar Jest/Vitest para testes
 - [ ] Testes para funções de criptografia
 - [ ] Testes para validação de entrada
 - [ ] Testes para operações de banco básicas
 
 #### 5. **Integração Shadcn/ui**
+
 - [ ] Configurar componentes Shadcn/ui
 - [ ] Criar tema claro/escuro
 - [ ] Implementar formulários com React Hook Form + Zod
@@ -279,17 +303,19 @@ interface ImagemLaudo {
 ---
 
 ### 👤 Sprint 2: Perfil do Perito e Apoio
+
 **Objetivo:** Cadastros base para o funcionamento do fluxo.
 
 - [ ] CRUD: **Perfil do Perito** (Criptografado).
 - [ ] CRUD: **Solicitantes** (Órgãos/Varas/Delegacias).
 - [ ] CRUD: **Tipos de Exame** e **Templates de Cabeçalho**.
 - [ ] > [!IMPORTANT]
-  > **Reuso Python:** Analisar scripts de processamento de templates para integração via `child_process`.
+      > **Reuso Python:** Analisar scripts de processamento de templates para integração via `child_process`.
 
 ---
 
 ### 📋 Sprint 3: Gestão de Requisições (REP)
+
 **Objetivo:** Fluxo de entrada de trabalho.
 
 - [ ] Dashboard de REPs com **Shadcn/ui Table**.
@@ -300,6 +326,7 @@ interface ImagemLaudo {
 ---
 
 ### 🖊️ Sprint 4: Núcleo - Edição de Laudos
+
 **Objetivo:** O motor de escrita e gestão de evidências.
 
 - [ ] Integração customizada do **TinyMCE**.
@@ -311,6 +338,7 @@ interface ImagemLaudo {
 ---
 
 ### 🔗 Sprint 5: Placeholders e Dinamismo
+
 **Objetivo:** Automação de campos repetitivos.
 
 - [ ] Interpretador de tags: `[NUMERO_REP]`, `[PERITO_NOME]`, etc.
@@ -320,6 +348,7 @@ interface ImagemLaudo {
 ---
 
 ### 🤖 Sprint 6: Assistência IA (Opcional)
+
 **Objetivo:** Inteligência na escrita de laudos.
 
 - [ ] Configuração de chaves de API (Groq/Gemini) com segurança.
@@ -329,6 +358,7 @@ interface ImagemLaudo {
 ---
 
 ### 📄 Sprint 7: Exportação e Documento Final
+
 **Objetivo:** Produção do laudo em formatos oficiais.
 
 - [ ] Exportação Nativa: **PDF** (mantendo CSS e Imagens).
@@ -339,6 +369,7 @@ interface ImagemLaudo {
 ---
 
 ### 💾 Sprint 8: Auditoria, Backup e Nuvem
+
 **Objetivo:** Segurança de dados e persistência a longo prazo.
 
 - [ ] Log de Auditoria cronológico detalhado.
@@ -348,6 +379,7 @@ interface ImagemLaudo {
 ---
 
 ### ⚡ Sprint 9: Otimização e UX
+
 **Objetivo:** Polimento de performance e interface.
 
 - [ ] Indexação pesada no SQLite para busca instantânea.
@@ -358,6 +390,7 @@ interface ImagemLaudo {
 ---
 
 ### 📦 Sprint 10: Distribuição
+
 **Objetivo:** Entrega do instalador final.
 
 - [ ] Refinamento estético final (Theming Dark/Light).

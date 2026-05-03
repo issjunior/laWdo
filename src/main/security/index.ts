@@ -41,7 +41,9 @@ const setupContentSecurityPolicy = (): void => {
     object-src 'none';
     base-uri 'self';
     form-action 'self';
-  `.replace(/\s+/g, ' ').trim();
+  `
+    .replace(/\s+/g, ' ')
+    .trim();
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -60,24 +62,24 @@ const setupContentSecurityPolicy = (): void => {
  */
 const setupSessionPermissions = (): void => {
   // Revogar permissões desnecessárias
-  session.defaultSession.setPermissionRequestHandler(
-    (webContents, permission, callback) => {
-      const allowedPermissions = ['media', 'geolocation', 'notifications', 'midiSysex'];
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'geolocation', 'notifications', 'midiSysex'];
 
-      if (allowedPermissions.includes(permission)) {
-        logWarning(`Permissão ${permission} solicitada - negada por padrão`);
-        callback(false); // Negar todas as permissões por padrão
-      } else {
-        logWarning(`Permissão desconhecida ${permission} solicitada - negada`);
-        callback(false);
-      }
+    if (allowedPermissions.includes(permission)) {
+      logWarning(`Permissão ${permission} solicitada - negada por padrão`);
+      callback(false); // Negar todas as permissões por padrão
+    } else {
+      logWarning(`Permissão desconhecida ${permission} solicitada - negada`);
+      callback(false);
     }
-  );
+  });
 
   // Nota: registerSchemesAsPrivileged foi removido no Electron v29+
   // Para versões 29+, usar protocol.registerSchemesAsPrivileged diretamente
   // ou implementar lógica personalizada se necessário
-  logInfo('Permissões da sessão configuradas (registerSchemesAsPrivileged não suportado no Electron 29+)');
+  logInfo(
+    'Permissões da sessão configuradas (registerSchemesAsPrivileged não suportado no Electron 29+)'
+  );
 };
 
 /**
@@ -90,9 +92,7 @@ const setupSecurityHeaders = (): void => {
       'X-Frame-Options': ['DENY'],
       'X-XSS-Protection': ['1; mode=block'],
       'Referrer-Policy': ['strict-origin-when-cross-origin'],
-      'Permissions-Policy': [
-        'geolocation=(), microphone=(), camera=(), payment=()'
-      ],
+      'Permissions-Policy': ['geolocation=(), microphone=(), camera=(), payment=()'],
     };
 
     callback({
@@ -170,9 +170,8 @@ export const validateSqlQuery = (query: string): boolean => {
   ];
 
   // Verificar se a query contém comandos perigosos
-  const containsDangerousCommand = dangerousCommands.some(cmd =>
-    trimmedQuery.includes(cmd) &&
-    !trimmedQuery.includes(`-- ${cmd}`) // Ignorar comentários
+  const containsDangerousCommand = dangerousCommands.some(
+    cmd => trimmedQuery.includes(cmd) && !trimmedQuery.includes(`-- ${cmd}`) // Ignorar comentários
   );
 
   if (containsDangerousCommand) {

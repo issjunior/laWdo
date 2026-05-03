@@ -20,20 +20,13 @@ const KEY_LENGTH = 32;
  */
 const deriveKey = (password: string, salt: Buffer): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
-    crypto.pbkdf2(
-      password,
-      salt,
-      ITERATIONS,
-      KEY_LENGTH,
-      'sha512',
-      (err, derivedKey) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(derivedKey);
-        }
+    crypto.pbkdf2(password, salt, ITERATIONS, KEY_LENGTH, 'sha512', (err, derivedKey) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(derivedKey);
       }
-    );
+    });
   });
 };
 
