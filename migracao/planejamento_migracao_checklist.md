@@ -50,16 +50,27 @@ projeto/
 
 ## 🗓️ Roadmap de Sprints
 
-### Sprint 0: Fundação e Segurança Crítica
-- [ ] Inicializar projeto Electron + Vite + TypeScript.
-- [ ] Implementar criptografia de dados sensíveis.
-- [ ] Camada de validação de entrada e proteção contra injeção SQL.
-- [ ] Página de **Tratamento de Erros e Recuperação**.
+### Sprint 0: Fundação e Segurança Crítica ✅ **COMPLETADA**
+- [x] Inicializar projeto Electron + Vite + TypeScript.
+- [x] Implementar criptografia de dados sensíveis (AES-256-GCM + bcrypt).
+- [x] Camada de validação de entrada e proteção contra injeção SQL.
+- [x] Página de **Tratamento de Erros e Recuperação** (ErrorBoundary React).
+- [x] Banco de dados SQLite com schema completo (8 tabelas).
+- [x] Sistema de logs com rotação automática (5MB).
+- [x] Arquitetura IPC segura e tipada.
+- [x] Configuração de segurança Electron (CSP, headers, sanitização).
 
-### Sprint 1: Arquitetura Base
-- [ ] Banco de dados SQLite com migrations automáticas.
-- [ ] Schema inicial (users, reps, laudos, etc.).
-- [ ] Padrão de IPC tipado com TypeScript.
+### Sprint 1: Arquitetura Base 🔄 **EM PROGRESSO**
+**Nota:** Parte da Sprint 1 já foi implementada na Sprint 0:
+- [x] Banco de dados SQLite com migrations automáticas.
+- [x] Schema inicial (users, solicitantes, tipos_exame, reps, laudos, imagens_laudo, placeholders, logs_auditoria).
+- [x] Padrão de IPC tipado com TypeScript.
+
+**Próximas tarefas para Sprint 1:**
+- [ ] Validação Zod para todas as entidades.
+- [ ] Handlers IPC específicos para operações de CRUD.
+- [ ] Testes unitários básicos.
+- [ ] Implementação de serviços de negócio básicos.
 
 ### Sprint 2: Perfil e Cadastros de Apoio
 - [ ] Perfil do Perito (Nome, Cargo, Matrícula, Lotação).

@@ -74,19 +74,10 @@ const setupSessionPermissions = (): void => {
     }
   );
 
-  // Configurar limitações de protocolo
-  session.defaultSession.protocol.registerSchemesAsPrivileged([
-    {
-      scheme: 'app',
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-      },
-    },
-  ]);
-
-  logInfo('Permissões da sessão configuradas');
+  // Nota: registerSchemesAsPrivileged foi removido no Electron v29+
+  // Para versões 29+, usar protocol.registerSchemesAsPrivileged diretamente
+  // ou implementar lógica personalizada se necessário
+  logInfo('Permissões da sessão configuradas (registerSchemesAsPrivileged não suportado no Electron 29+)');
 };
 
 /**

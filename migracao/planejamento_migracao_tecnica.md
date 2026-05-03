@@ -1,6 +1,22 @@
 # 🚀 Planejamento de Migração: Laudo Pericial
 ### 🐍 Python/Streamlit ➔ ⚛️ Electron + React
 
+## 📈 **STATUS ATUAL DO PROJETO** (03/05/2026)
+
+### ✅ **SPRINT 0: COMPLETA**
+- **Infraestrutura:** Electron + Vite + TypeScript funcionando
+- **Banco de Dados:** SQLite com schema completo (8 tabelas)
+- **Segurança:** Criptografia AES-256-GCM + bcrypt implementada
+- **Tratamento de Erros:** ErrorBoundary React com 4 opções de recuperação
+- **Comunicação:** IPC bridge segura e tipada implementada
+
+### 🔄 **SPRINT 1: EM ANDAMENTO**
+- **Validação:** Implementando Zod schemas para todas as entidades
+- **UI:** Configurando Shadcn/ui components
+- **Serviços:** Desenvolvendo lógica de negócio específica
+
+---
+
 Este documento detalha o roadmap estratégico para a migração do sistema "Laudo Pericial" para uma arquitetura desktop robusta. O planejamento é dividido em sprints incrementais, priorizando a fundação técnica e a segurança antes das funcionalidades de negócio.
 
 Em caso de consulta do projeto em python + streamlit, acesse o diretorio laudo-streamlit na raiz deste projeto.
@@ -52,6 +68,8 @@ Em caso de consulta do projeto em python + streamlit, acesse o diretorio laudo-s
 | **UI Components** | [Shadcn/ui](https://ui.shadcn.com/) | Componentes acessíveis com Tailwind CSS |
 | **Editor Rich Text** | [TinyMCE](https://www.tinymce.com/) | Editor de texto robusto para laudos |
 | **Validação** | [Zod](https://zod.dev/) + [React Hook Form](https://react-hook-form.com/) | Esquemas de dados e gestão de formulários |
+| **Logging** | [Winston](https://github.com/winstonjs/winston) | Logs estruturados com rotação automática |
+| **Criptografia** | Node.js `crypto` + `bcrypt` | AES-256-GCM + PBKDF2 para dados sensíveis |
 
 ---
 
@@ -81,28 +99,29 @@ graph TD
     end
 ```
 
-### 📁 Estrutura de Diretórios
+### 📁 Estrutura de Diretórios (ATUAL)
 ```text
-projeto/
+laudopericial/ (raiz do projeto)
 ├── src/
-│   ├── main/                    # Electron Main Process (Backend)
-│   │   ├── database/            # SQLite, Prisma/TypeORM, Migrations
-│   │   ├── ipc/                 # Handlers IPC (Comunicação Main-Renderer)
-│   │   ├── security/            # Criptografia, Sanitização e Validação
-│   │   ├── services/            # Regras de Negócio complexas
-│   │   └── utils/               # Helpers globais
-│   ├── preload/                 # Bridge IPC segura (Context Bridge)
-│   ├── renderer/                # Frontend React
-│   │   ├── components/          # Shadcn UI, Forms, Shared
-│   │   ├── pages/               # Views principais da aplicação
-│   │   ├── hooks/               # Custom hooks para lógica de UI
-│   │   ├── lib/                 # Configurações e validadores Zod
-│   │   └── styles/              # CSS Global e Tailwind config
-│   └── shared/                  # Types, Interfaces e Constantes comuns
-├── python/                      # Scripts Python legados para reutilização
-├── public/                      # Assets e Armazenamento local de imagens
-├── electron-builder.yml         # Configurações de empacotamento
-└── vite.config.ts               # Build pipeline
+│   ├── main/                    # ✅ Electron Main Process (Backend) IMPLEMENTADO
+│   │   ├── database/            # ✅ SQLite com schema completo + migrations
+│   │   ├── ipc/                 # ✅ Handlers IPC (Comunicação Main-Renderer)
+│   │   ├── security/            # ✅ Criptografia, Sanitização e Validação
+│   │   ├── services/            # 🔄 Regras de Negócio complexas (PRÓXIMO)
+│   │   └── utils/               # ✅ Helpers globais (logger, etc.)
+│   ├── preload/                 # ✅ Bridge IPC segura (Context Bridge)
+│   ├── renderer/                # ✅ Frontend React (Dashboard básico)
+│   │   ├── components/          # ✅ ErrorBoundary, UI básica
+│   │   ├── pages/               # 🔄 Views principais (PRÓXIMO)
+│   │   ├── hooks/               # 🔄 Custom hooks (PRÓXIMO)
+│   │   ├── lib/                 # 🔄 Configurações e validadores Zod (PRÓXIMO)
+│   │   └── styles/              # ✅ CSS Global e Tailwind config
+│   └── shared/                  # 🔄 Types, Interfaces e Constantes (PRÓXIMO)
+├── migracao/                    # ✅ Documentação do projeto
+├── laudo-streamlit/             # ✅ Projeto legado para referência
+├── package.json                 # ✅ Dependências configuradas
+├── vite.config.ts               # ✅ Build pipeline Vite
+└── electron-builder.yml         # 🔄 Configurações de empacotamento (PRÓXIMO)
 ```
 
 ---
@@ -144,25 +163,118 @@ interface ImagemLaudo {
 
 ## 📅 Roadmap de Sprints
 
-### 🏗️ Sprint 0: Fundação, Segurança e Infraestrutura Crítica
-**Objetivo:** Garantir a base sólida antes de qualquer interface funcional.
+### 🏗️ Sprint 0: Fundação, Segurança e Infraestrutura Crítica ✅ **COMPLETADA**
+**Objetivo:** Garantir a base sólida antes de qualquer interface funcional. **CONCLUÍDO**
 
-- [ ] Inicializar boilerplate Electron + Vite + TypeScript.
-- [ ] Implementar **Criptografia** (bcrypt/crypto) e **Sanitização** de entradas.
-- [ ] Configurar **SQLite** com suporte a migrations (Prisma recomendado).
-- [ ] Sistema de **Logs rotativos** (max 5MB) para auditoria.
-- [ ] Tela de **Recuperação de Erros** (fallback para o banco de dados).
-- [ ] Configurar Shadcn/ui e Tailwind CSS.
+**✅ IMPLEMENTAÇÕES COMPLETAS:**
+
+#### 1. **Infraestrutura Electron + Vite + TypeScript**
+- [x] Projeto configurado na raiz do repositório
+- [x] Build system completo (Vite + TypeScript + Electron)
+- [x] Ambiente de desenvolvimento funcional (`npm run dev`)
+
+#### 2. **Banco de Dados SQLite Avançado**
+- [x] Driver SQLite3 nativo no main process
+- [x] **Schema completo com 8 tabelas:**
+  - `users` (peritos)
+  - `solicitantes` (órgãos/varas)
+  - `tipos_exame` (categorias de perícia)
+  - `reps` (Requisições de Exame Pericial)
+  - `laudos` (documentos técnicos)
+  - `imagens_laudo` (fotos e ilustrações)
+  - `placeholders` (tags dinâmicas)
+  - `logs_auditoria` (histórico de ações)
+- [x] **Sistema de versionamento** com migrations automáticas
+- [x] **Transações ACID** (BEGIN, COMMIT, ROLLBACK)
+- [x] **Backup/restauração** automática
+- [x] **Índices otimizados** para performance
+
+#### 3. **Segurança de Alto Nível**
+- [x] **Criptografia AES-256-GCM** com PBKDF2 para dados sensíveis
+- [x] **Hash bcrypt** para senhas (salt rounds = 10)
+- [x] **Content Security Policy (CSP)** configurada
+- [x] **Validação e sanitização** de entrada completa
+- [x] **Proteção contra SQL Injection** com prepared statements
+- [x] **Headers de segurança** (X-Content-Type-Options, X-Frame-Options, etc.)
+- [x] **Sanitização de queries** perigosas (DROP, DELETE, etc.)
+
+#### 4. **Tratamento de Erros Profissional**
+- [x] **ErrorBoundary React** com UI amigável
+- [x] **4 opções de recuperação:**
+  - Reiniciar aplicação
+  - Voltar para início
+  - Limpar cache
+  - Reportar erro via email
+- [x] **Logs estruturais** com Winston (rotação de 5MB)
+- [x] Captura de erros não tratados (uncaughtException)
+
+#### 5. **Arquitetura Comunicação IPC**
+- [x] **Bridge IPC tipada** entre main/renderer
+- [x] **Handlers para:**
+  - Utilitários (ping, app info)
+  - Logs (info, error, warning)
+  - Sistema (restart, devtools, close)
+  - Banco de dados (query, backup, restore)
+  - Autenticação (login, logout, session)
+- [x] **Separação clara** de responsabilidades
+
+#### 6. **Interface React Funcional**
+- [x] **Dashboard** com layout profissional
+- [x] **Sidebar navigation** com itens principais
+- [x] **Integration** com sistema IPC
+- [x] **Status monitoring** em tempo real
 
 ---
 
-### 🧱 Sprint 1: Fundação e Arquitetura Base
-**Objetivo:** Estabelecer o "esqueleto" de comunicação do sistema.
+### 🧱 Sprint 1: Arquitetura Base 🔄 **EM PROGRESSO**
+**Objetivo:** Estabelecer os padrões de desenvolvimento e validação sobre a fundação sólida.
 
-- [ ] Validar schema inicial (Users, REPs, Laudos, Imagens, Logs).
-- [ ] Estabelecer padrão de **IPC Tipado** para segurança total na comunicação.
-- [ ] Implementar prepared statements contra SQL Injection.
-- [ ] Criar handlers de "Health Check" do sistema.
+**✅ PARTIALMENTE IMPLEMENTADO (da Sprint 0):**
+- [x] Validar schema inicial (8 tabelas completas com índices).
+- [x] Estabelecer padrão de **IPC Tipado** para segurança total na comunicação.
+- [x] Implementar prepared statements contra SQL Injection.
+- [x] Criar handlers de "Health Check" do sistema (ping, app info).
+
+**🔄 PRÓXIMAS TAREFAS PARA SPRINT 1:**
+
+#### 1. **Validação com Zod**
+- [ ] Criar schemas Zod para todas as entidades:
+  - Usuário (perito)
+  - Solicitante
+  - Tipo de Exame
+  - REP (Requisição de Exame Pericial)
+  - Laudo
+  - Imagem de Laudo
+  - Placeholder
+  - Log de Auditoria
+
+#### 2. **Handlers IPC Específicos**
+- [ ] Implementar operações CRUD completas via IPC:
+  - CRUD de Usuários
+  - CRUD de Solicitantes
+  - CRUD de Tipos de Exame
+  - CRUD de REPs
+  - CRUD de Laudos
+  - CRUD de Imagens
+  - CRUD de Placeholders
+
+#### 3. **Serviços de Negócio**
+- [ ] Criar serviços para lógica complexa:
+  - Gerenciamento de status de REP (Pendente → Em Andamento → Concluído)
+  - Transição de status de Laudo (Em andamento → Concluído → Entregue)
+  - Sistema de numeração automática de figuras
+  - Gerenciamento de versões de laudo
+
+#### 4. **Testes Unitários**
+- [ ] Configurar Jest/Vitest para testes
+- [ ] Testes para funções de criptografia
+- [ ] Testes para validação de entrada
+- [ ] Testes para operações de banco básicas
+
+#### 5. **Integração Shadcn/ui**
+- [ ] Configurar componentes Shadcn/ui
+- [ ] Criar tema claro/escuro
+- [ ] Implementar formulários com React Hook Form + Zod
 
 ---
 

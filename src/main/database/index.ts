@@ -2,10 +2,14 @@ import { logInfo, logError } from '../utils/logger';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
+import { getDatabase, executeNonQuery, executeQuery, backupDatabase as sqliteBackup } from './sqlite';
 
 // Diretório do banco de dados
 const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
+
+// Versão atual do schema
+const CURRENT_SCHEMA_VERSION = 1;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -23,16 +27,17 @@ export const setupDatabase = async (): Promise<void> => {
 
     if (!dbExists) {
       logInfo(`Banco de dados não encontrado. Criando novo: ${DB_PATH}`);
-      // TODO: Criar schema inicial do banco de dados
       await createDatabaseSchema();
+      await setSchemaVersion(CURRENT_SCHEMA_VERSION);
     } else {
       logInfo(`Banco de dados encontrado: ${DB_PATH}`);
-      // TODO: Verificar versão do schema e aplicar migrations se necessário
+      await checkAndApplyMigrations();
     }
 
-    // TODO: Implementar conexão real com SQLite
-    // Por enquanto, apenas log
-    logInfo('Banco de dados inicializado (mock)');
+    // Testar conexão
+    await testDatabaseConnection();
+
+    logInfo('Banco de dados inicializado com sucesso');
 
   } catch (error) {
     logError('Erro ao inicializar banco de dados', error);
@@ -46,21 +51,227 @@ export const setupDatabase = async (): Promise<void> => {
 const createDatabaseSchema = async (): Promise<void> => {
   logInfo('Criando schema inicial do banco de dados...');
 
-  // TODO: Implementar criação real das tabelas
-  // Schema será baseado no projeto Streamlit existente
+  try {
+    // Criar tabela de schema version
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS schema_version (
+        id INTEGER PRIMARY KEY,
+        version INTEGER NOT NULL,
+        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-  // Tabelas planejadas:
-  // - users (peritos)
-  // - reps (requisições de exame)
-  // - laudos (documentos)
-  // - solicitantes (órgãos)
-  // - tipos_exame
-  // - templates_exame
-  // - placeholders
-  // - imagens_laudo
-  // - logs_auditoria
+    // Tabela de usuários (peritos)
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        matricula TEXT,
+        telefone TEXT,
+        cargo TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-  logInfo('Schema inicial criado (mock)');
+    // Tabela de solicitantes (órgãos/varas/delegacias)
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS solicitantes (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        endereco TEXT,
+        telefone TEXT,
+        email TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Tabela de tipos de exame
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS tipos_exame (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL UNIQUE,
+        descricao TEXT,
+        template_padrao TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Tabela de REPs (Requisições de Exame Pericial)
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS reps (
+        id TEXT PRIMARY KEY,
+        numero TEXT NOT NULL UNIQUE,
+        solicitante_id TEXT NOT NULL,
+        tipo_exame_id TEXT NOT NULL,
+        data_requisicao DATETIME NOT NULL,
+        prazo DATETIME,
+        status TEXT NOT NULL DEFAULT 'Pendente',
+        observacoes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (solicitante_id) REFERENCES solicitantes(id),
+        FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id)
+      )
+    `);
+
+    // Tabela de laudos
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS laudos (
+        id TEXT PRIMARY KEY,
+        rep_id TEXT NOT NULL UNIQUE,
+        perito_id TEXT NOT NULL,
+        conteudo TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Em andamento',
+        data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
+        data_conclusao DATETIME,
+        data_entrega DATETIME,
+        versao INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rep_id) REFERENCES reps(id),
+        FOREIGN KEY (perito_id) REFERENCES users(id)
+      )
+    `);
+
+    // Tabela de imagens do laudo
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS imagens_laudo (
+        id TEXT PRIMARY KEY,
+        laudo_id TEXT NOT NULL,
+        caminho TEXT NOT NULL,
+        legenda TEXT NOT NULL,
+        numero_figura INTEGER NOT NULL,
+        sequencia INTEGER NOT NULL DEFAULT 0,
+        latitude REAL,
+        longitude REAL,
+        data_captura DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (laudo_id) REFERENCES laudos(id)
+      )
+    `);
+
+    // Tabela de placeholders
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS placeholders (
+        id TEXT PRIMARY KEY,
+        chave TEXT NOT NULL UNIQUE,
+        valor TEXT NOT NULL,
+        descricao TEXT,
+        categoria TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Tabela de logs de auditoria
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS logs_auditoria (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id TEXT,
+        acao TEXT NOT NULL,
+        entidade TEXT NOT NULL,
+        entidade_id TEXT,
+        detalhes TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Criar índices
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_status ON reps(status)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_solicitante ON reps(solicitante_id)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_status ON laudos(status)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_rep ON laudos(rep_id)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo ON imagens_laudo(laudo_id)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_logs_auditoria_usuario ON logs_auditoria(usuario_id)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_logs_auditoria_created ON logs_auditoria(created_at)');
+
+    logInfo('Schema inicial criado com sucesso');
+
+  } catch (error) {
+    logError('Erro ao criar schema inicial', error);
+    throw error;
+  }
+};
+
+/**
+ * Define a versão do schema
+ */
+const setSchemaVersion = async (version: number): Promise<void> => {
+  await executeNonQuery(
+    'INSERT INTO schema_version (version) VALUES (?)',
+    [version]
+  );
+  logInfo(`Schema version definida para ${version}`);
+};
+
+/**
+ * Obtém a versão atual do schema
+ */
+const getSchemaVersion = async (): Promise<number> => {
+  try {
+    const result = await executeQuery<{ max_version: number }>(
+      'SELECT MAX(version) as max_version FROM schema_version'
+    );
+    return result[0]?.max_version || 0;
+  } catch (error) {
+    // Se a tabela não existir, assumir versão 0
+    return 0;
+  }
+};
+
+/**
+ * Verifica e aplica migrations se necessário
+ */
+const checkAndApplyMigrations = async (): Promise<void> => {
+  const currentVersion = await getSchemaVersion();
+
+  if (currentVersion < CURRENT_SCHEMA_VERSION) {
+    logInfo(`Aplicando migrations da versão ${currentVersion} para ${CURRENT_SCHEMA_VERSION}...`);
+
+    // Aqui você pode adicionar lógica de migrations específicas
+    await applyMigrations(currentVersion);
+
+    await setSchemaVersion(CURRENT_SCHEMA_VERSION);
+    logInfo('Migrations aplicadas com sucesso');
+  } else {
+    logInfo(`Schema está atualizado (versão ${currentVersion})`);
+  }
+};
+
+/**
+ * Aplica migrations específicas
+ */
+const applyMigrations = async (fromVersion: number): Promise<void> => {
+  // Implementar migrations específicas conforme necessário
+  // Exemplo:
+  // if (fromVersion < 2) {
+  //   await executeNonQuery('ALTER TABLE users ADD COLUMN telefone TEXT');
+  // }
+
+  logInfo(`Aplicadas migrations da versão ${fromVersion}`);
+};
+
+/**
+ * Testa a conexão com o banco de dados
+ */
+const testDatabaseConnection = async (): Promise<void> => {
+  try {
+    const result = await executeQuery<{ test: number }>('SELECT 1 as test');
+    if (result[0]?.test === 1) {
+      logInfo('Teste de conexão com banco de dados: OK');
+    } else {
+      throw new Error('Teste de conexão falhou');
+    }
+  } catch (error) {
+    logError('Teste de conexão com banco de dados falhou', error);
+    throw error;
+  }
 };
 
 /**

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './styles/globals.css';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Componentes básicos
 const Header = () => (
@@ -171,14 +172,16 @@ const Footer = () => (
 
 const App = () => {
   return (
-    <div className="app">
-      <Header />
-      <div className="app-body">
-        <Sidebar />
-        <MainContent />
+    <ErrorBoundary>
+      <div className="app">
+        <Header />
+        <div className="app-body">
+          <Sidebar />
+          <MainContent />
+        </div>
+        <Footer />
       </div>
-      <Footer />
-    </div>
+    </ErrorBoundary>
   );
 };
 
