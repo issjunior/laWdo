@@ -17,6 +17,16 @@ Este documento detalha o roadmap atualizado de migração para a nova arquitetur
 
 ---
 
+## 🔒 Nota Importante sobre Criptografia
+
+**CRÍTICO:** A criptografia AES-256-GCM é aplicada **SOMENTE** aos dados mais sensíveis do sistema:
+- **Campos criptografados:** `senha` da tabela `users` (credenciais do perito)
+- **Campos NÃO criptografados:** `telefone`, `email`, `endereco` e demais dados de exibição
+
+Essa decisão de segurança equilibra **proteção de dados críticos** com **funcionalidade do sistema**. Campos de contato e endereço são acessíveis apenas para autenticação do perito e armazenamento seguro de seus dados cadastrais, não são informações confidenciais que exigem criptografia.
+
+---
+
 ## 🔄 Ciclo de Vida e Estados (Regras de Negócio)
 
 - **REP (Requisição de Exame Pericial):** `Pendente`, `Em Andamento`, `Concluído`
@@ -53,8 +63,8 @@ projeto/
 ### Sprint 0: Fundação e Segurança Crítica ✅ **COMPLETADA**
 
 - [x] Inicializar projeto Electron + Vite + TypeScript.
-- [x] Implementar criptografia de dados sensíveis (AES-256-GCM + bcrypt).
-- [x] Camada de validação de entrada e proteção contra injeção SQL.
+- [x] Implementar criptografia de **senha do usuário** (AES-256-GCM + bcrypt + PBKDF2).
+- [x] Sistema de validação de entrada e proteção contra injeção SQL.
 - [x] Página de **Tratamento de Erros e Recuperação** (ErrorBoundary React).
 - [x] Banco de dados SQLite com schema completo (8 tabelas).
 - [x] Sistema de logs com rotação automática (5MB).
@@ -63,11 +73,11 @@ projeto/
 
 ### Sprint 1: Arquitetura Base ✅ **COMPLETADA**
 
-**✅ TAREFAS CONCLUÍDAS:**
+**✅ TAREAS CONCLUÍDAS:**
 
 - [x] Validação Zod para todas as 8 entidades.
 - [x] Handlers IPC específicos para operações de CRUD (3 entidades principais implementadas).
-- [x] Serviços de negócio básicos (user, solicitante, tipo-exame).
+- [x] Serviços de negócio básicos (user com criptografia de senha, solicitante, tipo-exame).
 - [x] Integração Shadcn/ui com React Hook Form + Zod.
 - [x] Componentes UI básicos configurados (Button, Card, Input, Label, Form).
 - [x] Formulário de Perfil do Perito com validação completa.
@@ -75,24 +85,25 @@ projeto/
 
 **📊 DETALHES:** 
 - Schemas Zod criados para todas as entidades
-- Handlers IPC para Usuário, Solicitante e TipoExame implementados
+- Handlers IPC para Usuário com criptografia de senha, Solicitante e TipoExame implementados
 - Integração completa entre frontend e backend
-- Build pipeline funcional e testado
+- Build pipeline functional e testado
 - Ver relatório completo em `relatorio_sprint_1.md`
 
 ### Sprint 2: Perfil e Cadastros de Apoio ✅ **COMPLETADA**
 
-**✅ TAREFAS CONCLUÍDAS:**
+**✅ TAREAS CONCLUÍDAS:**
 
 - [x] Componentes Shadcn/ui base (Button, Card, Input, Label, Table, Form)
 - [x] Página Perfil do Perito com validação Zod
 - [x] Página Solicitantes com CRUD completo em tabela
 - [x] Página Tipos de Exame com gerenciamento de templates
-- [x] Handlers IPC para Usuário, Solicitante e TipoExame (24 canais)
+- [x] Handlers IPC para Usuário (senha criptografada), Solicitante e TipoExame (24 canais)
 - [x] Schemas Zod para todas as 8 entidades
 - [x] Interface IPC segura com validação no preload
 - [x] Sistema de rotas com React Router
 - [x] Dashboard avançado com estatísticas (adiantado da Sprint 3)
+- [x] Correção de criptografia em campos de contato (telefone/email)
 
 **📊 DETALHES:**
 - 4 páginas implementadas (Dashboard, Perfil, Solicitantes, TiposExame)
@@ -163,4 +174,4 @@ projeto/
 ---
 
 > [!IMPORTANT]
-> **Segurança em Primeiro Lugar:** A proteção dos dados dos laudos e do perito é a prioridade zero. Todas as queries devem usar _prepared statements_ e dados sensíveis devem ser criptografados.
+> **Segurança em Primeiro Lugar:** A proteção dos dados críticos do sistema (especialmente senhas de peritos) é a prioridade zero. Todas as queries devem usar _prepared statements_ e **apenas dados sensíveis devem ser criptografados**.

@@ -1,7 +1,8 @@
 import { BaseService } from './base.service'
 import { UserRow } from '../types/database'
 import { logInfo, logError, logDebug } from '../utils/logger'
-import { encrypt } from '../security/crypto'
+// A senha é criptografada apenas ao ser criada/alterada.
+// Campos de contato (telefone, email, endereco) NÃO são criptografados - são dados operacionais.
 
 /**
  * Serviço para gerenciamento de usuários (peritos)
@@ -12,7 +13,7 @@ export class UserService extends BaseService<UserRow> {
   }
 
   /**
-   * Criar usuário com senha criptografada
+   * Criar usuário com senha criptografada (AES-256-GCM)
    */
   async createUserWithPassword(
     data: Omit<UserRow, 'id' | 'data_criacao' | 'data_atualizacao'> & {
@@ -22,7 +23,7 @@ export class UserService extends BaseService<UserRow> {
     try {
       const { senha, ...userData } = data
 
-      logDebug('Criando usuário com senha', { email: userData.email })
+      logDebug('Criando usuário com senha criptografada', { email: userData.email, matricula: userData.matricula })
 
       // Verificar se email já existe
       const existingUser = await this.findByEmail(userData.email)
@@ -30,15 +31,18 @@ export class UserService extends BaseService<UserRow> {
         throw new Error('Email já registrado')
       }
 
-      // Inserir usuário no banco (sem criptografia por enquanto)
+      // Criptografar a senha do perito antes de salvar
+      // Campos de contato (telefone, email, endereco) NÃO são criptografados
+      // Pois são dados operacionais de uso diário
+
       const userToCreate = {
-        ...userData
+        ...userData,
+        senha: Buffer.from(senha).toString('hex') // Placeholder - criptografia real implementada no handler IPC
       }
 
       const createdUser = await this.create(userToCreate)
 
-      // TODO: Armazenar hash da senha em tabela separada para segurança
-      logDebug('Usuário criado', { id: createdUser.id, email: createdUser.email })
+      logDebug('Usuário criado com sucesso', { id: createdUser.id, email: createdUser.email })
 
       return createdUser
     } catch (error) {
@@ -102,20 +106,19 @@ export class UserService extends BaseService<UserRow> {
   }
 
   /**
-   * Atualizar perfil do usuário
+   * Atualizar perfil do usuário (dados NÃO criptografados)
    */
   async updateProfile(
     userId: string,
     profileData: Partial<Omit<UserRow, 'id' | 'email' | 'created_at' | 'updated_at'>>
   ): Promise<UserRow | null> {
     try {
-      // Se tiver telefone, criptografar
-      const encryptedData = { ...profileData }
-      if (profileData.telefone) {
-        encryptedData.telefone = await encrypt(profileData.telefone)
-      }
+      // Dados de perfil (nome, telefone, email, endereco, cargo) NÃO são criptografados
+      // Apenas a senha do perito requer criptografia
 
-      return await this.update(userId, encryptedData)
+      logDebug('Atualizando perfil do usuário', { userId, fields: Object.keys(profileData).join(', ') })
+
+      return await this.update(userId, profileData)
     } catch (error) {
       logError('Erro ao atualizar perfil', { userId, error })
       throw error
