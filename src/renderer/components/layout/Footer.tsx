@@ -8,8 +8,6 @@ export const Footer: React.FC = () => {
         <p className="footer-links">
           <span>v0.2.0-alpha</span>
           <span>•</span>
-          <span>Sprint 2: Perfil e Cadastros</span>
-          <span>•</span>
           <span>Electron + React + TypeScript</span>
         </p>
       </div>

@@ -306,13 +306,6 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = 
         />
       </nav>
 
-      {/* Rodapé da sidebar */}
-      {!collapsed && (
-        <div className="sidebar-footer">
-          <span className="sidebar-footer-badge">Sprint 2</span>
-          <span className="sidebar-footer-text">Perfil e Cadastros</span>
-        </div>
-      )}
     </aside>
   );
 };

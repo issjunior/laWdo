@@ -30,13 +30,6 @@ export const Sidebar: React.FC = () => {
           ))}
         </ul>
       </nav>
-
-      <div className="sidebar-footer">
-        <div className="sprint-info">
-          <p className="sprint-label">Sprint 2</p>
-          <p className="sprint-desc">Perfil e Cadastros</p>
-        </div>
-      </div>
     </aside>
   );
 };
