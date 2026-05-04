@@ -80,16 +80,44 @@ projeto/
 - Build pipeline funcional e testado
 - Ver relatório completo em `relatorio_sprint_1.md`
 
-### Sprint 2: Perfil e Cadastros de Apoio
+### Sprint 2: Perfil e Cadastros de Apoio ✅ **COMPLETADA**
 
-- [ ] Perfil do Perito (Nome, Cargo, Matrícula, Lotação).
-- [ ] CRUD de **Solicitantes** e **Modelos de Cabeçalho**.
-- [ ] Gerenciamento de **Templates de Exame**.
+**✅ TAREFAS CONCLUÍDAS:**
 
-### Sprint 3: Gestão de Requisições (REP)
+- [x] Componentes Shadcn/ui base (Button, Card, Input, Label, Table, Form)
+- [x] Página Perfil do Perito com validação Zod
+- [x] Página Solicitantes com CRUD completo em tabela
+- [x] Página Tipos de Exame com gerenciamento de templates
+- [x] Handlers IPC para Usuário, Solicitante e TipoExame (24 canais)
+- [x] Schemas Zod para todas as 8 entidades
+- [x] Interface IPC segura com validação no preload
+- [x] Sistema de rotas com React Router
+- [x] Dashboard avançado com estatísticas (adiantado da Sprint 3)
 
-- [ ] Dashboard de REPs com filtros e paginação.
-- [ ] Fluxo de criação de Nova REP e alteração de Status.
+**📊 DETALHES:**
+- 4 páginas implementadas (Dashboard, Perfil, Solicitantes, TiposExame)
+- 6 componentes Shadcn/ui configurados
+- 24 handlers IPC implementados
+- Ver relatório completo em `relatorio_sprint_2.md`
+
+### Sprint 3: Gestão de Requisições (REP) 🔄 **EM ANDAMENTO (30%)**
+
+**✅ ITENS ADIANTADOS:**
+- [x] Página Dashboard com estatísticas e ações rápidas
+- [x] Sistema de rotas configurado para todas as páginas
+- [x] Componentes de layout criados (Header, Sidebar, Footer)
+- [x] Correção de roteamento: BrowserRouter → HashRouter (compatibilidade Electron)
+
+**⬜ PENDENTES:**
+- [ ] Dashboard de REPs com filtros e paginação
+- [ ] Fluxo de criação de Nova REP e alteração de Status
+- [ ] Páginas REP (Requisição de Exame Pericial)
+- [ ] Handlers IPC: `rep.handlers.ts`
+- [ ] Service: `rep.service.ts`
+- [ ] CRUD completo de REPs
+- [ ] Fluxo de atribuição de peritos às REPs
+- [ ] Transições de status (Pendente → Em Andamento → Concluído)
+- [ ] Integrar páginas com chamadas IPC reais (remover mocks)
 
 ### Sprint 4: Núcleo - Edição de Laudos
 
