@@ -9,24 +9,42 @@ import {
   DashboardPage,
 } from '@/pages';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Info } from 'lucide-react';
+import {
+  Info,
+  ChevronDown,
+  LayoutDashboard,
+  FolderOpen,
+  Settings,
+  Users,
+  FlaskConical,
+  UserCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react';
 import './styles/globals.css';
 
-// Layout component
+// ─── Layout ────────────────────────────────────────────────────────────────────
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
     <div className="app">
       <Header />
       <div className="app-body">
-        <Sidebar />
-        <main className="main-content">{children}</main>
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+        <main className={`main-content ${sidebarCollapsed ? 'full-width' : ''}`}>
+          {children}
+        </main>
       </div>
       <Footer />
     </div>
   );
 };
 
-// Header component
+// ─── Header ─────────────────────────────────────────────────────────────────────
 const Header = () => {
   const [appInfo, setAppInfo] = useState<{ version: string; name: string } | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -109,50 +127,192 @@ const Header = () => {
   );
 };
 
-// Sidebar component
-const Sidebar = () => {
-  const { pathname: currentPath } = useLocation();
+// ─── Nav Section (with collapse support) ────────────────────────────────────────
+interface NavSectionProps {
+  label: string;
+  emoji: string;
+  icon: React.ReactNode;
+  items: { path: string; label: string; icon: React.ReactNode }[];
+  currentPath: string;
+  collapsed: boolean;
+}
 
-  const navItems = [
-    { path: '/', label: 'Dashboard', icon: '📊' },
-    { path: '/solicitantes', label: 'Solicitantes', icon: '🏛️' },
-    { path: '/tipos-exame', label: 'Tipos de Exame', icon: '🔬' },
-    { path: '/reps', label: 'REPs', icon: '📋' },
-    { path: '/laudos', label: 'Laudos', icon: '📝' },
-    { path: '/perfil', label: 'Perfil', icon: '👤' },
-  ];
+const NavSection: React.FC<NavSectionProps> = ({
+  label,
+  emoji,
+  icon,
+  items,
+  currentPath,
+  collapsed,
+}) => {
+  const [open, setOpen] = useState(true);
+  const hasActive = items.some((i) => i.path === currentPath);
+
+  if (collapsed) {
+    // No estado recolhido mostra só os ícones dos links
+    return (
+      <div className="nav-section-collapsed">
+        {items.map((item) => (
+          <Link
+            key={item.path}
+            to={item.path}
+            className={`nav-icon-btn${currentPath === item.path ? ' active' : ''}`}
+            title={item.label}
+          >
+            {item.icon}
+          </Link>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <aside className="sidebar">
-      <nav className="nav">
-        <ul>
-          {navItems.map((item) => (
-            <li
-              key={item.path}
-              className={`nav-item ${currentPath === item.path ? 'active' : ''}`}
-            >
-              <Link to={item.path} className="nav-link">
-                <span className="nav-icon">{item.icon}</span>
-                <span className="nav-text">{item.label}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+    <div className={`nav-section${hasActive && !open ? ' has-active' : ''}`}>
+      {/* Section header */}
+      <button
+        className={`nav-section-header${open ? ' open' : ''}`}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        <span className="nav-section-icon">{emoji}</span>
+        <span className="nav-section-label">{label}</span>
+        <ChevronDown
+          size={14}
+          className={`nav-section-chevron${open ? ' rotated' : ''}`}
+        />
+      </button>
+
+      {/* Items */}
+      <div className={`nav-section-items${open ? ' open' : ''}`}>
+        {items.map((item) => (
+          <Link
+            key={item.path}
+            to={item.path}
+            className={`nav-link${currentPath === item.path ? ' active' : ''}`}
+          >
+            <span className="nav-link-icon">{item.icon}</span>
+            <span className="nav-link-label">{item.label}</span>
+            {currentPath === item.path && <span className="nav-link-indicator" />}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Nav Item (single, no dropdown) ─────────────────────────────────────────────
+interface NavItemProps {
+  path: string;
+  label: string;
+  emoji: string;
+  icon: React.ReactNode;
+  currentPath: string;
+  collapsed: boolean;
+}
+
+const NavItem: React.FC<NavItemProps> = ({ path, label, emoji, icon, currentPath, collapsed }) => {
+  const isActive = currentPath === path;
+
+  if (collapsed) {
+    return (
+      <Link
+        to={path}
+        className={`nav-icon-btn${isActive ? ' active' : ''}`}
+        title={label}
+      >
+        {icon}
+      </Link>
+    );
+  }
+
+  return (
+    <Link to={path} className={`nav-link solo${isActive ? ' active' : ''}`}>
+      <span className="nav-link-icon">{emoji}</span>
+      <span className="nav-link-label">{label}</span>
+      {isActive && <span className="nav-link-indicator" />}
+    </Link>
+  );
+};
+
+// ─── Sidebar ─────────────────────────────────────────────────────────────────────
+const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = ({
+  collapsed,
+  onToggleCollapse,
+}) => {
+  const { pathname: currentPath } = useLocation();
+
+  return (
+    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+      {/* Toggle button */}
+      <button
+        className="sidebar-collapse-btn"
+        onClick={onToggleCollapse}
+        title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+      >
+        {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+      </button>
+
+      <nav className="sidebar-nav">
+        {/* Divisor visual */}
+        {!collapsed && <p className="nav-divider-label">MENU</p>}
+
+        {/* Dashboard — item único */}
+        <NavItem
+          path="/"
+          label="Dashboard"
+          emoji="📊"
+          icon={<LayoutDashboard size={16} />}
+          currentPath={currentPath}
+          collapsed={collapsed}
+        />
+
+        {/* Cadastro */}
+        <NavSection
+          label="Cadastro"
+          emoji="📁"
+          icon={<FolderOpen size={16} />}
+          items={[
+            { path: '/solicitantes', label: 'Solicitantes', icon: <Users size={15} /> },
+            { path: '/tipos-exame', label: 'Tipos de Exame', icon: <FlaskConical size={15} /> },
+          ]}
+          currentPath={currentPath}
+          collapsed={collapsed}
+        />
+
+        {/* Configurações */}
+        <NavSection
+          label="Configurações"
+          emoji="⚙️"
+          icon={<Settings size={16} />}
+          items={[
+            { path: '/perfil', label: 'Perfil', icon: <UserCircle size={15} /> },
+          ]}
+          currentPath={currentPath}
+          collapsed={collapsed}
+        />
       </nav>
+
+      {/* Rodapé da sidebar */}
+      {!collapsed && (
+        <div className="sidebar-footer">
+          <span className="sidebar-footer-badge">Sprint 2</span>
+          <span className="sidebar-footer-text">Perfil e Cadastros</span>
+        </div>
+      )}
     </aside>
   );
 };
 
-// Footer component
+// ─── Footer ───────────────────────────────────────────────────────────────────────
 const Footer = () => (
   <footer className="footer">
     <div className="footer-content">
-      <p>© 2026 - laWdo</p>
+      <p>© 2026 — laWdo</p>
     </div>
   </footer>
 );
 
-// Main App component
+// ─── App ──────────────────────────────────────────────────────────────────────────
 const App = () => {
   return (
     <ErrorBoundary>
@@ -173,41 +333,37 @@ const App = () => {
   );
 };
 
-// Componente para páginas em desenvolvimento
-const PlaceholderPage: React.FC<{ title: string; description: string }> = ({ title, description }) => {
-  return (
-    <div className="container mx-auto p-6">
-      <div className="text-center py-16">
-        <h1 className="text-3xl font-bold mb-4">{title}</h1>
-        <p className="text-gray-600 mb-8">{description}</p>
-        <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-lg max-w-md mx-auto">
-          <h3 className="font-semibold text-yellow-800 mb-2">🚧 Em Desenvolvimento</h3>
-          <p className="text-yellow-700">
-            Esta funcionalidade será implementada nas próximas sprints.
-            Por enquanto, você pode acessar as páginas já disponíveis.
-          </p>
-        </div>
+// ─── Placeholder Page ─────────────────────────────────────────────────────────────
+const PlaceholderPage: React.FC<{ title: string; description: string }> = ({ title, description }) => (
+  <div className="container mx-auto p-6">
+    <div className="text-center py-16">
+      <h1 className="text-3xl font-bold mb-4">{title}</h1>
+      <p className="text-gray-600 mb-8">{description}</p>
+      <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-lg max-w-md mx-auto">
+        <h3 className="font-semibold text-yellow-800 mb-2">🚧 Em Desenvolvimento</h3>
+        <p className="text-yellow-700">
+          Esta funcionalidade será implementada nas próximas sprints.
+          Por enquanto, você pode acessar as páginas já disponíveis.
+        </p>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
-// Página 404
-const NotFoundPage = () => {
-  return (
-    <div className="container mx-auto p-6">
-      <div className="text-center py-16">
-        <h1 className="text-3xl font-bold mb-4">404 - Página não encontrada</h1>
-        <p className="text-gray-600 mb-8">A página que você está procurando não existe.</p>
-        <Link
-          to="/"
-          className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          Ir para Dashboard
-        </Link>
-      </div>
+// ─── 404 ──────────────────────────────────────────────────────────────────────────
+const NotFoundPage = () => (
+  <div className="container mx-auto p-6">
+    <div className="text-center py-16">
+      <h1 className="text-3xl font-bold mb-4">404 — Página não encontrada</h1>
+      <p className="text-gray-600 mb-8">A página que você está procurando não existe.</p>
+      <Link
+        to="/"
+        className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        Ir para Dashboard
+      </Link>
     </div>
-  );
-};
+  </div>
+);
 
 export default App;
