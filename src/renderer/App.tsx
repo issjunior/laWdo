@@ -215,13 +215,15 @@ const NavItem: React.FC<NavItemProps> = ({ path, label, emoji, icon, currentPath
 
   if (collapsed) {
     return (
-      <Link
-        to={path}
-        className={`nav-icon-btn${isActive ? ' active' : ''}`}
-        title={label}
-      >
-        {icon}
-      </Link>
+      <div className="nav-section-collapsed">
+        <Link
+          to={path}
+          className={`nav-icon-btn${isActive ? ' active' : ''}`}
+          title={label}
+        >
+          {icon}
+        </Link>
+      </div>
     );
   }
 
