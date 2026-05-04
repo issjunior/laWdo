@@ -40,14 +40,25 @@ export const SolicitantesPage: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [mostrarTodos, setMostrarTodos] = useState(false);
+  const [removidoRecentemente, setRemovidoRecentemente] = useState<string | null>(null);
 
   // Carregar solicitantes
-  const carregarSolicitantes = useCallback(async () => {
+  const carregarSolicitantes = useCallback(async (showAll = false) => {
     try {
       setLoading(true);
       setError(null);
 
-      const result = await window.ipcAPI.solicitante.findAll();
+      let result;
+      if (showAll) {
+        // Buscar todos os solicitantes (ativos e inativos)
+        result = await window.ipcAPI.solicitante.findAllSemFiltroStatus();
+        console.log('Resultado findAllSemFiltroStatus:', result); // Debug
+      } else {
+        // Buscar apenas solicitantes ativos
+        result = await window.ipcAPI.solicitante.findAll();
+        console.log('Resultado findAll:', result); // Debug
+      }
 
       if (result.success && result.data) {
         setSolicitantes(result.data);
@@ -63,8 +74,8 @@ export const SolicitantesPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    carregarSolicitantes();
-  }, [carregarSolicitantes]);
+    carregarSolicitantes(mostrarTodos);
+  }, [carregarSolicitantes, mostrarTodos]);
 
   // Filtrar solicitantes pelo termo de busca
   const filteredSolicitantes = solicitantes.filter(
@@ -151,9 +162,9 @@ export const SolicitantesPage: React.FC = () => {
     }
   };
 
-  // Excluir solicitante
-  const handleExcluir = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este solicitante?')) {
+  // Desativar solicitante (soft delete)
+  const handleDesativar = async (id: string) => {
+    if (!confirm('Tem certeza que deseja desativar este solicitante? Ele deixará de aparecer na lista de ativos, mas permanecerá no banco de dados para fins históricos.')) {
       return;
     }
 
@@ -161,26 +172,64 @@ export const SolicitantesPage: React.FC = () => {
       const result = await window.ipcAPI.solicitante.delete(id);
 
       if (result.success) {
-        await carregarSolicitantes();
+        await carregarSolicitantes(mostrarTodos);
+        setSuccess('Solicitante desativado com sucesso!');
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        alert(`Erro ao excluir: ${result.error}`);
+        setError(result.error || 'Erro ao desativar solicitante');
       }
     } catch (error) {
-      console.error('Erro ao excluir solicitante:', error);
-      alert('Erro ao excluir solicitante');
+      console.error('Erro ao desativar solicitante:', error);
+      setError('Erro ao desativar solicitante');
+    }
+  };
+
+  // Excluir permanentemente (hard delete)
+  const handleHardDelete = async (id: string, nome: string) => {
+    if (!confirm(`⚠️ ATENÇÃO: Você está prestes a EXCLUIR PERMANENTEMENTE o solicitante "${nome}".\n\nEsta ação não pode ser desfeita e pode afetar laudos que utilizam este solicitante. Tem certeza absoluta?`)) {
+      return;
+    }
+
+    try {
+      const result = await window.ipcAPI.solicitante.hardDelete(id);
+
+      if (result.success) {
+        await carregarSolicitantes(mostrarTodos);
+        setSuccess('Solicitante excluído permanentemente!');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(result.error || 'Erro ao excluir permanentemente');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir permanentemente:', error);
+      setError('Erro ao excluir permanentemente');
     }
   };
 
   // Gerenciar status (ativar/desativar)
   const handleToggleStatus = async (solicitante: Solicitante) => {
     try {
-      const novoStatus = !solicitante.ativo;
-      const result = await window.ipcAPI.solicitante.update(solicitante.id, {
-        ativo: novoStatus,
-      });
+      // Mostrar mensagem de confirmação mais específica
+      const acao = solicitante.ativo !== false ? 'desativar' : 'ativar';
+      if (!confirm(`Tem certeza que deseja ${acao} este solicitante?`)) {
+        return;
+      }
+
+      const result = await window.ipcAPI.solicitante.toggleStatus(solicitante.id);
 
       if (result.success) {
-        await carregarSolicitantes();
+        const novoStatus = !solicitante.ativo;
+
+        if (!mostrarTodos && !!solicitante.ativo && novoStatus === false) {
+          // ApenasAtivos + Desativando: remover da lista local
+          setSolicitantes(prev => prev.filter(s => s.id !== solicitante.id));
+          setRemovidoRecentemente(solicitante.id);
+          setTimeout(() => setRemovidoRecentemente(null), 3000);
+          setSuccess(`Solicitante desativado com sucesso!`);
+        } else {
+          // Outros casos: recarregar normalmente
+          await carregarSolicitantes(mostrarTodos);
+        }
       } else {
         alert(`Erro ao alterar status: ${result.error}`);
       }
@@ -199,10 +248,26 @@ export const SolicitantesPage: React.FC = () => {
             Gerencie órgãos solicitantes (varas, delegacias, órgãos públicos)
           </p>
         </div>
-        <Button onClick={handleNovo} className="flex items-center gap-2">
-          <Plus size={16} />
-          Novo Solicitante
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={handleNovo}
+            className="flex items-center gap-2"
+          >
+            <Plus size={16} />
+            Novo Solicitante
+          </Button>
+          <Button
+            variant={mostrarTodos ? "default" : "outline"}
+            onClick={() => {
+              const novoStatus = !mostrarTodos;
+              setMostrarTodos(novoStatus);
+              carregarSolicitantes(novoStatus);
+            }}
+            className="flex items-center gap-2"
+          >
+            {mostrarTodos ? "🔍 Todos" : "🔍 Apenas Ativos"}
+          </Button>
+        </div>
       </div>
 
       {/* Card de estatísticas */}
@@ -226,7 +291,7 @@ export const SolicitantesPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {solicitantes.filter((s) => s.ativo !== false).length}
+              {solicitantes.filter((s) => !!s.ativo).length}
             </div>
           </CardContent>
         </Card>
@@ -243,6 +308,29 @@ export const SolicitantesPage: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Status View
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm">
+              <span className="text-green-600 font-medium">
+                {solicitantes.filter((s) => !!s.ativo).length} Ativos
+              </span>
+              {mostrarTodos && solicitantes.some((s) => !s.ativo) && (
+                <span className="mx-2">•</span>
+              )}
+              {mostrarTodos && solicitantes.some((s) => !s.ativo) && (
+                <span className="text-red-600 font-medium">
+                  {solicitantes.filter((s) => !s.ativo).length} Inativos
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Busca e tabela */}
@@ -252,7 +340,7 @@ export const SolicitantesPage: React.FC = () => {
             <div>
               <CardTitle>Lista de Solicitantes</CardTitle>
               <CardDescription>
-                {filteredSolicitantes.length} solicitante(s) encontrado(s)
+                {filteredSolicitantes.length} solicitante(s) encontrado(s) • {mostrarTodos ? "Todos" : "Apenas Ativos"}
               </CardDescription>
             </div>
             <div className="relative w-64">
@@ -297,12 +385,12 @@ export const SolicitantesPage: React.FC = () => {
                     <TableCell>
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          solicitante.ativo !== false
+                          !!solicitante.ativo
                             ? 'bg-green-100 text-green-800'
                             : 'bg-red-100 text-red-800'
                         }`}
                       >
-                        {solicitante.ativo !== false ? 'Ativo' : 'Inativo'}
+                        {!!solicitante.ativo ? 'Ativo' : 'Desativado'}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
@@ -310,29 +398,32 @@ export const SolicitantesPage: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            handleToggleStatus(solicitante)
-                          }
-                          title={
-                            solicitante.ativo !== false
-                              ? 'Desativar'
-                              : 'Ativar'
-                          }
-                        >
-                          {solicitante.ativo !== false ? '🚫' : '✅'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
                           onClick={() => handleEditar(solicitante)}
+                          title="Editar informações"
                         >
                           <Edit size={14} />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleExcluir(solicitante.id)}
+                          onClick={() =>
+                            handleToggleStatus(solicitante)
+                          }
+                          title={
+                            !!solicitante.ativo
+                              ? 'Desativar (ocultar da lista)'
+                              : 'Ativar (mostrar na lista)'
+                          }
+                          className={!!solicitante.ativo ? 'text-orange-500' : 'text-green-600'}
+                        >
+                          {!!solicitante.ativo ? <X size={14} /> : <Plus size={14} />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleHardDelete(solicitante.id, solicitante.nome)}
                           className="text-red-600 hover:text-red-700"
+                          title="Excluir permanentemente (apagar do banco de dados)"
                         >
                           <Trash2 size={14} />
                         </Button>
@@ -345,6 +436,13 @@ export const SolicitantesPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Toast de sucesso */}
+      {removidoRecentemente && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
+          Solicitante desativado com sucesso!
+        </div>
+      )}
 
       {/* Diálogo de criação/edição */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -111,6 +111,12 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
     } = {}
   ): Promise<SolicitanteRow[]> {
     try {
+      // Garantir que busque apenas ativos se não houver filtro explícito
+      if (!('ativo' in filters)) {
+        // Usar any temporariamente para contornar a incompatibilidade de tipos
+        (filters as any).ativo = 1
+      }
+
       const rows = await super.findAll(filters, options)
       const decryptedRows = await Promise.all(
         rows.map(row => this.decryptFields(row))
@@ -228,8 +234,12 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       let whereClause = ''
       const params: any[] = []
 
+      // Sempre filtrar por status ativo
+      whereClause = 'WHERE ativo = 1'
+
+      // Adiciona filtro de tipo se fornecido
       if (filters.tipo) {
-        whereClause = 'WHERE tipo = ?'
+        whereClause = `${whereClause} AND tipo = ?`
         params.push(filters.tipo)
       }
 
@@ -248,6 +258,66 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       return decryptedRows.filter((row): row is SolicitanteRow => row !== null)
     } catch (error) {
       logError('Erro ao buscar solicitantes ativos', { filters, options, error })
+      throw error
+    }
+  }
+
+  /**
+   * Desativar solicitante (soft delete - apenas altera status ativo para 0)
+   */
+  async desativarSolicitante(id: string): Promise<void> {
+    try {
+      logInfo(`Desativando solicitante ${id}`)
+      const sql = 'UPDATE solicitantes SET ativo = 0 WHERE id = ?'
+      await this.executeCustomQuery<SolicitanteRow>(sql, [id])
+    } catch (error) {
+      logError('Erro ao desativar solicitante', { id, error })
+      throw error
+    }
+  }
+
+  /**
+   * Buscar todos os solicitantes (ativos e inativos) com paginação
+   */
+  async findAllSemFiltroStatus(
+    filters: { tipo?: string } = {},
+    options: { limit?: number; offset?: number } = {}
+  ): Promise<SolicitanteRow[]> {
+    try {
+      const { limit = 100, offset = 0 } = options
+      let whereClause = ''
+      const params: any[] = []
+
+      // Adiciona filtro de tipo se fornecido, MAS NUNCA filtra por ativo
+      if (filters.tipo) {
+        whereClause = 'WHERE tipo = ?'
+        params.push(filters.tipo)
+      }
+
+      // Forçar busca SEMPRE incluindo inativos
+      const sql = `
+        SELECT * FROM solicitantes
+        ${whereClause}
+        ORDER BY nome ASC
+        LIMIT ? OFFSET ?
+      `
+
+      params.push(limit, offset)
+      logDebug('🔍findAllSemFiltroStatus - SQL:', { sql, filters, options, params })
+
+      const rows = await this.executeCustomQuery<SolicitanteRow>(sql, params)
+
+      logDebug('🔍findAllSemFiltroStatus - Rows:', { totalRows: rows.length, solicitantes: rows })
+
+      const decryptedRows = await Promise.all(
+        rows.map(row => this.decryptFields(row))
+      )
+      logDebug('🔍findAllSemFiltroStatus - Decrypted:', { decryptedRows: decryptedRows.filter((row): row is SolicitanteRow => row !== null) })
+
+      const filteredRows = decryptedRows.filter((row): row is SolicitanteRow => row !== null)
+      return filteredRows
+    } catch (error) {
+      logError('Erro ao buscar todos os solicitantes', { filters, options, error })
       throw error
     }
   }

@@ -84,6 +84,7 @@ export interface SolicitanteUpdateData {
   endereco?: string
   telefone?: string
   email?: string
+  ativo?: boolean
 }
 
 /**

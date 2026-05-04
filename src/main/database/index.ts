@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -92,6 +92,7 @@ const createDatabaseSchema = async (): Promise<void> => {
         endereco TEXT,
         telefone TEXT,
         email TEXT,
+        ativo BOOLEAN DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -261,10 +262,33 @@ const checkAndApplyMigrations = async (): Promise<void> => {
  */
 const applyMigrations = async (fromVersion: number): Promise<void> => {
   // Implementar migrations específicas conforme necessário
-  // Exemplo:
-  // if (fromVersion < 2) {
-  //   await executeNonQuery('ALTER TABLE users ADD COLUMN telefone TEXT');
-  // }
+
+  // Migration versão 2: Adicionar campo ativo na tabela solicitantes
+  if (fromVersion < 2) {
+    try {
+      // Verificar se a coluna já existe (evitar erro em re-execuções)
+      const tables = await executeQuery<{ name: string }>(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='solicitantes'
+      `);
+
+      if (tables.length > 0) {
+        const columns = await executeQuery<{ name: string }>(`
+          PRAGMA table_info(solicitantes)
+        `);
+
+        const hasAtivoColumn = columns.some(col => col.name === 'ativo');
+
+        if (!hasAtivoColumn) {
+          await executeNonQuery('ALTER TABLE solicitantes ADD COLUMN ativo BOOLEAN DEFAULT 1');
+          logInfo('Campo ativo adicionado na tabela solicitantes');
+        }
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 2', error);
+      throw error;
+    }
+  }
 
   logInfo(`Aplicadas migrations da versão ${fromVersion}`);
 };

@@ -50,10 +50,13 @@ export interface IpcAPI {
   // Solicitantes
   solicitante: {
     findAll: (filters?: SolicitanteFilters, options?: PaginationOptions) => Promise<UserResponse>;
+    findAllSemFiltroStatus: (filters?: SolicitanteFilters, options?: PaginationOptions) => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
     create: (solicitanteData: SolicitanteCreateData) => Promise<UserResponse>;
     update: (id: string, updateData: SolicitanteUpdateData) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
+    hardDelete: (id: string) => Promise<UserResponse>;
+    toggleStatus: (id: string) => Promise<UserResponse>;
     findByTipo: (tipo: string) => Promise<UserResponse>;
     findTipos: () => Promise<UserResponse>;
     findAtivos: (filters?: { tipo?: string }, options?: PaginationOptions) => Promise<UserResponse>;
@@ -107,10 +110,13 @@ const ALLOWED_CHANNELS = new Set([
 
   // Solicitantes
   'solicitante:findAll',
+  'solicitante:findAllSemFiltroStatus',
   'solicitante:findById',
   'solicitante:create',
   'solicitante:update',
   'solicitante:delete',
+  'solicitante:hardDelete',
+  'solicitante:toggleStatus',
   'solicitante:findByTipo',
   'solicitante:findTipos',
   'solicitante:findAtivos',
@@ -253,8 +259,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   // Solicitantes
   solicitante: {
-    findAll: (filters = {}, options = {}) => {
+    findAll: (filters?: SolicitanteFilters, options?: PaginationOptions) => {
       return ipcRenderer.invoke('solicitante:findAll', filters, options);
+    },
+
+    findAllSemFiltroStatus: (filters?: SolicitanteFilters, options?: PaginationOptions) => {
+      return ipcRenderer.invoke('solicitante:findAllSemFiltroStatus', filters, options);
     },
 
     findById: (id: string) => {
@@ -289,6 +299,20 @@ contextBridge.exposeInMainWorld('ipcAPI', {
         throw new Error('ID inválido');
       }
       return ipcRenderer.invoke('solicitante:delete', id.trim());
+    },
+
+    hardDelete: (id: string) => {
+      if (typeof id !== 'string' || !id.trim()) {
+        throw new Error('ID inválido');
+      }
+      return ipcRenderer.invoke('solicitante:hardDelete', id.trim());
+    },
+
+    toggleStatus: (id: string) => {
+      if (typeof id !== 'string' || !id.trim()) {
+        throw new Error('ID inválido');
+      }
+      return ipcRenderer.invoke('solicitante:toggleStatus', id.trim());
     },
 
     findByTipo: (tipo: string) => {
