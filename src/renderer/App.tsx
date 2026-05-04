@@ -54,8 +54,8 @@ const Header = () => {
     <header className="header">
       <div className="header-content">
         <div className="logo">
-          <h1>🔍 Laudo Pericial PCP</h1>
-          <p className="subtitle">Polícia Científica do Paraná</p>
+          <h1>🔍 laWdo</h1>
+          <p className="subtitle">Sistema de automatização de laudos periciais</p>
         </div>
         <div className="app-info">
           <span className="version">v0.1.0</span>
