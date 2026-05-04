@@ -93,10 +93,10 @@ export const SolicitantesPage: React.FC = () => {
     setEditingSolicitante(solicitante);
     setFormData({
       nome: solicitante.nome,
-      tipo: solicitante.tipo || '',
-      endereco: solicitante.endereco || '',
-      telefone: solicitante.telefone || '',
-      email: solicitante.email || '',
+      tipo: solicitante.tipo ?? '',
+      endereco: solicitante.endereco ?? '',
+      telefone: solicitante.telefone ?? '',
+      email: solicitante.email ?? '',
     });
     setError(null);
     setSuccess(null);
