@@ -36,6 +36,29 @@ Essa decisão de segurança equilibra **proteção de dados críticos** com **fu
 
 ---
 
+---
+
+## 🛠️ Ferramentas de Desenvolvimento
+
+### Skill de Referência de Migração
+**Descrição:** Ferramenta auxiliar para consulta do projeto legado (`laudo-streamlit/`) durante a migração.
+
+**Uso:** Quando implementar funcionalidades, use `Skill("skill-referencia-migracao")` para:
+1. Localizar implementações equivalentes no projeto legado
+2. Entender a lógica de negócio existente
+3. Adaptar para a nova arquitetura Electron/TypeScript/React
+4. Preserver funcionalidades sem copiar código diretamente
+
+**Recursos disponíveis:**
+- Mapa estrutural completo do legado
+- Localização de todas as páginas e componentes
+- Banco de dados e queries existentes
+- Templates e modelos de documentos
+
+**Quando usar:** Todo desenvolvimento de novas funcionalidades para garantir nenhuma feature seja perdida na migração.
+
+---
+
 ## 📁 Estrutura de Diretórios Recomendada
 
 ```text
