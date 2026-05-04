@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -8,6 +8,8 @@ import {
   TiposExamePage,
   DashboardPage,
 } from '@/pages';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Info } from 'lucide-react';
 import './styles/globals.css';
 
 // Layout component
@@ -25,20 +27,87 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 // Header component
-const Header = () => (
-  <header className="header">
-    <div className="header-content">
-      <div className="logo">
-        <h1>🔍 Laudo Pericial PCP</h1>
-        <p className="subtitle">Polícia Científica do Paraná</p>
+const Header = () => {
+  const [appInfo, setAppInfo] = useState<{ version: string; name: string } | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const fetchAppInfo = async () => {
+      try {
+        if (window.ipcAPI) {
+          const info = await window.ipcAPI.getAppInfo();
+          setAppInfo(info);
+        }
+      } catch {
+        // App info é opcional
+      }
+    };
+    fetchAppInfo();
+  }, []);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+    document.body.classList.toggle('dark', !isDarkMode);
+  };
+
+  return (
+    <header className="header">
+      <div className="header-content">
+        <div className="logo">
+          <h1>🔍 Laudo Pericial PCP</h1>
+          <p className="subtitle">Polícia Científica do Paraná</p>
+        </div>
+        <div className="app-info">
+          <span className="version">v0.1.0</span>
+          <span className="status online">● Online</span>
+          <button
+            onClick={toggleDarkMode}
+            className="dark-mode-btn"
+            title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
+          >
+            {isDarkMode ? '☀️' : '🌙'}
+          </button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <button className="system-info-btn" title="Informações do Sistema">
+                <Info size={18} />
+              </button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Informações do Sistema</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">⚡ Tecnologias</h3>
+                  <ul className="space-y-1 text-sm">
+                    <li>✅ Electron + Vite + TypeScript</li>
+                    <li>✅ React + Shadcn/ui</li>
+                    <li>✅ SQLite (local)</li>
+                    <li>✅ React Hook Form + Zod</li>
+                    <li>🚀 Handlers IPC específicos</li>
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">🔧 Sistema</h3>
+                  {appInfo ? (
+                    <div className="space-y-1 text-sm">
+                      <p><strong>Nome:</strong> {appInfo.name}</p>
+                      <p><strong>Versão:</strong> {appInfo.version}</p>
+                      <p><strong>Ambiente:</strong> {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Carregando informações...</p>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
-      <div className="app-info">
-        <span className="version">v0.1.0</span>
-        <span className="status online">● Online</span>
-      </div>
-    </div>
-  </header>
-);
+    </header>
+  );
+};
 
 // Sidebar component
 const Sidebar = () => {
@@ -78,14 +147,7 @@ const Sidebar = () => {
 const Footer = () => (
   <footer className="footer">
     <div className="footer-content">
-      <p>© 2024 Polícia Científica do Paraná - Sistema Laudo Pericial PCP</p>
-      <p className="footer-links">
-        <span>v0.1.0-alpha</span>
-        <span>•</span>
-        <span>Branch: main</span>
-        <span>•</span>
-        <span>Electron + React + TypeScript</span>
-      </p>
+      <p>© 2026 - laWdo</p>
     </div>
   </footer>
 );

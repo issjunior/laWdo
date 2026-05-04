@@ -198,6 +198,46 @@ body {
   background-color: #10b981;
 }
 
+/* Botão de informações do sistema */
+.system-info-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: transparent;
+  color: var(--muted-foreground, #64748b);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.system-info-btn:hover {
+  background: var(--accent, #f1f5f9);
+  color: var(--foreground, #0f172a);
+}
+
+/* Botão de dark mode */
+.dark-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 18px;
+}
+
+.dark-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
 /* App body */
 .app-body {
   display: flex;
