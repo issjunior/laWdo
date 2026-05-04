@@ -47,7 +47,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 // ─── Header ─────────────────────────────────────────────────────────────────────
 const Header = () => {
   const [appInfo, setAppInfo] = useState<{ version: string; name: string } | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme === 'dark';
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   useEffect(() => {
     const fetchAppInfo = async () => {
@@ -64,8 +75,9 @@ const Header = () => {
   }, []);
 
   const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    document.body.classList.toggle('dark', !isDarkMode);
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('theme', newMode ? 'dark' : 'light');
   };
 
   return (
