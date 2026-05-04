@@ -3,63 +3,79 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Variáveis CSS para Shadcn/ui */
+/* ═══ Design Tokens ═══════════════════════════════════════════════════════════ */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Superfícies */
+    --background: 210 20% 98%;      /* #f7f9fb — fundo geral, quase branco */
+    --foreground: 220 25% 12%;      /* #181f2e — texto principal, alto contraste */
+    --card: 0 0% 100%;              /* #ffffff — cards e painéis */
+    --card-foreground: 220 25% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --popover-foreground: 220 25% 12%;
+
+    /* Primária: azul-índigo vibrante */
+    --primary: 226 71% 52%;         /* #2f6fed */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secundária: cinza-azulado suave */
+    --secondary: 214 32% 91%;       /* #dce4f0 */
+    --secondary-foreground: 220 25% 22%;
+
+    /* Tons neutros */
+    --muted: 214 20% 94%;           /* #eaeef4 */
+    --muted-foreground: 220 14% 46%; /* #6b7589 */
+    --accent: 226 71% 96%;          /* #eef2fd */
+    --accent-foreground: 226 71% 40%;
+
+    /* Estados */
+    --destructive: 4 86% 58%;       /* #e84545 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 20% 88%;          /* #d8e0ec */
+    --input: 214 20% 88%;
+    --ring: 226 71% 52%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    /* Superfícies escuras */
+    --background: 224 28% 10%;      /* #111827 — fundo geral */
+    --foreground: 213 27% 90%;      /* #d8e3f0 — texto principal */
+    --card: 224 24% 14%;            /* #181f2e — cards */
+    --card-foreground: 213 27% 90%;
+    --popover: 224 24% 14%;
+    --popover-foreground: 213 27% 90%;
+
+    /* Primária mais brilhante no escuro */
+    --primary: 217 91% 65%;         /* #60a5fa */
+    --primary-foreground: 224 28% 10%;
+
+    /* Secundária escura */
+    --secondary: 222 24% 20%;       /* #242e42 */
+    --secondary-foreground: 213 27% 85%;
+
+    /* Neutros escuros */
+    --muted: 222 24% 18%;           /* #1f2a3c */
+    --muted-foreground: 215 18% 58%; /* #7e90aa */
+    --accent: 217 50% 22%;          /* #1d3052 */
+    --accent-foreground: 213 70% 75%;
+
+    /* Estados escuros */
+    --destructive: 4 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 24% 22%;          /* #283044 */
+    --input: 222 24% 22%;
+    --ring: 217 91% 65%;
   }
 
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Reset e estilos base */
+/* ═══ Reset & Base ════════════════════════════════════════════════════════════ */
 * {
   margin: 0;
   padding: 0;
@@ -67,22 +83,25 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
-  line-height: 1.5;
-  color: #333;
-  background-color: #f8fafc;
+  line-height: 1.6;
+  color: #181f2e;
+  background-color: #f7f9fb;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Modos escuro */
+/* Dark: fundo e texto base */
 .dark body {
-  background-color: #1e293b;
-  color: #f1f5f9;
+  background-color: #111827;
+  color: #d8e3f0;
 }
 
 .dark .header {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1e2d45 100%);
+  border-bottom-color: #1e293b;
 }
 
 .dark .sidebar {
@@ -163,75 +182,66 @@ body {
 }
 
 .dark .main-content {
-  background-color: #0f172a;
+  background-color: #111827;
 }
 
 .dark .welcome-card {
-  background: #1e293b;
+  background: #181f2e;
+  border: 1px solid #242e42;
 }
 
 .dark .welcome-card h2 {
-  color: #f1f5f9;
+  color: #e2eaf5;
 }
 
 .dark .welcome-text {
-  color: #94a3b8;
+  color: #7e90aa;
 }
 
 .dark .info-card {
-  background: #1e293b;
-  border: 1px solid #1e293b;
+  background: #1a2236;
+  border: 1px solid #242e42;
 }
 
 .dark .info-card h3 {
-  color: #f1f5f9;
+  color: #c8d8ee;
 }
 
-.dark .info-card p {
-  color: #94a3b8;
-}
-
+.dark .info-card p,
 .dark .info-card ul {
-  color: #94a3b8;
+  color: #7e90aa;
 }
 
 .dark .info-card li::before {
-  color: #64748b;
+  color: #3d5070;
 }
 
 .dark .sprint-info {
-  background: #1e293b;
+  background: #181f2e;
+  border: 1px solid #242e42;
 }
 
-.dark .sprint-info h3 {
-  color: #f1f5f9;
-}
-
-.dark .sprint-info ul {
-  color: #94a3b8;
-}
-
-.dark .sprint-info li {
-  color: #94a3b8;
-}
+.dark .sprint-info h3 { color: #e2eaf5; }
+.dark .sprint-info ul,
+.dark .sprint-info li { color: #7e90aa; }
 
 .dark .footer {
   background: #0f172a;
   border-top: 1px solid #1e293b;
-  color: #94a3b8;
+  color: #7e90aa;
 }
 
 .dark .btn.secondary {
-  background-color: #1e293b;
-  color: #94a3b8;
+  background-color: #242e42;
+  color: #8aa0bc;
 }
 
 .dark .btn.secondary:hover {
-  background-color: #334155;
+  background-color: #2d3a52;
 }
 
 .dark .btn.outline:hover {
-  background-color: #1e293b;
+  background-color: #1d3052;
 }
 
 /* Animações */
@@ -301,11 +311,12 @@ body {
 
 /* Header */
 .header {
-  background: linear-gradient(135deg, #1a3a5c 0%, #2d4a6e 100%);
+  background: linear-gradient(135deg, #1a2e4a 0%, #1e4080 100%);
   color: white;
-  padding: 16px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 12px 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
   z-index: 10;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
 .header-content {
@@ -318,14 +329,16 @@ body {
 }
 
 .logo h1 {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin-bottom: 2px;
 }
 
 .subtitle {
-  font-size: 12px;
-  opacity: 0.8;
+  font-size: 11px;
+  opacity: 0.65;
+  letter-spacing: 0.02em;
 }
 
 .app-info {
@@ -710,15 +723,16 @@ body {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
-  background-color: #f8fafc;
+  background-color: #f0f4f9;
 }
 
 .welcome-card {
-  background: white;
-  border-radius: 12px;
+  background: #ffffff;
+  border-radius: 14px;
   padding: 32px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 4px rgba(15,23,46,0.06), 0 4px 16px rgba(15,23,46,0.04);
   margin-bottom: 24px;
+  border: 1px solid #e8eef6;
 }
 
 .welcome-card .logo-container {
@@ -736,16 +750,19 @@ body {
 }
 
 .welcome-card h2 {
-  font-size: 24px;
-  color: #1e293b;
-  margin-bottom: 16px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #181f2e;
+  margin-bottom: 12px;
+  letter-spacing: -0.3px;
 }
 
 .welcome-text {
-  color: #64748b;
-  line-height: 1.6;
+  color: #5a6a82;
+  line-height: 1.7;
   margin-bottom: 24px;
   max-width: 800px;
+  font-size: 14px;
 }
 
 .info-grid {
@@ -756,43 +773,51 @@ body {
 }
 
 .info-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2eaf4;
+  border-radius: 12px;
   padding: 20px;
+  transition: box-shadow 0.2s;
+}
+
+.info-card:hover {
+  box-shadow: 0 4px 16px rgba(15,23,46,0.08);
 }
 
 .info-card h3 {
-  font-size: 16px;
-  color: #1e293b;
-  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #181f2e;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .info-card p {
-  color: #475569;
-  margin-bottom: 8px;
-  font-size: 14px;
+  color: #5a6a82;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  line-height: 1.6;
 }
 
 .info-card ul {
   list-style: none;
-  color: #475569;
+  color: #5a6a82;
 }
 
 .info-card li {
-  margin-bottom: 6px;
-  padding-left: 8px;
+  margin-bottom: 5px;
+  padding-left: 12px;
   position: relative;
+  font-size: 13.5px;
 }
 
 .info-card li::before {
   content: '•';
-  color: #64748b;
+  color: #2f6fed;
   position: absolute;
-  left: -8px;
+  left: 0;
 }
 
 .action-buttons {
@@ -802,41 +827,45 @@ body {
 }
 
 .btn {
-  padding: 10px 20px;
+  padding: 9px 20px;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s;
+  letter-spacing: 0.01em;
 }
 
 .btn.primary {
-  background-color: #3b82f6;
+  background: linear-gradient(135deg, #2f6fed, #1a4fd4);
   color: white;
+  box-shadow: 0 2px 8px rgba(47,111,237,0.3);
 }
 
 .btn.primary:hover {
-  background-color: #2563eb;
+  background: linear-gradient(135deg, #1a4fd4, #1040b8);
+  box-shadow: 0 4px 12px rgba(47,111,237,0.4);
+  transform: translateY(-1px);
 }
 
 .btn.secondary {
-  background-color: #f1f5f9;
-  color: #475569;
+  background-color: #eaeef4;
+  color: #3a4a62;
 }
 
 .btn.secondary:hover {
-  background-color: #e2e8f0;
+  background-color: #d8e0ec;
 }
 
 .btn.outline {
   background-color: transparent;
-  color: #3b82f6;
-  border: 1px solid #3b82f6;
+  color: #2f6fed;
+  border: 1.5px solid #2f6fed;
 }
 
 .btn.outline:hover {
-  background-color: #eff6ff;
+  background-color: #eef2fd;
 }
 
 .sprint-info {
@@ -899,10 +928,10 @@ body {
 
 /* Footer */
 .footer {
-  background: white;
-  border-top: 1px solid #e2e8f0;
-  padding: 16px 24px;
-  color: #64748b;
+  background: #ffffff;
+  border-top: 1px solid #e2eaf4;
+  padding: 10px 24px;
+  color: #7e90aa;
   font-size: 12px;
   z-index: 10;
 }
