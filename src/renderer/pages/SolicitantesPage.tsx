@@ -19,11 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Plus, Search, Edit, Trash2, X } from 'lucide-react';
-import {
-  Solicitante,
-  SolicitanteCreateData,
-  SolicitanteUpdateData,
-} from '@/lib/validators';
+import { solicitanteSchema, createSolicitanteSchema, type Solicitante } from '@/lib/validators/solicitante.schema';
 
 export const SolicitantesPage: React.FC = () => {
   const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
@@ -42,6 +38,7 @@ export const SolicitantesPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
   const [removidoRecentemente, setRemovidoRecentemente] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Partial<Solicitante>>({});
 
   // Carregar solicitantes
   const carregarSolicitantes = useCallback(async (showAll = false) => {
@@ -53,11 +50,9 @@ export const SolicitantesPage: React.FC = () => {
       if (showAll) {
         // Buscar todos os solicitantes (ativos e inativos)
         result = await window.ipcAPI.solicitante.findAllSemFiltroStatus();
-        console.log('Resultado findAllSemFiltroStatus:', result); // Debug
       } else {
         // Buscar apenas solicitantes ativos
         result = await window.ipcAPI.solicitante.findAll();
-        console.log('Resultado findAll:', result); // Debug
       }
 
       if (result.success && result.data) {
@@ -119,14 +114,29 @@ export const SolicitantesPage: React.FC = () => {
     try {
       setError(null);
       setSuccess(null);
+      setErrors({});
 
-      if (!formData.nome.trim()) {
-        setError('O nome é obrigatório');
-        return;
-      }
+      // Validar com Zod
+      const validationResult = createSolicitanteSchema.safeParse(formData);
 
-      if (!formData.tipo.trim()) {
-        setError('O tipo é obrigatório');
+      if (!validationResult.success) {
+        const zodErrors: Partial<Solicitante> = {};
+        validationResult.error.errors.forEach((err) => {
+          // Mapear corretamente os erros para os campos
+          if (err.path[0] === 'nome') {
+            zodErrors.nome = err.message;
+          } else if (err.path[0] === 'tipo') {
+            zodErrors.tipo = err.message;
+          } else if (err.path[0] === 'endereco') {
+            zodErrors.endereco = err.message;
+          } else if (err.path[0] === 'telefone') {
+            zodErrors.telefone = err.message;
+          } else if (err.path[0] === 'email') {
+            zodErrors.email = err.message;
+          }
+        });
+        setErrors(zodErrors);
+        setError(validationResult.error.errors[0].message);
         return;
       }
 
@@ -473,7 +483,11 @@ export const SolicitantesPage: React.FC = () => {
                     setFormData({ ...formData, nome: e.target.value })
                   }
                   placeholder="Ex: Tribunal de Justiça do Paraná"
+                  className={errors.nome ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
+                {errors.nome && (
+                  <p className="text-xs text-red-600">{errors.nome}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -487,7 +501,11 @@ export const SolicitantesPage: React.FC = () => {
                     setFormData({ ...formData, tipo: e.target.value })
                   }
                   placeholder="Ex: Vara Criminal, Delegacia, Ministério Público"
+                  className={errors.tipo ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
+                {errors.tipo && (
+                  <p className="text-xs text-red-600">{errors.tipo}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -501,7 +519,11 @@ export const SolicitantesPage: React.FC = () => {
                     setFormData({ ...formData, endereco: e.target.value })
                   }
                   placeholder="Endereço completo"
+                  className={errors.endereco ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
+                {errors.endereco && (
+                  <p className="text-xs text-red-600">{errors.endereco}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -516,7 +538,11 @@ export const SolicitantesPage: React.FC = () => {
                       setFormData({ ...formData, telefone: e.target.value })
                     }
                     placeholder="(41) 99999-9999"
+                    className={errors.telefone ? 'border-red-500 focus-visible:ring-red-500' : ''}
                   />
+                  {errors.telefone && (
+                    <p className="text-xs text-red-600">{errors.telefone}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -531,13 +557,17 @@ export const SolicitantesPage: React.FC = () => {
                       setFormData({ ...formData, email: e.target.value })
                     }
                     placeholder="email@tjpr.jus.br"
+                    className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
                   />
+                  {errors.email && (
+                    <p className="text-xs text-red-600">{errors.email}</p>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Mensagens de erro/sucesso */}
-            {error && (
+            {error && !errors.nome && !errors.tipo && (
               <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
                 {error}
               </div>
@@ -553,7 +583,7 @@ export const SolicitantesPage: React.FC = () => {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSalvar} disabled={!formData.nome.trim() || !formData.tipo.trim()}>
+            <Button onClick={handleSalvar}>
               {editingSolicitante ? 'Atualizar' : 'Criar'}
             </Button>
           </DialogFooter>
