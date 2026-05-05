@@ -1,5 +1,5 @@
-import { logError, logInfo, logDebug } from '../utils/logger'
-import { executeQuery, executeNonQuery } from '../database/sqlite'
+import { logError, logInfo, logDebug } from '../utils/logger.js'
+import { executeQuery, executeNonQuery } from '../database/sqlite.js'
 
 /**
  * Serviço base com operações CRUD comuns

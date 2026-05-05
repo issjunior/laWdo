@@ -1,9 +1,9 @@
-import { ipcMain, BrowserWindow } from 'electron';
-import { logInfo, logError, logDebug, logWarning } from '../utils/logger';
-import { sanitizeInput, validateSqlQuery } from '../security';
-import { registerUserHandlers } from './handlers/user.handlers';
-import { registerSolicitanteHandlers } from './handlers/solicitante.handlers';
-import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers';
+import { ipcMain, BrowserWindow, app } from 'electron';
+import { logInfo, logError, logDebug, logWarning } from '../utils/logger.js';
+import { sanitizeInput, validateSqlQuery } from '../security/index.js';
+import { registerUserHandlers } from './handlers/user.handlers.js';
+import { registerSolicitanteHandlers } from './handlers/solicitante.handlers.js';
+import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers.js';
 
 /**
  * Registra todos os handlers IPC para comunicação entre main e renderer processes
@@ -104,8 +104,8 @@ const registerSystemHandlers = (): void => {
   ipcMain.handle('restart-app', async () => {
     logInfo('Reiniciando aplicativo...');
     setTimeout(() => {
-      require('electron').app.relaunch();
-      require('electron').app.exit(0);
+      app.relaunch();
+      app.exit(0);
     }, 1000);
     return { success: true };
   });
@@ -122,7 +122,7 @@ const registerSystemHandlers = (): void => {
   // Fechar aplicativo
   ipcMain.handle('close-app', async () => {
     logInfo('Fechando aplicativo...');
-    require('electron').app.quit();
+    app.quit();
     return { success: true };
   });
 };

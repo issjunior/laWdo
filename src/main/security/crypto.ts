@@ -1,5 +1,6 @@
-import { logInfo, logError, logDebug } from '../utils/logger';
+import { logInfo, logError, logDebug } from '../utils/logger.js';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 /**
  * Módulo de criptografia para dados sensíveis
@@ -105,8 +106,6 @@ export const hashPassword = async (password: string): Promise<string> => {
   try {
     logDebug('Criando hash de senha...');
 
-    // Usando bcrypt diretamente
-    const bcrypt = require('bcrypt');
     const saltRounds = 10;
 
     const hash = await bcrypt.hash(password, saltRounds);
@@ -124,7 +123,6 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
   try {
     logDebug('Verificando senha...');
 
-    const bcrypt = require('bcrypt');
     const isValid = await bcrypt.compare(password, hash);
 
     if (!isValid) {

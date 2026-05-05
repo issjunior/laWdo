@@ -1,5 +1,5 @@
 import { app, session } from 'electron';
-import { logInfo, logWarning } from '../utils/logger';
+import { logInfo, logWarning } from '../utils/logger.js';
 
 /**
  * Configuração de segurança para a aplicação Electron

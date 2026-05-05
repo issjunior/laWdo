@@ -6,9 +6,11 @@
   "author": "Polícia Científica do Paraná",
   "license": "MIT",
   "private": true,
+  "type":"module",
   "scripts": {
     "dev": "npm run build && electron .",
     "start": "electron .",
+    "postbuild": "node scripts/fix-imports.mjs",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json",

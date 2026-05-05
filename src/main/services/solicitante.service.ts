@@ -1,7 +1,7 @@
-import { BaseService } from './base.service'
-import { SolicitanteRow } from '../types/database'
-import { logInfo, logError, logDebug } from '../utils/logger'
-import { encrypt, decrypt } from '../security/crypto'
+import { BaseService } from './base.service.js'
+import { SolicitanteRow } from '../types/database.js'
+import { logInfo, logError, logDebug } from '../utils/logger.js'
+import { encrypt, decrypt } from '../security/crypto.js'
 
 /**
  * Serviço para gerenciamento de solicitantes (órgãos, varas, delegacias)

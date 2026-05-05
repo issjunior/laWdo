@@ -1,10 +1,8 @@
-import { logInfo, logError, logDebug } from '../utils/logger';
+import { logInfo, logError, logDebug } from '../utils/logger.js';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
-
-// Usaremos sqlite3 diretamente por enquanto
-const sqlite3 = require('sqlite3');
+import sqlite3 from 'sqlite3';
 
 // Configuração do banco de dados
 const DB_DIR = app.getPath('userData');

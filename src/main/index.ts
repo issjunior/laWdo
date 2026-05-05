@@ -1,17 +1,22 @@
 import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron';
 import path from 'path';
-import { setupSecurity } from './security';
-import { setupDatabase } from './database';
-import { setupLogging } from './utils/logger';
-import { registerIpcHandlers } from './ipc';
+import { fileURLToPath } from 'url';
+import squirrelStartup from 'electron-squirrel-startup';
+import { setupSecurity } from './security/index.js';
+import { setupDatabase } from './database/index.js';
+import { setupLogging } from './utils/logger.js';
+import { registerIpcHandlers } from './ipc/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configurações de segurança
-if (require('electron-squirrel-startup')) {
+if (squirrelStartup) {
   app.quit();
 }
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
+if (squirrelStartup) {
   app.quit();
 }
 

@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
-import { logInfo, logError } from '../../utils/logger'
-import { tipoExameService } from '../../services/tipo-exame.service'
-import { sanitizeInput } from '../../security'
+import { logInfo, logError } from '../../utils/logger.js'
+import { tipoExameService } from '../../services/tipo-exame.service.js'
+import { sanitizeInput } from '../../security/index.js'
 
 /**
  * Registra handlers IPC para operações de tipo de exame

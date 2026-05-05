@@ -2,8 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./out/preload",
-    "rootDir": "./src/preload"
+    "rootDir": "./src/preload",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
   },
-  "include": ["src/preload/**/*"],
+  "include": ["src/preload/**/*", "src/types/**/*"],
   "exclude": ["src/preload/**/*.test.ts", "src/preload/**/*.spec.ts"]
 }

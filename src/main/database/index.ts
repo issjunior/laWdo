@@ -1,4 +1,4 @@
-import { logInfo, logError } from '../utils/logger';
+import { logInfo, logError } from '../utils/logger.js';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
@@ -7,7 +7,7 @@ import {
   executeNonQuery,
   executeQuery,
   backupDatabase as sqliteBackup,
-} from './sqlite';
+} from './sqlite.js';
 
 // Diretório do banco de dados
 const DB_DIR = app.getPath('userData');

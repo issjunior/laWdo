@@ -1,6 +1,6 @@
-import { BaseService } from './base.service'
-import { UserRow } from '../types/database'
-import { logInfo, logError, logDebug } from '../utils/logger'
+import { BaseService } from './base.service.js'
+import { UserRow } from '../types/database.js'
+import { logInfo, logError, logDebug } from '../utils/logger.js'
 // A senha é criptografada apenas ao ser criada/alterada.
 // Campos de contato (telefone, email, endereco) NÃO são criptografados - são dados operacionais.
 

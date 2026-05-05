@@ -12,7 +12,7 @@ import type {
   SolicitanteUpdateData,
   TipoExameCreateData,
   TipoExameUpdateData
-} from './types';
+} from './types.js';
 
 // Tipos para a API exposta
 export interface IpcAPI {

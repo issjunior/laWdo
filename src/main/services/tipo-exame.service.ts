@@ -1,6 +1,6 @@
-import { BaseService } from './base.service'
-import { TipoExameRow } from '../types/database'
-import { logInfo, logError, logDebug } from '../utils/logger'
+import { BaseService } from './base.service.js'
+import { TipoExameRow } from '../types/database.js'
+import { logInfo, logError, logDebug } from '../utils/logger.js'
 
 /**
  * Serviço para gerenciamento de tipos de exame

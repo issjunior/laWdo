@@ -144,6 +144,7 @@ Uso interno - Polícia Científica do Paraná.
 ### 🎉 Destaques Técnicos Recentes
 
 - ✅ **Build vitorioso:** Compilação TypeScript/Vite 100% funcional
+- ✅ **Migração ESM concluída:** Projeto migrado para ECMAScript Modules com script automático de correção de imports (scripts/fix-imports.mjs)
 - ✅ **CRUD Solicitantes:** Implementado com criptografia e descriptografia automática
 - ✅ **Validação Zod:** Todos os forms validados com mensagens em português
 - ✅ **Segurança robusta:** Criptografia de senha com padrões industriais

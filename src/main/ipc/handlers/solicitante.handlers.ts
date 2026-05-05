@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
-import { logInfo, logError } from '../../utils/logger'
-import { solicitanteService } from '../../services/solicitante.service'
-import { sanitizeInput } from '../../security'
+import { logInfo, logError } from '../../utils/logger.js'
+import { solicitanteService } from '../../services/solicitante.service.js'
+import { sanitizeInput } from '../../security/index.js'
 
 /**
  * Registra handlers IPC para operações de solicitante

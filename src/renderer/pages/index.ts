@@ -1,4 +1,4 @@
-export { DashboardPage } from './DashboardPage';
-export { PerfilPage } from './PerfilPage';
-export { SolicitantesPage } from './SolicitantesPage';
-export { TiposExamePage } from './TiposExamePage';
+export { DashboardPage } from './DashboardPage.js';
+export { PerfilPage } from './PerfilPage.js';
+export { SolicitantesPage } from './SolicitantesPage.js';
+export { TiposExamePage } from './TiposExamePage.js';
