@@ -136,7 +136,7 @@ export const SolicitantesPage: React.FC = () => {
           }
         });
         setErrors(zodErrors);
-        setError(validationResult.error.errors[0].message);
+        // Removido setError duplicado que exibia a mesma mensagem geral
         return;
       }
 
