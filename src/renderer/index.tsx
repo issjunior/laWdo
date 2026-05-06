@@ -10,8 +10,10 @@ declare global {
   }
 }
 
-// Verificar se estamos no contexto do Electron
-const isElectron = typeof window !== 'undefined' && window.ipcAPI;
+const hasIpcApi = () =>
+  typeof window !== 'undefined' &&
+  typeof window.ipcAPI !== 'undefined' &&
+  typeof window.ipcAPI?.ping === 'function';
 
 // Componente de carregamento inicial
 const LoadingScreen = () => (
@@ -41,7 +43,7 @@ const LoadingScreen = () => (
     />
     <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>Laudo Pericial PCP</h1>
     <p style={{ fontSize: '16px', opacity: 0.8 }}>
-      {isElectron ? 'Inicializando aplicação...' : 'Aguardando conexão...'}
+      {hasIpcApi() ? 'Inicializando aplicacao...' : 'Aguardando conexao...'}
     </p>
     <style>{`
       @keyframes spin {
@@ -52,12 +54,12 @@ const LoadingScreen = () => (
   </div>
 );
 
-// Função para inicializar a aplicação
+// Funcao para inicializar a aplicacao
 const initApp = async () => {
   const rootElement = document.getElementById('root');
 
   if (!rootElement) {
-    console.error('Elemento root não encontrado');
+    console.error('Elemento root nao encontrado');
     return;
   }
 
@@ -68,9 +70,9 @@ const initApp = async () => {
 
   try {
     // Verificar se estamos no Electron
-    if (!isElectron) {
+    if (!hasIpcApi()) {
       console.warn(
-        '⚠️ Não está no contexto do Electron. Algumas funcionalidades podem não funcionar.'
+        'Nao esta no contexto do Electron. Algumas funcionalidades podem nao funcionar.'
       );
 
       // Mock para desenvolvimento
@@ -80,28 +82,41 @@ const initApp = async () => {
         logInfo: (msg: string) => console.log(`[INFO] ${msg}`),
         logError: (msg: string, err?: any) => console.error(`[ERROR] ${msg}`, err),
         executeQuery: async () => ({ success: false, message: 'Mock mode' }),
-        login: async () => ({ success: true, user: { id: 1, name: 'Usuário Mock' } }),
+        login: async () => ({ success: true, user: { id: 1, name: 'Usuario Mock' } }),
+        solicitante: {
+          findAll: async () => ({ success: true, data: [] }),
+          findAllSemFiltroStatus: async () => ({ success: true, data: [] }),
+          findById: async () => ({ success: false, error: 'Mock mode' }),
+          create: async () => ({ success: false, error: 'Mock mode' }),
+          update: async () => ({ success: false, error: 'Mock mode' }),
+          delete: async () => ({ success: false, error: 'Mock mode' }),
+          hardDelete: async () => ({ success: false, error: 'Mock mode' }),
+          toggleStatus: async () => ({ success: false, error: 'Mock mode' }),
+          findByTipo: async () => ({ success: true, data: [] }),
+          findTipos: async () => ({ success: true, data: [] }),
+          findAtivos: async () => ({ success: true, data: [] }),
+        },
       };
     }
 
-    // Testar conexão com main process
-    if (isElectron) {
+    // Testar conexao com main process
+    if (hasIpcApi()) {
       try {
         const pingResult = await window.ipcAPI.ping();
-        console.log('✅ Conexão com main process:', pingResult);
+        console.log('Conexao com main process:', pingResult);
       } catch (error) {
-        console.error('❌ Erro ao conectar com main process:', error);
+        console.error('Erro ao conectar com main process:', error);
       }
     }
 
-    // Renderizar aplicação principal
+    // Renderizar aplicacao principal
     root.render(
       <React.StrictMode>
         <App />
       </React.StrictMode>
     );
   } catch (error) {
-    console.error('❌ Erro ao inicializar aplicação:', error);
+    console.error('Erro ao inicializar aplicacao:', error);
 
     // Mostrar tela de erro
     root.render(
@@ -118,9 +133,9 @@ const initApp = async () => {
           padding: '40px',
         }}
       >
-        <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>❌ Erro ao Inicializar</h1>
+        <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>Erro ao Inicializar</h1>
         <p style={{ fontSize: '16px', marginBottom: '20px', maxWidth: '600px' }}>
-          Ocorreu um erro ao inicializar a aplicação. Por favor, reinicie o aplicativo.
+          Ocorreu um erro ao inicializar a aplicacao. Por favor, reinicie o aplicativo.
         </p>
         <pre
           style={{
@@ -135,7 +150,7 @@ const initApp = async () => {
         >
           {error instanceof Error ? error.message : String(error)}
         </pre>
-        {isElectron && (
+        {hasIpcApi() && (
           <button
             onClick={() => window.ipcAPI?.restartApp?.()}
             style={{
@@ -157,7 +172,7 @@ const initApp = async () => {
   }
 };
 
-// Inicializar aplicação
+// Inicializar aplicacao
 initApp();
 
 // Hot Module Replacement (HMR)

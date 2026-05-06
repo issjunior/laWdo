@@ -115,6 +115,7 @@ export const SolicitantesPage: React.FC = () => {
       setError(null);
       setSuccess(null);
       setErrors({});
+      const solicitanteApi = window.ipcAPI?.solicitante;
 
       // Validar com Zod
       const validationResult = createSolicitanteSchema.safeParse(formData);
@@ -141,8 +142,12 @@ export const SolicitantesPage: React.FC = () => {
       }
 
       if (editingSolicitante) {
+        if (!solicitanteApi?.update) {
+          setError('API de solicitante indisponível para atualização.');
+          return;
+        }
         // Atualizar
-        const result = await window.ipcAPI.solicitante.update(
+        const result = await solicitanteApi.update(
           editingSolicitante.id,
           formData
         );
@@ -155,8 +160,12 @@ export const SolicitantesPage: React.FC = () => {
           setError(result.error || 'Erro ao atualizar solicitante');
         }
       } else {
+        if (!solicitanteApi?.create) {
+          setError('API de solicitante indisponível para criação.');
+          return;
+        }
         // Criar novo
-        const result = await window.ipcAPI.solicitante.create(formData);
+        const result = await solicitanteApi.create(formData);
 
         if (result.success) {
           setSuccess('Solicitante criado com sucesso!');

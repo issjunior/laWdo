@@ -3,8 +3,8 @@
   "compilerOptions": {
     "outDir": "./out/preload",
     "rootDir": "./src/preload",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext"
+    "module": "CommonJS",
+    "moduleResolution": "Node"
   },
   "include": ["src/preload/**/*", "src/types/**/*"],
   "exclude": ["src/preload/**/*.test.ts", "src/preload/**/*.spec.ts"]
