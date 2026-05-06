@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -105,7 +105,8 @@ const createDatabaseSchema = async (): Promise<void> => {
         nome TEXT NOT NULL UNIQUE,
         descricao TEXT,
         template_padrao TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -286,6 +287,35 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       logError('Erro ao aplicar migration versão 2', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 3: Adicionar campo updated_at na tabela tipos_exame
+  if (fromVersion < 3) {
+    try {
+      const tables = await executeQuery<{ name: string }>(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='tipos_exame'
+      `);
+
+      if (tables.length > 0) {
+        const columns = await executeQuery<{ name: string }>(`
+          PRAGMA table_info(tipos_exame)
+        `);
+
+        const hasUpdatedAtColumn = columns.some(col => col.name === 'updated_at');
+
+        if (!hasUpdatedAtColumn) {
+          await executeNonQuery('ALTER TABLE tipos_exame ADD COLUMN updated_at DATETIME');
+          await executeNonQuery(
+            'UPDATE tipos_exame SET updated_at = created_at WHERE updated_at IS NULL'
+          );
+          logInfo('Campo updated_at adicionado na tabela tipos_exame');
+        }
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 3', error);
       throw error;
     }
   }
