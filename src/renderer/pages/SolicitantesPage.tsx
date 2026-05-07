@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Search, Edit, Trash2, X } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { solicitanteSchema, createSolicitanteSchema, type Solicitante } from '@/lib/validators/solicitante.schema';
 
 export const SolicitantesPage: React.FC = () => {
@@ -285,26 +285,10 @@ export const SolicitantesPage: React.FC = () => {
             Gerencie órgãos solicitantes (varas, delegacias, órgãos públicos)
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button
-            onClick={handleNovo}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Novo Solicitante
-          </Button>
-          <Button
-            variant={mostrarTodos ? "default" : "outline"}
-            onClick={() => {
-              const novoStatus = !mostrarTodos;
-              setMostrarTodos(novoStatus);
-              carregarSolicitantes(novoStatus);
-            }}
-            className="flex items-center gap-2"
-          >
-            {mostrarTodos ? "🔍 Todos" : "🔍 Apenas Ativos"}
-          </Button>
-        </div>
+        <Button onClick={handleNovo} className="flex items-center gap-2">
+          <Plus size={16} />
+          Novo Solicitante
+        </Button>
       </div>
 
       {/* Card de estatísticas */}
@@ -339,14 +323,29 @@ export const SolicitantesPage: React.FC = () => {
                 {filteredSolicitantes.length} solicitante(s) encontrado(s) • {mostrarTodos ? "Todos" : "Apenas Ativos"}
               </CardDescription>
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar solicitantes..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
+            <div className="flex items-center gap-3">
+              <Button
+                variant={mostrarTodos ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  const novoStatus = !mostrarTodos;
+                  setMostrarTodos(novoStatus);
+                  carregarSolicitantes(novoStatus);
+                }}
+                className="flex items-center gap-1.5"
+              >
+                {mostrarTodos ? <Eye size={14} /> : <EyeOff size={14} />}
+                {mostrarTodos ? 'Mostrar Ativos' : 'Apenas Ativos'}
+              </Button>
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Buscar solicitantes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -373,7 +372,7 @@ export const SolicitantesPage: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {filteredSolicitantes.map((solicitante) => (
-                  <TableRow key={solicitante.id}>
+                  <TableRow key={solicitante.id} className={!solicitante.ativo ? 'opacity-60' : ''}>
                     <TableCell className="font-medium">{solicitante.nome}</TableCell>
                     <TableCell>{solicitante.tipo || '-'}</TableCell>
                     <TableCell>{solicitante.telefone || '-'}</TableCell>
@@ -385,7 +384,7 @@ export const SolicitantesPage: React.FC = () => {
                           : 'bg-red-100 text-red-800'
                           }`}
                       >
-                        {!!solicitante.ativo ? 'Ativo' : 'Desativado'}
+                        {!!solicitante.ativo ? 'Ativo' : 'Inativo'}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
