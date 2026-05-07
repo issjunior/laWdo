@@ -26,6 +26,7 @@ import { TipoExame, CreateTipoExameInput } from '@/lib/validators';
 
 export const TiposExamePage: React.FC = () => {
   const [tiposExame, setTiposExame] = useState<TipoExame[]>([]);
+  const [todosTipos, setTodosTipos] = useState<TipoExame[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [mostrarTodos, setMostrarTodos] = useState(false);
@@ -81,6 +82,24 @@ export const TiposExamePage: React.FC = () => {
     }
   }, []);
 
+  // Carrega lista completa para o card de total
+  const carregarTodosTipos = useCallback(async () => {
+    try {
+      const allResult = await window.ipcAPI.tipoExame.findAllSemFiltroStatus();
+      if (allResult.success && allResult.data) {
+        setTodosTipos(allResult.data);
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar todos os tipos:', err);
+    }
+  }, []);
+
+  // Carregar na inicialização
+  useEffect(() => {
+    carregarTiposExame();
+    carregarTodosTipos();
+  }, [carregarTiposExame, carregarTodosTipos]);
+
   useEffect(() => {
     if (mostrarTodos) {
       carregarTiposTodos();
@@ -99,6 +118,7 @@ export const TiposExamePage: React.FC = () => {
         } else {
           await carregarTiposExame();
         }
+        await carregarTodosTipos();
       } else {
         alert(`Erro ao alterar status: ${result.error}`);
       }
@@ -165,7 +185,12 @@ export const TiposExamePage: React.FC = () => {
 
         if (result.success && result.data) {
           setSuccess('Tipo de exame atualizado com sucesso!');
-          await carregarTiposExame();
+          if (mostrarTodos) {
+            await carregarTiposTodos();
+          } else {
+            await carregarTiposExame();
+          }
+          await carregarTodosTipos();
           setTimeout(() => setDialogOpen(false), 1000);
         } else {
           setError(result.error || 'Erro ao atualizar tipo de exame');
@@ -175,7 +200,12 @@ export const TiposExamePage: React.FC = () => {
 
         if (result.success && result.data) {
           setSuccess('Tipo de exame criado com sucesso!');
-          await carregarTiposExame();
+          if (mostrarTodos) {
+            await carregarTiposTodos();
+          } else {
+            await carregarTiposExame();
+          }
+          await carregarTodosTipos();
           setTimeout(() => setDialogOpen(false), 1000);
         } else {
           setError(result.error || 'Erro ao criar tipo de exame');
@@ -202,6 +232,7 @@ export const TiposExamePage: React.FC = () => {
         } else {
           await carregarTiposExame();
         }
+        await carregarTodosTipos();
       } else {
         alert(`Erro ao excluir: ${result.error}`);
       }
@@ -226,41 +257,22 @@ export const TiposExamePage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Card de estatísticas */}
+      {/* Card de total */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Total de Tipos
+              Total de Tipos de Exame
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{tiposExame.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Exames de Local
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {tiposExame.filter((t) => t.eh_local === true || t.eh_local === 1).length}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Exames Laboratoriais
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {tiposExame.filter((t) => !t.eh_local || t.eh_local === 0).length}
+            <div className="text-sm flex items-center space-x-2">
+              <span className="text-green-600 font-medium">
+                {todosTipos.filter((t) => !!t.ativo).length} Ativos
+              </span>
+              <span className="text-red-600 font-medium">
+                {todosTipos.filter((t) => !t.ativo).length} Inativos
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -273,7 +285,7 @@ export const TiposExamePage: React.FC = () => {
             <div>
               <CardTitle>Lista de Tipos de Exame</CardTitle>
               <CardDescription>
-                {filteredTipos.length} tipo(s) encontrado(s)
+                {filteredTipos.length} tipo(s) encontrado(s) • {mostrarTodos ? "Todos" : "Apenas Ativos"}
               </CardDescription>
             </div>
             <div className="flex items-center gap-3">
