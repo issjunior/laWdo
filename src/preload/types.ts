@@ -38,10 +38,12 @@ export interface UserUpdateData {
 
 export interface UserProfileUpdateData {
   nome?: string
+  email?: string
   matricula?: string
   telefone?: string
   cargo?: string
   lotacao?: string
+  senha?: string
 }
 
 /**

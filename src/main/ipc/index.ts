@@ -227,7 +227,10 @@ const registerAuthHandlers = (): void => {
             id: user.id,
             username: user.username,
             name: user.nome,
+            nome: user.nome, // kept for compatibility with PerfilPage.tsx checking user.nome
             role: user.cargo || 'perito',
+            cargo: user.cargo,
+            lotacao: user.lotacao,
             email: user.email,
           },
         };

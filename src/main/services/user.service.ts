@@ -1,4 +1,4 @@
-import { BaseService } from './base.service.js'
+ï»¿import { BaseService } from './base.service.js'
 import { UserRow } from '../types/database.js'
 import { logInfo, logError, logDebug } from '../utils/logger.js'
 import { executeNonQuery } from '../database/sqlite.js'
@@ -41,11 +41,11 @@ export class UserService extends BaseService<UserRow> {
 
       const created = await this.findById(id)
       if (!created) {
-        throw new Error('Falha ao recuperar usuário criado')
+        throw new Error('Falha ao recuperar usuï¿½rio criado')
       }
       return created
     } catch (error) {
-      logError('Erro ao criar usuário', { data, error })
+      logError('Erro ao criar usuï¿½rio', { data, error })
       throw error
     }
   }
@@ -78,7 +78,7 @@ export class UserService extends BaseService<UserRow> {
       await executeNonQuery(sql, [...values, now, id])
       return await this.findById(id)
     } catch (error) {
-      logError('Erro ao atualizar usuário', { id, data, error })
+      logError('Erro ao atualizar usuï¿½rio', { id, data, error })
       throw error
     }
   }
@@ -87,7 +87,7 @@ export class UserService extends BaseService<UserRow> {
     try {
       const user = await this.findByLogin(login)
       if (!user) {
-        logInfo('Tentativa de autenticação com usuário não encontrado', { login })
+        logInfo('Tentativa de autenticaï¿½ï¿½o com usuï¿½rio nï¿½o encontrado', { login })
         return null
       }
 
@@ -100,14 +100,14 @@ export class UserService extends BaseService<UserRow> {
       }
 
       if (!validPassword) {
-        logInfo('Tentativa de autenticação com senha inválida', { login, userId: user.id })
+        logInfo('Tentativa de autenticaï¿½ï¿½o com senha invï¿½lida', { login, userId: user.id })
         return null
       }
 
-      logInfo('Autenticação bem-sucedida', { login, userId: user.id })
+      logInfo('Autenticaï¿½ï¿½o bem-sucedida', { login, userId: user.id })
       return user
     } catch (error) {
-      logError('Erro na autenticação', { login, error })
+      logError('Erro na autenticaï¿½ï¿½o', { login, error })
       throw error
     }
   }
@@ -118,7 +118,7 @@ export class UserService extends BaseService<UserRow> {
       const rows = await this.executeCustomQuery<UserRow>(sql, [login, login])
       return rows.length > 0 ? rows[0] : null
     } catch (error) {
-      logError('Erro ao buscar usuário por login', { login, error })
+      logError('Erro ao buscar usuï¿½rio por login', { login, error })
       throw error
     }
   }
@@ -134,7 +134,7 @@ export class UserService extends BaseService<UserRow> {
 
       return rows[0]
     } catch (error) {
-      logError(`Erro ao buscar usuário por email`, { email, error })
+      logError(`Erro ao buscar usuï¿½rio por email`, { email, error })
       throw error
     }
   }
@@ -145,17 +145,17 @@ export class UserService extends BaseService<UserRow> {
       const rows = await this.executeCustomQuery<UserRow>(sql, [matricula])
       return rows.length > 0 ? rows[0] : null
     } catch (error) {
-      logError(`Erro ao buscar usuário por matrícula`, { matricula, error })
+      logError(`Erro ao buscar usuï¿½rio por matrï¿½cula`, { matricula, error })
       throw error
     }
   }
 
   async updateProfile(
     userId: string,
-    profileData: Partial<Omit<UserRow, 'id' | 'email' | 'created_at' | 'updated_at'>>
+    profileData: Partial<Omit<UserRow, 'id' | 'created_at' | 'updated_at'>>
   ): Promise<UserRow | null> {
     try {
-      logDebug('Atualizando perfil do usuário', { userId, fields: Object.keys(profileData).join(', ') })
+      logDebug('Atualizando perfil do usuï¿½rio', { userId, fields: Object.keys(profileData).join(', ') })
       return await this.update(userId, profileData)
     } catch (error) {
       logError('Erro ao atualizar perfil', { userId, error })
@@ -176,17 +176,17 @@ export class UserService extends BaseService<UserRow> {
 
   async deactivate(userId: string): Promise<boolean> {
     try {
-      logInfo('Usuário desativado (soft delete)', { userId })
+      logInfo('Usuï¿½rio desativado (soft delete)', { userId })
       return true
     } catch (error) {
-      logError('Erro ao desativar usuário', { userId, error })
+      logError('Erro ao desativar usuï¿½rio', { userId, error })
       throw error
     }
   }
 
   async generateActivityReport(userId: string, startDate?: Date, endDate?: Date): Promise<any> {
     try {
-      logInfo('Relatório de atividades solicitado', { userId, startDate, endDate })
+      logInfo('Relatï¿½rio de atividades solicitado', { userId, startDate, endDate })
       return {
         userId,
         period: { startDate, endDate },
@@ -195,7 +195,7 @@ export class UserService extends BaseService<UserRow> {
         atividades: []
       }
     } catch (error) {
-      logError('Erro ao gerar relatório de atividades', { userId, error })
+      logError('Erro ao gerar relatï¿½rio de atividades', { userId, error })
       throw error
     }
   }

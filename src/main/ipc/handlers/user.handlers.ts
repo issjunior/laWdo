@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+﻿import { ipcMain } from 'electron'
 import { logInfo, logError } from '../../utils/logger.js'
 import { userService } from '../../services/user.service.js'
 import { sanitizeInput } from '../../security/index.js'
@@ -268,6 +268,10 @@ export const registerUserHandlers = (): void => {
       if (profileData.telefone) sanitizedData.telefone = sanitizeInput(profileData.telefone)
       if (profileData.cargo) sanitizedData.cargo = sanitizeInput(profileData.cargo)
       if (profileData.lotacao) sanitizedData.lotacao = sanitizeInput(profileData.lotacao)
+      if (profileData.email) sanitizedData.email = sanitizeInput(profileData.email).toLowerCase()
+      if (profileData.senha && typeof profileData.senha === 'string' && profileData.senha.length >= 6) {
+        sanitizedData.senha_hash = await bcrypt.hash(profileData.senha, 10)
+      }
 
       logInfo('Atualizando perfil de usuário', { userId })
       const updatedProfile = await userService.updateProfile(userId, sanitizedData)

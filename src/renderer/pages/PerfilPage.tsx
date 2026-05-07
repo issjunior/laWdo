@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { User, AlertCircle } from 'lucide-react';
+import { User, AlertCircle, KeyRound } from 'lucide-react';
 import {
   Form,
   FormControl,
@@ -25,9 +25,27 @@ import { z } from 'zod';
 const perfilValidationSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   username: z.string().optional(),
-  email: z.string().optional(),
-  cargo: z.enum(['Perito Oficial Criminal', 'Técnico de Perícia Oficial']).optional(),
-  lotacao: z.string().min(3, 'Lotação deve ter pelo menos 3 caracteres').optional(),
+  email: z.string().email('E-mail inválido'),
+  cargo: z.enum(['Perito Oficial Criminal', 'Técnico de Perícia Oficial']),
+  lotacao: z.string().min(3, 'Lotação deve ter pelo menos 3 caracteres'),
+  senha: z.string().optional(),
+  confirmarSenha: z.string().optional(),
+}).refine(data => {
+  if (data.senha && data.senha.length > 0) {
+    return data.senha.length >= 6;
+  }
+  return true;
+}, {
+  message: 'A nova senha deve ter pelo menos 6 caracteres',
+  path: ['senha']
+}).refine(data => {
+  if (data.senha) {
+    return data.senha === data.confirmarSenha;
+  }
+  return true;
+}, {
+  message: 'As senhas não coincidem',
+  path: ['confirmarSenha']
 });
 
 type PerfilUpdateFormValues = z.infer<typeof perfilValidationSchema>;
@@ -40,6 +58,7 @@ export const PerfilPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const form = useForm<PerfilUpdateFormValues>({
     resolver: zodResolver(perfilValidationSchema),
@@ -49,6 +68,8 @@ export const PerfilPage: React.FC = () => {
       email: '',
       cargo: 'Perito Oficial Criminal',
       lotacao: '',
+      senha: '',
+      confirmarSenha: '',
     },
   });
 
@@ -67,6 +88,8 @@ export const PerfilPage: React.FC = () => {
         email: user?.email || '',
         cargo: user?.cargo || 'Perito Oficial Criminal',
         lotacao: user?.lotacao || '',
+        senha: '',
+        confirmarSenha: '',
       });
     } catch {
       // sem ação
@@ -84,11 +107,11 @@ export const PerfilPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const result = await window.ipcAPI.user.updateProfile(userId, {
-        nome: data.nome,
-        cargo: data.cargo,
-        lotacao: data.lotacao,
-      });
+      const updatePayload: any = { nome: data.nome, email: data.email, cargo: data.cargo, lotacao: data.lotacao };
+      if (isChangingPassword && data.senha) {
+        updatePayload.senha = data.senha;
+      }
+      const result = await window.ipcAPI.user.updateProfile(userId, updatePayload);
 
       if (!result.success) {
         throw new Error(result.error || 'Erro ao atualizar perfil');
@@ -101,6 +124,7 @@ export const PerfilPage: React.FC = () => {
           const user = JSON.parse(rawUser);
           user.name = data.nome;
           user.nome = data.nome;
+          user.email = data.email;
           user.cargo = data.cargo;
           user.lotacao = data.lotacao;
           sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
@@ -111,6 +135,10 @@ export const PerfilPage: React.FC = () => {
       }
 
       setSuccess('Perfil atualizado com sucesso.');
+      // Limpa e oculta a senha após sucesso
+      form.setValue('senha', '');
+      form.setValue('confirmarSenha', '');
+      setIsChangingPassword(false);
     } catch (err: any) {
       console.error('Erro ao atualizar perfil:', err);
       setError(err.message || 'Erro ao atualizar perfil.');
@@ -196,9 +224,9 @@ export const PerfilPage: React.FC = () => {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>E-mail</FormLabel>
+                      <FormLabel>E-mail *</FormLabel>
                       <FormControl>
-                        <Input type="email" {...field} disabled className="bg-gray-100 dark:bg-slate-800" />
+                        <Input type="email" {...field} placeholder="email@pcp.pr.gov.br" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -228,7 +256,7 @@ export const PerfilPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <FormField
                   control={form.control}
                   name="lotacao"
@@ -244,15 +272,84 @@ export const PerfilPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t">
+              <div className="pt-6 border-t">
+                {!isChangingPassword ? (
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsChangingPassword(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    Alterar Senha
+                  </Button>
+                ) : (
+                  <div className="space-y-4 bg-gray-50 dark:bg-slate-900 p-4 rounded-lg border">
+                    <h3 className="font-medium flex items-center gap-2">
+                      <KeyRound className="h-4 w-4" />
+                      Nova Senha
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="senha"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Digite a nova senha</FormLabel>
+                            <FormControl>
+                              <Input type="password" {...field} placeholder="Mínimo 6 caracteres" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="confirmarSenha"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirme a nova senha</FormLabel>
+                            <FormControl>
+                              <Input type="password" {...field} placeholder="Repita a nova senha" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        setIsChangingPassword(false);
+                        form.setValue('senha', '');
+                        form.setValue('confirmarSenha', '');
+                        form.clearErrors('senha');
+                        form.clearErrors('confirmarSenha');
+                      }}
+                    >
+                      Cancelar alteração de senha
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => {
                   const user = JSON.parse(sessionStorage.getItem(AUTH_USER_KEY) || '{}');
+                  setIsChangingPassword(false);
                   form.reset({
                     nome: user?.name || user?.nome || '',
                     username: user?.username || '',
                     email: user?.email || '',
                     cargo: user?.cargo || 'Perito Oficial Criminal',
                     lotacao: user?.lotacao || '',
+                    senha: '',
+                    confirmarSenha: '',
                   });
                 }}>
                   Restaurar
@@ -268,3 +365,4 @@ export const PerfilPage: React.FC = () => {
     </div>
   );
 };
+
