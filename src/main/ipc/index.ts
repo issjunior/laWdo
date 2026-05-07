@@ -4,6 +4,7 @@ import { sanitizeInput, validateSqlQuery } from '../security/index.js';
 import { registerUserHandlers } from './handlers/user.handlers.js';
 import { registerSolicitanteHandlers } from './handlers/solicitante.handlers.js';
 import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers.js';
+import { registerConfiguracaoHandlers } from './handlers/configuracao.handlers.js';
 import { userService } from '../services/user.service.js';
 
 /**
@@ -38,6 +39,7 @@ export const registerIpcHandlers = (): void => {
   registerUserHandlers();
   registerSolicitanteHandlers();
   registerTipoExameHandlers();
+  registerConfiguracaoHandlers();
 
   logInfo('Handlers IPC registrados com sucesso');
 };

@@ -6,7 +6,7 @@
   "author": "Polícia Científica do Paraná",
   "license": "MIT",
   "private": true,
-  "type":"module",
+  "type": "module",
   "scripts": {
     "dev": "npm run build && electron .",
     "start": "electron .",
@@ -34,6 +34,7 @@
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
+    "@tinymce/tinymce-react": "^6.3.0",
     "bcrypt": "^5.1.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
@@ -48,6 +49,7 @@
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.2.0",
+    "tinymce": "^8.5.0",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },

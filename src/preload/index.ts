@@ -76,6 +76,12 @@ export interface IpcAPI {
     findAllSemFiltroStatus: () => Promise<UserResponse>;
   };
 
+  // Configurações
+  configuracao: {
+    obter: (chave: string) => Promise<UserResponse>;
+    salvar: (chave: string, valor: string, tipo?: string, descricao?: string) => Promise<UserResponse>;
+  };
+
   // Placeholder para outras APIs que serão implementadas
 }
 
@@ -134,6 +140,8 @@ const ALLOWED_CHANNELS = new Set([
   'tipo-exame:obterTemplate',
   'tipo-exame:toggleStatus',
   'tipo-exame:findAllSemFiltroStatus',
+  'configuracao:obter',
+  'configuracao:salvar',
 ]);
 
 // Expor API segura para o renderer
@@ -408,6 +416,21 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
     findAllSemFiltroStatus: () => {
       return ipcRenderer.invoke('tipo-exame:findAllSemFiltroStatus');
+    },
+  },
+
+  configuracao: {
+    obter: (chave: string) => {
+      if (typeof chave !== 'string' || !chave.trim()) {
+        throw new Error('Chave inválida');
+      }
+      return ipcRenderer.invoke('configuracao:obter', chave.trim());
+    },
+    salvar: (chave: string, valor: string, tipo?: string, descricao?: string) => {
+      if (typeof chave !== 'string' || !chave.trim()) {
+        throw new Error('Chave inválida');
+      }
+      return ipcRenderer.invoke('configuracao:salvar', chave.trim(), valor, tipo, descricao);
     },
   },
 } satisfies IpcAPI);

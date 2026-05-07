@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -563,6 +563,26 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       logError('Erro ao aplicar migration versão 7', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 8: Criar tabela de configurações
+  if (fromVersion < 8) {
+    try {
+      await executeNonQuery(`
+        CREATE TABLE IF NOT EXISTS configuracoes (
+          chave TEXT PRIMARY KEY,
+          valor TEXT,
+          tipo TEXT NOT NULL DEFAULT 'texto',
+          descricao TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      logInfo('Migration v8: Tabela configuracoes criada');
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 8', error);
       throw error;
     }
   }

@@ -4,6 +4,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { PerfilPage } from '@/pages/PerfilPage';
 import { SolicitantesPage } from '@/pages/SolicitantesPage';
 import { TiposExamePage } from '@/pages/TiposExamePage';
+import { CabecalhoPage } from '@/pages/CabecalhoPage';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export const AppRoutes: React.FC = () => {
@@ -14,6 +15,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/perfil" element={<PerfilPage />} />
         <Route path="/solicitantes" element={<SolicitantesPage />} />
         <Route path="/tipos-exame" element={<TiposExamePage />} />
+        <Route path="/cabecalho" element={<CabecalhoPage />} />
         <Route path="/configuracoes" element={
           <div className="p-8">
             <h1 className="text-2xl font-bold mb-4">Configurações</h1>
