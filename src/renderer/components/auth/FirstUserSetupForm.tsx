@@ -52,7 +52,7 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
           </div>
           <div className="mb-6 flex flex-col items-center text-center">
             <img src={logo} alt="laWdo" className="mb-4 h-20 w-20 rounded-2xl object-cover shadow-md" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Primeiro acesso</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Primeiro acesso</h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
               Nenhum usuário foi encontrado. Cadastre o primeiro usuário para liberar o sistema.
             </p>
@@ -132,11 +132,11 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
             {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             {success && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-md bg-blue-600 py-2.5 font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
-            >
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-md bg-blue-600 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 dark:bg-sky-400 dark:text-slate-950 dark:hover:bg-sky-300"
+          >
               {loading ? 'Cadastrando...' : 'Cadastrar primeiro usuário'}
             </button>
           </form>
