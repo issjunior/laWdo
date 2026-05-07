@@ -29,6 +29,10 @@ const firstUserSchema = z.object({
 });
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme === 'dark';
+  });
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,6 +55,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
   const [registerLoading, setRegisterLoading] = useState(false);
 
   useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
     const checkUsers = async () => {
       try {
         const result = await window.ipcAPI.user.findActivePeritos();
@@ -63,6 +75,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
 
     checkUsers();
   }, []);
+
+  const handleToggleTheme = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('theme', newMode ? 'dark' : 'light');
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,6 +164,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
         loading={registerLoading}
         error={registerError}
         success={registerSuccess}
+        isDarkMode={isDarkMode}
+        onToggleTheme={handleToggleTheme}
         fieldErrors={registerFieldErrors}
         onChange={setRegisterData}
         onSubmit={handleRegisterFirstUser}
@@ -159,6 +179,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
       password={password}
       loading={loading}
       error={error}
+      isDarkMode={isDarkMode}
+      onToggleTheme={handleToggleTheme}
       onUsernameChange={setUsername}
       onPasswordChange={setPassword}
       onSubmit={handleLogin}

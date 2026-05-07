@@ -15,6 +15,8 @@ interface FirstUserSetupFormProps {
   loading: boolean;
   error: string | null;
   success: string | null;
+  isDarkMode: boolean;
+  onToggleTheme: () => void;
   fieldErrors?: Partial<Record<keyof FirstUserData, string>>;
   onChange: (data: FirstUserData) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -25,6 +27,8 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
   loading,
   error,
   success,
+  isDarkMode,
+  onToggleTheme,
   fieldErrors,
   onChange,
   onSubmit,
@@ -37,6 +41,15 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 px-4 py-10 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
       <div className="mx-auto max-w-xl">
         <div className="rounded-2xl border border-slate-200 bg-white/95 p-7 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              {isDarkMode ? 'Tema claro' : 'Tema escuro'}
+            </button>
+          </div>
           <div className="mb-6 flex flex-col items-center text-center">
             <img src={logo} alt="laWdo" className="mb-4 h-20 w-20 rounded-2xl object-cover shadow-md" />
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Primeiro acesso</h1>
