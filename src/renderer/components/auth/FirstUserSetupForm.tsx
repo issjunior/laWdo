@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import logo from '@/assets/logo.jpg';
 
 interface FirstUserData {
@@ -129,8 +129,8 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
               {fieldErrors?.senha && <p className="mt-1 text-sm text-red-600">{fieldErrors.senha}</p>}
             </div>
 
-            {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-            {success && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
+            {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
+            {success && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">{success}</p>}
 
           <button
             type="submit"
