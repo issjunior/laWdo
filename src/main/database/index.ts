@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 7;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -102,9 +102,12 @@ const createDatabaseSchema = async (): Promise<void> => {
     await executeNonQuery(`
       CREATE TABLE IF NOT EXISTS tipos_exame (
         id TEXT PRIMARY KEY,
-        nome TEXT NOT NULL UNIQUE,
+        nome TEXT NOT NULL,
         descricao TEXT,
         template_padrao TEXT,
+        codigo TEXT NOT NULL DEFAULT '' UNIQUE,
+        eh_local INTEGER NOT NULL DEFAULT 0,
+        ativo INTEGER NOT NULL DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -436,6 +439,130 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       logError('Erro ao aplicar migration versão 5', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 6: Adicionar campos codigo e eh_local na tabela tipos_exame
+  if (fromVersion < 6) {
+    try {
+      const tables = await executeQuery<{ name: string }>(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='tipos_exame'
+      `);
+
+      if (tables.length > 0) {
+        const columns = await executeQuery<{ name: string }>(`
+          PRAGMA table_info(tipos_exame)
+        `);
+
+        if (!columns.some(col => col.name === 'codigo')) {
+          await executeNonQuery('ALTER TABLE tipos_exame ADD COLUMN codigo TEXT NOT NULL DEFAULT \'\'');
+          logInfo('Campo codigo adicionado na tabela tipos_exame');
+        }
+
+        if (!columns.some(col => col.name === 'eh_local')) {
+          await executeNonQuery('ALTER TABLE tipos_exame ADD COLUMN eh_local INTEGER NOT NULL DEFAULT 0');
+          logInfo('Campo eh_local adicionado na tabela tipos_exame');
+        }
+
+        // Buscar tipos existentes e gerar códigos automáticos se estiverem vazios
+        const tipos = await executeQuery<{ id: string; nome: string; codigo: string }>(
+          'SELECT id, nome, codigo FROM tipos_exame WHERE codigo IS NULL OR codigo = \'\''
+        );
+        for (let i = 0; i < tipos.length; i++) {
+          const codigo = `T${String(i + 1).padStart(3, '0')}`;
+          await executeNonQuery('UPDATE tipos_exame SET codigo = ? WHERE id = ?', [codigo, tipos[i].id]);
+        }
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 6', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 7: Remover UNIQUE de nome e adicionar UNIQUE em codigo na tabela tipos_exame
+  if (fromVersion < 7) {
+    try {
+      const tables = await executeQuery<{ name: string }>(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='tipos_exame'
+      `);
+
+      if (tables.length > 0) {
+        await executeNonQuery('PRAGMA foreign_keys = OFF');
+
+        // Limpar tabela temporária de execução anterior que possa ter falhado
+        await executeNonQuery('DROP TABLE IF EXISTS tipos_exame_nova');
+
+        const columns = await executeQuery<{ name: string }>(`
+          PRAGMA table_info(tipos_exame)
+        `);
+        const hasUpdatedAt = columns.some(col => col.name === 'updated_at');
+        const hasCodigo = columns.some(col => col.name === 'codigo');
+        const hasEhLocal = columns.some(col => col.name === 'eh_local');
+        const hasAtivo = columns.some(col => col.name === 'ativo');
+
+        await executeNonQuery(`
+          CREATE TABLE tipos_exame_nova (
+            id TEXT PRIMARY KEY,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            template_padrao TEXT,
+            codigo TEXT NOT NULL DEFAULT '' UNIQUE,
+            eh_local INTEGER NOT NULL DEFAULT 0,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        // Copiar dados da tabela antiga para a nova
+        let insertCols = 'id, nome, descricao, template_padrao';
+        let selectCols = 'id, nome, descricao, template_padrao';
+        if (hasUpdatedAt) {
+          insertCols += ', created_at, updated_at';
+          selectCols += ', created_at, updated_at';
+        } else {
+          insertCols += ', created_at, updated_at';
+          selectCols += ', created_at, created_at';
+        }
+        if (hasCodigo) {
+          insertCols += ', codigo';
+          selectCols += ', codigo';
+        } else {
+          insertCols += ', codigo';
+          selectCols += ', \'\' as codigo';
+        }
+        if (hasEhLocal) {
+          insertCols += ', eh_local';
+          selectCols += ', eh_local';
+        } else {
+          insertCols += ', eh_local';
+          selectCols += ', 0 as eh_local';
+        }
+        if (hasAtivo) {
+          insertCols += ', ativo';
+          selectCols += ', ativo';
+        } else {
+          insertCols += ', ativo';
+          selectCols += ', 1 as ativo';
+        }
+
+        await executeNonQuery(`
+          INSERT INTO tipos_exame_nova (${insertCols})
+          SELECT ${selectCols} FROM tipos_exame
+        `);
+
+        await executeNonQuery('DROP TABLE tipos_exame');
+        await executeNonQuery('ALTER TABLE tipos_exame_nova RENAME TO tipos_exame');
+
+        await executeNonQuery('PRAGMA foreign_keys = ON');
+
+        logInfo('Migration v7: UNIQUE de nome removido, codigo definido como UNIQUE');
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 7', error);
       throw error;
     }
   }

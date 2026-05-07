@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -20,19 +21,21 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, FileText, X } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
 import { TipoExame, CreateTipoExameInput } from '@/lib/validators';
 
 export const TiposExamePage: React.FC = () => {
   const [tiposExame, setTiposExame] = useState<TipoExame[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [mostrarTodos, setMostrarTodos] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTipo, setEditingTipo] = useState<TipoExame | null>(null);
   const [formData, setFormData] = useState<CreateTipoExameInput>({
+    codigo: '',
     nome: '',
     descricao: '',
-    template_padrao: '',
+    eh_local: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -58,13 +61,57 @@ export const TiposExamePage: React.FC = () => {
     }
   }, []);
 
+  const carregarTiposTodos = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result = await window.ipcAPI.tipoExame.findAllSemFiltroStatus();
+
+      if (result.success && result.data) {
+        setTiposExame(result.data);
+      } else {
+        setError(result.error || 'Erro ao carregar tipos de exame');
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar tipos de exame:', err);
+      setError(err.message || 'Erro ao carregar tipos de exame');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    carregarTiposExame();
-  }, [carregarTiposExame]);
+    if (mostrarTodos) {
+      carregarTiposTodos();
+    } else {
+      carregarTiposExame();
+    }
+  }, [mostrarTodos, carregarTiposExame, carregarTiposTodos]);
+
+  // Alternar status ativo/inativo
+  const handleToggleStatus = async (id: string) => {
+    try {
+      const result = await window.ipcAPI.tipoExame.toggleStatus(id);
+      if (result.success) {
+        if (mostrarTodos) {
+          await carregarTiposTodos();
+        } else {
+          await carregarTiposExame();
+        }
+      } else {
+        alert(`Erro ao alterar status: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Erro ao alterar status:', error);
+      alert('Erro ao alterar status do tipo de exame');
+    }
+  };
 
   // Filtrar tipos de exame pelo termo de busca
   const filteredTipos = tiposExame.filter(
     (tipo) =>
+      tipo.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tipo.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (tipo.descricao && tipo.descricao.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -73,9 +120,10 @@ export const TiposExamePage: React.FC = () => {
   const handleNovo = () => {
     setEditingTipo(null);
     setFormData({
+      codigo: '',
       nome: '',
       descricao: '',
-      template_padrao: '',
+      eh_local: false,
     });
     setError(null);
     setSuccess(null);
@@ -86,9 +134,10 @@ export const TiposExamePage: React.FC = () => {
   const handleEditar = (tipo: TipoExame) => {
     setEditingTipo(tipo);
     setFormData({
+      codigo: tipo.codigo,
       nome: tipo.nome,
       descricao: tipo.descricao || '',
-      template_padrao: tipo.template_padrao || '',
+      eh_local: tipo.eh_local === true || tipo.eh_local === 1,
     });
     setError(null);
     setSuccess(null);
@@ -101,13 +150,17 @@ export const TiposExamePage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
+      if (!formData.codigo.trim()) {
+        setError('O código do exame no GDL é obrigatório.');
+        return;
+      }
+
       if (!formData.nome.trim()) {
-        setError('O nome é obrigatório.');
+        setError('O nome do tipo de exame é obrigatório.');
         return;
       }
 
       if (editingTipo) {
-        // Atualizar
         const result = await window.ipcAPI.tipoExame.update(editingTipo.id, formData);
 
         if (result.success && result.data) {
@@ -118,7 +171,6 @@ export const TiposExamePage: React.FC = () => {
           setError(result.error || 'Erro ao atualizar tipo de exame');
         }
       } else {
-        // Criar novo
         const result = await window.ipcAPI.tipoExame.create(formData);
 
         if (result.success && result.data) {
@@ -145,7 +197,11 @@ export const TiposExamePage: React.FC = () => {
       const result = await window.ipcAPI.tipoExame.delete(id);
 
       if (result.success) {
-        await carregarTiposExame();
+        if (mostrarTodos) {
+          await carregarTiposTodos();
+        } else {
+          await carregarTiposExame();
+        }
       } else {
         alert(`Erro ao excluir: ${result.error}`);
       }
@@ -155,36 +211,13 @@ export const TiposExamePage: React.FC = () => {
     }
   };
 
-  // Gerenciar template padrão
-  const handleGerenciarTemplate = async (tipo: TipoExame) => {
-    const template = prompt(
-      'Edite o template padrão para este tipo de exame:',
-      tipo.template_padrao || ''
-    );
-
-    if (template !== null) {
-      try {
-        const result = await window.ipcAPI.tipoExame.atualizarTemplate(tipo.id, template);
-        if (result.success) {
-          await carregarTiposExame();
-          alert('Template atualizado com sucesso!');
-        } else {
-          alert(`Erro ao salvar template: ${result.error}`);
-        }
-      } catch (error) {
-        console.error('Erro ao salvar template:', error);
-        alert('Erro ao salvar template');
-      }
-    }
-  };
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Tipos de Exame</h1>
           <p className="text-gray-600 mt-2">
-            Gerencie os tipos de exame pericial e seus templates padrão
+            Gerencie os tipos de exame pericial e suas informações
           </p>
         </div>
         <Button onClick={handleNovo} className="flex items-center gap-2">
@@ -209,12 +242,12 @@ export const TiposExamePage: React.FC = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Com Template
+              Exames de Local
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tiposExame.filter((t) => t.template_padrao).length}
+              {tiposExame.filter((t) => t.eh_local === true || t.eh_local === 1).length}
             </div>
           </CardContent>
         </Card>
@@ -222,12 +255,12 @@ export const TiposExamePage: React.FC = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Sem Template
+              Exames Laboratoriais
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tiposExame.filter((t) => !t.template_padrao).length}
+              {tiposExame.filter((t) => !t.eh_local || t.eh_local === 0).length}
             </div>
           </CardContent>
         </Card>
@@ -243,14 +276,25 @@ export const TiposExamePage: React.FC = () => {
                 {filteredTipos.length} tipo(s) encontrado(s)
               </CardDescription>
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar tipos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
+            <div className="flex items-center gap-3">
+              <Button
+                variant={mostrarTodos ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setMostrarTodos(!mostrarTodos)}
+                className="flex items-center gap-1.5"
+              >
+                {mostrarTodos ? <Eye size={14} /> : <EyeOff size={14} />}
+                {mostrarTodos ? 'Mostrar Ativos' : 'Apenas Ativos'}
+              </Button>
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Buscar tipos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -269,39 +313,57 @@ export const TiposExamePage: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Código GDL</TableHead>
                   <TableHead>Nome</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Descrição</TableHead>
-                  <TableHead>Template</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredTipos.map((tipo) => (
-                  <TableRow key={tipo.id}>
+                  <TableRow key={tipo.id} className={!tipo.ativo ? 'opacity-60' : ''}>
+                    <TableCell className="font-mono text-sm font-medium">{tipo.codigo}</TableCell>
                     <TableCell className="font-medium">{tipo.nome}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {tipo.descricao || '-'}
-                    </TableCell>
                     <TableCell>
-                      {tipo.template_padrao ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          ✅ Configurado
+                      {tipo.eh_local === true || tipo.eh_local === 1 ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Local
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          ⚠️ Não configurado
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Laboratorial
                         </span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      {tipo.ativo ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Ativo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Inativo
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {tipo.descricao || '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          onClick={() => handleGerenciarTemplate(tipo)}
-                          title="Gerenciar Template"
+                          onClick={() => handleToggleStatus(tipo.id)}
+                          title={tipo.ativo ? 'Desativar' : 'Ativar'}
                         >
-                          <FileText size={14} />
+                          {tipo.ativo ? (
+                            <ToggleRight size={14} className="text-green-600" />
+                          ) : (
+                            <ToggleLeft size={14} className="text-red-600" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
@@ -330,7 +392,7 @@ export const TiposExamePage: React.FC = () => {
 
       {/* Diálogo de criação/edição */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
               {editingTipo ? 'Editar Tipo de Exame' : 'Novo Tipo de Exame'}
@@ -355,8 +417,22 @@ export const TiposExamePage: React.FC = () => {
             )}
 
             <div className="space-y-2">
+              <label htmlFor="codigo" className="text-sm font-medium">
+                Código do exame no GDL *
+              </label>
+              <Input
+                id="codigo"
+                value={formData.codigo}
+                onChange={(e) =>
+                  setFormData({ ...formData, codigo: e.target.value })
+                }
+                placeholder="Ex: DNA, BAL, LOC..."
+              />
+            </div>
+
+            <div className="space-y-2">
               <label htmlFor="nome" className="text-sm font-medium">
-                Nome *
+                Nome do tipo de exame *
               </label>
               <Input
                 id="nome"
@@ -368,9 +444,24 @@ export const TiposExamePage: React.FC = () => {
               />
             </div>
 
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="eh_local"
+                checked={formData.eh_local}
+                onChange={(e) =>
+                  setFormData({ ...formData, eh_local: e.target.checked })
+                }
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <Label htmlFor="eh_local" className="text-sm font-medium cursor-pointer">
+                É exame de local
+              </Label>
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="descricao" className="text-sm font-medium">
-                Descrição
+                Descrição do exame
               </label>
               <Textarea
                 id="descricao"
@@ -379,27 +470,8 @@ export const TiposExamePage: React.FC = () => {
                   setFormData({ ...formData, descricao: e.target.value })
                 }
                 placeholder="Descrição detalhada do tipo de exame..."
-                rows={3}
+                rows={4}
               />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="template" className="text-sm font-medium">
-                Template Padrão (opcional)
-              </label>
-              <Textarea
-                id="template"
-                value={formData.template_padrao}
-                onChange={(e) =>
-                  setFormData({ ...formData, template_padrao: e.target.value })
-                }
-                placeholder="Template base para geração de laudos deste tipo..."
-                rows={8}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-gray-500">
-                Use placeholders como {"{perito.nome}"}, {"{rep.numero}"}, etc.
-              </p>
             </div>
           </div>
 
@@ -407,7 +479,7 @@ export const TiposExamePage: React.FC = () => {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSalvar} disabled={!formData.nome.trim()}>
+            <Button onClick={handleSalvar} disabled={!formData.codigo.trim() || !formData.nome.trim()}>
               {editingTipo ? 'Atualizar' : 'Criar'}
             </Button>
           </DialogFooter>

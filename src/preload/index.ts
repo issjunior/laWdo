@@ -72,6 +72,8 @@ export interface IpcAPI {
     findComTemplate: () => Promise<UserResponse>;
     atualizarTemplate: (id: string, template: string) => Promise<UserResponse>;
     obterTemplate: (id: string) => Promise<UserResponse>;
+    toggleStatus: (id: string) => Promise<UserResponse>;
+    findAllSemFiltroStatus: () => Promise<UserResponse>;
   };
 
   // Placeholder para outras APIs que serão implementadas
@@ -130,6 +132,8 @@ const ALLOWED_CHANNELS = new Set([
   'tipo-exame:findComTemplate',
   'tipo-exame:atualizarTemplate',
   'tipo-exame:obterTemplate',
+  'tipo-exame:toggleStatus',
+  'tipo-exame:findAllSemFiltroStatus',
 ]);
 
 // Expor API segura para o renderer
@@ -278,8 +282,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!solicitanteData || typeof solicitanteData !== 'object') {
         throw new Error('Dados do solicitante inválidos');
       }
-      if (!solicitanteData.nome || !solicitanteData.tipo) {
-        throw new Error('Nome e tipo são obrigatórios');
+      if (!solicitanteData.nome) {
+        throw new Error('Nome é obrigatório');
       }
       return ipcRenderer.invoke('solicitante:create', solicitanteData);
     },
@@ -348,6 +352,9 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!tipoExameData || typeof tipoExameData !== 'object') {
         throw new Error('Dados do tipo de exame inválidos');
       }
+      if (!tipoExameData.codigo) {
+        throw new Error('Código é obrigatório');
+      }
       if (!tipoExameData.nome) {
         throw new Error('Nome é obrigatório');
       }
@@ -390,6 +397,17 @@ contextBridge.exposeInMainWorld('ipcAPI', {
         throw new Error('ID inválido');
       }
       return ipcRenderer.invoke('tipo-exame:obterTemplate', id.trim());
+    },
+
+    toggleStatus: (id: string) => {
+      if (typeof id !== 'string' || !id.trim()) {
+        throw new Error('ID inválido');
+      }
+      return ipcRenderer.invoke('tipo-exame:toggleStatus', id.trim());
+    },
+
+    findAllSemFiltroStatus: () => {
+      return ipcRenderer.invoke('tipo-exame:findAllSemFiltroStatus');
     },
   },
 } satisfies IpcAPI);

@@ -39,8 +39,10 @@ export interface SolicitanteRow extends DatabaseRow {
 // Tipo de Exame
 export interface TipoExameRow extends DatabaseRow {
   id: string
+  codigo: string
   nome: string
   descricao?: string
+  eh_local: boolean | number
   template_padrao?: string
   created_at: string
 }

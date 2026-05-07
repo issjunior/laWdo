@@ -72,9 +72,10 @@ export const registerTipoExameHandlers = (): void => {
     try {
       // Sanitizar dados de entrada
       const sanitizedData = {
+        codigo: sanitizeInput(tipoExameData.codigo),
         nome: sanitizeInput(tipoExameData.nome),
         descricao: tipoExameData.descricao ? sanitizeInput(tipoExameData.descricao) : null,
-        template_padrao: tipoExameData.template_padrao ? sanitizeInput(tipoExameData.template_padrao) : null
+        eh_local: tipoExameData.eh_local ? 1 : 0
       }
 
       logInfo('Criando novo tipo de exame', { nome: sanitizedData.nome })
@@ -108,9 +109,10 @@ export const registerTipoExameHandlers = (): void => {
 
       // Sanitizar dados de entrada
       const sanitizedData: any = {}
+      if (updateData.codigo) sanitizedData.codigo = sanitizeInput(updateData.codigo)
       if (updateData.nome) sanitizedData.nome = sanitizeInput(updateData.nome)
-      if (updateData.descricao) sanitizedData.descricao = sanitizeInput(updateData.descricao)
-      if (updateData.template_padrao) sanitizedData.template_padrao = sanitizeInput(updateData.template_padrao)
+      if (updateData.descricao !== undefined) sanitizedData.descricao = sanitizeInput(updateData.descricao)
+      if (updateData.eh_local !== undefined) sanitizedData.eh_local = updateData.eh_local ? 1 : 0
 
       logInfo('Atualizando tipo de exame', { id })
       const updatedTipoExame = await tipoExameService.update(id, sanitizedData)
@@ -164,6 +166,63 @@ export const registerTipoExameHandlers = (): void => {
       }
     } catch (error) {
       logError('Erro ao excluir tipo de exame', { id, error })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
+      }
+    }
+  })
+
+  /**
+   * Ativar/desativar tipo de exame (toggle)
+   */
+  ipcMain.handle('tipo-exame:toggleStatus', async (event, id: string) => {
+    try {
+      if (!id || typeof id !== 'string') {
+        return {
+          success: false,
+          error: 'ID inválido'
+        }
+      }
+
+      const tipo = await tipoExameService.findById(id)
+      if (!tipo) {
+        return {
+          success: false,
+          error: 'Tipo de exame não encontrado'
+        }
+      }
+
+      const updated = await tipoExameService.toggleStatus(id)
+
+      return {
+        success: true,
+        data: updated,
+        message: updated?.ativo ? 'Tipo de exame ativado com sucesso!' : 'Tipo de exame desativado com sucesso!'
+      }
+    } catch (error) {
+      logError('Erro ao alternar status do tipo de exame', { id, error })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
+      }
+    }
+  })
+
+  /**
+   * Buscar todos os tipos de exame (ativos e inativos)
+   */
+  ipcMain.handle('tipo-exame:findAllSemFiltroStatus', async () => {
+    try {
+      logInfo('Buscando todos os tipos de exame (sem filtro de status)')
+      const tiposExame = await tipoExameService.findAllSemFiltroStatus()
+      return {
+        success: true,
+        data: tiposExame,
+        total: tiposExame.length
+      }
+    } catch (error) {
+      logError('Erro ao buscar tipos de exame sem filtro', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'

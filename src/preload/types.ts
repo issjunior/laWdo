@@ -98,13 +98,15 @@ export interface SolicitanteUpdateData {
  * Tipos para os handlers IPC específicos de tipo de exame
  */
 export interface TipoExameCreateData {
+  codigo: string
   nome: string
   descricao?: string
-  template_padrao?: string
+  eh_local?: boolean
 }
 
 export interface TipoExameUpdateData {
+  codigo?: string
   nome?: string
   descricao?: string
-  template_padrao?: string
+  eh_local?: boolean
 }

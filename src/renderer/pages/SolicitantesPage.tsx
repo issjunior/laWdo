@@ -459,7 +459,7 @@ export const SolicitantesPage: React.FC = () => {
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <label htmlFor="nome" className="text-sm font-medium">
-                  Nome *
+                  Solicitante *
                 </label>
                 <Input
                   id="nome"
@@ -477,7 +477,7 @@ export const SolicitantesPage: React.FC = () => {
 
               <div className="space-y-2">
                 <label htmlFor="tipo" className="text-sm font-medium">
-                  Tipo *
+                  Responsável/Contato
                 </label>
                 <Input
                   id="tipo"
@@ -511,43 +511,23 @@ export const SolicitantesPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="telefone" className="text-sm font-medium">
-                    Telefone
-                  </label>
-                  <Input
-                    id="telefone"
-                    value={formData.telefone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, telefone: e.target.value })
-                    }
-                    placeholder="(41) 99999-9999"
-                    className={errors.telefone ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                  />
-                  {errors.telefone && (
-                    <p className="text-xs text-red-600">{errors.telefone}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium">
-                    Email
-                  </label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    placeholder="email@tjpr.jus.br"
-                    className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                  />
-                  {errors.email && (
-                    <p className="text-xs text-red-600">{errors.email}</p>
-                  )}
-                </div>
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium">
+                  E-mail
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  placeholder="email@tjpr.jus.br"
+                  className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                />
+                {errors.email && (
+                  <p className="text-xs text-red-600">{errors.email}</p>
+                )}
               </div>
             </div>
 

@@ -29,11 +29,44 @@ export class TipoExameService extends BaseService<TipoExameRow> {
    */
   async findAllOrdered(): Promise<TipoExameRow[]> {
     try {
-      const sql = 'SELECT * FROM tipos_exame ORDER BY nome ASC'
+      const sql = 'SELECT * FROM tipos_exame WHERE ativo = 1 ORDER BY nome ASC'
       const rows = await this.executeCustomQuery<TipoExameRow>(sql)
       return rows
     } catch (error) {
       logError('Erro ao buscar tipos de exame ordenados', error)
+      throw error
+    }
+  }
+
+  /**
+   * Buscar todos os tipos de exame (ativos e inativos)
+   */
+  async findAllSemFiltroStatus(): Promise<TipoExameRow[]> {
+    try {
+      const sql = 'SELECT * FROM tipos_exame ORDER BY nome ASC'
+      const rows = await this.executeCustomQuery<TipoExameRow>(sql)
+      return rows
+    } catch (error) {
+      logError('Erro ao buscar tipos de exame sem filtro de status', error)
+      throw error
+    }
+  }
+
+  /**
+   * Ativar/desativar tipo de exame (toggle)
+   */
+  async toggleStatus(id: string): Promise<TipoExameRow | null> {
+    try {
+      const tipo = await this.findById(id)
+      if (!tipo) return null
+
+      const novoStatus = tipo.ativo ? 0 : 1
+      const sql = 'UPDATE tipos_exame SET ativo = ? WHERE id = ?'
+      await this.executeCustomQuery(sql, [novoStatus, id])
+
+      return await this.findById(id)
+    } catch (error) {
+      logError('Erro ao alternar status do tipo de exame', { id, error })
       throw error
     }
   }
