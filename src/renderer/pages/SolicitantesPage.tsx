@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
- TableCell,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -23,6 +23,7 @@ import { solicitanteSchema, createSolicitanteSchema, type Solicitante } from '@/
 
 export const SolicitantesPage: React.FC = () => {
   const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
+  const [todosSolicitantes, setTodosSolicitantes] = useState<Solicitante[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -68,9 +69,26 @@ export const SolicitantesPage: React.FC = () => {
     }
   }, []);
 
+  // Carrega a lista completa de solicitantes para o card de total
+  const carregarTodosSolicitantes = useCallback(async () => {
+    try {
+      const allResult = await window.ipcAPI.solicitante.findAllSemFiltroStatus();
+      if (allResult.success && allResult.data) {
+        setTodosSolicitantes(allResult.data);
+      } else {
+        setError(allResult.error || 'Erro ao carregar todos os solicitantes');
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar todos os solicitantes:', err);
+      setError(err.message || 'Erro ao carregar todos os solicitantes');
+    }
+  }, []);
+
   useEffect(() => {
+    // Primeiro carrega total completo, depois a lista filtrada
+    carregarTodosSolicitantes();
     carregarSolicitantes(mostrarTodos);
-  }, [carregarSolicitantes, mostrarTodos]);
+  }, [carregarSolicitantes, carregarTodosSolicitantes, mostrarTodos]);
 
   // Filtrar solicitantes pelo termo de busca
   const filteredSolicitantes = solicitantes.filter(
@@ -291,62 +309,21 @@ export const SolicitantesPage: React.FC = () => {
 
       {/* Card de estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{solicitantes.length}</div>
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Ativos
+              Total de Solicitantes
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {solicitantes.filter((s) => !!s.ativo).length}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Tipos Diferentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {new Set(solicitantes.map((s) => s.tipo)).size}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Status View
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm">
+            <div className="text-sm flex items-center space-x-2">
               <span className="text-green-600 font-medium">
-                {solicitantes.filter((s) => !!s.ativo).length} Ativos
+                {todosSolicitantes.filter((s) => !!s.ativo).length} Ativos
               </span>
-              {mostrarTodos && solicitantes.some((s) => !s.ativo) && (
-                <span className="mx-2">•</span>
-              )}
-              {mostrarTodos && solicitantes.some((s) => !s.ativo) && (
-                <span className="text-red-600 font-medium">
-                  {solicitantes.filter((s) => !s.ativo).length} Inativos
-                </span>
-              )}
+              <span className="text-red-600 font-medium">
+                {todosSolicitantes.filter((s) => !s.ativo).length} Inativos
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -403,11 +380,10 @@ export const SolicitantesPage: React.FC = () => {
                     <TableCell>{solicitante.email || '-'}</TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          !!solicitante.ativo
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${!!solicitante.ativo
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                          }`}
                       >
                         {!!solicitante.ativo ? 'Ativo' : 'Desativado'}
                       </span>
