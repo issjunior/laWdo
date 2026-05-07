@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
-import { PerfilPage, SolicitantesPage, TiposExamePage, DashboardPage, CabecalhoPage } from '@/pages';
+import { PerfilPage, SolicitantesPage, TiposExamePage, DashboardPage, CabecalhoPage, REPsPage } from '@/pages';
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -239,6 +239,17 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = 
         />
 
         <NavSection
+          label="Requisições (REPs)"
+          emoji="📋"
+          icon={<FolderOpen size={16} />}
+          items={[
+            { path: '/reps', label: 'REPs', icon: <FolderOpen size={15} /> },
+          ]}
+          currentPath={currentPath}
+          collapsed={collapsed}
+        />
+
+        <NavSection
           label="Configurações"
           emoji="⚙️"
           icon={<Settings size={16} />}
@@ -326,6 +337,7 @@ const App = () => {
               <Route path="/tipos-exame" element={<TiposExamePage />} />
               <Route path="/perfil" element={<PerfilPage />} />
               <Route path="/cabecalho" element={<CabecalhoPage />} />
+              <Route path="/reps" element={<REPsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Layout>

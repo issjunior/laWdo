@@ -56,6 +56,22 @@ export interface REPRow extends DatabaseRow {
   data_requisicao: string
   prazo?: string
   status: string
+  tipo_solicitacao?: string
+  numero_documento?: string
+  data_documento?: string
+  autoridade_solicitante?: string
+  nome_envolvido?: string
+  data_acionamento?: string
+  data_chegada?: string
+  data_saida?: string
+  local_fato?: string
+  latitude?: number
+  longitude?: number
+  lacre_entrada?: string
+  lacre_saida?: string
+  usuario_id?: string
+  numero_bo?: string
+  numero_ip?: string
   observacoes?: string
   created_at: string
   updated_at: string

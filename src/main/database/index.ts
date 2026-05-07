@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -118,16 +118,33 @@ const createDatabaseSchema = async (): Promise<void> => {
       CREATE TABLE IF NOT EXISTS reps (
         id TEXT PRIMARY KEY,
         numero TEXT NOT NULL UNIQUE,
-        solicitante_id TEXT NOT NULL,
-        tipo_exame_id TEXT NOT NULL,
+        solicitante_id TEXT,
+        tipo_exame_id TEXT,
         data_requisicao DATETIME NOT NULL,
         prazo DATETIME,
         status TEXT NOT NULL DEFAULT 'Pendente',
+        tipo_solicitacao TEXT,
+        numero_documento TEXT,
+        data_documento DATETIME,
+        autoridade_solicitante TEXT,
+        nome_envolvido TEXT,
+        data_acionamento DATETIME,
+        data_chegada DATETIME,
+        data_saida DATETIME,
+        local_fato TEXT,
+        latitude REAL,
+        longitude REAL,
+        lacre_entrada TEXT,
+        lacre_saida TEXT,
+        usuario_id TEXT,
+        numero_bo TEXT,
+        numero_ip TEXT,
         observacoes TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (solicitante_id) REFERENCES solicitantes(id),
-        FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id)
+        FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id),
+        FOREIGN KEY (usuario_id) REFERENCES users(id)
       )
     `);
 
@@ -583,6 +600,47 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       logInfo('Migration v8: Tabela configuracoes criada');
     } catch (error) {
       logError('Erro ao aplicar migration versão 8', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 9: Expandir colunas da tabela reps
+  if (fromVersion < 9) {
+    try {
+      const tables = await executeQuery<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='reps'"
+      );
+      if (tables.length > 0) {
+        const columns = await executeQuery<{ name: string }>('PRAGMA table_info(reps)');
+        const colNames = columns.map(c => c.name);
+
+        const addColumnIfMissing = async (col: string, def: string) => {
+          if (!colNames.includes(col)) {
+            await executeNonQuery(`ALTER TABLE reps ADD COLUMN ${col} ${def}`);
+          }
+        };
+
+        await addColumnIfMissing('tipo_solicitacao', 'TEXT');
+        await addColumnIfMissing('numero_documento', 'TEXT');
+        await addColumnIfMissing('data_documento', 'DATETIME');
+        await addColumnIfMissing('autoridade_solicitante', 'TEXT');
+        await addColumnIfMissing('nome_envolvido', 'TEXT');
+        await addColumnIfMissing('data_acionamento', 'DATETIME');
+        await addColumnIfMissing('data_chegada', 'DATETIME');
+        await addColumnIfMissing('data_saida', 'DATETIME');
+        await addColumnIfMissing('local_fato', 'TEXT');
+        await addColumnIfMissing('latitude', 'REAL');
+        await addColumnIfMissing('longitude', 'REAL');
+        await addColumnIfMissing('lacre_entrada', 'TEXT');
+        await addColumnIfMissing('lacre_saida', 'TEXT');
+        await addColumnIfMissing('usuario_id', 'TEXT');
+        await addColumnIfMissing('numero_bo', 'TEXT');
+        await addColumnIfMissing('numero_ip', 'TEXT');
+
+        logInfo('Migration v9: Colunas expandidas na tabela reps');
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 9', error);
       throw error;
     }
   }

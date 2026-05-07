@@ -76,6 +76,16 @@ export interface IpcAPI {
     findAllSemFiltroStatus: () => Promise<UserResponse>;
   };
 
+  // REPs
+  rep: {
+    findAll: () => Promise<UserResponse>;
+    findById: (id: string) => Promise<UserResponse>;
+    create: (data: any) => Promise<UserResponse>;
+    update: (id: string, data: any) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+    updateStatus: (id: string, status: string) => Promise<UserResponse>;
+  };
+
   // Configurações
   configuracao: {
     obter: (chave: string) => Promise<UserResponse>;
@@ -142,6 +152,12 @@ const ALLOWED_CHANNELS = new Set([
   'tipo-exame:findAllSemFiltroStatus',
   'configuracao:obter',
   'configuracao:salvar',
+  'rep:create',
+  'rep:findAll',
+  'rep:findById',
+  'rep:update',
+  'rep:delete',
+  'rep:updateStatus',
 ]);
 
 // Expor API segura para o renderer
@@ -432,6 +448,15 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       }
       return ipcRenderer.invoke('configuracao:salvar', chave.trim(), valor, tipo, descricao);
     },
+  },
+
+  rep: {
+    findAll: () => ipcRenderer.invoke('rep:findAll'),
+    findById: (id: string) => ipcRenderer.invoke('rep:findById', id),
+    create: (data: any) => ipcRenderer.invoke('rep:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('rep:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('rep:delete', id),
+    updateStatus: (id: string, status: string) => ipcRenderer.invoke('rep:updateStatus', id, status),
   },
 } satisfies IpcAPI);
 
