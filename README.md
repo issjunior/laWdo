@@ -149,3 +149,6 @@ Uso interno - Polícia Científica do Paraná.
 - ✅ **Validação Zod:** Todos os forms validados com mensagens em português
 - ✅ **Segurança robusta:** Criptografia de senha com padrões industriais
 - ✅ **Interface profissional:** Shadcn/ui integrado com Tailwind CSS
+
+## Regra de Acesso (Atualizada em 06/05/2026)
+- O laWdo deve abrir apenas para usuario autenticado (login obrigatorio).

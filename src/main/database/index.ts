@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 5;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -316,6 +316,126 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       logError('Erro ao aplicar migration versão 3', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 4: Garantir colunas necessárias na tabela users
+  if (fromVersion < 4) {
+    try {
+      const tables = await executeQuery<{ name: string }>(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='users'
+      `);
+
+      if (tables.length > 0) {
+        const columns = await executeQuery<{ name: string }>(`
+          PRAGMA table_info(users)
+        `);
+
+        const hasLotacao = columns.some(col => col.name === 'lotacao');
+        const hasUsername = columns.some(col => col.name === 'username');
+        const hasSenhaHash = columns.some(col => col.name === 'senha_hash');
+        const hasAtivo = columns.some(col => col.name === 'ativo');
+
+        if (!hasLotacao) {
+          await executeNonQuery('ALTER TABLE users ADD COLUMN lotacao TEXT');
+          logInfo('Campo lotacao adicionado na tabela users');
+        }
+
+        if (!hasUsername) {
+          await executeNonQuery('ALTER TABLE users ADD COLUMN username TEXT');
+          await executeNonQuery(`
+            UPDATE users
+            SET username = LOWER(
+              CASE
+                WHEN INSTR(email, '@') > 1 THEN SUBSTR(email, 1, INSTR(email, '@') - 1)
+                ELSE email
+              END
+            )
+            WHERE username IS NULL OR username = ''
+          `);
+          logInfo('Campo username adicionado na tabela users');
+        }
+
+        if (!hasSenhaHash) {
+          await executeNonQuery("ALTER TABLE users ADD COLUMN senha_hash TEXT DEFAULT 'senha_temporaria'");
+          logInfo('Campo senha_hash adicionado na tabela users');
+        }
+
+        if (!hasAtivo) {
+          await executeNonQuery('ALTER TABLE users ADD COLUMN ativo BOOLEAN DEFAULT 1');
+          logInfo('Campo ativo adicionado na tabela users');
+        }
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 4', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 5: Garantir colunas de data na tabela users
+  if (fromVersion < 5) {
+    try {
+      const tables = await executeQuery<{ name: string }>(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='users'
+      `);
+
+      if (tables.length > 0) {
+        const columns = await executeQuery<{ name: string }>(`
+          PRAGMA table_info(users)
+        `);
+
+        const hasDataCriacao = columns.some(col => col.name === 'data_criacao');
+        const hasDataAtualizacao = columns.some(col => col.name === 'data_atualizacao');
+        const hasCreatedAt = columns.some(col => col.name === 'created_at');
+        const hasUpdatedAt = columns.some(col => col.name === 'updated_at');
+
+        if (!hasDataCriacao) {
+          await executeNonQuery('ALTER TABLE users ADD COLUMN data_criacao DATETIME');
+          if (hasCreatedAt) {
+            await executeNonQuery(`
+              UPDATE users
+              SET data_criacao = created_at
+              WHERE data_criacao IS NULL
+            `);
+          } else {
+            await executeNonQuery(`
+              UPDATE users
+              SET data_criacao = CURRENT_TIMESTAMP
+              WHERE data_criacao IS NULL
+            `);
+          }
+          logInfo('Campo data_criacao adicionado na tabela users');
+        }
+
+        if (!hasDataAtualizacao) {
+          await executeNonQuery('ALTER TABLE users ADD COLUMN data_atualizacao DATETIME');
+          if (hasUpdatedAt) {
+            await executeNonQuery(`
+              UPDATE users
+              SET data_atualizacao = updated_at
+              WHERE data_atualizacao IS NULL
+            `);
+          } else if (hasDataCriacao || hasCreatedAt) {
+            await executeNonQuery(`
+              UPDATE users
+              SET data_atualizacao = COALESCE(data_criacao, CURRENT_TIMESTAMP)
+              WHERE data_atualizacao IS NULL
+            `);
+          } else {
+            await executeNonQuery(`
+              UPDATE users
+              SET data_atualizacao = CURRENT_TIMESTAMP
+              WHERE data_atualizacao IS NULL
+            `);
+          }
+          logInfo('Campo data_atualizacao adicionado na tabela users');
+        }
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 5', error);
       throw error;
     }
   }

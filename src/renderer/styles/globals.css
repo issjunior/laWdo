@@ -244,6 +244,19 @@ body {
   background-color: #1d3052;
 }
 
+/* Melhor contraste para utilitários cinza no tema escuro */
+.dark .text-gray-500 { color: #b6c4d8 !important; }
+.dark .text-gray-600 { color: #c7d2e3 !important; }
+.dark .text-gray-700 { color: #d5deea !important; }
+.dark .text-gray-800 { color: #e2e8f0 !important; }
+
+.dark .bg-red-50 { background-color: rgba(127, 29, 29, 0.28) !important; }
+.dark .bg-green-50 { background-color: rgba(20, 83, 45, 0.28) !important; }
+.dark .text-red-700,
+.dark .text-red-800 { color: #fca5a5 !important; }
+.dark .text-green-700,
+.dark .text-green-800 { color: #86efac !important; }
+
 /* Animações */
 @keyframes fade-in {
   from {

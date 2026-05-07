@@ -1,13 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import ReactDOM from 'react-dom/client';
+﻿import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
-import {
-  PerfilPage,
-  SolicitantesPage,
-  TiposExamePage,
-  DashboardPage,
-} from '@/pages';
+import { PerfilPage, SolicitantesPage, TiposExamePage, DashboardPage } from '@/pages';
+import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   Info,
@@ -20,32 +15,13 @@ import {
   UserCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
 } from 'lucide-react';
 import './styles/globals.css';
 
-// ─── Layout ────────────────────────────────────────────────────────────────────
-const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+const AUTH_USER_KEY = 'lawdo_auth_user';
 
-  return (
-    <div className="app">
-      <Header />
-      <div className="app-body">
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-        <main className={`main-content ${sidebarCollapsed ? 'full-width' : ''}`}>
-          {children}
-        </main>
-      </div>
-      <Footer />
-    </div>
-  );
-};
-
-// ─── Header ─────────────────────────────────────────────────────────────────────
-const Header = () => {
+const Header: React.FC<{ onLogout: () => void; currentUser: any }> = ({ onLogout, currentUser }) => {
   const [appInfo, setAppInfo] = useState<{ version: string; name: string } | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -63,12 +39,10 @@ const Header = () => {
   useEffect(() => {
     const fetchAppInfo = async () => {
       try {
-        if (window.ipcAPI) {
-          const info = await window.ipcAPI.getAppInfo();
-          setAppInfo(info);
-        }
+        const info = await window.ipcAPI.getAppInfo();
+        setAppInfo(info);
       } catch {
-        // App info é opcional
+        // opcional
       }
     };
     fetchAppInfo();
@@ -87,7 +61,8 @@ const Header = () => {
           <h1>🔍 laWdo</h1>
           <p className="subtitle">Sistema de automatização de laudos periciais</p>
         </div>
-        <div className="app-info">
+        <div className="app-info flex items-center gap-2">
+          <span className="version">{currentUser?.name || currentUser?.username || 'Usuário'}</span>
           <span className="version">v0.1.0</span>
           <span className="status online">● Online</span>
           <button
@@ -96,6 +71,9 @@ const Header = () => {
             title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
           >
             {isDarkMode ? '☀️' : '🌙'}
+          </button>
+          <button onClick={onLogout} className="dark-mode-btn" title="Sair">
+            <LogOut size={16} />
           </button>
           <Dialog>
             <DialogTrigger asChild>
@@ -139,7 +117,6 @@ const Header = () => {
   );
 };
 
-// ─── Nav Section (with collapse support) ────────────────────────────────────────
 interface NavSectionProps {
   label: string;
   emoji: string;
@@ -149,19 +126,11 @@ interface NavSectionProps {
   collapsed: boolean;
 }
 
-const NavSection: React.FC<NavSectionProps> = ({
-  label,
-  emoji,
-  icon,
-  items,
-  currentPath,
-  collapsed,
-}) => {
+const NavSection: React.FC<NavSectionProps> = ({ label, emoji, icon, items, currentPath, collapsed }) => {
   const [open, setOpen] = useState(true);
   const hasActive = items.some((i) => i.path === currentPath);
 
   if (collapsed) {
-    // No estado recolhido mostra só os ícones dos links
     return (
       <div className="nav-section-collapsed">
         {items.map((item) => (
@@ -180,28 +149,15 @@ const NavSection: React.FC<NavSectionProps> = ({
 
   return (
     <div className={`nav-section${hasActive && !open ? ' has-active' : ''}`}>
-      {/* Section header */}
-      <button
-        className={`nav-section-header${open ? ' open' : ''}`}
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-      >
+      <button className={`nav-section-header${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="nav-section-icon">{emoji}</span>
         <span className="nav-section-label">{label}</span>
-        <ChevronDown
-          size={14}
-          className={`nav-section-chevron${open ? ' rotated' : ''}`}
-        />
+        <ChevronDown size={14} className={`nav-section-chevron${open ? ' rotated' : ''}`} />
       </button>
 
-      {/* Items */}
       <div className={`nav-section-items${open ? ' open' : ''}`}>
         {items.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={`nav-link${currentPath === item.path ? ' active' : ''}`}
-          >
+          <Link key={item.path} to={item.path} className={`nav-link${currentPath === item.path ? ' active' : ''}`}>
             <span className="nav-link-icon">{item.icon}</span>
             <span className="nav-link-label">{item.label}</span>
             {currentPath === item.path && <span className="nav-link-indicator" />}
@@ -212,7 +168,6 @@ const NavSection: React.FC<NavSectionProps> = ({
   );
 };
 
-// ─── Nav Item (single, no dropdown) ─────────────────────────────────────────────
 interface NavItemProps {
   path: string;
   label: string;
@@ -228,11 +183,7 @@ const NavItem: React.FC<NavItemProps> = ({ path, label, emoji, icon, currentPath
   if (collapsed) {
     return (
       <div className="nav-section-collapsed">
-        <Link
-          to={path}
-          className={`nav-icon-btn${isActive ? ' active' : ''}`}
-          title={label}
-        >
+        <Link to={path} className={`nav-icon-btn${isActive ? ' active' : ''}`} title={label}>
           {icon}
         </Link>
       </div>
@@ -248,16 +199,11 @@ const NavItem: React.FC<NavItemProps> = ({ path, label, emoji, icon, currentPath
   );
 };
 
-// ─── Sidebar ─────────────────────────────────────────────────────────────────────
-const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = ({
-  collapsed,
-  onToggleCollapse,
-}) => {
+const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = ({ collapsed, onToggleCollapse }) => {
   const { pathname: currentPath } = useLocation();
 
   return (
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
-      {/* Toggle button */}
       <button
         className="sidebar-collapse-btn"
         onClick={onToggleCollapse}
@@ -267,10 +213,8 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = 
       </button>
 
       <nav className="sidebar-nav">
-        {/* Divisor visual */}
         {!collapsed && <p className="nav-divider-label">MENU</p>}
 
-        {/* Dashboard — item único */}
         <NavItem
           path="/"
           label="Dashboard"
@@ -280,7 +224,6 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = 
           collapsed={collapsed}
         />
 
-        {/* Cadastro */}
         <NavSection
           label="Cadastro"
           emoji="📁"
@@ -293,24 +236,19 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = 
           collapsed={collapsed}
         />
 
-        {/* Configurações */}
         <NavSection
           label="Configurações"
           emoji="⚙️"
           icon={<Settings size={16} />}
-          items={[
-            { path: '/perfil', label: 'Perfil', icon: <UserCircle size={15} /> },
-          ]}
+          items={[{ path: '/perfil', label: 'Perfil', icon: <UserCircle size={15} /> }]}
           currentPath={currentPath}
           collapsed={collapsed}
         />
       </nav>
-
     </aside>
   );
 };
 
-// ─── Footer ───────────────────────────────────────────────────────────────────────
 const Footer = () => (
   <footer className="footer">
     <div className="footer-content">
@@ -319,45 +257,25 @@ const Footer = () => (
   </footer>
 );
 
-// ─── App ──────────────────────────────────────────────────────────────────────────
-const App = () => {
+const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; currentUser: any }> = ({
+  children,
+  onLogout,
+  currentUser,
+}) => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
-    <ErrorBoundary>
-      <HashRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/solicitantes" element={<SolicitantesPage />} />
-            <Route path="/tipos-exame" element={<TiposExamePage />} />
-            <Route path="/perfil" element={<PerfilPage />} />
-            <Route path="/reps" element={<PlaceholderPage title="REPs" description="Gestão de Requisições de Exame Pericial" />} />
-            <Route path="/laudos" element={<PlaceholderPage title="Laudos" description="Criação e gestão de laudos periciais" />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </Layout>
-      </HashRouter>
-    </ErrorBoundary>
+    <div className="app">
+      <Header onLogout={onLogout} currentUser={currentUser} />
+      <div className="app-body">
+        <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />
+        <main className={`main-content ${sidebarCollapsed ? 'full-width' : ''}`}>{children}</main>
+      </div>
+      <Footer />
+    </div>
   );
 };
 
-// ─── Placeholder Page ─────────────────────────────────────────────────────────────
-const PlaceholderPage: React.FC<{ title: string; description: string }> = ({ title, description }) => (
-  <div className="container mx-auto p-6">
-    <div className="text-center py-16">
-      <h1 className="text-3xl font-bold mb-4">{title}</h1>
-      <p className="text-gray-600 mb-8">{description}</p>
-      <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-lg max-w-md mx-auto">
-        <h3 className="font-semibold text-yellow-800 mb-2">🚧 Em Desenvolvimento</h3>
-        <p className="text-yellow-700">
-          Esta funcionalidade será implementada nas próximas sprints.
-          Por enquanto, você pode acessar as páginas já disponíveis.
-        </p>
-      </div>
-    </div>
-  </div>
-);
-
-// ─── 404 ──────────────────────────────────────────────────────────────────────────
 const NotFoundPage = () => (
   <div className="container mx-auto p-6">
     <div className="text-center py-16">
@@ -372,5 +290,46 @@ const NotFoundPage = () => (
     </div>
   </div>
 );
+
+const App = () => {
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    try {
+      const raw = sessionStorage.getItem(AUTH_USER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleAuthenticated = (user: any) => {
+    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem(AUTH_USER_KEY);
+    setCurrentUser(null);
+  };
+
+  return (
+    <ErrorBoundary>
+      {!currentUser ? (
+        <AuthPage onAuthenticated={handleAuthenticated} />
+      ) : (
+        <HashRouter>
+          <Layout onLogout={handleLogout} currentUser={currentUser}>
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/solicitantes" element={<SolicitantesPage />} />
+              <Route path="/tipos-exame" element={<TiposExamePage />} />
+              <Route path="/perfil" element={<PerfilPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Layout>
+        </HashRouter>
+      )}
+    </ErrorBoundary>
+  );
+};
 
 export default App;

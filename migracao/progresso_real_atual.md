@@ -261,3 +261,6 @@ O projeto está **significativamente adiantado** em relação ao plano original.
 **Equipe de Migração**  
 Polícia Científica do Paraná  
 03/05/2026
+
+## Atualizacao de Produto - 06/05/2026
+- Regra de acesso revisada: aplicativo deve abrir somente para usuario autenticado.

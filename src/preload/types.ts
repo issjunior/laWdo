@@ -20,9 +20,12 @@ export interface PaginationOptions {
 export interface UserCreateData {
   nome: string
   email: string
+  senha: string
   matricula?: string
   telefone?: string
   cargo?: string
+  lotacao?: string
+  username?: string
 }
 
 export interface UserUpdateData {
@@ -30,6 +33,7 @@ export interface UserUpdateData {
   matricula?: string
   telefone?: string
   cargo?: string
+  lotacao?: string
 }
 
 export interface UserProfileUpdateData {
@@ -37,6 +41,7 @@ export interface UserProfileUpdateData {
   matricula?: string
   telefone?: string
   cargo?: string
+  lotacao?: string
 }
 
 /**

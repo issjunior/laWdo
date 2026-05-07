@@ -402,3 +402,7 @@ interface ImagemLaudo {
 
 > [!CAUTION]
 > **Atenção:** Sempre consulte o projeto legado em Python/Streamlit para garantir a paridade das regras de negócio complexas, especialmente em cálculos e validações de tipos de exame específicos.
+
+## Atualizacao de Escopo - Autenticacao e Cadastro (06/05/2026)
+1. O renderer deve bloquear acesso ao sistema quando nao houver sessao autenticada.
+2. A autenticacao deve ocorrer antes da exibicao do layout principal.

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { logInfo, logError } from '../../utils/logger.js'
 import { userService } from '../../services/user.service.js'
 import { sanitizeInput } from '../../security/index.js'
+import bcrypt from 'bcrypt'
 
 /**
  * Registra handlers IPC para operações de usuário
@@ -70,13 +71,28 @@ export const registerUserHandlers = (): void => {
    */
   ipcMain.handle('user:create', async (event, userData) => {
     try {
+      const sanitizedEmail = sanitizeInput(userData.email).toLowerCase()
+      const usernameBase = sanitizedEmail.split('@')[0] || 'perito'
+
+      if (!userData.senha || typeof userData.senha !== 'string' || userData.senha.trim().length < 6) {
+        return {
+          success: false,
+          error: 'Senha obrigatória com no mínimo 6 caracteres'
+        }
+      }
+      const senhaHash = await bcrypt.hash(userData.senha, 10)
+
       // Sanitizar dados de entrada
       const sanitizedData = {
         nome: sanitizeInput(userData.nome),
-        email: sanitizeInput(userData.email),
+        email: sanitizedEmail,
         matricula: userData.matricula ? sanitizeInput(userData.matricula) : null,
         telefone: userData.telefone ? sanitizeInput(userData.telefone) : null,
-        cargo: userData.cargo ? sanitizeInput(userData.cargo) : null
+        cargo: userData.cargo ? sanitizeInput(userData.cargo) : null,
+        lotacao: userData.lotacao ? sanitizeInput(userData.lotacao) : null,
+        username: userData.username ? sanitizeInput(userData.username) : usernameBase,
+        senha_hash: senhaHash,
+        ativo: 1
       }
 
       logInfo('Criando novo usuário', { email: sanitizedData.email })
@@ -114,6 +130,7 @@ export const registerUserHandlers = (): void => {
       if (updateData.matricula) sanitizedData.matricula = sanitizeInput(updateData.matricula)
       if (updateData.telefone) sanitizedData.telefone = sanitizeInput(updateData.telefone)
       if (updateData.cargo) sanitizedData.cargo = sanitizeInput(updateData.cargo)
+      if (updateData.lotacao) sanitizedData.lotacao = sanitizeInput(updateData.lotacao)
 
       logInfo('Atualizando usuário', { id })
       const updatedUser = await userService.update(id, sanitizedData)
@@ -250,6 +267,7 @@ export const registerUserHandlers = (): void => {
       if (profileData.matricula) sanitizedData.matricula = sanitizeInput(profileData.matricula)
       if (profileData.telefone) sanitizedData.telefone = sanitizeInput(profileData.telefone)
       if (profileData.cargo) sanitizedData.cargo = sanitizeInput(profileData.cargo)
+      if (profileData.lotacao) sanitizedData.lotacao = sanitizeInput(profileData.lotacao)
 
       logInfo('Atualizando perfil de usuário', { userId })
       const updatedProfile = await userService.updateProfile(userId, sanitizedData)

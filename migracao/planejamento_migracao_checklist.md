@@ -198,3 +198,7 @@ projeto/
 
 > [!IMPORTANT]
 > **Segurança em Primeiro Lugar:** A proteção dos dados críticos do sistema (especialmente senhas de peritos) é a prioridade zero. Todas as queries devem usar _prepared statements_ e **apenas dados sensíveis devem ser criptografados**.
+
+## Ajuste de Regra de Negocio (06/05/2026)
+- [x] Definir login obrigatorio para abrir o sistema.
+

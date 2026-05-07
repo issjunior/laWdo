@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { User } from 'lucide-react';
+import { User, AlertCircle } from 'lucide-react';
 import {
   Form,
   FormControl,
@@ -11,104 +11,103 @@ import {
   FormMessage,
 } from '@/components/forms/form';
 import { Input } from '@/components/ui/input';
-import { AlertCircle } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { PerfilPeritoFormValues } from '@/lib/validators';
 
-// Schema de validação para perfil
 const perfilValidationSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
-  email: z.string().email('Email inválido'),
-  matricula: z.string().min(4, 'Matrícula deve ter pelo menos 4 caracteres'),
-  cargo: z.string().min(3, 'Cargo deve ter pelo menos 3 caracteres'),
-  telefone: z.string().optional(),
+  username: z
+    .string()
+    .min(3, 'Nome de usuário deve ter pelo menos 3 caracteres')
+    .regex(/^[a-zA-Z0-9._-]+$/, 'Use apenas letras, números, ponto, underline e hífen'),
+  email: z.string().email('E-mail inválido'),
+  cargo: z.enum(['Perito Oficial Criminal', 'Técnico de Perícia Oficial']),
   lotacao: z.string().min(3, 'Lotação deve ter pelo menos 3 caracteres'),
+  senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
 });
 
+type PerfilCadastroFormValues = z.infer<typeof perfilValidationSchema>;
+
+const AUTH_USER_KEY = 'lawdo_auth_user';
+
 export const PerfilPage: React.FC = () => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const form = useForm<PerfilPeritoFormValues>({
+  const form = useForm<PerfilCadastroFormValues>({
     resolver: zodResolver(perfilValidationSchema),
     defaultValues: {
       nome: '',
+      username: '',
       email: '',
-      matricula: '',
-      cargo: '',
-      telefone: '',
+      cargo: 'Perito Oficial Criminal',
       lotacao: '',
+      senha: '',
     },
   });
 
-  // Carregar dados do perfil do usuário logado
   useEffect(() => {
-    carregarPerfil();
-  }, []);
-
-  const carregarPerfil = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Obter app info primeiro
-      // (app info não necessário no momento, apenas placeholder)
-
-      // TODO: Implementar busca real do perfil
-      // Por ora, vamos buscar usuários ativos e pegar o primeiro como exemplo
-      const result = await window.ipcAPI.user.findActivePeritos();
-
-      if (result.success && result.data && result.data.length > 0) {
-        const perito = result.data[0];
-        form.reset({
-          nome: perito.nome || '',
-          email: perito.email || '',
-          matricula: perito.matricula || '',
-          cargo: perito.cargo || '',
-          telefone: perito.telefone || '',
-          lotacao: perito.lotacao || '',
-        });
-      } else {
-        setError('Nenhum perito ativo encontrado no sistema.');
-      }
-    } catch (err: any) {
-      console.error('Erro ao carregar perfil:', err);
-      setError(err.message || 'Erro ao carregar perfil.');
-    } finally {
-      setLoading(false);
+    const rawUser = sessionStorage.getItem(AUTH_USER_KEY);
+    if (!rawUser) {
+      return;
     }
-  };
 
-  const onSubmit = async (data: PerfilPeritoFormValues) => {
+    try {
+      const user = JSON.parse(rawUser);
+      form.reset({
+        nome: user?.name || '',
+        username: user?.username || '',
+        email: user?.email || '',
+        cargo: 'Perito Oficial Criminal',
+        lotacao: '',
+        senha: '',
+      });
+    } catch {
+      // sem ação
+    }
+  }, [form]);
+
+  const onSubmit = async (data: PerfilCadastroFormValues) => {
     try {
       setSaving(true);
       setError(null);
       setSuccess(null);
 
-      // TODO: Obter o ID do usuário logado (deve vir da autenticação)
-      // Por ora, vamos buscar o primeiro usuário ativo novamente
-      const userResult = await window.ipcAPI.user.findActivePeritos();
-      if (!userResult.success || !userResult.data || userResult.data.length === 0) {
-        throw new Error('Nenhum usuário ativo encontrado para atualizar.');
+      const result = await window.ipcAPI.user.create({
+        nome: data.nome,
+        username: data.username,
+        email: data.email,
+        senha: data.senha,
+        cargo: data.cargo,
+        lotacao: data.lotacao,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao cadastrar usuário');
       }
 
-      const userId = userResult.data[0].id;
-
-      // Atualizar perfil
-      const result = await window.ipcAPI.user.updateProfile(userId, data);
-
-      if (result.success) {
-        setSuccess('Perfil atualizado com sucesso!');
-      } else {
-        throw new Error(result.error || 'Erro desconhecido ao salvar');
-      }
+      setSuccess('Usuário cadastrado com sucesso.');
+      form.reset({
+        nome: '',
+        username: '',
+        email: '',
+        cargo: 'Perito Oficial Criminal',
+        lotacao: '',
+        senha: '',
+      });
     } catch (err: any) {
-      console.error('Erro ao salvar perfil:', err);
-      setError(err.message || 'Erro ao salvar perfil.');
+      console.error('Erro ao cadastrar usuário:', err);
+      setError(err.message || 'Erro ao cadastrar usuário.');
     } finally {
       setSaving(false);
     }
@@ -118,7 +117,7 @@ export const PerfilPage: React.FC = () => {
     return (
       <div className="container mx-auto p-6">
         <div className="flex justify-center items-center h-64">
-          <div className="text-center text-gray-500">Carregando perfil...</div>
+          <div className="text-center text-gray-500">Carregando...</div>
         </div>
       </div>
     );
@@ -129,10 +128,8 @@ export const PerfilPage: React.FC = () => {
       <div className="flex items-center gap-4">
         <User className="h-8 w-8 text-gray-500" />
         <div>
-          <h1 className="text-3xl font-bold">Meu Perfil</h1>
-          <p className="text-gray-600 mt-1">
-            Gerencie suas informações pessoais e profissionais
-          </p>
+          <h1 className="text-3xl font-bold">Cadastro de Usuário</h1>
+          <p className="text-gray-600 mt-1">Preencha os dados do perito para acesso ao sistema</p>
         </div>
       </div>
 
@@ -144,17 +141,15 @@ export const PerfilPage: React.FC = () => {
       )}
 
       {success && (
-        <Alert variant="default" className="bg-green-50 border-green-200">
-          <AlertDescription className="text-green-800">{success}</AlertDescription>
-        </Alert>
+        <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+          <div className="text-green-800">{success}</div>
+        </div>
       )}
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Informações do Perito</CardTitle>
-          <CardDescription>
-            Atualize seus dados cadastrais. Os campos marcados com * são obrigatórios.
-          </CardDescription>
+          <CardTitle>Informações do Usuário</CardTitle>
+          <CardDescription>Os campos marcados com * são obrigatórios.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -176,12 +171,12 @@ export const PerfilPage: React.FC = () => {
 
                 <FormField
                   control={form.control}
-                  name="email"
+                  name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email *</FormLabel>
+                      <FormLabel>Nome de usuário *</FormLabel>
                       <FormControl>
-                        <Input type="email" {...field} placeholder="email@pcp.pr.gov.br" />
+                        <Input {...field} placeholder="usuario.perito" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -192,12 +187,12 @@ export const PerfilPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="matricula"
+                  name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Matrícula *</FormLabel>
+                      <FormLabel>E-mail *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Número da matrícula" />
+                        <Input type="email" {...field} placeholder="email@pcp.pr.gov.br" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -210,9 +205,17 @@ export const PerfilPage: React.FC = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cargo *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Ex: Perito Criminal" />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o cargo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Perito Oficial Criminal">Perito Oficial Criminal</SelectItem>
+                          <SelectItem value="Técnico de Perícia Oficial">Técnico de Perícia Oficial</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -220,20 +223,6 @@ export const PerfilPage: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="telefone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Telefone</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="(41) 99999-9999" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name="lotacao"
@@ -247,18 +236,28 @@ export const PerfilPage: React.FC = () => {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="senha"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha *</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} placeholder="Mínimo 6 caracteres" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => form.reset()}
-                >
+                <Button type="button" variant="outline" onClick={() => form.reset()}>
                   Limpar
                 </Button>
                 <Button type="submit" disabled={saving}>
-                  {saving ? 'Salvando...' : 'Salvar Alterações'}
+                  {saving ? 'Salvando...' : 'Cadastrar Usuário'}
                 </Button>
               </div>
             </form>

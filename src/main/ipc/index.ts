@@ -4,6 +4,7 @@ import { sanitizeInput, validateSqlQuery } from '../security/index.js';
 import { registerUserHandlers } from './handlers/user.handlers.js';
 import { registerSolicitanteHandlers } from './handlers/solicitante.handlers.js';
 import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers.js';
+import { userService } from '../services/user.service.js';
 
 /**
  * Registra todos os handlers IPC para comunicação entre main e renderer processes
@@ -217,22 +218,19 @@ const registerAuthHandlers = (): void => {
 
       logInfo(`Tentativa de login: ${sanitizedUsername}`);
 
-      // TODO: Implementar autenticação real com banco de dados
-      // Por enquanto, mock para desenvolvimento
-      if (process.env.NODE_ENV === 'development') {
-        if (sanitizedUsername === 'admin' && sanitizedPassword === 'admin') {
-          logInfo(`Login bem-sucedido: ${sanitizedUsername}`);
-          return {
-            success: true,
-            user: {
-              id: 1,
-              username: sanitizedUsername,
-              name: 'Administrador',
-              role: 'admin',
-              email: 'admin@pcp.pr.gov.br',
-            },
-          };
-        }
+      const user = await userService.authenticate(sanitizedUsername, sanitizedPassword)
+      if (user) {
+        logInfo(`Login bem-sucedido: ${sanitizedUsername}`);
+        return {
+          success: true,
+          user: {
+            id: user.id,
+            username: user.username,
+            name: user.nome,
+            role: user.cargo || 'perito',
+            email: user.email,
+          },
+        };
       }
 
       logWarning(`Login falhou: ${sanitizedUsername}`);
@@ -289,3 +287,4 @@ export const ipc = {
   setMainWindow,
   sendToRenderer,
 };
+
