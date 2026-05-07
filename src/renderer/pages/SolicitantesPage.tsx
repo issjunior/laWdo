@@ -327,11 +327,7 @@ export const SolicitantesPage: React.FC = () => {
               <Button
                 variant={mostrarTodos ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => {
-                  const novoStatus = !mostrarTodos;
-                  setMostrarTodos(novoStatus);
-                  carregarSolicitantes(novoStatus);
-                }}
+                onClick={() => setMostrarTodos(!mostrarTodos)}
                 className="flex items-center gap-1.5"
               >
                 {mostrarTodos ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -372,7 +368,7 @@ export const SolicitantesPage: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {filteredSolicitantes.map((solicitante) => (
-                  <TableRow key={solicitante.id} className={!solicitante.ativo ? 'opacity-60' : ''}>
+                  <TableRow key={solicitante.id}>
                     <TableCell className="font-medium">{solicitante.nome}</TableCell>
                     <TableCell>{solicitante.tipo || '-'}</TableCell>
                     <TableCell>{solicitante.telefone || '-'}</TableCell>

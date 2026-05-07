@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { TipoExame, CreateTipoExameInput } from '@/lib/validators';
 
 export const TiposExamePage: React.FC = () => {
@@ -323,7 +323,7 @@ export const TiposExamePage: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {filteredTipos.map((tipo) => (
-                  <TableRow key={tipo.id} className={!tipo.ativo ? 'opacity-60' : ''}>
+                  <TableRow key={tipo.id}>
                     <TableCell className="font-mono text-sm font-medium">{tipo.codigo}</TableCell>
                     <TableCell className="font-medium">{tipo.nome}</TableCell>
                     <TableCell>
@@ -338,15 +338,14 @@ export const TiposExamePage: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      {tipo.ativo ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Ativo
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Inativo
-                        </span>
-                      )}
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${!!tipo.ativo
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {!!tipo.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {tipo.descricao || '-'}
@@ -356,21 +355,18 @@ export const TiposExamePage: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleToggleStatus(tipo.id)}
-                          title={tipo.ativo ? 'Desativar' : 'Ativar'}
+                          onClick={() => handleEditar(tipo)}
                         >
-                          {tipo.ativo ? (
-                            <ToggleRight size={14} className="text-green-600" />
-                          ) : (
-                            <ToggleLeft size={14} className="text-red-600" />
-                          )}
+                          <Edit size={14} />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEditar(tipo)}
+                          onClick={() => handleToggleStatus(tipo.id)}
+                          title={tipo.ativo ? 'Desativar' : 'Ativar'}
+                          className={tipo.ativo ? 'text-orange-500' : 'text-green-600'}
                         >
-                          <Edit size={14} />
+                          {tipo.ativo ? <X size={14} /> : <Plus size={14} />}
                         </Button>
                         <Button
                           variant="ghost"
