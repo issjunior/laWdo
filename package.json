@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm run build && electron .",
     "start": "electron .",
+    "prebuild": "node scripts/copy-tinymce.mjs",
     "postbuild": "node scripts/fix-imports.mjs",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",

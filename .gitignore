@@ -89,6 +89,9 @@ Thumbs.db
 # --- TYPESCRIPT ---
 *.tsbuildinfo
 
+# --- TINYMCE (assets copiados via prebuild) ---
+src/renderer/public/tinymce/
+
 # --- TEMPORÁRIOS ---
 tmp/
 temp/

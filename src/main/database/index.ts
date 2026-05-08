@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 10;
+const CURRENT_SCHEMA_VERSION = 11;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -209,6 +209,33 @@ const createDatabaseSchema = async (): Promise<void> => {
         ip_address TEXT,
         user_agent TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Tabela de templates de laudo
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS templates (
+        id TEXT PRIMARY KEY,
+        tipo_exame_id TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        descricao TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id)
+      )
+    `);
+
+    // Tabela de seções do template
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS secoes_template (
+        id TEXT PRIMARY KEY,
+        template_id TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        conteudo TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
       )
     `);
 
@@ -722,6 +749,41 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       logError('Erro ao aplicar migration versão 10', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 11: Criar tabelas de templates e seções
+  if (fromVersion < 11) {
+    try {
+      await executeNonQuery(`
+        CREATE TABLE IF NOT EXISTS templates (
+          id TEXT PRIMARY KEY,
+          tipo_exame_id TEXT NOT NULL,
+          nome TEXT NOT NULL,
+          descricao TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id)
+        )
+      `);
+
+      await executeNonQuery(`
+        CREATE TABLE IF NOT EXISTS secoes_template (
+          id TEXT PRIMARY KEY,
+          template_id TEXT NOT NULL,
+          nome TEXT NOT NULL,
+          ordem INTEGER NOT NULL DEFAULT 0,
+          conteudo TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+        )
+      `);
+
+      logInfo('Migration v11: Tabelas templates e secoes_template criadas');
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 11', error);
       throw error;
     }
   }

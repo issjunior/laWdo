@@ -130,6 +130,27 @@ export interface LogAuditoriaRow extends DatabaseRow {
   created_at: string
 }
 
+// Template de Laudo
+export interface TemplateRow extends DatabaseRow {
+  id: string
+  tipo_exame_id: string
+  nome: string
+  descricao?: string
+  created_at: string
+  updated_at: string
+}
+
+// Seção de Template
+export interface SecaoTemplateRow extends DatabaseRow {
+  id: string
+  template_id: string
+  nome: string
+  ordem: number
+  conteudo?: string
+  created_at: string
+  updated_at: string
+}
+
 /**
  * Mapeamento de tipos por nome de entidade
  */
@@ -142,6 +163,8 @@ export type EntityRow =
   | ImagemLaudoRow
   | PlaceholderRow
   | LogAuditoriaRow
+  | TemplateRow
+  | SecaoTemplateRow
 
 /**
  * Resultado de query

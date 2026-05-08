@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Save, Eye, EyeOff, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Heading } from 'lucide-react';
+import { Save, Eye, EyeOff } from 'lucide-react';
+import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 
 export const CabecalhoPage: React.FC = () => {
   const [conteudo, setConteudo] = useState('');
@@ -11,11 +12,9 @@ export const CabecalhoPage: React.FC = () => {
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const editorRef = useRef<HTMLDivElement>(null);
 
   const CHAVE_CONFIG = 'cabecalho_laudo';
 
-  // Carregar cabeçalho salvo
   const carregarCabecalho = useCallback(async () => {
     try {
       setLoading(true);
@@ -34,7 +33,6 @@ export const CabecalhoPage: React.FC = () => {
     carregarCabecalho();
   }, [carregarCabecalho]);
 
-  // Salvar cabeçalho
   const handleSalvar = async () => {
     try {
       setSalvando(true);
@@ -59,37 +57,6 @@ export const CabecalhoPage: React.FC = () => {
       setError(err.message || 'Erro ao salvar cabeçalho');
     } finally {
       setSalvando(false);
-    }
-  };
-
-  // Comandos do editor
-  const execCmd = (cmd: string, value?: string) => {
-    document.execCommand(cmd, false, value);
-    if (editorRef.current) {
-      editorRef.current.focus();
-      setConteudo(editorRef.current.innerHTML);
-    }
-  };
-
-  const handleInsertHeading = () => {
-    execCmd('formatBlock', '<h2>');
-  };
-
-  const handleInsertParagraph = () => {
-    execCmd('formatBlock', '<p>');
-  };
-
-  const handleEditorInput = () => {
-    if (editorRef.current) {
-      setConteudo(editorRef.current.innerHTML);
-    }
-  };
-
-  // Inserir placeholder ao final do texto
-  const handleInsertPlaceholder = (tag: string) => {
-    if (editorRef.current) {
-      editorRef.current.focus();
-      execCmd('insertHTML', ` <span class="placeholder-tag" style="background:#e5e7eb;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:0.9em;color:#374151;">{${tag}}</span> `);
     }
   };
 
@@ -146,59 +113,11 @@ export const CabecalhoPage: React.FC = () => {
             />
           ) : (
             <>
-              {/* Toolbar */}
-              <div className="flex flex-wrap items-center gap-1 p-2 border rounded-t-lg bg-gray-50">
-                <Button variant="ghost" size="sm" onClick={() => execCmd('bold')} title="Negrito">
-                  <Bold size={16} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => execCmd('italic')} title="Itálico">
-                  <Italic size={16} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => execCmd('underline')} title="Sublinhado">
-                  <Underline size={16} />
-                </Button>
-                <div className="w-px h-6 bg-gray-300 mx-1" />
-                <Button variant="ghost" size="sm" onClick={handleInsertHeading} title="Título">
-                  <Heading size={16} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleInsertParagraph} title="Parágrafo">
-                  <span className="text-xs font-bold">P</span>
-                </Button>
-                <div className="w-px h-6 bg-gray-300 mx-1" />
-                <Button variant="ghost" size="sm" onClick={() => execCmd('justifyLeft')} title="Alinhar à esquerda">
-                  <AlignLeft size={16} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => execCmd('justifyCenter')} title="Centralizar">
-                  <AlignCenter size={16} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => execCmd('justifyRight')} title="Alinhar à direita">
-                  <AlignRight size={16} />
-                </Button>
-                <div className="w-px h-6 bg-gray-300 mx-1" />
-                <Button variant="ghost" size="sm" onClick={() => execCmd('insertUnorderedList')} title="Lista">
-                  <List size={16} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => execCmd('insertOrderedList')} title="Lista numerada">
-                  <ListOrdered size={16} />
-                </Button>
-                <div className="w-px h-6 bg-gray-300 mx-1" />
-                <Button variant="ghost" size="sm" onClick={() => execCmd('outdent')} title="Recuar">
-                  <span className="text-xs font-bold">←</span>
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => execCmd('indent')} title="Avançar">
-                  <span className="text-xs font-bold">→</span>
-                </Button>
-              </div>
-
-              {/* Área de edição */}
-              <div
-                ref={editorRef}
-                contentEditable
-                suppressContentEditableWarning
-                className="border-x border-b rounded-b-lg p-4 min-h-[400px] focus:outline-none focus:ring-2 focus:ring-blue-500 prose prose-sm max-w-none bg-white"
-                dangerouslySetInnerHTML={{ __html: conteudo }}
-                onInput={handleEditorInput}
-                onBlur={handleEditorInput}
+              <TinyMceEditor
+                value={conteudo}
+                onChange={setConteudo}
+                height={400}
+                placeholder="Digite o cabeçalho padrão dos laudos..."
               />
 
               {/* Inserir placeholders */}
@@ -207,10 +126,14 @@ export const CabecalhoPage: React.FC = () => {
                 {['perito.nome', 'rep.numero', 'data_atual', 'laudo.numero', 'solicitante.nome'].map((tag) => (
                   <button
                     key={tag}
-                    onClick={() => handleInsertPlaceholder(tag)}
+                    onClick={() => {
+                      // Copia o placeholder para a área de transferência
+                      navigator.clipboard.writeText(`{{${tag}}}`);
+                    }}
                     className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors cursor-pointer border-0"
+                    title="Clique para copiar o placeholder"
                   >
-                    {'{' + tag + '}'}
+                    {'{{' + tag + '}}'}
                   </button>
                 ))}
               </div>
@@ -229,12 +152,10 @@ export const CabecalhoPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="border rounded-lg p-8 bg-white">
-            {/* Cabeçalho */}
             <div
               className="border-b pb-4 mb-4"
               dangerouslySetInnerHTML={{ __html: conteudo || '<span class="text-gray-400">[Cabeçalho vazio - configure acima]</span>' }}
             />
-            {/* Conteúdo simulado do laudo */}
             <div className="text-gray-500 italic text-sm">
               <p>--- Conteúdo do laudo será inserido aqui ---</p>
             </div>

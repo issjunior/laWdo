@@ -103,6 +103,21 @@ export interface IpcAPI {
     delete: (id: string) => Promise<UserResponse>;
     seedSistema: () => Promise<UserResponse>;
   };
+
+  // Templates
+  template: {
+    findAll: () => Promise<UserResponse>;
+    findById: (id: string) => Promise<UserResponse>;
+    findByTipoExame: (tipoExameId: string) => Promise<UserResponse>;
+    create: (data: any) => Promise<UserResponse>;
+    update: (id: string, data: any) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+    findSecoes: (templateId: string) => Promise<UserResponse>;
+    createSecao: (data: any) => Promise<UserResponse>;
+    updateSecao: (id: string, data: any) => Promise<UserResponse>;
+    deleteSecao: (id: string) => Promise<UserResponse>;
+    reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -176,6 +191,19 @@ const ALLOWED_CHANNELS = new Set([
   'placeholder:update',
   'placeholder:delete',
   'placeholder:seedSistema',
+
+  // Templates
+  'template:findAll',
+  'template:findById',
+  'template:findByTipoExame',
+  'template:create',
+  'template:update',
+  'template:delete',
+  'template:findSecoes',
+  'template:createSecao',
+  'template:updateSecao',
+  'template:deleteSecao',
+  'template:reordenarSecoes',
 ]);
 
 // Expor API segura para o renderer
@@ -484,6 +512,20 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     update: (id: string, data: any) => ipcRenderer.invoke('placeholder:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('placeholder:delete', id),
     seedSistema: () => ipcRenderer.invoke('placeholder:seedSistema'),
+  },
+
+  template: {
+    findAll: () => ipcRenderer.invoke('template:findAll'),
+    findById: (id: string) => ipcRenderer.invoke('template:findById', id),
+    findByTipoExame: (tipoExameId: string) => ipcRenderer.invoke('template:findByTipoExame', tipoExameId),
+    create: (data: any) => ipcRenderer.invoke('template:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('template:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('template:delete', id),
+    findSecoes: (templateId: string) => ipcRenderer.invoke('template:findSecoes', templateId),
+    createSecao: (data: any) => ipcRenderer.invoke('template:createSecao', data),
+    updateSecao: (id: string, data: any) => ipcRenderer.invoke('template:updateSecao', id, data),
+    deleteSecao: (id: string) => ipcRenderer.invoke('template:deleteSecao', id),
+    reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
   },
 } satisfies IpcAPI);
 

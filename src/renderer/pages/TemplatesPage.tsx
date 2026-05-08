@@ -1,0 +1,512 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Plus, Search, Edit, Trash2, X, ArrowUp, ArrowDown, ArrowLeft,
+  FileText, GripVertical, Layers,
+} from 'lucide-react';
+import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { createTemplateSchema } from '@/lib/validators';
+import { z } from 'zod';
+
+interface TemplateItem {
+  id: string;
+  nome: string;
+  tipo_exame_id: string;
+  descricao?: string;
+  qtd_secoes: number;
+  tipo_exame_nome?: string;
+  created_at: string;
+}
+
+interface SecaoItem {
+  id: string;
+  template_id: string;
+  nome: string;
+  ordem: number;
+  conteudo?: string;
+}
+
+interface TemplateForm {
+  nome: string;
+  tipo_exame_id: string;
+  descricao: string;
+}
+
+interface SecaoForm {
+  id?: string;
+  nome: string;
+  conteudo: string;
+}
+
+const emptyTemplateForm = (): TemplateForm => ({
+  nome: '', tipo_exame_id: '', descricao: '',
+});
+
+const emptySecaoForm = (): SecaoForm => ({
+  nome: '', conteudo: '',
+});
+
+const templateFormSchema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório').max(200, 'Máximo 200 caracteres'),
+  tipo_exame_id: z.string().min(1, 'Tipo de exame é obrigatório'),
+  descricao: z.string().max(500, 'Máximo 500 caracteres').optional(),
+});
+
+export const TemplatesPage: React.FC = () => {
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filtroTipoExame, setFiltroTipoExame] = useState('');
+  const [tiposExame, setTiposExame] = useState<any[]>([]);
+
+  // Modo de edição
+  const [editMode, setEditMode] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
+  const [secoes, setSecoes] = useState<SecaoForm[]>([]);
+  const [secoesDb, setSecoesDb] = useState<SecaoItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
+
+  const carregarTemplates = useCallback(async () => {
+    try {
+      setLoading(true);
+      const r = await window.ipcAPI.template.findAll();
+      if (r.success) setTemplates(r.data || []);
+      else setError(r.error);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const carregarTiposExame = useCallback(async () => {
+    const r = await window.ipcAPI.tipoExame.findAllSemFiltroStatus();
+    if (r.success) setTiposExame(r.data || []);
+  }, []);
+
+  useEffect(() => { carregarTemplates(); carregarTiposExame(); }, []);
+
+  const filtered = templates.filter(t => {
+    const matchSearch = t.nome.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchTipo = !filtroTipoExame || t.tipo_exame_id === filtroTipoExame;
+    return matchSearch && matchTipo;
+  });
+
+  // ─── Modo Lista ──────────────────────────────────────
+
+  const handleNovo = () => {
+    setEditingTemplateId(null);
+    setTemplateForm(emptyTemplateForm());
+    setSecoes([emptySecaoForm()]);
+    setSecoesDb([]);
+    setError(null);
+    setSuccess(null);
+    setErrors({});
+    setEditMode(true);
+  };
+
+  const handleEditar = async (template: TemplateItem) => {
+    setEditingTemplateId(template.id);
+    setTemplateForm({
+      nome: template.nome,
+      tipo_exame_id: template.tipo_exame_id,
+      descricao: template.descricao || '',
+    });
+    setError(null);
+    setSuccess(null);
+    setErrors({});
+
+    // Carregar seções existentes
+    const r = await window.ipcAPI.template.findSecoes(template.id);
+    if (r.success && r.data) {
+      const s: SecaoItem[] = r.data;
+      setSecoesDb(s);
+      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' })));
+    } else {
+      setSecoesDb([]);
+      setSecoes([emptySecaoForm()]);
+    }
+    setEditMode(true);
+  };
+
+  const handleExcluir = async (id: string) => {
+    if (!confirm('Excluir este template? As seções vinculadas também serão removidas.')) return;
+    const r = await window.ipcAPI.template.delete(id);
+    if (r.success) {
+      await carregarTemplates();
+    } else {
+      alert(r.error);
+    }
+  };
+
+  const handleVoltar = () => {
+    setEditMode(false);
+    carregarTemplates();
+  };
+
+  // ─── Formulário ──────────────────────────────────────
+
+  const updateTemplateField = (field: keyof TemplateForm, value: string) => {
+    setTemplateForm(prev => ({ ...prev, [field]: value }));
+    setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
+  };
+
+  const handleAddSecao = () => {
+    setSecoes(prev => [...prev, emptySecaoForm()]);
+  };
+
+  const handleRemoveSecao = (index: number) => {
+    setSecoes(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMoveSecao = (index: number, direction: 'up' | 'down') => {
+    setSecoes(prev => {
+      const next = [...prev];
+      const target = direction === 'up' ? index - 1 : index + 1;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const updateSecao = (index: number, field: keyof SecaoForm, value: string) => {
+    setSecoes(prev => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
+  };
+
+  const handleSalvar = async () => {
+    try {
+      setError(null);
+      setSuccess(null);
+      setSubmitting(true);
+      setErrors({});
+
+      // Validar template
+      const result = templateFormSchema.safeParse(templateForm);
+      if (!result.success) {
+        const fErrors: Partial<Record<keyof TemplateForm, string>> = {};
+        result.error.errors.forEach(err => {
+          const f = err.path[0] as keyof TemplateForm;
+          if (!fErrors[f]) fErrors[f] = err.message;
+        });
+        setErrors(fErrors);
+        setSubmitting(false);
+        return;
+      }
+
+      // Salvar template
+      let templateId = editingTemplateId;
+      if (editingTemplateId) {
+        const r = await window.ipcAPI.template.update(editingTemplateId, {
+          nome: templateForm.nome,
+          tipo_exame_id: templateForm.tipo_exame_id,
+          descricao: templateForm.descricao || null,
+        });
+        if (!r.success) { setError(r.error); setSubmitting(false); return; }
+      } else {
+        const r = await window.ipcAPI.template.create({
+          nome: templateForm.nome,
+          tipo_exame_id: templateForm.tipo_exame_id,
+          descricao: templateForm.descricao || null,
+        });
+        if (!r.success) { setError(r.error); setSubmitting(false); return; }
+        templateId = r.data.id;
+      }
+
+      // Salvar seções (excluir as removidas, atualizar/criar as atuais)
+      if (templateId) {
+        // Remover seções que não estão mais na lista
+        const idsAtuais = secoes.filter(s => s.id).map(s => s.id!);
+        for (const s of secoesDb) {
+          if (!idsAtuais.includes(s.id)) {
+            await window.ipcAPI.template.deleteSecao(s.id);
+          }
+        }
+
+        // Criar/atualizar seções
+        const idsOrdenados: string[] = [];
+        for (let i = 0; i < secoes.length; i++) {
+          const sec = secoes[i];
+          if (!sec.nome.trim()) continue;
+
+          if (sec.id) {
+            await window.ipcAPI.template.updateSecao(sec.id, {
+              nome: sec.nome.trim(),
+              conteudo: sec.conteudo,
+              ordem: i,
+            });
+            idsOrdenados.push(sec.id);
+          } else {
+            const r = await window.ipcAPI.template.createSecao({
+              template_id: templateId,
+              nome: sec.nome.trim(),
+              ordem: i,
+              conteudo: sec.conteudo,
+            });
+            if (r.success) idsOrdenados.push(r.data.id);
+          }
+        }
+
+        // Reordenar
+        if (idsOrdenados.length > 0) {
+          await window.ipcAPI.template.reordenarSecoes(templateId, idsOrdenados);
+        }
+      }
+
+      setSuccess(editingTemplateId ? 'Template atualizado com sucesso!' : 'Template criado com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+      carregarTemplates();
+
+      if (!editingTemplateId) {
+        setEditingTemplateId(templateId);
+      }
+
+      // Recarregar seções do BD
+      if (templateId) {
+        const r = await window.ipcAPI.template.findSecoes(templateId);
+        if (r.success) {
+          setSecoesDb(r.data);
+          setSecoes(r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo || '' })));
+        }
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ─── Modo Lista ──────────────────────────────────────
+
+  if (!editMode) {
+    return (
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Templates</h1>
+            <p className="text-muted-foreground mt-1">Modelos de laudo vinculados aos tipos de exame</p>
+          </div>
+          <Button onClick={handleNovo} className="flex items-center gap-2 w-full sm:w-auto">
+            <Plus size={16} /> Novo Template
+          </Button>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
+              <div>
+                <CardTitle>Lista de Templates</CardTitle>
+                <CardDescription>{filtered.length} template(s) encontrado(s)</CardDescription>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                <div className="relative w-full md:w-72">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                <Select value={filtroTipoExame} onValueChange={setFiltroTipoExame}>
+                  <SelectTrigger className="w-full md:w-48">
+                    <SelectValue placeholder="Todos os tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os tipos</SelectItem>
+                    {tiposExame.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{`${t.codigo || 'sem código'} - ${t.nome}`}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchTerm || filtroTipoExame ? 'Nenhum template encontrado.' : 'Nenhum template cadastrado.'}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filtered.map(t => (
+                  <Card key={t.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-5 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-base truncate">{t.nome}</h3>
+                          <p className="text-xs text-muted-foreground">{t.tipo_exame_nome || '—'}</p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
+                            <Edit size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleExcluir(t.id)} aria-label="Excluir">
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                      {t.descricao && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">{t.descricao}</p>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 border-t">
+                        <Layers size={12} />
+                        <span>{t.qtd_secoes} seção(s)</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ─── Modo Edição ─────────────────────────────────────
+
+  return (
+    <div className="container mx-auto p-4 md:p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={handleVoltar}>
+            <ArrowLeft size={18} />
+          </Button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">
+              {editingTemplateId ? 'Editar Template' : 'Novo Template'}
+            </h1>
+            <p className="text-muted-foreground mt-1">Configure o modelo e suas seções</p>
+          </div>
+        </div>
+      </div>
+
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+      {success && (
+        <Alert className="bg-green-50 border-green-200">
+          <AlertDescription className="text-green-800">{success}</AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><FileText size={16} /> Dados do Template</CardTitle>
+          <CardDescription>Informações básicas do modelo de laudo</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="nome">Nome *</Label>
+              <Input
+                id="nome"
+                value={templateForm.nome}
+                onChange={e => updateTemplateField('nome', e.target.value)}
+                className={errors.nome ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                placeholder="Ex: Laudo de Local de Crime"
+              />
+              {errors.nome && <p className="text-xs text-red-600">{errors.nome}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tipo_exame_id">Tipo de Exame *</Label>
+              <Select value={templateForm.tipo_exame_id} onValueChange={v => updateTemplateField('tipo_exame_id', v)}>
+                <SelectTrigger id="tipo_exame_id" className={errors.tipo_exame_id ? 'border-red-500 focus-visible:ring-red-500' : ''}>
+                  <SelectValue placeholder="Selecione o tipo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposExame.map(t => (
+                    <SelectItem key={t.id} value={t.id}>{`${t.codigo || 'sem código'} - ${t.nome}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.tipo_exame_id && <p className="text-xs text-red-600">{errors.tipo_exame_id}</p>}
+            </div>
+          </div>
+          <div className="space-y-2 mt-4">
+            <Label htmlFor="descricao">Descrição</Label>
+            <Textarea
+              id="descricao"
+              value={templateForm.descricao}
+              onChange={e => updateTemplateField('descricao', e.target.value)}
+              placeholder="Descrição breve do template..."
+              rows={2}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Seções */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2"><Layers size={16} /> Seções do Laudo</CardTitle>
+              <CardDescription>Adicione, edite e reordene as seções que compõem o laudo</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleAddSecao} className="flex items-center gap-1">
+              <Plus size={14} /> Adicionar Seção
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {secoes.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Nenhuma seção. Clique em "Adicionar Seção" para começar.
+            </div>
+          ) : (
+            secoes.map((secao, index) => (
+              <div key={index} className="rounded-lg border bg-card/50 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <GripVertical size={16} className="text-muted-foreground" />
+                  <span className="text-sm font-semibold text-muted-foreground">Seção {index + 1}</span>
+                  <Input
+                    value={secao.nome}
+                    onChange={e => updateSecao(index, 'nome', e.target.value)}
+                    placeholder="Nome da seção (ex: Introdução, Metodologia...)"
+                    className="flex-1 h-8 text-sm"
+                  />
+                  <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'up')} disabled={index === 0} aria-label="Mover para cima">
+                    <ArrowUp size={14} />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'down')} disabled={index === secoes.length - 1} aria-label="Mover para baixo">
+                    <ArrowDown size={14} />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleRemoveSecao(index)} aria-label="Remover seção">
+                    <X size={14} />
+                  </Button>
+                </div>
+                <TinyMceEditor
+                  value={secao.conteudo}
+                  onChange={html => updateSecao(index, 'conteudo', html)}
+                  height={250}
+                  placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
+                />
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Botões */}
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+        <Button variant="outline" onClick={handleVoltar}>Cancelar</Button>
+        <Button onClick={handleSalvar} disabled={submitting} className="flex items-center gap-2">
+          <Plus size={16} /> {submitting ? 'Salvando...' : editingTemplateId ? 'Atualizar' : 'Criar'} Template
+        </Button>
+      </div>
+    </div>
+  );
+};
