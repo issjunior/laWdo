@@ -467,7 +467,7 @@ export const REPsPage: React.FC = () => {
                     <TableHead>Nº REP</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Envolvido</TableHead>
+                    <TableHead>Nº da Solicitação</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -475,10 +475,10 @@ export const REPsPage: React.FC = () => {
                 <TableBody>
                   {filteredREPs.map(rep => (
                     <TableRow key={rep.id}>
-                      <TableCell className="font-mono text-sm font-medium">{rep.numero}</TableCell>
-                      <TableCell>{rep.data_requisicao?.split('T')[0] || '-'}</TableCell>
+                      <TableCell className="font-medium">{rep.numero}</TableCell>
+                      <TableCell>{rep.data_requisicao ? rep.data_requisicao.split('T')[0].split('-').reverse().join('/') : '-'}</TableCell>
                       <TableCell>{rep.tipo_solicitacao || '-'}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{rep.nome_envolvido || '-'}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{rep.numero_documento || '-'}</TableCell>
                       <TableCell>{statusBadge(rep.status || 'Pendente')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

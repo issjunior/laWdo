@@ -108,6 +108,7 @@ export const TemplatesPage: React.FC = () => {
   useEffect(() => { carregarTemplates(); carregarTiposExame(); }, []);
 
   const filtered = templates.filter(t => {
+    if (t.id === 'tpl-nao-definido') return false;
     const matchSearch = t.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchTipo = !filtroTipoExame || t.tipo_exame_id === filtroTipoExame;
     return matchSearch && matchTipo;
