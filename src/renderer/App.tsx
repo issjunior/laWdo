@@ -1,7 +1,14 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
-import { PerfilPage, SolicitantesPage, TiposExamePage, DashboardPage, CabecalhoPage, REPsPage, PlaceholdersPage, TemplatesPage } from '@/pages';
+const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const SolicitantesPage = lazy(() => import('@/pages/SolicitantesPage').then(m => ({ default: m.SolicitantesPage })));
+const TiposExamePage = lazy(() => import('@/pages/TiposExamePage').then(m => ({ default: m.TiposExamePage })));
+const PerfilPage = lazy(() => import('@/pages/PerfilPage').then(m => ({ default: m.PerfilPage })));
+const CabecalhoPage = lazy(() => import('@/pages/CabecalhoPage').then(m => ({ default: m.CabecalhoPage })));
+const REPsPage = lazy(() => import('@/pages/REPsPage').then(m => ({ default: m.REPsPage })));
+const PlaceholdersPage = lazy(() => import('@/pages/PlaceholdersPage').then(m => ({ default: m.PlaceholdersPage })));
+const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then(m => ({ default: m.TemplatesPage })));
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -334,17 +341,19 @@ const App = () => {
       ) : (
         <HashRouter>
           <Layout onLogout={handleLogout} currentUser={currentUser}>
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/solicitantes" element={<SolicitantesPage />} />
-              <Route path="/tipos-exame" element={<TiposExamePage />} />
-              <Route path="/perfil" element={<PerfilPage />} />
-              <Route path="/cabecalho" element={<CabecalhoPage />} />
-              <Route path="/reps" element={<REPsPage />} />
-              <Route path="/placeholders" element={<PlaceholdersPage />} />
-              <Route path="/templates" element={<TemplatesPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
+            <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/solicitantes" element={<SolicitantesPage />} />
+                <Route path="/tipos-exame" element={<TiposExamePage />} />
+                <Route path="/perfil" element={<PerfilPage />} />
+                <Route path="/cabecalho" element={<CabecalhoPage />} />
+                <Route path="/reps" element={<REPsPage />} />
+                <Route path="/placeholders" element={<PlaceholdersPage />} />
+                <Route path="/templates" element={<TemplatesPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
           </Layout>
         </HashRouter>
       )}

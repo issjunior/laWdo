@@ -13,10 +13,16 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, 'out/renderer'),
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,
     rollupOptions: {
       input: {
         main: path.join(__dirname, 'src/renderer/index.html'),
+      },
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-tinymce': ['@tinymce/tinymce-react'],
+        },
       },
     },
   },
