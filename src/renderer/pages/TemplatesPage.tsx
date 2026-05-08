@@ -291,65 +291,105 @@ export const TemplatesPage: React.FC = () => {
     }
   };
 
-  /** Gerar PDF e exibir no Dialog via protocolo customizado */
+  /** Converte HTML em PDF e exibe no dialog */
+  const gerarEExibirPdf = async (fullHtml: string) => {
+    const result = await window.ipcAPI.template.previewPDF(fullHtml);
+    if (result.success && result.data) {
+      const byteChars = atob(result.data);
+      const byteNums = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNums[i] = byteChars.charCodeAt(i);
+      }
+      const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      setPreviewBlobUrl(url);
+    } else {
+      setError(result.error || 'Erro ao gerar PDF');
+      setShowPreview(false);
+    }
+  };
+
+  /** Monta o HTML com cabeçalho + placeholders substituídos */
+  const montarHtmlPreview = async (
+    secoesFonte: { nome: string; conteudo?: string }[],
+    templateNome: string,
+    tipoExameNome: string,
+  ) => {
+    let cabecalhoHtml = '';
+    const headerResult = await window.ipcAPI.configuracao.obter('cabecalho_laudo');
+    if (headerResult.success && headerResult.data) {
+      cabecalhoHtml = headerResult.data;
+    }
+
+    const secoesHtml = secoesFonte
+      .filter(s => s.nome.trim())
+      .map((s, i) => {
+        const titulo = s.nome.trim();
+        const conteudo = s.conteudo || '<p style="color: #999; font-style: italic;">(seção vazia)</p>';
+        return `<h2>${i + 1}. ${titulo}</h2>${conteudo}`;
+      })
+      .join('\n');
+
+    let fullHtml = cabecalhoHtml
+      ? `<div class="cabecalho" style="border-bottom:2px solid #000;padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
+      : '';
+    fullHtml += secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>';
+
+    const replacements: Record<string, string> = {
+      '{{perito.nome}}': '<strong>Dr. João da Silva</strong>',
+      '{{perito.cargo}}': '<strong>Perito Criminal</strong>',
+      '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
+      '{{laudo.numero}}': '<strong>2026/00123</strong>',
+      '{{rep.numero}}': '<strong>321.654-2026</strong>',
+      '{{solicitante.nome}}': '<strong>Delegacia de Polícia Civil</strong>',
+      '{{template.nome}}': `<strong>${templateNome || '(sem nome)'}</strong>`,
+      '{{tipo_exame.nome}}': `<strong>${tipoExameNome || '(não definido)'}</strong>`,
+    };
+
+    for (const [placeholder, value] of Object.entries(replacements)) {
+      fullHtml = fullHtml.split(placeholder).join(value);
+      const oldFormat = `{${placeholder.slice(2, -2)}}`;
+      fullHtml = fullHtml.split(oldFormat).join(value);
+    }
+
+    return fullHtml;
+  };
+
+  /** Pré-visualizar a partir do editor (usa estado atual das seções) */
   const handlePreview = async () => {
     try {
       setGeneratingPdf(true);
       setShowPreview(true);
       setError(null);
 
-      let cabecalhoHtml = '';
-      const headerResult = await window.ipcAPI.configuracao.obter('cabecalho_laudo');
-      if (headerResult.success && headerResult.data) {
-        cabecalhoHtml = headerResult.data;
-      }
+      const tipoExameNome = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '';
+      const fullHtml = await montarHtmlPreview(secoes, templateForm.nome, tipoExameNome);
+      await gerarEExibirPdf(fullHtml);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao gerar PDF');
+      setShowPreview(false);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
-      const secoesHtml = secoes
-        .filter(s => s.nome.trim())
-        .map((s, i) => {
-          const titulo = s.nome.trim();
-          const conteudo = s.conteudo || '<p style="color: #999; font-style: italic;">(seção vazia)</p>';
-          return `<h2>${i + 1}. ${titulo}</h2>${conteudo}`;
-        })
-        .join('\n');
+  /** Pré-visualizar a partir do card (carrega seções do banco) */
+  const handlePreviewCard = async (template: TemplateItem) => {
+    try {
+      setGeneratingPdf(true);
+      setShowPreview(true);
+      setError(null);
 
-      let fullHtml = cabecalhoHtml
-        ? `<div class="cabecalho" style="border-bottom:2px solid #000;padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
-        : '';
-      fullHtml += secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>';
+      const secResult = await window.ipcAPI.template.findSecoes(template.id);
+      const loadedSecoes: { nome: string; conteudo?: string }[] =
+        secResult.success && secResult.data ? secResult.data : [];
 
-      const replacements: Record<string, string> = {
-        '{{perito.nome}}': '<strong>Dr. João da Silva</strong>',
-        '{{perito.cargo}}': '<strong>Perito Criminal</strong>',
-        '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
-        '{{laudo.numero}}': '<strong>2026/00123</strong>',
-        '{{rep.numero}}': '<strong>321.654-2026</strong>',
-        '{{solicitante.nome}}': '<strong>Delegacia de Polícia Civil</strong>',
-        '{{template.nome}}': `<strong>${templateForm.nome || '(sem nome)'}</strong>`,
-        '{{tipo_exame.nome}}': `<strong>${tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '(não definido)'}</strong>`,
-      };
-
-      for (const [placeholder, value] of Object.entries(replacements)) {
-        fullHtml = fullHtml.split(placeholder).join(value);
-        const oldFormat = `{${placeholder.slice(2, -2)}}`;
-        fullHtml = fullHtml.split(oldFormat).join(value);
-      }
-
-      const result = await window.ipcAPI.template.previewPDF(fullHtml);
-      if (result.success && result.data) {
-        // Converter base64 para Blob URL (bypass CSP)
-        const byteChars = atob(result.data);
-        const byteNums = new Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteNums[i] = byteChars.charCodeAt(i);
-        }
-        const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        setPreviewBlobUrl(url);
-      } else {
-        setError(result.error || 'Erro ao gerar PDF');
-        setShowPreview(false);
-      }
+      const fullHtml = await montarHtmlPreview(
+        loadedSecoes,
+        template.nome,
+        template.tipo_exame_nome || '',
+      );
+      await gerarEExibirPdf(fullHtml);
     } catch (err: any) {
       setError(err.message || 'Erro ao gerar PDF');
       setShowPreview(false);
@@ -422,6 +462,9 @@ export const TemplatesPage: React.FC = () => {
                           <p className="text-xs text-muted-foreground">{t.tipo_exame_nome || '—'}</p>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
+                          <Button variant="ghost" size="sm" onClick={() => handlePreviewCard(t)} aria-label="Pré-visualizar">
+                            <Eye size={14} />
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
                             <Edit size={14} />
                           </Button>
@@ -444,6 +487,34 @@ export const TemplatesPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Dialog de Preview PDF (compartilhado com modo edição) */}
+        <Dialog open={showPreview} onOpenChange={(open) => {
+          if (!open && previewBlobUrl) {
+            URL.revokeObjectURL(previewBlobUrl);
+            setPreviewBlobUrl('');
+          }
+          setShowPreview(open);
+        }}>
+          <DialogContent className="max-w-5xl max-h-[95vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Pré-visualização do Laudo (PDF)</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 min-h-[70vh] border rounded-lg overflow-hidden bg-gray-200">
+              {generatingPdf ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Gerando PDF...
+                </div>
+              ) : (
+                <iframe
+                  src={previewBlobUrl}
+                  className="w-full h-full min-h-[70vh] border-0"
+                  title="Preview PDF"
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
