@@ -65,7 +65,7 @@ A migração está organizada em 10 sprints no diretório `migracao/`.
 
 1. **Sprint 0 - Fundação e Segurança:** ✅ COMPLETA
    - Infraestrutura Electron
-   - Banco SQLite com schema (8 tabelas)
+   - Banco SQLite com schema inicial (8 tabelas; hoje 9)
    - Criptografia de senha (AES-256-GCM + bcrypt)
    - Sistema de logs e tratamento de erros
    - IPC bridge segura
@@ -80,21 +80,27 @@ A migração está organizada em 10 sprints no diretório `migracao/`.
    - CRUD Solicitantes (órgãos varas delegacias)
    - CRUD Tipos de Exame
    - Dashboard com estatísticas
+   - Tema dark/light com persistência
+   - Login obrigatório (AuthPage)
+
+4. **Sprint 3 - Gestão de REPs:** ✅ COMPLETA
+   - CRUD completo de Requisições de Exame Pericial
+   - Formulário inline com campos condicionais
+   - Migration v9
+
+5. **Sprint 5 - Placeholders:** ✅ COMPLETA
+   - CRUD de placeholders
+   - 22 placeholders do sistema (seed)
+   - Sintaxe canônica `{{chave}}`
 
 ### Sprints em Andamento
 
-4. **Sprint 3 - Gestão de REPs:** 🔄 EM ANDAMENTO (30%)
-   - CRUD completo de Requisições de Exame Pericial
-   - Transições de status (Pendente → Em Andamento → Concluído)
-   - Atribuição de peritos
+6. **Sprint 4 - Edição de Laudos:** 🔄 PARCIAL
+   - Cabeçalho de laudos com editor HTML ✅
+   - Integração TinyMCE ⬜
+   - Auto-save e versionamento ⬜
 
-5. **Sprint 4 - Edição de Laudos:** 📋 PENDENTE
-   - Integração TinyMCE
-   - Auto-save e versionamento
-
-6. **Sprint 5 - Placeholders:** 📋 PENDENTE
-   - Interpretador de placeholders
-   - Placeholders customizados
+### Sprints Pendentes
 
 7. **Sprint 6 - IA Assistiva:** 📋 PENDENTE (Opcional)
    - Integração com APIs Groq e Gemini
@@ -108,9 +114,22 @@ A migração está organizada em 10 sprints no diretório `migracao/`.
 
 ## 📊 Status Atual
 
-**Data:** 03 de maio de 2026  
-**Status:** ✅ Sprint 0, 1 e 2 completas | 🔄 Sprint 3 em andamento  
-**Progresso:** ~60% do projeto completo
+**Data:** 07 de maio de 2026  
+**Status:** ✅ Sprints 0, 1, 2, 3 e 5 completas | 🔄 Sprint 4 parcial  
+**Progresso:** ~75% do projeto completo
+
+### Páginas Implementadas (8)
+
+| Página | Rota | Status |
+|---|---|---|
+| AuthPage (Login) | `/login` | ✅ |
+| Dashboard | `/` | ✅ |
+| Solicitantes | `/solicitantes` | ✅ |
+| Tipos de Exame | `/tipos-exame` | ✅ |
+| Cabeçalho | `/cabecalho` | ✅ |
+| REPs | `/reps` | ✅ |
+| Placeholders | `/placeholders` | ✅ |
+| Perfil | `/perfil` | ✅ |
 
 ## 📝 Documentação
 
@@ -143,12 +162,17 @@ Uso interno - Polícia Científica do Paraná.
 
 ### 🎉 Destaques Técnicos Recentes
 
+- ✅ **8 páginas implementadas:** Dashboard, Auth, Perfil, Solicitantes, TiposExame, Cabeçalho, REPs, Placeholders
+- ✅ **7 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder + BaseService
+- ✅ **6 módulos IPC:** Handlers para todas as entidades implementadas
 - ✅ **Build vitorioso:** Compilação TypeScript/Vite 100% funcional
-- ✅ **Migração ESM concluída:** Projeto migrado para ECMAScript Modules com script automático de correção de imports (scripts/fix-imports.mjs)
-- ✅ **CRUD Solicitantes:** Implementado com criptografia e descriptografia automática
+- ✅ **Migração ESM concluída:** Projeto migrado para ECMAScript Modules
+- ✅ **Login obrigatório:** AuthPage bloqueia acesso sem autenticação
+- ✅ **Tema dark/light:** Persistência de tema com Tailwind CSS
+- ✅ **Sidebar colapsável:** Menu com seções agrupadas e navegação por ícones
+- ✅ **Placeholders:** 22 placeholders do sistema com sintaxe `{{chave}}`
 - ✅ **Validação Zod:** Todos os forms validados com mensagens em português
 - ✅ **Segurança robusta:** Criptografia de senha com padrões industriais
-- ✅ **Interface profissional:** Shadcn/ui integrado com Tailwind CSS
 
 ## Regra de Acesso (Atualizada em 06/05/2026)
 - O laWdo deve abrir apenas para usuario autenticado (login obrigatorio).

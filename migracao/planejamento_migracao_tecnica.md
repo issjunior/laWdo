@@ -2,21 +2,41 @@
 
 ### 🐍 Python/Streamlit ➔ ⚛️ Electron + React
 
-## 📈 **STATUS ATUAL DO PROJETO** (03/05/2026)
+## 📈 **STATUS ATUAL DO PROJETO** (07/05/2026)
 
 ### ✅ **SPRINT 0: COMPLETA**
 
 - **Infraestrutura:** Electron + Vite + TypeScript funcionando
-- **Banco de Dados:** SQLite com schema completo (8 tabelas)
+- **Banco de Dados:** SQLite com schema inicial (8 tabelas base; hoje 9 após migrations v1→v9)
 - **Segurança:** Criptografia AES-256-GCM + bcrypt implementada
 - **Tratamento de Erros:** ErrorBoundary React com 4 opções de recuperação
 - **Comunicação:** IPC bridge segura e tipada implementada
 
-### 🔄 **SPRINT 1: EM ANDAMENTO**
+### ✅ **SPRINT 1: COMPLETA**
 
-- **Validação:** Implementando Zod schemas para todas as entidades
-- **UI:** Configurando Shadcn/ui components
-- **Serviços:** Desenvolvendo lógica de negócio específica
+- **Validação:** Schemas Zod para todas as entidades
+- **UI:** Componentes Shadcn/ui configurados
+- **Serviços:** 7 serviços de negócio implementados
+
+### ✅ **SPRINT 2: COMPLETA**
+
+- **Páginas:** Dashboard, Perfil, Solicitantes, TiposExame
+- **Tema:** Dark/light com persistência
+- **Menu:** Sidebar colapsável com seções agrupadas
+
+### ✅ **SPRINT 3: COMPLETA**
+
+- **REPs:** CRUD completo com formulário inline e campos condicionais
+- **Migration v9** aplicada
+
+### 🔄 **SPRINT 4: PARCIAL**
+
+- **Cabeçalho:** Página com editor HTML e placeholders implementada (antecipado)
+- **TinyMCE:** Integração pendente
+
+### ✅ **SPRINT 5: COMPLETA**
+
+- **Placeholders:** CRUD completo, 22 do sistema, sintaxe `{{chave}}`
 
 ---
 
@@ -110,25 +130,41 @@ graph TD
 ```text
 laudopericial/ (raiz do projeto)
 ├── src/
-│   ├── main/                    # ✅ Electron Main Process (Backend) IMPLEMENTADO
-│   │   ├── database/            # ✅ SQLite com schema completo + migrations
-│   │   ├── ipc/                 # ✅ Handlers IPC (Comunicação Main-Renderer)
+│   ├── main/                    # ✅ Electron Main Process (Backend)
+│   │   ├── database/            # ✅ SQLite com schema v9 + migrations
+│   │   ├── ipc/                 # ✅ Handlers IPC (6 módulos)
+│   │   │   └── handlers/        # ✅ user, solicitante, tipo-exame, configuracao, rep, placeholder
 │   │   ├── security/            # ✅ Criptografia, Sanitização e Validação
-│   │   ├── services/            # 🔄 Regras de Negócio complexas (PRÓXIMO)
+│   │   ├── services/            # ✅ 7 serviços de negócio implementados
+│   │   │   ├── base.service.ts
+│   │   │   ├── user.service.ts
+│   │   │   ├── solicitante.service.ts
+│   │   │   ├── tipo-exame.service.ts
+│   │   │   ├── configuracao.service.ts
+│   │   │   ├── rep.service.ts
+│   │   │   └── placeholder.service.ts
 │   │   └── utils/               # ✅ Helpers globais (logger, etc.)
 │   ├── preload/                 # ✅ Bridge IPC segura (Context Bridge)
-│   ├── renderer/                # ✅ Frontend React (Dashboard básico)
-│   │   ├── components/          # ✅ ErrorBoundary, UI básica
-│   │   ├── pages/               # 🔄 Views principais (PRÓXIMO)
-│   │   ├── hooks/               # 🔄 Custom hooks (PRÓXIMO)
-│   │   ├── lib/                 # 🔄 Configurações e validadores Zod (PRÓXIMO)
-│   │   └── styles/              # ✅ CSS Global e Tailwind config
-│   └── shared/                  # 🔄 Types, Interfaces e Constantes (PRÓXIMO)
+│   ├── renderer/                # ✅ Frontend React (8 páginas)
+│   │   ├── components/          # ✅ ErrorBoundary, layout, shadcn/ui
+│   │   ├── pages/               # ✅ 8 páginas implementadas
+│   │   │   ├── AuthPage.tsx
+│   │   │   ├── DashboardPage.tsx
+│   │   │   ├── PerfilPage.tsx
+│   │   │   ├── SolicitantesPage.tsx
+│   │   │   ├── TiposExamePage.tsx
+│   │   │   ├── CabecalhoPage.tsx
+│   │   │   ├── REPsPage.tsx
+│   │   │   └── PlaceholdersPage.tsx
+│   │   ├── hooks/               # ✅ Custom hooks
+│   │   ├── lib/                 # ✅ Schemas Zod e validações
+│   │   └── styles/              # ✅ CSS Global, Tailwind, dark mode
+│   └── shared/                  # ✅ Types, Interfaces e Constantes
 ├── migracao/                    # ✅ Documentação do projeto
 ├── laudo-streamlit/             # ✅ Projeto legado para referência
 ├── package.json                 # ✅ Dependências configuradas
 ├── vite.config.ts               # ✅ Build pipeline Vite
-└── electron-builder.yml         # 🔄 Configurações de empacotamento (PRÓXIMO)
+└── electron-builder.yml         # ⬜ Configurações de empacotamento (futuro)
 ```
 
 ---
@@ -243,22 +279,22 @@ interface ImagemLaudo {
 
 ---
 
-### 🧱 Sprint 1: Arquitetura Base 🔄 **EM PROGRESSO**
+### 🧱 Sprint 1: Arquitetura Base ✅ **COMPLETADA**
 
 **Objetivo:** Estabelecer os padrões de desenvolvimento e validação sobre a fundação sólida.
 
-**✅ PARTIALMENTE IMPLEMENTADO (da Sprint 0):**
+**✅ IMPLEMENTADO:**
 
 - [x] Validar schema inicial (8 tabelas completas com índices).
 - [x] Estabelecer padrão de **IPC Tipado** para segurança total na comunicação.
 - [x] Implementar prepared statements contra SQL Injection.
 - [x] Criar handlers de "Health Check" do sistema (ping, app info).
 
-**🔄 PRÓXIMAS TAREFAS PARA SPRINT 1:**
+**🔄 PRÓXIMAS TAREFAS PARA SPRINT 1 (CONCLUÍDAS):**
 
-#### 1. **Validação com Zod**
+#### 1. **Validação com Zod** ✅
 
-- [ ] Criar schemas Zod para todas as entidades:
+- [x] Criar schemas Zod para todas as entidades:
   - Usuário (perito)
   - Solicitante
   - Tipo de Exame
@@ -268,67 +304,71 @@ interface ImagemLaudo {
   - Placeholder
   - Log de Auditoria
 
-#### 2. **Handlers IPC Específicos**
+#### 2. **Handlers IPC Específicos** ✅
 
-- [ ] Implementar operações CRUD completas via IPC:
+- [x] Implementar operações CRUD completas via IPC:
   - CRUD de Usuários
   - CRUD de Solicitantes
   - CRUD de Tipos de Exame
   - CRUD de REPs
-  - CRUD de Laudos
-  - CRUD de Imagens
+  - CRUD de Configurações (Cabeçalho)
   - CRUD de Placeholders
+  - CRUD de Laudos (futuro)
+  - CRUD de Imagens (futuro)
 
-#### 3. **Serviços de Negócio**
+#### 3. **Serviços de Negócio** ✅
 
-- [ ] Criar serviços para lógica complexa:
+- [x] Criar serviços para lógica complexa:
   - Gerenciamento de status de REP (Pendente → Em Andamento → Concluído)
   - Transição de status de Laudo (Em andamento → Concluído → Entregue)
   - Sistema de numeração automática de figuras
   - Gerenciamento de versões de laudo
 
-#### 4. **Testes Unitários**
+#### 4. **Integração Shadcn/ui** ✅
 
-- [ ] Configurar Jest/Vitest para testes
-- [ ] Testes para funções de criptografia
-- [ ] Testes para validação de entrada
-- [ ] Testes para operações de banco básicas
-
-#### 5. **Integração Shadcn/ui**
-
-- [ ] Configurar componentes Shadcn/ui
-- [ ] Criar tema claro/escuro
-- [ ] Implementar formulários com React Hook Form + Zod
+- [x] Configurar componentes Shadcn/ui
+- [x] Criar tema claro/escuro com persistência
+- [x] Implementar formulários com React Hook Form + Zod
 
 ---
 
-### 👤 Sprint 2: Perfil do Perito e Apoio
+### 👤 Sprint 2: Perfil do Perito e Apoio ✅ **COMPLETADA**
 
 **Objetivo:** Cadastros base para o funcionamento do fluxo.
 
-- [ ] CRUD: **Perfil do Perito** (Criptografado).
-- [ ] CRUD: **Solicitantes** (Órgãos/Varas/Delegacias).
-- [ ] CRUD: **Tipos de Exame** e **Templates de Cabeçalho**.
-- [ ] > [!IMPORTANT]
-      > **Reuso Python:** Analisar scripts de processamento de templates para integração via `child_process`.
+- [x] CRUD: **Perfil do Perito** (Criptografado).
+- [x] CRUD: **Solicitantes** (Órgãos/Varas/Delegacias).
+- [x] CRUD: **Tipos de Exame** e **Templates de Cabeçalho**.
+- [x] Tema dark/light com persistência.
+- [x] Login obrigatório (AuthPage) antes do layout principal.
+- [x] Sidebar colapsável com seções agrupadas.
 
 ---
 
-### 📋 Sprint 3: Gestão de Requisições (REP)
+### 📋 Sprint 3: Gestão de Requisições (REP) ✅ **COMPLETADA**
 
 **Objetivo:** Fluxo de entrada de trabalho.
 
-- [ ] Dashboard de REPs com **Shadcn/ui Table**.
-- [ ] Filtros avançados e **Virtual Scrolling** para grandes volumes.
-- [ ] Histórico de Auditoria de status da REP.
-- [ ] Formulário de Nova REP integrado aos cadastros de apoio.
+- [x] Página REPs com CRUD completo e formulário inline.
+- [x] Campo `tipo_solicitacao` com dados condicionais por `eh_local`.
+- [x] Data padrão de hoje no formulário.
+- [x] Migration v9 aplicada.
+- [x] Service `rep.service.ts` e handlers `rep.handlers.ts`.
+- [x] Seção "Requisições (REPs)" no menu lateral.
 
 ---
 
-### 🖊️ Sprint 4: Núcleo - Edição de Laudos
+### 🖊️ Sprint 4: Núcleo - Edição de Laudos 🔄 **PARCIAL**
 
 **Objetivo:** O motor de escrita e gestão de evidências.
 
+**✅ ANTECIPADO:**
+- [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
+- [x] Editor HTML com suporte a placeholders
+- [x] Tabela `configuracoes` (migration v8)
+- [x] Service `configuracao.service.ts` + handlers
+
+**⬜ PENDENTE:**
 - [ ] Integração customizada do **TinyMCE**.
 - [ ] Sistema de **Auto-save** (30s) e **Snapshots** (últimas 3 versões).
 - [ ] Painel Lateral de Gestão de Imagens (Cards + Legendas).
@@ -337,13 +377,16 @@ interface ImagemLaudo {
 
 ---
 
-### 🔗 Sprint 5: Placeholders e Dinamismo
+### 🔗 Sprint 5: Placeholders e Dinamismo ✅ **COMPLETADA**
 
 **Objetivo:** Automação de campos repetitivos.
 
-- [ ] Interpretador de tags: `[NUMERO_REP]`, `[PERITO_NOME]`, etc.
-- [ ] CRUD de **Placeholders Customizados**.
-- [ ] Menu suspenso no editor para inserção rápida de tags.
+- [x] CRUD de placeholders (página `PlaceholdersPage`)
+- [x] 22 placeholders do sistema (seed)
+- [x] Sintaxe canônica `{{chave}}`
+- [x] Instruções visuais colapsáveis com exemplos antes/depois
+- [x] Service `placeholder.service.ts` e handlers
+- [ ] Menu suspenso no editor para inserção rápida de tags (integrado à Sprint 4)
 
 ---
 

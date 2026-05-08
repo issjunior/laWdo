@@ -89,80 +89,108 @@ projeto/
 - [x] Implementar criptografia de **senha do usuário** (AES-256-GCM + bcrypt + PBKDF2).
 - [x] Sistema de validação de entrada e proteção contra injeção SQL.
 - [x] Página de **Tratamento de Erros e Recuperação** (ErrorBoundary React).
-- [x] Banco de dados SQLite com schema completo (8 tabelas).
+- [x] Banco de dados SQLite com schema inicial (8 tabelas; 9 após migrations v1→v9).
 - [x] Sistema de logs com rotação automática (5MB).
 - [x] Arquitetura IPC segura e tipada.
 - [x] Configuração de segurança Electron (CSP, headers, sanitização).
 
 ### Sprint 1: Arquitetura Base ✅ **COMPLETADA**
 
-**✅ TAREAS CONCLUÍDAS:**
+**✅ TAREFAS CONCLUÍDAS:**
 
-- [x] Validação Zod para todas as 8 entidades.
-- [x] Handlers IPC específicos para operações de CRUD (3 entidades principais implementadas).
-- [x] Serviços de negócio básicos (user com criptografia de senha, solicitante, tipo-exame).
+- [x] Validação Zod para todas as entidades.
+- [x] Handlers IPC específicos para operações de CRUD (6 entidades implementadas).
+- [x] Serviços de negócio (user, solicitante, tipo-exame, configuracao, rep, placeholder).
 - [x] Integração Shadcn/ui com React Hook Form + Zod.
-- [x] Componentes UI básicos configurados (Button, Card, Input, Label, Form).
+- [x] Componentes UI básicos configurados (Button, Card, Input, Label, Form, Table, Dialog).
 - [x] Formulário de Perfil do Perito com validação completa.
 - [x] Correções técnicas e melhorias na arquitetura.
+- [x] Migração para ECMAScript Modules (ESM).
 
 **📊 DETALHES:** 
 - Schemas Zod criados para todas as entidades
-- Handlers IPC para Usuário com criptografia de senha, Solicitante e TipoExame implementados
+- 6 módulos de handlers IPC implementados
 - Integração completa entre frontend e backend
-- Build pipeline functional e testado
+- Build pipeline funcional e testado
 - Ver relatório completo em `relatorio_sprint_1.md`
 
 ### Sprint 2: Perfil e Cadastros de Apoio ✅ **COMPLETADA**
 
-**✅ TAREAS CONCLUÍDAS:**
+**✅ TAREFAS CONCLUÍDAS:**
 
 - [x] Componentes Shadcn/ui base (Button, Card, Input, Label, Table, Form)
 - [x] Página Perfil do Perito com validação Zod
-- [x] Página Solicitantes com CRUD completo em tabela
-- [x] Página Tipos de Exame com gerenciamento de templates
-- [x] Handlers IPC para Usuário (senha criptografada), Solicitante e TipoExame (24 canais)
-- [x] Schemas Zod para todas as 8 entidades
+- [x] Página Solicitantes com CRUD completo em tabela e toggle ativo/inativo
+- [x] Página Tipos de Exame com gerenciamento de templates, campo eh_local e toggle
+- [x] Handlers IPC para Usuário (senha criptografada), Solicitante e TipoExame
+- [x] Schemas Zod para todas as entidades
 - [x] Interface IPC segura com validação no preload
-- [x] Sistema de rotas com React Router
-- [x] Dashboard avançado com estatísticas (adiantado da Sprint 3)
-- [x] Correção de criptografia em campos de contato (telefone/email)
+- [x] Sistema de rotas com HashRouter
+- [x] Dashboard avançado com estatísticas
+- [x] Tema dark/light com persistência
+- [x] Login obrigatório (AuthPage) antes do layout principal
+- [x] Sidebar colapsável com seções agrupadas
 
 **📊 DETALHES:**
-- 4 páginas implementadas (Dashboard, Perfil, Solicitantes, TiposExame)
-- 6 componentes Shadcn/ui configurados
-- 24 handlers IPC implementados
+- 4 páginas base implementadas (Dashboard, Perfil, Solicitantes, TiposExame)
+- Componentes Shadcn/ui configurados
+- Múltiplos handlers IPC implementados
 - Ver relatório completo em `relatorio_sprint_2.md`
 
-### Sprint 3: Gestão de Requisições (REP) 🔄 **EM ANDAMENTO (30%)**
+### Sprint 3: Gestão de Requisições (REP) ✅ **COMPLETADA**
 
-**✅ ITENS ADIANTADOS:**
-- [x] Página Dashboard com estatísticas e ações rápidas
-- [x] Sistema de rotas configurado para todas as páginas
-- [x] Componentes de layout criados (Header, Sidebar, Footer)
-- [x] Correção de roteamento: BrowserRouter → HashRouter (compatibilidade Electron)
+**✅ TAREFAS CONCLUÍDAS:**
+
+- [x] Página REPs com CRUD completo
+- [x] Formulário inline na tabela
+- [x] Campo `tipo_solicitacao` com dados condicionais por `eh_local`
+- [x] Data padrão de hoje no formulário
+- [x] Migration v9 (tabela reps)
+- [x] Service `rep.service.ts`
+- [x] Handlers IPC `rep.handlers.ts`
+- [x] 22 placeholders do sistema mapeados
+- [x] Seção "Requisições (REPs)" no menu lateral
+- [x] Integração com validação Zod
+
+**📊 DETALHES:**
+- Página com tabela e formulário inline
+- Campos condicionais baseados no tipo de solicitante
+- Ver relatório completo em `relatorio_sprint_3.md`
+
+### Sprint 4: Núcleo - Edição de Laudos 🔄 **PARCIAL**
+
+**✅ ANTECIPADO:**
+
+- [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
+- [x] Editor HTML com suporte a placeholders
+- [x] Tabela `configuracoes` (migration v8)
+- [x] Service `configuracao.service.ts`
+- [x] Handlers IPC `configuracao.handlers.ts`
+- [x] Menu em Cadastros
 
 **⬜ PENDENTES:**
-- [ ] Dashboard de REPs com filtros e paginação
-- [ ] Fluxo de criação de Nova REP e alteração de Status
-- [ ] Páginas REP (Requisição de Exame Pericial)
-- [ ] Handlers IPC: `rep.handlers.ts`
-- [ ] Service: `rep.service.ts`
-- [ ] CRUD completo de REPs
-- [ ] Fluxo de atribuição de peritos às REPs
-- [ ] Transições de status (Pendente → Em Andamento → Concluído)
-- [ ] Integrar páginas com chamadas IPC reais (remover mocks)
-
-### Sprint 4: Núcleo - Edição de Laudos
 
 - [ ] Integração robusta com TinyMCE.
 - [ ] **Auto-save** e sistema de **Snapshots** (versões).
 - [ ] Suporte a Imagens/Ilustrações locais por laudo.
+- [ ] Painel lateral de gestão de imagens.
+- [ ] Drag-and-drop para reordenação de figuras.
+- [ ] Geração automática de seção "Figuras".
 
-### Sprint 5: Motor de Placeholders
+### Sprint 5: Motor de Placeholders ✅ **COMPLETADA**
 
-- [ ] Interpretador de placeholders (Parser).
-- [ ] Gerenciamento de **Placeholders Customizados**.
+- [x] CRUD de placeholders (página `PlaceholdersPage`)
+- [x] 22 placeholders do sistema (seed)
+- [x] Schema alinhado com sintaxe `{{chave}}` como padrão canônico
+- [x] Instruções visuais colapsáveis com antes/depois
+- [x] Service `placeholder.service.ts`
+- [x] Handlers IPC `placeholder.handlers.ts`
+- [x] Menu em Cadastros
+
+**⬜ PENDENTE (para Sprint 4):**
+
+- [ ] Interpretador de placeholders integrado ao TinyMCE
+- [ ] Menu suspenso no editor para inserção rápida de tags
 
 ### Sprint 6: Assistência IA (Opcional)
 
@@ -199,6 +227,12 @@ projeto/
 > [!IMPORTANT]
 > **Segurança em Primeiro Lugar:** A proteção dos dados críticos do sistema (especialmente senhas de peritos) é a prioridade zero. Todas as queries devem usar _prepared statements_ e **apenas dados sensíveis devem ser criptografados**.
 
-## Ajuste de Regra de Negocio (06/05/2026)
-- [x] Definir login obrigatorio para abrir o sistema.
+## Regras de Negócio e Escopo (Atualizado em 07/05/2026)
+
+- [x] Login obrigatório para abrir o sistema (AuthPage).
+- [x] Renderer bloqueia acesso ao layout principal sem sessão autenticada.
+- [x] Autenticação ocorre antes da exibição do layout principal.
+- [x] Placeholders usam sintaxe canônica `{{chave}}`.
+- [x] Seções de instrução nas páginas iniciam recolhidas.
+- [x] Todos os serviços estendem `BaseService` (padrão de herança).
 

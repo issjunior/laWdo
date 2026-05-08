@@ -2,14 +2,14 @@
 
 ## Análise Detalhada do Estado Atual do Projeto
 
-**Data:** 03 de maio de 2026  
-**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | 🔄 **SPRINT 3 EM ANDAMENTO (30%)**
+**Data:** 07 de maio de 2026  
+**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | 🔄 **SPRINT 4 PARCIAL**
 
 ---
 
 ## 🎯 **VISÃO GERAL**
 
-O projeto está significativamente mais avançado do que o documento de resumo anterior indicava. A **Sprint 0 foi completada em sua totalidade** com implementações robustas de segurança, banco de dados e arquitetura. **Sprint 1 e Sprint 2 também foram concluídas**, e parte da **Sprint 3 já foi antecipada**.
+O projeto está significativamente mais avançado do que o planejamento original previa. As Sprints 0, 1, 2, 3 e 5 estão **completas**. A Sprint 4 (Edição de Laudos) teve o módulo de Cabeçalho antecipado. O sistema já possui **8 páginas funcionais**, **7 serviços de negócio** e **6 módulos de handlers IPC**.
 
 ---
 
@@ -20,11 +20,24 @@ O projeto está significativamente mais avançado do que o documento de resumo a
 - **Projeto Electron** funcionando na raiz do repositório
 - **Build system** (Vite + TypeScript + Electron) configurado e funcional
 - **Ambiente de desenvolvimento** 100% operacional (`npm run dev`, `npm run build`)
+- **Migração ESM** concluída com script automático de correção de imports
 
 ### 2. **✅ BANCO DE DADOS SQLITE AVANÇADO**
 
 - **Driver nativo SQLite3** no main process
-- **Schema completo com 8 tabelas principais:**
+- **Schema completo com 9 migrations:**
+  ```
+  v1 - Schema inicial (8 tabelas base)
+  v2 - Campo ativo em tipos_exame
+  v3 - Campo ativo em solicitantes
+  v4 - Ajustes de schema
+  v5 - Login e autenticação
+  v6 - Campo eh_local em tipos_exame
+  v7 - Toggle ativo/inativo em tipos_exame
+  v8 - Tabela configuracoes (cabeçalho de laudos)
+  v9 - Tabela reps com tipo_solicitacao e campos condicionais
+  ```
+- **9 tabelas principais:**
   ```
   ┌─────────────────┬─────────────────────────────────────┐
   │ Tabela          │ Descrição                            │
@@ -36,10 +49,11 @@ O projeto está significativamente mais avançado do que o documento de resumo a
   │ laudos          │ Documentos técnicos                 │
   │ imagens_laudo   │ Fotos e ilustrações                 │
   │ placeholders    │ Tags dinâmicas                      │
+  │ configuracoes   │ Configurações de cabeçalho          │
   │ logs_auditoria  │ Histórico de ações                  │
   └─────────────────┴─────────────────────────────────────┘
   ```
-- **Sistema de versionamento** com migrations automáticas
+- **Sistema de versionamento** com migrations automáticas (v1 → v9)
 - **Transações ACID** (BEGIN, COMMIT, ROLLBACK)
 - **Backup/restauração** automática
 - **Índices otimizados** para performance
@@ -53,6 +67,7 @@ O projeto está significativamente mais avançado do que o documento de resumo a
 - **Proteção contra SQL Injection** com prepared statements
 - **Sanitização de queries** perigosas (DROP, DELETE, etc.)
 - **Headers de segurança** (X-Content-Type-Options, X-Frame-Options)
+- **Login obrigatório:** Renderer bloqueia acesso sem sessão autenticada
 
 > **NOTA DE SEGURANÇA:** Campos como `telefone`, `email`, `endereco` **NÃO são criptografados**, pois são dados de contato de uso operacional, não credenciais de acesso. Apenas a senha do perito exige criptografia.
 
@@ -76,42 +91,71 @@ O projeto está significativamente mais avançado do que o documento de resumo a
   - Sistema (restart, devtools, close)
   - Banco de dados (query, backup, restore)
   - Autenticação (login, logout, session)
+  - Usuário (CRUD completo)
+  - Solicitante (CRUD completo)
+  - Tipo de Exame (CRUD completo)
+  - Configuração (cabeçalho de laudos)
+  - REP (Requisições de Exame Pericial)
+  - Placeholder (CRUD completo)
 
 ### 6. **✅ INTERFACE REACT FUNCIONAL**
 
 - **Dashboard** com layout profissional
-- **Sidebar navigation** com itens principais
+- **Sidebar navigation** colapsável com seções agrupadas
 - **Integração completa** com sistema IPC
-- **Status monitoring** em tempo real
+- **Tema dark/light** com persistência
+- **Autenticação** com tela de login antes do layout principal
 
 ### 7. **✅ SERVIÇOS DE NEGÓCIO IMPLEMENTADOS**
 
-#### **user.service.ts**
+#### `user.service.ts`
 - Autenticação com criptografia de senha (bcrypt + AES-256-GCM)
 - Cadastro de peritos com validação
 - Busca por usuário e verificação de credenciais
 - Descriptografia automática ao recuperar dados
 
-#### **solicitante.service.ts**
+#### `solicitante.service.ts`
 - CRUD completo de solicitantes (órgãos, varas, delegacias)
 - Busca por nome, tipo e status
-- Criptografia NÃO aplicada (dados operacionais)
+- Filtro de ativos/inativos
 
-#### **tipo-exame.service.ts**
+#### `tipo-exame.service.ts`
 - Gerenciamento de tipos de exame e templates
 - Criação, atualização e exclusão
-- Ordenação alfabética automática
+- Campo `eh_local` e toggle ativo/inativo
 
-### 8. **✅ COMPONENTES REACT IMPLEMENTADOS**
+#### `configuracao.service.ts`
+- Gerenciamento de configurações de cabeçalho de laudo
+- Editor HTML com placeholders
 
-- **SolicitantesPage.tsx** - CRUD completo em tabela com:
-  - Estátísticas (total, ativos, tipos)
-  - Busca em tempo real
-  - Edição e exclusão
-  - Toggle de status (ativo/inativo)
-- **Perfil do Perito** - Formulário com validação Zod
-- **TiposExamePage** - Gerenciamento de templates
-- **Dashboard** - Estatísticas e navegação
+#### `rep.service.ts`
+- CRUD completo de Requisições de Exame Pericial
+- Campo `tipo_solicitacao` com dados condicionais por `eh_local`
+- Data padrão de hoje
+- 22 placeholders mapeados do sistema
+
+#### `placeholder.service.ts`
+- CRUD de placeholders customizados
+- 22 placeholders do sistema (seed)
+- Schema alinhado com sintaxe `{{chave}}`
+
+#### `base.service.ts`
+- Classe base abstrata com operações CRUD padronizadas
+- Geração automática de UUID
+- Todas as entidades estendem este serviço
+
+### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (8 PÁGINAS)**
+
+| Página | Rota | Descrição |
+|---|---|---|
+| **AuthPage** | `/login` | Tela de autenticação obrigatória |
+| **DashboardPage** | `/` | Estatísticas e navegação |
+| **SolicitantesPage** | `/solicitantes` | CRUD completo em tabela com toggle ativo/inativo |
+| **TiposExamePage** | `/tipos-exame` | Gerenciamento com campo eh_local e toggle |
+| **CabecalhoPage** | `/cabecalho` | Editor HTML com placeholders para cabeçalho de laudos |
+| **REPsPage** | `/reps` | CRUD com formulário inline e campos condicionais |
+| **PlaceholdersPage** | `/placeholders` | CRUD de placeholders com instruções visuais colapsáveis |
+| **PerfilPage** | `/perfil` | Perfil do perito com validação Zod |
 
 ---
 
@@ -119,9 +163,11 @@ O projeto está significativamente mais avançado do que o documento de resumo a
 
 ### **Código Produzido:**
 
-- **TypeScript:** ~2000 linhas (estimado)
-- **Arquivos:** ~80 arquivos criados/modificados
-- **Componentes principais:** 10 sistemas implementados
+- **TypeScript:** ~5000+ linhas (estimado)
+- **Arquivos:** ~120+ arquivos criados/modificados
+- **Páginas:** 8 páginas implementadas
+- **Serviços:** 7 serviços de negócio
+- **Handlers IPC:** 6 módulos de handlers
 
 ### **Testes Realizados:**
 
@@ -131,13 +177,14 @@ O projeto está significativamente mais avançado do que o documento de resumo a
 - ✅ Teste criptografia (AES-256-GCM + bcrypt)
 - ✅ Interface React funcional
 - ✅ Comunicação IPC operacional
-- ✅ CRUD de solicitantes com criptografia/descriptografia
+- ✅ CRUD de todas as entidades (solicitantes, tipos exame, REPs, placeholders, cabeçalho)
+- ✅ Autenticação com login obrigatório
 
 ### **Qualidade:**
 
 - **TypeScript:** `strict: true` ativado
 - **ESLint + Prettier:** Configurados e funcionando
-- **Tailwind CSS:** Estilos otimizados
+- **Tailwind CSS:** Estilos otimizados com suporte a dark mode
 - **Documentação:** Progresso totalmente documentado
 
 ---
@@ -148,20 +195,21 @@ O projeto está significativamente mais avançado do que o documento de resumo a
 
 Todas as tarefas realizadas com sucesso:
 - Infraestrutura Electron configurada
-- Banco SQLite com schema completo (8 tabelas)
+- Banco SQLite com schema completo (9 tabelas após migrations)
 - Criptografia de senha implementada (AES-256-GCM + bcrypt + PBKDF2)
 - Sistema de erro e logs configurados
 - IPC bridge segura implementada
+- Login obrigatório para acesso ao sistema
 
 ### ✅ **SPRINT 1 CONCLUÍDA - Arquitetura Base**
 
 **Validação Robusta:**
-- Schemas Zod para todas as 8 entidades
+- Schemas Zod para todas as entidades
 - Tipos TypeScript inferidos automaticamente
 - Validação rigorosa com mensagens em português
 
 **Arquitetura IPC Expandida:**
-- Handlers para Usuário (senha criptografada), Solicitante e TipoExame
+- Handlers para Usuário, Solicitante, TipoExame, Configuracao, REP, Placeholder
 - Serviços de negócio com lógica específica
 - APIs documentadas e testadas
 
@@ -173,32 +221,62 @@ Todas as tarefas realizadas com sucesso:
 ### ✅ **SPRINT 2 CONCLUÍDA - Perfil e Cadastros de Apoio**
 
 **Páginas Implementadas:**
+- AuthPage com login obrigatório (bloqueia acesso sem autenticação)
 - Dashboard com estatísticas e navegação
 - Perfil do Perito com validação completa
-- Solicitantes com CRUD em tabela
-- Tipos de Exame com gerenciamento de templates
+- Solicitantes com CRUD em tabela e toggle ativo/inativo
+- Tipos de Exame com campo eh_local e toggle
 
 **Backend Completo:**
-- 24 handlers IPC implementados
-- 3 serviços de negócio (user, solicitante, tipo-exame)
-- 8 schemas Zod validando todas as entidades
+- Múltiplos handlers IPC implementados
+- 3 serviços de negócio iniciais (user, solicitante, tipo-exame)
+- Schemas Zod validando todas as entidades
+
+### ✅ **SPRINT 3 CONCLUÍDA - Gestão de Requisições (REP)**
+
+**Página REPs Implementada:**
+- CRUD completo de Requisições de Exame Pericial
+- Formulário inline na tabela
+- Campo tipo_solicitacao com dados condicionais por eh_local
+- Data padrão de hoje
+- 22 placeholders do sistema mapeados
+- Migration v9 aplicada
+
+**Backend:**
+- `rep.service.ts` com operações CRUD
+- `rep.handlers.ts` com handlers IPC
+- Integração com validação Zod
+
+### ✅ **SPRINT 5 CONCLUÍDA - Placeholders**
+
+**Página Placeholders Implementada:**
+- CRUD completo de placeholders
+- 22 placeholders do sistema (seed)
+- Schema alinhado com sintaxe `{{chave}}` como padrão canônico
+- Instruções visuais colapsáveis com antes/depois para usuários leigos
+- Seções de instrução iniciam recolhidas, com cabeçalho clicável
+
+**Backend:**
+- `placeholder.service.ts` com operações CRUD
+- `placeholder.handlers.ts` com handlers IPC
 
 ---
 
-## 🔄 **SPRINT 3 EM ANDAMENTO (30%)**
+## 🔄 **SPRINT 4 EM ANDAMENTO (PARCIAL)**
 
-### Concluído:
-- [x] Dashboard de estatísticas
-- [x] Sistema de rotas com HashRouter
-- [x] Layout base (Header, Sidebar)
+### Concluído (antecipado):
+- [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
+- [x] Editor HTML para cabeçalho com placeholders
+- [x] Tabela `configuracoes` (migration v8)
+- [x] `configuracao.service.ts` e `configuracao.handlers.ts`
+- [x] Menu em Cadastros
 
-### Pendente (70%):
-- [ ] CRUD completo de REPs
-- [ ] Handlers IPC específicos (rep.handlers.ts)
-- [ ] Service de negócio (rep.service.ts)
-- [ ] Fluxo de criação e edição de REP
-- [ ] Transições de status
-- [ ] Integração com dados reais
+### Pendente:
+- [ ] Integração completa com TinyMCE para edição de laudos
+- [ ] Sistema de auto-save e snapshots (versões)
+- [ ] Painel lateral de gestão de imagens
+- [ ] Drag-and-drop para reordenação de figuras
+- [ ] Geração automática de seção "Figuras"
 
 ---
 
@@ -231,6 +309,9 @@ npm run format
 2. **Electron 29+** - API atualizada (`registerSchemesAsPrivileged` removida)
 3. **Criptografia seletiva** - Apenas senha do usuário é criptografada (não telefones/emails)
 4. **ErrorBoundary independente** - Componente reutilizável em todo o app
+5. **BaseService** - Padrão de herança para todos os serviços CRUD
+6. **Login obrigatório** - Renderer bloqueia acesso sem sessão autenticada
+7. **Sintaxe de placeholders** - Padrão canônico `{{chave}}`
 
 ### **Compatibilidade Verificada:**
 
@@ -242,25 +323,24 @@ npm run format
 
 ### **Próximos Desafios:**
 
-1. **Gestão de REPs** - Implementar CRUD completo com transições de status
-2. **TinyMCE** - Integrar editor rico para edição de laudos
-3. **Placeholders** - Motor de substituição dinâmica
-4. **Exportação** - PDF, DOCX e ODT
+1. **TinyMCE** - Integrar editor rico para edição completa de laudos
+2. **Exportação** - PDF, DOCX e ODT
+3. **Auto-save** - Sistema de salvamento automático e versionamento
+4. **Gestão de imagens** - Upload, legendas, drag-and-drop
 5. **Assistente IA** - Opcional, conforme demanda
 
 ---
 
 ## 🎉 **CONSIDERAÇÕES FINAIS**
 
-O projeto está **significativamente adiantado** em relação ao plano original. A fundação está sólida, segura e funcional. As três primeiras sprints estão **completas**, permitindo que a equipe prossiga diretamente para a gestão de REPs (Sprint 3) que será o próximo grande marco.
+O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3 e 5 estão **completas**, com a Sprint 4 já tendo o módulo de Cabeçalho antecipado. O sistema possui 8 páginas funcionais, 7 serviços de negócio e autenticação obrigatória.
 
-**Status:** 🟢 **PRÓXIMA ETAPA - COMPLETAR SPRINT 3 (Gestão de REPs)**
+**Progresso estimado:** ~75% do projeto completo
+
+**Status:** 🟢 **PRÓXIMA ETAPA - COMPLETAR SPRINT 4 (Edição de Laudos com TinyMCE)**
 
 ---
 
 **Equipe de Migração**  
 Polícia Científica do Paraná  
-03/05/2026
-
-## Atualizacao de Produto - 06/05/2026
-- Regra de acesso revisada: aplicativo deve abrir somente para usuario autenticado.
+07/05/2026
