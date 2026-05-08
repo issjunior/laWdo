@@ -60,13 +60,14 @@ type REPFormErrors = Partial<Record<keyof REPFormData, string>>;
 
 function formatarNumeroREP(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
-  let result = '';
-  for (let i = 0; i < digits.length; i++) {
-    if (i === 3) result += '.';
-    if (i === 6) result += '-';
-    result += digits[i];
+  // Preenche da direita para esquerda: os últimos 4 dígitos formam o ano
+  const len = digits.length;
+  if (len <= 4) {
+    return digits; // apenas o ano
+  } else if (len <= 7) {
+    return `${digits.slice(0, len - 4)}-${digits.slice(len - 4)}`; // meio-ano
   }
-  return result;
+  return `${digits.slice(0, 3)}.${digits.slice(3, len - 4)}-${digits.slice(len - 4)}`; // completo
 }
 
 const repFormSchema = z.object({
@@ -442,6 +443,9 @@ export const REPsPage: React.FC = () => {
                       placeholder="000.000-0000"
                     />
                     {errors.numero && <p className="text-xs text-red-600">{errors.numero}</p>}
+                    <p className="text-xs text-muted-foreground">
+                      Digite o número completo: os <strong>últimos 4 dígitos</strong> correspondem ao ano da REP.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="data_requisicao">Data de recebimento *</Label>
