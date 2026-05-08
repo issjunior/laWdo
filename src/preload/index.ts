@@ -93,6 +93,16 @@ export interface IpcAPI {
   };
 
   // Placeholder para outras APIs que serão implementadas
+
+  // Placeholders
+  placeholder: {
+    findAll: () => Promise<UserResponse>;
+    findById: (id: string) => Promise<UserResponse>;
+    create: (data: any) => Promise<UserResponse>;
+    update: (id: string, data: any) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+    seedSistema: () => Promise<UserResponse>;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -158,6 +168,14 @@ const ALLOWED_CHANNELS = new Set([
   'rep:update',
   'rep:delete',
   'rep:updateStatus',
+
+  // Placeholders
+  'placeholder:findAll',
+  'placeholder:findById',
+  'placeholder:create',
+  'placeholder:update',
+  'placeholder:delete',
+  'placeholder:seedSistema',
 ]);
 
 // Expor API segura para o renderer
@@ -457,6 +475,15 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     update: (id: string, data: any) => ipcRenderer.invoke('rep:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('rep:delete', id),
     updateStatus: (id: string, status: string) => ipcRenderer.invoke('rep:updateStatus', id, status),
+  },
+
+  placeholder: {
+    findAll: () => ipcRenderer.invoke('placeholder:findAll'),
+    findById: (id: string) => ipcRenderer.invoke('placeholder:findById', id),
+    create: (data: any) => ipcRenderer.invoke('placeholder:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('placeholder:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('placeholder:delete', id),
+    seedSistema: () => ipcRenderer.invoke('placeholder:seedSistema'),
   },
 } satisfies IpcAPI);
 

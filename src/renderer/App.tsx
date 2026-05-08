@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
-import { PerfilPage, SolicitantesPage, TiposExamePage, DashboardPage, CabecalhoPage, REPsPage } from '@/pages';
+import { PerfilPage, SolicitantesPage, TiposExamePage, DashboardPage, CabecalhoPage, REPsPage, PlaceholdersPage } from '@/pages';
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   LogOut,
   FileText,
+  Puzzle,
 } from 'lucide-react';
 import './styles/globals.css';
 
@@ -233,6 +234,7 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = 
             { path: '/solicitantes', label: 'Solicitantes', icon: <Users size={15} /> },
             { path: '/tipos-exame', label: 'Tipos de Exame', icon: <FlaskConical size={15} /> },
             { path: '/cabecalho', label: 'Cabeçalho', icon: <FileText size={15} /> },
+            { path: '/placeholders', label: 'Placeholders', icon: <Puzzle size={15} /> },
           ]}
           currentPath={currentPath}
           collapsed={collapsed}
@@ -338,6 +340,7 @@ const App = () => {
               <Route path="/perfil" element={<PerfilPage />} />
               <Route path="/cabecalho" element={<CabecalhoPage />} />
               <Route path="/reps" element={<REPsPage />} />
+              <Route path="/placeholders" element={<PlaceholdersPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Layout>
