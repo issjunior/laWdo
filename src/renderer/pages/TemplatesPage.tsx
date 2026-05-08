@@ -10,8 +10,9 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Plus, Search, Edit, Trash2, X, ArrowUp, ArrowDown, ArrowLeft,
-  FileText, GripVertical, Layers,
+  FileText, GripVertical, Layers, Eye,
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { createTemplateSchema } from '@/lib/validators';
 import { z } from 'zod';
@@ -77,6 +78,9 @@ export const TemplatesPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const carregarTemplates = useCallback(async () => {
     try {
@@ -287,6 +291,73 @@ export const TemplatesPage: React.FC = () => {
     }
   };
 
+  /** Gerar PDF e exibir no Dialog via protocolo customizado */
+  const handlePreview = async () => {
+    try {
+      setGeneratingPdf(true);
+      setShowPreview(true);
+      setError(null);
+
+      let cabecalhoHtml = '';
+      const headerResult = await window.ipcAPI.configuracao.obter('cabecalho_laudo');
+      if (headerResult.success && headerResult.data) {
+        cabecalhoHtml = headerResult.data;
+      }
+
+      const secoesHtml = secoes
+        .filter(s => s.nome.trim())
+        .map((s, i) => {
+          const titulo = s.nome.trim();
+          const conteudo = s.conteudo || '<p style="color: #999; font-style: italic;">(seção vazia)</p>';
+          return `<h2>${i + 1}. ${titulo}</h2>${conteudo}`;
+        })
+        .join('\n');
+
+      let fullHtml = cabecalhoHtml
+        ? `<div class="cabecalho" style="border-bottom:2px solid #000;padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
+        : '';
+      fullHtml += secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>';
+
+      const replacements: Record<string, string> = {
+        '{{perito.nome}}': '<strong>Dr. João da Silva</strong>',
+        '{{perito.cargo}}': '<strong>Perito Criminal</strong>',
+        '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
+        '{{laudo.numero}}': '<strong>2026/00123</strong>',
+        '{{rep.numero}}': '<strong>321.654-2026</strong>',
+        '{{solicitante.nome}}': '<strong>Delegacia de Polícia Civil</strong>',
+        '{{template.nome}}': `<strong>${templateForm.nome || '(sem nome)'}</strong>`,
+        '{{tipo_exame.nome}}': `<strong>${tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '(não definido)'}</strong>`,
+      };
+
+      for (const [placeholder, value] of Object.entries(replacements)) {
+        fullHtml = fullHtml.split(placeholder).join(value);
+        const oldFormat = `{${placeholder.slice(2, -2)}}`;
+        fullHtml = fullHtml.split(oldFormat).join(value);
+      }
+
+      const result = await window.ipcAPI.template.previewPDF(fullHtml);
+      if (result.success && result.data) {
+        // Converter base64 para Blob URL (bypass CSP)
+        const byteChars = atob(result.data);
+        const byteNums = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteNums[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        setPreviewBlobUrl(url);
+      } else {
+        setError(result.error || 'Erro ao gerar PDF');
+        setShowPreview(false);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro ao gerar PDF');
+      setShowPreview(false);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
   // ─── Modo Lista ──────────────────────────────────────
 
   if (!editMode) {
@@ -393,6 +464,9 @@ export const TemplatesPage: React.FC = () => {
             <p className="text-muted-foreground mt-1">Configure o modelo e suas seções</p>
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={handlePreview} disabled={generatingPdf} className="flex items-center gap-2">
+          <Eye size={16} /> {generatingPdf ? 'Gerando PDF...' : 'Pré-visualizar'}
+        </Button>
       </div>
 
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
@@ -401,6 +475,34 @@ export const TemplatesPage: React.FC = () => {
           <AlertDescription className="text-green-800">{success}</AlertDescription>
         </Alert>
       )}
+
+      {/* Dialog de Preview PDF */}
+      <Dialog open={showPreview} onOpenChange={(open) => {
+        if (!open && previewBlobUrl) {
+          URL.revokeObjectURL(previewBlobUrl);
+          setPreviewBlobUrl('');
+        }
+        setShowPreview(open);
+      }}>
+        <DialogContent className="max-w-5xl max-h-[95vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Pré-visualização do Laudo (PDF)</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-[70vh] border rounded-lg overflow-hidden bg-gray-200">
+            {generatingPdf ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Gerando PDF...
+              </div>
+            ) : (
+              <iframe
+                src={previewBlobUrl}
+                className="w-full h-full min-h-[70vh] border-0"
+                title="Preview PDF"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

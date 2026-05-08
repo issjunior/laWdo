@@ -117,6 +117,7 @@ export interface IpcAPI {
     updateSecao: (id: string, data: any) => Promise<UserResponse>;
     deleteSecao: (id: string) => Promise<UserResponse>;
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
+    previewPDF: (html: string) => Promise<UserResponse>;
   };
 }
 
@@ -204,6 +205,7 @@ const ALLOWED_CHANNELS = new Set([
   'template:updateSecao',
   'template:deleteSecao',
   'template:reordenarSecoes',
+  'template:previewPDF',
 ]);
 
 // Expor API segura para o renderer
@@ -526,6 +528,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     updateSecao: (id: string, data: any) => ipcRenderer.invoke('template:updateSecao', id, data),
     deleteSecao: (id: string) => ipcRenderer.invoke('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
+    previewPDF: (html: string) => ipcRenderer.invoke('template:previewPDF', html),
   },
 } satisfies IpcAPI);
 

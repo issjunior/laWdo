@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { logInfo, logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
@@ -155,6 +155,73 @@ export const registerTemplateHandlers = (): void => {
       return { success: true, message: 'Seções reordenadas com sucesso' };
     } catch (error: any) {
       logError('Erro ao reordenar seções', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /** Gerar PDF de preview do laudo (exibido no Dialog via protocolo customizado) */
+  ipcMain.handle('template:previewPDF', async (_event, html: string) => {
+    let win: BrowserWindow | null = null;
+    try {
+      const docHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #1a1a1a;
+    padding: 50px 60px;
+    max-width: 210mm;
+    margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  h3 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
+  p { margin-bottom: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  table th, table td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
+  table th { background: #f5f5f5; font-weight: 600; }
+  ul, ol { margin: 8px 0; padding-left: 24px; }
+  li { margin-bottom: 4px; }
+  img { max-width: 100%; height: auto; }
+  .placeholder-tag { background: #e8f0fe; color: #1a73e8; padding: 1px 4px; border-radius: 3px; font-family: monospace; }
+  blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding: 4px 16px; color: #555; }
+  pre { background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-size: 12px; }
+</style>
+</head>
+<body>${html}</body>
+</html>`;
+
+      win = new BrowserWindow({
+        width: 800,
+        height: 600,
+        show: false,
+        webPreferences: { nodeIntegration: false, contextIsolation: true },
+      });
+
+      await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(docHtml)}`);
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      const buffer = Buffer.from(await win.webContents.printToPDF({
+        printBackground: true,
+        preferCSSPageSize: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      }));
+
+      win.close();
+      win = null;
+
+      const base64 = buffer.toString('base64');
+      logInfo('PDF de preview gerado com sucesso');
+      return { success: true, data: base64 };
+    } catch (error: any) {
+      logError('Erro ao gerar PDF de preview', error);
+      if (win) { try { win.close(); } catch { /* ignora */ } }
       return { success: false, error: error.message };
     }
   });

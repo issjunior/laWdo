@@ -37,8 +37,8 @@ const setupContentSecurityPolicy = (): void => {
     font-src 'self' data: https://fonts.gstatic.com;
     img-src 'self' data: blob:;
     connect-src 'self' blob:;
-    frame-src 'none';
-    object-src 'none';
+    frame-src 'self' data: blob:;
+    object-src 'self' data: blob:;
     base-uri 'self';
     form-action 'self';
   `
