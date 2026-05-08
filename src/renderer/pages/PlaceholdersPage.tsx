@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, Puzzle, Info, Lock, Zap, ArrowRight } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Puzzle, Info, Lock, Zap, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { Placeholder } from '@/lib/validators';
 
 interface PlaceholderFormData {
@@ -51,6 +51,7 @@ export const PlaceholdersPage: React.FC = () => {
   const [formData, setFormData] = useState<PlaceholderFormData>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const carregarPlaceholders = useCallback(async () => {
     try {
@@ -168,7 +169,7 @@ export const PlaceholdersPage: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Placeholders</h1>
-          <p className="text-gray-600 mt-2">
+          <p className="text-gray-600 dark:text-gray-300 mt-2">
             Gerencie os placeholders disponíveis para uso nos laudos
           </p>
         </div>
@@ -193,8 +194,8 @@ export const PlaceholdersPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-sm flex items-center space-x-2">
-              <Lock size={14} className="text-gray-400" />
-              <span className="text-blue-600 font-medium">{totalSistema} fixos (REP)</span>
+              <Lock size={14} className="text-gray-400 dark:text-gray-500" />
+              <span className="text-blue-600 dark:text-blue-300 font-medium">{totalSistema} fixos (REP)</span>
             </div>
           </CardContent>
         </Card>
@@ -204,7 +205,7 @@ export const PlaceholdersPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-sm">
-              <span className="text-green-600 font-medium">{totalPersonalizados} criados pelo usuário</span>
+              <span className="text-green-600 dark:text-green-300 font-medium">{totalPersonalizados} criados pelo usuário</span>
             </div>
           </CardContent>
         </Card>
@@ -219,7 +220,7 @@ export const PlaceholdersPage: React.FC = () => {
               <CardDescription>{filtered.length} placeholder(s) encontrado(s)</CardDescription>
             </div>
             <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <Input
                 placeholder="Buscar placeholders..."
                 value={searchTerm}
@@ -231,9 +232,9 @@ export const PlaceholdersPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8 text-gray-500">Carregando...</div>
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">Carregando...</div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               {searchTerm ? 'Nenhum placeholder encontrado.' : 'Nenhum placeholder cadastrado.'}
             </div>
           ) : (
@@ -253,7 +254,7 @@ export const PlaceholdersPage: React.FC = () => {
                     <TableCell className="font-mono text-sm font-medium">
                       {`{{${p.chave}}}`}
                     </TableCell>
-                    <TableCell className="text-gray-500 max-w-[150px] truncate">
+                    <TableCell className="text-gray-500 dark:text-gray-400 max-w-[150px] truncate">
                       {p.valor || '—'}
                     </TableCell>
                     <TableCell className="max-w-[250px] truncate">
@@ -261,7 +262,7 @@ export const PlaceholdersPage: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        isSistema(p) ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                        isSistema(p) ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
                       }`}>
                         {isSistema(p) && <Lock size={10} className="mr-1" />}
                         {p.categoria || '—'}
@@ -277,7 +278,7 @@ export const PlaceholdersPage: React.FC = () => {
                           size="sm"
                           onClick={() => handleExcluir(p.id)}
                           disabled={isSistema(p)}
-                          className={isSistema(p) ? 'text-gray-300 cursor-not-allowed' : 'text-red-600 hover:text-red-700'}
+                          className={isSistema(p) ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-red-600 hover:text-red-700'}
                           title={isSistema(p) ? 'Placeholders do sistema não podem ser excluídos' : 'Excluir'}
                         >
                           <Trash2 size={14} />
@@ -293,28 +294,36 @@ export const PlaceholdersPage: React.FC = () => {
       </Card>
 
       {/* Instruções de uso */}
-      <Card className="border-blue-200 bg-gradient-to-b from-white to-blue-50/30">
-        <CardHeader className="pb-2">
+      <Card className="border-blue-200 dark:border-blue-800 bg-gradient-to-b from-white dark:from-gray-900 to-blue-50/30 dark:to-blue-950/20">
+        <CardHeader
+          className="pb-2 cursor-pointer select-none hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-colors rounded-t-lg"
+          onClick={() => setShowInstructions(!showInstructions)}
+        >
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100">
-              <Zap size={20} className="text-blue-600" />
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900">
+              <Zap size={20} className="text-blue-600 dark:text-blue-300" />
             </div>
-            <div>
+            <div className="flex-1">
               <CardTitle className="text-xl">Como usar placeholders no laudo</CardTitle>
               <CardDescription>
                 Um guia simples para automatizar o preenchimento dos seus documentos
               </CardDescription>
             </div>
+            {showInstructions
+              ? <ChevronUp size={22} className="text-gray-400 dark:text-gray-500 shrink-0" />
+              : <ChevronDown size={22} className="text-gray-400 dark:text-gray-500 shrink-0" />
+            }
           </div>
         </CardHeader>
+        {showInstructions && (
         <CardContent className="space-y-8 pt-4">
           {/* O que são */}
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-5">
+          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-100 dark:border-blue-800 rounded-lg p-5">
             <div className="flex gap-3">
-              <Info size={22} className="text-blue-500 shrink-0 mt-0.5" />
+              <Info size={22} className="text-blue-500 dark:text-blue-300 shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-blue-900 mb-1.5">O que é um placeholder?</h3>
-                <p className="text-blue-800 text-sm leading-relaxed">
+                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1.5">O que é um placeholder?</h3>
+                <p className="text-blue-800 dark:text-blue-200 text-sm leading-relaxed">
                   É um <strong>atalho inteligente</strong> que o sistema substitui automaticamente pela informação real.
                   Funciona como um "espaço reservado" no texto: você digita um código simples entre chaves duplas,
                   e na hora de gerar o laudo, o sistema troca esse código pelo dado verdadeiro —
@@ -326,76 +335,76 @@ export const PlaceholdersPage: React.FC = () => {
 
           {/* Exemplo visual */}
           <div>
-            <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <ArrowRight size={18} className="text-gray-500" />
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <ArrowRight size={18} className="text-gray-500 dark:text-gray-400" />
               Veja na prática
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Antes */}
-              <div className="border rounded-lg overflow-hidden">
-                <div className="bg-amber-50 px-4 py-2 border-b border-amber-100">
-                  <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">O que você digita</span>
+              <div className="border dark:border-gray-700 rounded-lg overflow-hidden">
+                <div className="bg-amber-50 dark:bg-amber-950 px-4 py-2 border-b border-amber-100 dark:border-amber-800">
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-200 uppercase tracking-wide">O que você digita</span>
                 </div>
-                <div className="p-4 font-mono text-sm leading-relaxed bg-white">
-                  <p><span className="text-gray-400">REP nº</span> <span className="bg-pink-50 text-pink-700 px-1 rounded">{'{{rep_numero}}'}</span></p>
-                  <p><span className="text-gray-400">Solicitante:</span> <span className="bg-pink-50 text-pink-700 px-1 rounded">{'{{solicitante_nome}}'}</span></p>
-                  <p><span className="text-gray-400">Envolvido:</span> <span className="bg-pink-50 text-pink-700 px-1 rounded">{'{{rep_nome_envolvido}}'}</span></p>
-                  <p><span className="text-gray-400">BO nº</span> <span className="bg-pink-50 text-pink-700 px-1 rounded">{'{{rep_numero_bo}}'}</span> <span className="text-gray-400">— IP nº</span> <span className="bg-pink-50 text-pink-700 px-1 rounded">{'{{rep_numero_ip}}'}</span></p>
-                  <p><span className="text-gray-400">Exame:</span> <span className="bg-pink-50 text-pink-700 px-1 rounded">{'{{tipo_exame_nome}}'}</span></p>
+                <div className="p-4 font-mono text-sm leading-relaxed bg-white dark:bg-gray-900">
+                  <p><span className="text-gray-400 dark:text-gray-500">REP nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_numero}}'}</span></p>
+                  <p><span className="text-gray-400 dark:text-gray-500">Solicitante:</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{solicitante_nome}}'}</span></p>
+                  <p><span className="text-gray-400 dark:text-gray-500">Envolvido:</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_nome_envolvido}}'}</span></p>
+                  <p><span className="text-gray-400 dark:text-gray-500">BO nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_numero_bo}}'}</span> <span className="text-gray-400 dark:text-gray-500">— IP nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_numero_ip}}'}</span></p>
+                  <p><span className="text-gray-400 dark:text-gray-500">Exame:</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{tipo_exame_nome}}'}</span></p>
                 </div>
               </div>
 
               {/* Depois */}
-              <div className="border rounded-lg overflow-hidden">
-                <div className="bg-green-50 px-4 py-2 border-b border-green-100">
-                  <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">O que o laudo exibe</span>
+              <div className="border dark:border-gray-700 rounded-lg overflow-hidden">
+                <div className="bg-green-50 dark:bg-green-950 px-4 py-2 border-b border-green-100 dark:border-green-800">
+                  <span className="text-xs font-semibold text-green-700 dark:text-green-200 uppercase tracking-wide">O que o laudo exibe</span>
                 </div>
-                <div className="p-4 text-sm leading-relaxed bg-white">
-                  <p>REP nº <strong className="text-gray-900">2025/00123</strong></p>
-                  <p>Solicitante: <strong className="text-gray-900">Delegacia de Polícia Civil</strong></p>
-                  <p>Envolvido: <strong className="text-gray-900">João da Silva</strong></p>
-                  <p>BO nº <strong className="text-gray-900">1234/2025</strong> — IP nº <strong className="text-gray-900">567/2025</strong></p>
-                  <p>Exame: <strong className="text-gray-900">Exame de DNA</strong></p>
+                <div className="p-4 text-sm leading-relaxed bg-white dark:bg-gray-900">
+                  <p>REP nº <strong className="text-gray-900 dark:text-gray-100">2025/00123</strong></p>
+                  <p>Solicitante: <strong className="text-gray-900 dark:text-gray-100">Delegacia de Polícia Civil</strong></p>
+                  <p>Envolvido: <strong className="text-gray-900 dark:text-gray-100">João da Silva</strong></p>
+                  <p>BO nº <strong className="text-gray-900 dark:text-gray-100">1234/2025</strong> — IP nº <strong className="text-gray-900 dark:text-gray-100">567/2025</strong></p>
+                  <p>Exame: <strong className="text-gray-900 dark:text-gray-100">Exame de DNA</strong></p>
                 </div>
               </div>
             </div>
-            <p className="text-xs text-gray-400 mt-2 text-center">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
               Os códigos em rosa são trocados pelos dados reais da REP automaticamente
             </p>
           </div>
 
           {/* Criando os seus próprios */}
-          <div className="bg-white border rounded-lg p-5">
+          <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-5">
             <div className="flex gap-3">
-              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-purple-100 shrink-0">
-                <Plus size={18} className="text-purple-600" />
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-purple-100 dark:bg-purple-900 shrink-0">
+                <Plus size={18} className="text-purple-600 dark:text-purple-300" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800 mb-1.5">Crie seus próprios placeholders</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-1.5">Crie seus próprios placeholders</h3>
+                <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
                   Precisa de um campo que não existe na lista? Clique em <strong>"Novo Placeholder"</strong> no topo da página,
-                  dê um nome (ex: <code className="bg-gray-100 px-1 rounded text-pink-600 text-xs">SECAO_TECNICA</code>),
-                  preencha um valor padrão se quiser, e pronto. Use <code className="bg-gray-100 px-1 rounded text-pink-600 text-xs">{'{{SECAO_TECNICA}}'}</code> em qualquer editor.
+                  dê um nome (ex: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-pink-600 dark:text-pink-300 text-xs">SECAO_TECNICA</code>),
+                  preencha um valor padrão se quiser, e pronto. Use <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-pink-600 dark:text-pink-300 text-xs">{'{{SECAO_TECNICA}}'}</code> em qualquer editor.
                 </p>
               </div>
             </div>
           </div>
 
           {/* Dicas */}
-          <div className="bg-amber-50 border border-amber-100 rounded-lg p-5">
+          <div className="bg-amber-50 dark:bg-amber-950 border border-amber-100 dark:border-amber-800 rounded-lg p-5">
             <div className="flex gap-3">
-              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-amber-100 shrink-0">
-                <Lock size={16} className="text-amber-600" />
+              <div className="flex items-center justify-center w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900 shrink-0">
+                <Lock size={16} className="text-amber-600 dark:text-amber-300" />
               </div>
-              <div className="space-y-3 text-sm text-amber-800">
+              <div className="space-y-3 text-sm text-amber-800 dark:text-amber-200">
                 <div>
                   <h3 className="font-semibold mb-1">Placeholders fixos (REP)</h3>
                   <p className="leading-relaxed">
-                    Os placeholders com o ícone <Lock size={12} className="inline text-amber-600" /> e categoria <strong>REP</strong> são fornecidos pelo sistema.
+                    Os placeholders com o ícone <Lock size={12} className="inline text-amber-600 dark:text-amber-300" /> e categoria <strong>REP</strong> são fornecidos pelo sistema.
                     Eles correspondem aos campos da Requisição de Exame Pericial e <strong>não podem ser removidos</strong>.
                   </p>
                 </div>
-                <div className="border-t border-amber-200 pt-3">
+                <div className="border-t border-amber-200 dark:border-amber-700 pt-3">
                   <h3 className="font-semibold mb-1">Dica importante</h3>
                   <p className="leading-relaxed">
                     Se o placeholder não tiver um valor correspondente na REP (ex: campos de local em exames laboratoriais),
@@ -406,6 +415,7 @@ export const PlaceholdersPage: React.FC = () => {
             </div>
           </div>
         </CardContent>
+        )}
       </Card>
 
       {/* Dialog de criação/edição */}
