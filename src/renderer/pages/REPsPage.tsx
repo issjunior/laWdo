@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, X, FileText, User, Clock3, Link2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, FileText, User, Clock3, Link2, AlertTriangle } from 'lucide-react';
 import { type REP } from '@/lib/validators';
 import { z } from 'zod';
 
@@ -61,21 +61,28 @@ type REPFormErrors = Partial<Record<keyof REPFormData, string>>;
 
 function formatarNumeroREP(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
-  // Preenche da direita para esquerda: os últimos 4 dígitos formam o ano
   const len = digits.length;
+  
   if (len <= 4) {
-    return digits; // apenas o ano
-  } else if (len <= 7) {
-    return `${digits.slice(0, len - 4)}-${digits.slice(len - 4)}`; // meio-ano
+    return digits;
   }
-  return `${digits.slice(0, 3)}.${digits.slice(3, len - 4)}-${digits.slice(len - 4)}`; // completo
+  
+  const year = digits.slice(-4);
+  const repNum = digits.slice(0, -4);
+  
+  let formattedRepNum = repNum;
+  if (repNum.length > 3) {
+    formattedRepNum = repNum.slice(0, -3) + '.' + repNum.slice(-3);
+  }
+  
+  return `${formattedRepNum}-${year}`;
 }
 
 const repFormSchema = z.object({
   numero: z
     .string()
     .min(1, 'Número da REP é obrigatório')
-    .regex(/^\d{3}\.\d{3}-\d{4}$/, 'Formato inválido. Use: 000.000-0000'),
+    .regex(/^(\d{1,3}|\d{1,3}\.\d{3})-\d{4}$/, 'Formato inválido. Use algo entre 1-AAAA e 000.000-AAAA'),
   solicitante_id: z.string().optional(),
   tipo_exame_id: z.string().optional(),
   template_id: z.string().optional(),
@@ -245,7 +252,11 @@ export const REPsPage: React.FC = () => {
     setErrors({});
     setTemplatesVinculados([]);
     setFormData(emptyForm());
+    setSubmitting(false);
     setShowForm(true);
+    
+    // Força a limpeza de estilos residuais do Radix UI (ex: Select) que podem travar a tela
+    document.body.style.pointerEvents = '';
   };
 
   const handleCancelar = () => {
@@ -256,6 +267,10 @@ export const REPsPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setErrors({});
+    setSubmitting(false);
+    
+    // Força a limpeza de estilos residuais do Radix UI (ex: Select) que podem travar a tela
+    document.body.style.pointerEvents = '';
   };
 
   const handleEditar = async (rep: REP) => {
@@ -519,7 +534,7 @@ export const REPsPage: React.FC = () => {
                       value={formData.numero}
                       onChange={e => updateField('numero', formatarNumeroREP(e.target.value))}
                       className={errors.numero ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="000.000-0000"
+                      placeholder="1-2025"
                     />
                     {errors.numero && <p className="text-xs text-red-600">{errors.numero}</p>}
                   </div>
@@ -743,6 +758,14 @@ export const REPsPage: React.FC = () => {
               )}
 
               <Section title="Documentos Associados" description="Vínculos e observações importantes da REP." icon={<Link2 size={14} />}>
+                {(!formData.numero_bo && !formData.numero_ip) && (
+                  <Alert className="bg-amber-50/50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-400">
+                    <AlertTriangle className="h-4 w-4 stroke-amber-600 dark:stroke-amber-400" />
+                    <AlertDescription className="ml-2">
+                      O GDL só aceitará o envio de laudos com o nº do BO ou nº do IP preenchidos.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="numero_bo">Nº do BO</Label>
