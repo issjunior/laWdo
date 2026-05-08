@@ -27,6 +27,7 @@ interface TemplateItem {
   descricao?: string;
   qtd_secoes: number;
   tipo_exame_nome?: string;
+  tipo_exame_codigo?: string;
   created_at: string;
 }
 
@@ -549,7 +550,7 @@ export const TemplatesPage: React.FC = () => {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <h3 className="font-semibold text-base truncate">{t.nome}</h3>
-                          <p className="text-xs text-muted-foreground">{t.tipo_exame_nome || '—'}</p>
+                          <p className="text-xs text-muted-foreground">{t.tipo_exame_codigo ? `${t.tipo_exame_codigo} - ${t.tipo_exame_nome || '—'}` : (t.tipo_exame_nome || '—')}</p>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <Button variant="ghost" size="sm" onClick={() => handlePreviewCard(t)} aria-label="Pré-visualizar">
@@ -561,7 +562,15 @@ export const TemplatesPage: React.FC = () => {
                           <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
                             <Edit size={14} />
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleExcluir(t.id)} aria-label="Excluir">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600"
+                            onClick={() => handleExcluir(t.id)}
+                            aria-label="Excluir"
+                            disabled={t.id === 'tpl-nao-definido'}
+                            title={t.id === 'tpl-nao-definido' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}
+                          >
                             <Trash2 size={14} />
                           </Button>
                         </div>
@@ -598,7 +607,7 @@ export const TemplatesPage: React.FC = () => {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{t.tipo_exame_nome || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{t.tipo_exame_codigo ? `${t.tipo_exame_codigo} - ${t.tipo_exame_nome || '—'}` : (t.tipo_exame_nome || '—')}</TableCell>
                       <TableCell className="text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           <Layers size={12} /> {t.qtd_secoes}
@@ -615,7 +624,15 @@ export const TemplatesPage: React.FC = () => {
                           <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
                             <Edit size={14} />
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleExcluir(t.id)} aria-label="Excluir">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600"
+                            onClick={() => handleExcluir(t.id)}
+                            aria-label="Excluir"
+                            disabled={t.id === 'tpl-nao-definido'}
+                            title={t.id === 'tpl-nao-definido' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}
+                          >
                             <Trash2 size={14} />
                           </Button>
                         </div>

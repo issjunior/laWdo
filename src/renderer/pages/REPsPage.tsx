@@ -28,6 +28,7 @@ interface REPFormData {
   numero: string;
   solicitante_id: string;
   tipo_exame_id: string;
+  template_id: string;
   data_requisicao: string;
   prazo: string;
   tipo_solicitacao: string;
@@ -49,7 +50,7 @@ interface REPFormData {
 }
 
 const emptyForm = (): REPFormData => ({
-  numero: '', solicitante_id: '', tipo_exame_id: '', data_requisicao: new Date().toISOString().split('T')[0], prazo: '',
+  numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0], prazo: '',
   tipo_solicitacao: 'Ofício', numero_documento: '', data_documento: '',
   autoridade_solicitante: '', nome_envolvido: '', data_acionamento: '',
   data_chegada: '', data_saida: '', local_fato: '', latitude: '', longitude: '',
@@ -77,10 +78,11 @@ const repFormSchema = z.object({
     .regex(/^\d{3}\.\d{3}-\d{4}$/, 'Formato inválido. Use: 000.000-0000'),
   solicitante_id: z.string().optional(),
   tipo_exame_id: z.string().optional(),
+  template_id: z.string().optional(),
   data_requisicao: z.string().min(1, 'Data da solicitação é obrigatória'),
   prazo: z.string().optional(),
-  tipo_solicitacao: z.string().max(50, 'Tipo de solicitação deve ter no máximo 50 caracteres').optional(),
-  numero_documento: z.string().max(30, 'Nº do documento deve ter no máximo 30 caracteres').optional(),
+  tipo_solicitacao: z.string().min(1, 'Tipo de solicitação é obrigatório').max(50, 'Tipo de solicitação deve ter no máximo 50 caracteres'),
+  numero_documento: z.string().min(1, 'Nº da solicitação é obrigatório').max(30, 'Nº do documento deve ter no máximo 30 caracteres'),
   data_documento: z.string().optional(),
   autoridade_solicitante: z.string().max(200, 'Autoridade deve ter no máximo 200 caracteres').optional(),
   nome_envolvido: z.string().max(200, 'Nome do envolvido deve ter no máximo 200 caracteres').optional(),
@@ -97,17 +99,32 @@ const repFormSchema = z.object({
   observacoes: z.string().max(1000, 'Observações devem ter no máximo 1000 caracteres').optional(),
 });
 
+function getLoggedUserId(): string | undefined {
+  try {
+    const raw = sessionStorage.getItem('lawdo_auth_user');
+    if (!raw) return undefined;
+    return JSON.parse(raw).id;
+  } catch {
+    return undefined;
+  }
+}
+
 function prepareForApi(data: REPFormData) {
   const payload: Record<string, unknown> = {
     numero: data.numero,
     data_requisicao: data.data_requisicao,
+    tipo_solicitacao: data.tipo_solicitacao,
+    numero_documento: data.numero_documento,
   };
 
   if (data.solicitante_id) payload.solicitante_id = data.solicitante_id;
   if (data.tipo_exame_id) payload.tipo_exame_id = data.tipo_exame_id;
+  if (data.template_id) {
+    payload.template_id = data.template_id;
+    const peritoId = getLoggedUserId();
+    if (peritoId) payload.perito_id = peritoId;
+  }
   if (data.prazo) payload.prazo = data.prazo;
-  if (data.tipo_solicitacao) payload.tipo_solicitacao = data.tipo_solicitacao;
-  if (data.numero_documento) payload.numero_documento = data.numero_documento;
   if (data.data_documento) payload.data_documento = data.data_documento;
   if (data.autoridade_solicitante) payload.autoridade_solicitante = data.autoridade_solicitante;
   if (data.nome_envolvido) payload.nome_envolvido = data.nome_envolvido;
@@ -144,6 +161,18 @@ const Section: React.FC<SectionProps> = ({ title, description, icon, children })
     <p className="text-xs text-muted-foreground -mt-1">{description}</p>
     {children}
   </fieldset>
+);
+
+/** Ícone "?" com tooltip que aparece ao passar o mouse */
+const HelpIcon: React.FC<{ text: string }> = ({ text }) => (
+  <span className="relative group ml-1.5 inline-flex cursor-help align-middle">
+    <span className="flex items-center justify-center w-[18px] h-[18px] rounded-full border border-muted-foreground/40 text-[10px] text-muted-foreground font-semibold group-hover:bg-muted-foreground group-hover:text-background transition-colors select-none">
+      ?
+    </span>
+    <span className="invisible group-hover:visible absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 px-3 py-2 text-xs rounded-lg bg-popover border shadow-md text-popover-foreground z-50 leading-relaxed whitespace-nowrap">
+      {text}
+    </span>
+  </span>
 );
 
 export const REPsPage: React.FC = () => {
@@ -190,7 +219,8 @@ export const REPsPage: React.FC = () => {
     (async () => {
       const r = await window.ipcAPI.template.findByTipoExame(formData.tipo_exame_id);
       if (r.success && r.data) {
-        setTemplatesVinculados(r.data);
+        const ordenados = [...r.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        setTemplatesVinculados(ordenados);
       } else {
         setTemplatesVinculados([]);
       }
@@ -213,6 +243,7 @@ export const REPsPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setErrors({});
+    setTemplatesVinculados([]);
     setFormData(emptyForm());
     setShowForm(true);
   };
@@ -221,21 +252,51 @@ export const REPsPage: React.FC = () => {
     setShowForm(false);
     setEditingRep(null);
     setFormData(emptyForm());
+    setTemplatesVinculados([]);
     setError(null);
     setSuccess(null);
     setErrors({});
   };
 
-  const handleEditar = (rep: REP) => {
+  const handleEditar = async (rep: REP) => {
     setEditingRep(rep);
     setError(null);
     setSuccess(null);
     setErrors({});
 
+    // Busca o template_id salvo no laudo ANTES de abrir o formulário
+    let templateId = '';
+    if (rep.tipo_exame_id) {
+      try {
+        const r = await window.ipcAPI.laudo.findByRepId(rep.id);
+        if (r.success && r.data && r.data.template_id) {
+          templateId = r.data.template_id;
+        }
+      } catch {
+        // Sem laudo vinculado — mantém vazio
+      }
+      
+      // Carregar os templates correspondentes imediatamente para garantir que o Select os tenha no primeiro render
+      try {
+        const templatesResp = await window.ipcAPI.template.findByTipoExame(rep.tipo_exame_id);
+        if (templatesResp.success && templatesResp.data) {
+          const ordenados = [...templatesResp.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          setTemplatesVinculados(ordenados);
+        } else {
+          setTemplatesVinculados([]);
+        }
+      } catch {
+        setTemplatesVinculados([]);
+      }
+    } else {
+      setTemplatesVinculados([]);
+    }
+
     setFormData({
       numero: rep.numero,
       solicitante_id: rep.solicitante_id || '',
       tipo_exame_id: rep.tipo_exame_id || '',
+      template_id: templateId,
       data_requisicao: rep.data_requisicao?.split('T')[0] || '',
       prazo: rep.prazo?.split('T')[0] || '',
       tipo_solicitacao: rep.tipo_solicitacao || '',
@@ -283,7 +344,13 @@ export const REPsPage: React.FC = () => {
   };
 
   const updateField = (field: keyof REPFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const nextData = { ...prev, [field]: value };
+      if (field === 'tipo_exame_id') {
+        nextData.template_id = '';
+      }
+      return nextData;
+    });
     setErrors(prev => {
       const next = { ...prev };
       delete next[field];
@@ -317,21 +384,16 @@ export const REPsPage: React.FC = () => {
       if (editingRep) {
         const r = await window.ipcAPI.rep.update(editingRep.id, apiData);
         if (r.success) {
-          setSuccess('REP atualizada com sucesso!');
           await carregarREPs();
-          setTimeout(() => setSuccess(null), 3000);
+          handleCancelar();
         } else {
           setError(r.error || 'Erro ao atualizar REP');
         }
       } else {
         const r = await window.ipcAPI.rep.create(apiData);
         if (r.success) {
-          setSuccess('REP criada com sucesso!');
-          setFormData(emptyForm());
-          setErrors({});
-          setEditingRep(null);
           await carregarREPs();
-          setTimeout(() => setSuccess(null), 3000);
+          handleCancelar();
         } else {
           setError(r.error || 'Erro ao criar REP');
         }
@@ -450,7 +512,7 @@ export const REPsPage: React.FC = () => {
               <Section title="Dados da Solicitação" description="Informações principais da requisição." icon={<FileText size={14} />}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="numero">Nº da REP *</Label>
+                    <Label htmlFor="numero">Nº da REP *<HelpIcon text="Formato XXX.XXX-AAAA. Ex: 001.001-2025" /></Label>
                     <Input
                       id="numero"
                       required
@@ -460,9 +522,6 @@ export const REPsPage: React.FC = () => {
                       placeholder="000.000-0000"
                     />
                     {errors.numero && <p className="text-xs text-red-600">{errors.numero}</p>}
-                    <p className="text-xs text-muted-foreground">
-                      Digite o número completo: os <strong>últimos 4 dígitos</strong> correspondem ao ano da REP.
-                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="data_requisicao">Data de recebimento *</Label>
@@ -507,21 +566,28 @@ export const REPsPage: React.FC = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Template</Label>
-                    <Input
-                      value={
-                        !formData.tipo_exame_id
-                          ? '—'
-                          : templatesVinculados.length === 0
-                            ? 'Nenhum template cadastrado'
-                            : templatesVinculados.map(t => t.nome).join(', ')
-                      }
-                      readOnly
-                      className="bg-muted text-muted-foreground cursor-default"
-                    />
+                    <Label htmlFor="template_id">Template<HelpIcon text="Define a estrutura e seções do laudo. Selecione um tipo de exame para ver os templates." /></Label>
+                    <Select
+                      disabled={!formData.tipo_exame_id || templatesVinculados.length === 0}
+                      value={formData.template_id || undefined}
+                      onValueChange={v => updateField('template_id', v)}
+                    >
+                      <SelectTrigger id="template_id">
+                        <SelectValue placeholder={
+                          !formData.tipo_exame_id
+                            ? 'Selecione um tipo de exame'
+                            : 'Selecione um template'
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templatesVinculados.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="tipo_solicitacao">Tipo de Solicitação</Label>
+                    <Label htmlFor="tipo_solicitacao">Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></Label>
                     <Select value={formData.tipo_solicitacao} onValueChange={v => updateField('tipo_solicitacao', v)}>
                       <SelectTrigger id="tipo_solicitacao"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
@@ -538,7 +604,7 @@ export const REPsPage: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="numero_documento">Nº da Solicitação</Label>
+                    <Label htmlFor="numero_documento">Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></Label>
                     <Input
                       id="numero_documento"
                       value={formData.numero_documento}

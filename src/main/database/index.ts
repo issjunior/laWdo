@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 11;
+const CURRENT_SCHEMA_VERSION = 13;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -154,6 +154,7 @@ const createDatabaseSchema = async (): Promise<void> => {
         id TEXT PRIMARY KEY,
         rep_id TEXT NOT NULL UNIQUE,
         perito_id TEXT NOT NULL,
+        template_id TEXT NOT NULL,
         conteudo TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'Em andamento',
         data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -163,7 +164,8 @@ const createDatabaseSchema = async (): Promise<void> => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (rep_id) REFERENCES reps(id),
-        FOREIGN KEY (perito_id) REFERENCES users(id)
+        FOREIGN KEY (perito_id) REFERENCES users(id),
+        FOREIGN KEY (template_id) REFERENCES templates(id)
       )
     `);
 
@@ -216,13 +218,19 @@ const createDatabaseSchema = async (): Promise<void> => {
     await executeNonQuery(`
       CREATE TABLE IF NOT EXISTS templates (
         id TEXT PRIMARY KEY,
-        tipo_exame_id TEXT NOT NULL,
+        tipo_exame_id TEXT,
         nome TEXT NOT NULL,
         descricao TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id)
       )
+    `);
+
+    // Seed: Template sistema "Não definido"
+    await executeNonQuery(`
+      INSERT OR IGNORE INTO templates (id, nome, descricao, tipo_exame_id, created_at, updated_at)
+      VALUES ('tpl-nao-definido', 'Não definido', 'Template padrão do sistema. Nenhum laudo é gerado automaticamente.', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `);
 
     // Tabela de seções do template
@@ -784,6 +792,77 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       logInfo('Migration v11: Tabelas templates e secoes_template criadas');
     } catch (error) {
       logError('Erro ao aplicar migration versão 11', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 12: Adicionar template_id na tabela laudos
+  if (fromVersion < 12) {
+    try {
+      const columns = await executeQuery<{ name: string }>(`PRAGMA table_info(laudos)`);
+      const hasTemplateId = columns.some(col => col.name === 'template_id');
+
+      if (!hasTemplateId) {
+        await executeNonQuery('ALTER TABLE laudos ADD COLUMN template_id TEXT');
+        logInfo('Migration v12: Coluna template_id adicionada na tabela laudos');
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 12', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 13: Permitir tipo_exame_id NULL e criar template sistema
+  if (fromVersion < 13) {
+    try {
+      // Recria tabela templates com tipo_exame_id nullable (SQLite não suporta ALTER COLUMN)
+      await executeNonQuery(`
+        CREATE TABLE IF NOT EXISTS templates_v13 (
+          id TEXT PRIMARY KEY,
+          tipo_exame_id TEXT,
+          nome TEXT NOT NULL,
+          descricao TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id)
+        )
+      `);
+      await executeNonQuery(`
+        INSERT OR IGNORE INTO templates_v13 (id, tipo_exame_id, nome, descricao, created_at, updated_at)
+        SELECT id, tipo_exame_id, nome, descricao, created_at, updated_at FROM templates
+      `);
+      await executeNonQuery('DROP TABLE templates');
+      await executeNonQuery('ALTER TABLE templates_v13 RENAME TO templates');
+
+      // Recria secoes_template (FK depende de templates)
+      await executeNonQuery(`
+        CREATE TABLE IF NOT EXISTS secoes_template_v13 (
+          id TEXT PRIMARY KEY,
+          template_id TEXT NOT NULL,
+          nome TEXT NOT NULL,
+          conteudo TEXT,
+          ordem INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+        )
+      `);
+      await executeNonQuery(`
+        INSERT OR IGNORE INTO secoes_template_v13 (id, template_id, nome, conteudo, ordem, created_at, updated_at)
+        SELECT id, template_id, nome, conteudo, ordem, created_at, updated_at FROM secoes_template
+      `);
+      await executeNonQuery('DROP TABLE secoes_template');
+      await executeNonQuery('ALTER TABLE secoes_template_v13 RENAME TO secoes_template');
+
+      // Insere o template sistema
+      await executeNonQuery(`
+        INSERT OR IGNORE INTO templates (id, nome, descricao, tipo_exame_id, created_at, updated_at)
+        VALUES ('tpl-nao-definido', 'Não definido', 'Template padrão do sistema. Nenhum laudo é gerado automaticamente.', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `);
+
+      logInfo('Migration v13: tipo_exame_id nullable + Template "Não definido" criado');
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 13', error);
       throw error;
     }
   }

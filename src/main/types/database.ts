@@ -82,6 +82,7 @@ export interface LaudoRow extends DatabaseRow {
   id: string
   rep_id: string
   perito_id: string
+  template_id: string
   conteudo: string
   status: string
   data_inicio: string
@@ -133,7 +134,7 @@ export interface LogAuditoriaRow extends DatabaseRow {
 // Template de Laudo
 export interface TemplateRow extends DatabaseRow {
   id: string
-  tipo_exame_id: string
+  tipo_exame_id: string | null
   nome: string
   descricao?: string
   created_at: string

@@ -171,11 +171,10 @@ projeto/
 **⬜ PENDENTES:**
 
 - [ ] Integração robusta com TinyMCE.
-- [ ] **Auto-save** e sistema de **Snapshots** (versões).
+- [ ]  **Snapshots** do Laudo (versões) no maximo 3 (três).
 - [ ] Suporte a Imagens/Ilustrações locais por laudo.
 - [ ] Painel lateral de gestão de imagens.
 - [ ] Drag-and-drop para reordenação de figuras.
-- [ ] Geração automática de seção "Figuras".
 
 ### Sprint 5: Motor de Placeholders ✅ **COMPLETADA**
 
@@ -219,7 +218,7 @@ projeto/
 ### Sprint 10: Distribuição e Entrega
 
 - [ ] Refino de design e tema claro/escuro.
-- [ ] Geração de instalador `.exe` e versão portátil.
+- [ ] Geração de instalador `.exe`.
 - [ ] Manual completo do usuário e documentação técnica.
 
 ---

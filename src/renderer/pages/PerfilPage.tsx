@@ -128,10 +128,10 @@ export const PerfilPage: React.FC = () => {
           user.cargo = data.cargo;
           user.lotacao = data.lotacao;
           sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-          
+
           // Dispara um evento para atualizar o header
           window.dispatchEvent(new Event('storage'));
-        } catch {}
+        } catch { }
       }
 
       setSuccess('Perfil atualizado com sucesso.');
@@ -262,9 +262,9 @@ export const PerfilPage: React.FC = () => {
                   name="lotacao"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Lotação *</FormLabel>
+                      <FormLabel>Lotação (UETC) *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Ex: Instituto de Criminalística" />
+                        <Input {...field} placeholder="Ex: Telêmaco Borba" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -274,9 +274,9 @@ export const PerfilPage: React.FC = () => {
 
               <div className="pt-6 border-t">
                 {!isChangingPassword ? (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => setIsChangingPassword(true)}
                     className="flex items-center gap-2"
                   >
@@ -289,7 +289,7 @@ export const PerfilPage: React.FC = () => {
                       <KeyRound className="h-4 w-4" />
                       Nova Senha
                     </h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -319,10 +319,10 @@ export const PerfilPage: React.FC = () => {
                         )}
                       />
                     </div>
-                    
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
+
+                    <Button
+                      type="button"
+                      variant="ghost"
                       size="sm"
                       onClick={() => {
                         setIsChangingPassword(false);

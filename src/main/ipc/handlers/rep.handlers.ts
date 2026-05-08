@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { logInfo, logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import { repService } from '../../services/rep.service.js';
+import { laudoService } from '../../services/laudo.service.js';
 import { REPRow } from '../../types/database.js';
 
 /**
@@ -11,8 +12,9 @@ import { REPRow } from '../../types/database.js';
 export const registerRepHandlers = (): void => {
   /**
    * Criar nova REP
+   * template_id e perito_id são opcionais: se fornecidos, um laudo é criado automaticamente
    */
-  ipcMain.handle('rep:create', async (_event, data: Omit<REPRow, 'id' | 'created_at' | 'updated_at'>) => {
+  ipcMain.handle('rep:create', async (_event, data: Omit<REPRow, 'id' | 'created_at' | 'updated_at'> & { template_id?: string; perito_id?: string }) => {
     try {
       if (!data.numero || !data.numero.trim()) {
         return { success: false, error: 'Número da REP é obrigatório.' };
@@ -54,6 +56,22 @@ export const registerRepHandlers = (): void => {
 
       const rep = await repService.create(sanitizedData);
       logInfo('REP criada', { numero: data.numero, id: rep.id });
+
+      // Criar laudo automaticamente (exceto para template sistema "Não definido")
+      if (data.template_id && data.perito_id && data.template_id !== 'tpl-nao-definido') {
+        try {
+          await laudoService.criarLaudoInicial({
+            rep_id: rep.id,
+            perito_id: data.perito_id,
+            template_id: data.template_id,
+          });
+          logInfo('Laudo criado automaticamente para REP', { repId: rep.id });
+        } catch (laudoError) {
+          logError('Erro ao criar laudo automático — REP criada sem laudo', laudoError);
+          // Não falha a criação da REP se o laudo falhar
+        }
+      }
+
       return { success: true, data: rep };
     } catch (error) {
       logError('Erro ao criar REP', { data, error });
@@ -101,7 +119,7 @@ export const registerRepHandlers = (): void => {
   /**
    * Atualizar REP
    */
-  ipcMain.handle('rep:update', async (_event, id: string, data: Partial<REPRow>) => {
+  ipcMain.handle('rep:update', async (_event, id: string, data: Partial<REPRow> & { template_id?: string; perito_id?: string }) => {
     try {
       if (!id) return { success: false, error: 'ID inválido' };
 
@@ -130,6 +148,32 @@ export const registerRepHandlers = (): void => {
       if (data.prazo !== undefined) sanitizedData.prazo = data.prazo;
 
       const updated = await repService.update(id, sanitizedData);
+
+      if (data.template_id && data.template_id !== 'tpl-nao-definido') {
+        const laudoExistente = await laudoService.findByRepId(id);
+        if (!laudoExistente) {
+          if (data.perito_id) {
+            try {
+              await laudoService.criarLaudoInicial({
+                rep_id: id,
+                perito_id: data.perito_id,
+                template_id: data.template_id,
+              });
+              logInfo('Laudo criado automaticamente na atualização da REP', { repId: id });
+            } catch (laudoError) {
+              logError('Erro ao criar laudo automático na edição da REP', laudoError);
+            }
+          }
+        } else if (laudoExistente.template_id !== data.template_id) {
+          try {
+            await laudoService.update(laudoExistente.id, { template_id: data.template_id });
+            logInfo('Template do laudo atualizado na edição da REP', { repId: id, laudoId: laudoExistente.id });
+          } catch (laudoError) {
+            logError('Erro ao atualizar template do laudo', laudoError);
+          }
+        }
+      }
+
       return { success: true, data: updated };
     } catch (error) {
       logError('Erro ao atualizar REP', { id, error });
@@ -141,12 +185,17 @@ export const registerRepHandlers = (): void => {
   });
 
   /**
-   * Excluir REP
+   * Excluir REP (remove o laudo vinculado antes para evitar erro de FK)
    */
   ipcMain.handle('rep:delete', async (_event, id: string) => {
     try {
       if (!id) return { success: false, error: 'ID inválido' };
+
+      // Deleta o laudo vinculado antes da REP (evita SQLITE_CONSTRAINT)
+      await laudoService.deletarPorRepId(id);
+
       await repService.delete(id);
+      logInfo('REP excluída', { id });
       return { success: true, message: 'REP excluída com sucesso!' };
     } catch (error) {
       logError('Erro ao excluir REP', { id, error });

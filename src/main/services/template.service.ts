@@ -9,13 +9,15 @@ export class TemplateService extends BaseService<TemplateRow> {
     super('templates', 'id');
   }
 
-  /** Buscar templates por tipo de exame */
+  /** Buscar templates por tipo de exame (inclui templates genéricos com tipo_exame_id NULL) */
   async findByTipoExame(tipoExameId: string): Promise<TemplateRow[]> {
     try {
-      return await this.findAll({ tipo_exame_id: tipoExameId } as Partial<TemplateRow>, {
-        orderBy: 'created_at',
-        orderDirection: 'DESC',
-      });
+      const sql = `
+        SELECT * FROM templates
+        WHERE tipo_exame_id = ? OR tipo_exame_id IS NULL
+        ORDER BY CASE WHEN tipo_exame_id IS NULL THEN 1 ELSE 0 END, nome ASC
+      `;
+      return await executeQuery<TemplateRow>(sql, [tipoExameId]);
     } catch (error) {
       logError('Erro ao buscar templates por tipo de exame', error);
       throw error;
@@ -23,17 +25,17 @@ export class TemplateService extends BaseService<TemplateRow> {
   }
 
   /** Buscar todos os templates com contagem de seções */
-  async findAllComSecoes(): Promise<(TemplateRow & { qtd_secoes: number; tipo_exame_nome?: string })[]> {
+  async findAllComSecoes(): Promise<(TemplateRow & { qtd_secoes: number; tipo_exame_nome?: string; tipo_exame_codigo?: string })[]> {
     try {
       const sql = `
-        SELECT t.*, COUNT(st.id) as qtd_secoes, te.nome as tipo_exame_nome
+        SELECT t.*, COUNT(st.id) as qtd_secoes, te.nome as tipo_exame_nome, te.codigo as tipo_exame_codigo
         FROM templates t
         LEFT JOIN secoes_template st ON st.template_id = t.id
         LEFT JOIN tipos_exame te ON te.id = t.tipo_exame_id
         GROUP BY t.id
         ORDER BY t.created_at DESC
       `;
-      return await executeQuery<TemplateRow & { qtd_secoes: number; tipo_exame_nome?: string }>(sql);
+      return await executeQuery<TemplateRow & { qtd_secoes: number; tipo_exame_nome?: string; tipo_exame_codigo?: string }>(sql);
     } catch (error) {
       logError('Erro ao buscar templates com seções', error);
       throw error;

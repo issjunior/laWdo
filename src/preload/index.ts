@@ -119,6 +119,11 @@ export interface IpcAPI {
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
     previewPDF: (html: string) => Promise<UserResponse>;
   };
+
+  // Laudos
+  laudo: {
+    findByRepId: (repId: string) => Promise<UserResponse>;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -206,6 +211,9 @@ const ALLOWED_CHANNELS = new Set([
   'template:deleteSecao',
   'template:reordenarSecoes',
   'template:previewPDF',
+
+  // Laudos
+  'laudo:findByRepId',
 ]);
 
 // Expor API segura para o renderer
@@ -529,6 +537,10 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     deleteSecao: (id: string) => ipcRenderer.invoke('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
     previewPDF: (html: string) => ipcRenderer.invoke('template:previewPDF', html),
+  },
+
+  laudo: {
+    findByRepId: (repId: string) => ipcRenderer.invoke('laudo:findByRepId', repId),
   },
 } satisfies IpcAPI);
 
