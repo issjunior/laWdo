@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 10;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -641,6 +641,87 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       logError('Erro ao aplicar migration versão 9', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 10: Remover constraints NOT NULL indevidas em colunas opcionais da tabela reps
+  if (fromVersion < 10) {
+    try {
+      const tables = await executeQuery<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='reps'"
+      );
+      if (tables.length > 0) {
+        // Colunas que devem aceitar NULL
+        const opcionais = [
+          'solicitante_id', 'tipo_exame_id', 'tipo_solicitacao', 'numero_documento',
+          'data_documento', 'autoridade_solicitante', 'nome_envolvido', 'data_acionamento',
+          'data_chegada', 'data_saida', 'local_fato', 'latitude', 'longitude',
+          'lacre_entrada', 'lacre_saida', 'usuario_id', 'numero_bo', 'numero_ip',
+          'observacoes', 'prazo',
+        ];
+
+        const columns = await executeQuery<{ name: string; notnull: number; dflt_value: string | null }>(
+          'PRAGMA table_info(reps)'
+        );
+
+        const colunasComNotNull = columns.filter(
+          c => opcionais.includes(c.name) && c.notnull === 1 && c.dflt_value === null
+        );
+
+        if (colunasComNotNull.length > 0) {
+          logInfo(`Migration v10: Corrigindo NOT NULL em: ${colunasComNotNull.map(c => c.name).join(', ')}`);
+
+          // Recriar a tabela com schema correto
+          await executeNonQuery(`
+            CREATE TABLE reps_v10 (
+              id TEXT PRIMARY KEY,
+              numero TEXT NOT NULL UNIQUE,
+              solicitante_id TEXT,
+              tipo_exame_id TEXT,
+              data_requisicao DATETIME NOT NULL,
+              prazo DATETIME,
+              status TEXT NOT NULL DEFAULT 'Pendente',
+              tipo_solicitacao TEXT,
+              numero_documento TEXT,
+              data_documento DATETIME,
+              autoridade_solicitante TEXT,
+              nome_envolvido TEXT,
+              data_acionamento DATETIME,
+              data_chegada DATETIME,
+              data_saida DATETIME,
+              local_fato TEXT,
+              latitude REAL,
+              longitude REAL,
+              lacre_entrada TEXT,
+              lacre_saida TEXT,
+              usuario_id TEXT,
+              numero_bo TEXT,
+              numero_ip TEXT,
+              observacoes TEXT,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (solicitante_id) REFERENCES solicitantes(id),
+              FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id),
+              FOREIGN KEY (usuario_id) REFERENCES users(id)
+            )
+          `);
+
+          await executeNonQuery('INSERT INTO reps_v10 SELECT * FROM reps');
+          await executeNonQuery('DROP TABLE reps');
+          await executeNonQuery('ALTER TABLE reps_v10 RENAME TO reps');
+
+          // Recriar índices
+          await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_status ON reps(status)');
+          await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_solicitante ON reps(solicitante_id)');
+
+          logInfo('Migration v10: Constraints NOT NULL removidas com sucesso');
+        } else {
+          logInfo('Migration v10: Nenhuma coluna com NOT NULL indevido encontrada');
+        }
+      }
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 10', error);
       throw error;
     }
   }

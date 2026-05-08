@@ -27,29 +27,30 @@ export const registerRepHandlers = (): void => {
       const sanitizedData: any = {
         id: randomUUID(),
         numero: sanitizeInput(data.numero.trim()),
-        solicitante_id: data.solicitante_id || null,
-        tipo_exame_id: data.tipo_exame_id || null,
         data_requisicao: data.data_requisicao,
         status: 'Pendente',
-        tipo_solicitacao: data.tipo_solicitacao ? sanitizeInput(data.tipo_solicitacao) : null,
-        numero_documento: data.numero_documento ? sanitizeInput(data.numero_documento) : null,
-        data_documento: data.data_documento || null,
-        autoridade_solicitante: data.autoridade_solicitante ? sanitizeInput(data.autoridade_solicitante) : null,
-        nome_envolvido: data.nome_envolvido ? sanitizeInput(data.nome_envolvido) : null,
-        data_acionamento: data.data_acionamento || null,
-        data_chegada: data.data_chegada || null,
-        data_saida: data.data_saida || null,
-        local_fato: data.local_fato ? sanitizeInput(data.local_fato) : null,
-        latitude: data.latitude != null ? data.latitude : null,
-        longitude: data.longitude != null ? data.longitude : null,
-        lacre_entrada: data.lacre_entrada ? sanitizeInput(data.lacre_entrada) : null,
-        lacre_saida: data.lacre_saida ? sanitizeInput(data.lacre_saida) : null,
-        usuario_id: data.usuario_id || null,
-        numero_bo: data.numero_bo ? sanitizeInput(data.numero_bo) : null,
-        numero_ip: data.numero_ip ? sanitizeInput(data.numero_ip) : null,
-        observacoes: data.observacoes ? sanitizeInput(data.observacoes) : null,
-        prazo: data.prazo || null,
       };
+
+      if (data.solicitante_id) sanitizedData.solicitante_id = data.solicitante_id;
+      if (data.tipo_exame_id) sanitizedData.tipo_exame_id = data.tipo_exame_id;
+      if (data.tipo_solicitacao) sanitizedData.tipo_solicitacao = sanitizeInput(data.tipo_solicitacao);
+      if (data.numero_documento) sanitizedData.numero_documento = sanitizeInput(data.numero_documento);
+      if (data.data_documento) sanitizedData.data_documento = data.data_documento;
+      if (data.autoridade_solicitante) sanitizedData.autoridade_solicitante = sanitizeInput(data.autoridade_solicitante);
+      if (data.nome_envolvido) sanitizedData.nome_envolvido = sanitizeInput(data.nome_envolvido);
+      if (data.data_acionamento) sanitizedData.data_acionamento = data.data_acionamento;
+      if (data.data_chegada) sanitizedData.data_chegada = data.data_chegada;
+      if (data.data_saida) sanitizedData.data_saida = data.data_saida;
+      if (data.local_fato) sanitizedData.local_fato = sanitizeInput(data.local_fato);
+      if (data.latitude != null) sanitizedData.latitude = data.latitude;
+      if (data.longitude != null) sanitizedData.longitude = data.longitude;
+      if (data.lacre_entrada) sanitizedData.lacre_entrada = sanitizeInput(data.lacre_entrada);
+      if (data.lacre_saida) sanitizedData.lacre_saida = sanitizeInput(data.lacre_saida);
+      if (data.usuario_id) sanitizedData.usuario_id = data.usuario_id;
+      if (data.numero_bo) sanitizedData.numero_bo = sanitizeInput(data.numero_bo);
+      if (data.numero_ip) sanitizedData.numero_ip = sanitizeInput(data.numero_ip);
+      if (data.observacoes) sanitizedData.observacoes = sanitizeInput(data.observacoes);
+      if (data.prazo) sanitizedData.prazo = data.prazo;
 
       const rep = await repService.create(sanitizedData);
       logInfo('REP criada', { numero: data.numero, id: rep.id });
