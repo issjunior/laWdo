@@ -158,6 +158,7 @@ export const REPsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [solicitantes, setSolicitantes] = useState<any[]>([]);
   const [tiposExame, setTiposExame] = useState<any[]>([]);
+  const [templatesVinculados, setTemplatesVinculados] = useState<any[]>([]);
   const [errors, setErrors] = useState<REPFormErrors>({});
 
   const carregarREPs = useCallback(async () => {
@@ -179,6 +180,22 @@ export const REPsPage: React.FC = () => {
   }, []);
 
   useEffect(() => { carregarREPs(); carregarSolicitantes(); carregarTiposExame(); }, []);
+
+  // Quando o tipo de exame muda, busca os templates vinculados
+  useEffect(() => {
+    if (!showForm || !formData.tipo_exame_id) {
+      setTemplatesVinculados([]);
+      return;
+    }
+    (async () => {
+      const r = await window.ipcAPI.template.findByTipoExame(formData.tipo_exame_id);
+      if (r.success && r.data) {
+        setTemplatesVinculados(r.data);
+      } else {
+        setTemplatesVinculados([]);
+      }
+    })();
+  }, [formData.tipo_exame_id, showForm]);
 
   const filteredREPs = reps.filter(r =>
     r.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -491,7 +508,17 @@ export const REPsPage: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Template</Label>
-                    <Input value={formData.tipo_exame_id ? (tiposExame.find(t => t.id === formData.tipo_exame_id)?.template_padrao || 'Nenhum template cadastrado') : '—'} readOnly className="bg-muted text-muted-foreground cursor-default" />
+                    <Input
+                      value={
+                        !formData.tipo_exame_id
+                          ? '—'
+                          : templatesVinculados.length === 0
+                            ? 'Nenhum template cadastrado'
+                            : templatesVinculados.map(t => t.nome).join(', ')
+                      }
+                      readOnly
+                      className="bg-muted text-muted-foreground cursor-default"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="tipo_solicitacao">Tipo de Solicitação</Label>

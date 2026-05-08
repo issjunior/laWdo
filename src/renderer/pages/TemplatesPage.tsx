@@ -9,10 +9,13 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  Plus, Search, Edit, Trash2, X, ArrowUp, ArrowDown, ArrowLeft,
-  FileText, GripVertical, Layers, Eye,
+  Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
+  FileText, GripVertical, Layers, Eye, LayoutGrid, List,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { createTemplateSchema } from '@/lib/validators';
 import { z } from 'zod';
@@ -70,6 +73,7 @@ export const TemplatesPage: React.FC = () => {
 
   // Modo de edição
   const [editMode, setEditMode] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
@@ -152,6 +156,68 @@ export const TemplatesPage: React.FC = () => {
       await carregarTemplates();
     } else {
       alert(r.error);
+    }
+  };
+
+  const handleClonar = async (template: TemplateItem) => {
+    try {
+      // Buscar as seções do template original
+      const secResult = await window.ipcAPI.template.findSecoes(template.id);
+      const secoesOriginais: SecaoItem[] =
+        secResult.success && secResult.data ? secResult.data : [];
+
+      const nomeClonado = `${template.nome} - (Cópia)`;
+
+      // Criar novo template com nome "{original} - (Cópia)"
+      const createR = await window.ipcAPI.template.create({
+        nome: nomeClonado,
+        tipo_exame_id: template.tipo_exame_id,
+        descricao: template.descricao || null,
+      });
+      if (!createR.success || !createR.data) {
+        alert(createR.error || 'Erro ao criar cópia do template');
+        return;
+      }
+
+      const novoId: string = createR.data.id;
+
+      // Copiar as seções
+      for (const sec of secoesOriginais) {
+        await window.ipcAPI.template.createSecao({
+          template_id: novoId,
+          nome: sec.nome,
+          ordem: sec.ordem,
+          conteudo: sec.conteudo || '',
+        });
+      }
+
+      // Atualizar lista em segundo plano
+      carregarTemplates();
+
+      // Abrir o template clonado no modo edição
+      setEditingTemplateId(novoId);
+      setTemplateForm({
+        nome: nomeClonado,
+        tipo_exame_id: template.tipo_exame_id,
+        descricao: template.descricao || '',
+      });
+      setError(null);
+      setSuccess(null);
+      setErrors({});
+
+      // Carregar as seções recém-criadas
+      const r = await window.ipcAPI.template.findSecoes(novoId);
+      if (r.success && r.data) {
+        const s: SecaoItem[] = r.data;
+        setSecoesDb(s);
+        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' })));
+      } else {
+        setSecoesDb([]);
+        setSecoes([emptySecaoForm()]);
+      }
+      setEditMode(true);
+    } catch (e: any) {
+      alert('Erro ao clonar template');
     }
   };
 
@@ -408,9 +474,33 @@ export const TemplatesPage: React.FC = () => {
             <h1 className="text-2xl md:text-3xl font-bold">Templates</h1>
             <p className="text-muted-foreground mt-1">Modelos de laudo vinculados aos tipos de exame</p>
           </div>
-          <Button onClick={handleNovo} className="flex items-center gap-2 w-full sm:w-auto">
-            <Plus size={16} /> Novo Template
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
+              <Button
+                variant={viewMode === 'cards' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('cards')}
+                className="h-8 px-2.5"
+                aria-label="Visualizar como cards"
+                title="Cards"
+              >
+                <LayoutGrid size={14} />
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className="h-8 px-2.5"
+                aria-label="Visualizar como lista"
+                title="Lista"
+              >
+                <List size={14} />
+              </Button>
+            </div>
+            <Button onClick={handleNovo} className="flex items-center gap-2">
+              <Plus size={16} /> Novo Template
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -451,7 +541,7 @@ export const TemplatesPage: React.FC = () => {
               <div className="text-center py-8 text-muted-foreground">
                 {searchTerm || filtroTipoExame ? 'Nenhum template encontrado.' : 'Nenhum template cadastrado.'}
               </div>
-            ) : (
+            ) : viewMode === 'cards' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.map(t => (
                   <Card key={t.id} className="hover:shadow-md transition-shadow">
@@ -464,6 +554,9 @@ export const TemplatesPage: React.FC = () => {
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <Button variant="ghost" size="sm" onClick={() => handlePreviewCard(t)} aria-label="Pré-visualizar">
                             <Eye size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleClonar(t)} aria-label="Clonar template" title="Clonar template">
+                            <Copy size={14} />
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
                             <Edit size={14} />
@@ -484,6 +577,53 @@ export const TemplatesPage: React.FC = () => {
                   </Card>
                 ))}
               </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Tipo de Exame</TableHead>
+                    <TableHead>Seções</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map(t => (
+                    <TableRow key={t.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{t.nome}</p>
+                          {t.descricao && (
+                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{t.descricao}</p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{t.tipo_exame_nome || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Layers size={12} /> {t.qtd_secoes}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handlePreviewCard(t)} aria-label="Pré-visualizar">
+                            <Eye size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleClonar(t)} aria-label="Clonar template" title="Clonar template">
+                            <Copy size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
+                            <Edit size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleExcluir(t.id)} aria-label="Excluir">
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
