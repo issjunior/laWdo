@@ -114,11 +114,11 @@ A migração está organizada em 10 sprints no diretório `migracao/`.
 
 ## 📊 Status Atual
 
-**Data:** 09 de maio de 2026  
-**Status:** ✅ Sprints 0, 1, 2, 3 e 5 completas | 🔄 Sprint 4 parcial  
-**Progresso:** ~75% do projeto completo
+**Data:** 09 de maio de 2026 (atualizado)  
+**Status:** ✅ Sprints 0, 1, 2, 3 e 5 completas | 🔄 Sprint 4 parcial (75%)  
+**Progresso:** ~80% do projeto completo
 
-### Páginas Implementadas (9)
+### Páginas Implementadas (10)
 
 | Página | Rota | Status |
 |---|---|---|
@@ -130,6 +130,7 @@ A migração está organizada em 10 sprints no diretório `migracao/`.
 | REPs | `/reps` | ✅ |
 | Placeholders | `/placeholders` | ✅ |
 | Templates | `/templates` | ✅ |
+| Laudos | `/laudos` | ✅ |
 | Perfil | `/perfil` | ✅ |
 
 ## 📝 Documentação
@@ -163,9 +164,10 @@ Uso interno - Polícia Científica do Paraná.
 
 ### 🎉 Destaques Técnicos Recentes
 
-- ✅ **9 páginas implementadas:** Dashboard, Auth, Perfil, Solicitantes, TiposExame, Cabeçalho, REPs, Placeholders, Templates
-- ✅ **8 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo + BaseService
-- ✅ **8 módulos IPC:** Handlers para todas as entidades implementadas
+- ✅ **10 páginas implementadas:** Dashboard, Auth, Perfil, Solicitantes, TiposExame, Cabeçalho, REPs, Placeholders, Templates, Laudos
+- ✅ **9 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo, Imagem + BaseService
+- ✅ **9 módulos IPC:** Handlers para todas as entidades implementadas
+- ✅ **Editor TinyMCE com upload de imagens:** Toolbar responsiva 2 linhas, 14 plugins, diálogo nativo, protocolo `laudo-img://`
 - ✅ **Build vitorioso:** Compilação TypeScript/Vite 100% funcional
 - ✅ **Migração ESM concluída:** Projeto migrado para ECMAScript Modules
 - ✅ **Login obrigatório:** AuthPage bloqueia acesso sem autenticação

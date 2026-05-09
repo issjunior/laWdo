@@ -2,8 +2,8 @@
 
 ## Análise Detalhada do Estado Atual do Projeto
 
-**Data:** 09 de maio de 2026  
-**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | 🔄 **SPRINT 4 PARCIAL**
+**Data:** 09 de maio de 2026 (atualizado)  
+**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | 🔄 **SPRINT 4 PARCIAL (75%)**
 
 ---
 
@@ -25,7 +25,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 ### 2. **✅ BANCO DE DADOS SQLITE AVANÇADO**
 
 - **Driver nativo SQLite3** no main process
-- **Schema completo com 9 migrations:**
+- **Schema completo com 10 migrations:**
   ```
   v1 - Schema inicial (8 tabelas base)
   v2 - Campo ativo em tipos_exame
@@ -36,22 +36,11 @@ O projeto está significativamente mais avançado do que o planejamento original
   v7 - Toggle ativo/inativo em tipos_exame
   v8 - Tabela configuracoes (cabeçalho de laudos)
   v9 - Tabela reps com tipo_solicitacao e campos condicionais
-  ```
-- **9 tabelas principais:**
-  ```
-  ┌─────────────────┬─────────────────────────────────────┐
-  │ Tabela          │ Descrição                            │
-  ├─────────────────┼─────────────────────────────────────┤
-  │ users           │ Peritos criminais                   │
-  │ solicitantes    │ Órgãos, varas, delegacias           │
-  │ tipos_exame     │ Categorias de perícia               │
-  │ reps            │ Requisições de Exame Pericial       │
-  │ laudos          │ Documentos técnicos                 │
-  │ imagens_laudo   │ Fotos e ilustrações                 │
-  │ placeholders    │ Tags dinâmicas                      │
-  │ configuracoes   │ Configurações de cabeçalho          │
-  │ logs_auditoria  │ Histórico de ações                  │
-  └─────────────────┴─────────────────────────────────────┘
+  v10 - Tabela templates + secoes_template
+  v11 - Correções de schema
+  v12 - FK fix para delete em cascata
+  v13 - tipo_exame_id nullable + Template "Não definido"
+  v14 - Tabela imagens_laudo para bancos existentes
   ```
 - **Sistema de versionamento** com migrations automáticas (v1 → v9)
 - **Transações ACID** (BEGIN, COMMIT, ROLLBACK)
@@ -97,6 +86,9 @@ O projeto está significativamente mais avançado do que o planejamento original
   - Configuração (cabeçalho de laudos)
   - REP (Requisições de Exame Pericial)
   - Placeholder (CRUD completo)
+  - Template (CRUD + seções + preview PDF)
+  - Laudo (findAll, findByRepId, updateConteudo)
+  - Imagem (pickAndUpload, findByLaudoId, delete)
 
 ### 6. **✅ INTERFACE REACT FUNCIONAL**
 
@@ -108,7 +100,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 ### 7. **✅ SERVIÇOS DE NEGÓCIO IMPLEMENTADOS**
 
-- **8 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo
+- **9 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo, Imagem
 
 #### `user.service.ts`
 - Autenticação com criptografia de senha (bcrypt + AES-256-GCM)
@@ -146,7 +138,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 - Geração automática de UUID
 - Todas as entidades estendem este serviço
 
-### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (9 PÁGINAS)**
+### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (10 PÁGINAS)**
 
 | Página | Rota | Descrição |
 |---|---|---|
@@ -158,6 +150,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 | **REPsPage** | `/reps` | CRUD com formulário inline e campos condicionais |
 | **PlaceholdersPage** | `/placeholders` | CRUD de placeholders com instruções visuais colapsáveis |
 | **TemplatesPage** | `/templates` | Gerenciamento de templates de laudos por tipo de exame |
+| **LaudosPage** | `/laudos` | Editor multi-seção TinyMCE com upload de imagens do PC |
 | **PerfilPage** | `/perfil` | Perfil do perito com validação Zod |
 
 ---
@@ -168,9 +161,10 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 - **TypeScript:** ~5000+ linhas (estimado)
 - **Arquivos:** ~120+ arquivos criados/modificados
-- **Páginas:** 9 páginas implementadas
-- **Serviços:** 8 serviços de negócio
-- **Handlers IPC:** 8 módulos de handlers
+- **Páginas:** 10 páginas implementadas
+- **Serviços:** 9 serviços de negócio
+- **Handlers IPC:** 9 módulos de handlers
+- **Migrations:** 14 versões de schema (v1 → v14)
 
 ### **Testes Realizados:**
 
@@ -267,16 +261,24 @@ Todas as tarefas realizadas com sucesso:
 
 ## 🔄 **SPRINT 4 EM ANDAMENTO (PARCIAL)**
 
-### Concluído (antecipado):
+### Concluído (09/05/2026):
 - [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
 - [x] Editor HTML para cabeçalho com placeholders
 - [x] Tabela `configuracoes` (migration v8)
 - [x] `configuracao.service.ts` e `configuracao.handlers.ts`
 - [x] Menu em Cadastros
+- [x] **Página Laudos (`LaudosPage`)** — editor multi-seção com TinyMCE independente por seção
+- [x] **Editor TinyMCE completo** — 14 plugins, toolbar 2 linhas, modo `floating` responsivo
+- [x] **Upload de imagens do PC** — diálogo nativo Electron → `userData/imagens/<laudo_id>/`
+- [x] **Protocolo `laudo-img://`** — serve imagens locais sem expor caminhos absolutos
+- [x] **Serviço `imagem.service.ts`** — salvar (cópia + registro), listar, deletar
+- [x] **Handlers `imagem.handlers.ts`** — `imagem:pickAndUpload`, `imagem:findByLaudoId`, `imagem:delete`
+- [x] **Migration v14** — tabela `imagens_laudo` para bancos existentes
+- [x] **CSP atualizado** — `img-src 'self' data: blob: laudo-img:`
+- [x] **Seções colapsáveis** (abertas por padrão) com toggle individual
 
 ### Pendente:
-- [ ] Integração completa com TinyMCE para edição de laudos
-- [ ] Sistema de auto-save e snapshots (versões)
+- [ ] Sistema de snapshots (versões) do laudo — máximo 3
 - [ ] Painel lateral de gestão de imagens
 - [ ] Drag-and-drop para reordenação de figuras
 - [ ] Geração automática de seção "Figuras"
@@ -338,7 +340,7 @@ npm run format
 
 O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3 e 5 estão **completas**, com a Sprint 4 já tendo o módulo de Cabeçalho antecipado. O sistema possui 9 páginas funcionais, 8 serviços de negócio e autenticação obrigatória.
 
-**Progresso estimado:** ~75% do projeto completo
+**Progresso estimado:** ~80% do projeto completo
 
 **Status:** 🟢 **PRÓXIMA ETAPA - COMPLETAR SPRINT 4 (Edição de Laudos com TinyMCE)**
 

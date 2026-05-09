@@ -2,7 +2,7 @@
 
 ### 🐍 Python/Streamlit ➔ ⚛️ Electron + React
 
-## 📈 **STATUS ATUAL DO PROJETO** (09/05/2026)
+## 📈 **STATUS ATUAL DO PROJETO** (09/05/2026 - atualizado)
 
 ### ✅ **SPRINT 0: COMPLETA**
 
@@ -29,10 +29,13 @@
 - **REPs:** CRUD completo com formulário inline e campos condicionais
 - **Migration v9** aplicada
 
-### 🔄 **SPRINT 4: PARCIAL**
+### 🔄 **SPRINT 4: PARCIAL (75%)**
 
 - **Cabeçalho:** Página com editor HTML e placeholders implementada (antecipado)
-- **TinyMCE:** Integração pendente
+- **LaudosPage:** Editor multi-seção TinyMCE implementado
+- **TinyMCE:** 14 plugins, toolbar 2 linhas, modo floating responsivo
+- **Upload de imagens:** Diálogo nativo + protocolo `laudo-img://` + serviço/handlers
+- **Pendente:** Painel lateral de imagens, drag-and-drop, snapshots
 
 ### ✅ **SPRINT 5: COMPLETA**
 
@@ -133,7 +136,7 @@ laudopericial/ (raiz do projeto)
 │   ├── main/                    # ✅ Electron Main Process (Backend)
 │   │   ├── database/            # ✅ SQLite com schema v9 + migrations
 │   │   ├── ipc/                 # ✅ Handlers IPC (8 módulos)
-│   │   │   └── handlers/        # ✅ user, solicitante, tipo-exame, configuracao, rep, placeholder, template, laudo
+│   │   │   └── handlers/        # ✅ user, solicitante, tipo-exame, configuracao, rep, placeholder, template, laudo, imagem
 │   │   ├── security/            # ✅ Criptografia, Sanitização e Validação
 │   │   ├── services/            # ✅ 8 serviços de negócio implementados
 │   │   │   ├── base.service.ts
@@ -144,12 +147,13 @@ laudopericial/ (raiz do projeto)
 │   │   │   ├── rep.service.ts
 │   │   │   ├── placeholder.service.ts
 │   │   │   ├── template.service.ts
-│   │   │   └── laudo.service.ts
+│   │   │   ├── laudo.service.ts
+│   │   │   └── imagem.service.ts
 │   │   └── utils/               # ✅ Helpers globais (logger, etc.)
 │   ├── preload/                 # ✅ Bridge IPC segura (Context Bridge)
 │   ├── renderer/                # ✅ Frontend React (9 páginas)
 │   │   ├── components/          # ✅ ErrorBoundary, layout, shadcn/ui
-│   │   ├── pages/               # ✅ 9 páginas implementadas
+│   │   ├── pages/               # ✅ 10 páginas implementadas
 │   │   │   ├── AuthPage.tsx
 │   │   │   ├── DashboardPage.tsx
 │   │   │   ├── PerfilPage.tsx
@@ -158,7 +162,8 @@ laudopericial/ (raiz do projeto)
 │   │   │   ├── CabecalhoPage.tsx
 │   │   │   ├── REPsPage.tsx
 │   │   │   ├── PlaceholdersPage.tsx
-│   │   │   └── TemplatesPage.tsx
+│   │   │   ├── TemplatesPage.tsx
+│   │   │   └── LaudosPage.tsx
 │   │   ├── hooks/               # ✅ Custom hooks
 │   │   ├── lib/                 # ✅ Schemas Zod e validações
 │   │   └── styles/              # ✅ CSS Global, Tailwind, dark mode
@@ -365,17 +370,26 @@ interface ImagemLaudo {
 
 **Objetivo:** O motor de escrita e gestão de evidências.
 
-**✅ ANTECIPADO:**
+**✅ CONCLUÍDO (09/05/2026):**
 - [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
 - [x] Editor HTML com suporte a placeholders
 - [x] Tabela `configuracoes` (migration v8)
 - [x] Service `configuracao.service.ts` + handlers
+- [x] **Página Laudos (`LaudosPage`)** com editor multi-seção — cada seção do template é um TinyMCE independente
+- [x] **Integração TinyMCE** completa com 14 plugins (fontsize, fontfamily, fullscreen, preview, hr, subscript, superscript, blockquote, etc.)
+- [x] **Toolbar responsiva** — 2 linhas com `toolbar_mode: 'floating'` (overflow automático para "...")
+- [x] **Upload de imagens** via diálogo nativo Electron → salvas em `userData/imagens/<laudo_id>/`
+- [x] **Protocolo `laudo-img://`** registrado via `protocol.handle` para servir imagens locais
+- [x] **Serviço `imagem.service.ts`** — CRUD de imagens com cópia de arquivo
+- [x] **Handlers `imagem.handlers.ts`** — `imagem:pickAndUpload`, `findByLaudoId`, `delete`
+- [x] **Migration v14** — tabela `imagens_laudo` para compatibilidade com bancos existentes
+- [x] **CSP atualizado** — `img-src 'self' data: blob: laudo-img:`
 
 **⬜ PENDENTE:**
-- [ ] Integração customizada do **TinyMCE**.
 - [ ] Painel Lateral de Gestão de Imagens (Cards + Legendas).
 - [ ] Drag-and-Drop para reordenação de figuras.
 - [ ] Geração automática de seção "Figuras".
+- [ ] Snapshots/versões do laudo (máximo 3).
 
 ---
 

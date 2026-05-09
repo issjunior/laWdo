@@ -159,7 +159,7 @@ projeto/
 
 ### Sprint 4: Núcleo - Edição de Laudos 🔄 **PARCIAL**
 
-**✅ ANTECIPADO:**
+**✅ CONCLUÍDO:**
 
 - [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
 - [x] Editor HTML com suporte a placeholders
@@ -167,14 +167,20 @@ projeto/
 - [x] Service `configuracao.service.ts`
 - [x] Handlers IPC `configuracao.handlers.ts`
 - [x] Menu em Cadastros
+- [x] Página Laudos (`LaudosPage`) com editor multi-seção (09/05/2026)
+- [x] Integração TinyMCE: plugins completos, toolbar em 2 linhas, modo floating responsivo (09/05/2026)
+- [x] Suporte a Imagens/Ilustrações locais por laudo via diálogo nativo Electron (09/05/2026)
+- [x] Protocolo customizado `laudo-img://` para servir imagens locais (09/05/2026)
+- [x] Serviço `imagem.service.ts` + handlers `imagem.handlers.ts` (09/05/2026)
+- [x] Migration v14: tabela `imagens_laudo` (09/05/2026)
+- [x] CSP atualizado com `laudo-img:` (09/05/2026)
 
 **⬜ PENDENTES:**
 
-- [ ] Integração robusta com TinyMCE.
-- [ ]  **Snapshots** do Laudo (versões) no maximo 3 (três).
-- [ ] Suporte a Imagens/Ilustrações locais por laudo.
+- [ ] **Snapshots** do Laudo (versões) no máximo 3 (três).
 - [ ] Painel lateral de gestão de imagens.
 - [ ] Drag-and-drop para reordenação de figuras.
+- [ ] Geração automática de seção "Figuras".
 
 ### Sprint 5: Motor de Placeholders ✅ **COMPLETADA**
 
@@ -188,8 +194,7 @@ projeto/
 
 **⬜ PENDENTE (para Sprint 4):**
 
-- [ ] Interpretador de placeholders integrado ao TinyMCE
-- [ ] Menu suspenso no editor para inserção rápida de tags
+- [ ] Menu suspenso no editor para inserção rápida de tags (placeholders inseridos via comando TinyMCE)
 
 ### Sprint 6: Assistência IA (Opcional)
 
