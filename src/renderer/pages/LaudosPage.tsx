@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Save, ArrowLeft, Edit, Search } from 'lucide-react';
+import { Save, ArrowLeft, Edit, Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 
 interface LaudoItem {
@@ -29,6 +29,11 @@ interface LaudoItem {
   status_rep: string;
   tipo_exame_nome?: string;
   nome_envolvido?: string;
+}
+
+interface SecaoEditor {
+  titulo: string;
+  conteudo: string;
 }
 
 const statusBadge = (status: string) => {
@@ -50,12 +55,59 @@ function formatarData(iso: string | undefined): string {
   return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
+/** Decodifica entidades HTML (&Acirc; → Â, &amp; → &, etc.) usando o parser do navegador */
+function decodificarEntidadesHtml(texto: string): string {
+  const txt = document.createElement('textarea');
+  txt.innerHTML = texto;
+  return txt.value;
+}
+
+/** Faz o parse do HTML do laudo em seções independentes, usando <h2> como delimitador */
+function parseConteudoEmSecoes(html: string): SecaoEditor[] {
+  if (!html) return [{ titulo: 'Conteúdo', conteudo: '<p>&nbsp;</p>' }];
+
+  const regexH2 = /<h2[^>]*>(.*?)<\/h2>/gi;
+  const matches: { titulo: string; pos: number; endPos: number }[] = [];
+  let match;
+
+  while ((match = regexH2.exec(html)) !== null) {
+    matches.push({
+      titulo: decodificarEntidadesHtml(match[1].replace(/<[^>]*>/g, '').trim()),
+      pos: match.index,
+      endPos: match.index + match[0].length,
+    });
+  }
+
+  if (matches.length === 0) {
+    return [{ titulo: 'Conteúdo', conteudo: html }];
+  }
+
+  const secoes: SecaoEditor[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].endPos;
+    const end = i < matches.length - 1 ? matches[i + 1].pos : html.length;
+    const conteudo = html.substring(start, end).trim();
+    secoes.push({
+      titulo: matches[i].titulo,
+      conteudo: conteudo || '<p>&nbsp;</p>',
+    });
+  }
+
+  return secoes;
+}
+
+/** Reconstrói o HTML completo concatenando as seções */
+function reconstruirConteudo(secoes: SecaoEditor[]): string {
+  return secoes.map(s => `<h2>${s.titulo}</h2>\n${s.conteudo}`).join('\n');
+}
+
 export const LaudosPage: React.FC = () => {
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editando, setEditando] = useState<LaudoItem | null>(null);
-  const [conteudo, setConteudo] = useState('');
+  const [secoes, setSecoes] = useState<SecaoEditor[]>([]);
+  const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -89,14 +141,16 @@ export const LaudosPage: React.FC = () => {
 
   const handleEditar = (laudo: LaudoItem) => {
     setEditando(laudo);
-    setConteudo(laudo.conteudo || '');
+    setSecoes(parseConteudoEmSecoes(laudo.conteudo || ''));
+    setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
   };
 
   const handleVoltar = () => {
     setEditando(null);
-    setConteudo('');
+    setSecoes([]);
+    setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
   };
@@ -108,6 +162,7 @@ export const LaudosPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
+      const conteudo = reconstruirConteudo(secoes);
       const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudo);
       if (r.success) {
         setSuccess('Laudo salvo com sucesso!');
@@ -126,7 +181,19 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  // Modo editor
+  const toggleSecao = (idx: number) => {
+    setSecoesColapsadas(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  const atualizarConteudoSecao = (idx: number, novoConteudo: string) => {
+    setSecoes(prev => {
+      const novas = [...prev];
+      novas[idx] = { ...novas[idx], conteudo: novoConteudo };
+      return novas;
+    });
+  };
+
+  // Modo editor com múltiplas seções
   if (editando) {
     return (
       <div className="container mx-auto p-4 md:p-6 space-y-6">
@@ -149,6 +216,9 @@ export const LaudosPage: React.FC = () => {
           </div>
         </div>
 
+        {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+        {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
+
         <Card>
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -162,16 +232,29 @@ export const LaudosPage: React.FC = () => {
               {statusBadge(editando.status)}
             </div>
           </CardHeader>
-          <CardContent>
-            {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
-            {success && <Alert className="mb-4 bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
-
-            <TinyMceEditor
-              value={conteudo}
-              onChange={setConteudo}
-              height={600}
-              placeholder="Escreva o conteúdo do laudo..."
-            />
+          <CardContent className="space-y-3">
+            {secoes.map((secao, idx) => (
+              <div key={idx} className="border rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => toggleSecao(idx)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 rounded-t-lg transition-colors"
+                >
+                  <h3 className="text-base font-semibold">{secao.titulo}</h3>
+                  {secoesColapsadas[idx] ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                </button>
+                {!secoesColapsadas[idx] && (
+                  <div className="px-4 pb-4">
+                    <TinyMceEditor
+                      value={secao.conteudo}
+                      onChange={val => atualizarConteudoSecao(idx, val)}
+                      height={400}
+                      placeholder={`Escreva o conteúdo de "${secao.titulo}"...`}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>

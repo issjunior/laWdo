@@ -527,7 +527,7 @@ export const REPsPage: React.FC = () => {
               <Section title="Dados da Solicitação" description="Informações principais da requisição." icon={<FileText size={14} />}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="numero">Nº da REP *<HelpIcon text="Formato XXX.XXX-AAAA. Ex: 000.000-2026" /></Label>
+                    <Label htmlFor="numero">Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></Label>
                     <Input
                       id="numero"
                       required
@@ -581,7 +581,7 @@ export const REPsPage: React.FC = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="template_id">Template<HelpIcon text="Define a estrutura e seções do laudo. Selecione um tipo de exame para ver os templates." /></Label>
+                    <Label htmlFor="template_id">Template<HelpIcon text="Selecione 'Não definido' para não criar o laudo automaticamente." /></Label>
                     <Select
                       disabled={!formData.tipo_exame_id || templatesVinculados.length === 0}
                       value={formData.template_id || undefined}
