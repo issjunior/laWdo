@@ -122,7 +122,9 @@ export interface IpcAPI {
 
   // Laudos
   laudo: {
+    findAll: () => Promise<UserResponse>;
     findByRepId: (repId: string) => Promise<UserResponse>;
+    updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
   };
 }
 
@@ -214,6 +216,8 @@ const ALLOWED_CHANNELS = new Set([
 
   // Laudos
   'laudo:findByRepId',
+  'laudo:findAll',
+  'laudo:updateConteudo',
 ]);
 
 // Expor API segura para o renderer
@@ -540,7 +544,9 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   laudo: {
+    findAll: () => ipcRenderer.invoke('laudo:findAll'),
     findByRepId: (repId: string) => ipcRenderer.invoke('laudo:findByRepId', repId),
+    updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
   },
 } satisfies IpcAPI);
 

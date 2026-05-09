@@ -22,4 +22,38 @@ export const registerLaudoHandlers = (): void => {
       };
     }
   });
+
+  /**
+   * Listar todos os laudos com dados da REP e template
+   */
+  ipcMain.handle('laudo:findAll', async () => {
+    try {
+      const laudos = await laudoService.findAllComRep();
+      return { success: true, data: laudos };
+    } catch (error) {
+      logError('Erro ao buscar todos os laudos', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+      };
+    }
+  });
+
+  /**
+   * Atualizar conteúdo HTML de um laudo
+   */
+  ipcMain.handle('laudo:updateConteudo', async (_event, laudoId: string, conteudo: string) => {
+    try {
+      if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
+      if (typeof conteudo !== 'string') return { success: false, error: 'Conteúdo inválido' };
+      const laudo = await laudoService.updateConteudo(laudoId, conteudo);
+      return { success: true, data: laudo };
+    } catch (error) {
+      logError('Erro ao atualizar conteúdo do laudo', { laudoId, error });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+      };
+    }
+  });
 };

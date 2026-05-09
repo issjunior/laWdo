@@ -78,6 +78,57 @@ export class LaudoService extends BaseService<LaudoRow> {
     }
   }
 
+  /** Listar todos os laudos com dados da REP e template */
+  async findAllComRep(): Promise<
+    Array<
+      LaudoRow & {
+        rep_numero: string;
+        template_nome: string;
+        status_rep: string;
+        tipo_exame_nome?: string;
+        nome_envolvido?: string;
+      }
+    >
+  > {
+    try {
+      const sql = `
+        SELECT
+          l.*,
+          r.numero AS rep_numero,
+          r.status AS status_rep,
+          r.nome_envolvido,
+          t.nome AS template_nome,
+          te.nome AS tipo_exame_nome
+        FROM laudos l
+        JOIN reps r ON r.id = l.rep_id
+        LEFT JOIN templates t ON t.id = l.template_id
+        LEFT JOIN tipos_exame te ON te.id = r.tipo_exame_id
+        ORDER BY l.updated_at DESC
+      `;
+      return await executeQuery<any>(sql);
+    } catch (error) {
+      logError('Erro ao buscar laudos com REPs', error);
+      throw error;
+    }
+  }
+
+  /** Atualizar conteúdo HTML do laudo */
+  async updateConteudo(id: string, conteudo: string): Promise<LaudoRow> {
+    try {
+      const sql = `
+        UPDATE laudos
+        SET conteudo = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `;
+      await executeNonQuery(sql, [conteudo, id]);
+      const rows = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [id]);
+      return rows[0];
+    } catch (error) {
+      logError('Erro ao atualizar conteúdo do laudo', error);
+      throw error;
+    }
+  }
+
   /** Deletar laudo vinculado a uma REP (usado antes de excluir a REP) */
   async deletarPorRepId(repId: string): Promise<void> {
     try {

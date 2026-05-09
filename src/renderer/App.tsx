@@ -9,6 +9,7 @@ const CabecalhoPage = lazy(() => import('@/pages/CabecalhoPage').then(m => ({ de
 const REPsPage = lazy(() => import('@/pages/REPsPage').then(m => ({ default: m.REPsPage })));
 const PlaceholdersPage = lazy(() => import('@/pages/PlaceholdersPage').then(m => ({ default: m.PlaceholdersPage })));
 const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then(m => ({ default: m.TemplatesPage })));
+const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default: m.LaudosPage })));
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -25,6 +26,7 @@ import {
   LogOut,
   FileText,
   Puzzle,
+  ScrollText,
 } from 'lucide-react';
 import './styles/globals.css';
 
@@ -260,6 +262,17 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = 
         />
 
         <NavSection
+          label="Laudos"
+          emoji="📝"
+          icon={<ScrollText size={16} />}
+          items={[
+            { path: '/laudos', label: 'Editor de Laudos', icon: <ScrollText size={15} /> },
+          ]}
+          currentPath={currentPath}
+          collapsed={collapsed}
+        />
+
+        <NavSection
           label="Configurações"
           emoji="⚙️"
           icon={<Settings size={16} />}
@@ -351,6 +364,7 @@ const App = () => {
                 <Route path="/reps" element={<REPsPage />} />
                 <Route path="/placeholders" element={<PlaceholdersPage />} />
                 <Route path="/templates" element={<TemplatesPage />} />
+                <Route path="/laudos" element={<LaudosPage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </Suspense>
