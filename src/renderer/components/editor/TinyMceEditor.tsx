@@ -8,6 +8,8 @@ interface TinyMceEditorProps {
   placeholder?: string;
   /** ID do laudo para upload de imagens. Se ausente, usa base64 (templates/cabeçalho). */
   laudoId?: string;
+  /** ID único para a instância do editor (necessário com múltiplos editores na mesma página) */
+  editorId?: string;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
@@ -16,6 +18,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
   height = 300,
   placeholder,
   laudoId,
+  editorId,
 }) => {
   const editorRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -23,6 +26,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
   return (
     <div className={ready ? '' : 'opacity-0'}>
       <Editor
+        id={editorId}
         tinymceScriptSrc="./tinymce/tinymce.min.js"
         onInit={(_evt, editor) => {
           editorRef.current = editor;
@@ -41,6 +45,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
           skin_url: './tinymce/skins/ui/oxide',
           content_css: './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
+          toolbar_mode: 'floating',
           image_advtab: true,
           image_title: true,
           plugins: [
@@ -72,13 +77,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
             'pagebreak',
             'help',
           ],
-          toolbar:
+          toolbar: [
             'undo redo | blocks fontsize fontfamily forecolor backcolor | ' +
-            'bold italic underline strikethrough subscript superscript | ' +
+              'bold italic underline strikethrough subscript superscript',
             'alignleft aligncenter alignright alignjustify | ' +
-            'bullist numlist outdent indent | ' +
-            'blockquote hr table link image | ' +
-            'fullscreen preview | removeformat code help',
+              'bullist numlist outdent indent | ' +
+              'blockquote hr table link image | ' +
+              'fullscreen preview | removeformat code help',
+          ],
           content_style: `
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

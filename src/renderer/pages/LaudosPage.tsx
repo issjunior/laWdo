@@ -246,6 +246,7 @@ export const LaudosPage: React.FC = () => {
                 {!secoesColapsadas[idx] && (
                   <div className="px-4 pb-4">
                     <TinyMceEditor
+                      editorId={`secao-${idx}`}
                       value={secao.conteudo}
                       onChange={val => atualizarConteudoSecao(idx, val)}
                       height={400}
