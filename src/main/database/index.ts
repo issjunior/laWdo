@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 13;
+const CURRENT_SCHEMA_VERSION = 14;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -25,6 +25,13 @@ export const setupDatabase = async (): Promise<void> => {
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
       logInfo(`Diretório de dados criado: ${DB_DIR}`);
+    }
+
+    // Garantir que o diretório de imagens existe
+    const imagensDir = path.join(DB_DIR, 'imagens');
+    if (!fs.existsSync(imagensDir)) {
+      fs.mkdirSync(imagensDir, { recursive: true });
+      logInfo(`Diretório de imagens criado: ${imagensDir}`);
     }
 
     // Verificar se o arquivo de banco de dados existe
@@ -863,6 +870,32 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       logInfo('Migration v13: tipo_exame_id nullable + Template "Não definido" criado');
     } catch (error) {
       logError('Erro ao aplicar migration versão 13', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 14: Garantir tabela imagens_laudo para bancos existentes
+  if (fromVersion < 14) {
+    try {
+      await executeNonQuery(`
+        CREATE TABLE IF NOT EXISTS imagens_laudo (
+          id TEXT PRIMARY KEY,
+          laudo_id TEXT NOT NULL,
+          caminho TEXT NOT NULL,
+          legenda TEXT NOT NULL,
+          numero_figura INTEGER NOT NULL,
+          sequencia INTEGER NOT NULL DEFAULT 0,
+          latitude REAL,
+          longitude REAL,
+          data_captura DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (laudo_id) REFERENCES laudos(id)
+        )
+      `);
+      await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo ON imagens_laudo(laudo_id)');
+      logInfo('Migration v14: Tabela imagens_laudo criada/verificada');
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 14', error);
       throw error;
     }
   }

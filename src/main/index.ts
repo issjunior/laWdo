@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, globalShortcut, protocol, net } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
@@ -19,6 +19,14 @@ if (squirrelStartup) {
 if (squirrelStartup) {
   app.quit();
 }
+
+// Registrar protocolo customizado laudo-img:// para servir imagens locais
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'laudo-img',
+    privileges: { standard: true, secure: true, bypassCSP: true, supportFetchAPI: true },
+  },
+]);
 
 // Variável global para a janela principal
 let mainWindow: BrowserWindow | null = null;
@@ -92,6 +100,13 @@ app.whenReady().then(async () => {
 
     // Registrar handlers IPC
     registerIpcHandlers();
+
+    // Registrar protocolo laudo-img:// para servir imagens do userData
+    protocol.handle('laudo-img', request => {
+      const url = new URL(request.url);
+      const filePath = path.join(app.getPath('userData'), 'imagens', url.host, url.pathname.replace(/^\//, ''));
+      return net.fetch(`file:///${filePath.replace(/\\/g, '/')}`);
+    });
 
     // Criar janela
     createWindow();

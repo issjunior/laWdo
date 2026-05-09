@@ -9,6 +9,7 @@ import { registerRepHandlers } from './handlers/rep.handlers.js';
 import { registerPlaceholderHandlers } from './handlers/placeholder.handlers.js';
 import { registerTemplateHandlers } from './handlers/template.handlers.js';
 import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
+import { registerImagemHandlers } from './handlers/imagem.handlers.js';
 import { userService } from '../services/user.service.js';
 
 /**
@@ -48,6 +49,7 @@ export const registerIpcHandlers = (): void => {
   registerPlaceholderHandlers();
   registerTemplateHandlers();
   registerLaudoHandlers();
+  registerImagemHandlers();
 
   logInfo('Handlers IPC registrados com sucesso');
 };

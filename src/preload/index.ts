@@ -126,6 +126,11 @@ export interface IpcAPI {
     findByRepId: (repId: string) => Promise<UserResponse>;
     updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
   };
+  imagem: {
+    pickAndUpload: (laudoId: string) => Promise<UserResponse>;
+    findByLaudoId: (laudoId: string) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -218,6 +223,11 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:findByRepId',
   'laudo:findAll',
   'laudo:updateConteudo',
+
+  // Imagens
+  'imagem:pickAndUpload',
+  'imagem:findByLaudoId',
+  'imagem:delete',
 ]);
 
 // Expor API segura para o renderer
@@ -547,6 +557,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findAll: () => ipcRenderer.invoke('laudo:findAll'),
     findByRepId: (repId: string) => ipcRenderer.invoke('laudo:findByRepId', repId),
     updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
+  },
+
+  imagem: {
+    pickAndUpload: (laudoId: string) => ipcRenderer.invoke('imagem:pickAndUpload', laudoId),
+    findByLaudoId: (laudoId: string) => ipcRenderer.invoke('imagem:findByLaudoId', laudoId),
+    delete: (id: string) => ipcRenderer.invoke('imagem:delete', id),
   },
 } satisfies IpcAPI);
 

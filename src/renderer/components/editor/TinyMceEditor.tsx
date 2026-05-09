@@ -6,6 +6,8 @@ interface TinyMceEditorProps {
   onChange: (html: string) => void;
   height?: number;
   placeholder?: string;
+  /** ID do laudo para upload de imagens. Se ausente, usa base64 (templates/cabeçalho). */
+  laudoId?: string;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
@@ -13,6 +15,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
   onChange,
   height = 300,
   placeholder,
+  laudoId,
 }) => {
   const editorRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -32,22 +35,50 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
           height,
           menubar: false,
           placeholder,
+          promotion: false,
+          branding: false,
+          statusbar: false,
           skin_url: './tinymce/skins/ui/oxide',
           content_css: './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
+          image_advtab: true,
+          image_title: true,
           plugins: [
-            'anchor', 'autolink', 'charmap', 'codesample', 'emoticons', 'image',
-            'link', 'lists', 'media', 'searchreplace', 'table', 'visualblocks',
-            'wordcount', 'code',
+            'anchor',
+            'autolink',
+            'charmap',
+            'codesample',
+            'emoticons',
+            'image',
+            'link',
+            'lists',
+            'media',
+            'searchreplace',
+            'table',
+            'visualblocks',
+            'wordcount',
+            'code',
+            'fullscreen',
+            'preview',
+            'hr',
+            'fontsize',
+            'fontfamily',
+            'subscript',
+            'superscript',
+            'blockquote',
+            'nonbreaking',
+            'visualchars',
+            'insertdatetime',
+            'pagebreak',
+            'help',
           ],
           toolbar:
-            'undo redo | blocks | ' +
-            'bold italic underline strikethrough | ' +
-            'forecolor backcolor | ' +
+            'undo redo | blocks fontsize fontfamily forecolor backcolor | ' +
+            'bold italic underline strikethrough subscript superscript | ' +
             'alignleft aligncenter alignright alignjustify | ' +
             'bullist numlist outdent indent | ' +
-            'table link image | ' +
-            'removeformat | code',
+            'blockquote hr table link image | ' +
+            'fullscreen preview | removeformat code help',
           content_style: `
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -56,23 +87,48 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
               padding: 12px;
             }
             .placeholder-tag {
-              background: #e8f0fe;
+              background-color: #e8f0fe;
               color: #1a73e8;
-              padding: 1px 4px;
-              border-radius: 3px;
-              font-family: monospace;
-              font-size: 13px;
+              border-radius: 4px;
+              padding: 2px 6px;
+              font-weight: 500;
+              user-select: all;
+              cursor: default;
+            }
+            img {
+              max-width: 100%;
+              height: auto;
             }
           `,
-          promotion: false,
-          branding: false,
-          statusbar: false,
-          // Placeholder insertion via custom setup
-          setup: (editor) => {
-            editor.addCommand('insertPlaceholder', (tag: string) => {
-              editor.insertContent(
-                `<span class="placeholder-tag" contenteditable="false" data-placeholder="${tag}">{{${tag}}}</span>&nbsp;`
-              );
+
+          // ─── Upload de imagens ───────────────────────────
+          // Se laudoId existe, usa diálogo nativo + protocolo customizado.
+          // Caso contrário (templates, cabeçalho), fallback para base64 padrão.
+          ...(laudoId
+            ? {
+                file_picker_callback: (callback: any, _value: any, meta: any) => {
+                  if (meta.filetype === 'image') {
+                    window.ipcAPI.imagem
+                      .pickAndUpload(laudoId)
+                      .then(r => {
+                        if (r.success && r.data) {
+                          callback(r.data.url, { title: r.data.legenda, alt: r.data.legenda });
+                        }
+                      })
+                      .catch(() => {
+                        // Silencioso: usuário cancelou ou erro
+                      });
+                  }
+                },
+                automatic_uploads: true,
+              }
+            : {}),
+
+          // ─── Placeholder personalizado ───────────────────
+          setup: (editor: any) => {
+            editor.addCommand('insertPlaceholder', (_ui: any, placeholder: { chave: string }) => {
+              const html = `<span class="placeholder-tag" contenteditable="false" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
+              editor.insertContent(html);
             });
           },
         }}

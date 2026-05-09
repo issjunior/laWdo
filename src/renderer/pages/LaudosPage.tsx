@@ -250,6 +250,7 @@ export const LaudosPage: React.FC = () => {
                       onChange={val => atualizarConteudoSecao(idx, val)}
                       height={400}
                       placeholder={`Escreva o conteúdo de "${secao.titulo}"...`}
+                      laudoId={editando.id}
                     />
                   </div>
                 )}
