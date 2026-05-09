@@ -2,7 +2,7 @@
 
 ### 🐍 Python/Streamlit ➔ ⚛️ Electron + React
 
-## 📈 **STATUS ATUAL DO PROJETO** (07/05/2026)
+## 📈 **STATUS ATUAL DO PROJETO** (09/05/2026)
 
 ### ✅ **SPRINT 0: COMPLETA**
 
@@ -16,7 +16,7 @@
 
 - **Validação:** Schemas Zod para todas as entidades
 - **UI:** Componentes Shadcn/ui configurados
-- **Serviços:** 7 serviços de negócio implementados
+- **Serviços:** 8 serviços de negócio implementados
 
 ### ✅ **SPRINT 2: COMPLETA**
 
@@ -132,22 +132,24 @@ laudopericial/ (raiz do projeto)
 ├── src/
 │   ├── main/                    # ✅ Electron Main Process (Backend)
 │   │   ├── database/            # ✅ SQLite com schema v9 + migrations
-│   │   ├── ipc/                 # ✅ Handlers IPC (6 módulos)
-│   │   │   └── handlers/        # ✅ user, solicitante, tipo-exame, configuracao, rep, placeholder
+│   │   ├── ipc/                 # ✅ Handlers IPC (8 módulos)
+│   │   │   └── handlers/        # ✅ user, solicitante, tipo-exame, configuracao, rep, placeholder, template, laudo
 │   │   ├── security/            # ✅ Criptografia, Sanitização e Validação
-│   │   ├── services/            # ✅ 7 serviços de negócio implementados
+│   │   ├── services/            # ✅ 8 serviços de negócio implementados
 │   │   │   ├── base.service.ts
 │   │   │   ├── user.service.ts
 │   │   │   ├── solicitante.service.ts
 │   │   │   ├── tipo-exame.service.ts
 │   │   │   ├── configuracao.service.ts
 │   │   │   ├── rep.service.ts
-│   │   │   └── placeholder.service.ts
+│   │   │   ├── placeholder.service.ts
+│   │   │   ├── template.service.ts
+│   │   │   └── laudo.service.ts
 │   │   └── utils/               # ✅ Helpers globais (logger, etc.)
 │   ├── preload/                 # ✅ Bridge IPC segura (Context Bridge)
-│   ├── renderer/                # ✅ Frontend React (8 páginas)
+│   ├── renderer/                # ✅ Frontend React (9 páginas)
 │   │   ├── components/          # ✅ ErrorBoundary, layout, shadcn/ui
-│   │   ├── pages/               # ✅ 8 páginas implementadas
+│   │   ├── pages/               # ✅ 9 páginas implementadas
 │   │   │   ├── AuthPage.tsx
 │   │   │   ├── DashboardPage.tsx
 │   │   │   ├── PerfilPage.tsx
@@ -155,7 +157,8 @@ laudopericial/ (raiz do projeto)
 │   │   │   ├── TiposExamePage.tsx
 │   │   │   ├── CabecalhoPage.tsx
 │   │   │   ├── REPsPage.tsx
-│   │   │   └── PlaceholdersPage.tsx
+│   │   │   ├── PlaceholdersPage.tsx
+│   │   │   └── TemplatesPage.tsx
 │   │   ├── hooks/               # ✅ Custom hooks
 │   │   ├── lib/                 # ✅ Schemas Zod e validações
 │   │   └── styles/              # ✅ CSS Global, Tailwind, dark mode
@@ -370,7 +373,6 @@ interface ImagemLaudo {
 
 **⬜ PENDENTE:**
 - [ ] Integração customizada do **TinyMCE**.
-- [ ] Sistema de **Auto-save** (30s) e **Snapshots** (últimas 3 versões).
 - [ ] Painel Lateral de Gestão de Imagens (Cards + Legendas).
 - [ ] Drag-and-Drop para reordenação de figuras.
 - [ ] Geração automática de seção "Figuras".
@@ -395,7 +397,7 @@ interface ImagemLaudo {
 **Objetivo:** Inteligência na escrita de laudos.
 
 - [ ] Configuração de chaves de API (Groq/Gemini) com segurança.
-- [ ] Painel de Assistente Pareado: "Corrigir", "Melhorar", "Resumir".
+- [ ] Painel de Assistente Pareado: "Ortografia", "Reescrever", "Descrever Imagem".
 - [ ] Fallback: Ocultar funcionalidade se não houver chaves configuradas.
 
 ---

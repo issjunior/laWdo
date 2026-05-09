@@ -99,8 +99,8 @@ projeto/
 **✅ TAREFAS CONCLUÍDAS:**
 
 - [x] Validação Zod para todas as entidades.
-- [x] Handlers IPC específicos para operações de CRUD (6 entidades implementadas).
-- [x] Serviços de negócio (user, solicitante, tipo-exame, configuracao, rep, placeholder).
+- [x] Handlers IPC específicos para operações de CRUD (8 entidades implementadas).
+- [x] Serviços de negócio (user, solicitante, tipo-exame, configuracao, rep, placeholder, template, laudo).
 - [x] Integração Shadcn/ui com React Hook Form + Zod.
 - [x] Componentes UI básicos configurados (Button, Card, Input, Label, Form, Table, Dialog).
 - [x] Formulário de Perfil do Perito com validação completa.
@@ -109,7 +109,7 @@ projeto/
 
 **📊 DETALHES:** 
 - Schemas Zod criados para todas as entidades
-- 6 módulos de handlers IPC implementados
+- 8 módulos de handlers IPC implementados
 - Integração completa entre frontend e backend
 - Build pipeline funcional e testado
 - Ver relatório completo em `relatorio_sprint_1.md`

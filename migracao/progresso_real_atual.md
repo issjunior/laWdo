@@ -2,14 +2,14 @@
 
 ## Análise Detalhada do Estado Atual do Projeto
 
-**Data:** 07 de maio de 2026  
+**Data:** 09 de maio de 2026  
 **Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | 🔄 **SPRINT 4 PARCIAL**
 
 ---
 
 ## 🎯 **VISÃO GERAL**
 
-O projeto está significativamente mais avançado do que o planejamento original previa. As Sprints 0, 1, 2, 3 e 5 estão **completas**. A Sprint 4 (Edição de Laudos) teve o módulo de Cabeçalho antecipado. O sistema já possui **8 páginas funcionais**, **7 serviços de negócio** e **6 módulos de handlers IPC**.
+O projeto está significativamente mais avançado do que o planejamento original previa. As Sprints 0, 1, 2, 3 e 5 estão **completas**. A Sprint 4 (Edição de Laudos) teve o módulo de Cabeçalho antecipado. O sistema já possui **9 páginas funcionais**, **8 serviços de negócio** e **8 módulos de handlers IPC**.
 
 ---
 
@@ -108,6 +108,8 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 ### 7. **✅ SERVIÇOS DE NEGÓCIO IMPLEMENTADOS**
 
+- **8 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo
+
 #### `user.service.ts`
 - Autenticação com criptografia de senha (bcrypt + AES-256-GCM)
 - Cadastro de peritos com validação
@@ -144,7 +146,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 - Geração automática de UUID
 - Todas as entidades estendem este serviço
 
-### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (8 PÁGINAS)**
+### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (9 PÁGINAS)**
 
 | Página | Rota | Descrição |
 |---|---|---|
@@ -155,6 +157,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 | **CabecalhoPage** | `/cabecalho` | Editor HTML com placeholders para cabeçalho de laudos |
 | **REPsPage** | `/reps` | CRUD com formulário inline e campos condicionais |
 | **PlaceholdersPage** | `/placeholders` | CRUD de placeholders com instruções visuais colapsáveis |
+| **TemplatesPage** | `/templates` | Gerenciamento de templates de laudos por tipo de exame |
 | **PerfilPage** | `/perfil` | Perfil do perito com validação Zod |
 
 ---
@@ -165,9 +168,9 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 - **TypeScript:** ~5000+ linhas (estimado)
 - **Arquivos:** ~120+ arquivos criados/modificados
-- **Páginas:** 8 páginas implementadas
-- **Serviços:** 7 serviços de negócio
-- **Handlers IPC:** 6 módulos de handlers
+- **Páginas:** 9 páginas implementadas
+- **Serviços:** 8 serviços de negócio
+- **Handlers IPC:** 8 módulos de handlers
 
 ### **Testes Realizados:**
 
@@ -333,7 +336,7 @@ npm run format
 
 ## 🎉 **CONSIDERAÇÕES FINAIS**
 
-O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3 e 5 estão **completas**, com a Sprint 4 já tendo o módulo de Cabeçalho antecipado. O sistema possui 8 páginas funcionais, 7 serviços de negócio e autenticação obrigatória.
+O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3 e 5 estão **completas**, com a Sprint 4 já tendo o módulo de Cabeçalho antecipado. O sistema possui 9 páginas funcionais, 8 serviços de negócio e autenticação obrigatória.
 
 **Progresso estimado:** ~75% do projeto completo
 
@@ -343,4 +346,4 @@ O projeto está **significativamente adiantado** em relação ao plano original.
 
 **Equipe de Migração**  
 Polícia Científica do Paraná  
-07/05/2026
+09/05/2026

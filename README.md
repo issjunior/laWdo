@@ -114,11 +114,11 @@ A migração está organizada em 10 sprints no diretório `migracao/`.
 
 ## 📊 Status Atual
 
-**Data:** 07 de maio de 2026  
+**Data:** 09 de maio de 2026  
 **Status:** ✅ Sprints 0, 1, 2, 3 e 5 completas | 🔄 Sprint 4 parcial  
 **Progresso:** ~75% do projeto completo
 
-### Páginas Implementadas (8)
+### Páginas Implementadas (9)
 
 | Página | Rota | Status |
 |---|---|---|
@@ -129,6 +129,7 @@ A migração está organizada em 10 sprints no diretório `migracao/`.
 | Cabeçalho | `/cabecalho` | ✅ |
 | REPs | `/reps` | ✅ |
 | Placeholders | `/placeholders` | ✅ |
+| Templates | `/templates` | ✅ |
 | Perfil | `/perfil` | ✅ |
 
 ## 📝 Documentação
@@ -162,9 +163,9 @@ Uso interno - Polícia Científica do Paraná.
 
 ### 🎉 Destaques Técnicos Recentes
 
-- ✅ **8 páginas implementadas:** Dashboard, Auth, Perfil, Solicitantes, TiposExame, Cabeçalho, REPs, Placeholders
-- ✅ **7 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder + BaseService
-- ✅ **6 módulos IPC:** Handlers para todas as entidades implementadas
+- ✅ **9 páginas implementadas:** Dashboard, Auth, Perfil, Solicitantes, TiposExame, Cabeçalho, REPs, Placeholders, Templates
+- ✅ **8 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo + BaseService
+- ✅ **8 módulos IPC:** Handlers para todas as entidades implementadas
 - ✅ **Build vitorioso:** Compilação TypeScript/Vite 100% funcional
 - ✅ **Migração ESM concluída:** Projeto migrado para ECMAScript Modules
 - ✅ **Login obrigatório:** AuthPage bloqueia acesso sem autenticação
