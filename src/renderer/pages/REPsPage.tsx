@@ -62,19 +62,19 @@ type REPFormErrors = Partial<Record<keyof REPFormData, string>>;
 function formatarNumeroREP(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
   const len = digits.length;
-  
+
   if (len <= 4) {
     return digits;
   }
-  
+
   const year = digits.slice(-4);
   const repNum = digits.slice(0, -4);
-  
+
   let formattedRepNum = repNum;
   if (repNum.length > 3) {
     formattedRepNum = repNum.slice(0, -3) + '.' + repNum.slice(-3);
   }
-  
+
   return `${formattedRepNum}-${year}`;
 }
 
@@ -254,7 +254,7 @@ export const REPsPage: React.FC = () => {
     setFormData(emptyForm());
     setSubmitting(false);
     setShowForm(true);
-    
+
     // Força a limpeza de estilos residuais do Radix UI (ex: Select) que podem travar a tela
     document.body.style.pointerEvents = '';
   };
@@ -268,7 +268,7 @@ export const REPsPage: React.FC = () => {
     setSuccess(null);
     setErrors({});
     setSubmitting(false);
-    
+
     // Força a limpeza de estilos residuais do Radix UI (ex: Select) que podem travar a tela
     document.body.style.pointerEvents = '';
   };
@@ -290,7 +290,7 @@ export const REPsPage: React.FC = () => {
       } catch {
         // Sem laudo vinculado — mantém vazio
       }
-      
+
       // Carregar os templates correspondentes imediatamente para garantir que o Select os tenha no primeiro render
       try {
         const templatesResp = await window.ipcAPI.template.findByTipoExame(rep.tipo_exame_id);
@@ -527,14 +527,14 @@ export const REPsPage: React.FC = () => {
               <Section title="Dados da Solicitação" description="Informações principais da requisição." icon={<FileText size={14} />}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="numero">Nº da REP *<HelpIcon text="Formato XXX.XXX-AAAA. Ex: 001.001-2025" /></Label>
+                    <Label htmlFor="numero">Nº da REP *<HelpIcon text="Formato XXX.XXX-AAAA. Ex: 000.000-2026" /></Label>
                     <Input
                       id="numero"
                       required
                       value={formData.numero}
                       onChange={e => updateField('numero', formatarNumeroREP(e.target.value))}
                       className={errors.numero ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="1-2025"
+                      placeholder="000.000-2026"
                     />
                     {errors.numero && <p className="text-xs text-red-600">{errors.numero}</p>}
                   </div>
