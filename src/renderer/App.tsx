@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -14,20 +14,10 @@ import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   Info,
-  ChevronDown,
-  LayoutDashboard,
-  FolderOpen,
-  Settings,
-  Users,
-  FlaskConical,
-  UserCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
   LogOut,
-  FileText,
-  Puzzle,
-  ScrollText,
 } from 'lucide-react';
+import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/layout/AppSidebar';
 import './styles/globals.css';
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
@@ -66,224 +56,72 @@ const Header: React.FC<{ onLogout: () => void; currentUser: any }> = ({ onLogout
   };
 
   return (
-    <header className="header">
-      <div className="header-content">
+    <header className="header flex items-center gap-4 px-4 h-16 shrink-0">
+      <SidebarTrigger className="-ml-1" />
+      <div className="header-content flex-1 flex justify-between items-center">
         <div className="logo">
-          <h1>🔍 laWdo</h1>
-          <p className="subtitle">Sistema de automatização de laudos periciais</p>
+          <h1 className="text-xl font-bold flex items-center gap-2">🔍 laWdo</h1>
         </div>
-        <div className="app-info flex items-center gap-2">
-          <span className="version">{currentUser?.name || currentUser?.username || 'Usuário'}</span>
-          <span className="version">v0.1.0</span>
-          <span className="status online">● Online</span>
-          <button
-            onClick={toggleDarkMode}
-            className="dark-mode-btn"
-            title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
-          >
-            {isDarkMode ? '☀️' : '🌙'}
-          </button>
-          <button onClick={onLogout} className="dark-mode-btn" title="Sair">
-            <LogOut size={16} />
-          </button>
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="system-info-btn" title="Informações do Sistema">
-                <Info size={18} />
-              </button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Informações do Sistema</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">⚡ Tecnologias</h3>
-                  <ul className="space-y-1 text-sm">
-                    <li>✅ Electron + Vite + TypeScript</li>
-                    <li>✅ React + Shadcn/ui</li>
-                    <li>✅ SQLite (local)</li>
-                    <li>✅ React Hook Form + Zod</li>
-                    <li>🚀 Handlers IPC específicos</li>
-                  </ul>
+        <div className="app-info flex items-center gap-4">
+          <div className="flex flex-col items-end">
+            <span className="text-sm font-medium">{currentUser?.name || currentUser?.username || 'Usuário'}</span>
+            <span className="text-[10px] text-muted-foreground uppercase">v0.1.0 ● Online</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 hover:bg-accent rounded-md transition-colors"
+              title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
+            >
+              {isDarkMode ? '☀️' : '🌙'}
+            </button>
+            <button onClick={onLogout} className="p-2 hover:bg-destructive/10 hover:text-destructive rounded-md transition-colors" title="Sair">
+              <LogOut size={18} />
+            </button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <button className="p-2 hover:bg-accent rounded-md transition-colors" title="Informações do Sistema">
+                  <Info size={18} />
+                </button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Informações do Sistema</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">⚡ Tecnologias</h3>
+                    <ul className="space-y-1 text-sm">
+                      <li>✅ Electron + Vite + TypeScript</li>
+                      <li>✅ React + Shadcn/ui</li>
+                      <li>✅ SQLite (local)</li>
+                      <li>✅ React Hook Form + Zod</li>
+                      <li>🚀 Handlers IPC específicos</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">🔧 Sistema</h3>
+                    {appInfo ? (
+                      <div className="space-y-1 text-sm">
+                        <p><strong>Nome:</strong> {appInfo.name}</p>
+                        <p><strong>Versão:</strong> {appInfo.version}</p>
+                        <p><strong>Ambiente:</strong> {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Carregando informações...</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">🔧 Sistema</h3>
-                  {appInfo ? (
-                    <div className="space-y-1 text-sm">
-                      <p><strong>Nome:</strong> {appInfo.name}</p>
-                      <p><strong>Versão:</strong> {appInfo.version}</p>
-                      <p><strong>Ambiente:</strong> {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}</p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Carregando informações...</p>
-                  )}
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
     </header>
   );
 };
 
-interface NavSectionProps {
-  label: string;
-  emoji: string;
-  icon: React.ReactNode;
-  items: { path: string; label: string; icon: React.ReactNode }[];
-  currentPath: string;
-  collapsed: boolean;
-}
 
-const NavSection: React.FC<NavSectionProps> = ({ label, emoji, icon, items, currentPath, collapsed }) => {
-  const [open, setOpen] = useState(true);
-  const hasActive = items.some((i) => i.path === currentPath);
-
-  if (collapsed) {
-    return (
-      <div className="nav-section-collapsed">
-        {items.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={`nav-icon-btn${currentPath === item.path ? ' active' : ''}`}
-            title={item.label}
-          >
-            {item.icon}
-          </Link>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`nav-section${hasActive && !open ? ' has-active' : ''}`}>
-      <button className={`nav-section-header${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="nav-section-icon">{emoji}</span>
-        <span className="nav-section-label">{label}</span>
-        <ChevronDown size={14} className={`nav-section-chevron${open ? ' rotated' : ''}`} />
-      </button>
-
-      <div className={`nav-section-items${open ? ' open' : ''}`}>
-        {items.map((item) => (
-          <Link key={item.path} to={item.path} className={`nav-link${currentPath === item.path ? ' active' : ''}`}>
-            <span className="nav-link-icon">{item.icon}</span>
-            <span className="nav-link-label">{item.label}</span>
-            {currentPath === item.path && <span className="nav-link-indicator" />}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-interface NavItemProps {
-  path: string;
-  label: string;
-  emoji: string;
-  icon: React.ReactNode;
-  currentPath: string;
-  collapsed: boolean;
-}
-
-const NavItem: React.FC<NavItemProps> = ({ path, label, emoji, icon, currentPath, collapsed }) => {
-  const isActive = currentPath === path;
-
-  if (collapsed) {
-    return (
-      <div className="nav-section-collapsed">
-        <Link to={path} className={`nav-icon-btn${isActive ? ' active' : ''}`} title={label}>
-          {icon}
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <Link to={path} className={`nav-link solo${isActive ? ' active' : ''}`}>
-      <span className="nav-link-icon">{emoji}</span>
-      <span className="nav-link-label">{label}</span>
-      {isActive && <span className="nav-link-indicator" />}
-    </Link>
-  );
-};
-
-const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = ({ collapsed, onToggleCollapse }) => {
-  const { pathname: currentPath } = useLocation();
-
-  return (
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
-      <button
-        className="sidebar-collapse-btn"
-        onClick={onToggleCollapse}
-        title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-      >
-        {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-      </button>
-
-      <nav className="sidebar-nav">
-        {!collapsed && <p className="nav-divider-label">MENU</p>}
-
-        <NavItem
-          path="/"
-          label="Dashboard"
-          emoji="📊"
-          icon={<LayoutDashboard size={16} />}
-          currentPath={currentPath}
-          collapsed={collapsed}
-        />
-
-        <NavSection
-          label="Cadastro"
-          emoji="📁"
-          icon={<FolderOpen size={16} />}
-          items={[
-            { path: '/solicitantes', label: 'Solicitantes', icon: <Users size={15} /> },
-            { path: '/tipos-exame', label: 'Tipos de Exame', icon: <FlaskConical size={15} /> },
-            { path: '/cabecalho', label: 'Cabeçalho', icon: <FileText size={15} /> },
-            { path: '/placeholders', label: 'Placeholders', icon: <Puzzle size={15} /> },
-            { path: '/templates', label: 'Templates', icon: <FileText size={15} /> },
-          ]}
-          currentPath={currentPath}
-          collapsed={collapsed}
-        />
-
-        <NavSection
-          label="Requisições (REPs)"
-          emoji="📋"
-          icon={<FolderOpen size={16} />}
-          items={[
-            { path: '/reps', label: 'REPs', icon: <FolderOpen size={15} /> },
-          ]}
-          currentPath={currentPath}
-          collapsed={collapsed}
-        />
-
-        <NavSection
-          label="Laudos"
-          emoji="📝"
-          icon={<ScrollText size={16} />}
-          items={[
-            { path: '/laudos', label: 'Editor de Laudos', icon: <ScrollText size={15} /> },
-          ]}
-          currentPath={currentPath}
-          collapsed={collapsed}
-        />
-
-        <NavSection
-          label="Configurações"
-          emoji="⚙️"
-          icon={<Settings size={16} />}
-          items={[{ path: '/perfil', label: 'Perfil', icon: <UserCircle size={15} /> }]}
-          currentPath={currentPath}
-          collapsed={collapsed}
-        />
-      </nav>
-    </aside>
-  );
-};
 
 const Footer = () => (
   <footer className="footer">
@@ -298,17 +136,21 @@ const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; curren
   onLogout,
   currentUser,
 }) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
   return (
-    <div className="app">
-      <Header onLogout={onLogout} currentUser={currentUser} />
-      <div className="app-body">
-        <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <main className={`main-content ${sidebarCollapsed ? 'full-width' : ''}`}>{children}</main>
-      </div>
-      <Footer />
-    </div>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <div className="flex flex-col h-screen overflow-hidden bg-background">
+          <Header onLogout={onLogout} currentUser={currentUser} />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-[1600px] mx-auto">
+              {children}
+            </div>
+          </main>
+          <Footer />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 };
 
