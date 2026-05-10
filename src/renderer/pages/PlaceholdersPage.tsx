@@ -57,7 +57,8 @@ export const PlaceholdersPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Garantir seed antes de listar
+      // Garantir migração antes do seed
+      await window.ipcAPI.placeholder.migrateSistema();
       await window.ipcAPI.placeholder.seedSistema();
       const r = await window.ipcAPI.placeholder.findAll();
       if (r.success && r.data) {
@@ -346,10 +347,10 @@ export const PlaceholdersPage: React.FC = () => {
                   <span className="text-xs font-semibold text-amber-700 dark:text-amber-200 uppercase tracking-wide">O que você digita</span>
                 </div>
                 <div className="p-4 font-mono text-sm leading-relaxed bg-white dark:bg-gray-900">
-                  <p><span className="text-gray-400 dark:text-gray-500">REP nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_numero}}'}</span></p>
+                  <p><span className="text-gray-400 dark:text-gray-500">REP nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{numero_rep}}'}</span></p>
                   <p><span className="text-gray-400 dark:text-gray-500">Solicitante:</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{solicitante_nome}}'}</span></p>
-                  <p><span className="text-gray-400 dark:text-gray-500">Envolvido:</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_nome_envolvido}}'}</span></p>
-                  <p><span className="text-gray-400 dark:text-gray-500">BO nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_numero_bo}}'}</span> <span className="text-gray-400 dark:text-gray-500">— IP nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{rep_numero_ip}}'}</span></p>
+                  <p><span className="text-gray-400 dark:text-gray-500">Envolvido:</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{nome_envolvido}}'}</span></p>
+                  <p><span className="text-gray-400 dark:text-gray-500">BO nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{numero_bo}}'}</span> <span className="text-gray-400 dark:text-gray-500">— IP nº</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{numero_ip}}'}</span></p>
                   <p><span className="text-gray-400 dark:text-gray-500">Exame:</span> <span className="bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-200 px-1 rounded">{'{{tipo_exame_nome}}'}</span></p>
                 </div>
               </div>

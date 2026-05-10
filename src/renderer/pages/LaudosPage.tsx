@@ -119,6 +119,26 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     'LACRE_ENTRADA': repData.lacre_entrada || '',
     'LACRE_SAIDA': repData.lacre_saida || '',
 
+    // Sem prefixo (notação recomendada após migração)
+    'numero_rep': repData.numero || '',
+    'data_recebimento_rep': formatarData(repData.data_requisicao),
+    'tipo_solicitacao_rep': repData.tipo_solicitacao || '',
+    'numero_solicitacao_rep': repData.numero_documento || '',
+    'data_solicitacao_rep': repData.data_documento || '',
+    'autoridade_solicitante_rep': repData.autoridade_solicitante || '',
+    'nome_envolvido': repData.nome_envolvido || '',
+    'local_fato': repData.local_fato || '',
+    'latitude': repData.latitude != null ? String(repData.latitude) : '',
+    'longitude': repData.longitude != null ? String(repData.longitude) : '',
+    'data_acionamento_local': repData.data_acionamento || '',
+    'data_chegada_local': repData.data_chegada || '',
+    'data_saida_local': repData.data_saida || '',
+    'numero_bo': repData.numero_bo || '',
+    'numero_ip': repData.numero_ip || '',
+    'lacre_entrada': repData.lacre_entrada || '',
+    'lacre_saida': repData.lacre_saida || '',
+    'observacoes_rep': repData.observacoes || '',
+
     // Perito
     'perito.nome': perito?.nome || '',
     'perito.cargo': perito?.cargo || 'Perito Criminal',

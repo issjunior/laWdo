@@ -123,7 +123,7 @@ export const CabecalhoPage: React.FC = () => {
               {/* Inserir placeholders */}
               <div className="flex flex-wrap items-center gap-2 p-3 border rounded-lg bg-gray-50">
                 <span className="text-sm text-gray-600 font-medium mr-1">Placeholders:</span>
-                {['perito.nome', 'rep.numero', 'data_atual', 'laudo.numero', 'solicitante.nome'].map((tag) => (
+                {['perito.nome', 'numero_rep', 'data_atual', 'laudo.numero', 'solicitante.nome'].map((tag) => (
                   <button
                     key={tag}
                     onClick={() => {

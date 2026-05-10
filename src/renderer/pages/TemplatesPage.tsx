@@ -408,7 +408,7 @@ export const TemplatesPage: React.FC = () => {
       '{{perito.cargo}}': '<strong>Perito Criminal</strong>',
       '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
       '{{laudo.numero}}': '<strong>2026/00123</strong>',
-      '{{rep.numero}}': '<strong>321.654-2026</strong>',
+      '{{numero_rep}}': '<strong>321.654-2026</strong>',
       '{{solicitante.nome}}': '<strong>Delegacia de Polícia Civil</strong>',
       '{{template.nome}}': `<strong>${templateNome || '(sem nome)'}</strong>`,
       '{{tipo_exame.nome}}': `<strong>${tipoExameNome || '(não definido)'}</strong>`,

@@ -76,6 +76,16 @@ export const registerPlaceholderHandlers = (): void => {
     }
   });
 
+  ipcMain.handle('placeholder:migrateSistema', async () => {
+    try {
+      const result = await placeholderService.migrateSistema();
+      return { success: true, data: result, message: 'Migração de placeholders concluída' };
+    } catch (error) {
+      logError('Erro ao migrar placeholders do sistema', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
+  });
+
   ipcMain.handle('placeholder:seedSistema', async () => {
     try {
       await placeholderService.seedSistema();

@@ -109,6 +109,7 @@ export interface IpcAPI {
     update: (id: string, data: any) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     seedSistema: () => Promise<UserResponse>;
+    migrateSistema: () => Promise<UserResponse>;
   };
 
   // Templates
@@ -210,6 +211,7 @@ const ALLOWED_CHANNELS = new Set([
   'placeholder:create',
   'placeholder:update',
   'placeholder:delete',
+  'placeholder:migrateSistema',
   'placeholder:seedSistema',
 
   // Templates
@@ -542,6 +544,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     create: (data: any) => ipcRenderer.invoke('placeholder:create', data),
     update: (id: string, data: any) => ipcRenderer.invoke('placeholder:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('placeholder:delete', id),
+    migrateSistema: () => ipcRenderer.invoke('placeholder:migrateSistema'),
     seedSistema: () => ipcRenderer.invoke('placeholder:seedSistema'),
   },
 
