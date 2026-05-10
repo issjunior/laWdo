@@ -263,9 +263,9 @@ body.dark {
 
 /* ── Footer ── */
 .dark .footer {
-  background: #0c1322;
-  border-top: 1px solid #1e293b;
-  color: #8494a7;
+  background-color: var(--background);
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
 }
 
 /* ── Botões (.btn class-based) ── */

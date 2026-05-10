@@ -168,7 +168,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-sidebar-border">
+      <SidebarFooter className="p-4">
          <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
             <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
                 <UserCircle className="h-5 w-5 text-muted-foreground" />

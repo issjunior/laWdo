@@ -23,17 +23,10 @@ import {
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
 import './styles/globals.css';
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
-
-const Footer = () => (
-  <footer className="footer">
-    <div className="footer-content">
-      <p>© 2026 — laWdo</p>
-    </div>
-  </footer>
-);
 
 const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; currentUser: any }> = ({
   children,
