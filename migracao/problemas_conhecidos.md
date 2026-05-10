@@ -65,10 +65,30 @@ Warning: Module type of file:///postcss.config.js is not specified
 
 ---
 
+## 5. Placeholders não substituídos no PDF ✅ RESOLVIDO
+
+**Problema:** Ao gerar o PDF, placeholders inseridos via menu de contexto no TinyMCE apareciam como texto literal (`{{rep_numero}}`) em vez dos valores da REP.
+
+**Causa:** Duas falhas independentes:
+1. **Chaves divergentes** — seed do banco usa underscore (`rep_numero`), mapping no código usava ponto (`rep.numero`). Nenhuma chave casava.
+2. **Regex frágil** — detecção de spans por regex quebrava com modificações do TinyMCE no HTML (`data-mce-*`, reordenação de atributos).
+
+**Solução:**
+1. Adicionadas todas as 19 chaves com underscore ao mapping, alinhando com o seed do sistema
+2. Substituído regex por `DOMParser` + `querySelectorAll('span[data-placeholder]')` — opera na árvore DOM, imune a variações estruturais
+3. Adicionados placeholders de relacionamento (`solicitante_nome`, `tipo_exame_nome`, `tipo_exame_codigo`) com busca assíncrona
+
+**Status:** ✅ **RESOLVIDO** - Implementado em 10/05/2026
+
+**Referência:** `migracao/placeholder/placeholder-pdf-bug.md` (diagnóstico completo)
+
+---
+
 ## Histórico de Problemas Resolução
 
 | Data | Problema | Status | Notas |
 |------|----------|--------|-------|
+| 10/05/2026 | Placeholders não substituídos no PDF | ✅ RESOLVIDO | Chaves underscore vs ponto + regex frágil; DOMParser + alinhamento |
 | 03/05/2026 | Criptografia telefone/email | ✅ RESOLVIDO | Implementada política de criptografia seletiva |
 | 03/05/2026 | Roteamento 404 Electron | ✅ RESOLVIDO | MigraçãoBrowserRouter → HashRouter |
 
