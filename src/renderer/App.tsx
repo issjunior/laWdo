@@ -12,9 +12,13 @@ const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then(m => ({ de
 const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default: m.LaudosPage })));
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import {
   Info,
   LogOut,
+  Github,
+  Mail,
 } from 'lucide-react';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
@@ -23,7 +27,13 @@ import './styles/globals.css';
 const AUTH_USER_KEY = 'lawdo_auth_user';
 
 const Header: React.FC<{ onLogout: () => void; currentUser: any }> = ({ onLogout, currentUser }) => {
-  const [appInfo, setAppInfo] = useState<{ version: string; name: string } | null>(null);
+  const [appInfo, setAppInfo] = useState<{
+    version: string;
+    name: string;
+    platform: string;
+    arch: string;
+    memory: string;
+  } | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
     return savedTheme === 'dark';
@@ -59,13 +69,9 @@ const Header: React.FC<{ onLogout: () => void; currentUser: any }> = ({ onLogout
     <header className="header flex items-center gap-4 px-4 h-16 shrink-0">
       <SidebarTrigger className="-ml-1" />
       <div className="header-content flex-1 flex justify-between items-center">
-        <div className="logo">
-          <h1 className="text-xl font-bold flex items-center gap-2">🔍 laWdo</h1>
-        </div>
         <div className="app-info flex items-center gap-4">
           <div className="flex flex-col items-end">
             <span className="text-sm font-medium">{currentUser?.name || currentUser?.username || 'Usuário'}</span>
-            <span className="text-[10px] text-muted-foreground uppercase">v0.1.0 ● Online</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -84,32 +90,85 @@ const Header: React.FC<{ onLogout: () => void; currentUser: any }> = ({ onLogout
                   <Info size={18} />
                 </button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="sm:max-w-[400px]">
                 <DialogHeader>
-                  <DialogTitle>Informações do Sistema</DialogTitle>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Info className="h-5 w-5 text-primary" />
+                    Suporte Técnico
+                  </DialogTitle>
                 </DialogHeader>
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2">⚡ Tecnologias</h3>
-                    <ul className="space-y-1 text-sm">
-                      <li>✅ Electron + Vite + TypeScript</li>
-                      <li>✅ React + Shadcn/ui</li>
-                      <li>✅ SQLite (local)</li>
-                      <li>✅ React Hook Form + Zod</li>
-                      <li>🚀 Handlers IPC específicos</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2">🔧 Sistema</h3>
-                    {appInfo ? (
-                      <div className="space-y-1 text-sm">
-                        <p><strong>Nome:</strong> {appInfo.name}</p>
-                        <p><strong>Versão:</strong> {appInfo.version}</p>
-                        <p><strong>Ambiente:</strong> {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}</p>
+                <div className="space-y-4 pt-2">
+                  {appInfo ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-muted-foreground">Nome da Aplicação</span>
+                        <span className="text-sm font-bold">laWdo</span>
                       </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Carregando informações...</p>
-                    )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-muted-foreground">Versão Atual</span>
+                        <Badge variant="default" className="bg-green-500 hover:bg-green-600">v{appInfo.version}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-muted-foreground">Ambiente</span>
+                        <Badge variant={import.meta.env.DEV ? "warning" : "success"} className="capitalize">
+                          {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-border">
+                        <span className="text-xs text-muted-foreground">Processador</span>
+                        <span className="text-xs font-mono">{appInfo.arch}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Plataforma</span>
+                        <span className="text-xs font-mono">{appInfo.platform}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Memória RAM</span>
+                        <span className="text-xs font-mono">{appInfo.memory}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      Carregando detalhes do suporte...
+                    </div>
+                  )}
+
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Canais de Contato</h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      <a
+                        href="https://github.com/issjunior/LaudoPericial"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors group"
+                      >
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20">
+                          <Github className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium">Repositório GitHub</span>
+                          <span className="text-[10px] text-muted-foreground">issjunior/LaudoPericial</span>
+                        </div>
+                      </a>
+                      <a
+                        href="mailto:izaias.santos@policiacientifica.pr.gov.br"
+                        className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors group"
+                      >
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20">
+                          <Mail className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium">Dúvidas e sugestões</span>
+                          <span className="text-[10px] text-muted-foreground">izaias.santos@policiacientifica.pr.gov.br</span>
+                        </div>
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-primary/5 p-3 border border-primary/10">
+                    <p className="text-[10px] text-center text-muted-foreground italic">
+                      Sistema desenvolvido para automatização de laudos periciais.
+                    </p>
                   </div>
                 </div>
               </DialogContent>

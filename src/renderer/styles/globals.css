@@ -119,8 +119,9 @@ body.dark {
 
 /* ── Header ── */
 .dark .header {
-  background: linear-gradient(135deg, #0c1322 0%, #16263e 100%);
-  border-bottom-color: #1e293b;
+  background-color: var(--background);
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
 }
 
 /* ── Sidebar ── */
@@ -545,12 +546,12 @@ body.dark {
 
 /* Header */
 .header {
-  background: linear-gradient(135deg, #1a2e4a 0%, #1e4080 100%);
-  color: white;
-  padding: 12px 24px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  background-color: var(--background);
+  color: var(--foreground);
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
   z-index: 10;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .header-content {

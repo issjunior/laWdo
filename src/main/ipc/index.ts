@@ -66,13 +66,18 @@ const registerUtilityHandlers = (): void => {
 
   // Informações do aplicativo
   ipcMain.handle('get-app-info', async () => {
+    const os = await import('os');
+    const totalMemoryGB = Math.round(os.totalmem() / (1024 * 1024 * 1024));
+
     return {
       version: '0.1.0',
       name: 'Laudo Pericial PCP',
       electron: process.versions.electron,
       node: process.versions.node,
       chrome: process.versions.chrome,
-      platform: process.platform,
+      platform: process.platform === 'win32' ? 'Windows' : process.platform,
+      arch: process.arch === 'x64' ? '64-bit' : process.arch,
+      memory: `${totalMemoryGB} GB`,
     };
   });
 };

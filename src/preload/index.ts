@@ -18,7 +18,13 @@ import type {
 export interface IpcAPI {
   // Utilitários
   ping: () => Promise<string>;
-  getAppInfo: () => Promise<{ version: string; name: string }>;
+  getAppInfo: () => Promise<{
+    version: string;
+    name: string;
+    platform: string;
+    arch: string;
+    memory: string;
+  }>;
 
   // Logs
   logInfo: (message: string) => void;
