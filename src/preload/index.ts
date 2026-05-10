@@ -22,6 +22,7 @@ export interface IpcAPI {
     version: string;
     name: string;
     platform: string;
+    osVersion: string;
     arch: string;
     memory: string;
   }>;

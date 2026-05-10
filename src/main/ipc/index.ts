@@ -76,6 +76,7 @@ const registerUtilityHandlers = (): void => {
       node: process.versions.node,
       chrome: process.versions.chrome,
       platform: process.platform === 'win32' ? 'Windows' : process.platform,
+      osVersion: os.version(),
       arch: process.arch === 'x64' ? '64-bit' : process.arch,
       memory: `${totalMemoryGB} GB`,
     };
