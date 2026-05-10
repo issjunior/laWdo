@@ -1,17 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -20,9 +12,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, X, FileText, User, Clock3, Link2, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Edit, Trash2, X, FileText, User, Clock3, Link2, AlertTriangle } from 'lucide-react';
 import { type REP } from '@/lib/validators';
 import { z } from 'zod';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table/data-table';
+import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 
 interface REPFormData {
   numero: string;
@@ -182,10 +178,20 @@ const HelpIcon: React.FC<{ text: string }> = ({ text }) => (
   </span>
 );
 
+function formatarDataBR(iso: string | undefined): string {
+  if (!iso) return '-';
+  try {
+    const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
+    if (isNaN(data.getTime())) return iso;
+    return data.toLocaleDateString('pt-BR');
+  } catch {
+    return iso;
+  }
+}
+
 export const REPsPage: React.FC = () => {
   const [reps, setReps] = useState<REP[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingRep, setEditingRep] = useState<REP | null>(null);
   const [formData, setFormData] = useState<REPFormData>(emptyForm);
@@ -233,12 +239,6 @@ export const REPsPage: React.FC = () => {
       }
     })();
   }, [formData.tipo_exame_id, showForm]);
-
-  const filteredREPs = reps.filter(r =>
-    r.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (r.nome_envolvido || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (r.numero_bo || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const tipoExameSelecionado = formData.tipo_exame_id
     ? tiposExame.find(t => t.id === formData.tipo_exame_id)
@@ -420,19 +420,107 @@ export const REPsPage: React.FC = () => {
     }
   };
 
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      'Pendente': 'bg-yellow-100 text-yellow-800',
-      'Em Andamento': 'bg-blue-100 text-blue-800',
-      'Concluído': 'bg-green-100 text-green-800',
-    };
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status}
-      </span>
-    );
-  };
+  const columnDefs = useMemo<ColumnDef<REP>[]>(() => [
+    {
+      accessorKey: 'data_requisicao',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Data de recebimento" />
+      ),
+      cell: ({ row }) => formatarDataBR(row.getValue('data_requisicao')),
+    },
+    {
+      accessorKey: 'numero',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Nº REP" />
+      ),
+      cell: ({ row }) => <span className="font-medium">{row.getValue('numero')}</span>,
+    },
+    {
+      accessorKey: 'tipo_solicitacao',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Tipo de Solicitação" />
+      ),
+      cell: ({ row }) => row.getValue('tipo_solicitacao') || '-',
+    },
+    {
+      accessorKey: 'numero_documento',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Nº da Solicitação" />
+      ),
+      cell: ({ row }) => (
+        <span className="max-w-[200px] truncate block">{row.getValue('numero_documento') || '-'}</span>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => {
+        const status = (row.getValue('status') as string) || 'Pendente';
+        const variantMap: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+          'Pendente': 'secondary',
+          'Em Andamento': 'default',
+          'Concluído': 'outline',
+        };
+        return <Badge variant={variantMap[status] || 'secondary'}>{status}</Badge>;
+      },
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      header: () => <span className="sr-only">Ações</span>,
+      cell: ({ row }) => {
+        const rep = row.original;
+        return (
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => handleEditar(rep)} aria-label={`Editar REP ${rep.numero}`}>
+              <Edit size={14} />
+            </Button>
+            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(rep.id)} aria-label={`Excluir REP ${rep.numero}`}>
+              <Trash2 size={14} />
+            </Button>
+          </div>
+        );
+      },
+    },
+  ], [handleEditar, handleDelete]);
 
+  // Tabela sem form
+  if (!showForm) {
+    return (
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Requisições (REPs)</h1>
+            <p className="text-muted-foreground mt-1">Gerencie as requisições de exame pericial</p>
+          </div>
+          <Button onClick={handleNovo} className="flex items-center gap-2 w-full sm:w-auto"><Plus size={16} /> Nova REP</Button>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Lista de REPs</CardTitle>
+            <CardDescription>{reps.length} registro(s)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+            ) : (
+              <DataTable
+                columns={columnDefs}
+                data={reps}
+                searchColumn="numero"
+                searchPlaceholder="Buscar por REP, envolvido ou BO..."
+              />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Modo formulário
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
@@ -442,61 +530,6 @@ export const REPsPage: React.FC = () => {
         </div>
         <Button onClick={handleNovo} className="flex items-center gap-2 w-full sm:w-auto"><Plus size={16} /> Nova REP</Button>
       </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
-            <div>
-              <CardTitle>Lista de REPs</CardTitle>
-              <CardDescription>{filteredREPs.length} registro(s) encontrado(s)</CardDescription>
-            </div>
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar por REP, envolvido ou BO..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8" />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-            : filteredREPs.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">{searchTerm ? 'Nenhuma REP encontrada.' : 'Nenhuma REP cadastrada.'}</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nº REP</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Nº da Solicitação</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredREPs.map(rep => (
-                    <TableRow key={rep.id}>
-                      <TableCell className="font-medium">{rep.numero}</TableCell>
-                      <TableCell>{rep.data_requisicao ? rep.data_requisicao.split('T')[0].split('-').reverse().join('/') : '-'}</TableCell>
-                      <TableCell>{rep.tipo_solicitacao || '-'}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{rep.numero_documento || '-'}</TableCell>
-                      <TableCell>{statusBadge(rep.status || 'Pendente')}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditar(rep)} aria-label={`Editar REP ${rep.numero}`}>
-                            <Edit size={14} />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(rep.id)} aria-label={`Excluir REP ${rep.numero}`}>
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-        </CardContent>
-      </Card>
 
       {showForm && (
         <Card>

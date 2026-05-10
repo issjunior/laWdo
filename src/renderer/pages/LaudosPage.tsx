@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -11,7 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Save, ArrowLeft, Edit, Search, ChevronDown, ChevronRight, Eye, Printer, FileText } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, Printer, FileText } from 'lucide-react';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table/data-table';
+import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import {
   Dialog,
@@ -194,27 +198,15 @@ interface LaudoItem {
   status_rep: string;
   tipo_exame_nome?: string;
   nome_envolvido?: string;
+  data_requisicao?: string;
+  tipo_solicitacao?: string;
+  numero_documento?: string;
 }
 
 interface SecaoEditor {
   titulo: string;
   conteudo: string;
 }
-
-const statusBadge = (status: string) => {
-  const colors: Record<string, string> = {
-    'Em andamento': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    'Concluído': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    'Entregue': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-  };
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
-      {status}
-    </span>
-  );
-};
-
-
 
 /** Decodifica entidades HTML (&Acirc; → Â, &amp; → &, etc.) usando o parser do navegador */
 function decodificarEntidadesHtml(texto: string): string {
@@ -265,7 +257,6 @@ function reconstruirConteudo(secoes: SecaoEditor[]): string {
 export const LaudosPage: React.FC = () => {
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [editando, setEditando] = useState<LaudoItem | null>(null);
   const [secoes, setSecoes] = useState<SecaoEditor[]>([]);
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
@@ -313,12 +304,6 @@ export const LaudosPage: React.FC = () => {
       editor.execCommand('insertPlaceholder', false, { chave });
     }
   };
-
-  const filtered = laudos.filter(l =>
-    l.rep_numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (l.template_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (l.nome_envolvido || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const handlePreview = async () => {
     if (!editando) return;
@@ -464,6 +449,99 @@ export const LaudosPage: React.FC = () => {
     });
   };
 
+  const laudoColumns = useMemo<ColumnDef<LaudoItem>[]>(() => [
+    {
+      accessorKey: 'data_requisicao',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Data de recebimento" />
+      ),
+      cell: ({ row }) => formatarData(row.getValue('data_requisicao')),
+    },
+    {
+      accessorKey: 'rep_numero',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Nº REP" />
+      ),
+      cell: ({ row }) => <span className="font-medium">{row.getValue('rep_numero')}</span>,
+    },
+    {
+      accessorKey: 'tipo_solicitacao',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Tipo de Solicitação" />
+      ),
+      cell: ({ row }) => row.getValue('tipo_solicitacao') || '-',
+    },
+    {
+      accessorKey: 'numero_documento',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Nº da Solicitação" />
+      ),
+      cell: ({ row }) => (
+        <span className="max-w-[200px] truncate block">{row.getValue('numero_documento') || '-'}</span>
+      ),
+    },
+    {
+      accessorKey: 'template_nome',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Template" />
+      ),
+      cell: ({ row }) => row.getValue('template_nome') || 'Não definido',
+    },
+    {
+      accessorKey: 'tipo_exame_nome',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Tipo de Exame" />
+      ),
+      cell: ({ row }) => row.getValue('tipo_exame_nome') || '-',
+    },
+    {
+      accessorKey: 'nome_envolvido',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Envolvido" />
+      ),
+      cell: ({ row }) => (
+        <span className="max-w-[150px] truncate block">{row.getValue('nome_envolvido') || '-'}</span>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => {
+        const status = row.getValue('status') as string;
+        const variantMap: Record<string, 'default' | 'secondary' | 'outline'> = {
+          'Em andamento': 'default',
+          'Concluído': 'outline',
+          'Entregue': 'secondary',
+        };
+        return <Badge variant={variantMap[status] || 'secondary'}>{status}</Badge>;
+      },
+    },
+    {
+      accessorKey: 'data_inicio',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Início" />
+      ),
+      cell: ({ row }) => formatarData(row.getValue('data_inicio')),
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      header: () => <span className="sr-only">Ações</span>,
+      cell: ({ row }) => {
+        const laudo = row.original;
+        return (
+          <div className="flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => handleEditar(laudo)} aria-label={`Editar laudo da REP ${laudo.rep_numero}`}>
+              <Edit size={14} />
+            </Button>
+          </div>
+        );
+      },
+    },
+  ], [handleEditar]);
+
   // Modo editor com múltiplas seções
   if (editando) {
     return (
@@ -503,7 +581,7 @@ export const LaudosPage: React.FC = () => {
                   {editando.data_conclusao ? ` &middot; Concluído em ${formatarData(editando.data_conclusao)}` : ''}
                 </CardDescription>
               </div>
-              {statusBadge(editando.status)}
+              <Badge variant={editando.status === 'Concluído' ? 'outline' : editando.status === 'Entregue' ? 'secondary' : 'default'}>{editando.status}</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -612,62 +690,27 @@ export const LaudosPage: React.FC = () => {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
-            <div>
-              <CardTitle>Laudos em Andamento</CardTitle>
-              <CardDescription>{filtered.length} laudo(s) encontrado(s)</CardDescription>
-            </div>
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por REP, template ou envolvido..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-          </div>
+          <CardTitle>Laudos em Andamento</CardTitle>
+          <CardDescription>{laudos.length} laudo(s)</CardDescription>
         </CardHeader>
         <CardContent>
           {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
 
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchTerm ? 'Nenhum laudo encontrado.' : 'Nenhum laudo cadastrado. Crie uma REP com template vinculado para gerar um laudo automaticamente.'}
-            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nº REP</TableHead>
-                  <TableHead>Template</TableHead>
-                  <TableHead>Tipo de Exame</TableHead>
-                  <TableHead>Envolvido</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Início</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map(laudo => (
-                  <TableRow key={laudo.id}>
-                    <TableCell className="font-medium">{laudo.rep_numero}</TableCell>
-                    <TableCell>{laudo.template_nome || 'Não definido'}</TableCell>
-                    <TableCell>{laudo.tipo_exame_nome || '-'}</TableCell>
-                    <TableCell className="max-w-[150px] truncate">{laudo.nome_envolvido || '-'}</TableCell>
-                    <TableCell>{statusBadge(laudo.status)}</TableCell>
-                    <TableCell>{formatarData(laudo.data_inicio)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleEditar(laudo)} aria-label={`Editar laudo da REP ${laudo.rep_numero}`}>
-                        <Edit size={14} />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={laudoColumns}
+              data={laudos}
+              searchColumn="rep_numero"
+              searchPlaceholder="Buscar por REP, template ou envolvido..."
+              initialColumnVisibility={{
+                template_nome: false,
+                tipo_exame_nome: false,
+                nome_envolvido: false,
+                data_inicio: false,
+              }}
+            />
           )}
         </CardContent>
       </Card>
