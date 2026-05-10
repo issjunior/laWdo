@@ -52,9 +52,9 @@ function formatarData(iso: string | undefined): string {
   }
 }
 
-const aplicarPlaceholders = (html: string, repData: any) => {
+const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solicitanteNome?: string; tipoExameNome?: string; tipoExameCodigo?: string }) => {
   if (!repData) return html;
-  
+
   // Buscar usuário logado para placeholders de perito
   let perito: any = null;
   try {
@@ -62,11 +62,9 @@ const aplicarPlaceholders = (html: string, repData: any) => {
     if (userJson) perito = JSON.parse(userJson);
   } catch (e) {}
 
-  let resultado = html;
-  
   // Mapeamento exaustivo para cobrir diferentes estilos de tag
   const mapping: Record<string, string> = {
-    // Prefixados com rep.
+    // Prefixados com rep. (compatibilidade com placeholders antigos)
     'rep.numero': repData.numero || '',
     'rep.documento': repData.numero_documento || '',
     'rep.envolvido': repData.nome_envolvido || '',
@@ -78,7 +76,33 @@ const aplicarPlaceholders = (html: string, repData: any) => {
     'rep.requisicao': repData.numero_documento || '',
     'rep.lacre_entrada': repData.lacre_entrada || '',
     'rep.lacre_saida': repData.lacre_saida || '',
-    
+
+    // Prefixados com rep_ (notação do banco de dados — seed do sistema)
+    'rep_numero': repData.numero || '',
+    'rep_data_requisicao': formatarData(repData.data_requisicao),
+    'rep_prazo': repData.prazo || '',
+    'rep_tipo_solicitacao': repData.tipo_solicitacao || '',
+    'rep_numero_documento': repData.numero_documento || '',
+    'rep_data_documento': repData.data_documento || '',
+    'rep_autoridade_solicitante': repData.autoridade_solicitante || '',
+    'rep_nome_envolvido': repData.nome_envolvido || '',
+    'rep_local_fato': repData.local_fato || '',
+    'rep_latitude': repData.latitude != null ? String(repData.latitude) : '',
+    'rep_longitude': repData.longitude != null ? String(repData.longitude) : '',
+    'rep_data_acionamento': repData.data_acionamento || '',
+    'rep_data_chegada': repData.data_chegada || '',
+    'rep_data_saida': repData.data_saida || '',
+    'rep_numero_bo': repData.numero_bo || '',
+    'rep_numero_ip': repData.numero_ip || '',
+    'rep_lacre_entrada': repData.lacre_entrada || '',
+    'rep_lacre_saida': repData.lacre_saida || '',
+    'rep_observacoes': repData.observacoes || '',
+
+    // Relacionamentos (preenchidos via extraContext em handlePreview)
+    'solicitante_nome': extraContext?.solicitanteNome || '',
+    'tipo_exame_nome': extraContext?.tipoExameNome || '',
+    'tipo_exame_codigo': extraContext?.tipoExameCodigo || '',
+
     // Sem prefixo (compatibilidade)
     'NUMERO_REP': repData.numero || '',
     'NUMERO': repData.numero || '',
@@ -95,40 +119,64 @@ const aplicarPlaceholders = (html: string, repData: any) => {
     'perito.nome': perito?.nome || '',
     'perito.cargo': perito?.cargo || 'Perito Criminal',
     'perito.especialidade': perito?.especialidade || '',
-    
+
     // Geral
     'data_atual': new Date().toLocaleDateString('pt-BR'),
   };
 
-  // 1. Primeiro passo: Substituir spans do TinyMCE (que contêm o atributo data-placeholder)
-  Object.entries(mapping).forEach(([chave, valor]) => {
-    const displayValue = valor || '';
-    // Escapar pontos e outros caracteres para o Regex
-    const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
-    // Regex para encontrar o span inteiro do placeholder
-    const spanRegex = new RegExp(`<span[^>]*data-placeholder="\\{\\{${escapedChave}\\}\\}"[^>]*>[\\s\\S]*?<\\/span>`, 'gi');
-    resultado = resultado.replace(spanRegex, displayValue);
-  });
+  try {
+    // 1. Usar DOMParser para encontrar e substituir spans de placeholder
+    //    (muito mais robusto que regex, imune a modificações do TinyMCE no HTML)
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
 
-  // 2. Segundo passo: Substituir tags de texto puro {{...}} que sobraram ou foram digitadas manualmente
-  Object.entries(mapping).forEach(([chave, valor]) => {
-    const displayValue = valor || '';
-    const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
-    resultado = resultado.replace(tagRegex, displayValue);
-  });
+    const placeholderSpans = doc.querySelectorAll('span[data-placeholder]');
+    placeholderSpans.forEach(span => {
+      const rawPlaceholder = span.getAttribute('data-placeholder') || '';
+      // Extrai a chave de dentro de {{...}}
+      const chaveMatch = rawPlaceholder.match(/^\{\{(.+)\}\}$/);
+      if (chaveMatch) {
+        const chave = chaveMatch[1];
+        const valor = mapping[chave];
+        if (valor !== undefined) {
+          // Substitui o span inteiro pelo valor (texto puro)
+          span.replaceWith(valor);
+        }
+      }
+    });
 
-  // 3. Terceiro passo: Se houver campos rep.X, tentar substituir também {{X}}
-  Object.entries(mapping).forEach(([chave, valor]) => {
-    if (chave.startsWith('rep.')) {
-      const semPrefixo = chave.replace('rep.', '');
-      const tagRegex = new RegExp(`\\{\\{${semPrefixo}\\}\\}`, 'gi');
-      resultado = resultado.replace(tagRegex, valor || '');
-    }
-  });
+    // Serializa de volta, extraindo apenas o conteúdo do <body>
+    let resultado = doc.body.innerHTML;
 
-  return resultado;
+    // 2. Substituir tags de texto puro {{...}} que sobraram ou foram digitadas manualmente
+    Object.entries(mapping).forEach(([chave, valor]) => {
+      const displayValue = valor || '';
+      const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
+      resultado = resultado.replace(tagRegex, displayValue);
+    });
+
+    // 3. Se houver campos rep.X, tentar substituir também {{X}}
+    Object.entries(mapping).forEach(([chave, valor]) => {
+      if (chave.startsWith('rep.')) {
+        const semPrefixo = chave.replace('rep.', '');
+        const tagRegex = new RegExp(`\\{\\{${semPrefixo}\\}\\}`, 'gi');
+        resultado = resultado.replace(tagRegex, valor || '');
+      }
+    });
+
+    return resultado;
+  } catch {
+    // Fallback: se DOMParser falhar (muito raro), tentar só regex textual
+    let resultado = html;
+    Object.entries(mapping).forEach(([chave, valor]) => {
+      const displayValue = valor || '';
+      const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
+      resultado = resultado.replace(tagRegex, displayValue);
+    });
+    return resultado;
+  }
 };
 
 interface LaudoItem {
@@ -285,6 +333,31 @@ export const LaudosPage: React.FC = () => {
         return;
       }
 
+      // 1a. Buscar dados de relacionamento para placeholders como solicitante_nome, tipo_exame_nome
+      const repData = rRep.data;
+      let solicitanteNome = '';
+      let tipoExameNome = '';
+      let tipoExameCodigo = '';
+
+      if (repData.solicitante_id) {
+        try {
+          const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
+          if (rSol.success && rSol.data) {
+            solicitanteNome = rSol.data.nome || '';
+          }
+        } catch { /* silencioso: placeholder fica vazio */ }
+      }
+
+      if (repData.tipo_exame_id) {
+        try {
+          const rTipo = await window.ipcAPI.tipoExame.findById(repData.tipo_exame_id);
+          if (rTipo.success && rTipo.data) {
+            tipoExameNome = rTipo.data.nome || '';
+            tipoExameCodigo = rTipo.data.codigo || '';
+          }
+        } catch { /* silencioso: placeholder fica vazio */ }
+      }
+
       // 2. Buscar cabeçalho das configurações
       let cabecalhoHtml = '';
       const headerResult = await window.ipcAPI.configuracao.obter('cabecalho_laudo');
@@ -302,8 +375,12 @@ export const LaudosPage: React.FC = () => {
         : '';
       fullHtml += secoesHtml;
 
-      // 4. Aplicar placeholders
-      const htmlProcessado = aplicarPlaceholders(fullHtml, rRep.data);
+      // 4. Aplicar placeholders (incluindo relacionamentos)
+      const htmlProcessado = aplicarPlaceholders(fullHtml, repData, {
+        solicitanteNome,
+        tipoExameNome,
+        tipoExameCodigo,
+      });
 
       // 5. Gerar PDF via IPC (usando o mesmo handler do template)
       const result = await window.ipcAPI.template.previewPDF(htmlProcessado);
