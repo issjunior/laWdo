@@ -548,7 +548,6 @@ body.dark {
 .header {
   background-color: var(--background);
   color: var(--foreground);
-  padding: 0 24px;
   border-bottom: 1px solid var(--border);
   z-index: 10;
   transition: background-color 0.2s, border-color 0.2s;
@@ -558,8 +557,6 @@ body.dark {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 1400px;
-  margin: 0 auto;
   width: 100%;
 }
 
