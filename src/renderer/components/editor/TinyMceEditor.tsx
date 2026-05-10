@@ -43,10 +43,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
           branding: false,
           statusbar: true,
           resize: 'vertical',
+          contextmenu: false,
           skin_url: './tinymce/skins/ui/oxide',
           content_css: './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
-          toolbar_mode: 'floating',
+          toolbar_mode: 'wrap',
           image_advtab: true,
           image_title: true,
           plugins: [
@@ -78,14 +79,13 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
             'pagebreak',
             'help',
           ],
-          toolbar: [
+          toolbar:
             'undo redo | blocks fontsize fontfamily forecolor backcolor | ' +
-              'bold italic underline strikethrough subscript superscript',
+            'bold italic underline strikethrough subscript superscript | ' +
             'alignleft aligncenter alignright alignjustify | ' +
-              'bullist numlist outdent indent | ' +
-              'blockquote hr table link image | ' +
-              'fullscreen preview | removeformat code help',
-          ],
+            'bullist numlist outdent indent | ' +
+            'blockquote hr table link image | ' +
+            'fullscreen preview | removeformat code help',
           content_style: `
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -131,11 +131,29 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
               }
             : {}),
 
-          // ─── Placeholder personalizado ───────────────────
+          // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: any) => {
             editor.addCommand('insertPlaceholder', (_ui: any, placeholder: { chave: string }) => {
               const html = `<span class="placeholder-tag" contenteditable="false" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
+            });
+
+            // Repassar evento de clique direito para o componente pai (Shadcn ContextMenu)
+            editor.on('contextmenu', (e: any) => {
+              const container = editor.getContainer();
+              const rect = container.getBoundingClientRect();
+              
+              // Criar evento de clique direito simulado no documento pai
+              const newEvent = new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+                clientX: e.clientX + rect.left,
+                clientY: e.clientY + rect.top,
+              });
+              
+              // Disparar no container para que o ContextMenuTrigger capture
+              container.dispatchEvent(newEvent);
             });
           },
         }}

@@ -11,8 +11,125 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Save, ArrowLeft, Edit, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { Save, ArrowLeft, Edit, Search, ChevronDown, ChevronRight, Eye, Printer, FileText } from 'lucide-react';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+
+interface Placeholder {
+  id: string;
+  chave: string;
+  descricao: string;
+  categoria: string;
+}
+
+// ... (seções de interfaces mantidas)
+
+function formatarData(iso: string | undefined): string {
+  if (!iso) return '-';
+  try {
+    const data = new Date(iso);
+    if (isNaN(data.getTime())) return iso;
+    return data.toLocaleDateString('pt-BR');
+  } catch {
+    return iso;
+  }
+}
+
+const aplicarPlaceholders = (html: string, repData: any) => {
+  if (!repData) return html;
+  
+  // Buscar usuário logado para placeholders de perito
+  let perito: any = null;
+  try {
+    const userJson = localStorage.getItem('lawdo_auth_user');
+    if (userJson) perito = JSON.parse(userJson);
+  } catch (e) {}
+
+  let resultado = html;
+  
+  // Mapeamento exaustivo para cobrir diferentes estilos de tag
+  const mapping: Record<string, string> = {
+    // Prefixados com rep.
+    'rep.numero': repData.numero || '',
+    'rep.documento': repData.numero_documento || '',
+    'rep.envolvido': repData.nome_envolvido || '',
+    'rep.local': repData.local_fato || '',
+    'rep.bo': repData.numero_bo || '',
+    'rep.ip': repData.numero_ip || '',
+    'rep.data': formatarData(repData.data_requisicao),
+    'rep.autoridade': repData.autoridade_solicitante || '',
+    'rep.requisicao': repData.numero_documento || '',
+    'rep.lacre_entrada': repData.lacre_entrada || '',
+    'rep.lacre_saida': repData.lacre_saida || '',
+    
+    // Sem prefixo (compatibilidade)
+    'NUMERO_REP': repData.numero || '',
+    'NUMERO': repData.numero || '',
+    'NOME_ENVOLVIDO': repData.nome_envolvido || '',
+    'ENVOLVIDO': repData.nome_envolvido || '',
+    'LOCAL_FATO': repData.local_fato || '',
+    'BO': repData.numero_bo || '',
+    'IP': repData.numero_ip || '',
+    'AUTORIDADE': repData.autoridade_solicitante || '',
+    'LACRE_ENTRADA': repData.lacre_entrada || '',
+    'LACRE_SAIDA': repData.lacre_saida || '',
+
+    // Perito
+    'perito.nome': perito?.nome || '',
+    'perito.cargo': perito?.cargo || 'Perito Criminal',
+    'perito.especialidade': perito?.especialidade || '',
+    
+    // Geral
+    'data_atual': new Date().toLocaleDateString('pt-BR'),
+  };
+
+  // 1. Primeiro passo: Substituir spans do TinyMCE (que contêm o atributo data-placeholder)
+  Object.entries(mapping).forEach(([chave, valor]) => {
+    const displayValue = valor || '';
+    // Escapar pontos e outros caracteres para o Regex
+    const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Regex para encontrar o span inteiro do placeholder
+    const spanRegex = new RegExp(`<span[^>]*data-placeholder="\\{\\{${escapedChave}\\}\\}"[^>]*>[\\s\\S]*?<\\/span>`, 'gi');
+    resultado = resultado.replace(spanRegex, displayValue);
+  });
+
+  // 2. Segundo passo: Substituir tags de texto puro {{...}} que sobraram ou foram digitadas manualmente
+  Object.entries(mapping).forEach(([chave, valor]) => {
+    const displayValue = valor || '';
+    const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
+    resultado = resultado.replace(tagRegex, displayValue);
+  });
+
+  // 3. Terceiro passo: Se houver campos rep.X, tentar substituir também {{X}}
+  Object.entries(mapping).forEach(([chave, valor]) => {
+    if (chave.startsWith('rep.')) {
+      const semPrefixo = chave.replace('rep.', '');
+      const tagRegex = new RegExp(`\\{\\{${semPrefixo}\\}\\}`, 'gi');
+      resultado = resultado.replace(tagRegex, valor || '');
+    }
+  });
+
+  return resultado;
+};
 
 interface LaudoItem {
   id: string;
@@ -49,11 +166,7 @@ const statusBadge = (status: string) => {
   );
 };
 
-function formatarData(iso: string | undefined): string {
-  if (!iso) return '-';
-  const partes = iso.split('T')[0].split('-');
-  return `${partes[2]}/${partes[1]}/${partes[0]}`;
-}
+
 
 /** Decodifica entidades HTML (&Acirc; → Â, &amp; → &, etc.) usando o parser do navegador */
 function decodificarEntidadesHtml(texto: string): string {
@@ -112,6 +225,18 @@ export const LaudosPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+  const [carregandoPreview, setCarregandoPreview] = useState(false);
+  const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
+
+  const carregarPlaceholders = useCallback(async () => {
+    const r = await window.ipcAPI.placeholder.findAll();
+    if (r.success && r.data) {
+      setPlaceholders(r.data);
+    }
+  }, []);
+
   const carregarLaudos = useCallback(async () => {
     try {
       setLoading(true);
@@ -131,13 +256,78 @@ export const LaudosPage: React.FC = () => {
 
   useEffect(() => {
     carregarLaudos();
-  }, [carregarLaudos]);
+    carregarPlaceholders();
+  }, [carregarLaudos, carregarPlaceholders]);
+
+  const inserirPlaceholder = (editorId: string, chave: string) => {
+    const editor = (window as any).tinymce?.get(editorId);
+    if (editor) {
+      editor.execCommand('insertPlaceholder', false, { chave });
+    }
+  };
 
   const filtered = laudos.filter(l =>
     l.rep_numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (l.template_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (l.nome_envolvido || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handlePreview = async () => {
+    if (!editando) return;
+    try {
+      setCarregandoPreview(true);
+      setError(null);
+      
+      // 1. Buscar dados da REP para placeholders
+      const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
+      if (!rRep.success || !rRep.data) {
+        setError('Erro ao carregar dados da REP para o preview');
+        return;
+      }
+
+      // 2. Buscar cabeçalho das configurações
+      let cabecalhoHtml = '';
+      const headerResult = await window.ipcAPI.configuracao.obter('cabecalho_laudo');
+      if (headerResult.success && headerResult.data) {
+        cabecalhoHtml = headerResult.data;
+      }
+
+      // 3. Montar HTML completo
+      const secoesHtml = secoes
+        .map((s, i) => `<h2>${i + 1}. ${s.titulo}</h2>${s.conteudo}`)
+        .join('\n');
+
+      let fullHtml = cabecalhoHtml
+        ? `<div class="cabecalho" style="border-bottom:2px solid #000;padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
+        : '';
+      fullHtml += secoesHtml;
+
+      // 4. Aplicar placeholders
+      const htmlProcessado = aplicarPlaceholders(fullHtml, rRep.data);
+
+      // 5. Gerar PDF via IPC (usando o mesmo handler do template)
+      const result = await window.ipcAPI.template.previewPDF(htmlProcessado);
+      if (result.success && result.data) {
+        const byteChars = atob(result.data);
+        const byteNums = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteNums[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        
+        if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+        setPreviewBlobUrl(url);
+        setPreviewOpen(true);
+      } else {
+        setError(result.error || 'Erro ao gerar PDF do laudo');
+      }
+    } catch (e: any) {
+      setError('Erro ao gerar preview: ' + e.message);
+    } finally {
+      setCarregandoPreview(false);
+    }
+  };
 
   const handleEditar = (laudo: LaudoItem) => {
     setEditando(laudo);
@@ -153,6 +343,10 @@ export const LaudosPage: React.FC = () => {
     setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl('');
+    }
   };
 
   const handleSalvar = async () => {
@@ -210,7 +404,10 @@ export const LaudosPage: React.FC = () => {
             <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
               <ArrowLeft size={16} /> Voltar
             </Button>
-            <Button onClick={handleSalvar} disabled={salvando} className="flex items-center gap-2">
+            <Button variant="secondary" onClick={handlePreview} disabled={carregandoPreview || salvando} className="flex items-center gap-2">
+              <Eye size={16} /> {carregandoPreview ? 'Gerando PDF...' : 'Visualizar'}
+            </Button>
+            <Button onClick={handleSalvar} disabled={salvando || carregandoPreview} className="flex items-center gap-2">
               <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
@@ -243,22 +440,85 @@ export const LaudosPage: React.FC = () => {
                   <h3 className="text-base font-semibold">{secao.titulo}</h3>
                   {secoesColapsadas[idx] ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
                 </button>
-                {!secoesColapsadas[idx] && (
+                 {!secoesColapsadas[idx] && (
                   <div className="px-4 pb-4">
-                    <TinyMceEditor
-                      editorId={`secao-${idx}`}
-                      value={secao.conteudo}
-                      onChange={val => atualizarConteudoSecao(idx, val)}
-                      height={400}
-                      placeholder={`Escreva o conteúdo de "${secao.titulo}"...`}
-                      laudoId={editando.id}
-                    />
+                    <ContextMenu>
+                      <ContextMenuTrigger>
+                        <TinyMceEditor
+                          editorId={`secao-${idx}`}
+                          value={secao.conteudo}
+                          onChange={val => atualizarConteudoSecao(idx, val)}
+                          height={400}
+                          placeholder={`Escreva o conteúdo de "${secao.titulo}"...`}
+                          laudoId={editando.id}
+                        />
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="w-64">
+                        <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
+                        <ContextMenuSeparator />
+                        {Array.from(new Set(placeholders.map(p => p.categoria))).sort().map(cat => (
+                          <ContextMenuSub key={cat}>
+                            <ContextMenuSubTrigger>{cat || 'Outros'}</ContextMenuSubTrigger>
+                            <ContextMenuSubContent className="w-56">
+                              {placeholders
+                                .filter(p => p.categoria === cat)
+                                .sort((a, b) => a.chave.localeCompare(b.chave))
+                                .map(p => (
+                                  <ContextMenuItem
+                                    key={p.id}
+                                    onClick={() => inserirPlaceholder(`secao-${idx}`, p.chave)}
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
+                                      {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
+                                    </div>
+                                  </ContextMenuItem>
+                                ))}
+                            </ContextMenuSubContent>
+                          </ContextMenuSub>
+                        ))}
+                      </ContextMenuContent>
+                    </ContextMenu>
                   </div>
                 )}
               </div>
             ))}
           </CardContent>
         </Card>
+
+        {/* Modal de Visualização (Preview PDF) */}
+        <Dialog open={previewOpen} onOpenChange={(open) => {
+          if (!open && previewBlobUrl) {
+            URL.revokeObjectURL(previewBlobUrl);
+            setPreviewBlobUrl('');
+          }
+          setPreviewOpen(open);
+        }}>
+          <DialogContent className="max-w-[90vw] w-[1000px] h-[95vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-4 border-b">
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Pré-visualização do Laudo (PDF)
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 bg-slate-100 dark:bg-slate-800">
+              {carregandoPreview ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Gerando PDF...
+                </div>
+              ) : (
+                <iframe
+                  src={previewBlobUrl}
+                  className="w-full h-full border-0"
+                  title="Preview PDF"
+                />
+              )}
+            </div>
+            <div className="p-4 border-t flex justify-end gap-2 bg-background">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)}>Fechar</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
