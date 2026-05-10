@@ -96,8 +96,8 @@ export function AppSidebar() {
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Pericial</span>
           </div>
         </div>
-        <div className="hidden group-data-[collapsible=icon]:flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-           <span className="text-lg font-bold">L</span>
+        <div className="hidden group-data-[collapsible=icon]:flex h-8 w-8 items-center justify-start rounded-lg bg-primary text-primary-foreground p-1">
+           <span className="text-lg font-bold ml-1">L</span>
         </div>
       </SidebarHeader>
 
