@@ -204,6 +204,10 @@ export const REPsPage: React.FC = () => {
   const [criarLaudoSubmitting, setCriarLaudoSubmitting] = useState(false);
   const [repsComLaudo, setRepsComLaudo] = useState<Set<string>>(new Set());
 
+  // Estados para o Alert Dialog de exclusão
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteDialogRep, setDeleteDialogRep] = useState<REP | null>(null);
+
   const carregarREPs = useCallback(async () => {
     try {
       setLoading(true); setError(null);
@@ -351,12 +355,28 @@ export const REPsPage: React.FC = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta REP?')) return;
+  const handleDelete = (rep: REP) => {
+    setDeleteDialogRep(rep);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteDialogRep) return;
     try {
+      const id = deleteDialogRep.id;
       const r = await window.ipcAPI.rep.delete(id);
-      if (r.success) { await carregarREPs(); } else { setError(r.error || 'Erro ao excluir REP'); }
-    } catch (e: any) { setError('Erro ao excluir REP'); }
+      if (r.success) {
+        await carregarREPs();
+        setDeleteDialogOpen(false);
+        setDeleteDialogRep(null);
+      } else {
+        setError(r.error || 'Erro ao excluir REP');
+        setDeleteDialogOpen(false);
+      }
+    } catch (e: any) {
+      setError('Erro ao excluir REP');
+      setDeleteDialogOpen(false);
+    }
   };
 
   const handleCriarLaudo = (rep: REP) => {
@@ -546,7 +566,7 @@ export const REPsPage: React.FC = () => {
             <Button variant="ghost" size="sm" onClick={() => handleEditar(rep)} aria-label={`Editar REP ${rep.numero}`}>
               <Edit size={14} />
             </Button>
-            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(rep.id)} aria-label={`Excluir REP ${rep.numero}`}>
+            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(rep)} aria-label={`Excluir REP ${rep.numero}`}>
               <Trash2 size={14} />
             </Button>
           </div>
@@ -653,6 +673,33 @@ export const REPsPage: React.FC = () => {
               >
                 <Plus size={16} />
                 {criarLaudoSubmitting ? 'Criando...' : 'Criar Laudo'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de confirmação de exclusão */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Excluir REP
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                Ao excluir a REP de nº <span className="font-semibold text-foreground">{deleteDialogRep?.numero}</span> o laudo vinculado também será excluído automaticamente.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="pt-2 text-sm text-muted-foreground">
+              Esta ação não pode ser desfeita.
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteConfirm} className="flex items-center gap-2">
+                <Trash2 size={16} />
+                Excluir
               </Button>
             </div>
           </DialogContent>

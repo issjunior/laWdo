@@ -3,6 +3,7 @@ import { LaudoRow } from '../types/database.js';
 import { logError, logInfo } from '../utils/logger.js';
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { randomUUID } from 'crypto';
+import { imagemService } from './imagem.service.js';
 
 export class LaudoService extends BaseService<LaudoRow> {
   constructor() {
@@ -135,13 +136,27 @@ export class LaudoService extends BaseService<LaudoRow> {
     }
   }
 
-  /** Deletar laudo vinculado a uma REP (usado antes de excluir a REP) */
+  /** Deletar laudo vinculado a uma REP (usado antes de excluir a REP).
+   *  Primeiro remove todas as imagens do laudo (arquivos + registros), depois o laudo. */
   async deletarPorRepId(repId: string): Promise<void> {
     try {
+      // Busca o laudo vinculado
+      const rows = await executeQuery<LaudoRow>('SELECT id FROM laudos WHERE rep_id = ?', [repId]);
+      const laudoId = rows[0]?.id;
+
+      if (laudoId) {
+        // Deleta imagens do laudo primeiro (arquivos + registros)
+        const imagens = await imagemService.findByLaudoId(laudoId);
+        for (const img of imagens) {
+          await imagemService.deletar(img.id);
+        }
+      }
+
+      // Agora pode deletar o laudo (sem violar FK de imagens_laudo)
       await executeNonQuery('DELETE FROM laudos WHERE rep_id = ?', [repId]);
     } catch (error) {
       logError('Erro ao deletar laudo por rep_id', { repId, error });
-      // Não lança erro — a REP pode não ter laudo vinculado
+      throw error; // Re-lança para o handler tratar
     }
   }
 }
