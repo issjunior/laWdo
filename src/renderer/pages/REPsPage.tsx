@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/forms/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -14,6 +17,8 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, X, FileText, User, Clock3, Link2, AlertTriangle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { type REP } from '@/lib/validators';
 import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -33,7 +38,6 @@ interface REPFormData {
   tipo_exame_id: string;
   template_id: string;
   data_requisicao: string;
-  prazo: string;
   tipo_solicitacao: string;
   numero_documento: string;
   data_documento: string;
@@ -53,14 +57,12 @@ interface REPFormData {
 }
 
 const emptyForm = (): REPFormData => ({
-  numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0], prazo: '',
+  numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0],
   tipo_solicitacao: 'Ofício', numero_documento: '', data_documento: '',
   autoridade_solicitante: '', nome_envolvido: '', data_acionamento: '',
   data_chegada: '', data_saida: '', local_fato: '', latitude: '', longitude: '',
   lacre_entrada: '', lacre_saida: '', numero_bo: '', numero_ip: '', observacoes: '',
 });
-
-type REPFormErrors = Partial<Record<keyof REPFormData, string>>;
 
 function formatarNumeroREP(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
@@ -90,7 +92,6 @@ const repFormSchema = z.object({
   tipo_exame_id: z.string().optional(),
   template_id: z.string().optional(),
   data_requisicao: z.string().min(1, 'Data da solicitação é obrigatória'),
-  prazo: z.string().optional(),
   tipo_solicitacao: z.string().min(1, 'Tipo de solicitação é obrigatório').max(50, 'Tipo de solicitação deve ter no máximo 50 caracteres'),
   numero_documento: z.string().min(1, 'Nº da solicitação é obrigatório').max(30, 'Nº do documento deve ter no máximo 30 caracteres'),
   data_documento: z.string().optional(),
@@ -134,7 +135,6 @@ function prepareForApi(data: REPFormData) {
     const peritoId = getLoggedUserId();
     if (peritoId) payload.perito_id = peritoId;
   }
-  if (data.prazo) payload.prazo = data.prazo;
   if (data.data_documento) payload.data_documento = data.data_documento;
   if (data.autoridade_solicitante) payload.autoridade_solicitante = data.autoridade_solicitante;
   if (data.nome_envolvido) payload.nome_envolvido = data.nome_envolvido;
@@ -153,36 +153,18 @@ function prepareForApi(data: REPFormData) {
   return payload;
 }
 
-interface SectionProps {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}
-
-const Section: React.FC<SectionProps> = ({ title, description, icon, children }) => (
-  <fieldset className="rounded-lg border bg-card/50 p-4 md:p-5 space-y-4">
-    <legend className="px-2">
-      <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-        {icon}
-        {title}
-      </span>
-    </legend>
-    <p className="text-xs text-muted-foreground -mt-1">{description}</p>
-    {children}
-  </fieldset>
-);
-
-/** Ícone "?" com tooltip que aparece ao passar o mouse */
+/** Ícone "?" com tooltip usando shadcn Tooltip */
 const HelpIcon: React.FC<{ text: string }> = ({ text }) => (
-  <span className="relative group ml-1.5 inline-flex cursor-help align-middle">
-    <span className="flex items-center justify-center w-[18px] h-[18px] rounded-full border border-muted-foreground/40 text-[10px] text-muted-foreground font-semibold group-hover:bg-muted-foreground group-hover:text-background transition-colors select-none">
-      ?
-    </span>
-    <span className="invisible group-hover:visible absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 px-3 py-2 text-xs rounded-lg bg-popover border shadow-md text-popover-foreground z-50 leading-relaxed whitespace-nowrap">
-      {text}
-    </span>
-  </span>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full border border-muted-foreground/40 text-[10px] text-muted-foreground font-semibold cursor-help ml-1.5 align-middle select-none hover:bg-muted-foreground hover:text-background transition-colors">
+        ?
+      </span>
+    </TooltipTrigger>
+    <TooltipContent side="top">
+      <p className="max-w-[250px] text-xs">{text}</p>
+    </TooltipContent>
+  </Tooltip>
 );
 
 function formatarDataBR(iso: string | undefined): string {
@@ -201,14 +183,17 @@ export const REPsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRep, setEditingRep] = useState<REP | null>(null);
-  const [formData, setFormData] = useState<REPFormData>(emptyForm);
+  const form = useForm<REPFormData>({
+    resolver: zodResolver(repFormSchema),
+    defaultValues: emptyForm(),
+    mode: 'onBlur',
+  });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [solicitantes, setSolicitantes] = useState<any[]>([]);
   const [tiposExame, setTiposExame] = useState<any[]>([]);
   const [templatesVinculados, setTemplatesVinculados] = useState<any[]>([]);
-  const [errors, setErrors] = useState<REPFormErrors>({});
 
   // Estados para o Dialog "Criar Laudo" (REPs órfãs)
   const [criarLaudoOpen, setCriarLaudoOpen] = useState(false);
@@ -256,14 +241,17 @@ export const REPsPage: React.FC = () => {
 
   useEffect(() => { carregarREPs(); carregarSolicitantes(); carregarTiposExame(); }, []);
 
-  // Quando o tipo de exame muda, busca os templates vinculados
+  const tipoExameId = form.watch('tipo_exame_id');
+
+  // Quando o tipo de exame muda, busca os templates vinculados e limpa template_id
   useEffect(() => {
-    if (!showForm || !formData.tipo_exame_id) {
+    form.setValue('template_id', '', { shouldValidate: false });
+    if (!showForm || !tipoExameId) {
       setTemplatesVinculados([]);
       return;
     }
     (async () => {
-      const r = await window.ipcAPI.template.findByTipoExame(formData.tipo_exame_id);
+      const r = await window.ipcAPI.template.findByTipoExame(tipoExameId);
       if (r.success && r.data) {
         const ordenados = [...r.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
         setTemplatesVinculados(ordenados);
@@ -271,10 +259,10 @@ export const REPsPage: React.FC = () => {
         setTemplatesVinculados([]);
       }
     })();
-  }, [formData.tipo_exame_id, showForm]);
+  }, [tipoExameId, showForm]);
 
-  const tipoExameSelecionado = formData.tipo_exame_id
-    ? tiposExame.find(t => t.id === formData.tipo_exame_id)
+  const tipoExameSelecionado = tipoExameId
+    ? tiposExame.find(t => t.id === tipoExameId)
     : null;
   const isExameLocal = tipoExameSelecionado?.eh_local === true || tipoExameSelecionado?.eh_local === 1;
 
@@ -282,9 +270,8 @@ export const REPsPage: React.FC = () => {
     setEditingRep(null);
     setError(null);
     setSuccess(null);
-    setErrors({});
     setTemplatesVinculados([]);
-    setFormData(emptyForm());
+    form.reset(emptyForm());
     setSubmitting(false);
     setShowForm(true);
 
@@ -295,11 +282,10 @@ export const REPsPage: React.FC = () => {
   const handleCancelar = () => {
     setShowForm(false);
     setEditingRep(null);
-    setFormData(emptyForm());
+    form.reset(emptyForm());
     setTemplatesVinculados([]);
     setError(null);
     setSuccess(null);
-    setErrors({});
     setSubmitting(false);
 
     // Força a limpeza de estilos residuais do Radix UI (ex: Select) que podem travar a tela
@@ -310,7 +296,6 @@ export const REPsPage: React.FC = () => {
     setEditingRep(rep);
     setError(null);
     setSuccess(null);
-    setErrors({});
 
     // Busca o template_id salvo no laudo ANTES de abrir o formulário
     let templateId = '';
@@ -340,13 +325,12 @@ export const REPsPage: React.FC = () => {
       setTemplatesVinculados([]);
     }
 
-    setFormData({
+    form.reset({
       numero: rep.numero,
       solicitante_id: rep.solicitante_id || '',
       tipo_exame_id: rep.tipo_exame_id || '',
       template_id: templateId,
       data_requisicao: rep.data_requisicao?.split('T')[0] || '',
-      prazo: rep.prazo?.split('T')[0] || '',
       tipo_solicitacao: rep.tipo_solicitacao || '',
       numero_documento: rep.numero_documento || '',
       data_documento: rep.data_documento?.split('T')[0] || '',
@@ -371,8 +355,8 @@ export const REPsPage: React.FC = () => {
     if (!confirm('Tem certeza que deseja excluir esta REP?')) return;
     try {
       const r = await window.ipcAPI.rep.delete(id);
-      if (r.success) { await carregarREPs(); } else { alert(`Erro: ${r.error}`); }
-    } catch (e: any) { alert('Erro ao excluir REP'); }
+      if (r.success) { await carregarREPs(); } else { setError(r.error || 'Erro ao excluir REP'); }
+    } catch (e: any) { setError('Erro ao excluir REP'); }
   };
 
   const handleCriarLaudo = (rep: REP) => {
@@ -402,7 +386,7 @@ export const REPsPage: React.FC = () => {
       setCriarLaudoSubmitting(true);
       const peritoId = getLoggedUserId();
       if (!peritoId) {
-        alert('Usuário não autenticado. Faça login novamente.');
+        setError('Usuário não autenticado. Faça login novamente.');
         return;
       }
 
@@ -418,10 +402,10 @@ export const REPsPage: React.FC = () => {
         setSuccess('Laudo criado com sucesso!');
         setTimeout(() => setSuccess(null), 3000);
       } else {
-        alert(r.error || 'Erro ao criar laudo');
+        setError(r.error || 'Erro ao criar laudo');
       }
     } catch (e: any) {
-      alert('Erro ao criar laudo: ' + e.message);
+      setError('Erro ao criar laudo: ' + e.message);
     } finally {
       setCriarLaudoSubmitting(false);
     }
@@ -444,65 +428,20 @@ export const REPsPage: React.FC = () => {
     }
   };
 
-  const validateField = (field: keyof REPFormData) => {
-    const fieldSchema = repFormSchema.shape[field];
-    if (!fieldSchema) return;
-    const value = formData[field];
-    const result = fieldSchema.safeParse(value);
-    if (!result.success) {
-      setErrors(prev => ({ ...prev, [field]: result.error.errors[0].message }));
-    } else {
-      setErrors(prev => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
-    }
-  };
-
-  const updateField = (field: keyof REPFormData, value: string) => {
-    setFormData(prev => {
-      const nextData = { ...prev, [field]: value };
-      if (field === 'tipo_exame_id') {
-        nextData.template_id = '';
-      }
-      return nextData;
-    });
-    setErrors(prev => {
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  };
-
-  const handleSalvar = async () => {
+  const handleSalvar = form.handleSubmit(async (data) => {
     try {
       setError(null);
       setSuccess(null);
       setSubmitting(true);
-      setErrors({});
 
-      const result = repFormSchema.safeParse(formData);
-      if (!result.success) {
-        const fieldErrors: REPFormErrors = {};
-        result.error.errors.forEach((err) => {
-          const field = err.path[0] as keyof REPFormData;
-          if (!fieldErrors[field]) {
-            fieldErrors[field] = err.message;
-          }
-        });
-        setErrors(fieldErrors);
-        setSubmitting(false);
-        return;
-      }
-
-      const apiData = prepareForApi(formData);
+      const apiData = prepareForApi(data);
 
       if (editingRep) {
         const r = await window.ipcAPI.rep.update(editingRep.id, apiData);
         if (r.success) {
           await carregarREPs();
-          handleCancelar();
+          setSuccess('REP atualizada com sucesso!');
+          setTimeout(() => handleCancelar(), 1200);
         } else {
           setError(r.error || 'Erro ao atualizar REP');
         }
@@ -510,7 +449,8 @@ export const REPsPage: React.FC = () => {
         const r = await window.ipcAPI.rep.create(apiData);
         if (r.success) {
           await carregarREPs();
-          handleCancelar();
+          setSuccess('REP criada com sucesso!');
+          setTimeout(() => handleCancelar(), 1200);
         } else {
           setError(r.error || 'Erro ao criar REP');
         }
@@ -520,7 +460,7 @@ export const REPsPage: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  };
+  });
 
   const columnDefs = useMemo<ColumnDef<REP>[]>(() => [
     {
@@ -558,6 +498,11 @@ export const REPsPage: React.FC = () => {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Laudo" />
       ),
+      sortingFn: (rowA, rowB) => {
+        const a = repsComLaudo.has(rowA.original.id) ? 1 : 0;
+        const b = repsComLaudo.has(rowB.original.id) ? 1 : 0;
+        return a - b;
+      },
       cell: ({ row }) => {
         const temLaudo = repsComLaudo.has(row.original.id);
         return temLaudo
@@ -615,7 +560,8 @@ export const REPsPage: React.FC = () => {
   // Tabela sem form
   if (!showForm) {
     return (
-      <div className="container mx-auto p-4 md:p-6 space-y-6">
+      <TooltipProvider>
+        <div className="container mx-auto p-4 md:p-6 space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Requisições (REPs)</h1>
@@ -623,6 +569,8 @@ export const REPsPage: React.FC = () => {
           </div>
           <Button onClick={handleNovo} className="flex items-center gap-2 w-full sm:w-auto"><Plus size={16} /> Nova REP</Button>
         </div>
+
+        {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
 
         <Card>
           <CardHeader>
@@ -712,12 +660,14 @@ export const REPsPage: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
+      </TooltipProvider>
     );
   }
 
   // Modo formulário
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
+    <TooltipProvider>
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Requisições (REPs)</h1>
@@ -742,251 +692,370 @@ export const REPsPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <form
-              className="space-y-5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSalvar();
-              }}
-            >
+            <Form {...form}>
+              <form
+                className="space-y-5"
+                onSubmit={handleSalvar}
+              >
               {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-              {success && <Alert className="bg-green-50 border-green-200"><AlertDescription className="text-green-800">{success}</AlertDescription></Alert>}
+              {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
 
-              <Section title="Dados da Solicitação" description="Informações principais da requisição." icon={<FileText size={14} />}>
+              <Accordion type="multiple" defaultValue={["dados-solicitacao", "envolvido-local", "documentos"]} className="space-y-4">
+                <AccordionItem value="dados-solicitacao">
+                  <AccordionTrigger className="text-sm font-semibold">
+                    <span className="inline-flex items-center gap-2">
+                      <FileText size={14} />
+                      Dados da Solicitação
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <p className="text-xs text-muted-foreground mb-4">Informações principais da requisição.</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="numero">Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></Label>
-                    <Input
-                      id="numero"
-                      required
-                      value={formData.numero}
-                      onChange={e => updateField('numero', formatarNumeroREP(e.target.value))}
-                      className={errors.numero ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="000.000-2026"
+                    <FormField
+                      control={form.control}
+                      name="numero"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="000.000-2026"
+                              value={field.value}
+                              onChange={e => field.onChange(formatarNumeroREP(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.numero && <p className="text-xs text-red-600">{errors.numero}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="data_requisicao">Data de recebimento *</Label>
-                    <Input
-                      id="data_requisicao"
-                      required
-                      type="date"
-                      value={formData.data_requisicao}
-                      onChange={e => updateField('data_requisicao', e.target.value)}
-                      onBlur={() => validateField('data_requisicao')}
-                      className={errors.data_requisicao ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                    <FormField
+                      control={form.control}
+                      name="data_requisicao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data de recebimento *</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.data_requisicao && <p className="text-xs text-red-600">{errors.data_requisicao}</p>}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="solicitante_id">Solicitante</Label>
-                    <Select value={formData.solicitante_id} onValueChange={v => updateField('solicitante_id', v)}>
-                      <SelectTrigger id="solicitante_id"><SelectValue placeholder="Selecione o órgão..." /></SelectTrigger>
-                      <SelectContent>
-                        {solicitantes.map(s => (
-                          <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormField
+                      control={form.control}
+                      name="solicitante_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Solicitante</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Selecione o órgão..." /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {solicitantes.map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label>Responsável/Contato</Label>
-                    <Input value={formData.solicitante_id ? (solicitantes.find(s => s.id === formData.solicitante_id)?.tipo || '—') : '—'} readOnly className="bg-muted text-muted-foreground cursor-default" />
+                    <FormLabel>Responsável/Contato</FormLabel>
+                    <Input value={form.watch('solicitante_id') ? (solicitantes.find(s => s.id === form.watch('solicitante_id'))?.tipo || '—') : '—'} readOnly className="bg-muted text-muted-foreground cursor-default" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="tipo_exame_id">Tipo de Exame</Label>
-                    <Select value={formData.tipo_exame_id} onValueChange={v => updateField('tipo_exame_id', v)}>
-                      <SelectTrigger id="tipo_exame_id"><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
-                      <SelectContent>
-                        {tiposExame.map(t => (
-                          <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormField
+                      control={form.control}
+                      name="tipo_exame_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tipo de Exame</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {tiposExame.map(t => (
+                                <SelectItem key={t.id} value={t.id}>{t.codigo} - {t.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="template_id">Template<HelpIcon text="Selecione 'Não definido' para não criar o laudo automaticamente." /></Label>
-                    <Select
-                      disabled={!formData.tipo_exame_id || templatesVinculados.length === 0}
-                      value={formData.template_id || undefined}
-                      onValueChange={v => updateField('template_id', v)}
-                    >
-                      <SelectTrigger id="template_id">
-                        <SelectValue placeholder={
-                          !formData.tipo_exame_id
-                            ? 'Selecione um tipo de exame'
-                            : 'Selecione um template'
-                        } />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {templatesVinculados.map(t => (
-                          <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormField
+                      control={form.control}
+                      name="template_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Template<HelpIcon text="Selecione 'Não definido' para não criar o laudo automaticamente." /></FormLabel>
+                          <Select
+                            disabled={!tipoExameId || templatesVinculados.length === 0}
+                            value={field.value || undefined}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={
+                                  !tipoExameId
+                                    ? 'Selecione um tipo de exame'
+                                    : 'Selecione um template'
+                                } />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {templatesVinculados.map(t => (
+                                <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="tipo_solicitacao">Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></Label>
-                    <Select value={formData.tipo_solicitacao} onValueChange={v => updateField('tipo_solicitacao', v)}>
-                      <SelectTrigger id="tipo_solicitacao"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BOU">BOU</SelectItem>
-                        <SelectItem value="BO PM">BO PM</SelectItem>
-                        <SelectItem value="BO PC">BO PC</SelectItem>
-                        <SelectItem value="Ofício">Ofício</SelectItem>
-                        <SelectItem value="CECOMP">CECOMP</SelectItem>
-                        <SelectItem value="Outros">Outros</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormField
+                      control={form.control}
+                      name="tipo_solicitacao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="BOU">BOU</SelectItem>
+                              <SelectItem value="BO PM">BO PM</SelectItem>
+                              <SelectItem value="BO PC">BO PC</SelectItem>
+                              <SelectItem value="Ofício">Ofício</SelectItem>
+                              <SelectItem value="CECOMP">CECOMP</SelectItem>
+                              <SelectItem value="Outros">Outros</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="numero_documento">Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></Label>
-                    <Input
-                      id="numero_documento"
-                      value={formData.numero_documento}
-                      onChange={e => updateField('numero_documento', e.target.value)}
-                      onBlur={() => validateField('numero_documento')}
-                      className={errors.numero_documento ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="Requisição nº"
+                    <FormField
+                      control={form.control}
+                      name="numero_documento"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></FormLabel>
+                          <FormControl>
+                            <Input placeholder="Requisição nº" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.numero_documento && <p className="text-xs text-red-600">{errors.numero_documento}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="data_documento">Data do Documento</Label>
-                    <Input
-                      id="data_documento"
-                      type="date"
-                      value={formData.data_documento}
-                      onChange={e => updateField('data_documento', e.target.value)}
-                      className={errors.data_documento ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                    <FormField
+                      control={form.control}
+                      name="data_documento"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data do Documento</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.data_documento && <p className="text-xs text-red-600">{errors.data_documento}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="autoridade_solicitante">Autoridade Solicitante</Label>
-                    <Input
-                      id="autoridade_solicitante"
-                      value={formData.autoridade_solicitante}
-                      onChange={e => updateField('autoridade_solicitante', e.target.value)}
-                      onBlur={() => validateField('autoridade_solicitante')}
-                      className={errors.autoridade_solicitante ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="Nome da autoridade"
+                    <FormField
+                      control={form.control}
+                      name="autoridade_solicitante"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Autoridade Solicitante</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nome da autoridade" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.autoridade_solicitante && <p className="text-xs text-red-600">{errors.autoridade_solicitante}</p>}
                   </div>
                 </div>
-              </Section>
+                  </AccordionContent>
+                </AccordionItem>
 
-              <Section title="Envolvido e Local" description="Dados da pessoa envolvida e, quando aplicável, do local do fato." icon={<User size={14} />}>
+                <AccordionItem value="envolvido-local">
+                  <AccordionTrigger className="text-sm font-semibold">
+                    <span className="inline-flex items-center gap-2">
+                      <User size={14} />
+                      Envolvido e Local
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <p className="text-xs text-muted-foreground mb-4">Dados da pessoa envolvida e, quando aplicável, do local do fato.</p>
                 <div className={`grid grid-cols-1 ${isExameLocal ? 'md:grid-cols-2' : ''} gap-4`}>
                   <div className="space-y-2">
-                    <Label htmlFor="nome_envolvido">Nome do Envolvido</Label>
-                    <Input
-                      id="nome_envolvido"
-                      value={formData.nome_envolvido}
-                      onChange={e => updateField('nome_envolvido', e.target.value)}
-                      onBlur={() => validateField('nome_envolvido')}
-                      className={errors.nome_envolvido ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="Nome dos envolvidos"
+                    <FormField
+                      control={form.control}
+                      name="nome_envolvido"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nome do Envolvido</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nome dos envolvidos" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.nome_envolvido && <p className="text-xs text-red-600">{errors.nome_envolvido}</p>}
                   </div>
                   {isExameLocal && (
                     <div className="space-y-2">
-                      <Label htmlFor="local_fato">Local do Fato</Label>
-                      <Input
-                        id="local_fato"
-                        value={formData.local_fato}
-                        onChange={e => updateField('local_fato', e.target.value)}
-                        onBlur={() => validateField('local_fato')}
-                        className={errors.local_fato ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                        placeholder="Descrição do local"
+                      <FormField
+                        control={form.control}
+                        name="local_fato"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Local do Fato</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Descrição do local" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                      {errors.local_fato && <p className="text-xs text-red-600">{errors.local_fato}</p>}
                     </div>
                   )}
                 </div>
                 {isExameLocal && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="latitude">Latitude</Label>
-                      <Input
-                        id="latitude"
-                        type="number"
-                        step="any"
-                        value={formData.latitude}
-                        onChange={e => updateField('latitude', e.target.value)}
-                        className={errors.latitude ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                        placeholder="-25.4284"
+                      <FormField
+                        control={form.control}
+                        name="latitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Latitude</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="any" placeholder="-25.4284" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                      {errors.latitude && <p className="text-xs text-red-600">{errors.latitude}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="longitude">Longitude</Label>
-                      <Input
-                        id="longitude"
-                        type="number"
-                        step="any"
-                        value={formData.longitude}
-                        onChange={e => updateField('longitude', e.target.value)}
-                        className={errors.longitude ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                        placeholder="-49.2674"
+                      <FormField
+                        control={form.control}
+                        name="longitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Longitude</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="any" placeholder="-49.2674" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                      {errors.longitude && <p className="text-xs text-red-600">{errors.longitude}</p>}
                     </div>
                   </div>
                 )}
-              </Section>
+                  </AccordionContent>
+                </AccordionItem>
 
-              {isExameLocal && (
-                <Section title="Acionamento" description="Linha do tempo de atendimento no local." icon={<Clock3 size={14} />}>
+                {isExameLocal && (
+                  <AccordionItem value="acionamento">
+                    <AccordionTrigger className="text-sm font-semibold">
+                      <span className="inline-flex items-center gap-2">
+                        <Clock3 size={14} />
+                        Acionamento
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <p className="text-xs text-muted-foreground mb-4">Linha do tempo de atendimento no local.</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="data_acionamento">Data/Hora Acionamento</Label>
-                      <Input
-                        id="data_acionamento"
-                        type="datetime-local"
-                        value={formData.data_acionamento}
-                        onChange={e => updateField('data_acionamento', e.target.value)}
-                        className={errors.data_acionamento ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                      <FormField
+                        control={form.control}
+                        name="data_acionamento"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Data/Hora Acionamento</FormLabel>
+                            <FormControl>
+                              <Input type="datetime-local" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                      {errors.data_acionamento && <p className="text-xs text-red-600">{errors.data_acionamento}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="data_chegada">Data/Hora Chegada</Label>
-                      <Input
-                        id="data_chegada"
-                        type="datetime-local"
-                        value={formData.data_chegada}
-                        onChange={e => updateField('data_chegada', e.target.value)}
-                        className={errors.data_chegada ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                      <FormField
+                        control={form.control}
+                        name="data_chegada"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Data/Hora Chegada</FormLabel>
+                            <FormControl>
+                              <Input type="datetime-local" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                      {errors.data_chegada && <p className="text-xs text-red-600">{errors.data_chegada}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="data_saida">Data/Hora Saída</Label>
-                      <Input
-                        id="data_saida"
-                        type="datetime-local"
-                        value={formData.data_saida}
-                        onChange={e => updateField('data_saida', e.target.value)}
-                        className={errors.data_saida ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                      <FormField
+                        control={form.control}
+                        name="data_saida"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Data/Hora Saída</FormLabel>
+                            <FormControl>
+                              <Input type="datetime-local" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                      {errors.data_saida && <p className="text-xs text-red-600">{errors.data_saida}</p>}
                     </div>
                   </div>
-                </Section>
-              )}
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
 
-              <Section title="Documentos Associados" description="Vínculos e observações importantes da REP." icon={<Link2 size={14} />}>
-                {(!formData.numero_bo && !formData.numero_ip) && (
+                <AccordionItem value="documentos">
+                  <AccordionTrigger className="text-sm font-semibold">
+                    <span className="inline-flex items-center gap-2">
+                      <Link2 size={14} />
+                      Documentos Associados
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <p className="text-xs text-muted-foreground mb-4">Vínculos e observações importantes da REP.</p>
+                {(!form.watch('numero_bo') && !form.watch('numero_ip')) && (
                   <Alert className="bg-amber-50/50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-400">
                     <AlertTriangle className="h-4 w-4 stroke-amber-600 dark:stroke-amber-400" />
                     <AlertDescription className="ml-2">
@@ -996,68 +1065,84 @@ export const REPsPage: React.FC = () => {
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="numero_bo">Nº do BO</Label>
-                    <Input
-                      id="numero_bo"
-                      value={formData.numero_bo}
-                      onChange={e => updateField('numero_bo', e.target.value)}
-                      onBlur={() => validateField('numero_bo')}
-                      className={errors.numero_bo ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="Boletim de Ocorrência"
+                    <FormField
+                      control={form.control}
+                      name="numero_bo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nº do BO</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Boletim de Ocorrência" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.numero_bo && <p className="text-xs text-red-600">{errors.numero_bo}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="numero_ip">Nº do IP</Label>
-                    <Input
-                      id="numero_ip"
-                      value={formData.numero_ip}
-                      onChange={e => updateField('numero_ip', e.target.value)}
-                      onBlur={() => validateField('numero_ip')}
-                      className={errors.numero_ip ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="Inquérito Policial"
+                    <FormField
+                      control={form.control}
+                      name="numero_ip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nº do IP</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Inquérito Policial" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.numero_ip && <p className="text-xs text-red-600">{errors.numero_ip}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lacre_entrada">Lacre de Entrada</Label>
-                    <Input
-                      id="lacre_entrada"
-                      value={formData.lacre_entrada}
-                      onChange={e => updateField('lacre_entrada', e.target.value)}
-                      onBlur={() => validateField('lacre_entrada')}
-                      className={errors.lacre_entrada ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="Nº do lacre"
+                    <FormField
+                      control={form.control}
+                      name="lacre_entrada"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Lacre de Entrada</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nº do lacre" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.lacre_entrada && <p className="text-xs text-red-600">{errors.lacre_entrada}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lacre_saida">Lacre de Saída</Label>
-                    <Input
-                      id="lacre_saida"
-                      value={formData.lacre_saida}
-                      onChange={e => updateField('lacre_saida', e.target.value)}
-                      onBlur={() => validateField('lacre_saida')}
-                      className={errors.lacre_saida ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                      placeholder="Nº do lacre"
+                    <FormField
+                      control={form.control}
+                      name="lacre_saida"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Lacre de Saída</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nº do lacre" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    {errors.lacre_saida && <p className="text-xs text-red-600">{errors.lacre_saida}</p>}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="observacoes">Observações</Label>
-                  <Textarea
-                    id="observacoes"
-                    value={formData.observacoes}
-                    onChange={e => updateField('observacoes', e.target.value)}
-                    onBlur={() => validateField('observacoes')}
-                    className={errors.observacoes ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                    placeholder="Observações gerais..."
-                    rows={3}
+                  <FormField
+                    control={form.control}
+                    name="observacoes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Observações</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Observações gerais..." rows={3} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  {errors.observacoes && <p className="text-xs text-red-600">{errors.observacoes}</p>}
                 </div>
-              </Section>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
 
               <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
                 <Button variant="outline" type="button" onClick={handleCancelar}>Cancelar</Button>
@@ -1066,9 +1151,11 @@ export const REPsPage: React.FC = () => {
                 </Button>
               </div>
             </form>
+            </Form>
           </CardContent>
         </Card>
       )}
     </div>
+      </TooltipProvider>
   );
 };

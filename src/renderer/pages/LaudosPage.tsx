@@ -1,18 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, Printer, FileText } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
@@ -22,7 +15,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   ContextMenu,
@@ -463,10 +455,6 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const toggleSecao = (idx: number) => {
-    setSecoesColapsadas(prev => ({ ...prev, [idx]: !prev[idx] }));
-  };
-
   const atualizarConteudoSecao = (idx: number, novoConteudo: string) => {
     setSecoes(prev => {
       const novas = [...prev];
@@ -571,7 +559,8 @@ export const LaudosPage: React.FC = () => {
   // Modo editor com múltiplas seções
   if (editando) {
     return (
-      <div className="container mx-auto p-4 md:p-6 space-y-6">
+      <TooltipProvider>
+        <div className="container mx-auto p-4 md:p-6 space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Editor de Laudo</h1>
@@ -582,15 +571,30 @@ export const LaudosPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
-              <ArrowLeft size={16} /> Voltar
-            </Button>
-            <Button variant="secondary" onClick={handlePreview} disabled={carregandoPreview || salvando} className="flex items-center gap-2">
-              <Eye size={16} /> {carregandoPreview ? 'Gerando PDF...' : 'Visualizar'}
-            </Button>
-            <Button onClick={handleSalvar} disabled={salvando || carregandoPreview} className="flex items-center gap-2">
-              <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar'}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
+                  <ArrowLeft size={16} /> Voltar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Voltar para a lista de laudos</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="secondary" onClick={handlePreview} disabled={carregandoPreview || salvando} className="flex items-center gap-2">
+                  <Eye size={16} /> {carregandoPreview ? 'Gerando PDF...' : 'Visualizar'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Pré-visualizar o laudo em PDF</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleSalvar} disabled={salvando || carregandoPreview} className="flex items-center gap-2">
+                  <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Salvar o conteúdo do laudo</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -612,16 +616,17 @@ export const LaudosPage: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {secoes.map((secao, idx) => (
-              <div key={idx} className="border rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => toggleSecao(idx)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 rounded-t-lg transition-colors"
-                >
+              <Collapsible
+                key={idx}
+                open={!secoesColapsadas[idx]}
+                onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
+                className="border rounded-lg"
+              >
+                <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 rounded-t-lg transition-colors">
                   <h3 className="text-base font-semibold">{secao.titulo}</h3>
-                  {secoesColapsadas[idx] ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-                </button>
-                 {!secoesColapsadas[idx] && (
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
                   <div className="px-4 pb-4">
                     <ContextMenu>
                       <ContextMenuTrigger>
@@ -661,8 +666,8 @@ export const LaudosPage: React.FC = () => {
                       </ContextMenuContent>
                     </ContextMenu>
                   </div>
-                )}
-              </div>
+                </CollapsibleContent>
+              </Collapsible>
             ))}
           </CardContent>
         </Card>
@@ -701,6 +706,7 @@ export const LaudosPage: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
+      </TooltipProvider>
     );
   }
 
