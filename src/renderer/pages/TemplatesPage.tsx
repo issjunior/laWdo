@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,13 +12,14 @@ import {
   Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
   FileText, GripVertical, Layers, Eye, LayoutGrid, List,
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { createTemplateSchema } from '@/lib/validators';
 import { z } from 'zod';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table/data-table';
+import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 
 interface TemplateItem {
   id: string;
@@ -74,7 +75,7 @@ export const TemplatesPage: React.FC = () => {
 
   // Modo de edição
   const [editMode, setEditMode] = useState(false);
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
@@ -107,12 +108,14 @@ export const TemplatesPage: React.FC = () => {
 
   useEffect(() => { carregarTemplates(); carregarTiposExame(); }, []);
 
-  const filtered = templates.filter(t => {
+  const filteredByTipo = templates.filter(t => {
     if (t.id === 'tpl-nao-definido') return false;
-    const matchSearch = t.nome.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchTipo = !filtroTipoExame || t.tipo_exame_id === filtroTipoExame;
-    return matchSearch && matchTipo;
+    return !filtroTipoExame || filtroTipoExame === 'todos' || t.tipo_exame_id === filtroTipoExame;
   });
+
+  const filtered = filteredByTipo.filter(t =>
+    t.nome.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
   // ─── Modo Lista ──────────────────────────────────────
 
@@ -470,11 +473,101 @@ export const TemplatesPage: React.FC = () => {
     }
   };
 
+  const columnDefs = useMemo<ColumnDef<TemplateItem>[]>(() => [
+    {
+      accessorKey: 'nome',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Nome" />
+      ),
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium">{row.getValue('nome')}</p>
+          {row.original.descricao && (
+            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{row.original.descricao}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'tipo_exame',
+      accessorFn: (row) => row.tipo_exame_codigo ? `${row.tipo_exame_codigo} - ${row.tipo_exame_nome || '—'}` : (row.tipo_exame_nome || '—'),
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Tipo de Exame" />
+      ),
+      cell: ({ row }) => <span className="text-muted-foreground">{row.getValue('tipo_exame')}</span>,
+    },
+    {
+      accessorKey: 'qtd_secoes',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Seções" />
+      ),
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1 text-muted-foreground">
+          <Layers size={12} /> {row.getValue('qtd_secoes')}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      header: () => <span className="sr-only">Ações</span>,
+      cell: ({ row }) => {
+        const t = row.original;
+        return (
+          <div className="flex justify-end gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => handlePreviewCard(t)} aria-label="Pré-visualizar">
+                  <Eye size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Pré-visualizar</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => handleClonar(t)} aria-label="Clonar template">
+                  <Copy size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Clonar template</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
+                  <Edit size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Editar</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-600"
+                  onClick={() => handleExcluir(t.id)}
+                  aria-label="Excluir"
+                  disabled={t.id === 'tpl-nao-definido'}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">{t.id === 'tpl-nao-definido' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        );
+      },
+    },
+  ], [handlePreviewCard, handleClonar, handleEditar, handleExcluir]);
+
   // ─── Modo Lista ──────────────────────────────────────
 
   if (!editMode) {
     return (
-      <div className="container mx-auto p-4 md:p-6 space-y-6">
+      <TooltipProvider>
+        <div className="container mx-auto p-4 md:p-6 space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Templates</h1>
@@ -514,18 +607,9 @@ export const TemplatesPage: React.FC = () => {
             <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
               <div>
                 <CardTitle>Lista de Templates</CardTitle>
-                <CardDescription>{filtered.length} template(s) encontrado(s)</CardDescription>
+                <CardDescription>{viewMode === 'cards' ? filtered.length : filteredByTipo.length} template(s) encontrado(s)</CardDescription>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                <div className="relative w-full md:w-72">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nome..."
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
+              <div className="flex items-center gap-3 w-full md:w-auto">
                 <Select value={filtroTipoExame} onValueChange={setFiltroTipoExame}>
                   <SelectTrigger className="w-full md:w-48">
                     <SelectValue placeholder="Todos os tipos" />
@@ -543,12 +627,22 @@ export const TemplatesPage: React.FC = () => {
           <CardContent>
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-            ) : filtered.length === 0 ? (
+            ) : (viewMode === 'cards' ? filtered : filteredByTipo).length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {searchTerm || filtroTipoExame ? 'Nenhum template encontrado.' : 'Nenhum template cadastrado.'}
+                {filtroTipoExame ? 'Nenhum template encontrado.' : 'Nenhum template cadastrado.'}
               </div>
             ) : viewMode === 'cards' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <>
+                <div className="relative w-full md:w-72 mb-4">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.map(t => (
                   <Card key={t.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-5 space-y-3">
@@ -591,61 +685,14 @@ export const TemplatesPage: React.FC = () => {
                   </Card>
                 ))}
               </div>
+              </>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Tipo de Exame</TableHead>
-                    <TableHead>Seções</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map(t => (
-                    <TableRow key={t.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{t.nome}</p>
-                          {t.descricao && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{t.descricao}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{t.tipo_exame_codigo ? `${t.tipo_exame_codigo} - ${t.tipo_exame_nome || '—'}` : (t.tipo_exame_nome || '—')}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        <span className="inline-flex items-center gap-1">
-                          <Layers size={12} /> {t.qtd_secoes}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => handlePreviewCard(t)} aria-label="Pré-visualizar">
-                            <Eye size={14} />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleClonar(t)} aria-label="Clonar template" title="Clonar template">
-                            <Copy size={14} />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
-                            <Edit size={14} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600"
-                            onClick={() => handleExcluir(t.id)}
-                            aria-label="Excluir"
-                            disabled={t.id === 'tpl-nao-definido'}
-                            title={t.id === 'tpl-nao-definido' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <DataTable
+                columns={columnDefs}
+                data={filteredByTipo}
+                searchColumn="nome"
+                searchPlaceholder="Buscar por nome..."
+              />
             )}
           </CardContent>
         </Card>
@@ -678,13 +725,15 @@ export const TemplatesPage: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
+      </TooltipProvider>
     );
   }
 
   // ─── Modo Edição ─────────────────────────────────────
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
+    <TooltipProvider>
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={handleVoltar}>
@@ -843,5 +892,6 @@ export const TemplatesPage: React.FC = () => {
         </Button>
       </div>
     </div>
+    </TooltipProvider>
   );
 };

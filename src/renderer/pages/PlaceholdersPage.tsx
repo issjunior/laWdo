@@ -40,8 +40,14 @@ import {
   Type,
   AlignLeft,
   Tag,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { Placeholder } from '@/lib/validators';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table/data-table';
+import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 /* ═══════════════════════════════════════════════════════════════
    CONFIGURAÇÃO DE CATEGORIAS
@@ -134,6 +140,7 @@ export const PlaceholdersPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   /* ── Carregamento ── */
   const carregarPlaceholders = useCallback(async () => {
@@ -270,11 +277,119 @@ export const PlaceholdersPage: React.FC = () => {
     }
   };
 
+  /* ── Colunas da DataTable ── */
+  const columnDefs = useMemo<ColumnDef<Placeholder>[]>(() => [
+    {
+      accessorKey: 'chave',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Chave" />
+      ),
+      cell: ({ row }) => (
+        <code className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted font-mono text-xs font-semibold whitespace-nowrap">
+          <Hash size={10} className="mr-1 text-muted-foreground shrink-0" />
+          {`{{${row.getValue('chave')}}}`}
+        </code>
+      ),
+    },
+    {
+      accessorKey: 'categoria',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Categoria" />
+      ),
+      cell: ({ row }) => {
+        const cfg = categoriaConfig(row.getValue('categoria'));
+        const Icon = cfg.icone;
+        const sistema = isSistema(row.original);
+        return (
+          <div className="flex items-center gap-1.5">
+            <Badge variant="outline" className={`text-[10px] h-5 px-1.5 gap-1 ${cfg.corBorda} ${cfg.corTexto}`}>
+              <Icon size={10} />
+              {cfg.label}
+            </Badge>
+            {sistema && (
+              <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1 shrink-0 border-blue-200 text-blue-600 dark:text-blue-300">
+                <Lock size={9} />
+                Fixo
+              </Badge>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'valor',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Valor padrão" />
+      ),
+      cell: ({ row }) => {
+        const valor = row.getValue('valor') as string;
+        const cat = row.getValue('categoria') as string;
+        if (cat !== 'Personalizado' && cat !== 'personalizado') {
+          return <span className="text-xs text-muted-foreground italic">Automático</span>;
+        }
+        return valor
+          ? <span className="text-sm font-medium truncate block max-w-[200px]" title={valor}>{valor}</span>
+          : <span className="text-xs text-muted-foreground italic">Sem valor definido</span>;
+      },
+    },
+    {
+      accessorKey: 'descricao',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Descrição" />
+      ),
+      cell: ({ row }) => {
+        const desc = row.getValue('descricao') as string;
+        return desc
+          ? <span className="text-xs text-muted-foreground line-clamp-2 block max-w-[250px]" title={desc}>{desc}</span>
+          : <span className="text-xs text-muted-foreground/50 italic">—</span>;
+      },
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      header: () => <span className="sr-only">Ações</span>,
+      cell: ({ row }) => {
+        const p = row.original;
+        const deletavel = p.categoria === 'Personalizado';
+        return (
+          <div className="flex justify-end gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => handleEditar(p)} aria-label="Editar">
+                  <Edit size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Editar</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={!deletavel ? 'text-muted-foreground/30' : 'text-red-600'}
+                  onClick={() => deletavel && handleExcluir(p.id)}
+                  disabled={!deletavel}
+                  aria-label="Excluir"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">{deletavel ? 'Excluir' : 'Somente placeholders personalizados podem ser excluídos'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        );
+      },
+    },
+  ], [handleEditar, handleExcluir]);
+
   /* ── Render ── */
   const totalSistema = placeholders.filter(p => isSistema(p)).length;
   const totalPersonalizados = placeholders.filter(p => !isSistema(p)).length;
 
   return (
+    <TooltipProvider>
     <div className="container mx-auto p-6 space-y-6">
       {/* ── Cabeçalho ── */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -284,9 +399,33 @@ export const PlaceholdersPage: React.FC = () => {
             Gerencie os placeholders disponíveis para uso nos laudos
           </p>
         </div>
-        <Button onClick={handleNovo} className="flex items-center gap-2 shrink-0">
-          <Plus size={16} /> Novo Placeholder
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
+            <Button
+              variant={viewMode === 'cards' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('cards')}
+              className="h-8 px-2.5"
+              aria-label="Visualizar como cards"
+              title="Cards"
+            >
+              <LayoutGrid size={14} />
+            </Button>
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('table')}
+              className="h-8 px-2.5"
+              aria-label="Visualizar como lista"
+              title="Lista"
+            >
+              <List size={14} />
+            </Button>
+          </div>
+          <Button onClick={handleNovo} className="flex items-center gap-2 shrink-0">
+            <Plus size={16} /> Novo Placeholder
+          </Button>
+        </div>
       </div>
 
       {/* ── Cards de resumo ── */}
@@ -411,7 +550,7 @@ export const PlaceholdersPage: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
-            ) : (
+            ) : viewMode === 'cards' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {placeholdersPorCategoria[cat.chave]!.map(p => {
                   const cfg = categoriaConfig(p.categoria);
@@ -536,6 +675,13 @@ export const PlaceholdersPage: React.FC = () => {
                   );
                 })}
               </div>
+            ) : (
+              <DataTable
+                columns={columnDefs}
+                data={placeholdersPorCategoria[cat.chave] || []}
+                searchColumn="chave"
+                searchPlaceholder="Buscar por chave, valor, descrição..."
+              />
             )}
           </TabsContent>
         ))}
@@ -761,5 +907,6 @@ export const PlaceholdersPage: React.FC = () => {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 };
