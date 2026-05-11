@@ -35,7 +35,6 @@ import {
   Layers,
   UserCheck,
   FileText,
-  Settings,
   Puzzle,
   Hash,
   Type,
@@ -99,16 +98,6 @@ const CATEGORIAS: CategoriaConfig[] = [
     corTexto: 'text-violet-700 dark:text-violet-200',
     icone: UserCheck,
   },
-  {
-    chave: 'Sistema',
-    label: 'Sistema',
-    descricao: 'Variáveis e metadados do sistema',
-    cor: 'rose',
-    corFundo: 'bg-rose-50 dark:bg-rose-900/20',
-    corBorda: 'border-rose-200 dark:border-rose-800',
-    corTexto: 'text-rose-700 dark:text-rose-200',
-    icone: Settings,
-  },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
@@ -117,7 +106,7 @@ const CATEGORIAS: CategoriaConfig[] = [
 const categoriaConfig = (cat?: string | null): CategoriaConfig =>
   CATEGORIAS.find(c => c.chave === (cat || 'Personalizado')) ?? CATEGORIAS[0];
 
-const isSistema = (p: Placeholder): boolean => p.categoria === 'REP';
+const isSistema = (p: Placeholder): boolean => p.categoria === 'REP' || p.categoria === 'Perito';
 
 /* ═══════════════════════════════════════════════════════════════
    COMPONENTE PRINCIPAL
@@ -301,7 +290,7 @@ export const PlaceholdersPage: React.FC = () => {
       </div>
 
       {/* ── Cards de resumo ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total de Placeholders</CardTitle>
@@ -318,7 +307,7 @@ export const PlaceholdersPage: React.FC = () => {
           <CardContent className="flex items-center gap-2">
             <Lock size={16} className="text-blue-500" />
             <div className="text-xl font-semibold text-blue-600 dark:text-blue-300">{totalSistema}</div>
-            <span className="text-xs text-muted-foreground">fixos (REP)</span>
+            <span className="text-xs text-muted-foreground">fixos (REP + Perito)</span>
           </CardContent>
         </Card>
 
@@ -333,20 +322,6 @@ export const PlaceholdersPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Categorias</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-1">
-              {CATEGORIAS.filter(c => c.chave !== 'TODOS').map(c => (
-                <Badge key={c.chave} variant="secondary" className="text-[10px] px-1.5 py-0.5">
-                  {c.label}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* ── Área principal: Tabs + Grid ── */}
@@ -507,29 +482,31 @@ export const PlaceholdersPage: React.FC = () => {
                       </CardHeader>
 
                       <CardContent className="pt-0 pl-5 space-y-3">
-                        {/* Valor padrão */}
-                        {p.valor ? (
-                          <div className="flex items-start gap-2">
-                            <Type size={12} className="text-muted-foreground mt-1 shrink-0" />
-                            <div>
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">
-                                Valor padrão
-                              </p>
-                              <p className="text-sm text-foreground font-medium truncate" title={p.valor}>
-                                {p.valor}
-                              </p>
+                        {/* Valor padrão — apenas para placeholders personalizados */}
+                        {p.categoria === 'Personalizado' && (
+                          p.valor ? (
+                            <div className="flex items-start gap-2">
+                              <Type size={12} className="text-muted-foreground mt-1 shrink-0" />
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">
+                                  Valor padrão
+                                </p>
+                                <p className="text-sm text-foreground font-medium truncate" title={p.valor}>
+                                  {p.valor}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-start gap-2">
-                            <Type size={12} className="text-muted-foreground mt-1 shrink-0" />
-                            <div>
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">
-                                Valor padrão
-                              </p>
-                              <span className="text-xs text-muted-foreground italic">Sem valor definido</span>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              <Type size={12} className="text-muted-foreground mt-1 shrink-0" />
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">
+                                  Valor padrão
+                                </p>
+                                <span className="text-xs text-muted-foreground italic">Sem valor definido</span>
+                              </div>
                             </div>
-                          </div>
+                          )
                         )}
 
                         {/* Descrição */}
@@ -745,7 +722,6 @@ export const PlaceholdersPage: React.FC = () => {
                   <SelectItem value="REP">REP/Laudo (Sistema)</SelectItem>
                   <SelectItem value="Personalizado">Personalizado</SelectItem>
                   <SelectItem value="Perito">Perito</SelectItem>
-                  <SelectItem value="Sistema">Sistema</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -406,6 +406,10 @@ export const TemplatesPage: React.FC = () => {
     const replacements: Record<string, string> = {
       '{{perito.nome}}': '<strong>Dr. João da Silva</strong>',
       '{{perito.cargo}}': '<strong>Perito Criminal</strong>',
+      '{{perito_nome}}': '<strong>Dr. João da Silva</strong>',
+      '{{perito_cargo}}': '<strong>Perito Criminal</strong>',
+      '{{perito_lotacao}}': '<strong>UETC - Telêmaco Borba</strong>',
+      '{{perito_matricula}}': '<strong>123456</strong>',
       '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
       '{{laudo.numero}}': '<strong>2026/00123</strong>',
       '{{numero_rep}}': '<strong>321.654-2026</strong>',
