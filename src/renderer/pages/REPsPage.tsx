@@ -19,6 +19,13 @@ import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface REPFormData {
   numero: string;
@@ -203,11 +210,37 @@ export const REPsPage: React.FC = () => {
   const [templatesVinculados, setTemplatesVinculados] = useState<any[]>([]);
   const [errors, setErrors] = useState<REPFormErrors>({});
 
+  // Estados para o Dialog "Criar Laudo" (REPs órfãs)
+  const [criarLaudoOpen, setCriarLaudoOpen] = useState(false);
+  const [criarLaudoRep, setCriarLaudoRep] = useState<REP | null>(null);
+  const [criarLaudoTipoExameId, setCriarLaudoTipoExameId] = useState('');
+  const [criarLaudoTemplateId, setCriarLaudoTemplateId] = useState('');
+  const [criarLaudoTemplates, setCriarLaudoTemplates] = useState<any[]>([]);
+  const [criarLaudoSubmitting, setCriarLaudoSubmitting] = useState(false);
+  const [repsComLaudo, setRepsComLaudo] = useState<Set<string>>(new Set());
+
   const carregarREPs = useCallback(async () => {
     try {
       setLoading(true); setError(null);
       const r = await window.ipcAPI.rep.findAll();
-      if (r.success && r.data) setReps(r.data); else setError(r.error);
+      if (r.success && r.data) {
+        setReps(r.data);
+
+        // Carregar laudos para identificar quais REPs têm laudo vinculado
+        try {
+          const laudosResp = await window.ipcAPI.laudo.findAll();
+          if (laudosResp.success && laudosResp.data) {
+            const idsComLaudo = new Set<string>(
+              (laudosResp.data as any[]).map((l: any) => l.rep_id)
+            );
+            setRepsComLaudo(idsComLaudo);
+          }
+        } catch {
+          // Silencioso: badges não serão exibidos, mas a tabela funciona normalmente
+        }
+      } else {
+        setError(r.error);
+      }
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   }, []);
 
@@ -342,6 +375,75 @@ export const REPsPage: React.FC = () => {
     } catch (e: any) { alert('Erro ao excluir REP'); }
   };
 
+  const handleCriarLaudo = (rep: REP) => {
+    setCriarLaudoRep(rep);
+    setCriarLaudoTipoExameId(rep.tipo_exame_id || '');
+    setCriarLaudoTemplateId('');
+    setCriarLaudoTemplates([]);
+    setCriarLaudoSubmitting(false);
+    setCriarLaudoOpen(true);
+
+    // Se a REP já tem tipo de exame, carregar os templates imediatamente
+    if (rep.tipo_exame_id) {
+      (async () => {
+        const r = await window.ipcAPI.template.findByTipoExame(rep.tipo_exame_id!);
+        if (r.success && r.data) {
+          const ordenados = [...r.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          setCriarLaudoTemplates(ordenados);
+        }
+      })();
+    }
+  };
+
+  const handleCriarLaudoConfirmar = async () => {
+    if (!criarLaudoRep || !criarLaudoTemplateId) return;
+
+    try {
+      setCriarLaudoSubmitting(true);
+      const peritoId = getLoggedUserId();
+      if (!peritoId) {
+        alert('Usuário não autenticado. Faça login novamente.');
+        return;
+      }
+
+      const r = await window.ipcAPI.laudo.create({
+        rep_id: criarLaudoRep.id,
+        perito_id: peritoId,
+        template_id: criarLaudoTemplateId,
+      });
+
+      if (r.success) {
+        await carregarREPs();
+        setCriarLaudoOpen(false);
+        setSuccess('Laudo criado com sucesso!');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        alert(r.error || 'Erro ao criar laudo');
+      }
+    } catch (e: any) {
+      alert('Erro ao criar laudo: ' + e.message);
+    } finally {
+      setCriarLaudoSubmitting(false);
+    }
+  };
+
+  // Carregar templates quando o tipo de exame muda no Dialog
+  const handleCriarLaudoTipoExameChange = async (tipoExameId: string) => {
+    setCriarLaudoTipoExameId(tipoExameId);
+    setCriarLaudoTemplateId('');
+    if (!tipoExameId) {
+      setCriarLaudoTemplates([]);
+      return;
+    }
+    const r = await window.ipcAPI.template.findByTipoExame(tipoExameId);
+    if (r.success && r.data) {
+      const ordenados = [...r.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+      setCriarLaudoTemplates(ordenados);
+    } else {
+      setCriarLaudoTemplates([]);
+    }
+  };
+
   const validateField = (field: keyof REPFormData) => {
     const fieldSchema = repFormSchema.shape[field];
     if (!fieldSchema) return;
@@ -452,6 +554,18 @@ export const REPsPage: React.FC = () => {
       ),
     },
     {
+      id: 'tem_laudo',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Laudo" />
+      ),
+      cell: ({ row }) => {
+        const temLaudo = repsComLaudo.has(row.original.id);
+        return temLaudo
+          ? <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800">Criado</Badge>
+          : <Badge variant="destructive" className="gap-1"><AlertTriangle size={12} /> Sem Laudo</Badge>;
+      },
+    },
+    {
       accessorKey: 'status',
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Status" />
@@ -472,8 +586,20 @@ export const REPsPage: React.FC = () => {
       header: () => <span className="sr-only">Ações</span>,
       cell: ({ row }) => {
         const rep = row.original;
+        const temLaudo = repsComLaudo.has(rep.id);
         return (
           <div className="flex justify-end gap-2">
+            {!temLaudo && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCriarLaudo(rep)}
+                aria-label={`Criar laudo para REP ${rep.numero}`}
+                title="Criar Laudo"
+              >
+                <FileText size={14} />
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => handleEditar(rep)} aria-label={`Editar REP ${rep.numero}`}>
               <Edit size={14} />
             </Button>
@@ -484,7 +610,7 @@ export const REPsPage: React.FC = () => {
         );
       },
     },
-  ], [handleEditar, handleDelete]);
+  ], [handleEditar, handleDelete, repsComLaudo, handleCriarLaudo]);
 
   // Tabela sem form
   if (!showForm) {
@@ -516,6 +642,75 @@ export const REPsPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Dialog "Criar Laudo" para REPs órfãs */}
+        <Dialog open={criarLaudoOpen} onOpenChange={setCriarLaudoOpen}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Criar Laudo — REP {criarLaudoRep?.numero}
+              </DialogTitle>
+              <DialogDescription>
+                Selecione o tipo de exame e o template para criar o laudo desta REP.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="criar-laudo-tipo-exame">Tipo de Exame</Label>
+                <Select
+                  value={criarLaudoTipoExameId}
+                  onValueChange={handleCriarLaudoTipoExameChange}
+                >
+                  <SelectTrigger id="criar-laudo-tipo-exame">
+                    <SelectValue placeholder="Selecione o tipo de exame..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tiposExame.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.codigo} - {t.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="criar-laudo-template">Template</Label>
+                <Select
+                  disabled={!criarLaudoTipoExameId || criarLaudoTemplates.length === 0}
+                  value={criarLaudoTemplateId}
+                  onValueChange={setCriarLaudoTemplateId}
+                >
+                  <SelectTrigger id="criar-laudo-template">
+                    <SelectValue placeholder={
+                      !criarLaudoTipoExameId
+                        ? 'Selecione um tipo de exame'
+                        : criarLaudoTemplates.length === 0
+                          ? 'Nenhum template disponível'
+                          : 'Selecione um template'
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {criarLaudoTemplates.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setCriarLaudoOpen(false)} disabled={criarLaudoSubmitting}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleCriarLaudoConfirmar}
+                disabled={!criarLaudoTemplateId || criarLaudoSubmitting}
+                className="flex items-center gap-2"
+              >
+                <Plus size={16} />
+                {criarLaudoSubmitting ? 'Criando...' : 'Criar Laudo'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

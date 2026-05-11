@@ -133,6 +133,7 @@ export interface IpcAPI {
     findAll: () => Promise<UserResponse>;
     findByRepId: (repId: string) => Promise<UserResponse>;
     updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
+    create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
   };
   imagem: {
     pickAndUpload: (laudoId: string) => Promise<UserResponse>;
@@ -232,6 +233,7 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:findByRepId',
   'laudo:findAll',
   'laudo:updateConteudo',
+  'laudo:create',
 
   // Imagens
   'imagem:pickAndUpload',
@@ -567,6 +569,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findAll: () => ipcRenderer.invoke('laudo:findAll'),
     findByRepId: (repId: string) => ipcRenderer.invoke('laudo:findByRepId', repId),
     updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
+    create: (data: { rep_id: string; perito_id: string; template_id: string }) => ipcRenderer.invoke('laudo:create', data),
   },
 
   imagem: {
