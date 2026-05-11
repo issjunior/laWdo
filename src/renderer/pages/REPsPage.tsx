@@ -495,14 +495,12 @@ export const REPsPage: React.FC = () => {
     },
     {
       id: 'tem_laudo',
+      accessorFn: (row) => (repsComLaudo.has(row.id) ? 1 : 0),
+      enableSorting: true,
+      enableHiding: true,
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Laudo" />
       ),
-      sortingFn: (rowA, rowB) => {
-        const a = repsComLaudo.has(rowA.original.id) ? 1 : 0;
-        const b = repsComLaudo.has(rowB.original.id) ? 1 : 0;
-        return a - b;
-      },
       cell: ({ row }) => {
         const temLaudo = repsComLaudo.has(row.original.id);
         return temLaudo
