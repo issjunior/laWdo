@@ -60,6 +60,7 @@ const createWindow = (): void => {
   // Mostrar quando estiver pronto
   mainWindow.once('ready-to-show', () => {
     if (mainWindow) {
+      mainWindow.maximize();
       mainWindow.show();
     }
   });
