@@ -1,15 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -18,14 +11,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Search, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Plus, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
+import { ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table/data-table';
+import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { solicitanteSchema, createSolicitanteSchema, type Solicitante } from '@/lib/validators/solicitante.schema';
 
 export const SolicitantesPage: React.FC = () => {
   const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
   const [todosSolicitantes, setTodosSolicitantes] = useState<Solicitante[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSolicitante, setEditingSolicitante] = useState<Solicitante | null>(null);
   const [formData, setFormData] = useState<SolicitanteCreateData>({
@@ -89,13 +90,6 @@ export const SolicitantesPage: React.FC = () => {
     carregarTodosSolicitantes();
     carregarSolicitantes(mostrarTodos);
   }, [carregarSolicitantes, carregarTodosSolicitantes, mostrarTodos]);
-
-  // Filtrar solicitantes pelo termo de busca
-  const filteredSolicitantes = solicitantes.filter(
-    (s) =>
-      s.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.tipo && s.tipo.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
 
   // Abrir diálogo para novo solicitante
   const handleNovo = () => {
@@ -276,54 +270,168 @@ export const SolicitantesPage: React.FC = () => {
     }
   };
 
+  // Definições de colunas da DataTable
+  const columnDefs = useMemo<ColumnDef<Solicitante>[]>(() => [
+    {
+      accessorKey: 'nome',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Nome" />
+      ),
+      cell: ({ row }) => (
+        <span className="font-medium">{row.getValue('nome')}</span>
+      ),
+    },
+    {
+      accessorKey: 'tipo',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Tipo" />
+      ),
+      cell: ({ row }) => (
+        <span>{row.getValue('tipo') || '-'}</span>
+      ),
+    },
+    {
+      accessorKey: 'telefone',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Telefone" />
+      ),
+      cell: ({ row }) => (
+        <span>{row.getValue('telefone') || '-'}</span>
+      ),
+    },
+    {
+      accessorKey: 'email',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Email" />
+      ),
+      cell: ({ row }) => (
+        <span>{row.getValue('email') || '-'}</span>
+      ),
+    },
+    {
+      accessorKey: 'ativo',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => {
+        const ativo = !!row.getValue('ativo');
+        return (
+          <Badge
+            variant="outline"
+            className={`rounded-full ${ativo
+              ? 'bg-green-100 text-green-800 border-green-200'
+              : 'bg-red-100 text-red-800 border-red-200'
+            }`}
+          >
+            {ativo ? 'Ativo' : 'Inativo'}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      header: () => <span className="sr-only">Ações</span>,
+      cell: ({ row }) => {
+        const solicitante = row.original;
+        return (
+          <div className="flex justify-end gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleEditar(solicitante)}
+                  aria-label="Editar"
+                >
+                  <Edit size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Editar</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleToggleStatus(solicitante)}
+                  aria-label={!!solicitante.ativo ? 'Desativar' : 'Ativar'}
+                  className={!!solicitante.ativo ? 'text-orange-500' : 'text-green-600'}
+                >
+                  {!!solicitante.ativo ? <X size={14} /> : <Plus size={14} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">{!!solicitante.ativo ? 'Desativar' : 'Ativar'}</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleHardDelete(solicitante.id, solicitante.nome)}
+                  className="text-red-600"
+                  aria-label="Excluir"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Excluir permanentemente</p></TooltipContent>
+            </Tooltip>
+          </div>
+        );
+      },
+    },
+  ], [handleEditar, handleToggleStatus, handleHardDelete]);
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Solicitantes</h1>
-          <p className="text-gray-600 mt-2">
-            Gerencie órgãos solicitantes (varas, delegacias, órgãos públicos)
-          </p>
+    <TooltipProvider>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Solicitantes</h1>
+            <p className="text-gray-600 mt-2">
+              Gerencie órgãos solicitantes (varas, delegacias, órgãos públicos)
+            </p>
+          </div>
+          <Button onClick={handleNovo} className="flex items-center gap-2">
+            <Plus size={16} />
+            Novo Solicitante
+          </Button>
         </div>
-        <Button onClick={handleNovo} className="flex items-center gap-2">
-          <Plus size={16} />
-          Novo Solicitante
-        </Button>
-      </div>
 
-      {/* Card de estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Card de estatísticas */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Total de Solicitantes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm flex items-center space-x-2">
+                <span className="text-green-600 font-medium">
+                  {todosSolicitantes.filter((s) => !!s.ativo).length} Ativos
+                </span>
+                <span className="text-red-600 font-medium">
+                  {todosSolicitantes.filter((s) => !s.ativo).length} Inativos
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
+        {/* Tabela com DataTable */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total de Solicitantes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm flex items-center space-x-2">
-              <span className="text-green-600 font-medium">
-                {todosSolicitantes.filter((s) => !!s.ativo).length} Ativos
-              </span>
-              <span className="text-red-600 font-medium">
-                {todosSolicitantes.filter((s) => !s.ativo).length} Inativos
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Busca e tabela */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Lista de Solicitantes</CardTitle>
-              <CardDescription>
-                {filteredSolicitantes.length} solicitante(s) encontrado(s) • {mostrarTodos ? "Todos" : "Apenas Ativos"}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-3">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Lista de Solicitantes</CardTitle>
+                <CardDescription>
+                  {mostrarTodos ? 'Todos' : 'Apenas Ativos'}
+                </CardDescription>
+              </div>
               <Button
                 variant={mostrarTodos ? 'default' : 'outline'}
                 size="sm"
@@ -333,222 +441,149 @@ export const SolicitantesPage: React.FC = () => {
                 {mostrarTodos ? <Eye size={14} /> : <EyeOff size={14} />}
                 {mostrarTodos ? 'Mostrar Ativos' : 'Apenas Ativos'}
               </Button>
-              <div className="relative w-64">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar solicitantes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8 text-gray-500">Carregando...</div>
-          ) : filteredSolicitantes.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {searchTerm
-                ? 'Nenhum solicitante encontrado para a busca.'
-                : 'Nenhum solicitante cadastrado.'}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSolicitantes.map((solicitante) => (
-                  <TableRow key={solicitante.id}>
-                    <TableCell className="font-medium">{solicitante.nome}</TableCell>
-                    <TableCell>{solicitante.tipo || '-'}</TableCell>
-                    <TableCell>{solicitante.telefone || '-'}</TableCell>
-                    <TableCell>{solicitante.email || '-'}</TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${!!solicitante.ativo
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                          }`}
-                      >
-                        {!!solicitante.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditar(solicitante)}
-                          title="Editar informações"
-                        >
-                          <Edit size={14} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            handleToggleStatus(solicitante)
-                          }
-                          title={
-                            !!solicitante.ativo
-                              ? 'Desativar (ocultar da lista)'
-                              : 'Ativar (mostrar na lista)'
-                          }
-                          className={!!solicitante.ativo ? 'text-orange-500' : 'text-green-600'}
-                        >
-                          {!!solicitante.ativo ? <X size={14} /> : <Plus size={14} />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleHardDelete(solicitante.id, solicitante.nome)}
-                          className="text-red-600 hover:text-red-700"
-                          title="Excluir permanentemente (apagar do banco de dados)"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Toast de sucesso */}
-      {removidoRecentemente && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
-          Solicitante desativado com sucesso!
-        </div>
-      )}
-
-      {/* Diálogo de criação/edição */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingSolicitante
-                ? 'Editar Solicitante'
-                : 'Novo Solicitante'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingSolicitante
-                ? 'Atualize as informações do solicitante.'
-                : 'Preencha as informações para cadastrar um novo solicitante.'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="nome" className="text-sm font-medium">
-                  Solicitante *
-                </label>
-                <Input
-                  id="nome"
-                  value={formData.nome}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nome: e.target.value })
-                  }
-                  placeholder="Ex: Tribunal de Justiça do Paraná"
-                  className={errors.nome ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                />
-                {errors.nome && (
-                  <p className="text-xs text-red-600">{errors.nome}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="tipo" className="text-sm font-medium">
-                  Responsável/Contato
-                </label>
-                <Input
-                  id="tipo"
-                  value={formData.tipo}
-                  onChange={(e) =>
-                    setFormData({ ...formData, tipo: e.target.value })
-                  }
-                  placeholder="Ex: Vara Criminal, Delegacia, Ministério Público"
-                  className={errors.tipo ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                />
-                {errors.tipo && (
-                  <p className="text-xs text-red-600">{errors.tipo}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="endereco" className="text-sm font-medium">
-                  Endereço
-                </label>
-                <Input
-                  id="endereco"
-                  value={formData.endereco}
-                  onChange={(e) =>
-                    setFormData({ ...formData, endereco: e.target.value })
-                  }
-                  placeholder="Endereço completo"
-                  className={errors.endereco ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                />
-                {errors.endereco && (
-                  <p className="text-xs text-red-600">{errors.endereco}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium">
-                  E-mail
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  placeholder="email@tjpr.jus.br"
-                  className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                />
-                {errors.email && (
-                  <p className="text-xs text-red-600">{errors.email}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Mensagens de erro/sucesso */}
-            {error && !errors.nome && !errors.tipo && (
-              <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
-                {error}
-              </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-gray-500">Carregando...</div>
+            ) : error && solicitantes.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">{error}</div>
+            ) : (
+              <DataTable
+                columns={columnDefs}
+                data={solicitantes}
+                searchColumn="nome"
+                searchPlaceholder="Buscar solicitantes..."
+              />
             )}
-            {success && (
-              <div className="text-sm text-green-600 bg-green-50 p-3 rounded">
-                {success}
-              </div>
-            )}
-          </div>
+          </CardContent>
+        </Card>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSalvar}>
-              {editingSolicitante ? 'Atualizar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Toast de sucesso */}
+        {removidoRecentemente && (
+          <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
+            Solicitante desativado com sucesso!
+          </div>
+        )}
+
+        {/* Diálogo de criação/edição */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingSolicitante
+                  ? 'Editar Solicitante'
+                  : 'Novo Solicitante'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingSolicitante
+                  ? 'Atualize as informações do solicitante.'
+                  : 'Preencha as informações para cadastrar um novo solicitante.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="nome" className="text-sm font-medium">
+                    Solicitante *
+                  </label>
+                  <Input
+                    id="nome"
+                    value={formData.nome}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nome: e.target.value })
+                    }
+                    placeholder="Ex: Tribunal de Justiça do Paraná"
+                    className={errors.nome ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  />
+                  {errors.nome && (
+                    <p className="text-xs text-red-600">{errors.nome}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="tipo" className="text-sm font-medium">
+                    Responsável/Contato
+                  </label>
+                  <Input
+                    id="tipo"
+                    value={formData.tipo}
+                    onChange={(e) =>
+                      setFormData({ ...formData, tipo: e.target.value })
+                    }
+                    placeholder="Ex: Vara Criminal, Delegacia, Ministério Público"
+                    className={errors.tipo ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  />
+                  {errors.tipo && (
+                    <p className="text-xs text-red-600">{errors.tipo}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="endereco" className="text-sm font-medium">
+                    Endereço
+                  </label>
+                  <Input
+                    id="endereco"
+                    value={formData.endereco}
+                    onChange={(e) =>
+                      setFormData({ ...formData, endereco: e.target.value })
+                    }
+                    placeholder="Endereço completo"
+                    className={errors.endereco ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  />
+                  {errors.endereco && (
+                    <p className="text-xs text-red-600">{errors.endereco}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-medium">
+                    E-mail
+                  </label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
+                    placeholder="email@tjpr.jus.br"
+                    className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  />
+                  {errors.email && (
+                    <p className="text-xs text-red-600">{errors.email}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Mensagens de erro/sucesso */}
+              {error && !errors.nome && !errors.tipo && (
+                <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="text-sm text-green-600 bg-green-50 p-3 rounded">
+                  {success}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSalvar}>
+                {editingSolicitante ? 'Atualizar' : 'Criar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 };
+
+export default SolicitantesPage;

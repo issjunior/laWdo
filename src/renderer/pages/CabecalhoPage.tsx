@@ -108,7 +108,7 @@ export const CabecalhoPage: React.FC = () => {
             <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : preview ? (
             <div
-              className="prose prose-sm max-w-none border rounded-lg p-6 min-h-[400px] bg-white"
+              className="prose prose-sm dark:prose-invert max-w-none border rounded-lg p-6 min-h-[400px] bg-white"
               dangerouslySetInnerHTML={{ __html: conteudo || '<p class="text-gray-400">Nenhum conteúdo definido.</p>' }}
             />
           ) : (
@@ -121,7 +121,7 @@ export const CabecalhoPage: React.FC = () => {
               />
 
               {/* Inserir placeholders */}
-              <div className="flex flex-wrap items-center gap-2 p-3 border rounded-lg bg-gray-50">
+              <div className="flex flex-wrap items-center gap-2 p-3 border rounded-lg bg-gray-50 dark:bg-gray-800/50">
                 <span className="text-sm text-gray-600 font-medium mr-1">Placeholders:</span>
                 {['perito_nome', 'perito_cargo', 'perito_lotacao', 'perito_matricula', 'numero_rep', 'data_atual', 'laudo.numero', 'solicitante_nome'].map((tag) => (
                   <button
@@ -130,7 +130,7 @@ export const CabecalhoPage: React.FC = () => {
                       // Copia o placeholder para a área de transferência
                       navigator.clipboard.writeText(`{{${tag}}}`);
                     }}
-                    className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors cursor-pointer border-0"
+                    className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/60 transition-colors cursor-pointer border-0"
                     title="Clique para copiar o placeholder"
                   >
                     {'{{' + tag + '}}'}
@@ -142,29 +142,6 @@ export const CabecalhoPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Preview de como fica no laudo */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Pré-visualização no Laudo</CardTitle>
-          <CardDescription>
-            Simulação de como o cabeçalho aparecerá no início de cada laudo
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="border rounded-lg p-8 bg-white">
-            <div
-              className="border-b pb-4 mb-4"
-              dangerouslySetInnerHTML={{ __html: conteudo || '<span class="text-gray-400">[Cabeçalho vazio - configure acima]</span>' }}
-            />
-            <div className="text-gray-500 italic text-sm">
-              <p>--- Conteúdo do laudo será inserido aqui ---</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            * Esta é apenas uma simulação. O cabeçalho real será aplicado automaticamente em todos os laudos.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 };

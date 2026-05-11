@@ -1,17 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -21,14 +14,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Plus, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
+import { ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table/data-table';
+import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TipoExame, CreateTipoExameInput } from '@/lib/validators';
 
 export const TiposExamePage: React.FC = () => {
   const [tiposExame, setTiposExame] = useState<TipoExame[]>([]);
   const [todosTipos, setTodosTipos] = useState<TipoExame[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [mostrarTodos, setMostrarTodos] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTipo, setEditingTipo] = useState<TipoExame | null>(null);
@@ -127,14 +128,6 @@ export const TiposExamePage: React.FC = () => {
       alert('Erro ao alterar status do tipo de exame');
     }
   };
-
-  // Filtrar tipos de exame pelo termo de busca
-  const filteredTipos = tiposExame.filter(
-    (tipo) =>
-      tipo.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tipo.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (tipo.descricao && tipo.descricao.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
 
   // Abrir diálogo para novo tipo
   const handleNovo = () => {
@@ -242,53 +235,177 @@ export const TiposExamePage: React.FC = () => {
     }
   };
 
+  // Definições de colunas da DataTable
+  const columnDefs = useMemo<ColumnDef<TipoExame>[]>(() => [
+    {
+      accessorKey: 'codigo',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Código GDL" />
+      ),
+      cell: ({ row }) => (
+        <span className="font-mono text-sm font-medium">{row.getValue('codigo')}</span>
+      ),
+    },
+    {
+      accessorKey: 'nome',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Nome" />
+      ),
+      cell: ({ row }) => (
+        <span className="font-medium">{row.getValue('nome')}</span>
+      ),
+    },
+    {
+      id: 'tipo',
+      accessorFn: (row) => (row.eh_local === true || row.eh_local === 1 ? 'Local' : 'Laboratorial'),
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Tipo" />
+      ),
+      cell: ({ row }) => {
+        const isLocal = row.original.eh_local === true || row.original.eh_local === 1;
+        return (
+          <Badge
+            variant={isLocal ? 'default' : 'secondary'}
+            className="rounded-full"
+          >
+            {isLocal ? 'Local' : 'Laboratorial'}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: 'ativo',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => {
+        const ativo = !!row.getValue('ativo');
+        return (
+          <Badge
+            variant="outline"
+            className={`rounded-full ${ativo
+              ? 'bg-green-100 text-green-800 border-green-200'
+              : 'bg-red-100 text-red-800 border-red-200'
+            }`}
+          >
+            {ativo ? 'Ativo' : 'Inativo'}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: 'descricao',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Descrição" />
+      ),
+      cell: ({ row }) => (
+        <span className="max-w-xs truncate block">{row.getValue('descricao') || '-'}</span>
+      ),
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      header: () => <span className="sr-only">Ações</span>,
+      cell: ({ row }) => {
+        const tipo = row.original;
+        return (
+          <div className="flex justify-end gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleEditar(tipo)}
+                  aria-label="Editar"
+                >
+                  <Edit size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Editar</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleToggleStatus(tipo.id)}
+                  aria-label={tipo.ativo ? 'Desativar' : 'Ativar'}
+                  className={tipo.ativo ? 'text-orange-500' : 'text-green-600'}
+                >
+                  {tipo.ativo ? <X size={14} /> : <Plus size={14} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">{tipo.ativo ? 'Desativar' : 'Ativar'}</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleExcluir(tipo.id)}
+                  className="text-red-600"
+                  aria-label="Excluir"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top"><p className="text-xs">Excluir</p></TooltipContent>
+            </Tooltip>
+          </div>
+        );
+      },
+    },
+  ], [handleEditar, handleToggleStatus, handleExcluir]);
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Tipos de Exame</h1>
-          <p className="text-gray-600 mt-2">
-            Gerencie os tipos de exame pericial e suas informações
-          </p>
+    <TooltipProvider>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Tipos de Exame</h1>
+            <p className="text-gray-600 mt-2">
+              Gerencie os tipos de exame pericial e suas informações
+            </p>
+          </div>
+          <Button onClick={handleNovo} className="flex items-center gap-2">
+            <Plus size={16} />
+            Novo Tipo de Exame
+          </Button>
         </div>
-        <Button onClick={handleNovo} className="flex items-center gap-2">
-          <Plus size={16} />
-          Novo Tipo de Exame
-        </Button>
-      </div>
 
-      {/* Card de total */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Card de total */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Total de Tipos de Exame
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm flex items-center space-x-2">
+                <span className="text-green-600 font-medium">
+                  {todosTipos.filter((t) => !!t.ativo).length} Ativos
+                </span>
+                <span className="text-red-600 font-medium">
+                  {todosTipos.filter((t) => !t.ativo).length} Inativos
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabela com DataTable */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total de Tipos de Exame
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm flex items-center space-x-2">
-              <span className="text-green-600 font-medium">
-                {todosTipos.filter((t) => !!t.ativo).length} Ativos
-              </span>
-              <span className="text-red-600 font-medium">
-                {todosTipos.filter((t) => !t.ativo).length} Inativos
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Busca e tabela */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Lista de Tipos de Exame</CardTitle>
-              <CardDescription>
-                {filteredTipos.length} tipo(s) encontrado(s) • {mostrarTodos ? "Todos" : "Apenas Ativos"}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-3">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Lista de Tipos de Exame</CardTitle>
+                <CardDescription>
+                  {mostrarTodos ? 'Todos' : 'Apenas Ativos'}
+                </CardDescription>
+              </div>
               <Button
                 variant={mostrarTodos ? 'default' : 'outline'}
                 size="sm"
@@ -298,201 +415,124 @@ export const TiposExamePage: React.FC = () => {
                 {mostrarTodos ? <Eye size={14} /> : <EyeOff size={14} />}
                 {mostrarTodos ? 'Mostrar Ativos' : 'Apenas Ativos'}
               </Button>
-              <div className="relative w-64">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar tipos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8 text-gray-500">Carregando...</div>
-          ) : error && filteredTipos.length === 0 ? (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : filteredTipos.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {searchTerm ? 'Nenhum tipo encontrado para a busca.' : 'Nenhum tipo de exame cadastrado.'}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Código GDL</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTipos.map((tipo) => (
-                  <TableRow key={tipo.id}>
-                    <TableCell className="font-mono text-sm font-medium">{tipo.codigo}</TableCell>
-                    <TableCell className="font-medium">{tipo.nome}</TableCell>
-                    <TableCell>
-                      {tipo.eh_local === true || tipo.eh_local === 1 ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          Local
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Laboratorial
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${!!tipo.ativo
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {!!tipo.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {tipo.descricao || '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditar(tipo)}
-                        >
-                          <Edit size={14} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleStatus(tipo.id)}
-                          title={tipo.ativo ? 'Desativar' : 'Ativar'}
-                          className={tipo.ativo ? 'text-orange-500' : 'text-green-600'}
-                        >
-                          {tipo.ativo ? <X size={14} /> : <Plus size={14} />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleExcluir(tipo.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Diálogo de criação/edição */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingTipo ? 'Editar Tipo de Exame' : 'Novo Tipo de Exame'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingTipo
-                ? 'Atualize as informações do tipo de exame.'
-                : 'Preencha as informações para criar um novo tipo de exame.'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {error && (
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-gray-500">Carregando...</div>
+            ) : error && tiposExame.length === 0 ? (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            ) : (
+              <DataTable
+                columns={columnDefs}
+                data={tiposExame}
+                searchColumn="nome"
+                searchPlaceholder="Buscar tipos..."
+              />
             )}
-            {success && (
-              <Alert className="bg-green-50 border-green-200">
-                <AlertDescription className="text-green-800">{success}</AlertDescription>
-              </Alert>
-            )}
+          </CardContent>
+        </Card>
 
-            <div className="space-y-2">
-              <label htmlFor="codigo" className="text-sm font-medium">
-                Código do exame no GDL *
-              </label>
-              <Input
-                id="codigo"
-                value={formData.codigo}
-                onChange={(e) =>
-                  setFormData({ ...formData, codigo: e.target.value })
-                }
-                placeholder="Ex: DNA, BAL, LOC..."
-              />
+        {/* Diálogo de criação/edição */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingTipo ? 'Editar Tipo de Exame' : 'Novo Tipo de Exame'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingTipo
+                  ? 'Atualize as informações do tipo de exame.'
+                  : 'Preencha as informações para criar um novo tipo de exame.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              {success && (
+                <Alert className="bg-green-50 border-green-200">
+                  <AlertDescription className="text-green-800">{success}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-2">
+                <label htmlFor="codigo" className="text-sm font-medium">
+                  Código do exame no GDL *
+                </label>
+                <Input
+                  id="codigo"
+                  value={formData.codigo}
+                  onChange={(e) =>
+                    setFormData({ ...formData, codigo: e.target.value })
+                  }
+                  placeholder="Ex: DNA, BAL, LOC..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="nome" className="text-sm font-medium">
+                  Nome do tipo de exame *
+                </label>
+                <Input
+                  id="nome"
+                  value={formData.nome}
+                  onChange={(e) =>
+                    setFormData({ ...formData, nome: e.target.value })
+                  }
+                  placeholder="Ex: Exame de DNA, Perícia Balística..."
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="eh_local"
+                  checked={formData.eh_local}
+                  onChange={(e) =>
+                    setFormData({ ...formData, eh_local: e.target.checked })
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <Label htmlFor="eh_local" className="text-sm font-medium cursor-pointer">
+                  É exame de local
+                </Label>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="descricao" className="text-sm font-medium">
+                  Descrição do exame
+                </label>
+                <Textarea
+                  id="descricao"
+                  value={formData.descricao}
+                  onChange={(e) =>
+                    setFormData({ ...formData, descricao: e.target.value })
+                  }
+                  placeholder="Descrição detalhada do tipo de exame..."
+                  rows={4}
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="nome" className="text-sm font-medium">
-                Nome do tipo de exame *
-              </label>
-              <Input
-                id="nome"
-                value={formData.nome}
-                onChange={(e) =>
-                  setFormData({ ...formData, nome: e.target.value })
-                }
-                placeholder="Ex: Exame de DNA, Perícia Balística..."
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="eh_local"
-                checked={formData.eh_local}
-                onChange={(e) =>
-                  setFormData({ ...formData, eh_local: e.target.checked })
-                }
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <Label htmlFor="eh_local" className="text-sm font-medium cursor-pointer">
-                É exame de local
-              </Label>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="descricao" className="text-sm font-medium">
-                Descrição do exame
-              </label>
-              <Textarea
-                id="descricao"
-                value={formData.descricao}
-                onChange={(e) =>
-                  setFormData({ ...formData, descricao: e.target.value })
-                }
-                placeholder="Descrição detalhada do tipo de exame..."
-                rows={4}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSalvar} disabled={!formData.codigo.trim() || !formData.nome.trim()}>
-              {editingTipo ? 'Atualizar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSalvar} disabled={!formData.codigo.trim() || !formData.nome.trim()}>
+                {editingTipo ? 'Atualizar' : 'Criar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 };
+
+export default TiposExamePage;
