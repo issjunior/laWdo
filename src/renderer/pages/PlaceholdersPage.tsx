@@ -117,7 +117,7 @@ const CATEGORIAS: CategoriaConfig[] = [
 const categoriaConfig = (cat?: string | null): CategoriaConfig =>
   CATEGORIAS.find(c => c.chave === (cat || 'Personalizado')) ?? CATEGORIAS[0];
 
-const isSistema = (p: Placeholder): boolean => p.categoria === 'REP';
+const isSistema = (p: Placeholder): boolean => p.categoria === 'REP' || p.categoria === 'Perito';
 
 /* ═══════════════════════════════════════════════════════════════
    COMPONENTE PRINCIPAL
@@ -318,7 +318,7 @@ export const PlaceholdersPage: React.FC = () => {
           <CardContent className="flex items-center gap-2">
             <Lock size={16} className="text-blue-500" />
             <div className="text-xl font-semibold text-blue-600 dark:text-blue-300">{totalSistema}</div>
-            <span className="text-xs text-muted-foreground">fixos (REP)</span>
+            <span className="text-xs text-muted-foreground">fixos (REP + Perito)</span>
           </CardContent>
         </Card>
 

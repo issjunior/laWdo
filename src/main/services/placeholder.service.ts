@@ -59,6 +59,11 @@ const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   { chave: 'solicitante_nome', valor: '', descricao: 'Nome do órgão solicitante', categoria: 'REP' },
   { chave: 'tipo_exame_nome', valor: '', descricao: 'Nome do tipo de exame', categoria: 'REP' },
   { chave: 'tipo_exame_codigo', valor: '', descricao: 'Código do exame no GDL', categoria: 'REP' },
+  // Perito (4)
+  { chave: 'perito_nome', valor: '', descricao: 'Nome completo do perito', categoria: 'Perito' },
+  { chave: 'perito_cargo', valor: '', descricao: 'Cargo do perito', categoria: 'Perito' },
+  { chave: 'perito_lotacao', valor: '', descricao: 'Lotação/unidade do perito', categoria: 'Perito' },
+  { chave: 'perito_matricula', valor: '', descricao: 'Matrícula funcional do perito', categoria: 'Perito' },
 ];
 
 class PlaceholderService extends BaseService<PlaceholderRow> {
@@ -73,7 +78,7 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
     const row = await this.findById(id);
     if (!row) return false;
 
-    if (row.categoria === 'REP') {
+    if (row.categoria === 'REP' || row.categoria === 'Perito') {
       throw new Error('Placeholders do sistema não podem ser excluídos.');
     }
 

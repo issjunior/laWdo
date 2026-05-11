@@ -139,10 +139,16 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     'lacre_saida': repData.lacre_saida || '',
     'observacoes_rep': repData.observacoes || '',
 
-    // Perito
+    // Perito (notação com ponto — compatibilidade retroativa)
     'perito.nome': perito?.nome || '',
     'perito.cargo': perito?.cargo || 'Perito Criminal',
     'perito.especialidade': perito?.especialidade || '',
+
+    // Perito (notação snake_case — seed do sistema)
+    'perito_nome': perito?.nome || '',
+    'perito_cargo': perito?.cargo || 'Perito Criminal',
+    'perito_lotacao': perito?.lotacao || '',
+    'perito_matricula': perito?.matricula || '',
 
     // Geral
     'data_atual': new Date().toLocaleDateString('pt-BR'),
