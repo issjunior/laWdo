@@ -10,6 +10,7 @@ import {
   UserCircle,
   Settings,
   ChevronRight,
+  Brain,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -76,6 +77,7 @@ const menuItems = [
     icon: Settings,
     items: [
       { title: 'Perfil', path: '/perfil', icon: UserCircle },
+      { title: 'Modelos IA', path: '/modelos-ia', icon: Brain },
     ],
   },
 ];

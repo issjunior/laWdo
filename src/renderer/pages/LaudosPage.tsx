@@ -27,6 +27,8 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { AISectionToolbar } from '@/components/ai/AISectionToolbar';
+import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
 
 interface Placeholder {
   id: string;
@@ -287,6 +289,13 @@ export const LaudosPage: React.FC = () => {
   const [carregandoPreview, setCarregandoPreview] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
 
+  const [iaSheetOpen, setIaSheetOpen] = useState(false);
+  const [iaSheetSecaoIdx, setIaSheetSecaoIdx] = useState<number | null>(null);
+  const [iaSheetSecaoTitulo, setIaSheetSecaoTitulo] = useState('');
+  const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaError, setIaError] = useState<string | null>(null);
+
   const carregarPlaceholders = useCallback(async () => {
     const r = await window.ipcAPI.placeholder.findAll();
     if (r.success && r.data) {
@@ -463,6 +472,134 @@ export const LaudosPage: React.FC = () => {
     });
   };
 
+  const handleOpenSheet = (idx: number, titulo: string) => {
+    setIaSheetSecaoIdx(idx);
+    setIaSheetSecaoTitulo(titulo);
+    setIaSheetOpen(true);
+    setIaError(null);
+  };
+
+  const handleRevisarOrtografia = async (html: string, idx: number) => {
+    try {
+      setIaLoading(true);
+      setIaError(null);
+      const r = await window.ipcAPI.ia.revisarOrtografia(html);
+      if (r.success && r.data) {
+        // Aplicar diretamente ao editor
+        atualizarConteudoSecao(idx, String(r.data));
+      } else {
+        setIaError(r.error || 'Erro ao revisar ortografia');
+        handleOpenSheet(idx, secoes[idx]?.titulo || '');
+      }
+    } catch (e: any) {
+      setIaError(e.message || 'Erro ao revisar ortografia');
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
+  const handleAdequarEscrita = async (html: string, idx: number) => {
+    try {
+      setIaLoading(true);
+      setIaError(null);
+      const r = await window.ipcAPI.ia.adequarEscrita(html);
+      if (r.success && r.data) {
+        const resposta: ChatMessage = {
+          role: 'assistant',
+          content: String(r.data),
+          timestamp: Date.now(),
+        };
+        setChatMessages(prev => ({
+          ...prev,
+          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), resposta],
+        }));
+      } else {
+        setIaError(r.error || 'Erro ao adequar escrita');
+      }
+    } catch (e: any) {
+      setIaError(e.message || 'Erro ao adequar escrita');
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
+  const handleDescreverImagem = async (imagens: Array<{ src: string; alt?: string }>, idx: number) => {
+    try {
+      setIaLoading(true);
+      setIaError(null);
+      const r = await window.ipcAPI.ia.descreverImagem(imagens);
+      if (r.success && r.data) {
+        const resposta: ChatMessage = {
+          role: 'assistant',
+          content: String(r.data),
+          timestamp: Date.now(),
+        };
+        setChatMessages(prev => ({
+          ...prev,
+          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), resposta],
+        }));
+      } else {
+        setIaError(r.error || 'Erro ao descrever imagem');
+      }
+    } catch (e: any) {
+      setIaError(e.message || 'Erro ao descrever imagem');
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
+  const handlePerguntar = async (pergunta: string, html: string, idx: number, titulo: string) => {
+    try {
+      setIaLoading(true);
+      setIaError(null);
+
+      const userMsg: ChatMessage = {
+        role: 'user',
+        content: pergunta,
+        timestamp: Date.now(),
+      };
+
+      setChatMessages(prev => ({
+        ...prev,
+        [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), userMsg],
+      }));
+
+      const r = await window.ipcAPI.ia.perguntar(pergunta, html);
+      if (r.success && r.data) {
+        const assistantMsg: ChatMessage = {
+          role: 'assistant',
+          content: String(r.data),
+          timestamp: Date.now(),
+        };
+        setChatMessages(prev => ({
+          ...prev,
+          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), assistantMsg],
+        }));
+      } else {
+        setIaError(r.error || 'Erro ao processar pergunta');
+      }
+    } catch (e: any) {
+      setIaError(e.message || 'Erro ao processar pergunta');
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
+  const handleApplyResponse = (texto: string) => {
+    if (iaSheetSecaoIdx !== null) {
+      atualizarConteudoSecao(iaSheetSecaoIdx, texto);
+      setIaSheetOpen(false);
+    }
+  };
+
+  const handleSendChatMessage = (message: string) => {
+    if (iaSheetSecaoIdx !== null) {
+      const html = secoes[iaSheetSecaoIdx]?.conteudo || '';
+      const titulo = secoes[iaSheetSecaoIdx]?.titulo || '';
+      handlePerguntar(message, html, iaSheetSecaoIdx, titulo);
+    }
+  };
+
   const laudoColumns = useMemo<ColumnDef<LaudoItem>[]>(() => [
     {
       accessorKey: 'data_requisicao',
@@ -628,6 +765,17 @@ export const LaudosPage: React.FC = () => {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="px-4 pb-4">
+                    <AISectionToolbar
+                      editorId={`secao-${idx}`}
+                      secaoIndex={idx}
+                      secaoTitulo={secao.titulo}
+                      htmlContent={secao.conteudo}
+                      onRevisarOrtografia={handleRevisarOrtografia}
+                      onAdequarEscrita={handleAdequarEscrita}
+                      onDescreverImagem={handleDescreverImagem}
+                      onPerguntar={handlePerguntar}
+                      onOpenSheet={handleOpenSheet}
+                    />
                     <ContextMenu>
                       <ContextMenuTrigger>
                         <TinyMceEditor
@@ -705,6 +853,19 @@ export const LaudosPage: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Sheet de Chat com IA */}
+        <AISheet
+          open={iaSheetOpen}
+          onOpenChange={setIaSheetOpen}
+          secaoTitulo={iaSheetSecaoTitulo}
+          editorId={iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : ''}
+          messages={iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : []}
+          onSendMessage={handleSendChatMessage}
+          onApplyResponse={handleApplyResponse}
+          loading={iaLoading}
+          error={iaError}
+        />
       </div>
       </TooltipProvider>
     );

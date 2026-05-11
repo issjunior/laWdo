@@ -140,6 +140,14 @@ export interface IpcAPI {
     findByLaudoId: (laudoId: string) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
   };
+
+  // IA / Integração Groq
+  ia: {
+    revisarOrtografia: (textoHtml: string) => Promise<UserResponse>;
+    adequarEscrita: (textoHtml: string) => Promise<UserResponse>;
+    descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => Promise<UserResponse>;
+    perguntar: (pergunta: string, contexto?: string) => Promise<UserResponse>;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -239,6 +247,12 @@ const ALLOWED_CHANNELS = new Set([
   'imagem:pickAndUpload',
   'imagem:findByLaudoId',
   'imagem:delete',
+
+  // IA
+  'ia:revisarOrtografia',
+  'ia:adequarEscrita',
+  'ia:descreverImagem',
+  'ia:perguntar',
 ]);
 
 // Expor API segura para o renderer
@@ -576,6 +590,25 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     pickAndUpload: (laudoId: string) => ipcRenderer.invoke('imagem:pickAndUpload', laudoId),
     findByLaudoId: (laudoId: string) => ipcRenderer.invoke('imagem:findByLaudoId', laudoId),
     delete: (id: string) => ipcRenderer.invoke('imagem:delete', id),
+  },
+
+  ia: {
+    revisarOrtografia: (textoHtml: string) => {
+      if (typeof textoHtml !== 'string') throw new Error('Texto inválido');
+      return ipcRenderer.invoke('ia:revisarOrtografia', textoHtml);
+    },
+    adequarEscrita: (textoHtml: string) => {
+      if (typeof textoHtml !== 'string') throw new Error('Texto inválido');
+      return ipcRenderer.invoke('ia:adequarEscrita', textoHtml);
+    },
+    descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => {
+      if (!Array.isArray(imagens)) throw new Error('Imagens devem ser um array');
+      return ipcRenderer.invoke('ia:descreverImagem', imagens);
+    },
+    perguntar: (pergunta: string, contexto?: string) => {
+      if (typeof pergunta !== 'string' || !pergunta.trim()) throw new Error('Pergunta inválida');
+      return ipcRenderer.invoke('ia:perguntar', pergunta, contexto);
+    },
   },
 } satisfies IpcAPI);
 
