@@ -622,7 +622,7 @@ export const REPsPage: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
-              <div className="space-y-2">
+              <div>
                 <Label htmlFor="criar-laudo-tipo-exame">Tipo de Exame</Label>
                 <Select
                   value={criarLaudoTipoExameId}
@@ -638,7 +638,7 @@ export const REPsPage: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div>
                 <Label htmlFor="criar-laudo-template">Template</Label>
                 <Select
                   disabled={!criarLaudoTipoExameId || criarLaudoTemplates.length === 0}
@@ -753,10 +753,10 @@ export const REPsPage: React.FC = () => {
                       Dados da Solicitação
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent>
+                  <AccordionContent className="space-y-5">
                     <p className="text-xs text-muted-foreground mb-4">Informações principais da requisição.</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2 md:col-span-2">
+                  <div className="md:col-span-2">
                     <FormField
                       control={form.control}
                       name="numero"
@@ -775,7 +775,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="data_requisicao"
@@ -793,7 +793,7 @@ export const REPsPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="solicitante_id"
@@ -819,7 +819,7 @@ export const REPsPage: React.FC = () => {
                     <FormLabel>Responsável/Contato</FormLabel>
                     <Input value={form.watch('solicitante_id') ? (solicitantes.find(s => s.id === form.watch('solicitante_id'))?.tipo || '—') : '—'} readOnly className="bg-muted text-muted-foreground cursor-default" />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="tipo_exame_id"
@@ -841,7 +841,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="template_id"
@@ -873,7 +873,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="tipo_solicitacao"
@@ -901,7 +901,7 @@ export const REPsPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="numero_documento"
@@ -916,7 +916,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="data_documento"
@@ -931,7 +931,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="autoridade_solicitante"
@@ -957,10 +957,10 @@ export const REPsPage: React.FC = () => {
                       Envolvido e Local
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent>
+                  <AccordionContent className="space-y-5">
                     <p className="text-xs text-muted-foreground mb-4">Dados da pessoa envolvida e, quando aplicável, do local do fato.</p>
                 <div className={`grid grid-cols-1 ${isExameLocal ? 'md:grid-cols-2' : ''} gap-4`}>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="nome_envolvido"
@@ -976,7 +976,7 @@ export const REPsPage: React.FC = () => {
                     />
                   </div>
                   {isExameLocal && (
-                    <div className="space-y-2">
+                    <div>
                       <FormField
                         control={form.control}
                         name="local_fato"
@@ -995,7 +995,7 @@ export const REPsPage: React.FC = () => {
                 </div>
                 {isExameLocal && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <div>
                       <FormField
                         control={form.control}
                         name="latitude"
@@ -1010,7 +1010,7 @@ export const REPsPage: React.FC = () => {
                         )}
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div>
                       <FormField
                         control={form.control}
                         name="longitude"
@@ -1038,10 +1038,10 @@ export const REPsPage: React.FC = () => {
                         Acionamento
                       </span>
                     </AccordionTrigger>
-                    <AccordionContent>
+                    <AccordionContent className="space-y-5">
                       <p className="text-xs text-muted-foreground mb-4">Linha do tempo de atendimento no local.</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
+                    <div>
                       <FormField
                         control={form.control}
                         name="data_acionamento"
@@ -1056,7 +1056,7 @@ export const REPsPage: React.FC = () => {
                         )}
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div>
                       <FormField
                         control={form.control}
                         name="data_chegada"
@@ -1071,7 +1071,7 @@ export const REPsPage: React.FC = () => {
                         )}
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div>
                       <FormField
                         control={form.control}
                         name="data_saida"
@@ -1098,7 +1098,7 @@ export const REPsPage: React.FC = () => {
                       Documentos Associados
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent>
+                  <AccordionContent className="space-y-5">
                     <p className="text-xs text-muted-foreground mb-4">Vínculos e observações importantes da REP.</p>
                 {(!form.watch('numero_bo') && !form.watch('numero_ip')) && (
                   <Alert className="bg-amber-50/50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-400">
@@ -1109,7 +1109,7 @@ export const REPsPage: React.FC = () => {
                   </Alert>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="numero_bo"
@@ -1124,7 +1124,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="numero_ip"
@@ -1139,7 +1139,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="lacre_entrada"
@@ -1154,7 +1154,7 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <FormField
                       control={form.control}
                       name="lacre_saida"
@@ -1170,7 +1170,7 @@ export const REPsPage: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div>
                   <FormField
                     control={form.control}
                     name="observacoes"
