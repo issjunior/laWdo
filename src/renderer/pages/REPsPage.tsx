@@ -747,13 +747,13 @@ export const REPsPage: React.FC = () => {
 
               <Accordion type="multiple" defaultValue={["dados-solicitacao", "envolvido-local", "documentos"]} className="space-y-4">
                 <AccordionItem value="dados-solicitacao">
-                  <AccordionTrigger className="text-sm font-semibold">
+                  <AccordionTrigger className="text-base font-semibold">
                     <span className="inline-flex items-center gap-2">
                       <FileText size={14} />
                       Dados da Solicitação
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-5">
+                  <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-4">Informações principais da requisição.</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-2">
@@ -951,13 +951,13 @@ export const REPsPage: React.FC = () => {
                 </AccordionItem>
 
                 <AccordionItem value="envolvido-local">
-                  <AccordionTrigger className="text-sm font-semibold">
+                  <AccordionTrigger className="text-base font-semibold">
                     <span className="inline-flex items-center gap-2">
                       <User size={14} />
                       Envolvido e Local
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-5">
+                  <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-4">Dados da pessoa envolvida e, quando aplicável, do local do fato.</p>
                 <div className={`grid grid-cols-1 ${isExameLocal ? 'md:grid-cols-2' : ''} gap-4`}>
                   <div>
@@ -1032,13 +1032,13 @@ export const REPsPage: React.FC = () => {
 
                 {isExameLocal && (
                   <AccordionItem value="acionamento">
-                    <AccordionTrigger className="text-sm font-semibold">
+                    <AccordionTrigger className="text-base font-semibold">
                       <span className="inline-flex items-center gap-2">
                         <Clock3 size={14} />
                         Acionamento
                       </span>
                     </AccordionTrigger>
-                    <AccordionContent className="space-y-5">
+                    <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
                       <p className="text-xs text-muted-foreground mb-4">Linha do tempo de atendimento no local.</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -1092,13 +1092,13 @@ export const REPsPage: React.FC = () => {
                 )}
 
                 <AccordionItem value="documentos">
-                  <AccordionTrigger className="text-sm font-semibold">
+                  <AccordionTrigger className="text-base font-semibold">
                     <span className="inline-flex items-center gap-2">
                       <Link2 size={14} />
                       Documentos Associados
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-5">
+                  <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-4">Vínculos e observações importantes da REP.</p>
                 {(!form.watch('numero_bo') && !form.watch('numero_ip')) && (
                   <Alert className="bg-amber-50/50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-400">
