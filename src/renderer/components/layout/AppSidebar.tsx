@@ -77,9 +77,10 @@ const menuItems = [
     title: 'Configurações',
     icon: Settings,
     items: [
-      { title: 'Perfil', path: '/perfil', icon: UserCircle },
       { title: 'Modelos IA', path: '/modelos-ia', icon: Brain },
-      { title: 'Backup e Restauração', path: '/backup', icon: Database },
+      { title: 'Backup', path: '/backup', icon: Database },
+      { title: 'Logs', path: '/logs', icon: FileText },
+      { title: 'Perfil', path: '/perfil', icon: UserCircle },
     ],
   },
 ];

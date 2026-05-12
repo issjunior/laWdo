@@ -12,6 +12,7 @@ import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
 import { registerImagemHandlers } from './handlers/imagem.handlers.js';
 import { registerIAHandlers } from './handlers/ia.handlers.js';
 import { registerBackupHandlers } from './handlers/backup.handlers.js';
+import { registerLogSystemHandlers } from './handlers/log.handlers.js';
 import { userService } from '../services/user.service.js';
 
 /**
@@ -54,6 +55,7 @@ export const registerIpcHandlers = (): void => {
   registerImagemHandlers();
   registerIAHandlers();
   registerBackupHandlers();
+  registerLogSystemHandlers();
 
   logInfo('Handlers IPC registrados com sucesso');
 };

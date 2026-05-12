@@ -14,6 +14,14 @@ import type {
   TipoExameUpdateData
 } from './types.js';
 
+// Tipo para entrada de log do sistema
+interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: 'error' | 'warn' | 'info' | 'debug';
+  message: string;
+}
+
 // Tipos para a API exposta
 export interface IpcAPI {
   // Utilitários
@@ -155,6 +163,12 @@ export interface IpcAPI {
     criar: () => Promise<{ success: boolean; path?: string; error?: string }>;
     restaurar: () => Promise<{ success: boolean; error?: string }>;
   };
+
+  // Logs do sistema
+  log: {
+    listar: () => Promise<{ success: boolean; data?: LogEntry[]; error?: string }>;
+    limpar: () => Promise<{ success: boolean; error?: string }>;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -265,6 +279,10 @@ const ALLOWED_CHANNELS = new Set([
   // Backup
   'backup:criar',
   'backup:restaurar',
+
+  // Logs do sistema
+  'log:listar',
+  'log:limpar',
 ]);
 
 // Expor API segura para o renderer
@@ -627,6 +645,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   backup: {
     criar: () => ipcRenderer.invoke('backup:criar'),
     restaurar: () => ipcRenderer.invoke('backup:restaurar'),
+  },
+
+  log: {
+    listar: () => ipcRenderer.invoke('log:listar'),
+    limpar: () => ipcRenderer.invoke('log:limpar'),
   },
 } satisfies IpcAPI);
 

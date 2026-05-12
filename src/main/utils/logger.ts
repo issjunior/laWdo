@@ -96,6 +96,108 @@ export const setupLogging = () => {
   });
 };
 
+/**
+ * Entrada de log estruturada
+ */
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: 'error' | 'warn' | 'info' | 'debug';
+  message: string;
+}
+
+/**
+ * Parseia uma linha de log do Winston no formato: [YYYY-MM-DD HH:mm:ss] LEVEL: mensagem
+ */
+const parseLogLine = (line: string): LogEntry | null => {
+  const match = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+(\w+):\s+(.*)$/);
+  if (!match) return null;
+  const [, timestamp, level, message] = match;
+  const normalizedLevel = level.toLowerCase();
+  const validLevel: LogEntry['level'] =
+    normalizedLevel === 'error' || normalizedLevel === 'warn' || normalizedLevel === 'info' || normalizedLevel === 'debug'
+      ? normalizedLevel
+      : 'info';
+  return {
+    id: `${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp,
+    level: validLevel,
+    message,
+  };
+};
+
+/**
+ * Lê todos os arquivos de log (combined.log, error.log e rotações) e retorna entradas parseadas
+ */
+export const getAllLogs = (): LogEntry[] => {
+  try {
+    const entries: LogEntry[] = [];
+
+    // Lê apenas combined.log e suas rotações (error.log é subset)
+    const files = fs.readdirSync(LOGS_DIR).filter(
+      f => /^combined\.log(\.\d+)?$/.test(f)
+    );
+
+    for (const file of files) {
+      const filepath = path.join(LOGS_DIR, file);
+      const content = fs.readFileSync(filepath, 'utf-8');
+      const lines = content.split('\n');
+
+      let currentEntry: LogEntry | null = null;
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        const parsed = parseLogLine(line);
+        if (parsed) {
+          if (currentEntry) {
+            entries.push(currentEntry);
+          }
+          currentEntry = parsed;
+        } else if (currentEntry) {
+          // Stack trace ou continuação da mensagem anterior
+          currentEntry.message += '\n' + line;
+        }
+      }
+
+      if (currentEntry) {
+        entries.push(currentEntry);
+      }
+    }
+
+    // Ordena por timestamp descendente (mais recente primeiro)
+    entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+    return entries;
+  } catch (err) {
+    logError('Erro ao ler logs do sistema', err);
+    return [];
+  }
+};
+
+/**
+ * Limpa (trunca) todos os arquivos de log do sistema (combined.log e error.log)
+ */
+export const clearAllLogs = (): { success: boolean; error?: string } => {
+  try {
+    const files = fs.readdirSync(LOGS_DIR).filter(
+      f => /^(combined|error)\.log(\.\d+)?$/.test(f)
+    );
+
+    for (const file of files) {
+      const filepath = path.join(LOGS_DIR, file);
+      // Trunca o arquivo (mantém o arquivo vazio)
+      fs.writeFileSync(filepath, '', 'utf-8');
+    }
+
+    logInfo('Logs do sistema limpos pelo usuário');
+    return { success: true };
+  } catch (err) {
+    logError('Erro ao limpar logs do sistema', err);
+    return { success: false, error: String(err) };
+  }
+};
 // Função para obter logs recentes (útil para debug)
 export const getRecentLogs = (lines: number = 100): string[] => {
   try {

@@ -98,6 +98,14 @@ export interface PlaceholderRow extends DatabaseRow {
   updated_at: string
 }
 
+// Log do sistema (Winston)
+export interface LogEntry {
+  id: string
+  timestamp: string
+  level: 'error' | 'warn' | 'info' | 'debug'
+  message: string
+}
+
 // Log de Auditoria
 export interface LogAuditoriaRow extends DatabaseRow {
   id: number
