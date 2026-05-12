@@ -8,19 +8,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/**
- * Remove formatação HTML de placeholders no conteúdo
- * Exemplo: <strong>{{NOME}}</strong> -> {{NOME}}
- */
-export function removerFormatacaoPlaceholders(conteudo: string): string {
-  // Regex para encontrar placeholders {{...}} e remover tags HTML dentro deles
-  return conteudo.replace(/\{\{([^}]+)\}\}/g, (match, inside) => {
-    // Remove tags HTML do conteúdo interno
-    const semTags = inside.replace(/<[^>]*>/g, '');
-    return `{{${semTags}}}`;
-  });
-}
-
 /** Tags HTML de formatação inline que não devem envolver placeholders */
 const TAGS_FORMATACAO = new Set([
   'B', 'STRONG', 'I', 'EM', 'U', 'S', 'SUB', 'SUP',
