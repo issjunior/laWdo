@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -357,6 +357,9 @@ export const LaudosPage: React.FC = () => {
   const [iaLoading, setIaLoading] = useState(false);
   const [iaError, setIaError] = useState<string | null>(null);
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
+
   const carregarPlaceholders = useCallback(async () => {
     const r = await window.ipcAPI.placeholder.findAll();
     if (r.success && r.data) {
@@ -661,6 +664,25 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
+  const handleExcluir = async () => {
+    if (!laudoParaExcluir) return;
+    try {
+      setError(null);
+      const r = await window.ipcAPI.laudo.delete(laudoParaExcluir.id);
+      if (r.success) {
+        setSuccess(r.message || 'Laudo excluído com sucesso!');
+        setDeleteDialogOpen(false);
+        setLaudoParaExcluir(null);
+        carregarLaudos();
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(r.error || 'Erro ao excluir laudo');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Erro ao excluir laudo');
+    }
+  };
+
   const laudoColumns = useMemo<ColumnDef<LaudoItem>[]>(() => [
     {
       accessorKey: 'data_requisicao',
@@ -744,9 +766,18 @@ export const LaudosPage: React.FC = () => {
       cell: ({ row }) => {
         const laudo = row.original;
         return (
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-1">
             <Button variant="ghost" size="sm" onClick={() => handleEditar(laudo)} aria-label={`Editar laudo da REP ${laudo.rep_numero}`}>
               <Edit size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setLaudoParaExcluir(laudo); setDeleteDialogOpen(true); }}
+              aria-label={`Excluir laudo da REP ${laudo.rep_numero}`}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 size={14} />
             </Button>
           </div>
         );
@@ -949,6 +980,7 @@ export const LaudosPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
+          {success && <Alert className="mb-4 bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
 
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Carregando...</div>
@@ -968,6 +1000,27 @@ export const LaudosPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de confirmação para exclusão de laudo */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Laudo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p>Tem certeza que deseja excluir o laudo da REP nº <strong>{laudoParaExcluir?.rep_numero}</strong>?</p>
+            <Alert variant="destructive">
+              <AlertDescription>
+                A REP vinculada voltará para o status <strong>Pendente</strong>.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleExcluir}>Excluir Laudo</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

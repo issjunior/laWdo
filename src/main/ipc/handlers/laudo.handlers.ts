@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
-import { logError } from '../../utils/logger.js';
+import { logError, logInfo } from '../../utils/logger.js';
 import { laudoService } from '../../services/laudo.service.js';
+import { repService } from '../../services/rep.service.js';
 
 /**
  * Registra handlers IPC para operações de Laudo
@@ -75,6 +76,27 @@ export const registerLaudoHandlers = (): void => {
       return { success: true, data: laudo };
     } catch (error) {
       logError('Erro ao criar laudo', { data, error });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+      };
+    }
+  });
+
+  /**
+   * Excluir laudo e resetar status da REP para Pendente
+   */
+  ipcMain.handle('laudo:delete', async (_event, laudoId: string) => {
+    try {
+      if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
+
+      const { rep_id } = await laudoService.deletar(laudoId);
+      await repService.updateStatus(rep_id, 'Pendente');
+
+      logInfo('Laudo excluído e REP resetada para Pendente', { laudoId, repId: rep_id });
+      return { success: true, message: 'Laudo excluído. A REP voltou para o status Pendente.' };
+    } catch (error) {
+      logError('Erro ao excluir laudo', { laudoId, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',

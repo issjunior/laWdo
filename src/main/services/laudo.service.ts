@@ -159,6 +159,30 @@ export class LaudoService extends BaseService<LaudoRow> {
       throw error; // Re-lança para o handler tratar
     }
   }
+
+  /** Deletar um laudo pelo ID e retornar o rep_id para resetar o status da REP.
+   *  Remove imagens vinculadas (arquivos + registros) antes de deletar o laudo. */
+  async deletar(laudoId: string): Promise<{ rep_id: string }> {
+    try {
+      const laudo = await this.findById(laudoId);
+      if (!laudo) throw new Error('Laudo não encontrado');
+
+      // Deleta imagens do laudo primeiro (arquivos + registros)
+      const imagens = await imagemService.findByLaudoId(laudoId);
+      for (const img of imagens) {
+        await imagemService.deletar(img.id);
+      }
+
+      // Deleta o laudo
+      await this.delete(laudoId);
+
+      logInfo('Laudo excluído', { laudoId, repId: laudo.rep_id });
+      return { rep_id: laudo.rep_id };
+    } catch (error) {
+      logError('Erro ao deletar laudo', { laudoId, error });
+      throw error;
+    }
+  }
 }
 
 export const laudoService = new LaudoService();

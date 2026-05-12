@@ -4,6 +4,24 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Save, Eye, EyeOff } from 'lucide-react';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+
+interface Placeholder {
+  id: string;
+  chave: string;
+  descricao: string;
+  categoria: string;
+}
 
 export const CabecalhoPage: React.FC = () => {
   const [conteudo, setConteudo] = useState('');
@@ -12,6 +30,7 @@ export const CabecalhoPage: React.FC = () => {
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
 
   const CHAVE_CONFIG = 'cabecalho_laudo';
 
@@ -29,9 +48,24 @@ export const CabecalhoPage: React.FC = () => {
     }
   }, []);
 
+  const carregarPlaceholders = useCallback(async () => {
+    const r = await window.ipcAPI.placeholder.findAll();
+    if (r.success && r.data) {
+      setPlaceholders(r.data);
+    }
+  }, []);
+
   useEffect(() => {
     carregarCabecalho();
-  }, [carregarCabecalho]);
+    carregarPlaceholders();
+  }, [carregarCabecalho, carregarPlaceholders]);
+
+  const inserirPlaceholder = (chave: string) => {
+    const editor = (window as any).tinymce?.get('cabecalho-editor');
+    if (editor) {
+      editor.insertContent(`{{${chave}}}`);
+    }
+  };
 
   const handleSalvar = async () => {
     try {
@@ -112,32 +146,42 @@ export const CabecalhoPage: React.FC = () => {
               dangerouslySetInnerHTML={{ __html: conteudo || '<p class="text-gray-400">Nenhum conteúdo definido.</p>' }}
             />
           ) : (
-            <>
-              <TinyMceEditor
-                value={conteudo}
-                onChange={setConteudo}
-                height={400}
-                placeholder="Digite o cabeçalho padrão dos laudos..."
-              />
-
-              {/* Inserir placeholders */}
-              <div className="flex flex-wrap items-center gap-2 p-3 border rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                <span className="text-sm text-gray-600 font-medium mr-1">Placeholders:</span>
-                {['perito_nome', 'perito_cargo', 'perito_lotacao', 'perito_matricula', 'numero_rep', 'data_atual', 'laudo.numero', 'solicitante_nome'].map((tag) => (
-                  <button
-                    key={tag}
-                    onClick={() => {
-                      // Copia o placeholder para a área de transferência
-                      navigator.clipboard.writeText(`{{${tag}}}`);
-                    }}
-                    className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/60 transition-colors cursor-pointer border-0"
-                    title="Clique para copiar o placeholder"
-                  >
-                    {'{{' + tag + '}}'}
-                  </button>
+            <ContextMenu>
+              <ContextMenuTrigger>
+                <TinyMceEditor
+                  editorId="cabecalho-editor"
+                  value={conteudo}
+                  onChange={setConteudo}
+                  height={400}
+                  placeholder="Digite o cabeçalho padrão dos laudos..."
+                />
+              </ContextMenuTrigger>
+              <ContextMenuContent className="w-64">
+                <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
+                <ContextMenuSeparator />
+                {Array.from(new Set(placeholders.map(p => p.categoria))).sort().map(cat => (
+                  <ContextMenuSub key={cat}>
+                    <ContextMenuSubTrigger>{cat || 'Outros'}</ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-56">
+                      {placeholders
+                        .filter(p => p.categoria === cat)
+                        .sort((a, b) => a.chave.localeCompare(b.chave))
+                        .map(p => (
+                          <ContextMenuItem
+                            key={p.id}
+                            onClick={() => inserirPlaceholder(p.chave)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
+                              {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
+                            </div>
+                          </ContextMenuItem>
+                        ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
                 ))}
-              </div>
-            </>
+              </ContextMenuContent>
+            </ContextMenu>
           )}
         </CardContent>
       </Card>

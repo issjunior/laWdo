@@ -14,6 +14,17 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { createTemplateSchema } from '@/lib/validators';
 import { z } from 'zod';
@@ -60,6 +71,13 @@ const emptySecaoForm = (): SecaoForm => ({
   nome: '', conteudo: '',
 });
 
+interface Placeholder {
+  id: string;
+  chave: string;
+  descricao: string;
+  categoria: string;
+}
+
 const templateFormSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório').max(200, 'Máximo 200 caracteres'),
   tipo_exame_id: z.string().min(1, 'Tipo de exame é obrigatório'),
@@ -87,6 +105,7 @@ export const TemplatesPage: React.FC = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
 
   const carregarTemplates = useCallback(async () => {
     try {
@@ -106,7 +125,21 @@ export const TemplatesPage: React.FC = () => {
     if (r.success) setTiposExame(r.data || []);
   }, []);
 
-  useEffect(() => { carregarTemplates(); carregarTiposExame(); }, []);
+  const carregarPlaceholders = useCallback(async () => {
+    const r = await window.ipcAPI.placeholder.findAll();
+    if (r.success && r.data) {
+      setPlaceholders(r.data);
+    }
+  }, []);
+
+  useEffect(() => { carregarTemplates(); carregarTiposExame(); carregarPlaceholders(); }, []);
+
+  const inserirPlaceholder = (editorId: string, chave: string) => {
+    const editor = (window as any).tinymce?.get(editorId);
+    if (editor) {
+      editor.insertContent(`{{${chave}}}`);
+    }
+  };
 
   const filteredByTipo = templates.filter(t => {
     if (t.id === 'tpl-nao-definido') return false;
@@ -872,12 +905,42 @@ export const TemplatesPage: React.FC = () => {
                     <X size={14} />
                   </Button>
                 </div>
-                <TinyMceEditor
-                  value={secao.conteudo}
-                  onChange={html => updateSecao(index, 'conteudo', html)}
-                  height={250}
-                  placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
-                />
+                <ContextMenu>
+                  <ContextMenuTrigger>
+                    <TinyMceEditor
+                      editorId={`template-secao-${index}`}
+                      value={secao.conteudo}
+                      onChange={html => updateSecao(index, 'conteudo', html)}
+                      height={250}
+                      placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
+                    />
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-64">
+                    <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
+                    <ContextMenuSeparator />
+                    {Array.from(new Set(placeholders.map(p => p.categoria))).sort().map(cat => (
+                      <ContextMenuSub key={cat}>
+                        <ContextMenuSubTrigger>{cat || 'Outros'}</ContextMenuSubTrigger>
+                        <ContextMenuSubContent className="w-56">
+                          {placeholders
+                            .filter(p => p.categoria === cat)
+                            .sort((a, b) => a.chave.localeCompare(b.chave))
+                            .map(p => (
+                              <ContextMenuItem
+                                key={p.id}
+                                onClick={() => inserirPlaceholder(`template-secao-${index}`, p.chave)}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
+                                  {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
+                                </div>
+                              </ContextMenuItem>
+                            ))}
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                    ))}
+                  </ContextMenuContent>
+                </ContextMenu>
               </div>
             ))
           )}

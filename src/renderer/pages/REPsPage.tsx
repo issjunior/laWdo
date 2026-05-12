@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, User, Clock3, Link2, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, User, Clock3, Link2, AlertTriangle, Eye } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { type REP } from '@/lib/validators';
@@ -63,6 +63,29 @@ const emptyForm = (): REPFormData => ({
   data_chegada: '', data_saida: '', local_fato: '', latitude: '', longitude: '',
   lacre_entrada: '', lacre_saida: '', numero_bo: '', numero_ip: '', observacoes: '',
 });
+
+const FIELD_PLACEHOLDER: Record<string, string> = {
+  numero: 'numero_rep',
+  solicitante_id: 'solicitante_nome',
+  tipo_exame_id: 'tipo_exame_nome',
+  data_requisicao: 'data_recebimento_rep',
+  tipo_solicitacao: 'tipo_solicitacao_rep',
+  numero_documento: 'numero_solicitacao_rep',
+  data_documento: 'data_solicitacao_rep',
+  autoridade_solicitante: 'autoridade_solicitante_rep',
+  nome_envolvido: 'nome_envolvido',
+  local_fato: 'local_fato',
+  latitude: 'latitude',
+  longitude: 'longitude',
+  data_acionamento: 'data_acionamento_local',
+  data_chegada: 'data_chegada_local',
+  data_saida: 'data_saida_local',
+  numero_bo: 'numero_bo',
+  numero_ip: 'numero_ip',
+  lacre_entrada: 'lacre_entrada',
+  lacre_saida: 'lacre_saida',
+  observacoes: 'observacoes_rep',
+};
 
 function formatarNumeroREP(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
@@ -167,6 +190,24 @@ const HelpIcon: React.FC<{ text: string }> = ({ text }) => (
   </Tooltip>
 );
 
+/** FormLabel que condicionalmente mostra o placeholder via Tooltip */
+const LabelWithPlaceholder: React.FC<{ field: string; children: React.ReactNode; mostrar: boolean }> = ({ field, children, mostrar }) => {
+  const chave = FIELD_PLACEHOLDER[field];
+  if (!mostrar || !chave) {
+    return <FormLabel>{children}</FormLabel>;
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <FormLabel className="cursor-help border-b border-dotted border-muted-foreground/50">{children}</FormLabel>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        <span className="font-mono text-xs">{`{{${chave}}}`}</span>
+      </TooltipContent>
+    </Tooltip>
+  );
+};
+
 function formatarDataBR(iso: string | undefined): string {
   if (!iso) return '-';
   try {
@@ -199,6 +240,7 @@ export const REPsPage: React.FC = () => {
   const [criarLaudoOpen, setCriarLaudoOpen] = useState(false);
   const [criarLaudoRep, setCriarLaudoRep] = useState<REP | null>(null);
   const [criarLaudoTipoExameId, setCriarLaudoTipoExameId] = useState('');
+  const [mostrarPlaceholders, setMostrarPlaceholders] = useState(false);
   const [criarLaudoTemplateId, setCriarLaudoTemplateId] = useState('');
   const [criarLaudoTemplates, setCriarLaudoTemplates] = useState<any[]>([]);
   const [criarLaudoSubmitting, setCriarLaudoSubmitting] = useState(false);
@@ -731,9 +773,20 @@ export const REPsPage: React.FC = () => {
                   Campos marcados com <span className="font-semibold">*</span> são obrigatórios.
                 </CardDescription>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleCancelar} aria-label="Fechar formulário">
-                <X size={18} />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={mostrarPlaceholders ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMostrarPlaceholders(!mostrarPlaceholders)}
+                  className="flex items-center gap-1"
+                >
+                  <Eye size={14} />
+                  Placeholders
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleCancelar} aria-label="Fechar formulário">
+                  <X size={18} />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -762,7 +815,7 @@ export const REPsPage: React.FC = () => {
                       name="numero"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></FormLabel>
+                          <LabelWithPlaceholder field="numero" mostrar={mostrarPlaceholders}>Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></LabelWithPlaceholder>
                           <FormControl>
                             <Input
                               placeholder="000.000-2026"
@@ -781,7 +834,7 @@ export const REPsPage: React.FC = () => {
                       name="data_requisicao"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Data de recebimento *</FormLabel>
+                          <LabelWithPlaceholder field="data_requisicao" mostrar={mostrarPlaceholders}>Data de recebimento *</LabelWithPlaceholder>
                           <FormControl>
                             <Input type="date" {...field} />
                           </FormControl>
@@ -799,7 +852,7 @@ export const REPsPage: React.FC = () => {
                       name="solicitante_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Solicitante</FormLabel>
+                          <LabelWithPlaceholder field="solicitante_id" mostrar={mostrarPlaceholders}>Solicitante</LabelWithPlaceholder>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger><SelectValue placeholder="Selecione o órgão..." /></SelectTrigger>
@@ -825,7 +878,7 @@ export const REPsPage: React.FC = () => {
                       name="tipo_exame_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tipo de Exame</FormLabel>
+                          <LabelWithPlaceholder field="tipo_exame_id" mostrar={mostrarPlaceholders}>Tipo de Exame</LabelWithPlaceholder>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
@@ -879,7 +932,7 @@ export const REPsPage: React.FC = () => {
                       name="tipo_solicitacao"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></FormLabel>
+                          <LabelWithPlaceholder field="tipo_solicitacao" mostrar={mostrarPlaceholders}>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></LabelWithPlaceholder>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
@@ -907,7 +960,7 @@ export const REPsPage: React.FC = () => {
                       name="numero_documento"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></FormLabel>
+                          <LabelWithPlaceholder field="numero_documento" mostrar={mostrarPlaceholders}>Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></LabelWithPlaceholder>
                           <FormControl>
                             <Input placeholder="Requisição nº" {...field} />
                           </FormControl>
@@ -922,7 +975,7 @@ export const REPsPage: React.FC = () => {
                       name="data_documento"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Data do Documento</FormLabel>
+                          <LabelWithPlaceholder field="data_documento" mostrar={mostrarPlaceholders}>Data do Documento</LabelWithPlaceholder>
                           <FormControl>
                             <Input type="date" {...field} />
                           </FormControl>
@@ -937,7 +990,7 @@ export const REPsPage: React.FC = () => {
                       name="autoridade_solicitante"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Autoridade Solicitante</FormLabel>
+                          <LabelWithPlaceholder field="autoridade_solicitante" mostrar={mostrarPlaceholders}>Autoridade Solicitante</LabelWithPlaceholder>
                           <FormControl>
                             <Input placeholder="Nome da autoridade" {...field} />
                           </FormControl>
@@ -966,7 +1019,7 @@ export const REPsPage: React.FC = () => {
                       name="nome_envolvido"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nome do Envolvido</FormLabel>
+                          <LabelWithPlaceholder field="nome_envolvido" mostrar={mostrarPlaceholders}>Nome do Envolvido</LabelWithPlaceholder>
                           <FormControl>
                             <Input placeholder="Nome dos envolvidos" {...field} />
                           </FormControl>
@@ -982,7 +1035,7 @@ export const REPsPage: React.FC = () => {
                         name="local_fato"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Local do Fato</FormLabel>
+                            <LabelWithPlaceholder field="local_fato" mostrar={mostrarPlaceholders}>Local do Fato</LabelWithPlaceholder>
                             <FormControl>
                               <Input placeholder="Descrição do local" {...field} />
                             </FormControl>
@@ -1001,7 +1054,7 @@ export const REPsPage: React.FC = () => {
                         name="latitude"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Latitude</FormLabel>
+                            <LabelWithPlaceholder field="latitude" mostrar={mostrarPlaceholders}>Latitude</LabelWithPlaceholder>
                             <FormControl>
                               <Input type="number" step="any" placeholder="-25.4284" {...field} />
                             </FormControl>
@@ -1016,7 +1069,7 @@ export const REPsPage: React.FC = () => {
                         name="longitude"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Longitude</FormLabel>
+                            <LabelWithPlaceholder field="longitude" mostrar={mostrarPlaceholders}>Longitude</LabelWithPlaceholder>
                             <FormControl>
                               <Input type="number" step="any" placeholder="-49.2674" {...field} />
                             </FormControl>
@@ -1047,7 +1100,7 @@ export const REPsPage: React.FC = () => {
                         name="data_acionamento"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Data/Hora Acionamento</FormLabel>
+                            <LabelWithPlaceholder field="data_acionamento" mostrar={mostrarPlaceholders}>Data/Hora Acionamento</LabelWithPlaceholder>
                             <FormControl>
                               <Input type="datetime-local" {...field} />
                             </FormControl>
@@ -1062,7 +1115,7 @@ export const REPsPage: React.FC = () => {
                         name="data_chegada"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Data/Hora Chegada</FormLabel>
+                            <LabelWithPlaceholder field="data_chegada" mostrar={mostrarPlaceholders}>Data/Hora Chegada</LabelWithPlaceholder>
                             <FormControl>
                               <Input type="datetime-local" {...field} />
                             </FormControl>
@@ -1077,7 +1130,7 @@ export const REPsPage: React.FC = () => {
                         name="data_saida"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Data/Hora Saída</FormLabel>
+                            <LabelWithPlaceholder field="data_saida" mostrar={mostrarPlaceholders}>Data/Hora Saída</LabelWithPlaceholder>
                             <FormControl>
                               <Input type="datetime-local" {...field} />
                             </FormControl>
@@ -1115,7 +1168,7 @@ export const REPsPage: React.FC = () => {
                       name="numero_bo"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nº do BO</FormLabel>
+                          <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO</LabelWithPlaceholder>
                           <FormControl>
                             <Input placeholder="Boletim de Ocorrência" {...field} />
                           </FormControl>
@@ -1130,7 +1183,7 @@ export const REPsPage: React.FC = () => {
                       name="numero_ip"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nº do IP</FormLabel>
+                          <LabelWithPlaceholder field="numero_ip" mostrar={mostrarPlaceholders}>Nº do IP</LabelWithPlaceholder>
                           <FormControl>
                             <Input placeholder="Inquérito Policial" {...field} />
                           </FormControl>
@@ -1145,7 +1198,7 @@ export const REPsPage: React.FC = () => {
                       name="lacre_entrada"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Lacre de Entrada</FormLabel>
+                          <LabelWithPlaceholder field="lacre_entrada" mostrar={mostrarPlaceholders}>Lacre de Entrada</LabelWithPlaceholder>
                           <FormControl>
                             <Input placeholder="Nº do lacre" {...field} />
                           </FormControl>
@@ -1160,7 +1213,7 @@ export const REPsPage: React.FC = () => {
                       name="lacre_saida"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Lacre de Saída</FormLabel>
+                          <LabelWithPlaceholder field="lacre_saida" mostrar={mostrarPlaceholders}>Lacre de Saída</LabelWithPlaceholder>
                           <FormControl>
                             <Input placeholder="Nº do lacre" {...field} />
                           </FormControl>
@@ -1176,7 +1229,7 @@ export const REPsPage: React.FC = () => {
                     name="observacoes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Observações</FormLabel>
+                        <LabelWithPlaceholder field="observacoes" mostrar={mostrarPlaceholders}>Observações</LabelWithPlaceholder>
                         <FormControl>
                           <Textarea placeholder="Observações gerais..." rows={3} {...field} />
                         </FormControl>
