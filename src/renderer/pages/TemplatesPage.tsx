@@ -429,13 +429,28 @@ export const TemplatesPage: React.FC = () => {
       : '';
     fullHtml += secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>';
 
+    let peritoNome = '';
+    let peritoCargo = '';
+    let peritoLotacao = '';
+    let peritoMatricula = '';
+    try {
+      const userJson = sessionStorage.getItem('lawdo_auth_user');
+      if (userJson) {
+        const perito = JSON.parse(userJson);
+        peritoNome = perito.nome || perito.name || '';
+        peritoCargo = perito.cargo || perito.role || '';
+        peritoLotacao = perito.lotacao || '';
+        peritoMatricula = perito.matricula || '';
+      }
+    } catch {}
+
     const replacements: Record<string, string> = {
-      '{{perito.nome}}': '<strong>Dr. João da Silva</strong>',
-      '{{perito.cargo}}': '<strong>Perito Criminal</strong>',
-      '{{perito_nome}}': '<strong>Dr. João da Silva</strong>',
-      '{{perito_cargo}}': '<strong>Perito Criminal</strong>',
-      '{{perito_lotacao}}': '<strong>UETC - Telêmaco Borba</strong>',
-      '{{perito_matricula}}': '<strong>123456</strong>',
+      '{{perito.nome}}': peritoNome,
+      '{{perito.cargo}}': peritoCargo,
+      '{{perito_nome}}': peritoNome,
+      '{{perito_cargo}}': peritoCargo,
+      '{{perito_lotacao}}': peritoLotacao,
+      '{{perito_matricula}}': peritoMatricula,
       '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
       '{{laudo.numero}}': '<strong>2026/00123</strong>',
       '{{numero_rep}}': '<strong>321.654-2026</strong>',

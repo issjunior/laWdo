@@ -57,7 +57,7 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
   // Buscar usuário logado para placeholders de perito
   let perito: any = null;
   try {
-    const userJson = localStorage.getItem('lawdo_auth_user');
+    const userJson = sessionStorage.getItem('lawdo_auth_user');
     if (userJson) perito = JSON.parse(userJson);
   } catch (e) {}
 
