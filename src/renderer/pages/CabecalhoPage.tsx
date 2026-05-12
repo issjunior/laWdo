@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Save, Eye, EyeOff } from 'lucide-react';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { removerFormatacaoPlaceholders } from '@/lib/utils';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -75,7 +76,7 @@ export const CabecalhoPage: React.FC = () => {
 
       const result = await window.ipcAPI.configuracao.salvar(
         CHAVE_CONFIG,
-        conteudo,
+        removerFormatacaoPlaceholders(conteudo),
         'html',
         'Cabeçalho padrão para todos os laudos'
       );

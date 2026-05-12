@@ -1,5 +1,6 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const SolicitantesPage = lazy(() => import('@/pages/SolicitantesPage').then(m => ({ default: m.SolicitantesPage })));
@@ -89,6 +90,13 @@ const App = () => {
 
   return (
     <ErrorBoundary>
+      <Toaster
+        richColors
+        closeButton
+        visibleToasts={5}
+        position="bottom-right"
+        duration={4000}
+      />
       {!currentUser ? (
         <AuthPage onAuthenticated={handleAuthenticated} />
       ) : (

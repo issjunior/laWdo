@@ -10,6 +10,7 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { removerFormatacaoPlaceholders } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -509,7 +510,7 @@ export const LaudosPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const conteudo = reconstruirConteudo(secoes);
+      const conteudo = removerFormatacaoPlaceholders(reconstruirConteudo(secoes));
       const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudo);
       if (r.success) {
         setSuccess('Laudo salvo com sucesso!');

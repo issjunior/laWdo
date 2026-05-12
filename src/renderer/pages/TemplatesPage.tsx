@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 import {
   Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
   FileText, GripVertical, Layers, Eye, LayoutGrid, List,
@@ -26,6 +26,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { removerFormatacaoPlaceholders } from '@/lib/utils';
 import { createTemplateSchema } from '@/lib/validators';
 import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -98,8 +99,6 @@ export const TemplatesPage: React.FC = () => {
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
   const [secoesDb, setSecoesDb] = useState<SecaoItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
   const [showPreview, setShowPreview] = useState(false);
@@ -112,9 +111,9 @@ export const TemplatesPage: React.FC = () => {
       setLoading(true);
       const r = await window.ipcAPI.template.findAll();
       if (r.success) setTemplates(r.data || []);
-      else setError(r.error);
+      else toast.error(r.error);
     } catch (e: any) {
-      setError(e.message);
+      toast.error(e.message);
     } finally {
       setLoading(false);
     }
@@ -157,8 +156,6 @@ export const TemplatesPage: React.FC = () => {
     setTemplateForm(emptyTemplateForm());
     setSecoes([emptySecaoForm()]);
     setSecoesDb([]);
-    setError(null);
-    setSuccess(null);
     setErrors({});
     setEditMode(true);
   };
@@ -170,8 +167,6 @@ export const TemplatesPage: React.FC = () => {
       tipo_exame_id: template.tipo_exame_id,
       descricao: template.descricao || '',
     });
-    setError(null);
-    setSuccess(null);
     setErrors({});
 
     // Carregar seções existentes
@@ -193,7 +188,7 @@ export const TemplatesPage: React.FC = () => {
     if (r.success) {
       await carregarTemplates();
     } else {
-      alert(r.error);
+      toast.error(r.error || 'Erro ao excluir template');
     }
   };
 
@@ -213,7 +208,7 @@ export const TemplatesPage: React.FC = () => {
         descricao: template.descricao || null,
       });
       if (!createR.success || !createR.data) {
-        alert(createR.error || 'Erro ao criar cópia do template');
+        toast.error(createR.error || 'Erro ao criar cópia do template');
         return;
       }
 
@@ -239,8 +234,6 @@ export const TemplatesPage: React.FC = () => {
         tipo_exame_id: template.tipo_exame_id,
         descricao: template.descricao || '',
       });
-      setError(null);
-      setSuccess(null);
       setErrors({});
 
       // Carregar as seções recém-criadas
@@ -255,7 +248,7 @@ export const TemplatesPage: React.FC = () => {
       }
       setEditMode(true);
     } catch (e: any) {
-      alert('Erro ao clonar template');
+      toast.error('Erro ao clonar template');
     }
   };
 
@@ -295,8 +288,6 @@ export const TemplatesPage: React.FC = () => {
 
   const handleSalvar = async () => {
     try {
-      setError(null);
-      setSuccess(null);
       setSubmitting(true);
       setErrors({});
 
@@ -321,14 +312,14 @@ export const TemplatesPage: React.FC = () => {
           tipo_exame_id: templateForm.tipo_exame_id,
           descricao: templateForm.descricao || null,
         });
-        if (!r.success) { setError(r.error); setSubmitting(false); return; }
+        if (!r.success) { toast.error(r.error); setSubmitting(false); return; }
       } else {
         const r = await window.ipcAPI.template.create({
           nome: templateForm.nome,
           tipo_exame_id: templateForm.tipo_exame_id,
           descricao: templateForm.descricao || null,
         });
-        if (!r.success) { setError(r.error); setSubmitting(false); return; }
+        if (!r.success) { toast.error(r.error); setSubmitting(false); return; }
         templateId = r.data.id;
       }
 
@@ -351,7 +342,7 @@ export const TemplatesPage: React.FC = () => {
           if (sec.id) {
             await window.ipcAPI.template.updateSecao(sec.id, {
               nome: sec.nome.trim(),
-              conteudo: sec.conteudo,
+              conteudo: removerFormatacaoPlaceholders(sec.conteudo),
               ordem: i,
             });
             idsOrdenados.push(sec.id);
@@ -360,7 +351,7 @@ export const TemplatesPage: React.FC = () => {
               template_id: templateId,
               nome: sec.nome.trim(),
               ordem: i,
-              conteudo: sec.conteudo,
+              conteudo: removerFormatacaoPlaceholders(sec.conteudo),
             });
             if (r.success) idsOrdenados.push(r.data.id);
           }
@@ -372,8 +363,7 @@ export const TemplatesPage: React.FC = () => {
         }
       }
 
-      setSuccess(editingTemplateId ? 'Template atualizado com sucesso!' : 'Template criado com sucesso!');
-      setTimeout(() => setSuccess(null), 3000);
+      toast.success(editingTemplateId ? 'Template atualizado com sucesso!' : 'Template criado com sucesso!');
       carregarTemplates();
 
       if (!editingTemplateId) {
@@ -389,7 +379,7 @@ export const TemplatesPage: React.FC = () => {
         }
       }
     } catch (e: any) {
-      setError(e.message);
+      toast.error(e.message);
     } finally {
       setSubmitting(false);
     }
@@ -408,7 +398,7 @@ export const TemplatesPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       setPreviewBlobUrl(url);
     } else {
-      setError(result.error || 'Erro ao gerar PDF');
+      toast.error(result.error || 'Erro ao gerar PDF');
       setShowPreview(false);
     }
   };
@@ -468,13 +458,12 @@ export const TemplatesPage: React.FC = () => {
     try {
       setGeneratingPdf(true);
       setShowPreview(true);
-      setError(null);
 
       const tipoExameNome = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '';
       const fullHtml = await montarHtmlPreview(secoes, templateForm.nome, tipoExameNome);
       await gerarEExibirPdf(fullHtml);
     } catch (err: any) {
-      setError(err.message || 'Erro ao gerar PDF');
+      toast.error(err.message || 'Erro ao gerar PDF');
       setShowPreview(false);
     } finally {
       setGeneratingPdf(false);
@@ -486,7 +475,6 @@ export const TemplatesPage: React.FC = () => {
     try {
       setGeneratingPdf(true);
       setShowPreview(true);
-      setError(null);
 
       const secResult = await window.ipcAPI.template.findSecoes(template.id);
       const loadedSecoes: { nome: string; conteudo?: string }[] =
@@ -499,7 +487,7 @@ export const TemplatesPage: React.FC = () => {
       );
       await gerarEExibirPdf(fullHtml);
     } catch (err: any) {
-      setError(err.message || 'Erro ao gerar PDF');
+      toast.error(err.message || 'Erro ao gerar PDF');
       setShowPreview(false);
     } finally {
       setGeneratingPdf(false);
@@ -784,12 +772,6 @@ export const TemplatesPage: React.FC = () => {
         </Button>
       </div>
 
-      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-      {success && (
-        <Alert className="bg-green-50 border-green-200">
-          <AlertDescription className="text-green-800">{success}</AlertDescription>
-        </Alert>
-      )}
 
       {/* Dialog de Preview PDF */}
       <Dialog open={showPreview} onOpenChange={(open) => {
