@@ -216,8 +216,8 @@ projeto/
 ### Sprint 8: Auditoria e Backup
 
 - [ ] Log de Auditoria cronológico e completo.
-- [ ] Ferramenta de **Backup/Restauração** (ZIP: BD + Imagens).
-- [ ] Backup/restauração via IPC com pacote ZIP e importação de imagens.
+- [x] Ferramenta de **Backup/Restauração** (ZIP: BD + Imagens).
+- [x] Backup/restauração via IPC com pacote ZIP e importação de imagens.
 ### Sprint 9: Performance e UX
 
 - [ ] Otimização de queries e renderização.

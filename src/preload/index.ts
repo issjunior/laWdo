@@ -149,6 +149,12 @@ export interface IpcAPI {
     descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => Promise<UserResponse>;
     perguntar: (pergunta: string, contexto?: string) => Promise<UserResponse>;
   };
+
+  // Backup e Restauração
+  backup: {
+    criar: () => Promise<{ success: boolean; path?: string; error?: string }>;
+    restaurar: () => Promise<{ success: boolean; error?: string }>;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -255,6 +261,10 @@ const ALLOWED_CHANNELS = new Set([
   'ia:adequarEscrita',
   'ia:descreverImagem',
   'ia:perguntar',
+
+  // Backup
+  'backup:criar',
+  'backup:restaurar',
 ]);
 
 // Expor API segura para o renderer
@@ -612,6 +622,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof pergunta !== 'string' || !pergunta.trim()) throw new Error('Pergunta inválida');
       return ipcRenderer.invoke('ia:perguntar', pergunta, contexto);
     },
+  },
+
+  backup: {
+    criar: () => ipcRenderer.invoke('backup:criar'),
+    restaurar: () => ipcRenderer.invoke('backup:restaurar'),
   },
 } satisfies IpcAPI);
 

@@ -11,6 +11,7 @@ import { registerTemplateHandlers } from './handlers/template.handlers.js';
 import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
 import { registerImagemHandlers } from './handlers/imagem.handlers.js';
 import { registerIAHandlers } from './handlers/ia.handlers.js';
+import { registerBackupHandlers } from './handlers/backup.handlers.js';
 import { userService } from '../services/user.service.js';
 
 /**
@@ -52,6 +53,7 @@ export const registerIpcHandlers = (): void => {
   registerLaudoHandlers();
   registerImagemHandlers();
   registerIAHandlers();
+  registerBackupHandlers();
 
   logInfo('Handlers IPC registrados com sucesso');
 };
@@ -192,28 +194,6 @@ const registerDatabaseHandlers = (): void => {
         error: error instanceof Error ? error.message : 'Erro desconhecido',
       };
     }
-  });
-
-  // Backup do banco de dados
-  ipcMain.handle('backup-database', async () => {
-    logInfo('Backup do banco de dados solicitado');
-    // TODO: Implementar backup real
-    return {
-      success: true,
-      message: 'Backup em desenvolvimento',
-      timestamp: new Date().toISOString(),
-    };
-  });
-
-  // Restaurar banco de dados
-  ipcMain.handle('restore-database', async (event, backupData: any) => {
-    logInfo('Restauração do banco de dados solicitada');
-    // TODO: Implementar restauração real
-    return {
-      success: true,
-      message: 'Restauração em desenvolvimento',
-      timestamp: new Date().toISOString(),
-    };
   });
 };
 

@@ -11,6 +11,7 @@ import {
   Settings,
   ChevronRight,
   Brain,
+  Database,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -78,6 +79,7 @@ const menuItems = [
     items: [
       { title: 'Perfil', path: '/perfil', icon: UserCircle },
       { title: 'Modelos IA', path: '/modelos-ia', icon: Brain },
+      { title: 'Backup e Restauração', path: '/backup', icon: Database },
     ],
   },
 ];

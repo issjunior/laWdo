@@ -12,6 +12,7 @@ const PlaceholdersPage = lazy(() => import('@/pages/PlaceholdersPage').then(m =>
 const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then(m => ({ default: m.TemplatesPage })));
 const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default: m.LaudosPage })));
 const ModelosIAPage = lazy(() => import('@/pages/ModelosIAPage').then(m => ({ default: m.ModelosIAPage })));
+const BackupPage = lazy(() => import('@/pages/BackupPage').then(m => ({ default: m.BackupPage })));
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -114,6 +115,7 @@ const App = () => {
                 <Route path="/templates" element={<TemplatesPage />} />
                 <Route path="/laudos" element={<LaudosPage />} />
                 <Route path="/modelos-ia" element={<ModelosIAPage />} />
+                <Route path="/backup" element={<BackupPage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </Suspense>
