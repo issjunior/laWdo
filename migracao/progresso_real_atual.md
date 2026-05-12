@@ -9,7 +9,7 @@
 
 ## 🎯 **VISÃO GERAL**
 
-O projeto está significativamente mais avançado do que o planejamento original previa. As Sprints 0, 1, 2, 3 e 5 estão **completas**. A Sprint 4 (Edição de Laudos) teve o módulo de Cabeçalho antecipado. O sistema já possui **9 páginas funcionais**, **8 serviços de negócio** e **8 módulos de handlers IPC**.
+O projeto está significativamente mais avançado do que o planejamento original previa. As Sprints 0, 1, 2, 3 e 5 estão **completas**. A Sprint 4 (Edição de Laudos) teve o módulo de Cabeçalho antecipado. A Sprint 6 também já começou com IA parcial. O sistema já possui **11 páginas funcionais**, **9 serviços de negócio** e **10 módulos de handlers IPC**.
 
 ---
 
@@ -89,6 +89,7 @@ O projeto está significativamente mais avançado do que o planejamento original
   - Template (CRUD + seções + preview PDF)
   - Laudo (findAll, findByRepId, updateConteudo)
   - Imagem (pickAndUpload, findByLaudoId, delete)
+  - IA (revisarOrtografia, adequarEscrita, descreverImagem, perguntar)
 
 ### 6. **✅ INTERFACE REACT FUNCIONAL**
 
@@ -138,7 +139,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 - Geração automática de UUID
 - Todas as entidades estendem este serviço
 
-### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (10 PÁGINAS)**
+### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (11 PÁGINAS)**
 
 | Página | Rota | Descrição |
 |---|---|---|
@@ -150,6 +151,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 | **REPsPage** | `/reps` | CRUD com formulário inline e campos condicionais |
 | **PlaceholdersPage** | `/placeholders` | CRUD de placeholders com instruções visuais colapsáveis |
 | **TemplatesPage** | `/templates` | Gerenciamento de templates de laudos por tipo de exame |
+| **ModelosIAPage** | `/modelos-ia` | Configuração de IA e testes de integração Groq |
 | **LaudosPage** | `/laudos` | Editor multi-seção TinyMCE com upload de imagens do PC |
 | **PerfilPage** | `/perfil` | Perfil do perito com validação Zod |
 
@@ -161,9 +163,9 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 - **TypeScript:** ~5000+ linhas (estimado)
 - **Arquivos:** ~120+ arquivos criados/modificados
-- **Páginas:** 10 páginas implementadas
+- **Páginas:** 11 páginas implementadas
 - **Serviços:** 9 serviços de negócio
-- **Handlers IPC:** 9 módulos de handlers
+- **Handlers IPC:** 10 módulos de handlers
 - **Migrations:** 14 versões de schema (v1 → v14)
 
 ### **Testes Realizados:**
@@ -275,6 +277,7 @@ Todas as tarefas realizadas com sucesso:
 - [x] **Handlers `imagem.handlers.ts`** — `imagem:pickAndUpload`, `imagem:findByLaudoId`, `imagem:delete`
 - [x] **Migration v14** — tabela `imagens_laudo` para bancos existentes
 - [x] **CSP atualizado** — `img-src 'self' data: blob: laudo-img:`
+- [x] **Preview de PDF implementado** para laudos/templates via `template:previewPDF`
 - [x] **Seções colapsáveis** (abertas por padrão) com toggle individual
 
 ### Pendente:
@@ -338,14 +341,10 @@ npm run format
 
 ## 🎉 **CONSIDERAÇÕES FINAIS**
 
-O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3 e 5 estão **completas**, com a Sprint 4 já tendo o módulo de Cabeçalho antecipado. O sistema possui 9 páginas funcionais, 8 serviços de negócio e autenticação obrigatória.
+O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3, 5 e parte da Sprint 6 já estão implementadas. O sistema possui 11 páginas funcionais, 9 serviços de negócio e autenticação obrigatória.
 
 **Progresso estimado:** ~80% do projeto completo
 
 **Status:** 🟢 **PRÓXIMA ETAPA - COMPLETAR SPRINT 4 (Edição de Laudos com TinyMCE)**
 
 ---
-
-**Equipe de Migração**  
-Polícia Científica do Paraná  
-09/05/2026

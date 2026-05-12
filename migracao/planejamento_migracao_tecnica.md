@@ -151,9 +151,9 @@ laudopericial/ (raiz do projeto)
 │   │   │   └── imagem.service.ts
 │   │   └── utils/               # ✅ Helpers globais (logger, etc.)
 │   ├── preload/                 # ✅ Bridge IPC segura (Context Bridge)
-│   ├── renderer/                # ✅ Frontend React (9 páginas)
+│   ├── renderer/                # ✅ Frontend React (11 páginas)
 │   │   ├── components/          # ✅ ErrorBoundary, layout, shadcn/ui
-│   │   ├── pages/               # ✅ 10 páginas implementadas
+│   │   ├── pages/               # ✅ 11 páginas implementadas
 │   │   │   ├── AuthPage.tsx
 │   │   │   ├── DashboardPage.tsx
 │   │   │   ├── PerfilPage.tsx
@@ -163,6 +163,7 @@ laudopericial/ (raiz do projeto)
 │   │   │   ├── REPsPage.tsx
 │   │   │   ├── PlaceholdersPage.tsx
 │   │   │   ├── TemplatesPage.tsx
+│   │   │   ├── ModelosIAPage.tsx
 │   │   │   └── LaudosPage.tsx
 │   │   ├── hooks/               # ✅ Custom hooks
 │   │   ├── lib/                 # ✅ Schemas Zod e validações
@@ -406,13 +407,14 @@ interface ImagemLaudo {
 
 ---
 
-### 🤖 Sprint 6: Assistência IA (Opcional)
+### 🤖 Sprint 6: Assistência IA (Parcial)
 
 **Objetivo:** Inteligência na escrita de laudos.
 
-- [ ] Configuração de chaves de API (Groq/Gemini) com segurança.
-- [ ] Painel de Assistente Pareado: "Ortografia", "Reescrever", "Descrever Imagem".
-- [ ] Fallback: Ocultar funcionalidade se não houver chaves configuradas.
+- [x] Página `ModelosIAPage` com configuração de chave Groq.
+- [x] Handlers de IA implementados para revisão de texto, adequação de tom, descrição de imagens e perguntas livres.
+- [ ] Painel de assistente integrado ao editor de laudos.
+- [ ] Fallback completo quando a chave de API não estiver configurada.
 
 ---
 
@@ -420,7 +422,8 @@ interface ImagemLaudo {
 
 **Objetivo:** Produção do laudo em formatos oficiais.
 
-- [ ] Exportação Nativa: **PDF** (mantendo CSS e Imagens).
+- [x] Preview interno de PDF via handler Electron `template:previewPDF`.
+- [ ] Exportação Nativa de PDF final com imagens.
 - [ ] Exportação Conversível: **DOCX** e **ODT**.
 - [ ] Pré-visualização de Impressão (Print Preview).
 - [ ] Metadados de documento e seção de figuras automática.

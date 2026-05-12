@@ -88,3 +88,9 @@ O **Laudo Pericial Desktop** é uma evolução do sistema atual baseado em Strea
 
 - O laudo final gerado deve ser idêntico visualmente ao modelo oficial da instituição.
 - A migração do banco de dados atual para a nova estrutura não deve resultar em perda de dados.
+
+## 8. Status Atual de Implementação
+
+- Já implementado: autenticação local e perfil de perito, cadastros de solicitantes e tipos de exame, templates de laudo, placeholders dinâmicos, editor TinyMCE multi-seção, upload de imagens locais com protocolo `laudo-img://`, preview interno de PDF e configuração de IA via Groq.
+- Em desenvolvimento: backup/restauração com pacote ZIP, geração de PDF final persistente, exportação DOCX/ODT, snapshots de laudos e apêndice automático de figuras.
+- Nota: a integração de IA inclui handlers de revisão de texto, adequação de tom pericial e descrição de imagens usando o serviço Groq.

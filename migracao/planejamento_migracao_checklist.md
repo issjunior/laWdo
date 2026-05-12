@@ -174,6 +174,7 @@ projeto/
 - [x] Serviço `imagem.service.ts` + handlers `imagem.handlers.ts` (09/05/2026)
 - [x] Migration v14: tabela `imagens_laudo` (09/05/2026)
 - [x] CSP atualizado com `laudo-img:` (09/05/2026)
+- [x] Preview interno de PDF para laudos e templates via handler `template:previewPDF`.
 
 **⬜ PENDENTES:**
 
@@ -196,16 +197,18 @@ projeto/
 
 - [ ] Menu suspenso no editor para inserção rápida de tags (placeholders inseridos via comando TinyMCE)
 
-### Sprint 6: Assistência IA (Opcional)
+### Sprint 6: Assistência IA (Parcial)
 
-- [ ] Integração com APIs Groq e Gemini.
-- [ ] Painel de Assistente IA com ações rápidas de correção e melhoria.
+- [x] Página `ModelosIAPage` e configuração de chave Groq para IA.
+- [x] Handlers de IA implementados para revisão, adequação, descrição de imagens e perguntas livres.
+- [ ] Ajustes de integração IA na edição de laudos e experiência de assistente.
 
 ### Sprint 7: Exportação Multi-formato
 
 **Objetivo:** Gerar documentos finais em PDF, Word e ODT.
 
-- [ ] Geração nativa de PDF com imagens.
+- [x] Preview interno de PDF via handler Electron `template:previewPDF`.
+- [ ] Geração nativa de PDF final com imagens e persistência.
 - [ ] Exportação para **DOCX** (Word).
 - [ ] Exportação para **ODT** (Open Document Text).
 - [ ] Interface de Pré-visualização de Impressão.
@@ -214,7 +217,7 @@ projeto/
 
 - [ ] Log de Auditoria cronológico e completo.
 - [ ] Ferramenta de **Backup/Restauração** (ZIP: BD + Imagens).
-
+- [ ] Backup/restauração via IPC com pacote ZIP e importação de imagens.
 ### Sprint 9: Performance e UX
 
 - [ ] Otimização de queries e renderização.
