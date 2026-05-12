@@ -1,6 +1,6 @@
 # 🚀 Planejamento de Migração: Laudo Pericial para Electron (v1)
 
-Este documento detalha o roadmap atualizado de migração para a nova arquitetura desktop. O planejamento foi refinado para incluir suporte a múltiplos formatos de exportação e infraestrutura de segurança avançada.
+Este documento detalha o roadmap atualizado de migração para a nova arquitetura desktop. O planejamento foi refinado para incluir suporte a múltiplos formatos de exportação, infraestrutura de segurança avançada, integração com IA (Groq) e sistema de backup/restauração robusto.
 
 ---
 
@@ -195,13 +195,14 @@ projeto/
 
 **⬜ PENDENTE (para Sprint 4):**
 
-- [ ] Menu suspenso no editor para inserção rápida de tags (placeholders inseridos via comando TinyMCE)
+- [x] Menu suspenso no editor para inserção rápida de tags (placeholders inseridos via comando TinyMCE)
 
-### Sprint 6: Assistência IA (Parcial)
+### Sprint 6: Assistência IA ✅ **COMPLETADA**
 
 - [x] Página `ModelosIAPage` e configuração de chave Groq para IA.
 - [x] Handlers de IA implementados para revisão, adequação, descrição de imagens e perguntas livres.
-- [ ] Ajustes de integração IA na edição de laudos e experiência de assistente.
+- [x] Painel de assistente integrado ao editor de laudos (`AISheet`).
+- [x] Ferramenta de revisão rápida via toolbar no editor.
 
 ### Sprint 7: Exportação Multi-formato
 
@@ -211,13 +212,14 @@ projeto/
 - [ ] Geração nativa de PDF final com imagens e persistência.
 - [ ] Exportação para **DOCX** (Word).
 - [ ] Exportação para **ODT** (Open Document Text).
-- [ ] Interface de Pré-visualização de Impressão.
+- [x] Interface de Pré-visualização de Impressão.
 
-### Sprint 8: Auditoria e Backup
+### Sprint 8: Auditoria e Backup ✅ **COMPLETADA**
 
-- [ ] Log de Auditoria cronológico e completo.
+- [x] Log de Auditoria cronológico e completo com interface visual (`LogsPage`).
 - [x] Ferramenta de **Backup/Restauração** (ZIP: BD + Imagens).
 - [x] Backup/restauração via IPC com pacote ZIP e importação de imagens.
+- [x] Página `BackupPage` para gestão fácil de arquivos de segurança.
 ### Sprint 9: Performance e UX
 
 - [ ] Otimização de queries e renderização.
@@ -234,7 +236,7 @@ projeto/
 > [!IMPORTANT]
 > **Segurança em Primeiro Lugar:** A proteção dos dados críticos do sistema (especialmente senhas de peritos) é a prioridade zero. Todas as queries devem usar _prepared statements_ e **apenas dados sensíveis devem ser criptografados**.
 
-## Regras de Negócio e Escopo (Atualizado em 07/05/2026)
+## Regras de Negócio e Escopo (Atualizado em 12/05/2026)
 
 - [x] Login obrigatório para abrir o sistema (AuthPage).
 - [x] Renderer bloqueia acesso ao layout principal sem sessão autenticada.
@@ -242,4 +244,5 @@ projeto/
 - [x] Placeholders usam sintaxe canônica `{{chave}}`.
 - [x] Seções de instrução nas páginas iniciam recolhidas.
 - [x] Todos os serviços estendem `BaseService` (padrão de herança).
+- [x] Backup em formato ZIP inclui banco de dados e arquivos de mídia.
 

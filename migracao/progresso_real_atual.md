@@ -2,14 +2,14 @@
 
 ## Análise Detalhada do Estado Atual do Projeto
 
-**Data:** 09 de maio de 2026 (atualizado)  
-**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | 🔄 **SPRINT 4 PARCIAL (75%)**
+**Data:** 12 de maio de 2026 (atualizado)  
+**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | ✅ **SPRINT 6 COMPLETA** | ✅ **SPRINT 8 COMPLETA** | 🔄 **SPRINT 4 PARCIAL (75%)**
 
 ---
 
 ## 🎯 **VISÃO GERAL**
 
-O projeto está significativamente mais avançado do que o planejamento original previa. As Sprints 0, 1, 2, 3 e 5 estão **completas**. A Sprint 4 (Edição de Laudos) teve o módulo de Cabeçalho antecipado. A Sprint 6 também já começou com IA parcial. O sistema já possui **11 páginas funcionais**, **9 serviços de negócio** e **10 módulos de handlers IPC**.
+O projeto está significativamente mais avançado do que o planejamento original previa. As Sprints 0, 1, 2, 3, 5, 6 e 8 estão **completas**. A Sprint 4 (Edição de Laudos) teve o módulo de Cabeçalho antecipado e o motor TinyMCE funcional. O sistema já possui **13 páginas funcionais**, **10 serviços de negócio** e **12 módulos de handlers IPC**.
 
 ---
 
@@ -25,7 +25,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 ### 2. **✅ BANCO DE DADOS SQLITE AVANÇADO**
 
 - **Driver nativo SQLite3** no main process
-- **Schema completo com 10 migrations:**
+- **Schema completo com 14 migrations:**
   ```
   v1 - Schema inicial (8 tabelas base)
   v2 - Campo ativo em tipos_exame
@@ -42,9 +42,9 @@ O projeto está significativamente mais avançado do que o planejamento original
   v13 - tipo_exame_id nullable + Template "Não definido"
   v14 - Tabela imagens_laudo para bancos existentes
   ```
-- **Sistema de versionamento** com migrations automáticas (v1 → v9)
+- **Sistema de versionamento** com migrations automáticas (v1 → v14)
 - **Transações ACID** (BEGIN, COMMIT, ROLLBACK)
-- **Backup/restauração** automática
+- **Backup/restauração** automática e manual (ZIP)
 - **Índices otimizados** para performance
 
 ### 3. **✅ SEGURANÇA DE ALTO NÍVEL**
@@ -69,6 +69,7 @@ O projeto está significativamente mais avançado do que o planejamento original
   3. Limpar cache
   4. Reportar erro via email
 - **Logs estruturais** com Winston (rotação automática de 5MB)
+- **Página de Logs** (`LogsPage`) para visualização e auditoria em tempo real
 - **Captura de erros não tratados** (uncaughtException)
 
 ### 5. **✅ ARQUITETURA COMUNICAÇÃO IPC**
@@ -76,7 +77,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 - **Bridge IPC tipada** entre main/renderer processes
 - **Handlers implementados para:**
   - Utilitários (ping, app info)
-  - Logs (info, error, warning)
+  - Logs (info, error, warning, listar, limpar)
   - Sistema (restart, devtools, close)
   - Banco de dados (query, backup, restore)
   - Autenticação (login, logout, session)
@@ -90,6 +91,7 @@ O projeto está significativamente mais avançado do que o planejamento original
   - Laudo (findAll, findByRepId, updateConteudo)
   - Imagem (pickAndUpload, findByLaudoId, delete)
   - IA (revisarOrtografia, adequarEscrita, descreverImagem, perguntar)
+  - Backup (exportar ZIP, importar ZIP)
 
 ### 6. **✅ INTERFACE REACT FUNCIONAL**
 
@@ -101,7 +103,18 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 ### 7. **✅ SERVIÇOS DE NEGÓCIO IMPLEMENTADOS**
 
-- **9 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo, Imagem
+- **10 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo, Imagem, Backup
+
+#### `backup.service.ts`
+- Geração de pacotes ZIP contendo banco de dados e pasta de imagens
+- Restauração completa do sistema a partir de arquivo ZIP
+- Validação de integridade do backup
+
+#### `ia.service.ts` (ia.handlers)
+- Integração com Groq Cloud (Llama 3 / Mixtral)
+- Revisão ortográfica e adequação de tom técnico
+- Descrição de imagens para acessibilidade e laudos
+- Chat assistente integrado ao editor
 
 #### `user.service.ts`
 - Autenticação com criptografia de senha (bcrypt + AES-256-GCM)
@@ -109,37 +122,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 - Busca por usuário e verificação de credenciais
 - Descriptografia automática ao recuperar dados
 
-#### `solicitante.service.ts`
-- CRUD completo de solicitantes (órgãos, varas, delegacias)
-- Busca por nome, tipo e status
-- Filtro de ativos/inativos
-
-#### `tipo-exame.service.ts`
-- Gerenciamento de tipos de exame e templates
-- Criação, atualização e exclusão
-- Campo `eh_local` e toggle ativo/inativo
-
-#### `configuracao.service.ts`
-- Gerenciamento de configurações de cabeçalho de laudo
-- Editor HTML com placeholders
-
-#### `rep.service.ts`
-- CRUD completo de Requisições de Exame Pericial
-- Campo `tipo_solicitacao` com dados condicionais por `eh_local`
-- Data padrão de hoje
-- 22 placeholders mapeados do sistema
-
-#### `placeholder.service.ts`
-- CRUD de placeholders customizados
-- 22 placeholders do sistema (seed)
-- Schema alinhado com sintaxe `{{chave}}`
-
-#### `base.service.ts`
-- Classe base abstrata com operações CRUD padronizadas
-- Geração automática de UUID
-- Todas as entidades estendem este serviço
-
-### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (11 PÁGINAS)**
+### 8. **✅ PÁGINAS REACT IMPLEMENTADAS (13 PÁGINAS)**
 
 | Página | Rota | Descrição |
 |---|---|---|
@@ -154,6 +137,8 @@ O projeto está significativamente mais avançado do que o planejamento original
 | **ModelosIAPage** | `/modelos-ia` | Configuração de IA e testes de integração Groq |
 | **LaudosPage** | `/laudos` | Editor multi-seção TinyMCE com upload de imagens do PC |
 | **PerfilPage** | `/perfil` | Perfil do perito com validação Zod |
+| **BackupPage** | `/backup` | Ferramenta de exportação/importação de dados (ZIP) |
+| **LogsPage** | `/logs` | Visualização e gestão de logs do sistema |
 
 ---
 
@@ -161,11 +146,11 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 ### **Código Produzido:**
 
-- **TypeScript:** ~5000+ linhas (estimado)
-- **Arquivos:** ~120+ arquivos criados/modificados
-- **Páginas:** 11 páginas implementadas
-- **Serviços:** 9 serviços de negócio
-- **Handlers IPC:** 10 módulos de handlers
+- **TypeScript:** ~6500+ linhas (estimado)
+- **Arquivos:** ~140+ arquivos criados/modificados
+- **Páginas:** 13 páginas implementadas
+- **Serviços:** 10 serviços de negócio
+- **Handlers IPC:** 12 módulos de handlers
 - **Migrations:** 14 versões de schema (v1 → v14)
 
 ### **Testes Realizados:**
@@ -174,10 +159,9 @@ O projeto está significativamente mais avançado do que o planejamento original
 - ✅ Execução desenvolvimento (`npm run dev`)
 - ✅ Teste SQLite (conexão + operações + transações)
 - ✅ Teste criptografia (AES-256-GCM + bcrypt)
-- ✅ Interface React funcional
-- ✅ Comunicação IPC operacional
-- ✅ CRUD de todas as entidades (solicitantes, tipos exame, REPs, placeholders, cabeçalho)
-- ✅ Autenticação com login obrigatório
+- ✅ Backup/Restore funcional com imagens
+- ✅ Integração Groq IA (revisão e chat)
+- ✅ CRUD de todas as entidades
 
 ### **Qualidade:**
 
@@ -191,92 +175,25 @@ O projeto está significativamente mais avançado do que o planejamento original
 ## 🚀 **SPRINTS CONCLUÍDAS - RESUMO**
 
 ### ✅ **SPRINT 0 COMPLETA - Fundação e Segurança Crítica**
-
-Todas as tarefas realizadas com sucesso:
-- Infraestrutura Electron configurada
-- Banco SQLite com schema completo (9 tabelas após migrations)
-- Criptografia de senha implementada (AES-256-GCM + bcrypt + PBKDF2)
-- Sistema de erro e logs configurados
-- IPC bridge segura implementada
-- Login obrigatório para acesso ao sistema
-
 ### ✅ **SPRINT 1 CONCLUÍDA - Arquitetura Base**
-
-**Validação Robusta:**
-- Schemas Zod para todas as entidades
-- Tipos TypeScript inferidos automaticamente
-- Validação rigorosa com mensagens em português
-
-**Arquitetura IPC Expandida:**
-- Handlers para Usuário, Solicitante, TipoExame, Configuracao, REP, Placeholder
-- Serviços de negócio com lógica específica
-- APIs documentadas e testadas
-
-**Interface Moderna:**
-- Componentes Shadcn/ui configurados
-- Formulários com React Hook Form + Zod
-- Layout responsivo e acessível
-
 ### ✅ **SPRINT 2 CONCLUÍDA - Perfil e Cadastros de Apoio**
-
-**Páginas Implementadas:**
-- AuthPage com login obrigatório (bloqueia acesso sem autenticação)
-- Dashboard com estatísticas e navegação
-- Perfil do Perito com validação completa
-- Solicitantes com CRUD em tabela e toggle ativo/inativo
-- Tipos de Exame com campo eh_local e toggle
-
-**Backend Completo:**
-- Múltiplos handlers IPC implementados
-- 3 serviços de negócio iniciais (user, solicitante, tipo-exame)
-- Schemas Zod validando todas as entidades
-
 ### ✅ **SPRINT 3 CONCLUÍDA - Gestão de Requisições (REP)**
-
-**Página REPs Implementada:**
-- CRUD completo de Requisições de Exame Pericial
-- Formulário inline na tabela
-- Campo tipo_solicitacao com dados condicionais por eh_local
-- Data padrão de hoje
-- 22 placeholders do sistema mapeados
-- Migration v9 aplicada
-
-**Backend:**
-- `rep.service.ts` com operações CRUD
-- `rep.handlers.ts` com handlers IPC
-- Integração com validação Zod
-
 ### ✅ **SPRINT 5 CONCLUÍDA - Placeholders**
-
-**Página Placeholders Implementada:**
-- CRUD completo de placeholders
-- 22 placeholders do sistema (seed)
-- Schema alinhado com sintaxe `{{chave}}` como padrão canônico
-- Instruções visuais colapsáveis com antes/depois para usuários leigos
-- Seções de instrução iniciam recolhidas, com cabeçalho clicável
-
-**Backend:**
-- `placeholder.service.ts` com operações CRUD
-- `placeholder.handlers.ts` com handlers IPC
+### ✅ **SPRINT 6 CONCLUÍDA - Assistência IA (Groq)**
+### ✅ **SPRINT 8 CONCLUÍDA - Auditoria e Backup (ZIP)**
 
 ---
 
 ## 🔄 **SPRINT 4 EM ANDAMENTO (PARCIAL)**
 
-### Concluído (09/05/2026):
+### Concluído (12/05/2026):
 - [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
 - [x] Editor HTML para cabeçalho com placeholders
-- [x] Tabela `configuracoes` (migration v8)
-- [x] `configuracao.service.ts` e `configuracao.handlers.ts`
-- [x] Menu em Cadastros
 - [x] **Página Laudos (`LaudosPage`)** — editor multi-seção com TinyMCE independente por seção
 - [x] **Editor TinyMCE completo** — 14 plugins, toolbar 2 linhas, modo `floating` responsivo
 - [x] **Upload de imagens do PC** — diálogo nativo Electron → `userData/imagens/<laudo_id>/`
 - [x] **Protocolo `laudo-img://`** — serve imagens locais sem expor caminhos absolutos
-- [x] **Serviço `imagem.service.ts`** — salvar (cópia + registro), listar, deletar
-- [x] **Handlers `imagem.handlers.ts`** — `imagem:pickAndUpload`, `imagem:findByLaudoId`, `imagem:delete`
-- [x] **Migration v14** — tabela `imagens_laudo` para bancos existentes
-- [x] **CSP atualizado** — `img-src 'self' data: blob: laudo-img:`
+- [x] **Integração IA** no editor para revisão e assistência
 - [x] **Preview de PDF implementado** para laudos/templates via `template:previewPDF`
 - [x] **Seções colapsáveis** (abertas por padrão) com toggle individual
 
@@ -288,58 +205,23 @@ Todas as tarefas realizadas com sucesso:
 
 ---
 
-## 🔧 **COMANDOS DE VERIFICAÇÃO ATUAIS**
-
-```bash
-# 1. Verificar build
-npm run build
-
-# 2. Executar em desenvolvimento
-npm run dev
-
-# 3. Verificar tipos TypeScript
-npm run type-check
-
-# 4. Verificar linting
-npm run lint
-
-# 5. Formatar código
-npm run format
-```
-
----
-
 ## 📝 **OBSERVAÇÕES TÉCNICAS IMPORTANTES**
 
-### **Decisões Arquiteturais:**
-
-1. **SQLite3 diretamente** - Optou-se pelo driver nativo em vez de ORM para controle total
-2. **Electron 29+** - API atualizada (`registerSchemesAsPrivileged` removida)
-3. **Criptografia seletiva** - Apenas senha do usuário é criptografada (não telefones/emails)
-4. **ErrorBoundary independente** - Componente reutilizável em todo o app
-5. **BaseService** - Padrão de herança para todos os serviços CRUD
-6. **Login obrigatório** - Renderer bloqueia acesso sem sessão autenticada
-7. **Sintaxe de placeholders** - Padrão canônico `{{chave}}`
-
-### **Compatibilidade Verificada:**
-
-- ✅ Electron v29+ (última versão estável)
-- ✅ Node.js v18+ (requerido por Electron)
-- ✅ TypeScript 5.3+
-- ✅ React 18.2+
-- ✅ SQLite3 5.1.7+
-
-### **Próximos Desafios:**
-
-1. **TinyMCE** - Integrar editor rico para edição completa de laudos
-2. **Exportação** - PDF, DOCX e ODT
-3. **Auto-save** - Sistema de salvamento automático e versionamento
-4. **Gestão de imagens** - Upload, legendas, drag-and-drop
-5. **Assistente IA** - Opcional, conforme demanda
+1. **Backup Robusto** - Implementado via ZIP contendo o banco de dados e a pasta de imagens, garantindo portabilidade total.
+2. **IA Integrada** - Uso do Groq Cloud para latência ultra-baixa em revisões de texto.
+3. **Logs Auditáveis** - Sistema de logs agora possui interface visual para auditoria.
 
 ---
 
 ## 🎉 **CONSIDERAÇÕES FINAIS**
+
+O projeto atingiu um nível de maturidade alto, com quase todas as funcionalidades auxiliares (IA, Backup, Logs) completas. O foco agora reside puramente na finalização do fluxo de edição de laudos e exportação multi-formato.
+
+**Progresso estimado:** ~90% do projeto completo
+
+**Status:** 🟢 **PRÓXIMA ETAPA - COMPLETAR SPRINT 4 (Snapshots) e SPRINT 7 (Exportação)**
+
+---🎉 **CONSIDERAÇÕES FINAIS**
 
 O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3, 5 e parte da Sprint 6 já estão implementadas. O sistema possui 11 páginas funcionais, 9 serviços de negócio e autenticação obrigatória.
 

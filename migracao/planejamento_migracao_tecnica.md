@@ -2,7 +2,7 @@
 
 ### 🐍 Python/Streamlit ➔ ⚛️ Electron + React
 
-## 📈 **STATUS ATUAL DO PROJETO** (09/05/2026 - atualizado)
+## 📈 **STATUS ATUAL DO PROJETO** (12/05/2026 - atualizado)
 
 ### ✅ **SPRINT 0: COMPLETA**
 
@@ -29,17 +29,27 @@
 - **REPs:** CRUD completo com formulário inline e campos condicionais
 - **Migration v9** aplicada
 
-### 🔄 **SPRINT 4: PARCIAL (75%)**
+### ✅ **SPRINT 4: PARCIAL (80%)**
 
 - **Cabeçalho:** Página com editor HTML e placeholders implementada (antecipado)
 - **LaudosPage:** Editor multi-seção TinyMCE implementado
 - **TinyMCE:** 14 plugins, toolbar 2 linhas, modo floating responsivo
 - **Upload de imagens:** Diálogo nativo + protocolo `laudo-img://` + serviço/handlers
+- **IA:** Integração total com Groq no editor para revisão e chat assistente
 - **Pendente:** Painel lateral de imagens, drag-and-drop, snapshots
 
 ### ✅ **SPRINT 5: COMPLETA**
 
 - **Placeholders:** CRUD completo, 22 do sistema, sintaxe `{{chave}}`
+
+### ✅ **SPRINT 6: COMPLETA**
+
+- **IA:** ModelosIAPage, integração Groq, handlers de IA e interface de assistente
+
+### ✅ **SPRINT 8: COMPLETA**
+
+- **Backup:** BackupPage, serviço de backup ZIP, restauração completa
+- **Logs:** LogsPage, auditoria visual, gestão de logs estruturados
 
 ---
 
@@ -148,7 +158,8 @@ laudopericial/ (raiz do projeto)
 │   │   │   ├── placeholder.service.ts
 │   │   │   ├── template.service.ts
 │   │   │   ├── laudo.service.ts
-│   │   │   └── imagem.service.ts
+│   │   │   ├── imagem.service.ts
+│   │   │   └── backup.service.ts
 │   │   └── utils/               # ✅ Helpers globais (logger, etc.)
 │   ├── preload/                 # ✅ Bridge IPC segura (Context Bridge)
 │   ├── renderer/                # ✅ Frontend React (11 páginas)
@@ -164,7 +175,9 @@ laudopericial/ (raiz do projeto)
 │   │   │   ├── PlaceholdersPage.tsx
 │   │   │   ├── TemplatesPage.tsx
 │   │   │   ├── ModelosIAPage.tsx
-│   │   │   └── LaudosPage.tsx
+│   │   │   ├── LaudosPage.tsx
+│   │   │   ├── BackupPage.tsx
+│   │   │   └── LogsPage.tsx
 │   │   ├── hooks/               # ✅ Custom hooks
 │   │   ├── lib/                 # ✅ Schemas Zod e validações
 │   │   └── styles/              # ✅ CSS Global, Tailwind, dark mode
