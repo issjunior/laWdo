@@ -134,6 +134,7 @@ export interface IpcAPI {
     deleteSecao: (id: string) => Promise<UserResponse>;
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
     previewPDF: (html: string) => Promise<UserResponse>;
+    importarArquivo: () => Promise<{ success: boolean; data?: any; error?: string }>;
   };
 
   // Laudos
@@ -257,6 +258,7 @@ const ALLOWED_CHANNELS = new Set([
   'template:deleteSecao',
   'template:reordenarSecoes',
   'template:previewPDF',
+  'template:importarArquivo',
 
   // Laudos
   'laudo:findByRepId',
@@ -607,6 +609,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     deleteSecao: (id: string) => ipcRenderer.invoke('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
     previewPDF: (html: string) => ipcRenderer.invoke('template:previewPDF', html),
+    importarArquivo: () => ipcRenderer.invoke('template:importarArquivo'),
   },
 
   laudo: {

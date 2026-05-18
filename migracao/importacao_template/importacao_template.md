@@ -1,7 +1,8 @@
 # Importação de Templates de Laudos (PDF/DOCX → Template)
 
 > Criado em: 2026-05-18  
-> Status: **Aguardando execução**
+> Status: **Implementado**
+> Implementado em: 2026-05-18
 
 Implementar um fluxo completo de importação de documentos (PDF e DOCX) diretamente na `TemplatesPage`, convertendo-os em templates estruturados com seções editáveis via TinyMCE.
 

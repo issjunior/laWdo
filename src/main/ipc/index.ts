@@ -8,6 +8,7 @@ import { registerConfiguracaoHandlers } from './handlers/configuracao.handlers.j
 import { registerRepHandlers } from './handlers/rep.handlers.js';
 import { registerPlaceholderHandlers } from './handlers/placeholder.handlers.js';
 import { registerTemplateHandlers } from './handlers/template.handlers.js';
+import { registerImportacaoHandlers } from './handlers/importacao.handlers.js';
 import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
 import { registerImagemHandlers } from './handlers/imagem.handlers.js';
 import { registerIAHandlers } from './handlers/ia.handlers.js';
@@ -51,6 +52,7 @@ export const registerIpcHandlers = (): void => {
   registerRepHandlers();
   registerPlaceholderHandlers();
   registerTemplateHandlers();
+  registerImportacaoHandlers();
   registerLaudoHandlers();
   registerImagemHandlers();
   registerIAHandlers();

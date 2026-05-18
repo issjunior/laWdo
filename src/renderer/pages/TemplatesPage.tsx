@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner';
 import {
   Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
-  FileText, GripVertical, Layers, Eye, LayoutGrid, List,
+  FileText, GripVertical, Layers, Eye, LayoutGrid, List, Upload,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/context-menu";
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { removerFormatacaoPlaceholders } from '@/lib/utils';
-import { createTemplateSchema } from '@/lib/validators';
 import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -85,6 +84,8 @@ const templateFormSchema = z.object({
   descricao: z.string().max(500, 'Máximo 500 caracteres').optional(),
 });
 
+import { ImportTemplateDialog } from '@/components/template/ImportTemplateDialog';
+
 export const TemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,6 +106,7 @@ export const TemplatesPage: React.FC = () => {
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const carregarTemplates = useCallback(async () => {
     try {
@@ -632,8 +634,12 @@ export const TemplatesPage: React.FC = () => {
                 <List size={14} />
               </Button>
             </div>
-            <Button onClick={handleNovo} className="flex items-center gap-2">
-              <Plus size={16} /> Novo Template
+            <Button
+              variant="outline"
+              onClick={() => setShowImportDialog(true)}
+              className="flex items-center gap-2"
+            >
+              <Upload size={16} /> Importar Documento
             </Button>
           </div>
         </div>
@@ -760,6 +766,14 @@ export const TemplatesPage: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        <ImportTemplateDialog
+          open={showImportDialog}
+          onOpenChange={setShowImportDialog}
+          tiposExame={tiposExame}
+          placeholders={placeholders}
+          onImportSuccess={carregarTemplates}
+        />
       </div>
       </TooltipProvider>
     );
