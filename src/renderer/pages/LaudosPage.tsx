@@ -556,17 +556,73 @@ export const LaudosPage: React.FC = () => {
     setIaError(null);
   };
 
+  /**
+   * Resolve os valores reais dos placeholders num bloco HTML antes de enviar à IA.
+   * Usa os dados da REP vinculada ao laudo em edição.
+   */
+  const resolverPlaceholdersNoHtml = async (html: string): Promise<string> => {
+    if (!editando) return html;
+    try {
+      const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
+      if (!rRep.success || !rRep.data) return html;
+      const repData = rRep.data;
+
+      let solicitanteNome = '';
+      let tipoExameNome = '';
+      let tipoExameCodigo = '';
+
+      if (repData.solicitante_id) {
+        try {
+          const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
+          if (rSol.success && rSol.data) solicitanteNome = rSol.data.nome || '';
+        } catch {}
+      }
+      if (repData.tipo_exame_id) {
+        try {
+          const rTipo = await window.ipcAPI.tipoExame.findById(repData.tipo_exame_id);
+          if (rTipo.success && rTipo.data) {
+            tipoExameNome = rTipo.data.nome || '';
+            tipoExameCodigo = rTipo.data.codigo || '';
+          }
+        } catch {}
+      }
+
+      // Substituir os {{placeholders}} pelos valores reais
+      let resolved = aplicarPlaceholders(html, repData, { solicitanteNome, tipoExameNome, tipoExameCodigo });
+
+      // Substituir quaisquer placeholders customizados (valor padrão do banco)
+      for (const p of placeholders) {
+        if (p.valor) {
+          resolved = resolved.split(`{{${p.chave}}}`).join(p.valor);
+        }
+      }
+
+      return resolved;
+    } catch {
+      return html; // fallback: envia o original
+    }
+  };
+
   const handleRevisarOrtografia = async (html: string, idx: number) => {
     try {
       setIaLoading(true);
       setIaError(null);
-      const r = await window.ipcAPI.ia.revisarOrtografia(html);
+      // Abre o sheet para o usuário ver a sugestão
+      handleOpenSheet(idx, secoes[idx]?.titulo || '');
+      const htmlResolvido = await resolverPlaceholdersNoHtml(html);
+      const r = await window.ipcAPI.ia.revisarOrtografia(htmlResolvido);
       if (r.success && r.data) {
-        // Aplicar diretamente ao editor
-        atualizarConteudoSecao(idx, String(r.data));
+        const resposta: ChatMessage = {
+          role: 'assistant',
+          content: String(r.data),
+          timestamp: Date.now(),
+        };
+        setChatMessages(prev => ({
+          ...prev,
+          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), resposta],
+        }));
       } else {
         setIaError(r.error || 'Erro ao revisar ortografia');
-        handleOpenSheet(idx, secoes[idx]?.titulo || '');
       }
     } catch (e: any) {
       setIaError(e.message || 'Erro ao revisar ortografia');
@@ -579,7 +635,8 @@ export const LaudosPage: React.FC = () => {
     try {
       setIaLoading(true);
       setIaError(null);
-      const r = await window.ipcAPI.ia.adequarEscrita(html);
+      const htmlResolvido = await resolverPlaceholdersNoHtml(html);
+      const r = await window.ipcAPI.ia.adequarEscrita(htmlResolvido);
       if (r.success && r.data) {
         const resposta: ChatMessage = {
           role: 'assistant',
