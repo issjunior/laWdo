@@ -116,13 +116,41 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
   );
 };
 
-const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete }: { categoria: CategoriaPlaceholderRow, placeholders: Placeholder[], onEdit: (p: Placeholder)=>void, onDelete: (id: string)=>void }) => {
+const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete }: { 
+  categoria: CategoriaPlaceholderRow, 
+  placeholders: Placeholder[], 
+  onEdit: (p: Placeholder) => void, 
+  onDelete: (id: string) => void,
+}) => {
   const { isOver, setNodeRef } = useDroppable({
     id: categoria.id,
     data: { categoria }
   });
+  const [open, setOpen] = useState(true);
 
   const IconComp = (LucideIcons as any)[categoria.icone] || LucideIcons.Tag;
+
+  if (!open) {
+    return (
+      <div
+        ref={setNodeRef}
+        className={`flex flex-col items-center rounded-xl border bg-muted/20 py-3 px-2 gap-3 cursor-pointer hover:bg-muted/40 transition-colors shrink-0 w-12
+          ${isOver ? `ring-2 ring-${categoria.cor}-500/50` : ''}
+        `}
+        onClick={() => setOpen(true)}
+        title={`Expandir: ${categoria.label} (${placeholders.length})`}
+      >
+        <IconComp size={16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400 shrink-0`} />
+        <span
+          className={`text-[11px] font-semibold text-${categoria.cor}-700 dark:text-${categoria.cor}-300 whitespace-nowrap`}
+          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+        >
+          {categoria.label}
+        </span>
+        <Badge variant="secondary" className="text-[10px] h-4 px-1">{placeholders.length}</Badge>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -136,6 +164,14 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete }: { catego
           <h3 className={`font-semibold text-sm text-${categoria.cor}-700 dark:text-${categoria.cor}-300`}>{categoria.label}</h3>
           <Badge variant="secondary" className="text-[10px] h-4 px-1">{placeholders.length}</Badge>
         </div>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
+          title="Recolher coluna"
+        >
+          <ChevronDown size={14} className="rotate-90" />
+        </button>
       </div>
       <div className="p-3 flex-1 overflow-y-auto min-h-[150px]">
         {placeholders.map(p => {
