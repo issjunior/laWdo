@@ -365,6 +365,7 @@ export const LaudosPage: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
   const [iaLoading, setIaLoading] = useState(false);
   const [iaError, setIaError] = useState<string | null>(null);
+  const [iaSheetMode, setIaSheetMode] = useState<'ortografia' | 'adequar' | 'imagem' | 'perguntar' | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
@@ -605,6 +606,7 @@ export const LaudosPage: React.FC = () => {
 
   const handleRevisarOrtografia = async (html: string, idx: number) => {
     try {
+      setIaSheetMode('ortografia');
       setIaLoading(true);
       setIaError(null);
       // Abre o sheet para o usuário ver a sugestão
@@ -633,6 +635,7 @@ export const LaudosPage: React.FC = () => {
 
   const handleAdequarEscrita = async (html: string, idx: number) => {
     try {
+      setIaSheetMode('adequar');
       setIaLoading(true);
       setIaError(null);
       const htmlResolvido = await resolverPlaceholdersNoHtml(html);
@@ -659,6 +662,7 @@ export const LaudosPage: React.FC = () => {
 
   const handleDescreverImagem = async (imagens: Array<{ src: string; alt?: string }>, idx: number) => {
     try {
+      setIaSheetMode('imagem');
       setIaLoading(true);
       setIaError(null);
       const r = await window.ipcAPI.ia.descreverImagem(imagens);
@@ -684,6 +688,7 @@ export const LaudosPage: React.FC = () => {
 
   const handlePerguntar = async (pergunta: string, html: string, idx: number, titulo: string) => {
     try {
+      setIaSheetMode('perguntar');
       setIaLoading(true);
       setIaError(null);
 
@@ -721,7 +726,29 @@ export const LaudosPage: React.FC = () => {
 
   const handleApplyResponse = (texto: string) => {
     if (iaSheetSecaoIdx !== null) {
-      atualizarConteudoSecao(iaSheetSecaoIdx, texto);
+      const editorId = `secao-${iaSheetSecaoIdx}`;
+      const win = window as any;
+
+      if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
+        // Converter quebras de linha em parágrafos de HTML
+        const descHtml = texto
+          .split('\n')
+          .map((line) => (line.trim() ? `<p>${line}</p>` : ''))
+          .join('');
+
+        const editor = win.tinymce?.get(editorId);
+        if (editor) {
+          // Insere na posição atual do cursor no editor correspondente
+          editor.insertContent(descHtml);
+        } else {
+          // Fallback caso o editor não seja encontrado: anexa ao final
+          const atual = secoes[iaSheetSecaoIdx]?.conteudo || '';
+          const divisor = atual.trim() ? '<p>&nbsp;</p>' : '';
+          atualizarConteudoSecao(iaSheetSecaoIdx, atual + divisor + descHtml);
+        }
+      } else {
+        atualizarConteudoSecao(iaSheetSecaoIdx, texto);
+      }
       setIaSheetOpen(false);
     }
   };

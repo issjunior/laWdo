@@ -234,8 +234,8 @@ export const ModelosIAPage: React.FC = () => {
                         <SelectItem value="llama-3.3-70b-versatile">
                           Llama 3.3 70B (padrão — recomendado)
                         </SelectItem>
-                        <SelectItem value="llama-3.2-11b-vision-preview">
-                          Llama 3.2 11B Vision (para descrição de imagens)
+                        <SelectItem value="meta-llama/llama-4-scout-17b-16e-instruct">
+                          Llama 4 Scout 17B Instruct (Multimodal / Imagens)
                         </SelectItem>
                         <SelectItem value="gemma2-9b-it">Gemma 2 9B</SelectItem>
                         <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>

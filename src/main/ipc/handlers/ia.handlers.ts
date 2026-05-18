@@ -1,4 +1,6 @@
-import { ipcMain } from 'electron';
+import { ipcMain, app } from 'electron';
+import path from 'path';
+import fs from 'fs';
 import { logError, logInfo } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 
@@ -6,13 +8,13 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 const MODELOS_DISPONIVEIS = [
   'llama-3.3-70b-versatile',
-  'llama-3.2-11b-vision-preview',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
   'gemma2-9b-it',
   'mixtral-8x7b-32768',
 ];
 
 const MODELO_PADRAO = 'llama-3.3-70b-versatile';
-const MODELO_VISION = 'llama-3.2-11b-vision-preview';
+const MODELO_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 async function obterConfigIA(): Promise<{ apiKey: string | null; modelo: string }> {
   const apiKey = await configuracaoService.obter('api_key_groq');
@@ -65,6 +67,16 @@ function extrairTextoDoHtml(html: string): string {
   // 3. Normalizar espaços
   texto = texto.replace(/\s+/g, ' ').trim();
   return texto || '';
+}
+
+function obterMimeType(ext: string): string {
+  switch (ext.toLowerCase()) {
+    case '.png': return 'image/png';
+    case '.gif': return 'image/gif';
+    case '.webp': return 'image/webp';
+    case '.bmp': return 'image/bmp';
+    default: return 'image/jpeg';
+  }
 }
 
 /**
@@ -171,12 +183,31 @@ ${texto}`;
             type: 'image_url',
             image_url: { url: img.src },
           });
+        } else if (img.src.startsWith('laudo-img://')) {
+          try {
+            const matches = img.src.match(/^laudo-img:\/\/([^/]+)\/(.+)$/);
+            if (matches) {
+              const laudoId = matches[1];
+              const filename = matches[2];
+              const filePath = path.join(app.getPath('userData'), 'imagens', laudoId, filename);
+              if (fs.existsSync(filePath)) {
+                const ext = path.extname(filePath);
+                const mime = obterMimeType(ext);
+                const base64 = fs.readFileSync(filePath, { encoding: 'base64' });
+                content.push({
+                  type: 'image_url',
+                  image_url: { url: `data:${mime};base64,${base64}` },
+                });
+              }
+            }
+          } catch (err) {
+            logError('Erro ao converter laudo-img:// para base64', err);
+          }
         }
-        // Ignorar protocolos internos (laudo-img://) que não podem ser acessados pela API externa
       }
 
       if (content.length === 1) {
-        return { success: false, error: 'Nenhuma imagem válida para descrição ( apenas data-URI ou URLs HTTP são suportados)' };
+        return { success: false, error: 'Nenhuma imagem válida para descrição (apenas data-URI, URLs HTTP/HTTPS ou imagens do laudo são suportadas)' };
       }
 
       const resposta = await chamarGroq(

@@ -43,12 +43,13 @@ export const AISectionToolbar: React.FC<AISectionToolbarProps> = ({
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlContent, 'text/html');
       const imgs = doc.querySelectorAll('img');
-      // Filtrar apenas imagens com src válido (data-URI ou HTTP)
+      // Filtrar imagens com src válido: data-URI, HTTP, HTTPS ou protocolo customizado do Electron
       return Array.from(imgs).some(
         (img) =>
           img.src.startsWith('data:') ||
           img.src.startsWith('http://') ||
-          img.src.startsWith('https://')
+          img.src.startsWith('https://') ||
+          img.getAttribute('src')?.startsWith('laudo-img://')
       );
     } catch {
       return false;
@@ -65,9 +66,14 @@ export const AISectionToolbar: React.FC<AISectionToolbarProps> = ({
           (img) =>
             img.src.startsWith('data:') ||
             img.src.startsWith('http://') ||
-            img.src.startsWith('https://')
+            img.src.startsWith('https://') ||
+            img.getAttribute('src')?.startsWith('laudo-img://')
         )
-        .map((img) => ({ src: img.src, alt: img.alt }));
+        .map((img) => ({
+          // Usar getAttribute para preservar o protocolo original laudo-img://
+          src: img.getAttribute('src') || img.src,
+          alt: img.alt,
+        }));
     } catch {
       return [];
     }
