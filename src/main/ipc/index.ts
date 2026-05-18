@@ -7,6 +7,7 @@ import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers.js';
 import { registerConfiguracaoHandlers } from './handlers/configuracao.handlers.js';
 import { registerRepHandlers } from './handlers/rep.handlers.js';
 import { registerPlaceholderHandlers } from './handlers/placeholder.handlers.js';
+import { registerCategoriaHandlers } from './handlers/categoria-placeholder.handlers.js';
 import { registerTemplateHandlers } from './handlers/template.handlers.js';
 import { registerImportacaoHandlers } from './handlers/importacao.handlers.js';
 import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
@@ -51,6 +52,7 @@ export const registerIpcHandlers = (): void => {
   registerConfiguracaoHandlers();
   registerRepHandlers();
   registerPlaceholderHandlers();
+  registerCategoriaHandlers();
   registerTemplateHandlers();
   registerImportacaoHandlers();
   registerLaudoHandlers();

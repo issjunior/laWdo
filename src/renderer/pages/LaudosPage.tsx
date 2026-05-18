@@ -35,7 +35,14 @@ interface Placeholder {
   id: string;
   chave: string;
   descricao: string;
-  categoria: string;
+  categoria_id: string;
+}
+
+interface Categoria {
+  id: string;
+  label: string;
+  icone: string;
+  cor: string;
 }
 
 // ... (seções de interfaces mantidas)
@@ -350,6 +357,7 @@ export const LaudosPage: React.FC = () => {
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [carregandoPreview, setCarregandoPreview] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
 
   const [iaSheetOpen, setIaSheetOpen] = useState(false);
   const [iaSheetSecaoIdx, setIaSheetSecaoIdx] = useState<number | null>(null);
@@ -362,9 +370,13 @@ export const LaudosPage: React.FC = () => {
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
 
   const carregarPlaceholders = useCallback(async () => {
-    const r = await window.ipcAPI.placeholder.findAll();
-    if (r.success && r.data) {
-      setPlaceholders(r.data);
+    const rCat = await window.ipcAPI.categoria.findAll();
+    if (rCat.success && rCat.data) {
+      setCategorias(rCat.data);
+    }
+    const rPlace = await window.ipcAPI.placeholder.findAll();
+    if (rPlace.success && rPlace.data) {
+      setPlaceholders(rPlace.data);
     }
   }, []);
 
@@ -883,12 +895,14 @@ export const LaudosPage: React.FC = () => {
                       <ContextMenuContent className="w-64">
                         <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
                         <ContextMenuSeparator />
-                        {Array.from(new Set(placeholders.map(p => p.categoria))).sort().map(cat => (
-                          <ContextMenuSub key={cat}>
-                            <ContextMenuSubTrigger>{cat || 'Outros'}</ContextMenuSubTrigger>
+                        {categorias.map(cat => (
+                          <ContextMenuSub key={cat.id}>
+                            <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
+                              {cat.label}
+                            </ContextMenuSubTrigger>
                             <ContextMenuSubContent className="w-56">
                               {placeholders
-                                .filter(p => p.categoria === cat)
+                                .filter(p => p.categoria_id === cat.id)
                                 .sort((a, b) => a.chave.localeCompare(b.chave))
                                 .map(p => (
                                   <ContextMenuItem

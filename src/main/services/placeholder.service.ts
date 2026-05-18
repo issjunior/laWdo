@@ -6,7 +6,7 @@ export interface PlaceholderRow {
   chave: string;
   valor: string;
   descricao: string | null;
-  categoria: string | null;
+  categoria_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,33 +37,33 @@ const RENOMEACOES: Record<string, string> = {
 
 const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   // Tabela reps (18)
-  { chave: 'numero_rep', valor: '', descricao: 'Nº da REP', categoria: 'REP' },
-  { chave: 'data_recebimento_rep', valor: '', descricao: 'Data de recebimento da REP', categoria: 'REP' },
-  { chave: 'tipo_solicitacao_rep', valor: '', descricao: 'Tipo de solicitação (Ofício, BOU, BO PM, etc.)', categoria: 'REP' },
-  { chave: 'numero_solicitacao_rep', valor: '', descricao: 'Nº da Solicitação (Ofício/Requisição)', categoria: 'REP' },
-  { chave: 'data_solicitacao_rep', valor: '', descricao: 'Data do documento de solicitação', categoria: 'REP' },
-  { chave: 'autoridade_solicitante_rep', valor: '', descricao: 'Autoridade solicitante', categoria: 'REP' },
-  { chave: 'nome_envolvido', valor: '', descricao: 'Nome da pessoa envolvida', categoria: 'REP' },
-  { chave: 'local_fato', valor: '', descricao: 'Local do fato (exames de local)', categoria: 'REP' },
-  { chave: 'latitude', valor: '', descricao: 'Latitude do local (exames de local)', categoria: 'REP' },
-  { chave: 'longitude', valor: '', descricao: 'Longitude do local (exames de local)', categoria: 'REP' },
-  { chave: 'data_acionamento_local', valor: '', descricao: 'Data/Hora do acionamento (exames de local)', categoria: 'REP' },
-  { chave: 'data_chegada_local', valor: '', descricao: 'Data/Hora de chegada ao local (exames de local)', categoria: 'REP' },
-  { chave: 'data_saida_local', valor: '', descricao: 'Data/Hora de saída do local (exames de local)', categoria: 'REP' },
-  { chave: 'numero_bo', valor: '', descricao: 'Nº do Boletim de Ocorrência', categoria: 'REP' },
-  { chave: 'numero_ip', valor: '', descricao: 'Nº do Inquérito Policial', categoria: 'REP' },
-  { chave: 'lacre_entrada', valor: '', descricao: 'Nº do lacre de entrada', categoria: 'REP' },
-  { chave: 'lacre_saida', valor: '', descricao: 'Nº do lacre de saída', categoria: 'REP' },
-  { chave: 'observacoes_rep', valor: '', descricao: 'Observações gerais da REP', categoria: 'REP' },
+  { chave: 'numero_rep', valor: '', descricao: 'Nº da REP', categoria_id: 'cat-rep' },
+  { chave: 'data_recebimento_rep', valor: '', descricao: 'Data de recebimento da REP', categoria_id: 'cat-rep' },
+  { chave: 'tipo_solicitacao_rep', valor: '', descricao: 'Tipo de solicitação (Ofício, BOU, BO PM, etc.)', categoria_id: 'cat-rep' },
+  { chave: 'numero_solicitacao_rep', valor: '', descricao: 'Nº da Solicitação (Ofício/Requisição)', categoria_id: 'cat-rep' },
+  { chave: 'data_solicitacao_rep', valor: '', descricao: 'Data do documento de solicitação', categoria_id: 'cat-rep' },
+  { chave: 'autoridade_solicitante_rep', valor: '', descricao: 'Autoridade solicitante', categoria_id: 'cat-rep' },
+  { chave: 'nome_envolvido', valor: '', descricao: 'Nome da pessoa envolvida', categoria_id: 'cat-rep' },
+  { chave: 'local_fato', valor: '', descricao: 'Local do fato (exames de local)', categoria_id: 'cat-rep' },
+  { chave: 'latitude', valor: '', descricao: 'Latitude do local (exames de local)', categoria_id: 'cat-rep' },
+  { chave: 'longitude', valor: '', descricao: 'Longitude do local (exames de local)', categoria_id: 'cat-rep' },
+  { chave: 'data_acionamento_local', valor: '', descricao: 'Data/Hora do acionamento (exames de local)', categoria_id: 'cat-rep' },
+  { chave: 'data_chegada_local', valor: '', descricao: 'Data/Hora de chegada ao local (exames de local)', categoria_id: 'cat-rep' },
+  { chave: 'data_saida_local', valor: '', descricao: 'Data/Hora de saída do local (exames de local)', categoria_id: 'cat-rep' },
+  { chave: 'numero_bo', valor: '', descricao: 'Nº do Boletim de Ocorrência', categoria_id: 'cat-rep' },
+  { chave: 'numero_ip', valor: '', descricao: 'Nº do Inquérito Policial', categoria_id: 'cat-rep' },
+  { chave: 'lacre_entrada', valor: '', descricao: 'Nº do lacre de entrada', categoria_id: 'cat-rep' },
+  { chave: 'lacre_saida', valor: '', descricao: 'Nº do lacre de saída', categoria_id: 'cat-rep' },
+  { chave: 'observacoes_rep', valor: '', descricao: 'Observações gerais da REP', categoria_id: 'cat-rep' },
   // Relacionamentos (3)
-  { chave: 'solicitante_nome', valor: '', descricao: 'Nome do órgão solicitante', categoria: 'REP' },
-  { chave: 'tipo_exame_nome', valor: '', descricao: 'Nome do tipo de exame', categoria: 'REP' },
-  { chave: 'tipo_exame_codigo', valor: '', descricao: 'Código do exame no GDL', categoria: 'REP' },
+  { chave: 'solicitante_nome', valor: '', descricao: 'Nome do órgão solicitante', categoria_id: 'cat-rep' },
+  { chave: 'tipo_exame_nome', valor: '', descricao: 'Nome do tipo de exame', categoria_id: 'cat-rep' },
+  { chave: 'tipo_exame_codigo', valor: '', descricao: 'Código do exame no GDL', categoria_id: 'cat-rep' },
   // Perito (4)
-  { chave: 'perito_nome', valor: '', descricao: 'Nome completo do perito', categoria: 'Perito' },
-  { chave: 'perito_cargo', valor: '', descricao: 'Cargo do perito', categoria: 'Perito' },
-  { chave: 'perito_lotacao', valor: '', descricao: 'Lotação/unidade do perito', categoria: 'Perito' },
-  { chave: 'perito_matricula', valor: '', descricao: 'Matrícula funcional do perito', categoria: 'Perito' },
+  { chave: 'perito_nome', valor: '', descricao: 'Nome completo do perito', categoria_id: 'cat-perito' },
+  { chave: 'perito_cargo', valor: '', descricao: 'Cargo do perito', categoria_id: 'cat-perito' },
+  { chave: 'perito_lotacao', valor: '', descricao: 'Lotação/unidade do perito', categoria_id: 'cat-perito' },
+  { chave: 'perito_matricula', valor: '', descricao: 'Matrícula funcional do perito', categoria_id: 'cat-perito' },
 ];
 
 class PlaceholderService extends BaseService<PlaceholderRow> {
@@ -71,14 +71,12 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
     super('placeholders', 'id');
   }
 
-  /**
-   * Excluir um placeholder (apenas se não for do sistema)
-   */
   async delete(id: string): Promise<boolean> {
     const row = await this.findById(id);
     if (!row) return false;
 
-    if (row.categoria === 'REP' || row.categoria === 'Perito') {
+    const sistemaChaves = PLACEHOLDERS_SISTEMA.map(p => p.chave);
+    if (sistemaChaves.includes(row.chave)) {
       throw new Error('Placeholders do sistema não podem ser excluídos.');
     }
 

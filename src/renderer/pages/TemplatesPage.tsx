@@ -74,8 +74,15 @@ const emptySecaoForm = (): SecaoForm => ({
 interface Placeholder {
   id: string;
   chave: string;
-  descricao: string;
-  categoria: string;
+  descricao: string | null;
+  categoria_id: string | null;
+}
+
+interface Categoria {
+  id: string;
+  label: string;
+  icone: string;
+  cor: string;
 }
 
 const templateFormSchema = z.object({
@@ -106,6 +113,7 @@ export const TemplatesPage: React.FC = () => {
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
 
   const carregarTemplates = useCallback(async () => {
@@ -127,6 +135,10 @@ export const TemplatesPage: React.FC = () => {
   }, []);
 
   const carregarPlaceholders = useCallback(async () => {
+    const rCat = await window.ipcAPI.categoria.findAll();
+    if (rCat.success && rCat.data) {
+      setCategorias(rCat.data);
+    }
     const r = await window.ipcAPI.placeholder.findAll();
     if (r.success && r.data) {
       setPlaceholders(r.data);
@@ -929,12 +941,14 @@ export const TemplatesPage: React.FC = () => {
                   <ContextMenuContent className="w-64">
                     <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
                     <ContextMenuSeparator />
-                    {Array.from(new Set(placeholders.map(p => p.categoria))).sort().map(cat => (
-                      <ContextMenuSub key={cat}>
-                        <ContextMenuSubTrigger>{cat || 'Outros'}</ContextMenuSubTrigger>
+                    {categorias.map(cat => (
+                      <ContextMenuSub key={cat.id}>
+                        <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
+                          {cat.label}
+                        </ContextMenuSubTrigger>
                         <ContextMenuSubContent className="w-56">
                           {placeholders
-                            .filter(p => p.categoria === cat)
+                            .filter(p => p.categoria_id === cat.id)
                             .sort((a, b) => a.chave.localeCompare(b.chave))
                             .map(p => (
                               <ContextMenuItem

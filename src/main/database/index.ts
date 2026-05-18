@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 14;
+const CURRENT_SCHEMA_VERSION = 15;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -896,6 +896,87 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       logInfo('Migration v14: Tabela imagens_laudo criada/verificada');
     } catch (error) {
       logError('Erro ao aplicar migration versão 14', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 15: Criar tabela categorias_placeholders e atualizar placeholders
+  if (fromVersion < 15) {
+    try {
+      // Cria a tabela de categorias
+      await executeNonQuery(`
+        CREATE TABLE IF NOT EXISTS categorias_placeholders (
+          id TEXT PRIMARY KEY,
+          chave TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL UNIQUE,
+          descricao TEXT,
+          cor TEXT,
+          icone TEXT,
+          is_sistema INTEGER NOT NULL DEFAULT 0,
+          ordem INTEGER NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Popula categorias de sistema com UUIDs fáceis/fixos
+      const catRepId = 'cat-rep';
+      const catPeritoId = 'cat-perito';
+      const catSemCategoriaId = 'cat-sem-categoria';
+
+      await executeNonQuery(`
+        INSERT OR IGNORE INTO categorias_placeholders (id, chave, label, descricao, cor, icone, is_sistema, ordem)
+        VALUES 
+          ('${catRepId}', 'REP', 'REP/Laudo', 'Dados da Requisição de Exame Pericial e do Laudo', 'blue', 'FileText', 1, 1),
+          ('${catPeritoId}', 'Perito', 'Perito', 'Informações do perito responsável', 'violet', 'UserCheck', 1, 2),
+          ('${catSemCategoriaId}', 'sem_categoria', 'Sem Categoria', 'Placeholders sem categoria definida', 'slate', 'Puzzle', 1, 999)
+      `);
+
+      // Atualiza a tabela placeholders para ter categoria_id em vez de categoria
+      const columns = await executeQuery<{ name: string }>(`PRAGMA table_info(placeholders)`);
+      const hasCategoriaId = columns.some(col => col.name === 'categoria_id');
+
+      if (!hasCategoriaId) {
+        await executeNonQuery('PRAGMA foreign_keys = OFF');
+        
+        await executeNonQuery(`
+          CREATE TABLE placeholders_v15 (
+            id TEXT PRIMARY KEY,
+            chave TEXT NOT NULL UNIQUE,
+            valor TEXT NOT NULL,
+            descricao TEXT,
+            categoria_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (categoria_id) REFERENCES categorias_placeholders(id) ON DELETE SET NULL
+          )
+        `);
+
+        // Copia os dados, mapeando a string antiga para o novo ID
+        // 'REP' -> cat-rep
+        // 'Perito' -> cat-perito
+        // 'Personalizado' ou outros -> cat-sem-categoria
+        await executeNonQuery(`
+          INSERT INTO placeholders_v15 (id, chave, valor, descricao, created_at, updated_at, categoria_id)
+          SELECT 
+            id, chave, valor, descricao, created_at, updated_at,
+            CASE 
+              WHEN categoria = 'REP' THEN '${catRepId}'
+              WHEN categoria = 'Perito' THEN '${catPeritoId}'
+              ELSE '${catSemCategoriaId}'
+            END as categoria_id
+          FROM placeholders
+        `);
+
+        await executeNonQuery('DROP TABLE placeholders');
+        await executeNonQuery('ALTER TABLE placeholders_v15 RENAME TO placeholders');
+        
+        await executeNonQuery('PRAGMA foreign_keys = ON');
+        logInfo('Migration v15: Tabela categorias_placeholders criada e placeholders atualizada');
+      }
+
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 15', error);
       throw error;
     }
   }

@@ -37,7 +37,7 @@ export const registerPlaceholderHandlers = (): void => {
         chave: sanitizeInput(data.chave.trim()),
         valor: data.valor ? sanitizeInput(data.valor) : '',
         descricao: data.descricao ? sanitizeInput(data.descricao) : null,
-        categoria: data.categoria ? sanitizeInput(data.categoria) : null,
+        categoria_id: data.categoria_id ? sanitizeInput(data.categoria_id) : null,
       };
       const row = await placeholderService.create(createData);
       return { success: true, data: row, message: 'Placeholder criado com sucesso' };
@@ -54,7 +54,7 @@ export const registerPlaceholderHandlers = (): void => {
       if (data.chave !== undefined) updateData.chave = sanitizeInput(data.chave);
       if (data.valor !== undefined) updateData.valor = sanitizeInput(data.valor);
       if (data.descricao !== undefined) updateData.descricao = data.descricao ? sanitizeInput(data.descricao) : null;
-      if (data.categoria !== undefined) updateData.categoria = data.categoria ? sanitizeInput(data.categoria) : null;
+      if (data.categoria_id !== undefined) updateData.categoria_id = data.categoria_id ? sanitizeInput(data.categoria_id) : null;
 
       const row = await placeholderService.update(id, updateData);
       if (!row) return { success: false, error: 'Placeholder não encontrado' };

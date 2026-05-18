@@ -110,6 +110,13 @@ export interface IpcAPI {
   // Placeholder para outras APIs que serão implementadas
 
   // Placeholders
+  categoria: {
+    findAll: () => Promise<UserResponse>;
+    create: (data: any) => Promise<UserResponse>;
+    update: (id: string, data: any) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+  };
+
   placeholder: {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
@@ -235,6 +242,12 @@ const ALLOWED_CHANNELS = new Set([
   'rep:update',
   'rep:delete',
   'rep:updateStatus',
+
+  // Categorias de Placeholders
+  'categoria:findAll',
+  'categoria:create',
+  'categoria:update',
+  'categoria:delete',
 
   // Placeholders
   'placeholder:findAll',
@@ -584,6 +597,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     update: (id: string, data: any) => ipcRenderer.invoke('rep:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('rep:delete', id),
     updateStatus: (id: string, status: string) => ipcRenderer.invoke('rep:updateStatus', id, status),
+  },
+
+  categoria: {
+    findAll: () => ipcRenderer.invoke('categoria:findAll'),
+    create: (data: any) => ipcRenderer.invoke('categoria:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('categoria:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('categoria:delete', id),
   },
 
   placeholder: {

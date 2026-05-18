@@ -2,6 +2,12 @@
 export default {
   darkMode: ['class'],
   content: ['./src/renderer/**/*.{ts,tsx,js,jsx}', './src/renderer/index.html'],
+  safelist: [
+    {
+      pattern: /^(bg|text|border|ring)-(slate|red|orange|amber|emerald|teal|blue|indigo|violet|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900)$/,
+      variants: ['hover', 'dark'],
+    },
+  ],
   theme: {
   	container: {
   		center: true,

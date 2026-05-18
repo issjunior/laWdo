@@ -60,3 +60,8 @@ A partir de um aprofundamento nos requisitos técnicos e na UX do sistema, defin
    - Apagar o banco de dados. Restaurar tudo e iniciar o aplicativo.
    - Criar uma nova categoria. Abrir um laudo e clicar no botão direito para validar que o cache refletiu imediatamente no menu, agrupando os dados com as cores certas.
 4. **Validação Visual de Cores e Ícones:** Confirmar se as badges e as seleções de grid aparecem alinhadas visualmente com o padrão do painel (nada fora da paleta curada do Tailwind).
+
+## Status da Execução
+
+- [x] **Fase 1 (Backend):** Migration V15 criada (tabela `categorias_placeholders`), schema de `placeholders` atualizado com `categoria_id`, serviços e handlers IPC implementados e tipados no `preload`.
+- [x] **Fase 2 (Frontend):** Atualização das páginas `PlaceholdersPage` (Modal, Drag-and-Drop) e `LaudosPage` (Context Menu dinâmico).
