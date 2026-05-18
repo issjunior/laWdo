@@ -91,6 +91,6 @@ O **Laudo Pericial Desktop** é uma evolução do sistema atual baseado em Strea
 
 ## 8. Status Atual de Implementação
 
-- Já implementado: autenticação local e perfil de perito, cadastros de solicitantes e tipos de exame, templates de laudo, placeholders dinâmicos, editor TinyMCE multi-seção, upload de imagens locais com protocolo `laudo-img://`, preview interno de PDF e configuração de IA via Groq.
-- Em desenvolvimento: backup/restauração com pacote ZIP, geração de PDF final persistente, exportação DOCX/ODT, snapshots de laudos e apêndice automático de figuras.
-- Nota: a integração de IA inclui handlers de revisão de texto, adequação de tom pericial e descrição de imagens usando o serviço Groq.
+- **Já implementado:** Autenticação local e perfil de perito, cadastros de solicitantes e tipos de exame, templates de laudo dinâmicos com menu de contexto por categoria, placeholders dinâmicos (com Kanban horizontal expansível/colapsável de categorias), editor TinyMCE independente por seção, upload de imagens locais com protocolo `laudo-img://`, preview interno de PDF, logs de auditoria e backup/restauração robusta via ZIP.
+- **Assistência de IA Avançada:** Assistente de IA integrado (`AISheet`) com revisão de ortografia e adequação de tom sob aprovação expressa do perito (sem substituição silenciosa). Resolução automática de placeholders para valores reais antes de enviar ao Groq. Descrição inteligente de evidências fotográficas locais (`laudo-img://`) convertidas dinamicamente para Base64 no backend, utilizando o modelo vision ativo `meta-llama/llama-4-scout-17b-16e-instruct`. Inserção de respostas de IA diretamente na posição atual do cursor no editor de texto.
+- **Em desenvolvimento:** Geração de PDF final persistente, exportação DOCX/ODT, snapshots de laudos e apêndice automático de figuras.

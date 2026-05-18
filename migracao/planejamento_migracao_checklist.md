@@ -203,6 +203,11 @@ projeto/
 - [x] Handlers de IA implementados para revisão, adequação, descrição de imagens e perguntas livres.
 - [x] Painel de assistente integrado ao editor de laudos (`AISheet`).
 - [x] Ferramenta de revisão rápida via toolbar no editor.
+- [x] Todas as ações de IA (revisar/adequar) passam por consentimento do usuário na `AISheet` antes de aplicar.
+- [x] Resolução automática de placeholders para valores reais da REP antes de consultar as LLMs.
+- [x] Suporte para descrever fotos locais (`laudo-img://`) convertendo-as dinamicamente para Base64 no backend.
+- [x] Migração de modelo vision descontinuado para o novo e ativo `meta-llama/llama-4-scout-17b-16e-instruct`.
+- [x] Inserção inteligente de descrições e respostas da IA diretamente no local do cursor no editor Rich Text.
 
 ### Sprint 7: Exportação Multi-formato
 

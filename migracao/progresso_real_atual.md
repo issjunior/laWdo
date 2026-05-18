@@ -2,8 +2,8 @@
 
 ## Análise Detalhada do Estado Atual do Projeto
 
-**Data:** 12 de maio de 2026 (atualizado)  
-**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | ✅ **SPRINT 6 COMPLETA** | ✅ **SPRINT 8 COMPLETA** | 🔄 **SPRINT 4 PARCIAL (75%)**
+**Data:** 18 de maio de 2026 (atualizado)  
+**Status:** ✅ **SPRINT 0 COMPLETA** | ✅ **SPRINT 1 COMPLETA** | ✅ **SPRINT 2 COMPLETA** | ✅ **SPRINT 3 COMPLETA** | ✅ **SPRINT 5 COMPLETA** | ✅ **SPRINT 6 COMPLETA** | ✅ **SPRINT 8 COMPLETA** | 🔄 **SPRINT 4 PARCIAL (85%)**
 
 ---
 
@@ -111,10 +111,11 @@ O projeto está significativamente mais avançado do que o planejamento original
 - Validação de integridade do backup
 
 #### `ia.service.ts` (ia.handlers)
-- Integração com Groq Cloud (Llama 3 / Mixtral)
-- Revisão ortográfica e adequação de tom técnico
-- Descrição de imagens para acessibilidade e laudos
-- Chat assistente integrado ao editor
+- Integração com Groq Cloud (Llama 3.3 / Llama 4 Scout Vision)
+- Revisão ortográfica e adequação de tom técnico com aprovação explícita do perito (sem substituição silenciosa)
+- Resolução automática de placeholders `{{chave}}` para os valores reais da REP antes de consultar as LLMs
+- Descrição de imagens locais (`laudo-img://`) convertidas dinamicamente para Base64 em tempo de execução
+- Chat assistente integrado ao editor com inserção precisa na posição do cursor do usuário
 
 #### `user.service.ts`
 - Autenticação com criptografia de senha (bcrypt + AES-256-GCM)
@@ -186,7 +187,7 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 ## 🔄 **SPRINT 4 EM ANDAMENTO (PARCIAL)**
 
-### Concluído (12/05/2026):
+### Concluído (18/05/2026):
 - [x] Página Cabeçalho de Laudos (`CabecalhoPage`)
 - [x] Editor HTML para cabeçalho com placeholders
 - [x] **Página Laudos (`LaudosPage`)** — editor multi-seção com TinyMCE independente por seção
@@ -196,6 +197,8 @@ O projeto está significativamente mais avançado do que o planejamento original
 - [x] **Integração IA** no editor para revisão e assistência
 - [x] **Preview de PDF implementado** para laudos/templates via `template:previewPDF`
 - [x] **Seções colapsáveis** (abertas por padrão) com toggle individual
+- [x] **Inserção contextual da IA** na posição atual do cursor no editor de texto
+- [x] **Resolução dinâmica de placeholders** para valores reais no HTML antes do envio à IA
 
 ### Pendente:
 - [ ] Sistema de snapshots (versões) do laudo — máximo 3
@@ -217,16 +220,8 @@ O projeto está significativamente mais avançado do que o planejamento original
 
 O projeto atingiu um nível de maturidade alto, com quase todas as funcionalidades auxiliares (IA, Backup, Logs) completas. O foco agora reside puramente na finalização do fluxo de edição de laudos e exportação multi-formato.
 
-**Progresso estimado:** ~90% do projeto completo
+**Progresso estimado:** ~92% do projeto completo
 
 **Status:** 🟢 **PRÓXIMA ETAPA - COMPLETAR SPRINT 4 (Snapshots) e SPRINT 7 (Exportação)**
-
----🎉 **CONSIDERAÇÕES FINAIS**
-
-O projeto está **significativamente adiantado** em relação ao plano original. As Sprints 0, 1, 2, 3, 5 e parte da Sprint 6 já estão implementadas. O sistema possui 11 páginas funcionais, 9 serviços de negócio e autenticação obrigatória.
-
-**Progresso estimado:** ~80% do projeto completo
-
-**Status:** 🟢 **PRÓXIMA ETAPA - COMPLETAR SPRINT 4 (Edição de Laudos com TinyMCE)**
 
 ---

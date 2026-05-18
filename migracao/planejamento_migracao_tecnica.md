@@ -29,7 +29,7 @@
 - **REPs:** CRUD completo com formulário inline e campos condicionais
 - **Migration v9** aplicada
 
-### ✅ **SPRINT 4: PARCIAL (80%)**
+### ✅ **SPRINT 4: PARCIAL (85%)**
 
 - **Cabeçalho:** Página com editor HTML e placeholders implementada (antecipado)
 - **LaudosPage:** Editor multi-seção TinyMCE implementado
@@ -37,6 +37,7 @@
 - **Upload de imagens:** Diálogo nativo + protocolo `laudo-img://` + serviço/handlers
 - **IA:** Integração total com Groq no editor para revisão e chat assistente
 - **Pendente:** Painel lateral de imagens, drag-and-drop, snapshots
+- **Destaque:** Resolução dinâmica de placeholders no texto do laudo antes de chamar a IA e inserção precisa da resposta na posição do cursor do perito.
 
 ### ✅ **SPRINT 5: COMPLETA**
 
@@ -44,7 +45,7 @@
 
 ### ✅ **SPRINT 6: COMPLETA**
 
-- **IA:** ModelosIAPage, integração Groq, handlers de IA e interface de assistente
+- **IA:** ModelosIAPage, integração Groq, handlers de IA, assistente interativo (`AISheet`), aprovação obrigatória do usuário para aplicar alterações de Ortografia/Adequar (fim da substituição silenciosa), suporte de visão para imagens locais (`laudo-img://`) e migração para o modelo ativo Llama 4 Scout.
 
 ### ✅ **SPRINT 8: COMPLETA**
 
@@ -420,14 +421,19 @@ interface ImagemLaudo {
 
 ---
 
-### 🤖 Sprint 6: Assistência IA (Parcial)
+### 🤖 Sprint 6: Assistência IA ✅ **COMPLETADA**
 
 **Objetivo:** Inteligência na escrita de laudos.
 
 - [x] Página `ModelosIAPage` com configuração de chave Groq.
 - [x] Handlers de IA implementados para revisão de texto, adequação de tom, descrição de imagens e perguntas livres.
-- [ ] Painel de assistente integrado ao editor de laudos.
-- [ ] Fallback completo quando a chave de API não estiver configurada.
+- [x] Painel de assistente integrado ao editor de laudos (`AISheet`).
+- [x] Fallback completo quando a chave de API não estiver configurada.
+- [x] Todas as ações de IA (revisar/adequar) necessitam de consentimento do usuário na `AISheet` antes de aplicar.
+- [x] Resolução automática de placeholders para valores reais da REP antes de enviar à IA.
+- [x] Suporte para descrever fotos locais (`laudo-img://`) convertendo-as para Base64 no backend.
+- [x] Migração de modelo vision para o novo e ativo `meta-llama/llama-4-scout-17b-16e-instruct`.
+- [x] Inserção da IA feita de forma inteligente na posição atual do cursor no editor.
 
 ---
 
