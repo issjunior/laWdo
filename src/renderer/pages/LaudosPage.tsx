@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText, Trash2 } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image, Send } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -349,6 +350,11 @@ export const LaudosPage: React.FC = () => {
   const [editando, setEditando] = useState<LaudoItem | null>(null);
   const [secoes, setSecoes] = useState<SecaoEditor[]>([]);
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
+  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('multi');
+  const [singleEditorHtml, setSingleEditorHtml] = useState('');
+  const [singleSelectedHtml, setSingleSelectedHtml] = useState('');
+  const [singleSelectionHasText, setSingleSelectionHasText] = useState(false);
+  const [singleSelectionHasImage, setSingleSelectionHasImage] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -366,9 +372,119 @@ export const LaudosPage: React.FC = () => {
   const [iaLoading, setIaLoading] = useState(false);
   const [iaError, setIaError] = useState<string | null>(null);
   const [iaSheetMode, setIaSheetMode] = useState<'ortografia' | 'adequar' | 'imagem' | 'perguntar' | null>(null);
+  const [singlePergunta, setSinglePergunta] = useState('');
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
+  const SINGLE_CHAT_KEY = 'single-selection';
+
+  const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
+    if (secoesFonte.length === 0) return '';
+    return secoesFonte
+      .map((sec, index) => {
+        const tituloRaw = (sec.titulo || '').trim();
+        const titulo = tituloRaw
+          ? (/^(?:se[cç]ão\b|\d+[\s\.\-\:]|[a-zA-Z][\.\-\:]\s|[IVXLCDM]+[\.\-\:]\s)/i.test(tituloRaw)
+            ? tituloRaw
+            : `Seção ${index + 1}: ${tituloRaw}`)
+          : `Seção ${index + 1}`;
+        const conteudo = sec.conteudo?.trim() || '<p>&nbsp;</p>';
+        return `
+          <section data-laudo-secao="true" data-secao-index="${index}" style="margin-bottom:16px;border:1px solid #d9d9d9;border-radius:8px;overflow:hidden;">
+            <div contenteditable="false" data-laudo-secao-header="true" style="background:#f5f5f5;padding:8px 12px;border-bottom:1px solid #d9d9d9;font-weight:600;">
+              ${titulo}
+            </div>
+            <div data-laudo-secao-content="true" style="padding:8px 4px;">
+              ${conteudo}
+            </div>
+          </section>
+        `;
+      })
+      .join('\n');
+  }, []);
+
+  const parseSingleHtmlToSecoes = useCallback((singleHtml: string, secoesBase: SecaoEditor[]) => {
+    if (!singleHtml || secoesBase.length === 0) return secoesBase;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(singleHtml, 'text/html');
+      const sectionNodes = Array.from(doc.querySelectorAll('section[data-laudo-secao="true"]'));
+      if (sectionNodes.length === 0) return secoesBase;
+
+      const contentByIndex = new Map<number, string>();
+      sectionNodes.forEach(node => {
+        const idxRaw = node.getAttribute('data-secao-index');
+        const idx = idxRaw != null ? Number(idxRaw) : NaN;
+        const contentNode = node.querySelector('[data-laudo-secao-content="true"]') as HTMLElement | null;
+        if (!Number.isNaN(idx) && contentNode) {
+          contentByIndex.set(idx, (contentNode.innerHTML || '').trim() || '<p>&nbsp;</p>');
+        }
+      });
+
+      return secoesBase.map((sec, idx) => ({
+        ...sec,
+        conteudo: contentByIndex.get(idx) ?? sec.conteudo,
+      }));
+    } catch {
+      return secoesBase;
+    }
+  }, []);
+
+  const getSecoesSincronizadas = useCallback(() => {
+    return editorMode === 'single' ? parseSingleHtmlToSecoes(singleEditorHtml, secoes) : secoes;
+  }, [editorMode, parseSingleHtmlToSecoes, singleEditorHtml, secoes]);
+
+  const handleEditorModeChange = useCallback((nextMode: 'multi' | 'single') => {
+    if (nextMode === editorMode) return;
+    if (nextMode === 'single') {
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(secoes));
+      setEditorMode('single');
+      return;
+    }
+    setSecoes(prev => parseSingleHtmlToSecoes(singleEditorHtml, prev));
+    setEditorMode('multi');
+  }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+
+  const getSingleEditorSelectionHtml = () => {
+    const editor = (window as any).tinymce?.get('laudo-single-editor');
+    if (!editor) return '';
+    const selectedHtml = String(editor.selection?.getContent({ format: 'html' }) || '').trim();
+    return selectedHtml;
+  };
+
+  const refreshSingleSelectionState = useCallback(() => {
+    if (editorMode !== 'single') {
+      setSingleSelectionHasText(false);
+      setSingleSelectionHasImage(false);
+      return;
+    }
+
+    const selectedHtml = getSingleEditorSelectionHtml();
+    if (!selectedHtml) {
+      setSingleSelectionHasText(false);
+      setSingleSelectionHasImage(false);
+      return;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(selectedHtml, 'text/html');
+      const text = (doc.body.textContent || '').trim();
+      const hasText = text.length > 0;
+      const hasImage = doc.querySelectorAll('img').length > 0;
+      setSingleSelectionHasText(hasText);
+      setSingleSelectionHasImage(hasImage);
+    } catch {
+      setSingleSelectionHasText(false);
+      setSingleSelectionHasImage(false);
+    }
+  }, [editorMode]);
+
+  useEffect(() => {
+    if (editorMode !== 'single') return;
+    const timer = window.setInterval(refreshSingleSelectionState, 250);
+    return () => window.clearInterval(timer);
+  }, [editorMode, refreshSingleSelectionState]);
 
   const carregarPlaceholders = useCallback(async () => {
     const rCat = await window.ipcAPI.categoria.findAll();
@@ -456,7 +572,8 @@ export const LaudosPage: React.FC = () => {
       }
 
       // 3. Montar HTML completo
-      const secoesHtml = secoes
+      const secoesAtuais = getSecoesSincronizadas();
+      const secoesHtml = secoesAtuais
         .map((s, i) => `<h2>${i + 1}. ${s.titulo}</h2>${s.conteudo}`)
         .join('\n');
 
@@ -497,8 +614,12 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleEditar = (laudo: LaudoItem) => {
+    const parsedSecoes = parseConteudoEmSecoes(laudo.conteudo || '');
     setEditando(laudo);
-    setSecoes(parseConteudoEmSecoes(laudo.conteudo || ''));
+    setSecoes(parsedSecoes);
+    setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
+    setEditorMode('multi');
+    setSingleSelectedHtml('');
     setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
@@ -507,6 +628,9 @@ export const LaudosPage: React.FC = () => {
   const handleVoltar = () => {
     setEditando(null);
     setSecoes([]);
+    setSingleEditorHtml('');
+    setEditorMode('multi');
+    setSingleSelectedHtml('');
     setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
@@ -523,7 +647,11 @@ export const LaudosPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const conteudo = removerFormatacaoPlaceholders(reconstruirConteudo(secoes));
+      const secoesAtuais = getSecoesSincronizadas();
+      if (editorMode === 'single') {
+        setSecoes(secoesAtuais);
+      }
+      const conteudo = removerFormatacaoPlaceholders(reconstruirConteudo(secoesAtuais));
       const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudo);
       if (r.success) {
         setSuccess('Laudo salvo com sucesso!');
@@ -614,6 +742,7 @@ export const LaudosPage: React.FC = () => {
       const htmlResolvido = await resolverPlaceholdersNoHtml(html);
       const r = await window.ipcAPI.ia.revisarOrtografia(htmlResolvido);
       if (r.success && r.data) {
+        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
         const resposta: ChatMessage = {
           role: 'assistant',
           content: String(r.data),
@@ -621,7 +750,7 @@ export const LaudosPage: React.FC = () => {
         };
         setChatMessages(prev => ({
           ...prev,
-          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), resposta],
+          [chatKey]: [...(prev[chatKey] || []), resposta],
         }));
       } else {
         setIaError(r.error || 'Erro ao revisar ortografia');
@@ -641,6 +770,7 @@ export const LaudosPage: React.FC = () => {
       const htmlResolvido = await resolverPlaceholdersNoHtml(html);
       const r = await window.ipcAPI.ia.adequarEscrita(htmlResolvido);
       if (r.success && r.data) {
+        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
         const resposta: ChatMessage = {
           role: 'assistant',
           content: String(r.data),
@@ -648,7 +778,7 @@ export const LaudosPage: React.FC = () => {
         };
         setChatMessages(prev => ({
           ...prev,
-          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), resposta],
+          [chatKey]: [...(prev[chatKey] || []), resposta],
         }));
       } else {
         setIaError(r.error || 'Erro ao adequar escrita');
@@ -667,6 +797,7 @@ export const LaudosPage: React.FC = () => {
       setIaError(null);
       const r = await window.ipcAPI.ia.descreverImagem(imagens);
       if (r.success && r.data) {
+        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
         const resposta: ChatMessage = {
           role: 'assistant',
           content: String(r.data),
@@ -674,7 +805,7 @@ export const LaudosPage: React.FC = () => {
         };
         setChatMessages(prev => ({
           ...prev,
-          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), resposta],
+          [chatKey]: [...(prev[chatKey] || []), resposta],
         }));
       } else {
         setIaError(r.error || 'Erro ao descrever imagem');
@@ -686,7 +817,7 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handlePerguntar = async (pergunta: string, html: string, idx: number, titulo: string) => {
+  const handlePerguntar = async (pergunta: string, html: string, idx: number, _titulo: string) => {
     try {
       setIaSheetMode('perguntar');
       setIaLoading(true);
@@ -698,9 +829,10 @@ export const LaudosPage: React.FC = () => {
         timestamp: Date.now(),
       };
 
+      const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
       setChatMessages(prev => ({
         ...prev,
-        [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), userMsg],
+        [chatKey]: [...(prev[chatKey] || []), userMsg],
       }));
 
       const r = await window.ipcAPI.ia.perguntar(pergunta, html);
@@ -712,7 +844,7 @@ export const LaudosPage: React.FC = () => {
         };
         setChatMessages(prev => ({
           ...prev,
-          [`secao-${idx}`]: [...(prev[`secao-${idx}`] || []), assistantMsg],
+          [chatKey]: [...(prev[chatKey] || []), assistantMsg],
         }));
       } else {
         setIaError(r.error || 'Erro ao processar pergunta');
@@ -726,6 +858,28 @@ export const LaudosPage: React.FC = () => {
 
   const handleApplyResponse = (texto: string) => {
     if (iaSheetSecaoIdx !== null) {
+      if (iaSheetSecaoIdx === -1) {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (!editor) return;
+        if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
+          const descHtml = texto
+            .split('\n')
+            .map((line) => (line.trim() ? `<p>${line}</p>` : ''))
+            .join('');
+          editor.insertContent(descHtml);
+        } else {
+          const selectedHtml = getSingleEditorSelectionHtml();
+          if (selectedHtml) {
+            editor.selection.setContent(texto);
+          } else {
+            editor.insertContent(texto);
+          }
+        }
+        setSingleEditorHtml(editor.getContent());
+        setIaSheetOpen(false);
+        return;
+      }
+
       const editorId = `secao-${iaSheetSecaoIdx}`;
       const win = window as any;
 
@@ -755,6 +909,11 @@ export const LaudosPage: React.FC = () => {
 
   const handleSendChatMessage = (message: string) => {
     if (iaSheetSecaoIdx !== null) {
+      if (iaSheetSecaoIdx === -1) {
+        const html = getSingleEditorSelectionHtml() || singleSelectedHtml;
+        handlePerguntar(message, html, -1, 'Seleção no editor único');
+        return;
+      }
       const html = secoes[iaSheetSecaoIdx]?.conteudo || '';
       const titulo = secoes[iaSheetSecaoIdx]?.titulo || '';
       handlePerguntar(message, html, iaSheetSecaoIdx, titulo);
@@ -939,9 +1098,187 @@ export const LaudosPage: React.FC = () => {
               </div>
               <Badge variant={editando.status === 'Concluído' ? 'outline' : editando.status === 'Entregue' ? 'secondary' : 'default'}>{editando.status}</Badge>
             </div>
+            <div className="flex items-center justify-end">
+              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
+                <Button
+                  variant={editorMode === 'multi' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleEditorModeChange('multi')}
+                  className="h-8 px-2.5"
+                  title="Múltiplas seções"
+                >
+                  <Layers size={14} />
+                </Button>
+                <Button
+                  variant={editorMode === 'single' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleEditorModeChange('single')}
+                  className="h-8 px-2.5"
+                  title="Editor único"
+                >
+                  <List size={14} />
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {secoes.map((secao, idx) => (
+            {editorMode === 'single' ? (
+              <div className="space-y-3">
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                  Estrutura por seções preservada automaticamente. Use seleção de texto para ações de IA.
+                </div>
+                <div className="space-y-2 mb-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Bot size={14} className="text-primary" />
+                      <span className="text-xs font-medium text-muted-foreground">IA (seleção):</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
+                      disabled={!singleSelectionHasText}
+                      onClick={async () => {
+                        const selectedHtml = getSingleEditorSelectionHtml();
+                        if (!selectedHtml) {
+                          setIaError('Selecione um trecho no editor único para usar a IA.');
+                          return;
+                        }
+                        setSingleSelectedHtml(selectedHtml);
+                        setIaSheetSecaoIdx(-1);
+                        setIaSheetSecaoTitulo('Seleção no editor único');
+                        setIaSheetOpen(true);
+                        await handleRevisarOrtografia(selectedHtml, -1);
+                      }}
+                    >
+                      <SpellCheck size={12} /> Ortografia
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
+                      disabled={!singleSelectionHasText}
+                      onClick={async () => {
+                        const selectedHtml = getSingleEditorSelectionHtml();
+                        if (!selectedHtml) {
+                          setIaError('Selecione um trecho no editor único para usar a IA.');
+                          return;
+                        }
+                        setSingleSelectedHtml(selectedHtml);
+                        setIaSheetSecaoIdx(-1);
+                        setIaSheetSecaoTitulo('Seleção no editor único');
+                        setIaSheetOpen(true);
+                        await handleAdequarEscrita(selectedHtml, -1);
+                      }}
+                    >
+                      <PenLine size={12} /> Adequar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
+                      disabled={!singleSelectionHasImage}
+                      onClick={async () => {
+                        const selectedHtml = getSingleEditorSelectionHtml();
+                        if (!selectedHtml) {
+                          setIaError('Selecione um trecho com imagem no editor único.');
+                          return;
+                        }
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(selectedHtml, 'text/html');
+                        const imagens = Array.from(doc.querySelectorAll('img')).map((img) => ({
+                          src: img.getAttribute('src') || img.src,
+                          alt: img.alt,
+                        }));
+                        if (imagens.length === 0) {
+                          setIaError('Nenhuma imagem encontrada na seleção.');
+                          return;
+                        }
+                        setSingleSelectedHtml(selectedHtml);
+                        setIaSheetSecaoIdx(-1);
+                        setIaSheetSecaoTitulo('Seleção no editor único');
+                        setIaSheetOpen(true);
+                        await handleDescreverImagem(imagens, -1);
+                      }}
+                    >
+                      <Image size={12} /> Imagem
+                    </Button>
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <Input
+                        value={singlePergunta}
+                        onChange={(e) => setSinglePergunta(e.target.value)}
+                        placeholder="Pergunte à IA..."
+                        className="h-7 text-xs w-[200px]"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 disabled:opacity-45 disabled:cursor-not-allowed"
+                        disabled={!singleSelectionHasText || !singlePergunta.trim()}
+                        onClick={async () => {
+                          const selectedHtml = getSingleEditorSelectionHtml();
+                          if (!selectedHtml) {
+                            setIaError('Selecione um trecho no editor único para perguntar à IA.');
+                            return;
+                          }
+                          if (!singlePergunta.trim()) {
+                            setIaError('Digite uma pergunta para a IA.');
+                            return;
+                          }
+                          setSingleSelectedHtml(selectedHtml);
+                          setIaSheetSecaoIdx(-1);
+                          setIaSheetSecaoTitulo('Seleção no editor único');
+                          setIaSheetOpen(true);
+                          await handlePerguntar(singlePergunta, selectedHtml, -1, 'Seleção no editor único');
+                          setSinglePergunta('');
+                        }}
+                      >
+                        <Send size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <ContextMenu>
+                  <ContextMenuTrigger>
+                    <TinyMceEditor
+                      editorId="laudo-single-editor"
+                      value={singleEditorHtml}
+                      onChange={setSingleEditorHtml}
+                      height={560}
+                      placeholder="Edite o laudo completo..."
+                      laudoId={editando.id}
+                    />
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-64">
+                    <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
+                    <ContextMenuSeparator />
+                    {categorias.map(cat => (
+                      <ContextMenuSub key={cat.id}>
+                        <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
+                          {cat.label}
+                        </ContextMenuSubTrigger>
+                        <ContextMenuSubContent className="w-56">
+                          {placeholders
+                            .filter(p => p.categoria_id === cat.id)
+                            .sort((a, b) => a.chave.localeCompare(b.chave))
+                            .map(p => (
+                              <ContextMenuItem
+                                key={p.id}
+                                onClick={() => inserirPlaceholder('laudo-single-editor', p.chave)}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
+                                  {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
+                                </div>
+                              </ContextMenuItem>
+                            ))}
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                    ))}
+                  </ContextMenuContent>
+                </ContextMenu>
+              </div>
+            ) : secoes.map((secao, idx) => (
               <Collapsible
                 key={idx}
                 open={!secoesColapsadas[idx]}
@@ -1050,8 +1387,12 @@ export const LaudosPage: React.FC = () => {
           open={iaSheetOpen}
           onOpenChange={setIaSheetOpen}
           secaoTitulo={iaSheetSecaoTitulo}
-          editorId={iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : ''}
-          messages={iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : []}
+          editorId={iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : (iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : '')}
+          messages={
+            iaSheetSecaoIdx === -1
+              ? (chatMessages[SINGLE_CHAT_KEY] || [])
+              : (iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : [])
+          }
           onSendMessage={handleSendChatMessage}
           onApplyResponse={handleApplyResponse}
           loading={iaLoading}

@@ -107,6 +107,8 @@ export const TemplatesPage: React.FC = () => {
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
   const [secoesDb, setSecoesDb] = useState<SecaoItem[]>([]);
+  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('multi');
+  const [singleEditorHtml, setSingleEditorHtml] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
   const [showPreview, setShowPreview] = useState(false);
@@ -147,6 +149,79 @@ export const TemplatesPage: React.FC = () => {
 
   useEffect(() => { carregarTemplates(); carregarTiposExame(); carregarPlaceholders(); }, []);
 
+  const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoForm[]) => {
+    if (secoesFonte.length === 0) {
+      return `
+        <div data-template-empty="true" style="padding:12px;border:1px dashed #bbb;border-radius:8px;color:#666;">
+          Nenhuma seção definida. Volte para o modo multi-editor para adicionar seções.
+        </div>
+      `;
+    }
+
+    return secoesFonte
+      .map((sec, index) => {
+        const nomeRaw = (sec.nome || '').trim();
+        const nome = nomeRaw
+          ? (/^(?:se[cç]ão\b|\d+[\s\.\-\:]|[a-zA-Z][\.\-\:]\s|[IVXLCDM]+[\.\-\:]\s)/i.test(nomeRaw)
+            ? nomeRaw
+            : `Seção ${index + 1}: ${nomeRaw}`)
+          : `Seção ${index + 1}`;
+        const conteudo = sec.conteudo?.trim() || '<p>&nbsp;</p>';
+        const secId = sec.id || `tmp-${index}`;
+
+        return `
+          <section data-template-secao="true" data-secao-index="${index}" data-secao-id="${secId}" style="margin-bottom:16px;border:1px solid #d9d9d9;border-radius:8px;overflow:hidden;">
+            <div contenteditable="false" data-template-secao-header="true" style="background:#f5f5f5;padding:8px 12px;border-bottom:1px solid #d9d9d9;font-weight:600;">
+              ${nome}
+            </div>
+            <div data-template-secao-content="true" style="padding:8px 4px;">
+              ${conteudo}
+            </div>
+          </section>
+        `;
+      })
+      .join('\n');
+  }, []);
+
+  const parseSingleHtmlToSecoes = useCallback((singleHtml: string, secoesBase: SecaoForm[]) => {
+    if (!singleHtml || secoesBase.length === 0) return secoesBase;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(singleHtml, 'text/html');
+      const sectionNodes = Array.from(doc.querySelectorAll('section[data-template-secao="true"]'));
+      if (sectionNodes.length === 0) return secoesBase;
+
+      const contentByIndex = new Map<number, string>();
+      sectionNodes.forEach(node => {
+        const idxRaw = node.getAttribute('data-secao-index');
+        const idx = idxRaw != null ? Number(idxRaw) : NaN;
+        const contentNode = node.querySelector('[data-template-secao-content="true"]') as HTMLElement | null;
+        if (!Number.isNaN(idx) && contentNode) {
+          contentByIndex.set(idx, (contentNode.innerHTML || '').trim() || '<p>&nbsp;</p>');
+        }
+      });
+
+      return secoesBase.map((s, idx) => ({
+        ...s,
+        conteudo: contentByIndex.get(idx) ?? s.conteudo,
+      }));
+    } catch {
+      return secoesBase;
+    }
+  }, []);
+
+  const handleEditorModeChange = useCallback((nextMode: 'multi' | 'single') => {
+    if (nextMode === editorMode) return;
+    if (nextMode === 'single') {
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(secoes));
+      setEditorMode('single');
+      return;
+    }
+
+    setSecoes(prev => parseSingleHtmlToSecoes(singleEditorHtml, prev));
+    setEditorMode('multi');
+  }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const editor = (window as any).tinymce?.get(editorId);
     if (editor) {
@@ -170,6 +245,8 @@ export const TemplatesPage: React.FC = () => {
     setTemplateForm(emptyTemplateForm());
     setSecoes([emptySecaoForm()]);
     setSecoesDb([]);
+    setEditorMode('multi');
+    setSingleEditorHtml('');
     setErrors({});
     setEditMode(true);
   };
@@ -189,10 +266,13 @@ export const TemplatesPage: React.FC = () => {
       const s: SecaoItem[] = r.data;
       setSecoesDb(s);
       setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' })));
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' }))));
     } else {
       setSecoesDb([]);
       setSecoes([emptySecaoForm()]);
+      setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
     }
+    setEditorMode('multi');
     setEditMode(true);
   };
 
@@ -256,10 +336,13 @@ export const TemplatesPage: React.FC = () => {
         const s: SecaoItem[] = r.data;
         setSecoesDb(s);
         setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' })));
+        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' }))));
       } else {
         setSecoesDb([]);
         setSecoes([emptySecaoForm()]);
+        setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
       }
+      setEditorMode('multi');
       setEditMode(true);
     } catch (e: any) {
       toast.error('Erro ao clonar template');
@@ -304,6 +387,9 @@ export const TemplatesPage: React.FC = () => {
     try {
       setSubmitting(true);
       setErrors({});
+      const secoesParaSalvar = editorMode === 'single'
+        ? parseSingleHtmlToSecoes(singleEditorHtml, secoes)
+        : secoes;
 
       // Validar template
       const result = templateFormSchema.safeParse(templateForm);
@@ -340,7 +426,7 @@ export const TemplatesPage: React.FC = () => {
       // Salvar seções (excluir as removidas, atualizar/criar as atuais)
       if (templateId) {
         // Remover seções que não estão mais na lista
-        const idsAtuais = secoes.filter(s => s.id).map(s => s.id!);
+        const idsAtuais = secoesParaSalvar.filter(s => s.id).map(s => s.id!);
         for (const s of secoesDb) {
           if (!idsAtuais.includes(s.id)) {
             await window.ipcAPI.template.deleteSecao(s.id);
@@ -349,8 +435,8 @@ export const TemplatesPage: React.FC = () => {
 
         // Criar/atualizar seções
         const idsOrdenados: string[] = [];
-        for (let i = 0; i < secoes.length; i++) {
-          const sec = secoes[i];
+        for (let i = 0; i < secoesParaSalvar.length; i++) {
+          const sec = secoesParaSalvar[i];
           if (!sec.nome.trim()) continue;
 
           if (sec.id) {
@@ -389,7 +475,9 @@ export const TemplatesPage: React.FC = () => {
         const r = await window.ipcAPI.template.findSecoes(templateId);
         if (r.success) {
           setSecoesDb(r.data);
-          setSecoes(r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo || '' })));
+          const nextSecoes = r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo || '' }));
+          setSecoes(nextSecoes);
+          setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
         }
       }
     } catch (e: any) {
@@ -487,9 +575,12 @@ export const TemplatesPage: React.FC = () => {
     try {
       setGeneratingPdf(true);
       setShowPreview(true);
+      const secoesParaPreview = editorMode === 'single'
+        ? parseSingleHtmlToSecoes(singleEditorHtml, secoes)
+        : secoes;
 
       const tipoExameNome = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '';
-      const fullHtml = await montarHtmlPreview(secoes, templateForm.nome, tipoExameNome);
+      const fullHtml = await montarHtmlPreview(secoesParaPreview, templateForm.nome, tipoExameNome);
       await gerarEExibirPdf(fullHtml);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao gerar PDF');
@@ -891,18 +982,86 @@ export const TemplatesPage: React.FC = () => {
       {/* Seções */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2"><Layers size={16} /> Seções do Laudo</CardTitle>
               <CardDescription>Adicione, edite e reordene as seções que compõem o laudo</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={handleAddSecao} className="flex items-center gap-1">
-              <Plus size={14} /> Adicionar Seção
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
+                <Button
+                  variant={editorMode === 'multi' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleEditorModeChange('multi')}
+                  className="h-8 px-2.5"
+                  title="Múltiplos editores por seção"
+                >
+                  <Layers size={14} />
+                </Button>
+                <Button
+                  variant={editorMode === 'single' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleEditorModeChange('single')}
+                  className="h-8 px-2.5"
+                  title="Editor único (laudo inteiro)"
+                >
+                  <FileText size={14} />
+                </Button>
+              </div>
+              {editorMode === 'multi' && (
+                <Button variant="outline" size="sm" onClick={handleAddSecao} className="flex items-center gap-1">
+                  <Plus size={14} /> Adicionar Seção
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {secoes.length === 0 ? (
+          {editorMode === 'single' ? (
+            <>
+              <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                Estrutura por seções preservada automaticamente. Para adicionar/remover seções, volte ao modo multi-editor.
+              </div>
+              <ContextMenu>
+                <ContextMenuTrigger>
+                  <TinyMceEditor
+                    editorId="template-single-editor"
+                    value={singleEditorHtml}
+                    onChange={setSingleEditorHtml}
+                    height={520}
+                    placeholder="Edite o laudo completo..."
+                  />
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-64">
+                  <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
+                  <ContextMenuSeparator />
+                  {categorias.map(cat => (
+                    <ContextMenuSub key={cat.id}>
+                      <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
+                        {cat.label}
+                      </ContextMenuSubTrigger>
+                      <ContextMenuSubContent className="w-56">
+                        {placeholders
+                          .filter(p => p.categoria_id === cat.id)
+                          .sort((a, b) => a.chave.localeCompare(b.chave))
+                          .map(p => (
+                            <ContextMenuItem
+                              key={p.id}
+                              onClick={() => inserirPlaceholder('template-single-editor', p.chave)}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
+                                {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
+                              </div>
+                            </ContextMenuItem>
+                          ))}
+                      </ContextMenuSubContent>
+                    </ContextMenuSub>
+                  ))}
+                </ContextMenuContent>
+              </ContextMenu>
+            </>
+          ) : secoes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhuma seção. Clique em "Adicionar Seção" para começar.
             </div>

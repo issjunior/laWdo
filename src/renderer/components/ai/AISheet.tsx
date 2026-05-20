@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Send, Loader2, Check, Copy } from 'lucide-react';
+import { Send, Loader2, Check, Copy, X } from 'lucide-react';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -81,7 +81,7 @@ export const AISheet: React.FC<AISheetProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-[460px] flex flex-col p-0">
+      <SheetContent side="right" className="w-full sm:max-w-[460px] flex flex-col p-0 [&>button]:hidden">
         <SheetHeader className="px-5 py-4 border-b shrink-0">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-base flex items-center gap-2">
@@ -92,7 +92,8 @@ export const AISheet: React.FC<AISheetProps> = ({
             </SheetTitle>
             <SheetClose asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <span className="sr-only">Fechar</span>✕
+                <span className="sr-only">Fechar</span>
+                <X className="h-4 w-4" />
               </Button>
             </SheetClose>
           </div>
