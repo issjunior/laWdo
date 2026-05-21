@@ -1813,8 +1813,8 @@ export const LaudosPage: React.FC = () => {
             <DataTable
               columns={laudoColumns}
               data={laudos}
-              searchColumn="rep_numero"
-              searchPlaceholder="Buscar por REP, template ou envolvido..."
+              hideSearch
+              defaultSorting={[{ id: "data_requisicao", desc: true }]}
               initialColumnVisibility={{
                 template_nome: false,
                 tipo_exame_nome: false,

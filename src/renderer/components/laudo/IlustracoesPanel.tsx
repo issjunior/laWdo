@@ -161,9 +161,6 @@ const SortableItem: React.FC<SortableItemProps> = ({
             className="h-full w-full object-cover cursor-pointer hover:scale-105 transition-transform"
             onClick={() => onPreview(index)}
           />
-          <Badge className="absolute top-1 left-1 h-5 px-1 truncate max-w-[60px] text-[10px]" variant="secondary">
-            Fig. {imagem.numero_figura}
-          </Badge>
         </div>
 
         <div className="flex-1 flex flex-col justify-between min-w-0">
@@ -347,7 +344,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'sequencia' | 'nome' | 'data'>('sequencia');
+  const [sortBy, setSortBy] = useState<'sequencia' | 'nome' | 'data'>('data');
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [lightboxEditorIndex, setLightboxEditorIndex] = useState(-1);
@@ -424,7 +421,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     .filter(img => img.legenda.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === 'nome') return a.legenda.localeCompare(b.legenda);
-      if (sortBy === 'data') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === 'data') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       return a.sequencia - b.sequencia;
     });
 

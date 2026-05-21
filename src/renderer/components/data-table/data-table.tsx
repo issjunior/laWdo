@@ -42,6 +42,10 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string
   /** Visibilidade inicial das colunas (colunas com false iniciam ocultas) */
   initialColumnVisibility?: VisibilityState
+  /** Oculta o campo de busca global */
+  hideSearch?: boolean
+  /** Ordenação inicial [{ id: "coluna", desc: true/false }] */
+  defaultSorting?: SortingState
 }
 
 export function DataTable<TData, TValue>({
@@ -50,8 +54,10 @@ export function DataTable<TData, TValue>({
   searchColumn = "numero",
   searchPlaceholder = "Buscar...",
   initialColumnVisibility = {},
+  hideSearch = false,
+  defaultSorting = [],
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = React.useState<SortingState>([])
+  const [sorting, setSorting] = React.useState<SortingState>(defaultSorting)
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialColumnVisibility)
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -80,15 +86,17 @@ export function DataTable<TData, TValue>({
     <div className="space-y-4">
       {/* Barra de ferramentas */}
       <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={searchPlaceholder}
-            value={globalFilter ?? ""}
-            onChange={(event) => setGlobalFilter(String(event.target.value))}
-            className="pl-8"
-          />
-        </div>
+        {!hideSearch && (
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={searchPlaceholder}
+              value={globalFilter ?? ""}
+              onChange={(event) => setGlobalFilter(String(event.target.value))}
+              className="pl-8"
+            />
+          </div>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="ml-auto">
