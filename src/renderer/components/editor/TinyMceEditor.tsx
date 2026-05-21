@@ -12,6 +12,8 @@ interface TinyMceEditorProps {
   editorId?: string;
   /** Callback disparado quando uma imagem é inserida via botão de imagem do editor */
   onImageInserted?: () => void;
+  /** Tema do editor: 'light' (padrão), 'dark' ou 'auto' (segue preferência do sistema) */
+  theme?: 'light' | 'dark' | 'auto';
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
@@ -22,13 +24,23 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
   laudoId,
   editorId,
   onImageInserted,
+  theme = 'light',
 }) => {
   const editorRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
 
+  const resolveTheme = () => {
+    if (theme === 'auto') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return theme;
+  };
+  const resolved = resolveTheme();
+
   return (
     <div className={ready ? '' : 'opacity-0'}>
       <Editor
+        key={resolved}
         id={editorId}
         tinymceScriptSrc="./tinymce/tinymce.min.js"
         onInit={(_evt, editor) => {
@@ -47,8 +59,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
           statusbar: true,
           resize: 'vertical',
           contextmenu: false,
-          skin_url: './tinymce/skins/ui/oxide',
-          content_css: './tinymce/skins/content/default/content.css',
+          skin_url: resolved === 'dark' ? './tinymce/skins/ui/oxide-dark' : './tinymce/skins/ui/oxide',
+          content_css: resolved === 'dark' ? './tinymce/skins/content/dark/content.css' : './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
           toolbar_mode: 'wrap',
           image_advtab: true,
@@ -80,12 +92,18 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
             'help',
           ],
           toolbar:
-            'undo redo | blocks fontsize fontfamily forecolor backcolor | ' +
-            'bold italic underline strikethrough subscript superscript | ' +
+            'undo redo | ' +
+            'styles fontsize fontfamily | ' +
+            'bold italic underline strikethrough | ' +
+            'forecolor backcolor | ' +
             'alignleft aligncenter alignright alignjustify | ' +
             'bullist numlist outdent indent | ' +
-            'blockquote hr table link image | ' +
-            'fullscreen preview | removeformat code help',
+            'blockquote hr table | ' +
+            'link image media | ' +
+            'searchreplace | ' +
+            'fullscreen preview | ' +
+            'removeformat code | ' +
+            'help',
           content_style: `
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -105,6 +123,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
             img {
               max-width: 100%;
               height: auto;
+            }
+            [data-laudo-secao] {
+              border-color: rgba(128,128,128,0.2) !important;
+            }
+            [data-laudo-secao-header] {
+              background: rgba(128,128,128,0.08) !important;
+              border-bottom-color: rgba(128,128,128,0.2) !important;
+              color: inherit !important;
             }
           `,
 
