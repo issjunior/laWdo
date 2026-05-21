@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -13,7 +13,7 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { AISectionToolbar } from '@/components/ai/AISectionToolbar';
 import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
-import { removerFormatacaoPlaceholders } from '@/lib/utils';
+import { removerFormatacaoPlaceholders, cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -353,7 +353,7 @@ export const LaudosPage: React.FC = () => {
   const [editando, setEditando] = useState<LaudoItem | null>(null);
   const [secoes, setSecoes] = useState<SecaoEditor[]>([]);
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
-  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('multi');
+  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
   const [singleSelectedHtml, setSingleSelectedHtml] = useState('');
   const [singleSelectionHasText, setSingleSelectionHasText] = useState(false);
@@ -380,7 +380,15 @@ export const LaudosPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
   const [iluminacoesPanelOpen, setIlustracoesPanelOpen] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+
+  const togglePanel = useCallback(() => {
+    setPanelCollapsed(prev => !prev);
+  }, []);
   const [imageInsertCounter, setImageInsertCounter] = useState(0);
+
+  const [syncEnabled, setSyncEnabled] = useState(true);
+  const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
     if (secoesFonte.length === 0) return '';
@@ -523,6 +531,52 @@ export const LaudosPage: React.FC = () => {
     carregarPlaceholders();
   }, [carregarLaudos, carregarPlaceholders]);
 
+  useEffect(() => {
+    if (!syncEnabled || !editando) {
+      setFiguraAtivaId(null);
+      return;
+    }
+
+    const ratios = new Map<string, number>();
+    const observers: IntersectionObserver[] = [];
+
+    const timeout = setTimeout(() => {
+      const editors: any[] = editorMode === 'single'
+        ? [(window as any).tinymce?.get('laudo-single-editor')].filter(Boolean)
+        : secoes.map((_, i) => (window as any).tinymce?.get(`secao-${i}`)).filter(Boolean);
+
+      for (const editor of editors) {
+        const body = editor.getBody();
+        const win = editor.getWin();
+        if (!body || !win) continue;
+
+        const observer = new win.IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              const id = (entry.target as HTMLElement).getAttribute('data-image-id') || '';
+              ratios.set(id, entry.intersectionRatio);
+            }
+            let bestId: string | null = null;
+            let bestRatio = 0;
+            ratios.forEach((r, id) => {
+              if (r > bestRatio) { bestRatio = r; bestId = id; }
+            });
+            setFiguraAtivaId(bestId);
+          },
+          { threshold: [0, 0.25, 0.5, 0.75, 1] }
+        );
+
+        body.querySelectorAll('.laudo-figure').forEach(f => observer.observe(f));
+        observers.push(observer);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timeout);
+      observers.forEach(o => o.disconnect());
+    };
+  }, [syncEnabled, editando, editorMode, secoes, singleEditorHtml]);
+
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const editor = (window as any).tinymce?.get(editorId);
     if (editor) {
@@ -605,6 +659,21 @@ export const LaudosPage: React.FC = () => {
     }
     return secoes.flatMap(s => extrairFigurasDoHtml(s.conteudo));
   }, [editorMode, singleEditorHtml, secoes]);
+
+  const handleScrollToFigure = useCallback((imageId: string) => {
+    const editorIds = editorMode === 'single'
+      ? ['laudo-single-editor']
+      : secoes.map((_, i) => `secao-${i}`);
+    for (const editorId of editorIds) {
+      const editor = (window as any).tinymce?.get(editorId);
+      if (!editor) continue;
+      const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
+      if (figure) {
+        figure.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        break;
+      }
+    }
+  }, [editorMode, secoes]);
 
   /**
    * Aguarda até que uma instância TinyMCE com o editorId especificado esteja disponível.
@@ -755,7 +824,7 @@ export const LaudosPage: React.FC = () => {
     setEditando(laudo);
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
-    setEditorMode('multi');
+    setEditorMode('single');
     setSingleSelectedHtml('');
     setSecoesColapsadas({});
     setError(null);
@@ -766,7 +835,7 @@ export const LaudosPage: React.FC = () => {
     setEditando(null);
     setSecoes([]);
     setSingleEditorHtml('');
-    setEditorMode('multi');
+    setEditorMode('single');
     setSingleSelectedHtml('');
     setSecoesColapsadas({});
     setError(null);
@@ -1211,7 +1280,11 @@ export const LaudosPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" onClick={() => setIlustracoesPanelOpen(!iluminacoesPanelOpen)} className={`flex items-center gap-2 ${iluminacoesPanelOpen ? 'bg-muted' : ''}`}>
+                <Button variant="outline" onClick={() => {
+                  const next = !iluminacoesPanelOpen;
+                  setIlustracoesPanelOpen(next);
+                  if (next) setPanelCollapsed(false);
+                }} className={`flex items-center gap-2 ${iluminacoesPanelOpen ? 'bg-muted' : ''}`}>
                   <ImageIcon size={16} /> Ilustrações
                 </Button>
               </TooltipTrigger>
@@ -1283,13 +1356,10 @@ export const LaudosPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
-            <div className="flex h-full gap-0 overflow-hidden">
+            <div className="flex h-full gap-0">
               <div className="flex-1 overflow-y-auto pr-2">
                 {editorMode === 'single' ? (
                   <div className="space-y-3 pb-4">
-                    <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-                      Estrutura por seções preservada automaticamente. Use seleção de texto para ações de IA.
-                    </div>
                 <div className="space-y-2 mb-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-1.5">
@@ -1493,8 +1563,32 @@ export const LaudosPage: React.FC = () => {
               </div>
 
               {iluminacoesPanelOpen && (
-                <div className="w-[380px] border-l flex-shrink-0 bg-muted/5 h-full overflow-hidden">
-                  <IlustracoesPanel
+                <>
+                  <button
+                    onClick={togglePanel}
+                    aria-expanded={!panelCollapsed}
+                    className="w-7 border-y border-l rounded-l-md bg-background hover:bg-accent flex-shrink-0 flex items-center justify-center transition-colors group"
+                    title={panelCollapsed ? 'Expandir painel' : 'Recolher painel'}
+                  >
+                    <ChevronRight
+                      size={15}
+                      className={cn(
+                        "transition-transform duration-300 ease-in-out text-muted-foreground group-hover:text-foreground",
+                        !panelCollapsed && "rotate-180"
+                      )}
+                    />
+                  </button>
+
+                  <div
+                    className={cn(
+                      "border-l overflow-hidden bg-background transition-all duration-300 ease-in-out",
+                      panelCollapsed
+                        ? "w-0 border-l-0"
+                        : "w-[380px] 2xl:w-[420px] max-w-[85vw]"
+                    )}
+                  >
+                    <div className={cn("w-[380px] 2xl:w-[420px] max-w-[85vw] h-full overflow-y-auto", panelCollapsed && "invisible")}>
+                      <IlustracoesPanel
                     laudoId={editando.id}
                     onInsertImage={async (url, id, legenda) => {
                       if (editorMode === 'single') {
@@ -1626,8 +1720,14 @@ export const LaudosPage: React.FC = () => {
                       }
                     }}
                     onReorder={sincronizarOrdemEditor}
+                    syncEnabled={syncEnabled}
+                    figuraAtivaId={figuraAtivaId}
+                    onSyncToggle={(enabled) => setSyncEnabled(enabled)}
+                    onScrollToFigure={handleScrollToFigure}
                   />
-                </div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </CardContent>

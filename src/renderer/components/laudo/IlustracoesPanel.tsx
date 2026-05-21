@@ -29,6 +29,7 @@ import {
   Plus,
   Image as ImageIcon
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,6 +93,10 @@ interface IlustracoesPanelProps {
   figurasNoEditor?: ImagemLaudo[];
   /** Callback quando o painel altera a legenda de uma figura existente no editor */
   onUpdateLegendaInEditor?: (id: string, legenda: string) => void;
+  syncEnabled?: boolean;
+  figuraAtivaId?: string | null;
+  onSyncToggle?: (enabled: boolean) => void;
+  onScrollToFigure?: (imageId: string) => void;
 }
 
 interface SortableItemProps {
@@ -224,21 +229,32 @@ const SortableItem: React.FC<SortableItemProps> = ({
 interface FiguraEditorItemProps {
   imagem: ImagemLaudo;
   index: number;
+  ativo?: boolean;
   onDelete: (id: string) => void;
   onUpdateLegenda: (id: string, legenda: string) => void;
   onPreview: () => void;
+  onScrollToFigure?: (id: string) => void;
 }
 
 const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   imagem,
   index,
+  ativo = false,
   onDelete,
   onUpdateLegenda,
   onPreview,
+  onScrollToFigure,
 }) => {
   const [legenda, setLegenda] = useState(imagem.legenda);
   const onUpdateLegendaRef = useRef(onUpdateLegenda);
   onUpdateLegendaRef.current = onUpdateLegenda;
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ativo && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [ativo]);
 
   useEffect(() => {
     if (legenda === imagem.legenda) return;
@@ -249,14 +265,20 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   }, [legenda, imagem.id, imagem.legenda]);
 
   return (
-    <div className="flex items-center gap-2 bg-muted/30 rounded-lg p-2 border border-border/50">
-      <div className="w-12 h-12 rounded overflow-hidden shrink-0 bg-muted flex items-center justify-center relative cursor-pointer"
-        onClick={onPreview}
+    <div
+      ref={itemRef}
+      className={`flex items-center gap-2 bg-muted/30 rounded-lg p-2 border transition-all ${
+        ativo ? 'ring-2 ring-primary border-primary/50 bg-primary/5' : 'border-border/50'
+      }`}
+    >
+      <div className="w-12 h-12 rounded overflow-hidden shrink-0 bg-muted flex items-center justify-center relative cursor-pointer group/thumb"
+        onClick={() => onScrollToFigure?.(imagem.id)}
+        title="Clique para localizar no editor"
       >
         <img
           src={imagem.thumbnailUrl || imagem.url}
           alt={imagem.legenda}
-          className="w-full h-full object-cover hover:scale-105 transition-transform"
+          className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
           }}
@@ -286,6 +308,15 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
       <Button
         variant="ghost"
         size="icon"
+        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+        onClick={onPreview}
+        title="Ampliar"
+      >
+        <Maximize2 size={14} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
         onClick={() => {
           if (confirm('Deseja remover esta figura do laudo?')) {
@@ -308,6 +339,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onRefreshHtml,
   figurasNoEditor,
   onUpdateLegendaInEditor,
+  syncEnabled,
+  figuraAtivaId,
+  onSyncToggle,
+  onScrollToFigure,
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -394,12 +429,25 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     });
 
   return (
-    <div className="flex flex-col h-full border-l bg-muted/20">
+    <div className="flex flex-col h-full bg-muted/20">
       <div className="p-4 border-b space-y-4 bg-background">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold flex items-center gap-2">
             <ImageIcon size={16} /> Ilustrações ({imagens.length})
           </h2>
+          <div className="flex items-center gap-2 pb-1">
+            <Checkbox
+              id="sync-figuras"
+              checked={syncEnabled ?? false}
+              onCheckedChange={(checked) => onSyncToggle?.(!!checked)}
+            />
+            <label
+              htmlFor="sync-figuras"
+              className="text-xs cursor-pointer select-none text-muted-foreground"
+            >
+              Sincronizar com editor
+            </label>
+          </div>
           <div className="flex gap-1">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSortBy('sequencia')} title="Ordenar por sequência">
               <ArrowUpDown size={14} />
@@ -495,9 +543,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                 key={fig.id}
                 imagem={fig}
                 index={idx}
+                ativo={fig.id === figuraAtivaId}
                 onDelete={onDeleteImage ? onDeleteImage : () => {}}
                 onUpdateLegenda={onUpdateLegendaInEditor || (() => {})}
                 onPreview={() => setLightboxEditorIndex(idx)}
+                onScrollToFigure={onScrollToFigure}
               />
             ))}
           </div>
