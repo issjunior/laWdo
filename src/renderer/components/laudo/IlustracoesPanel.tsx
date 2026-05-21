@@ -22,10 +22,7 @@ import {
   Trash2,
   Type,
   Maximize2,
-  ArrowUpDown,
-  Calendar,
-  SortAsc,
-  Search,
+  Info,
   Plus,
   Image as ImageIcon
 } from 'lucide-react';
@@ -343,8 +340,6 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'sequencia' | 'nome' | 'data'>('data');
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [lightboxEditorIndex, setLightboxEditorIndex] = useState(-1);
@@ -417,55 +412,27 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     setImagens(prev => prev.map(img => img.id === id ? { ...img, legenda } : img));
   };
 
-  const filteredImagens = imagens
-    .filter(img => img.legenda.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === 'nome') return a.legenda.localeCompare(b.legenda);
-      if (sortBy === 'data') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      return a.sequencia - b.sequencia;
-    });
+  const filteredImagens = [...imagens]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   return (
     <div className="flex flex-col h-full bg-muted/20">
-      <div className="p-4 border-b space-y-4 bg-background">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <ImageIcon size={16} /> Ilustrações ({imagens.length})
-          </h2>
-          <div className="flex items-center gap-2 pb-1">
-            <Checkbox
-              id="sync-figuras"
-              checked={syncEnabled ?? false}
-              onCheckedChange={(checked) => onSyncToggle?.(!!checked)}
-            />
-            <label
-              htmlFor="sync-figuras"
-              className="text-xs cursor-pointer select-none text-muted-foreground"
-            >
-              Sincronizar com editor
-            </label>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSortBy('sequencia')} title="Ordenar por sequência">
-              <ArrowUpDown size={14} />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSortBy('nome')} title="Ordenar por nome">
-              <SortAsc size={14} />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSortBy('data')} title="Ordenar por data">
-              <Calendar size={14} />
-            </Button>
-          </div>
-        </div>
+      <div className="p-4 border-b space-y-3 bg-background">
+        <h2 className="text-sm font-semibold text-center">Painel de Ilustrações</h2>
 
-        <div className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Filtrar ilustrações..."
-            className="pl-8 h-9 text-xs"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Carregados</span>
+          <Badge variant="secondary" className="h-4 px-1.5 text-[10px] rounded-full">{imagens.length}</Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info size={12} className="text-muted-foreground/50 cursor-help hover:text-muted-foreground transition-colors" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[240px] text-xs">
+                Imagens carregadas neste painel. Arraste para reordenar. Use o botão <strong>+</strong> para inserir individualmente ou <strong>Inserir Todas</strong> para incluir todas de uma vez no laudo.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <Button className="w-full gap-2" variant="outline" asChild>
@@ -530,11 +497,22 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 
       {/* ─── Figuras já existentes no editor ─── */}
       {figurasNoEditor && figurasNoEditor.length > 0 && (
-        <div className="border-t pt-4 mt-4">
-          <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
-            Figuras no laudo ({figurasNoEditor.length})
-          </h3>
-          <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+        <div className="border-t pt-3">
+          <div className="flex items-center gap-1.5 px-4 mb-3">
+            <span className="text-xs font-medium text-muted-foreground">Figuras no Laudo</span>
+            <Badge variant="secondary" className="h-4 px-1.5 text-[10px] rounded-full">{figurasNoEditor.length}</Badge>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info size={12} className="text-muted-foreground/50 cursor-help hover:text-muted-foreground transition-colors" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[240px] text-xs">
+                  Figuras já inseridas no editor do laudo. Clique na miniatura para localizar a figura no texto. O destaque azul indica a figura atualmente visível no editor.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar px-4">
             {figurasNoEditor.map((fig, idx) => (
               <FiguraEditorItem
                 key={fig.id}
