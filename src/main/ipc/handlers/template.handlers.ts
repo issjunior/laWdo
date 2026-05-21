@@ -1,7 +1,9 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, dialog, BrowserWindow, nativeImage } from 'electron';
 import { logInfo, logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
+import path from 'path';
+import fs from 'fs';
 
 export const registerTemplateHandlers = (): void => {
   /** Listar todos os templates (com contagem de seções) */
@@ -187,11 +189,10 @@ export const registerTemplateHandlers = (): void => {
   table th { background: #f5f5f5; font-weight: 600; }
   ul, ol { margin: 8px 0; padding-left: 24px; }
   li { margin-bottom: 4px; }
-  img { max-width: 100%; height: auto; }
-  .placeholder-tag { background: #e8f0fe; color: #1a73e8; padding: 1px 4px; border-radius: 3px; font-family: monospace; }
-  blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding: 4px 16px; color: #555; }
-  pre { background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
-  code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-size: 12px; }
+  img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
+  .laudo-figure { text-align: center; margin: 12px auto; page-break-inside: avoid; }
+  figcaption { font-size: 12px; color: #444; font-weight: bold; margin-top: 4px; }
+  .placeholder-tag { color: #1a73e8; font-family: monospace; }
 </style>
 </head>
 <body>${html}</body>
@@ -205,7 +206,7 @@ export const registerTemplateHandlers = (): void => {
       });
 
       await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(docHtml)}`);
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       const buffer = Buffer.from(await win.webContents.printToPDF({
         printBackground: true,
@@ -216,9 +217,9 @@ export const registerTemplateHandlers = (): void => {
       win.close();
       win = null;
 
-      const base64 = buffer.toString('base64');
-      logInfo('PDF de preview gerado com sucesso');
-      return { success: true, data: base64 };
+      const base64PDF = buffer.toString('base64');
+      logInfo('PDF de preview gerado com sucesso (imagens otimizadas)');
+      return { success: true, data: base64PDF };
     } catch (error: any) {
       logError('Erro ao gerar PDF de preview', error);
       if (win) { try { win.close(); } catch { /* ignora */ } }

@@ -35,7 +35,7 @@ const setupContentSecurityPolicy = (): void => {
     script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' data: https://fonts.gstatic.com;
-    img-src 'self' data: blob: laudo-img:;
+    img-src 'self' data: blob:;
     connect-src 'self' blob:;
     frame-src 'self' data: blob:;
     object-src 'self' data: blob:;

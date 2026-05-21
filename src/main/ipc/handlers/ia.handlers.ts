@@ -183,26 +183,6 @@ ${texto}`;
             type: 'image_url',
             image_url: { url: img.src },
           });
-        } else if (img.src.startsWith('laudo-img://')) {
-          try {
-            const matches = img.src.match(/^laudo-img:\/\/([^/]+)\/(.+)$/);
-            if (matches) {
-              const laudoId = matches[1];
-              const filename = matches[2];
-              const filePath = path.join(app.getPath('userData'), 'imagens', laudoId, filename);
-              if (fs.existsSync(filePath)) {
-                const ext = path.extname(filePath);
-                const mime = obterMimeType(ext);
-                const base64 = fs.readFileSync(filePath, { encoding: 'base64' });
-                content.push({
-                  type: 'image_url',
-                  image_url: { url: `data:${mime};base64,${base64}` },
-                });
-              }
-            }
-          } catch (err) {
-            logError('Erro ao converter laudo-img:// para base64', err);
-          }
         }
       }
 

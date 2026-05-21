@@ -176,23 +176,6 @@ const createDatabaseSchema = async (): Promise<void> => {
       )
     `);
 
-    // Tabela de imagens do laudo
-    await executeNonQuery(`
-      CREATE TABLE IF NOT EXISTS imagens_laudo (
-        id TEXT PRIMARY KEY,
-        laudo_id TEXT NOT NULL,
-        caminho TEXT NOT NULL,
-        legenda TEXT NOT NULL,
-        numero_figura INTEGER NOT NULL,
-        sequencia INTEGER NOT NULL DEFAULT 0,
-        latitude REAL,
-        longitude REAL,
-        data_captura DATETIME DEFAULT CURRENT_TIMESTAMP,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (laudo_id) REFERENCES laudos(id)
-      )
-    `);
-
     // Tabela de placeholders
     await executeNonQuery(`
       CREATE TABLE IF NOT EXISTS placeholders (
@@ -261,9 +244,6 @@ const createDatabaseSchema = async (): Promise<void> => {
     );
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_status ON laudos(status)');
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_rep ON laudos(rep_id)');
-    await executeNonQuery(
-      'CREATE INDEX IF NOT EXISTS idx_imagens_laudo ON imagens_laudo(laudo_id)'
-    );
     await executeNonQuery(
       'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_usuario ON logs_auditoria(usuario_id)'
     );
@@ -870,32 +850,6 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       logInfo('Migration v13: tipo_exame_id nullable + Template "Não definido" criado');
     } catch (error) {
       logError('Erro ao aplicar migration versão 13', error);
-      throw error;
-    }
-  }
-
-  // Migration versão 14: Garantir tabela imagens_laudo para bancos existentes
-  if (fromVersion < 14) {
-    try {
-      await executeNonQuery(`
-        CREATE TABLE IF NOT EXISTS imagens_laudo (
-          id TEXT PRIMARY KEY,
-          laudo_id TEXT NOT NULL,
-          caminho TEXT NOT NULL,
-          legenda TEXT NOT NULL,
-          numero_figura INTEGER NOT NULL,
-          sequencia INTEGER NOT NULL DEFAULT 0,
-          latitude REAL,
-          longitude REAL,
-          data_captura DATETIME DEFAULT CURRENT_TIMESTAMP,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (laudo_id) REFERENCES laudos(id)
-        )
-      `);
-      await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo ON imagens_laudo(laudo_id)');
-      logInfo('Migration v14: Tabela imagens_laudo criada/verificada');
-    } catch (error) {
-      logError('Erro ao aplicar migration versão 14', error);
       throw error;
     }
   }

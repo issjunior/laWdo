@@ -11,7 +11,6 @@ import { registerCategoriaHandlers } from './handlers/categoria-placeholder.hand
 import { registerTemplateHandlers } from './handlers/template.handlers.js';
 import { registerImportacaoHandlers } from './handlers/importacao.handlers.js';
 import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
-import { registerImagemHandlers } from './handlers/imagem.handlers.js';
 import { registerIAHandlers } from './handlers/ia.handlers.js';
 import { registerBackupHandlers } from './handlers/backup.handlers.js';
 import { registerLogSystemHandlers } from './handlers/log.handlers.js';
@@ -56,7 +55,6 @@ export const registerIpcHandlers = (): void => {
   registerTemplateHandlers();
   registerImportacaoHandlers();
   registerLaudoHandlers();
-  registerImagemHandlers();
   registerIAHandlers();
   registerBackupHandlers();
   registerLogSystemHandlers();

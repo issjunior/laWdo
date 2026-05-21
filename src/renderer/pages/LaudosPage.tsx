@@ -5,12 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image, Send } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { AISectionToolbar } from '@/components/ai/AISectionToolbar';
+import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
 import { removerFormatacaoPlaceholders } from '@/lib/utils';
 import {
   Dialog,
@@ -29,8 +31,9 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { AISectionToolbar } from '@/components/ai/AISectionToolbar';
-import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
+import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import { reindexarFiguras } from '@/lib/figuras';
+import { toast } from 'sonner';
 
 interface Placeholder {
   id: string;
@@ -376,7 +379,8 @@ export const LaudosPage: React.FC = () => {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
-  const SINGLE_CHAT_KEY = 'single-selection';
+  const [iluminacoesPanelOpen, setIlustracoesPanelOpen] = useState(false);
+  const [imageInsertCounter, setImageInsertCounter] = useState(0);
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
     if (secoesFonte.length === 0) return '';
@@ -526,6 +530,139 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
+  /**
+   * Verifica e cria a seção "ILUSTRAÇÕES" no modo multi-seção.
+   * Retorna o índice da seção de ilustrações.
+   */
+  const garantirSecaoIlustracoes = useCallback((): number => {
+    // Verifica se já existe
+    const idxExistente = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+    if (idxExistente >= 0) return idxExistente;
+
+    // Criar nova seção
+    const novaSecao: SecaoEditor = {
+      titulo: 'ILUSTRAÇÕES',
+      conteudo: '<p>&nbsp;</p>',
+    };
+
+    const titulosUpper = secoes.map(s => s.titulo.trim().toUpperCase());
+
+    // 1. Tentar inserir antes de "CONSIDERAÇÕES FINAIS"
+    const idxConsideracoes = titulosUpper.indexOf('CONSIDERAÇÕES FINAIS');
+    if (idxConsideracoes >= 0) {
+      const novas = [...secoes];
+      novas.splice(idxConsideracoes, 0, novaSecao);
+      setSecoes(novas);
+      // Garantir que a seção esteja aberta
+      setSecoesColapsadas(prev => ({ ...prev, [idxConsideracoes]: false }));
+      return idxConsideracoes;
+    }
+
+    // 2. Tentar inserir antes de "CONCLUSÃO"
+    const idxConclusao = titulosUpper.indexOf('CONCLUSÃO');
+    if (idxConclusao >= 0) {
+      const novas = [...secoes];
+      novas.splice(idxConclusao, 0, novaSecao);
+      setSecoes(novas);
+      setSecoesColapsadas(prev => ({ ...prev, [idxConclusao]: false }));
+      return idxConclusao;
+    }
+
+    // 3. Inserir ao final
+    const idxFinal = secoes.length;
+    setSecoes(prev => [...prev, novaSecao]);
+    setSecoesColapsadas(prev => ({ ...prev, [idxFinal]: false }));
+    return idxFinal;
+  }, [secoes]);
+
+  /** Extrai figuras do HTML de um editor (modo multi ou single) */
+  const extrairFigurasDoHtml = (html: string): ImagemLaudo[] => {
+    if (!html) return [];
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const figures = doc.querySelectorAll('.laudo-figure');
+    return Array.from(figures)
+      .map((fig, idx) => {
+        const id = fig.getAttribute('data-image-id') || '';
+        const img = fig.querySelector('img');
+        const figcaption = fig.querySelector('figcaption');
+        return {
+          id,
+          url: img?.getAttribute('src') || '',
+          thumbnailUrl: img?.getAttribute('src') || '',
+          legenda: figcaption?.textContent?.replace(/^Fig(?:ura|\.)\s*\d+[:\s]*\s*/i, '').trim() || '',
+          numero_figura: idx + 1,
+          sequencia: idx + 1,
+          created_at: '',
+        };
+      })
+      .filter(f => f.id && f.url);
+  };
+
+  const extrairFigurasDoEditor = useCallback((): ImagemLaudo[] => {
+    if (editorMode === 'single') {
+      return extrairFigurasDoHtml(singleEditorHtml);
+    }
+    return secoes.flatMap(s => extrairFigurasDoHtml(s.conteudo));
+  }, [editorMode, singleEditorHtml, secoes]);
+
+  /**
+   * Aguarda até que uma instância TinyMCE com o editorId especificado esteja disponível.
+   * Útil quando uma nova seção é criada dinamicamente e o editor ainda está inicializando.
+   */
+  const aguardarEditor = (editorId: string, timeout = 3000, interval = 100): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      const check = () => {
+        const editor = (window as any).tinymce?.get(editorId);
+        if (editor) {
+          resolve(editor);
+          return;
+        }
+        if (Date.now() - start > timeout) {
+          reject(new Error(`Editor ${editorId} não ficou pronto no tempo esperado`));
+          return;
+        }
+        setTimeout(check, interval);
+      };
+      check();
+    });
+  };
+
+  /**
+   * Sincroniza a ordem das figuras no editor com a ordem do painel de ilustrações.
+   * Chamado após drag-and-drop no painel (painel → editor).
+   */
+  const sincronizarOrdemEditor = useCallback((imagensOrdenadas: { url: string; id: string; legenda: string }[]) => {
+    if (editorMode === 'single') return;
+    const idxIlustracoes = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+    if (idxIlustracoes < 0) return;
+
+    const editor = (window as any).tinymce?.get(`secao-${idxIlustracoes}`);
+    if (!editor) return;
+
+    const body = editor.getBody();
+    // Remover todas as figuras atuais (e parágrafos espaçadores)
+    const figurasAtuais = Array.from(body.querySelectorAll('.laudo-figure'));
+    figurasAtuais.forEach(fig => {
+      const next = fig.nextElementSibling;
+      fig.remove();
+      if (next && (next.tagName === 'BR' || next.tagName === 'P')) {
+        next.remove();
+      }
+    });
+
+    // Reinserir na nova ordem (sem reindexar a cada inserção)
+    imagensOrdenadas.forEach(img => {
+      editor.execCommand('insertLaudoImage', false, {
+        url: img.url, id: img.id, legenda: img.legenda, skipReindex: true
+      });
+    });
+
+    // Reindexar uma única vez no final
+    editor.execCommand('reindexFiguras');
+  }, [editorMode, secoes]);
+
   const handlePreview = async () => {
     if (!editando) return;
     try {
@@ -651,14 +788,30 @@ export const LaudosPage: React.FC = () => {
       if (editorMode === 'single') {
         setSecoes(secoesAtuais);
       }
-      const conteudo = removerFormatacaoPlaceholders(reconstruirConteudo(secoesAtuais));
-      const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudo);
+
+      // 1. Reindexar figuras fisicamente para garantir ordem definitiva
+      const conteudoOriginal = reconstruirConteudo(secoesAtuais);
+      const htmlReindexado = reindexarFiguras(conteudoOriginal);
+
+      // 2. Remover formatação de placeholders e salvar
+      const conteudoFinal = removerFormatacaoPlaceholders(htmlReindexado);
+
+      const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudoFinal);
       if (r.success) {
+
         setSuccess('Laudo salvo com sucesso!');
-        setEditando(prev => prev ? { ...prev, conteudo } : null);
+        setEditando(prev => prev ? { ...prev, conteudo: conteudoFinal } : null);
         setLaudos(prev =>
-          prev.map(l => (l.id === editando.id ? { ...l, conteudo } : l))
+          prev.map(l => (l.id === editando.id ? { ...l, conteudo: conteudoFinal } : l))
         );
+
+        // Atualizar visualização atual
+        if (editorMode === 'single') {
+          setSingleEditorHtml(conteudoFinal);
+        } else {
+          setSecoes(parseConteudoEmSecoes(conteudoFinal));
+        }
+
         setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(r.error || 'Erro ao salvar laudo');
@@ -1058,6 +1211,14 @@ export const LaudosPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button variant="outline" onClick={() => setIlustracoesPanelOpen(!iluminacoesPanelOpen)} className={`flex items-center gap-2 ${iluminacoesPanelOpen ? 'bg-muted' : ''}`}>
+                  <ImageIcon size={16} /> Ilustrações
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Abrir painel de ilustrações</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
                   <ArrowLeft size={16} /> Voltar
                 </Button>
@@ -1086,8 +1247,8 @@ export const LaudosPage: React.FC = () => {
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
 
-        <Card>
-          <CardHeader className="pb-3">
+        <Card className="flex-1 overflow-hidden flex flex-col">
+          <CardHeader className="pb-3 flex-shrink-0">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
               <div>
                 <CardTitle className="text-lg">Template: {editando.template_nome || 'Não definido'}</CardTitle>
@@ -1121,12 +1282,14 @@ export const LaudosPage: React.FC = () => {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {editorMode === 'single' ? (
-              <div className="space-y-3">
-                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-                  Estrutura por seções preservada automaticamente. Use seleção de texto para ações de IA.
-                </div>
+          <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
+            <div className="flex h-full gap-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto pr-2">
+                {editorMode === 'single' ? (
+                  <div className="space-y-3 pb-4">
+                    <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                      Estrutura por seções preservada automaticamente. Use seleção de texto para ações de IA.
+                    </div>
                 <div className="space-y-2 mb-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-1.5">
@@ -1201,7 +1364,7 @@ export const LaudosPage: React.FC = () => {
                         await handleDescreverImagem(imagens, -1);
                       }}
                     >
-                      <Image size={12} /> Imagem
+                      <ImageIcon size={12} /> Imagem
                     </Button>
                     <div className="flex items-center gap-1.5 ml-auto">
                       <Input
@@ -1238,17 +1401,18 @@ export const LaudosPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <ContextMenu>
-                  <ContextMenuTrigger>
-                    <TinyMceEditor
-                      editorId="laudo-single-editor"
-                      value={singleEditorHtml}
-                      onChange={setSingleEditorHtml}
-                      height={560}
-                      placeholder="Edite o laudo completo..."
-                      laudoId={editando.id}
-                    />
-                  </ContextMenuTrigger>
+                    <ContextMenu>
+                      <ContextMenuTrigger>
+                        <TinyMceEditor
+                          editorId="laudo-single-editor"
+                          value={singleEditorHtml}
+                          onChange={setSingleEditorHtml}
+                          height={560}
+                          placeholder="Edite o laudo completo..."
+                          laudoId={editando.id}
+                          onImageInserted={() => setImageInsertCounter(c => c + 1)}
+                        />
+                      </ContextMenuTrigger>
                   <ContextMenuContent className="w-64">
                     <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
                     <ContextMenuSeparator />
@@ -1276,75 +1440,196 @@ export const LaudosPage: React.FC = () => {
                       </ContextMenuSub>
                     ))}
                   </ContextMenuContent>
-                </ContextMenu>
-              </div>
-            ) : secoes.map((secao, idx) => (
-              <Collapsible
-                key={idx}
-                open={!secoesColapsadas[idx]}
-                onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
-                className="border rounded-lg"
-              >
-                <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 rounded-t-lg transition-colors">
-                  <h3 className="text-base font-semibold">{secao.titulo}</h3>
-                  <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="px-4 pb-4">
-                    <AISectionToolbar
-                      editorId={`secao-${idx}`}
-                      secaoIndex={idx}
-                      secaoTitulo={secao.titulo}
-                      htmlContent={secao.conteudo}
-                      onRevisarOrtografia={handleRevisarOrtografia}
-                      onAdequarEscrita={handleAdequarEscrita}
-                      onDescreverImagem={handleDescreverImagem}
-                      onPerguntar={handlePerguntar}
-                      onOpenSheet={handleOpenSheet}
-                    />
-                    <ContextMenu>
-                      <ContextMenuTrigger>
-                        <TinyMceEditor
-                          editorId={`secao-${idx}`}
-                          value={secao.conteudo}
-                          onChange={val => atualizarConteudoSecao(idx, val)}
-                          height={400}
-                          placeholder={`Escreva o conteúdo de "${secao.titulo}"...`}
-                          laudoId={editando.id}
-                        />
-                      </ContextMenuTrigger>
-                      <ContextMenuContent className="w-64">
-                        <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
-                        <ContextMenuSeparator />
-                        {categorias.map(cat => (
-                          <ContextMenuSub key={cat.id}>
-                            <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
-                              {cat.label}
-                            </ContextMenuSubTrigger>
-                            <ContextMenuSubContent className="w-56">
-                              {placeholders
-                                .filter(p => p.categoria_id === cat.id)
-                                .sort((a, b) => a.chave.localeCompare(b.chave))
-                                .map(p => (
-                                  <ContextMenuItem
-                                    key={p.id}
-                                    onClick={() => inserirPlaceholder(`secao-${idx}`, p.chave)}
-                                  >
-                                    <div className="flex flex-col">
-                                      <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
-                                      {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
-                                    </div>
-                                  </ContextMenuItem>
-                                ))}
-                            </ContextMenuSubContent>
-                          </ContextMenuSub>
-                        ))}
-                      </ContextMenuContent>
                     </ContextMenu>
                   </div>
-                </CollapsibleContent>
-              </Collapsible>
-            ))}
+                ) : (
+                  <div className="space-y-6 pb-4">
+                    {secoes.map((secao, idx) => (
+                      <Collapsible
+                        key={idx}
+                        open={!secoesColapsadas[idx]}
+                        onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
+                        className="border rounded-lg bg-card shadow-sm"
+                      >
+                        <div className="flex items-center justify-between p-4 cursor-default">
+                          <CollapsibleTrigger asChild>
+                            <div className="flex items-center gap-3 flex-1 cursor-pointer">
+                              <div className="p-2 rounded-full bg-primary/10 text-primary">
+                                <Edit size={18} />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-semibold">{secao.titulo}</h3>
+                                <p className="text-sm text-muted-foreground">Clique para expandir/recolher</p>
+                              </div>
+                            </div>
+                          </CollapsibleTrigger>
+                          <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                        </div>
+                        <CollapsibleContent className="p-4 border-t" forceMount>
+                          <AISectionToolbar
+                            editorId={`secao-${idx}`}
+                            secaoIndex={idx}
+                            secaoTitulo={secao.titulo}
+                            htmlContent={secao.conteudo}
+                            onRevisarOrtografia={handleRevisarOrtografia}
+                            onAdequarEscrita={handleAdequarEscrita}
+                            onDescreverImagem={handleDescreverImagem}
+                            onPerguntar={handlePerguntar}
+                            onOpenSheet={handleOpenSheet}
+                          />
+                          <TinyMceEditor
+                            editorId={`secao-${idx}`}
+                            value={secao.conteudo}
+                            onChange={(txt) => atualizarConteudoSecao(idx, txt)}
+                            height={400}
+                            laudoId={editando.id}
+                            onImageInserted={() => setImageInsertCounter(c => c + 1)}
+                          />
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {iluminacoesPanelOpen && (
+                <div className="w-[380px] border-l flex-shrink-0 bg-muted/5 h-full overflow-hidden">
+                  <IlustracoesPanel
+                    laudoId={editando.id}
+                    onInsertImage={async (url, id, legenda) => {
+                      if (editorMode === 'single') {
+                        // Modo single: inserir no editor único
+                        const editor = (window as any).tinymce?.get('laudo-single-editor');
+                        if (editor) {
+                          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
+                          toast.success('Imagem inserida');
+                        }
+                      } else {
+                        // Modo multi: criar/garantir seção ILUSTRAÇÕES e inserir lá
+                        const idxIlustracoes = garantirSecaoIlustracoes();
+                        const editorId = `secao-${idxIlustracoes}`;
+                        try {
+                          const editor = await aguardarEditor(editorId, 3000, 100);
+                          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
+                          toast.success('Imagem inserida na seção ILUSTRAÇÕES');
+                        } catch {
+                          toast.error('Editor da seção ILUSTRAÇÕES não está pronto. Tente novamente em instantes.');
+                        }
+                      }
+                    }}
+                    onDeleteImage={(imageId: string) => {
+                      if (editorMode === 'single') {
+                        const editor = (window as any).tinymce?.get('laudo-single-editor');
+                        if (editor) {
+                          editor.execCommand('removeLaudoImage', false, { id: imageId });
+                          // Força sincronização do estado com o conteúdo atual do editor
+                          setSingleEditorHtml(editor.getContent());
+                        }
+                        return;
+                      }
+                      // Modo multi: remover da seção ILUSTRAÇÕES
+                      const idxIlustracoes = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+                      if (idxIlustracoes < 0) return;
+                      const editor = (window as any).tinymce?.get(`secao-${idxIlustracoes}`);
+                      if (!editor) return;
+                      editor.execCommand('removeLaudoImage', false, { id: imageId });
+                      // Força sincronização do estado com o conteúdo atual do editor
+                      atualizarConteudoSecao(idxIlustracoes, editor.getContent());
+                      // Verificar se a seção ficou sem figuras
+                      const temFiguras = editor.getBody()?.querySelector('.laudo-figure');
+                      if (!temFiguras) {
+                        // Remove a seção ILUSTRAÇÕES vazia
+                        setSecoes(prev => {
+                          const novas = [...prev];
+                          novas.splice(idxIlustracoes, 1);
+                          return novas;
+                        });
+                        // Ajusta o mapa de colapsadas
+                        setSecoesColapsadas(prev => {
+                          const novo: Record<number, boolean> = {};
+                          Object.keys(prev).forEach(k => {
+                            const idx = Number(k);
+                            if (idx < idxIlustracoes) novo[idx] = prev[idx];
+                            else if (idx > idxIlustracoes) novo[idx - 1] = prev[idx];
+                          });
+                          return novo;
+                        });
+                        toast.success('Seção ILUSTRAÇÕES removida');
+                      }
+                    }}
+                    onRefreshHtml={() => {
+                      if (editorMode === 'single') {
+                        const editor = (window as any).tinymce?.get('laudo-single-editor');
+                        if (editor) editor.execCommand('reindexFiguras');
+                      } else {
+                        setSecoes(prev => prev.map(s => ({ ...s, conteudo: reindexarFiguras(s.conteudo) })));
+                      }
+                    }}
+                    onInsertAll={(imagens: ImagemLaudo[]) => {
+                      const carregarEInserirTodas = async () => {
+                        try {
+                          if (!imagens || imagens.length === 0) {
+                            toast.info('Nenhuma imagem carregada para inserir');
+                            return;
+                          }
+
+                          const idxIlustracoes = garantirSecaoIlustracoes();
+                          const editorId = `secao-${idxIlustracoes}`;
+                          const editor = await aguardarEditor(editorId, 3000, 100);
+
+                          for (const img of imagens) {
+                            editor.execCommand('insertLaudoImage', false, { url: img.url, id: img.id, legenda: img.legenda, skipReindex: true });
+                          }
+
+                          editor.execCommand('reindexFiguras');
+                          toast.success(`${imagens.length} imagens inseridas na seção ILUSTRAÇÕES`);
+                        } catch (error: any) {
+                          toast.error('Erro ao inserir imagens: ' + (error.message || 'Tente novamente'));
+                        }
+                      };
+                      carregarEInserirTodas();
+                    }}
+                    figurasNoEditor={extrairFigurasDoEditor()}
+                    onUpdateLegendaInEditor={(id, legenda) => {
+                      const atualizarFigcaption = (editor: any) => {
+                        const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${id}"]`);
+                        if (figure) {
+                          const figcaption = figure.querySelector('figcaption');
+                          if (figcaption) {
+                            const legendaAtual = figcaption.textContent || '';
+                            const match = legendaAtual.match(/Fig(?:ura|\.)\s*(\d+)/i);
+                            const num = match ? match[1] : '';
+                            const numFormatado = num ? num.padStart(2, '0') : 'XX';
+                            figcaption.textContent = legenda
+                              ? `Figura ${numFormatado}: ${legenda}`
+                              : `Figura ${numFormatado}`;
+                            const img = figure.querySelector('img');
+                            if (img) img.alt = figcaption.textContent;
+                          }
+                          return true;
+                        }
+                        return false;
+                      };
+                      if (editorMode === 'single') {
+                        const editor = (window as any).tinymce?.get('laudo-single-editor');
+                        if (editor && atualizarFigcaption(editor)) {
+                          setSingleEditorHtml(editor.getContent());
+                        }
+                        return;
+                      }
+                      for (let idx = 0; idx < secoes.length; idx++) {
+                        const editor = (window as any).tinymce?.get(`secao-${idx}`);
+                        if (editor && atualizarFigcaption(editor)) {
+                          atualizarConteudoSecao(idx, editor.getContent());
+                          break;
+                        }
+                      }
+                    }}
+                    onReorder={sincronizarOrdemEditor}
+                  />
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

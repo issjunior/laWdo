@@ -152,11 +152,6 @@ export interface IpcAPI {
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
     delete: (laudoId: string) => Promise<UserResponse>;
   };
-  imagem: {
-    pickAndUpload: (laudoId: string) => Promise<UserResponse>;
-    findByLaudoId: (laudoId: string) => Promise<UserResponse>;
-    delete: (id: string) => Promise<UserResponse>;
-  };
 
   // IA / Integração Groq
   ia: {
@@ -279,11 +274,6 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:updateConteudo',
   'laudo:create',
   'laudo:delete',
-
-  // Imagens
-  'imagem:pickAndUpload',
-  'imagem:findByLaudoId',
-  'imagem:delete',
 
   // IA
   'ia:revisarOrtografia',
@@ -638,12 +628,6 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => ipcRenderer.invoke('laudo:create', data),
     delete: (laudoId: string) => ipcRenderer.invoke('laudo:delete', laudoId),
-  },
-
-  imagem: {
-    pickAndUpload: (laudoId: string) => ipcRenderer.invoke('imagem:pickAndUpload', laudoId),
-    findByLaudoId: (laudoId: string) => ipcRenderer.invoke('imagem:findByLaudoId', laudoId),
-    delete: (id: string) => ipcRenderer.invoke('imagem:delete', id),
   },
 
   ia: {

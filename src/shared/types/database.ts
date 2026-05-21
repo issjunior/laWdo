@@ -73,20 +73,6 @@ export interface LaudoRow extends DatabaseRow {
   updated_at: string
 }
 
-// Imagem de Laudo
-export interface ImagemLaudoRow extends DatabaseRow {
-  id: string
-  laudo_id: string
-  caminho: string
-  legenda: string
-  numero_figura: number
-  sequencia: number
-  latitude?: number
-  longitude?: number
-  data_captura: string
-  created_at: string
-}
-
 // Placeholder
 export interface PlaceholderRow extends DatabaseRow {
   id: string
@@ -128,7 +114,6 @@ export type EntityRow =
   | TipoExameRow
   | REPRow
   | LaudoRow
-  | ImagemLaudoRow
   | PlaceholderRow
   | LogAuditoriaRow
 

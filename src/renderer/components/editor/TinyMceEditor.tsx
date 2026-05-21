@@ -10,6 +10,8 @@ interface TinyMceEditorProps {
   laudoId?: string;
   /** ID único para a instância do editor (necessário com múltiplos editores na mesma página) */
   editorId?: string;
+  /** Callback disparado quando uma imagem é inserida via botão de imagem do editor */
+  onImageInserted?: () => void;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
@@ -19,6 +21,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
   placeholder,
   laudoId,
   editorId,
+  onImageInserted,
 }) => {
   const editorRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -50,6 +53,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
           toolbar_mode: 'wrap',
           image_advtab: true,
           image_title: true,
+          relative_urls: false,
+          remove_script_host: false,
+          convert_urls: false,
           plugins: [
             'anchor',
             'autolink',
@@ -103,33 +109,89 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
           `,
 
           // ─── Upload de imagens ───────────────────────────
-          // Se laudoId existe, usa diálogo nativo + protocolo customizado.
-          // Caso contrário (templates, cabeçalho), fallback para base64 padrão.
-          ...(laudoId
-            ? {
-                file_picker_callback: (callback: any, _value: any, meta: any) => {
-                  if (meta.filetype === 'image') {
-                    window.ipcAPI.imagem
-                      .pickAndUpload(laudoId)
-                      .then(r => {
-                        if (r.success && r.data) {
-                          callback(r.data.url, { title: r.data.legenda, alt: r.data.legenda });
-                        }
-                      })
-                      .catch(() => {
-                        // Silencioso: usuário cancelou ou erro
-                      });
+          file_picker_callback: (_callback: any, _value: any, meta: any) => {
+            if (meta.filetype === 'image') {
+              const id = crypto.randomUUID();
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*';
+              input.onchange = () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const dataUri = reader.result as string;
+                  const editor = (window as any).tinymce.get(editorId);
+                  if (editor) {
+                    const html = `
+                      <figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;">
+                        <img src="${dataUri}" alt="" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />
+                        <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;"></figcaption>
+                      </figure>
+                      <br>`;
+                    editor.insertContent(html);
+                    editor.execCommand('reindexFiguras');
+                    onImageInserted?.();
                   }
-                },
-                automatic_uploads: true,
-              }
-            : {}),
+                };
+                reader.readAsDataURL(file);
+              };
+              input.click();
+            }
+          },
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: any) => {
             editor.addCommand('insertPlaceholder', (_ui: any, placeholder: { chave: string }) => {
               const html = `<span class="placeholder-tag" contenteditable="false" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
+            });
+
+            editor.addCommand('insertLaudoImage', (_ui: any, data: { url: string, id: string, legenda: string, skipReindex?: boolean }) => {
+              const html = `
+                <figure class="laudo-figure" data-image-id="${data.id}" style="text-align: center; margin: 12px auto; max-width: 100%;">
+                  <img src="${data.url}" alt="${data.legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />
+                  <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">${data.legenda}</figcaption>
+                </figure>
+                <br>`;
+              editor.insertContent(html);
+              if (!data.skipReindex) {
+                editor.execCommand('reindexFiguras');
+              }
+            });
+
+            editor.addCommand('reindexFiguras', () => {
+              const body = editor.getBody();
+              const figures = body.querySelectorAll('.laudo-figure');
+              figures.forEach((figure: Element, index: number) => {
+                const num = index + 1;
+                const numFormatado = num.toString().padStart(2, '0');
+                const figcaption = figure.querySelector('figcaption');
+                const img = figure.querySelector('img');
+                if (figcaption) {
+                  const legendaAtual = figcaption.textContent || '';
+                  const textoLimpo = legendaAtual.replace(/^Fig(?:ura|\.)\s*\d+[:\s]*\s*/i, '');
+                  figcaption.textContent = textoLimpo ? `Figura ${numFormatado}: ${textoLimpo}` : `Figura ${numFormatado}`;
+                  if (img) {
+                    (img as HTMLImageElement).alt = figcaption.textContent;
+                  }
+                }
+              });
+              editor.undoManager.add();
+            });
+
+            editor.addCommand('removeLaudoImage', (_ui: any, data: { id: string }) => {
+              const body = editor.getBody();
+              const figure = body.querySelector(`.laudo-figure[data-image-id="${data.id}"]`);
+              if (figure) {
+                const nextSibling = figure.nextElementSibling;
+                figure.remove();
+                // Remove o <br> ou <p>&nbsp;</p> que segue a figura
+                if (nextSibling && (nextSibling.tagName === 'BR' || (nextSibling.tagName === 'P' && (nextSibling as HTMLElement).innerHTML === '&nbsp;'))) {
+                  nextSibling.remove();
+                }
+              }
+              editor.execCommand('reindexFiguras');
             });
 
             // Repassar evento de clique direito para o componente pai (Shadcn ContextMenu)

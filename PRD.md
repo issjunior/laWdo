@@ -34,20 +34,19 @@ O **Laudo Pericial Desktop** é uma evolução do sistema atual baseado em Strea
 
 - **Registro de REP:** Captura de dados de acionamento, envolvidos, lacres de entrada/saída e localização.
 - **Controle de Prazos:** Dashboard com indicadores de REPs pendentes, em andamento e atrasadas.
-- **Histórico de Status:** Rastreamento do ciclo de vida da requisição (Pendente -> Em Andamento -> Concluído).
+- **Histórico de Status:** Rastreamento do ciclo de vida da requisição (Pendente -> Em Andamento -> Concluído). Implmentado no MENU Auditoria.
 
 ### FR4: Editor de Laudos (O Coração do Sistema)
 
-- **Estrutura Modular:** Edição do laudo dividida por seções independentes baseadas no template.
+- **Estrutura Modular:** Edição do laudo dividida por seções independentes baseadas no template ou visualização do laudo sob um unico editor de texto.
 - **Rich Text Editor:** Suporte a formatação avançada, tabelas e listas via TinyMCE.
-- **Auto-save:** Salvamento automático no SQLite a cada 30 segundos.
 - **Snapshots:** Histórico das últimas 3 versões salvas para recuperação de desastres.
 
 ### FR5: Gestão de Ilustrações
 
 - **Inserção de Imagens:** Upload de fotos locais para o diretório do laudo.
-- **Legendas Automáticas:** Sistema de numeração sequencial (Figura 1, Figura 2...) com legendas obrigatórias.
-- **Apêndice de Figuras:** Geração automática de uma seção final contendo todas as imagens do laudo.
+- **Legendas Automáticas:** Sistema de numeração sequencial (Figura 1:, Figura 2:) com legendas.
+- **Seção de Ilustrações:** Geração automática de uma seção Ilustração se caso o usuario optar pelo uso de inserçao automática de figuras no laudo.
 
 ### FR6: Sistema de Placeholders
 
