@@ -30,24 +30,11 @@ lerna-debug.log*
 *.sqlite
 *.sqlite3
 
-# --- VARIÁVEIS DE AMBIENTE ---
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env*.local
+# --- OPENCODE ---
+.opencode
 
-# --- IDE & EDITORES ---
-.vscode/
-!.vscode/extensions.json
-.idea/
-*.swp
-*.swo
-.project
-.settings/
-.classpath
-.factorypath
+# --- GRAPHIFY ---
+graphify-out
 
 # --- SISTEMA OPERACIONAL ---
 .DS_Store
