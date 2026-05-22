@@ -26,7 +26,7 @@ O laWdo auxilia peritos forenses no preenchimento de laudos, **reduzindo o retra
 
 ```bash
 # 1. Clone o repositório
-git clone <url-do-repositorio>
+git clone https://github.com/issjunior/laWdo.git
 cd LaudoPericial
 
 # 2. Instale as dependências
