@@ -66,7 +66,7 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
       style={style}
       {...listeners}
       {...attributes}
-      className={`relative overflow-hidden mb-3 cursor-grab hover:shadow-md transition-shadow 
+      className={`relative overflow-hidden mb-1.5 cursor-grab hover:shadow-md transition-shadow 
         ${isDragging ? 'opacity-50 border-primary ring-2 ring-primary/50' : ''} 
         ${isOverlay ? 'shadow-xl cursor-grabbing scale-105 rotate-2' : ''}
         ${isSysPlaceholder ? 'border-blue-200 dark:border-blue-800/60' : ''}
@@ -117,17 +117,18 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
   );
 };
 
-const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete }: { 
+const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onToggle }: { 
   categoria: CategoriaPlaceholderRow, 
   placeholders: Placeholder[], 
   onEdit: (p: Placeholder) => void, 
   onDelete: (id: string) => void,
+  open: boolean,
+  onToggle: () => void,
 }) => {
   const { isOver, setNodeRef } = useDroppable({
     id: categoria.id,
     data: { categoria }
   });
-  const [open, setOpen] = useState(true);
 
   const IconComp = (LucideIcons as any)[categoria.icone] || LucideIcons.Tag;
 
@@ -138,7 +139,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete }: {
         className={`flex flex-col items-center rounded-xl border bg-muted/20 py-3 px-2 gap-3 cursor-pointer hover:bg-muted/40 transition-colors shrink-0 w-12
           ${isOver ? `ring-2 ring-${categoria.cor}-500/50` : ''}
         `}
-        onClick={() => setOpen(true)}
+        onClick={onToggle}
         title={`Expandir: ${categoria.label} (${placeholders.length})`}
       >
         <IconComp size={16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400 shrink-0`} />
@@ -156,7 +157,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete }: {
   return (
     <div 
       ref={setNodeRef} 
-      className={`flex flex-col flex-1 min-w-[280px] max-w-[320px] rounded-xl border bg-muted/20 
+      className={`flex flex-col flex-1 min-w-[270px] max-w-[310px] rounded-xl border bg-muted/20 
       ${isOver ? `ring-2 ring-${categoria.cor}-500/50 bg-${categoria.cor}-50/50 dark:bg-${categoria.cor}-900/10` : ''}`}
     >
       <div className={`p-3 border-b bg-${categoria.cor}-50/50 dark:bg-${categoria.cor}-900/20 flex items-center justify-between rounded-t-xl`}>
@@ -167,7 +168,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete }: {
         </div>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={onToggle}
           className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
           title="Recolher coluna"
         >
@@ -216,6 +217,11 @@ export const PlaceholdersPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
 
+  // Accordion: no máximo 3 categorias expandidas por vez
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+
+  const MAX_EXPANDED = 3;
+
   // DND Overlay
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
@@ -250,6 +256,29 @@ export const PlaceholdersPage: React.FC = () => {
   }, []);
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
+
+  // Inicializa as 3 primeiras categorias expandidas ao carregar
+  useEffect(() => {
+    if (categorias.length > 0 && expandedCategories.length === 0) {
+      const primeiras = categorias
+        .sort((a, b) => a.ordem - b.ordem)
+        .slice(0, MAX_EXPANDED)
+        .map(c => c.id);
+      setExpandedCategories(primeiras);
+    }
+  }, [categorias]);
+
+  const toggleExpand = useCallback((catId: string) => {
+    setExpandedCategories(prev => {
+      if (prev.includes(catId)) {
+        return prev.filter(id => id !== catId);
+      }
+      if (prev.length >= MAX_EXPANDED) {
+        return [...prev.slice(1), catId];
+      }
+      return [...prev, catId];
+    });
+  }, []);
 
   /* ── Filtro ── */
   const filtradosPorBusca = useMemo(
@@ -541,7 +570,7 @@ export const PlaceholdersPage: React.FC = () => {
           </div>
         ) : (
           <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} collisionDetection={closestCorners}>
-            <div className="flex gap-4 h-full overflow-x-auto pb-4 items-start">
+            <div className="flex gap-2 h-full overflow-x-auto pb-4 items-start">
               {categorias.map(cat => (
                 <DroppableColumn 
                   key={cat.id} 
@@ -549,6 +578,8 @@ export const PlaceholdersPage: React.FC = () => {
                   placeholders={filtradosPorBusca.filter(p => p.categoria_id === cat.id)} 
                   onEdit={handleEditar}
                   onDelete={handleExcluir}
+                  open={expandedCategories.includes(cat.id)}
+                  onToggle={() => toggleExpand(cat.id)}
                 />
               ))}
             </div>
