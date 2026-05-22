@@ -1,147 +1,334 @@
-import React from 'react';
-import logo from '@/assets/logo.jpg';
+import React, { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Eye, EyeOff, Loader2, UserPlus } from 'lucide-react'
 
-interface FirstUserData {
-  nome: string;
-  username: string;
-  email: string;
-  cargo: string;
-  lotacao: string;
-  senha: string;
-}
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/forms/form'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import logo from '@/assets/logo.jpg'
+
+const firstUserSchema = z
+  .object({
+    nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
+    username: z
+      .string()
+      .min(3, 'Nome de usuário deve ter pelo menos 3 caracteres')
+      .regex(
+        /^[a-zA-Z0-9._-]+$/,
+        'Use apenas letras, números, ponto, underline e hífen',
+      ),
+    email: z.string().email('E-mail inválido'),
+    cargo: z.enum([
+      'Perito Oficial Criminal',
+      'Técnico de Perícia Oficial',
+    ]),
+    lotacao: z.string().min(3, 'Lotação deve ter pelo menos 3 caracteres'),
+    senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+    confirmarSenha: z.string(),
+  })
+  .refine((data) => data.senha === data.confirmarSenha, {
+    message: 'Senhas não conferem',
+    path: ['confirmarSenha'],
+  })
+
+export type FirstUserSetupInput = z.infer<typeof firstUserSchema>
 
 interface FirstUserSetupFormProps {
-  data: FirstUserData;
-  loading: boolean;
-  error: string | null;
-  success: string | null;
-  isDarkMode: boolean;
-  onToggleTheme: () => void;
-  fieldErrors?: Partial<Record<keyof FirstUserData, string>>;
-  onChange: (data: FirstUserData) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  loading: boolean
+  error: string | null
+  success: string | null
+  isDarkMode: boolean
+  onToggleTheme: () => void
+  onSubmit: (data: FirstUserSetupInput) => Promise<void>
 }
 
 export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
-  data,
   loading,
   error,
   success,
   isDarkMode,
   onToggleTheme,
-  fieldErrors,
-  onChange,
   onSubmit,
 }) => {
-  const updateField = (field: keyof FirstUserData, value: string) => {
-    onChange({ ...data, [field]: value });
-  };
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  const form = useForm<FirstUserSetupInput>({
+    resolver: zodResolver(firstUserSchema),
+    defaultValues: {
+      nome: '',
+      username: '',
+      email: '',
+      cargo: 'Perito Oficial Criminal',
+      lotacao: '',
+      senha: '',
+      confirmarSenha: '',
+    },
+  })
+
+  const handleSubmit = async (data: FirstUserSetupInput) => {
+    await onSubmit(data)
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 px-4 py-10 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      <div className="mx-auto max-w-xl">
-        <div className="rounded-2xl border border-slate-200 bg-white/95 p-7 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-          <div className="mb-3 flex justify-end">
-            <button
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 px-4 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+      <div className="w-full max-w-xl">
+        <Card className="shadow-xl backdrop-blur">
+          <div className="flex justify-end px-7 pt-5">
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={onToggleTheme}
-              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               {isDarkMode ? 'Tema claro' : 'Tema escuro'}
-            </button>
-          </div>
-          <div className="mb-6 flex flex-col items-center text-center">
-            <img src={logo} alt="laWdo" className="mb-4 h-20 w-20 rounded-2xl object-cover shadow-md" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Primeiro acesso</h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              Nenhum usuário foi encontrado. Cadastre o primeiro usuário para liberar o sistema.
-            </p>
+            </Button>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Nome completo</label>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={data.nome}
-                onChange={(e) => updateField('nome', e.target.value)}
-                placeholder="Seu nome completo"
-              />
-              {fieldErrors?.nome && <p className="mt-1 text-sm text-red-600">{fieldErrors.nome}</p>}
-            </div>
+          <CardHeader className="flex flex-col items-center text-center">
+            <img
+              src={logo}
+              alt="laWdo"
+              className="mb-4 h-20 w-20 rounded-2xl object-cover shadow-md"
+            />
+            <CardTitle>Primeiro acesso</CardTitle>
+            <CardDescription>
+              Nenhum usuário foi encontrado. Cadastre o primeiro usuário para
+              liberar o sistema.
+            </CardDescription>
+          </CardHeader>
 
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Nome de usuário</label>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={data.username}
-                onChange={(e) => updateField('username', e.target.value)}
-                placeholder="usuario.perito"
-              />
-              {fieldErrors?.username && <p className="mt-1 text-sm text-red-600">{fieldErrors.username}</p>}
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">E-mail</label>
-              <input
-                type="email"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={data.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                placeholder="email@pcp.pr.gov.br"
-              />
-              {fieldErrors?.email && <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>}
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cargo</label>
-              <select
-                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={data.cargo}
-                onChange={(e) => updateField('cargo', e.target.value)}
+          <CardContent>
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleSubmit)}
+                className="space-y-4"
               >
-                <option value="Perito Oficial Criminal">Perito Oficial Criminal</option>
-                <option value="Técnico de Perícia Oficial">Técnico de Perícia Oficial</option>
-              </select>
-              {fieldErrors?.cargo && <p className="mt-1 text-sm text-red-600">{fieldErrors.cargo}</p>}
-            </div>
+                <FormField
+                  control={form.control}
+                  name="nome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome completo</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Seu nome completo"
+                          autoComplete="name"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Lotação</label>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={data.lotacao}
-                onChange={(e) => updateField('lotacao', e.target.value)}
-                placeholder="Ex: Instituto de Criminalística"
-              />
-              {fieldErrors?.lotacao && <p className="mt-1 text-sm text-red-600">{fieldErrors.lotacao}</p>}
-            </div>
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome de usuário</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="usuario.perito"
+                          autoComplete="username"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Senha</label>
-              <input
-                type="password"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={data.senha}
-                onChange={(e) => updateField('senha', e.target.value)}
-                placeholder="Mínimo 6 caracteres"
-              />
-              {fieldErrors?.senha && <p className="mt-1 text-sm text-red-600">{fieldErrors.senha}</p>}
-            </div>
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>E-mail</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="email@pcp.pr.gov.br"
+                          autoComplete="email"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
-            {success && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">{success}</p>}
+                <FormField
+                  control={form.control}
+                  name="cargo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cargo</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o cargo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Perito Oficial Criminal">
+                            Perito Oficial Criminal
+                          </SelectItem>
+                          <SelectItem value="Técnico de Perícia Oficial">
+                            Técnico de Perícia Oficial
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-blue-600 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 dark:bg-sky-400 dark:text-slate-950 dark:hover:bg-sky-300"
-          >
-              {loading ? 'Cadastrando...' : 'Cadastrar primeiro usuário'}
-            </button>
-          </form>
-        </div>
+                <FormField
+                  control={form.control}
+                  name="lotacao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Lotação</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ex: Instituto de Criminalística"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="senha"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder="Mínimo 6 caracteres"
+                            autoComplete="new-password"
+                            className="pr-10"
+                            {...field}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((p) => !p)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            tabIndex={-1}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="confirmarSenha"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirmar senha</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            placeholder="Repita a senha"
+                            autoComplete="new-password"
+                            className="pr-10"
+                            {...field}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowConfirmPassword((p) => !p)
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            tabIndex={-1}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {success && (
+                  <Alert>
+                    <AlertDescription>{success}</AlertDescription>
+                  </Alert>
+                )}
+
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Cadastrando...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Cadastrar primeiro usuário
+                    </>
+                  )}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
       </div>
     </div>
-  );
-};
+  )
+}

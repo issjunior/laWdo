@@ -1,81 +1,164 @@
-import React from 'react';
-import logo from '@/assets/logo.jpg';
+import React, { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/forms/form'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { loginSchema, type LoginInput } from '@/lib/validators/user.schema'
+import logo from '@/assets/logo.jpg'
 
 interface LoginFormProps {
-  username: string;
-  password: string;
-  loading: boolean;
-  error: string | null;
-  isDarkMode: boolean;
-  onToggleTheme: () => void;
-  onUsernameChange: (value: string) => void;
-  onPasswordChange: (value: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  loading: boolean
+  error: string | null
+  isDarkMode: boolean
+  onToggleTheme: () => void
+  onSubmit: (data: LoginInput) => Promise<void>
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({
-  username,
-  password,
   loading,
   error,
   isDarkMode,
   onToggleTheme,
-  onUsernameChange,
-  onPasswordChange,
   onSubmit,
 }) => {
+  const [showPassword, setShowPassword] = useState(false)
+
+  const form = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { username: '', senha: '' },
+  })
+
+  const handleSubmit = async (data: LoginInput) => {
+    await onSubmit(data)
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 px-4 py-10 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      <div className="mx-auto max-w-md">
-        <div className="rounded-2xl border border-slate-200 bg-white/95 p-7 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-          <div className="mb-3 flex justify-end">
-            <button
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 px-4 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+      <div className="w-full max-w-md">
+        <Card className="shadow-xl backdrop-blur">
+          <div className="flex justify-end px-7 pt-5">
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={onToggleTheme}
-              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               {isDarkMode ? 'Tema claro' : 'Tema escuro'}
-            </button>
-          </div>
-          <div className="mb-6 flex flex-col items-center text-center">
-            <img src={logo} alt="laWdo" className="mb-4 h-20 w-20 rounded-2xl object-cover shadow-md" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Acesso ao laWdo</h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Entre com suas credenciais para acessar o sistema.</p>
+            </Button>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Usuário</label>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={username}
-                onChange={(e) => onUsernameChange(e.target.value)}
-                placeholder="usuario.perito"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Senha</label>
-              <input
-                type="password"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-400/30"
-                value={password}
-                onChange={(e) => onPasswordChange(e.target.value)}
-                placeholder="Digite sua senha"
-              />
-            </div>
+          <CardHeader className="flex flex-col items-center text-center">
+            <img
+              src={logo}
+              alt="laWdo"
+              className="mb-4 h-20 w-20 rounded-2xl object-cover shadow-md"
+            />
+            <CardTitle>Acesso ao laWdo</CardTitle>
+            <CardDescription>
+              Entre com suas credenciais para acessar o sistema.
+            </CardDescription>
+          </CardHeader>
 
-            {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{error}</p>}
+          <CardContent>
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleSubmit)}
+                className="space-y-4"
+              >
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Usuário</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="usuario.perito"
+                          autoComplete="username"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-md bg-blue-600 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 dark:bg-sky-400 dark:text-slate-950 dark:hover:bg-sky-300"
-            >
-              {loading ? 'Entrando...' : 'Entrar'}
-            </button>
-          </form>
-        </div>
+                <FormField
+                  control={form.control}
+                  name="senha"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder="Digite sua senha"
+                            autoComplete="current-password"
+                            className="pr-10"
+                            {...field}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((p) => !p)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            tabIndex={-1}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Entrando...
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Entrar
+                    </>
+                  )}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
       </div>
     </div>
-  );
-};
+  )
+}
