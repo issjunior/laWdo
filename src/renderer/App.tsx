@@ -14,6 +14,7 @@ const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default:
 const ModelosIAPage = lazy(() => import('@/pages/ModelosIAPage').then(m => ({ default: m.ModelosIAPage })));
 const BackupPage = lazy(() => import('@/pages/BackupPage').then(m => ({ default: m.BackupPage })));
 const LogsPage = lazy(() => import('@/pages/LogsPage').then(m => ({ default: m.LogsPage })));
+const IlustracoesPanelWindow = lazy(() => import('@/pages/IlustracoesPanelWindow'));
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -90,6 +91,8 @@ const App = () => {
     setCurrentUser(null);
   };
 
+  const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes');
+
   return (
     <ErrorBoundary>
       <Toaster
@@ -99,29 +102,34 @@ const App = () => {
         position="bottom-right"
         duration={4000}
       />
-      {!currentUser ? (
+      {!currentUser && !isPanelWindow ? (
         <AuthPage onAuthenticated={handleAuthenticated} />
       ) : (
         <HashRouter>
-          <Layout onLogout={handleLogout} currentUser={currentUser}>
-            <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/solicitantes" element={<SolicitantesPage />} />
-                <Route path="/tipos-exame" element={<TiposExamePage />} />
-                <Route path="/perfil" element={<PerfilPage />} />
-                <Route path="/cabecalho" element={<CabecalhoPage />} />
-                <Route path="/reps" element={<REPsPage />} />
-                <Route path="/placeholders" element={<PlaceholdersPage />} />
-                <Route path="/templates" element={<TemplatesPage />} />
-                <Route path="/laudos" element={<LaudosPage />} />
-                <Route path="/modelos-ia" element={<ModelosIAPage />} />
-                <Route path="/backup" element={<BackupPage />} />
-                <Route path="/logs" element={<LogsPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
-          </Layout>
+          <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
+            <Routes>
+              <Route path="/panel-ilustracoes" element={<IlustracoesPanelWindow />} />
+              <Route path="*" element={
+                <Layout onLogout={handleLogout} currentUser={currentUser}>
+                  <Routes>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/solicitantes" element={<SolicitantesPage />} />
+                    <Route path="/tipos-exame" element={<TiposExamePage />} />
+                    <Route path="/perfil" element={<PerfilPage />} />
+                    <Route path="/cabecalho" element={<CabecalhoPage />} />
+                    <Route path="/reps" element={<REPsPage />} />
+                    <Route path="/placeholders" element={<PlaceholdersPage />} />
+                    <Route path="/templates" element={<TemplatesPage />} />
+                    <Route path="/laudos" element={<LaudosPage />} />
+                    <Route path="/modelos-ia" element={<ModelosIAPage />} />
+                    <Route path="/backup" element={<BackupPage />} />
+                    <Route path="/logs" element={<LogsPage />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+                </Layout>
+              } />
+            </Routes>
+          </Suspense>
         </HashRouter>
       )}
     </ErrorBoundary>

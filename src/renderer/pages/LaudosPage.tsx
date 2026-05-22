@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, ExternalLink } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -32,6 +32,12 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { reindexarFiguras } from '@/lib/figuras';
 import { toast } from 'sonner';
 
@@ -381,6 +387,7 @@ export const LaudosPage: React.FC = () => {
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
   const [iluminacoesPanelOpen, setIlustracoesPanelOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelPoppedOut, setPanelPoppedOut] = useState(false);
 
   const togglePanel = useCallback(() => {
     setPanelCollapsed(prev => !prev);
@@ -748,6 +755,229 @@ export const LaudosPage: React.FC = () => {
     editor.execCommand('reindexFiguras');
   }, [editorMode, secoes]);
 
+  const panelCallbacksRef = useRef<{
+    onInsertImage: (url: string, id: string, legenda: string) => void;
+    onDeleteImage: (imageId: string) => void;
+    onUpdateLegenda: (id: string, legenda: string) => void;
+    onReorder: (imagens: ImagemLaudo[]) => void;
+    onRefreshHtml: () => void;
+    onInsertAll: (imagens: ImagemLaudo[]) => void;
+    onSyncToggle: (enabled: boolean) => void;
+    onScrollToFigure: (imageId: string) => void;
+    syncCurrentState: () => void;
+  }>({
+    onInsertImage: () => {},
+    onDeleteImage: () => {},
+    onUpdateLegenda: () => {},
+    onReorder: () => {},
+    onRefreshHtml: () => {},
+    onInsertAll: () => {},
+    onSyncToggle: () => {},
+    onScrollToFigure: () => {},
+    syncCurrentState: () => {},
+  });
+
+  panelCallbacksRef.current = {
+    onInsertImage: async (url, id, legenda) => {
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (editor) {
+          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
+          toast.success('Imagem inserida');
+        }
+      } else {
+        const idxIlustracoes = garantirSecaoIlustracoes();
+        const editorId = `secao-${idxIlustracoes}`;
+        try {
+          const editor = await aguardarEditor(editorId, 3000, 100);
+          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
+          toast.success('Imagem inserida na seção ILUSTRAÇÕES');
+        } catch {
+          toast.error('Editor da seção ILUSTRAÇÕES não está pronto. Tente novamente em instantes.');
+        }
+      }
+    },
+    onDeleteImage: (imageId) => {
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (editor) {
+          editor.execCommand('removeLaudoImage', false, { id: imageId });
+          setSingleEditorHtml(editor.getContent());
+        }
+        return;
+      }
+      const idxIlustracoes = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+      if (idxIlustracoes < 0) return;
+      const editor = (window as any).tinymce?.get(`secao-${idxIlustracoes}`);
+      if (!editor) return;
+      editor.execCommand('removeLaudoImage', false, { id: imageId });
+      atualizarConteudoSecao(idxIlustracoes, editor.getContent());
+      const temFiguras = editor.getBody()?.querySelector('.laudo-figure');
+      if (!temFiguras) {
+        setSecoes(prev => {
+          const novas = [...prev];
+          novas.splice(idxIlustracoes, 1);
+          return novas;
+        });
+        setSecoesColapsadas(prev => {
+          const novo: Record<number, boolean> = {};
+          Object.keys(prev).forEach(k => {
+            const idx = Number(k);
+            if (idx < idxIlustracoes) novo[idx] = prev[idx];
+            else if (idx > idxIlustracoes) novo[idx - 1] = prev[idx];
+          });
+          return novo;
+        });
+        toast.success('Seção ILUSTRAÇÕES removida');
+      }
+    },
+    onUpdateLegenda: (id, legenda) => {
+      const atualizarFigcaption = (editor: any) => {
+        const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${id}"]`);
+        if (figure) {
+          const figcaption = figure.querySelector('figcaption');
+          if (figcaption) {
+            const legendaAtual = figcaption.textContent || '';
+            const match = legendaAtual.match(/Fig(?:ura|\.)\s*(\d+)/i);
+            const num = match ? match[1] : '';
+            const numFormatado = num ? num.padStart(2, '0') : 'XX';
+            figcaption.textContent = legenda
+              ? `Figura ${numFormatado}: ${legenda}`
+              : `Figura ${numFormatado}`;
+            const img = figure.querySelector('img');
+            if (img) img.alt = figcaption.textContent;
+          }
+          return true;
+        }
+        return false;
+      };
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (editor && atualizarFigcaption(editor)) {
+          setSingleEditorHtml(editor.getContent());
+        }
+        return;
+      }
+      for (let idx = 0; idx < secoes.length; idx++) {
+        const editor = (window as any).tinymce?.get(`secao-${idx}`);
+        if (editor && atualizarFigcaption(editor)) {
+          atualizarConteudoSecao(idx, editor.getContent());
+          break;
+        }
+      }
+    },
+    onReorder: (imagens) => { sincronizarOrdemEditor(imagens); },
+    onRefreshHtml: () => {
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (editor) editor.execCommand('reindexFiguras');
+      } else {
+        setSecoes(prev => prev.map(s => ({ ...s, conteudo: reindexarFiguras(s.conteudo) })));
+      }
+    },
+    onInsertAll: (imagens) => {
+      const carregarEInserirTodas = async () => {
+        try {
+          if (!imagens || imagens.length === 0) {
+            toast.info('Nenhuma imagem carregada para inserir');
+            return;
+          }
+          const idxIlustracoes = garantirSecaoIlustracoes();
+          const editorId = `secao-${idxIlustracoes}`;
+          const editor = await aguardarEditor(editorId, 3000, 100);
+          for (const img of imagens) {
+            editor.execCommand('insertLaudoImage', false, { url: img.url, id: img.id, legenda: img.legenda, skipReindex: true });
+          }
+          editor.execCommand('reindexFiguras');
+          toast.success(`${imagens.length} imagens inseridas na seção ILUSTRAÇÕES`);
+        } catch (error: any) {
+          toast.error('Erro ao inserir imagens: ' + (error.message || 'Tente novamente'));
+        }
+      };
+      carregarEInserirTodas();
+    },
+    onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
+    onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
+    syncCurrentState: () => {
+      window.ipcAPI.ilustracoes.syncToPanel({
+        figurasNoEditor: extrairFigurasDoEditor(),
+        syncEnabled,
+        figuraAtivaId,
+        tema: document.body.classList.contains('dark') ? 'dark' : 'light',
+      });
+    },
+  };
+
+  useEffect(() => {
+    if (!panelPoppedOut) return;
+    const timer = setTimeout(() => {
+      window.ipcAPI.ilustracoes.syncToPanel({
+        figurasNoEditor: extrairFigurasDoEditor(),
+        syncEnabled,
+        figuraAtivaId,
+        tema: document.body.classList.contains('dark') ? 'dark' : 'light',
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [panelPoppedOut, extrairFigurasDoEditor, syncEnabled, figuraAtivaId]);
+
+  useEffect(() => {
+    if (!panelPoppedOut) return;
+    return window.ipcAPI.ilustracoes.onPanelAction((action: string, ...args: any[]) => {
+      const cbs = panelCallbacksRef.current;
+      switch (action) {
+        case 'insertImage': cbs.onInsertImage(args[0], args[1], args[2]); break;
+        case 'deleteImage': cbs.onDeleteImage(args[0]); break;
+        case 'updateLegenda': cbs.onUpdateLegenda(args[0], args[1]); break;
+        case 'reorder': cbs.onReorder(args[0]); break;
+        case 'refreshHtml': cbs.onRefreshHtml(); break;
+        case 'insertAll': cbs.onInsertAll(args[0]); break;
+        case 'syncToggle': cbs.onSyncToggle(args[0]); break;
+        case 'scrollToFigure': cbs.onScrollToFigure(args[0]); break;
+        case 'ready': cbs.syncCurrentState(); break;
+        case 'popIn':
+          setPanelPoppedOut(false);
+          setIlustracoesPanelOpen(true);
+          setPanelCollapsed(false);
+          toast.info('Painel de ilustrações retornou ao editor');
+          break;
+      }
+    });
+  }, [panelPoppedOut]);
+
+  useEffect(() => {
+    if (!panelPoppedOut) return;
+    return window.ipcAPI.ilustracoes.onPanelClosed(() => {
+      setPanelPoppedOut(false);
+      toast.info('Painel de ilustrações fechado');
+    });
+  }, [panelPoppedOut]);
+
+  const handlePopOut = () => {
+    setIlustracoesPanelOpen(false);
+    setPanelPoppedOut(true);
+    window.ipcAPI.ilustracoes.openPanel();
+
+    panelCallbacksRef.current.syncCurrentState();
+    setTimeout(() => panelCallbacksRef.current.syncCurrentState(), 300);
+    setTimeout(() => panelCallbacksRef.current.syncCurrentState(), 700);
+
+    toast.info('Painel de ilustrações movido para janela separada');
+  };
+
+  const handleToggleIlustracoes = () => {
+    if (panelPoppedOut) {
+      window.ipcAPI.ilustracoes.closePanel();
+      setPanelPoppedOut(false);
+      setIlustracoesPanelOpen(true);
+      setPanelCollapsed(false);
+    } else {
+      const next = !iluminacoesPanelOpen;
+      setIlustracoesPanelOpen(next);
+      if (next) setPanelCollapsed(false);
+    }
+  };
+
   const handlePreview = async () => {
     if (!editando) return;
     try {
@@ -848,6 +1078,9 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleVoltar = () => {
+    if (panelPoppedOut) {
+      window.ipcAPI.ilustracoes.closePanel();
+    }
     setEditando(null);
     setSecoes([]);
     setSingleEditorHtml('');
@@ -1296,15 +1529,43 @@ export const LaudosPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" onClick={() => {
-                  const next = !iluminacoesPanelOpen;
-                  setIlustracoesPanelOpen(next);
-                  if (next) setPanelCollapsed(false);
-                }} className={`flex items-center gap-2 ${iluminacoesPanelOpen ? 'bg-muted' : ''}`}>
-                  <ImageIcon size={16} /> Ilustrações
-                </Button>
+                <div className="flex items-center">
+                  <Button
+                    variant="outline"
+                    onClick={handleToggleIlustracoes}
+                    className={`flex items-center gap-2 rounded-r-none border-r-0 ${iluminacoesPanelOpen || panelPoppedOut ? (panelPoppedOut ? 'bg-primary/20 border-primary/40' : 'bg-muted') : ''}`}
+                  >
+                    <ImageIcon size={16} /> Ilustrações
+                    {panelPoppedOut && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className={`rounded-l-none h-9 w-7 ${iluminacoesPanelOpen || panelPoppedOut ? (panelPoppedOut ? 'bg-primary/20 border-primary/40' : 'bg-muted') : ''}`}
+                      >
+                        <ChevronDown size={14} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuItem onClick={handlePopOut} disabled={panelPoppedOut}>
+                        <ExternalLink size={14} className="mr-2" />
+                        Abrir em janela separada
+                      </DropdownMenuItem>
+                      {panelPoppedOut && (
+                        <DropdownMenuItem onClick={handleToggleIlustracoes}>
+                          <ImageIcon size={14} className="mr-2" />
+                          Retornar ao editor
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Abrir painel de ilustrações</TooltipContent>
+              <TooltipContent side="bottom">
+                {panelPoppedOut ? 'Painel em janela separada (clique para retornar)' : 'Abrir painel de ilustrações'}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1626,142 +1887,20 @@ export const LaudosPage: React.FC = () => {
                   >
                     <div className={cn("w-[380px] 2xl:w-[420px] max-w-[85vw] h-full overflow-y-auto", panelCollapsed && "invisible")}>
                       <IlustracoesPanel
-                    laudoId={editando.id}
-                    onInsertImage={async (url, id, legenda) => {
-                      if (editorMode === 'single') {
-                        // Modo single: inserir no editor único
-                        const editor = (window as any).tinymce?.get('laudo-single-editor');
-                        if (editor) {
-                          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
-                          toast.success('Imagem inserida');
-                        }
-                      } else {
-                        // Modo multi: criar/garantir seção ILUSTRAÇÕES e inserir lá
-                        const idxIlustracoes = garantirSecaoIlustracoes();
-                        const editorId = `secao-${idxIlustracoes}`;
-                        try {
-                          const editor = await aguardarEditor(editorId, 3000, 100);
-                          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
-                          toast.success('Imagem inserida na seção ILUSTRAÇÕES');
-                        } catch {
-                          toast.error('Editor da seção ILUSTRAÇÕES não está pronto. Tente novamente em instantes.');
-                        }
-                      }
-                    }}
-                    onDeleteImage={(imageId: string) => {
-                      if (editorMode === 'single') {
-                        const editor = (window as any).tinymce?.get('laudo-single-editor');
-                        if (editor) {
-                          editor.execCommand('removeLaudoImage', false, { id: imageId });
-                          // Força sincronização do estado com o conteúdo atual do editor
-                          setSingleEditorHtml(editor.getContent());
-                        }
-                        return;
-                      }
-                      // Modo multi: remover da seção ILUSTRAÇÕES
-                      const idxIlustracoes = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-                      if (idxIlustracoes < 0) return;
-                      const editor = (window as any).tinymce?.get(`secao-${idxIlustracoes}`);
-                      if (!editor) return;
-                      editor.execCommand('removeLaudoImage', false, { id: imageId });
-                      // Força sincronização do estado com o conteúdo atual do editor
-                      atualizarConteudoSecao(idxIlustracoes, editor.getContent());
-                      // Verificar se a seção ficou sem figuras
-                      const temFiguras = editor.getBody()?.querySelector('.laudo-figure');
-                      if (!temFiguras) {
-                        // Remove a seção ILUSTRAÇÕES vazia
-                        setSecoes(prev => {
-                          const novas = [...prev];
-                          novas.splice(idxIlustracoes, 1);
-                          return novas;
-                        });
-                        // Ajusta o mapa de colapsadas
-                        setSecoesColapsadas(prev => {
-                          const novo: Record<number, boolean> = {};
-                          Object.keys(prev).forEach(k => {
-                            const idx = Number(k);
-                            if (idx < idxIlustracoes) novo[idx] = prev[idx];
-                            else if (idx > idxIlustracoes) novo[idx - 1] = prev[idx];
-                          });
-                          return novo;
-                        });
-                        toast.success('Seção ILUSTRAÇÕES removida');
-                      }
-                    }}
-                    onRefreshHtml={() => {
-                      if (editorMode === 'single') {
-                        const editor = (window as any).tinymce?.get('laudo-single-editor');
-                        if (editor) editor.execCommand('reindexFiguras');
-                      } else {
-                        setSecoes(prev => prev.map(s => ({ ...s, conteudo: reindexarFiguras(s.conteudo) })));
-                      }
-                    }}
-                    onInsertAll={(imagens: ImagemLaudo[]) => {
-                      const carregarEInserirTodas = async () => {
-                        try {
-                          if (!imagens || imagens.length === 0) {
-                            toast.info('Nenhuma imagem carregada para inserir');
-                            return;
-                          }
-
-                          const idxIlustracoes = garantirSecaoIlustracoes();
-                          const editorId = `secao-${idxIlustracoes}`;
-                          const editor = await aguardarEditor(editorId, 3000, 100);
-
-                          for (const img of imagens) {
-                            editor.execCommand('insertLaudoImage', false, { url: img.url, id: img.id, legenda: img.legenda, skipReindex: true });
-                          }
-
-                          editor.execCommand('reindexFiguras');
-                          toast.success(`${imagens.length} imagens inseridas na seção ILUSTRAÇÕES`);
-                        } catch (error: any) {
-                          toast.error('Erro ao inserir imagens: ' + (error.message || 'Tente novamente'));
-                        }
-                      };
-                      carregarEInserirTodas();
-                    }}
-                    figurasNoEditor={extrairFigurasDoEditor()}
-                    onUpdateLegendaInEditor={(id, legenda) => {
-                      const atualizarFigcaption = (editor: any) => {
-                        const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${id}"]`);
-                        if (figure) {
-                          const figcaption = figure.querySelector('figcaption');
-                          if (figcaption) {
-                            const legendaAtual = figcaption.textContent || '';
-                            const match = legendaAtual.match(/Fig(?:ura|\.)\s*(\d+)/i);
-                            const num = match ? match[1] : '';
-                            const numFormatado = num ? num.padStart(2, '0') : 'XX';
-                            figcaption.textContent = legenda
-                              ? `Figura ${numFormatado}: ${legenda}`
-                              : `Figura ${numFormatado}`;
-                            const img = figure.querySelector('img');
-                            if (img) img.alt = figcaption.textContent;
-                          }
-                          return true;
-                        }
-                        return false;
-                      };
-                      if (editorMode === 'single') {
-                        const editor = (window as any).tinymce?.get('laudo-single-editor');
-                        if (editor && atualizarFigcaption(editor)) {
-                          setSingleEditorHtml(editor.getContent());
-                        }
-                        return;
-                      }
-                      for (let idx = 0; idx < secoes.length; idx++) {
-                        const editor = (window as any).tinymce?.get(`secao-${idx}`);
-                        if (editor && atualizarFigcaption(editor)) {
-                          atualizarConteudoSecao(idx, editor.getContent());
-                          break;
-                        }
-                      }
-                    }}
-                    onReorder={sincronizarOrdemEditor}
-                    syncEnabled={syncEnabled}
-                    figuraAtivaId={figuraAtivaId}
-                    onSyncToggle={(enabled) => setSyncEnabled(enabled)}
-                    onScrollToFigure={handleScrollToFigure}
-                  />
+                        laudoId={editando.id}
+                        onInsertImage={panelCallbacksRef.current.onInsertImage}
+                        onDeleteImage={panelCallbacksRef.current.onDeleteImage}
+                        onRefreshHtml={panelCallbacksRef.current.onRefreshHtml}
+                        onInsertAll={panelCallbacksRef.current.onInsertAll}
+                        figurasNoEditor={extrairFigurasDoEditor()}
+                        onUpdateLegendaInEditor={panelCallbacksRef.current.onUpdateLegenda}
+                        onReorder={panelCallbacksRef.current.onReorder}
+                        syncEnabled={syncEnabled}
+                        figuraAtivaId={figuraAtivaId}
+                        onSyncToggle={panelCallbacksRef.current.onSyncToggle}
+                        onScrollToFigure={panelCallbacksRef.current.onScrollToFigure}
+                        onPopOut={handlePopOut}
+                      />
                     </div>
                   </div>
                 </>

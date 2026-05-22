@@ -24,7 +24,8 @@ import {
   Maximize2,
   Info,
   Plus,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -94,6 +95,7 @@ interface IlustracoesPanelProps {
   figuraAtivaId?: string | null;
   onSyncToggle?: (enabled: boolean) => void;
   onScrollToFigure?: (imageId: string) => void;
+  onPopOut?: () => void;
 }
 
 interface SortableItemProps {
@@ -337,6 +339,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   figuraAtivaId,
   onSyncToggle,
   onScrollToFigure,
+  onPopOut,
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -417,8 +420,23 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-muted/20">
-      <div className="p-4 border-b space-y-3 bg-background">
+      <div className="p-4 border-b space-y-3 bg-background relative">
         <h2 className="text-sm font-semibold text-center">Painel de Ilustrações</h2>
+
+        {onPopOut && (
+          <div className="absolute right-3 top-3">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onPopOut}>
+                    <ExternalLink size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Abrir em janela separada</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        )}
 
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Carregados</span>

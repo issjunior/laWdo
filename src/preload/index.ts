@@ -172,6 +172,17 @@ export interface IpcAPI {
     listar: () => Promise<{ success: boolean; data?: LogEntry[]; error?: string }>;
     limpar: () => Promise<{ success: boolean; error?: string }>;
   };
+
+  // Painel de Ilustrações (janela separada)
+  ilustracoes: {
+    openPanel: () => void;
+    closePanel: () => void;
+    syncToPanel: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => void;
+    sendAction: (action: string, ...args: unknown[]) => void;
+    onPanelAction: (cb: (action: string, ...args: unknown[]) => void) => () => void;
+    onStateSync: (cb: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => void) => () => void;
+    onPanelClosed: (cb: () => void) => () => void;
+  };
 }
 
 // Validar canais IPC permitidos
@@ -288,6 +299,14 @@ const ALLOWED_CHANNELS = new Set([
   // Logs do sistema
   'log:listar',
   'log:limpar',
+
+  // Painel de Ilustrações
+  'ilustracoes:open-panel',
+  'ilustracoes:close-panel',
+  'ilustracoes:sync-to-panel',
+  'ilustracoes:panel-action',
+  'ilustracoes:state-sync',
+  'ilustracoes:panel-closed',
 ]);
 
 // Expor API segura para o renderer
@@ -657,6 +676,28 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   log: {
     listar: () => ipcRenderer.invoke('log:listar'),
     limpar: () => ipcRenderer.invoke('log:limpar'),
+  },
+
+  ilustracoes: {
+    openPanel: () => ipcRenderer.send('ilustracoes:open-panel'),
+    closePanel: () => ipcRenderer.send('ilustracoes:close-panel'),
+    syncToPanel: (data) => ipcRenderer.send('ilustracoes:sync-to-panel', data),
+    sendAction: (action, ...args) => ipcRenderer.send('ilustracoes:panel-action', action, ...args),
+    onPanelAction: (cb) => {
+      const handler = (_event: Electron.IpcRendererEvent, action: string, ...args: unknown[]) => cb(action, ...args);
+      ipcRenderer.on('ilustracoes:panel-action', handler);
+      return () => { ipcRenderer.removeListener('ilustracoes:panel-action', handler); };
+    },
+    onStateSync: (cb) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => cb(data);
+      ipcRenderer.on('ilustracoes:state-sync', handler);
+      return () => { ipcRenderer.removeListener('ilustracoes:state-sync', handler); };
+    },
+    onPanelClosed: (cb) => {
+      const handler = () => cb();
+      ipcRenderer.on('ilustracoes:panel-closed', handler);
+      return () => { ipcRenderer.removeListener('ilustracoes:panel-closed', handler); };
+    },
   },
 } satisfies IpcAPI);
 

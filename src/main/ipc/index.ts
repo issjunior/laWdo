@@ -14,6 +14,7 @@ import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
 import { registerIAHandlers } from './handlers/ia.handlers.js';
 import { registerBackupHandlers } from './handlers/backup.handlers.js';
 import { registerLogSystemHandlers } from './handlers/log.handlers.js';
+import { registerIlustracoesHandlers } from './handlers/ilustracoes.handlers.js';
 import { userService } from '../services/user.service.js';
 
 /**
@@ -26,7 +27,11 @@ let mainWindow: BrowserWindow | null = null;
 /**
  * Registra todos os handlers IPC
  */
-export const registerIpcHandlers = (): void => {
+export const registerIpcHandlers = (options: {
+  preloadPath: string;
+  rendererHtmlPath: string;
+  isDev: boolean;
+}): void => {
   logInfo('Registrando handlers IPC...');
 
   // Utilitários
@@ -58,6 +63,7 @@ export const registerIpcHandlers = (): void => {
   registerIAHandlers();
   registerBackupHandlers();
   registerLogSystemHandlers();
+  registerIlustracoesHandlers(options);
 
   logInfo('Handlers IPC registrados com sucesso');
 };

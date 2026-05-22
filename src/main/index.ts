@@ -92,7 +92,10 @@ app.whenReady().then(async () => {
     setupLogging();
 
     // Registrar handlers IPC
-    registerIpcHandlers();
+    const preloadPath = path.join(__dirname, '../preload/index.js');
+    const rendererHtmlPath = path.join(__dirname, '../renderer/index.html');
+    const isDev = process.env.NODE_ENV === 'development';
+    registerIpcHandlers({ preloadPath, rendererHtmlPath, isDev });
 
     // Criar janela
     createWindow();
