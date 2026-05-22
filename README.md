@@ -1,181 +1,67 @@
-# Sistema Laudo Pericial PCP
+# laWdo
 
-Repositório único contendo a migração do sistema de laudos periciais da Polícia Científica do Paraná.
+Sistema desktop para auxiliar na confecção de laudos no padrão da **Polícia Científica do Paraná**.
 
-## 📁 Estrutura do Projeto
+## Finalidade
 
-```
-/
-├── src/                      # Código fonte Electron (main/preload/renderer)
-├── public/                   # Assets estáticos
-├── python/                   # Integração Python (scripts reutilizáveis)
-├── laudo-streamlit/          # Versão anterior (Streamlit + Python) - mantida como referência
-├── migracao/                 # Documentação e planejamento da migração
-└── README.md
-```
+O laWdo auxilia peritos forenses no preenchimento de laudos, **reduzindo o retrabalho** e **minimizando erros de referência** por meio de templates inteligentes, placeholders dinâmicos e validações automáticas.
 
-## 🚀 Projeto Atual: Electron Desktop
+## Tecnologias
 
-Aplicativo desktop para automação de laudos periciais.
+- [Electron](https://www.electronjs.org/) — aplicativo desktop multiplataforma
+- [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) — interface do usuário
+- [Vite](https://vitejs.dev/) — bundler do renderer
+- [SQLite](https://www.sqlite.org/) — banco de dados local
+- [Tailwind CSS](https://tailwindcss.com/) + [Shadcn/ui](https://ui.shadcn.com/) — estilização
+- [Zod](https://zod.dev/) — validação de dados
+- [TinyMCE](https://www.tiny.cloud/) — editor de texto rico
+- [AES-256-GCM](https://en.wikipedia.org/wiki/Galois/Counter_Mode) + [bcrypt](https://en.wikipedia.org/wiki/Bcrypt) — criptografia de credenciais
 
-**Tecnologias:**
+## Pré-requisitos
 
-- Electron + Vite + TypeScript
-- React + Shadcn/ui
-- SQLite (local)
-- Node.js (main process)
-- Zod (validação)
-- Tailwind CSS
+- [Node.js](https://nodejs.org/) versão 18 ou superior
+- npm (incluído no Node.js)
 
-### 🔒 Segurança
-
-**Criptografia AES-256-GCM aplicada SOMENTE ao campo `senha` do perito.**
-
-- **Senha do perito:** Criptografada (AES-256-GCM + bcrypt + PBKDF2)
-- **Campos de contato (telefone, email, endereço):** NÃO são criptografados - são dados operacionais de uso diário
-
-Essa decisão equilibra proteção de credenciais de acesso com funcionalidade do sistema para dados de contato.
-
-### Comandos de Desenvolvimento
+## Instalação e Execução
 
 ```bash
-# Instalação e execução
+# 1. Clone o repositório
+git clone <url-do-repositorio>
+cd LaudoPericial
+
+# 2. Instale as dependências
 npm install
-npm run dev        # Desenvolvimento (watch + Electron)
-npm run build      # Build de produção
-npm run start      # Executar build existente
 
-# Qualidade
-npm run lint       # Checagem ESLint
-npm run lint:fix   # Correção automática
-npm run format     # Formatação Prettier
-npm run type-check # Checagem de tipos
-
-# Builds individuais
-npm run build:main     # Processo principal
-npm run build:preload  # Scripts de preload
-npm run build:renderer # Frontend React
+# 3. Execute em modo desenvolvimento
+npm run dev
 ```
 
-## 📋 Plano de Migração
+O comando `npm run dev` compila o projeto e inicia o aplicativo automaticamente.
 
-A migração está organizada em 10 sprints no diretório `migracao/`.
+Para executar a partir de um build já existente:
 
-### Sprints Concluídas ✅
+```bash
+npm start
+```
 
-1. **Sprint 0 - Fundação e Segurança:** ✅ COMPLETA
-   - Infraestrutura Electron
-   - Banco SQLite com schema inicial (8 tabelas; hoje 9)
-   - Criptografia de senha (AES-256-GCM + bcrypt)
-   - Sistema de logs e tratamento de erros
-   - IPC bridge segura
+## Desenvolvimento
 
-2. **Sprint 1 - Arquitetura Base:** ✅ COMPLETA
-   - Validação Zod para todas as entidades
-   - Handlers IPC e serviços de negócio
-   - Integração Shadcn/ui com React Hook Form
+| Comando | Descrição |
+|---------|-----------|
+| `npm run build` | Build de produção |
+| `npm run dev` | Build de desenvolvimento para sem qualquer otimização (ideal para teste de usabilidade) |
+| `npm run watch` | Watch mode (recompilação automática) |
+| `npm run lint` | Checagem ESLint |
+| `npm run format` | Formatação Prettier |
+| `npm run test` | Executa testes com Vitest |
+| `npm run type-check` | Verificação de tipos TypeScript |
 
-3. **Sprint 2 - Cadastros Estruturais:** ✅ COMPLETA
-   - Interface Perfil do Perito
-   - CRUD Solicitantes (órgãos varas delegacias)
-   - CRUD Tipos de Exame
-   - Dashboard com estatísticas
-   - Tema dark/light com persistência
-   - Login obrigatório (AuthPage)
+## Empacotamento
 
-4. **Sprint 3 - Gestão de REPs:** ✅ COMPLETA
-   - CRUD completo de Requisições de Exame Pericial
-   - Formulário inline com campos condicionais
-   - Migration v9
+Para gerar o instalador:
 
-5. **Sprint 5 - Placeholders:** ✅ COMPLETA
-   - CRUD de placeholders
-   - 22 placeholders do sistema (seed)
-   - Sintaxe canônica `{{chave}}`
+```bash
+npx electron-builder
+```
 
-### Sprints em Andamento
-
-6. **Sprint 4 - Edição de Laudos:** 🔄 PARCIAL
-   - Cabeçalho de laudos com editor HTML ✅
-   - Integração TinyMCE ⬜
-   - Auto-save e versionamento ⬜
-
-### Sprints Pendentes
-
-7. **Sprint 6 - IA Assistiva:** 📋 PENDENTE (Opcional)
-   - Integração com APIs Groq e Gemini
-
-8. **Sprint 7 - Exportação Multi-formato:** 📋 PENDENTE
-   - PDF, DOCX e ODT
-
-9. **Sprint 8 - Auditoria e Backup:** 📋 PENDENTE
-
-10. **Sprint 9-10 - Performance e Distribuição:** 📋 PENDENTE
-
-## 📊 Status Atual
-
-**Data:** 09 de maio de 2026 (atualizado)  
-**Status:** ✅ Sprints 0, 1, 2, 3 e 5 completas | 🔄 Sprint 4 parcial (75%)  
-**Progresso:** ~80% do projeto completo
-
-### Páginas Implementadas (10)
-
-| Página | Rota | Status |
-|---|---|---|
-| AuthPage (Login) | `/login` | ✅ |
-| Dashboard | `/` | ✅ |
-| Solicitantes | `/solicitantes` | ✅ |
-| Tipos de Exame | `/tipos-exame` | ✅ |
-| Cabeçalho | `/cabecalho` | ✅ |
-| REPs | `/reps` | ✅ |
-| Placeholders | `/placeholders` | ✅ |
-| Templates | `/templates` | ✅ |
-| Laudos | `/laudos` | ✅ |
-| Perfil | `/perfil` | ✅ |
-
-## 📝 Documentação
-
-- `migracao/planejamento_migracao_tecnica.md` - Roadmap técnico detalhado
-- `migracao/planejamento_migracao_checklist.md` - Checklist de sprints
-- `migracao/progresso_real_atual.md` - Status atualizado do projeto
-- `migracao/relatorio_sprint_1.md` - Relatório detalhado da Sprint 1
-- `migracao/relatorio_sprint_2.md` - Relatório detalhado da Sprint 2
-
-## 🔄 Reutilização de Código
-
-Abordagem híbrida de migração:
-
-- **Lógica de negócio complexa:** Reutilizada do projeto Streamlit via `child_process`
-- **Geradores de documentos:** Compatibilidade mantida
-- **Banco de dados:** Schema SQLite compatível
-- **UI/UX:** Totalmente redesenhada com Electron + React
-
-## 👥 Equipe
-
-Desenvolvido para a Polícia Científica do Paraná.
-
-## ⚠️ Problemas Conhecidos
-
-Ver [migracao/problemas_conhecidos.md](migracao/problemas_conhecidos.md) para lista atualizada de problemas e soluções.
-
-## 📄 Licença
-
-Uso interno - Polícia Científica do Paraná.
-
-### 🎉 Destaques Técnicos Recentes
-
-- ✅ **10 páginas implementadas:** Dashboard, Auth, Perfil, Solicitantes, TiposExame, Cabeçalho, REPs, Placeholders, Templates, Laudos
-- ✅ **9 serviços de negócio:** User, Solicitante, TipoExame, Configuracao, REP, Placeholder, Template, Laudo, Imagem + BaseService
-- ✅ **9 módulos IPC:** Handlers para todas as entidades implementadas
-- ✅ **Editor TinyMCE com upload de imagens:** Toolbar responsiva 2 linhas, 14 plugins, diálogo nativo, protocolo `laudo-img://`
-- ✅ **Build vitorioso:** Compilação TypeScript/Vite 100% funcional
-- ✅ **Migração ESM concluída:** Projeto migrado para ECMAScript Modules
-- ✅ **Login obrigatório:** AuthPage bloqueia acesso sem autenticação
-- ✅ **Tema dark/light:** Persistência de tema com Tailwind CSS
-- ✅ **Sidebar colapsável:** Menu com seções agrupadas e navegação por ícones
-- ✅ **Placeholders:** 22 placeholders do sistema com sintaxe `{{chave}}`
-- ✅ **Validação Zod:** Todos os forms validados com mensagens em português
-- ✅ **Segurança robusta:** Criptografia de senha com padrões industriais
-
-## Regra de Acesso (Atualizada em 06/05/2026)
-- O laWdo deve abrir apenas para usuario autenticado (login obrigatorio).
+Os arquivos serão gerados no diretório `dist/`.
