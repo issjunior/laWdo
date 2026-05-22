@@ -1,5 +1,6 @@
 import { BaseService } from './base.service.js';
 import { logInfo, logError } from '../utils/logger.js';
+import { executeNonQuery } from '../database/sqlite.js';
 
 export interface PlaceholderRow {
   id: string;
@@ -64,6 +65,8 @@ const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   { chave: 'perito_cargo', valor: '', descricao: 'Cargo do perito', categoria_id: 'cat-perito' },
   { chave: 'perito_lotacao', valor: '', descricao: 'Lotação/unidade do perito', categoria_id: 'cat-perito' },
   { chave: 'perito_matricula', valor: '', descricao: 'Matrícula funcional do perito', categoria_id: 'cat-perito' },
+  // Datas (1)
+  { chave: 'data_atual', valor: '', descricao: 'Data atual do sistema', categoria_id: 'cat-datas' },
 ];
 
 class PlaceholderService extends BaseService<PlaceholderRow> {
@@ -125,6 +128,65 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
    */
   async seedSistema(): Promise<void> {
     try {
+      // Safety net: garantir categorias de sistema antes do seed, resolvendo conflitos de label
+      const categoriasSistema = [
+        { id: 'cat-rep', chave: 'REP', label: 'REP/Laudo', descricao: 'Dados da Requisição de Exame Pericial e do Laudo', cor: 'blue', icone: 'FileText', is_sistema: 1, ordem: 1 },
+        { id: 'cat-perito', chave: 'Perito', label: 'Perito', descricao: 'Informações do perito responsável', cor: 'violet', icone: 'UserCheck', is_sistema: 1, ordem: 2 },
+        { id: 'cat-lacres', chave: 'Lacres', label: 'Lacres', descricao: 'Lacres de entrada e saída', cor: 'emerald', icone: 'ShieldCheck', is_sistema: 1, ordem: 3 },
+        { id: 'cat-solicitante', chave: 'Solicitante', label: 'Solicitante', descricao: 'Dados do órgão solicitante', cor: 'orange', icone: 'Building2', is_sistema: 1, ordem: 4 },
+        { id: 'cat-local', chave: 'Local', label: 'Local', descricao: 'Dados do local do fato', cor: 'teal', icone: 'MapPin', is_sistema: 1, ordem: 5 },
+        { id: 'cat-datas', chave: 'Datas', label: 'Datas', descricao: 'Datas e informações temporais', cor: 'amber', icone: 'Calendar', is_sistema: 1, ordem: 6 },
+        { id: 'cat-personalizados', chave: 'Personalizados', label: 'Personalizados', descricao: 'Placeholders personalizados pelo usuário', cor: 'pink', icone: 'Edit', is_sistema: 0, ordem: 7 },
+        { id: 'cat-sem-categoria', chave: 'sem_categoria', label: 'Sem Categoria', descricao: 'Placeholders sem categoria definida', cor: 'slate', icone: 'Puzzle', is_sistema: 1, ordem: 999 },
+      ];
+
+      for (const cat of categoriasSistema) {
+        // Resolve conflito: categoria com mesmo label mas ID diferente (criada pelo usuário)
+        const conflitantes = await this.executeCustomQuery<{ id: string }>(
+          'SELECT id FROM categorias_placeholders WHERE label = ? AND id != ?',
+          [cat.label, cat.id]
+        );
+
+        // Guarda placeholders antes de deletar (FK ON DELETE SET NULL)
+        const placeholderIds: string[] = [];
+        for (const conflito of conflitantes) {
+          const pids = await this.executeCustomQuery<{ id: string }>(
+            'SELECT id FROM placeholders WHERE categoria_id = ?', [conflito.id]
+          );
+          placeholderIds.push(...pids.map(p => p.id));
+        }
+
+        // Deleta conflitantes
+        for (const conflito of conflitantes) {
+          await executeNonQuery('DELETE FROM categorias_placeholders WHERE id = ?', [conflito.id]);
+        }
+
+        // Insere ou atualiza a categoria do sistema
+        const existente = await this.executeCustomQuery<{ id: string }>(
+          'SELECT id FROM categorias_placeholders WHERE id = ?', [cat.id]
+        );
+
+        if (existente.length === 0) {
+          await executeNonQuery(
+            'INSERT INTO categorias_placeholders (id, chave, label, descricao, cor, icone, is_sistema, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [cat.id, cat.chave, cat.label, cat.descricao, cat.cor, cat.icone, cat.is_sistema, cat.ordem]
+          );
+        } else {
+          await executeNonQuery(
+            'UPDATE categorias_placeholders SET is_sistema = ?, chave = ?, descricao = ?, cor = ?, icone = ?, ordem = ?, updated_at = ? WHERE id = ?',
+            [cat.is_sistema, cat.chave, cat.descricao, cat.cor, cat.icone, cat.ordem, new Date().toISOString(), cat.id]
+          );
+        }
+
+        // Move placeholders órfãos para a categoria sistema
+        for (const pid of placeholderIds) {
+          await executeNonQuery(
+            'UPDATE placeholders SET categoria_id = ?, updated_at = ? WHERE id = ?',
+            [cat.id, new Date().toISOString(), pid]
+          );
+        }
+      }
+
       for (const p of PLACEHOLDERS_SISTEMA) {
         const existing = await this.executeCustomQuery<PlaceholderRow>(
           'SELECT id FROM placeholders WHERE chave = ?',

@@ -39,7 +39,8 @@ const PLACEHOLDERS_SISTEMA_CHAVES = [
   'latitude', 'longitude', 'data_acionamento_local', 'data_chegada_local', 'data_saida_local',
   'numero_bo', 'numero_ip', 'lacre_entrada', 'lacre_saida', 'observacoes_rep',
   'solicitante_nome', 'tipo_exame_nome', 'tipo_exame_codigo',
-  'perito_nome', 'perito_cargo', 'perito_lotacao', 'perito_matricula'
+  'perito_nome', 'perito_cargo', 'perito_lotacao', 'perito_matricula',
+  'data_atual'
 ];
 
 /* ── COMPONENTES DRAG & DROP ── */
@@ -211,6 +212,7 @@ export const PlaceholdersPage: React.FC = () => {
   const [editingPlaceholder, setEditingPlaceholder] = useState<Placeholder | null>(null);
   const [formData, setFormData] = useState<PlaceholderFormData>(emptyForm(''));
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
 
@@ -222,8 +224,12 @@ export const PlaceholdersPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      setLoadError(null);
       await window.ipcAPI.placeholder.migrateSistema();
-      await window.ipcAPI.placeholder.seedSistema();
+      const seedResult = await window.ipcAPI.placeholder.seedSistema();
+      if (!seedResult.success) {
+        setLoadError(seedResult.error || 'Erro ao semear placeholders do sistema');
+      }
       
       const rPlaceholders = await window.ipcAPI.placeholder.findAll();
       const rCategorias = await window.ipcAPI.categoria.findAll();
@@ -234,10 +240,10 @@ export const PlaceholdersPage: React.FC = () => {
       if (rPlaceholders.success && rPlaceholders.data) {
         setPlaceholders(rPlaceholders.data);
       } else {
-        setError(rPlaceholders.error || 'Erro ao carregar dados');
+        setLoadError(rPlaceholders.error || 'Erro ao carregar dados');
       }
     } catch (err: any) {
-      setError(err.message || 'Erro ao carregar dados');
+      setLoadError(err.message || 'Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
@@ -514,6 +520,14 @@ export const PlaceholdersPage: React.FC = () => {
 
       {/* ── Área principal ── */}
       <div className="flex-1 overflow-hidden">
+        {loadError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription className="flex items-center justify-between gap-2">
+              <span>{loadError}</span>
+              <Button variant="outline" size="sm" onClick={() => carregarDados()}>Tentar novamente</Button>
+            </AlertDescription>
+          </Alert>
+        )}
         {loading ? (
           <div className="h-full flex items-center justify-center"><p className="animate-pulse">Carregando...</p></div>
         ) : viewMode === 'table' ? (

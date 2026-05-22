@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 15;
+const CURRENT_SCHEMA_VERSION = 16;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -176,6 +176,36 @@ const createDatabaseSchema = async (): Promise<void> => {
       )
     `);
 
+    // Tabela de categorias de placeholders
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS categorias_placeholders (
+        id TEXT PRIMARY KEY,
+        chave TEXT NOT NULL UNIQUE,
+        label TEXT NOT NULL UNIQUE,
+        descricao TEXT,
+        cor TEXT,
+        icone TEXT,
+        is_sistema INTEGER NOT NULL DEFAULT 0,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Seed categorias de sistema
+    await executeNonQuery(`
+      INSERT OR IGNORE INTO categorias_placeholders (id, chave, label, descricao, cor, icone, is_sistema, ordem)
+      VALUES
+        ('cat-rep', 'REP', 'REP/Laudo', 'Dados da Requisição de Exame Pericial e do Laudo', 'blue', 'FileText', 1, 1),
+        ('cat-perito', 'Perito', 'Perito', 'Informações do perito responsável', 'violet', 'UserCheck', 1, 2),
+        ('cat-lacres', 'Lacres', 'Lacres', 'Lacres de entrada e saída', 'emerald', 'ShieldCheck', 1, 3),
+        ('cat-solicitante', 'Solicitante', 'Solicitante', 'Dados do órgão solicitante', 'orange', 'Building2', 1, 4),
+        ('cat-local', 'Local', 'Local', 'Dados do local do fato', 'teal', 'MapPin', 1, 5),
+        ('cat-datas', 'Datas', 'Datas', 'Datas e informações temporais', 'amber', 'Calendar', 1, 6),
+        ('cat-personalizados', 'Personalizados', 'Personalizados', 'Placeholders personalizados pelo usuário', 'pink', 'Edit', 0, 7),
+        ('cat-sem-categoria', 'sem_categoria', 'Sem Categoria', 'Placeholders sem categoria definida', 'slate', 'Puzzle', 1, 999)
+    `);
+
     // Tabela de placeholders
     await executeNonQuery(`
       CREATE TABLE IF NOT EXISTS placeholders (
@@ -183,9 +213,10 @@ const createDatabaseSchema = async (): Promise<void> => {
         chave TEXT NOT NULL UNIQUE,
         valor TEXT NOT NULL,
         descricao TEXT,
-        categoria TEXT,
+        categoria_id TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (categoria_id) REFERENCES categorias_placeholders(id) ON DELETE SET NULL
       )
     `);
 
@@ -883,6 +914,11 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         VALUES 
           ('${catRepId}', 'REP', 'REP/Laudo', 'Dados da Requisição de Exame Pericial e do Laudo', 'blue', 'FileText', 1, 1),
           ('${catPeritoId}', 'Perito', 'Perito', 'Informações do perito responsável', 'violet', 'UserCheck', 1, 2),
+          ('cat-lacres', 'Lacres', 'Lacres', 'Lacres de entrada e saída', 'emerald', 'ShieldCheck', 1, 3),
+          ('cat-solicitante', 'Solicitante', 'Solicitante', 'Dados do órgão solicitante', 'orange', 'Building2', 1, 4),
+          ('cat-local', 'Local', 'Local', 'Dados do local do fato', 'teal', 'MapPin', 1, 5),
+          ('cat-datas', 'Datas', 'Datas', 'Datas e informações temporais', 'amber', 'Calendar', 1, 6),
+          ('cat-personalizados', 'Personalizados', 'Personalizados', 'Placeholders personalizados pelo usuário', 'pink', 'Edit', 0, 7),
           ('${catSemCategoriaId}', 'sem_categoria', 'Sem Categoria', 'Placeholders sem categoria definida', 'slate', 'Puzzle', 1, 999)
       `);
 
@@ -931,6 +967,80 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
 
     } catch (error) {
       logError('Erro ao aplicar migration versão 15', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 16: Garantir todas as 8 categorias de sistema e resolver conflitos
+  if (fromVersion < 16) {
+    try {
+      const categoriasSistema = [
+        { id: 'cat-rep', chave: 'REP', label: 'REP/Laudo', descricao: 'Dados da Requisição de Exame Pericial e do Laudo', cor: 'blue', icone: 'FileText', is_sistema: 1, ordem: 1 },
+        { id: 'cat-perito', chave: 'Perito', label: 'Perito', descricao: 'Informações do perito responsável', cor: 'violet', icone: 'UserCheck', is_sistema: 1, ordem: 2 },
+        { id: 'cat-lacres', chave: 'Lacres', label: 'Lacres', descricao: 'Lacres de entrada e saída', cor: 'emerald', icone: 'ShieldCheck', is_sistema: 1, ordem: 3 },
+        { id: 'cat-solicitante', chave: 'Solicitante', label: 'Solicitante', descricao: 'Dados do órgão solicitante', cor: 'orange', icone: 'Building2', is_sistema: 1, ordem: 4 },
+        { id: 'cat-local', chave: 'Local', label: 'Local', descricao: 'Dados do local do fato', cor: 'teal', icone: 'MapPin', is_sistema: 1, ordem: 5 },
+        { id: 'cat-datas', chave: 'Datas', label: 'Datas', descricao: 'Datas e informações temporais', cor: 'amber', icone: 'Calendar', is_sistema: 1, ordem: 6 },
+        { id: 'cat-personalizados', chave: 'Personalizados', label: 'Personalizados', descricao: 'Placeholders personalizados pelo usuário', cor: 'pink', icone: 'Edit', is_sistema: 0, ordem: 7 },
+        { id: 'cat-sem-categoria', chave: 'sem_categoria', label: 'Sem Categoria', descricao: 'Placeholders sem categoria definida', cor: 'slate', icone: 'Puzzle', is_sistema: 1, ordem: 999 },
+      ];
+
+      for (const cat of categoriasSistema) {
+        // Resolve conflito: categoria com mesmo label mas ID diferente (criada pelo usuário)
+        const conflitantes = await executeQuery<{ id: string }>(
+          'SELECT id FROM categorias_placeholders WHERE label = ? AND id != ?',
+          [cat.label, cat.id]
+        );
+
+        // Guarda placeholders dos conflitantes antes de deletar (FK usa ON DELETE SET NULL)
+        const placeholderIds: string[] = [];
+        for (const conflito of conflitantes) {
+          const pids = await executeQuery<{ id: string }>(
+            'SELECT id FROM placeholders WHERE categoria_id = ?', [conflito.id]
+          );
+          placeholderIds.push(...pids.map(p => p.id));
+        }
+
+        // Deleta categorias conflitantes (placeholders viram categoria_id=NULL)
+        for (const conflito of conflitantes) {
+          await executeNonQuery('DELETE FROM categorias_placeholders WHERE id = ?', [conflito.id]);
+          logInfo(`Migration v16: Categoria conflitante "${cat.label}" (${conflito.id}) removida`);
+        }
+
+        // Insere ou atualiza a categoria do sistema (agora sem conflito de label UNIQUE)
+        const existente = await executeQuery<{ id: string }>(
+          'SELECT id FROM categorias_placeholders WHERE id = ?', [cat.id]
+        );
+
+        if (existente.length === 0) {
+          await executeNonQuery(
+            `INSERT INTO categorias_placeholders (id, chave, label, descricao, cor, icone, is_sistema, ordem)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [cat.id, cat.chave, cat.label, cat.descricao, cat.cor, cat.icone, cat.is_sistema, cat.ordem]
+          );
+        } else {
+          await executeNonQuery(
+            `UPDATE categorias_placeholders SET is_sistema = ?, chave = ?, descricao = ?, cor = ?, icone = ?, ordem = ?, updated_at = ?
+             WHERE id = ?`,
+            [cat.is_sistema, cat.chave, cat.descricao, cat.cor, cat.icone, cat.ordem, new Date().toISOString(), cat.id]
+          );
+        }
+
+        // Move placeholders órfãos para a categoria sistema recém-criada
+        for (const pid of placeholderIds) {
+          await executeNonQuery(
+            'UPDATE placeholders SET categoria_id = ?, updated_at = ? WHERE id = ?',
+            [cat.id, new Date().toISOString(), pid]
+          );
+        }
+        if (placeholderIds.length > 0) {
+          logInfo(`Migration v16: ${placeholderIds.length} placeholder(s) movidos para categoria "${cat.label}" (${cat.id})`);
+        }
+      }
+
+      logInfo('Migration v16: Todas as 8 categorias de sistema garantidas');
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 16', error);
       throw error;
     }
   }
