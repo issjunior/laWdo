@@ -21,6 +21,7 @@ import { DndContext, useDroppable, useDraggable, DragOverlay, closestCorners } f
 
 // Modais e Componentes
 import { ManageCategoriesModal, CategoriaPlaceholderRow } from '@/components/placeholders/ManageCategoriesModal';
+import { CAMPOS_ESPECIFICOS_PLACEHOLDERS, EXAM_PLACEHOLDER_CATEGORIES } from '@/components/rep/exam-fields/placeholders';
 
 interface PlaceholderFormData {
   chave: string;
@@ -90,6 +91,20 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
                   Fixo
                 </Badge>
               )}
+              {(() => {
+                const examPH = CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(ep => ep.chave === p.chave);
+                if (!examPH) return null;
+                const examCat = EXAM_PLACEHOLDER_CATEGORIES.find(c => c.codigo === examPH.categoria_exam_codigo);
+                return (
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] h-4 px-1 gap-1 shrink-0 border-${examCat?.cor || 'amber'}-200 text-${examCat?.cor || 'amber'}-600 dark:text-${examCat?.cor || 'amber'}-300 dark:border-${examCat?.cor || 'amber'}-800/60`}
+                  >
+                    <Zap size={8} />
+                    {examPH.categoria_exam_codigo}
+                  </Badge>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               <IconComp size={11} className="text-muted-foreground" />
@@ -113,6 +128,17 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
             <p className="text-[10px] text-muted-foreground leading-snug line-clamp-2" title={p.descricao}>{p.descricao}</p>
           </div>
         )}
+        {(() => {
+          const examPH = CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(ep => ep.chave === p.chave);
+          if (!examPH) return null;
+          return (
+            <div className="flex items-start gap-2">
+              <code className="text-[9px] text-muted-foreground/60 truncate" title={`JSON path: ${examPH.jsonPath}`}>
+                {examPH.jsonPath}
+              </code>
+            </div>
+          );
+        })()}
       </CardContent>
     </Card>
   );
@@ -178,7 +204,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
       </div>
       <div className="p-3 flex-1 overflow-y-auto min-h-[150px]">
         {placeholders.map(p => {
-          const deletavel = !PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave);
+          const deletavel = !PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) && !CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
           return (
             <div key={p.id} className="group relative">
               <DraggableCard p={p} categoria={categoria} />
@@ -439,6 +465,17 @@ export const PlaceholdersPage: React.FC = () => {
                 Fixo
               </Badge>
             )}
+            {(() => {
+              const examPH = CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(ep => ep.chave === p.chave);
+              if (!examPH) return null;
+              const examCat = EXAM_PLACEHOLDER_CATEGORIES.find(c => c.codigo === examPH.categoria_exam_codigo);
+              return (
+                <Badge variant="outline" className={`text-[10px] h-5 px-1.5 gap-1 shrink-0 border-${examCat?.cor || 'amber'}-200 text-${examCat?.cor || 'amber'}-600`}>
+                  <Zap size={9} />
+                  {examPH.categoria_exam_codigo}
+                </Badge>
+              );
+            })()}
           </div>
         );
       },
@@ -449,7 +486,7 @@ export const PlaceholdersPage: React.FC = () => {
       cell: ({ row }) => {
         const valor = row.getValue('valor') as string;
         const p = row.original;
-        if (PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave)) {
+        if (PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave)) {
           return <span className="text-xs text-muted-foreground italic">Automático</span>;
         }
         return valor
@@ -473,7 +510,7 @@ export const PlaceholdersPage: React.FC = () => {
       header: () => <span className="sr-only">Ações</span>,
       cell: ({ row }) => {
         const p = row.original;
-        const deletavel = !PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave);
+        const deletavel = !PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) && !CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
         return (
           <div className="flex justify-end gap-1">
             <Tooltip>

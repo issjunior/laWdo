@@ -36,6 +36,26 @@ const RENOMEACOES: Record<string, string> = {
   'rep_observacoes': 'observacoes_rep',
 };
 
+const EXAM_PLACEHOLDER_CATEGORIES = [
+  { id: 'cat-exam-I-801', codigo: 'I-801', label: 'I-801 - Numerações Identificadoras', cor: 'amber', icone: 'Hash', is_sistema: 1, ordem: 10 },
+];
+
+const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
+  { chave: 'numeracao_veiculo',          valor: '', descricao: 'Marca, modelo ou tipo do veículo periciado',       categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_placa',            valor: '', descricao: 'Placa de identificação do veículo',                 categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_fabricacao',       valor: '', descricao: 'Ano de fabricação e modelo do veículo',             categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_cor',              valor: '', descricao: 'Cor do veículo',                                     categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_conservacao',      valor: '', descricao: 'Estado de conservação do veículo',                   categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_chassi',           valor: '', descricao: 'Nº do chassi (até 17 caracteres alfanuméricos)',    categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_chassi_revelado',  valor: '', descricao: 'Chassi após revelação química',                      categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_motor',            valor: '', descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     categoria_id: 'cat-exam-I-801' },
+  { chave: 'numeracao_motor_revelado',   valor: '', descricao: 'Motor após revelação química',                       categoria_id: 'cat-exam-I-801' },
+];
+
+function getExamCategoryId(codigo: string): string {
+  return `cat-exam-${codigo}`;
+}
+
 const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   // Tabela reps (18)
   { chave: 'numero_rep', valor: '', descricao: 'Nº da REP', categoria_id: 'cat-rep' },
@@ -79,7 +99,10 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
     const row = await this.findById(id);
     if (!row) return false;
 
-    const sistemaChaves = PLACEHOLDERS_SISTEMA.map(p => p.chave);
+    const sistemaChaves = [
+      ...PLACEHOLDERS_SISTEMA.map(p => p.chave),
+      ...CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave),
+    ];
     if (sistemaChaves.includes(row.chave)) {
       throw new Error('Placeholders do sistema não podem ser excluídos.');
     }
@@ -188,6 +211,31 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
         }
       }
 
+      for (const examCat of EXAM_PLACEHOLDER_CATEGORIES) {
+        const conflitantes = await this.executeCustomQuery<{ id: string }>(
+          'SELECT id FROM categorias_placeholders WHERE label = ? AND id != ?',
+          [examCat.label, examCat.id]
+        );
+        for (const conflito of conflitantes) {
+          await executeNonQuery('DELETE FROM categorias_placeholders WHERE id = ?', [conflito.id]);
+        }
+
+        const existente = await this.executeCustomQuery<{ id: string }>(
+          'SELECT id FROM categorias_placeholders WHERE id = ?', [examCat.id]
+        );
+        if (existente.length === 0) {
+          await executeNonQuery(
+            'INSERT INTO categorias_placeholders (id, chave, label, descricao, cor, icone, is_sistema, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [examCat.id, examCat.codigo, examCat.label, `Placeholders do exame ${examCat.codigo}`, examCat.cor, examCat.icone, examCat.is_sistema, examCat.ordem]
+          );
+        } else {
+          await executeNonQuery(
+            'UPDATE categorias_placeholders SET is_sistema = 1, chave = ?, label = ?, descricao = ?, cor = ?, icone = ?, updated_at = ? WHERE id = ?',
+            [examCat.codigo, examCat.label, `Placeholders do exame ${examCat.codigo}`, examCat.cor, examCat.icone, new Date().toISOString(), examCat.id]
+          );
+        }
+      }
+
       for (const p of PLACEHOLDERS_SISTEMA) {
         const existing = await this.executeCustomQuery<PlaceholderRow>(
           'SELECT id FROM placeholders WHERE chave = ?',
@@ -198,7 +246,17 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
           await this.create(p);
         }
       }
-      logInfo('Seed de placeholders do sistema concluído', { total: PLACEHOLDERS_SISTEMA.length });
+      for (const p of CAMPOS_ESPECIFICOS_PLACEHOLDERS) {
+        const existing = await this.executeCustomQuery<PlaceholderRow>(
+          'SELECT id FROM placeholders WHERE chave = ?',
+          [p.chave]
+        );
+
+        if (existing.length === 0) {
+          await this.create(p);
+        }
+      }
+      logInfo('Seed de placeholders do sistema concluído', { total: PLACEHOLDERS_SISTEMA.length + CAMPOS_ESPECIFICOS_PLACEHOLDERS.length });
     } catch (error) {
       logError('Erro ao semear placeholders do sistema', error);
       throw error;

@@ -70,6 +70,15 @@ const FIELD_PLACEHOLDER: Record<string, string> = {
   lacre_entrada: 'lacre_entrada',
   lacre_saida: 'lacre_saida',
   observacoes: 'observacoes_rep',
+  numeracao_veiculo: 'numeracao_veiculo',
+  numeracao_placa: 'numeracao_placa',
+  numeracao_fabricacao: 'numeracao_fabricacao',
+  numeracao_cor: 'numeracao_cor',
+  numeracao_conservacao: 'numeracao_conservacao',
+  numeracao_chassi: 'numeracao_chassi',
+  numeracao_chassi_revelado: 'numeracao_chassi_revelado',
+  numeracao_motor: 'numeracao_motor',
+  numeracao_motor_revelado: 'numeracao_motor_revelado',
 };
 
 function formatarNumeroREP(raw: string): string {
@@ -172,7 +181,7 @@ function prepareForApi(data: REPFormData, codigo: string | undefined) {
 
   if (codigo) {
     const campos = buildCamposEspecificos(data, codigo);
-    if (campos) payload.campos_especificos = campos;
+    payload.campos_especificos = campos || null;
   }
 
   return payload;

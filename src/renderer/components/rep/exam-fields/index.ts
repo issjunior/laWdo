@@ -5,6 +5,7 @@ import { NumeracaoFields } from './numeracao';
 import type { ExamSection } from './types';
 
 export type { ExamSection, ExamSectionProps, REPFormData } from './types';
+export * from './placeholders';
 
 export const SECTION_REGISTRY: Record<string, ExamSection> = {
   local_fato: {

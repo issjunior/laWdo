@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, ExternalLink } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, ExternalLink, Tag } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -32,6 +33,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -178,6 +180,22 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     'data_atual': new Date().toLocaleDateString('pt-BR'),
     'data_extenso_recebimento_rep': formatarDataExtenso(repData.data_requisicao),
   };
+
+  if (repData.campos_especificos) {
+    try {
+      const especificos = JSON.parse(repData.campos_especificos);
+      for (const placeholder of CAMPOS_ESPECIFICOS_PLACEHOLDERS) {
+        const partes = placeholder.jsonPath.split('.');
+        let valor: unknown = especificos;
+        for (const parte of partes) {
+          valor = (valor as Record<string, unknown>)?.[parte];
+        }
+        if (valor !== undefined && valor !== null && valor !== '') {
+          mapping[placeholder.chave] = String(valor);
+        }
+      }
+    } catch { /* mantém mapping atual */ }
+  }
 
   try {
     // 1. Usar DOMParser para encontrar e substituir spans de placeholder
@@ -619,6 +637,69 @@ export const LaudosPage: React.FC = () => {
       editor.insertContent(`{{${chave}}}`);
     }
   };
+
+  const PlaceholderContextMenu: React.FC<{
+    editorId: string;
+    children: React.ReactNode;
+  }> = ({ editorId, children }) => (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-64">
+        <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
+        <ContextMenuSeparator />
+        {categorias
+          .sort((a, b) => {
+            const aIsExam = (a as any).id?.startsWith('cat-exam-');
+            const bIsExam = (b as any).id?.startsWith('cat-exam-');
+            const ordemA = aIsExam ? 1 : ((a as any).is_sistema === 1 ? 0 : 2);
+            const ordemB = bIsExam ? 1 : ((b as any).is_sistema === 1 ? 0 : 2);
+            return ordemA - ordemB;
+          })
+          .map(cat => {
+            const items = placeholders.filter(p => p.categoria_id === cat.id);
+            if (items.length === 0) return null;
+            const IconComp = (LucideIcons as any)[(cat as any).icone] || LucideIcons.Tag;
+            return (
+              <ContextMenuSub key={cat.id}>
+                <ContextMenuSubTrigger>
+                  <IconComp size={14} className="mr-2" />
+                  <span>{cat.label}</span>
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="w-56 max-h-[350px] overflow-y-auto">
+                  {items
+                    .sort((a, b) => a.chave.localeCompare(b.chave))
+                    .map(p => {
+                      const isExamPlaceholder = CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
+                      return (
+                        <ContextMenuItem
+                          key={p.id}
+                          onClick={() => inserirPlaceholder(editorId, p.chave)}
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <code className="font-mono text-xs font-semibold">{`{{${p.chave}}}`}</code>
+                              {isExamPlaceholder && (
+                                <Badge variant="outline" className="text-[9px] h-4 px-1 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
+                                  I-801
+                                </Badge>
+                              )}
+                            </div>
+                            {p.descricao && (
+                              <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>
+                            )}
+                          </div>
+                        </ContextMenuItem>
+                      );
+                    })}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            );
+          })}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
 
   /**
    * Verifica e cria a seção "ILUSTRAÇÕES" no modo multi-seção.
@@ -1780,47 +1861,18 @@ export const LaudosPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                    <ContextMenu>
-                      <ContextMenuTrigger>
-                        <TinyMceEditor
-                          editorId="laudo-single-editor"
-                          value={singleEditorHtml}
-                          onChange={setSingleEditorHtml}
-                          height={560}
-                          placeholder="Edite o laudo completo..."
-                          laudoId={editando.id}
-                          onImageInserted={() => setImageInsertCounter(c => c + 1)}
-                          theme={editorTheme}
-                        />
-                      </ContextMenuTrigger>
-                  <ContextMenuContent className="w-64">
-                    <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
-                    <ContextMenuSeparator />
-                    {categorias.map(cat => (
-                      <ContextMenuSub key={cat.id}>
-                        <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
-                          {cat.label}
-                        </ContextMenuSubTrigger>
-                        <ContextMenuSubContent className="w-56">
-                          {placeholders
-                            .filter(p => p.categoria_id === cat.id)
-                            .sort((a, b) => a.chave.localeCompare(b.chave))
-                            .map(p => (
-                              <ContextMenuItem
-                                key={p.id}
-                                onClick={() => inserirPlaceholder('laudo-single-editor', p.chave)}
-                              >
-                                <div className="flex flex-col">
-                                  <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
-                                  {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
-                                </div>
-                              </ContextMenuItem>
-                            ))}
-                        </ContextMenuSubContent>
-                      </ContextMenuSub>
-                    ))}
-                  </ContextMenuContent>
-                    </ContextMenu>
+                    <PlaceholderContextMenu editorId="laudo-single-editor">
+                      <TinyMceEditor
+                        editorId="laudo-single-editor"
+                        value={singleEditorHtml}
+                        onChange={setSingleEditorHtml}
+                        height={560}
+                        placeholder="Edite o laudo completo..."
+                        laudoId={editando.id}
+                        onImageInserted={() => setImageInsertCounter(c => c + 1)}
+                        theme={editorTheme}
+                      />
+                    </PlaceholderContextMenu>
                   </div>
                 ) : (
                   <div className="space-y-6 pb-4">
@@ -1857,15 +1909,17 @@ export const LaudosPage: React.FC = () => {
                             onPerguntar={handlePerguntar}
                             onOpenSheet={handleOpenSheet}
                           />
-                          <TinyMceEditor
-                            editorId={`secao-${idx}`}
-                            value={secao.conteudo}
-                            onChange={(txt) => atualizarConteudoSecao(idx, txt)}
-                            height={400}
-                            laudoId={editando.id}
-                            onImageInserted={() => setImageInsertCounter(c => c + 1)}
-                            theme={editorTheme}
-                          />
+                          <PlaceholderContextMenu editorId={`secao-${idx}`}>
+                            <TinyMceEditor
+                              editorId={`secao-${idx}`}
+                              value={secao.conteudo}
+                              onChange={(txt) => atualizarConteudoSecao(idx, txt)}
+                              height={400}
+                              laudoId={editando.id}
+                              onImageInserted={() => setImageInsertCounter(c => c + 1)}
+                              theme={editorTheme}
+                            />
+                          </PlaceholderContextMenu>
                         </CollapsibleContent>
                       </Collapsible>
                     ))}
