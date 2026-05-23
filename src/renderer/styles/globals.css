@@ -502,6 +502,15 @@ body.dark {
   color: #d1d5db !important;
 }
 
+/* ── Inputs dark mode — garante legibilidade ── */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+.dark textarea,
+.dark select {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border));
+}
+
 /* ── Placeholder text in dark ── */
 .dark input::placeholder,
 .dark textarea::placeholder {
