@@ -6,43 +6,45 @@
 /* ═══ Design Tokens ═══════════════════════════════════════════════════════════ */
 @layer base {
   :root {
-    /* Superfícies */
-    --background: 210 20% 98%;      /* #f7f9fb — fundo geral, quase branco */
-    --foreground: 220 25% 12%;      /* #181f2e — texto principal, alto contraste */
-    --card: 0 0% 100%;              /* #ffffff — cards e painéis */
-    --card-foreground: 220 25% 12%;
+    /* ── Superfícies com hierarquia visual clara ── */
+    --background: 218 28% 91%;      /* #dde5f0 — fundo geral azul-slate médio */
+    --foreground: 220 30% 11%;      /* #151c2c — texto principal, alto contraste */
+    --card: 0 0% 100%;              /* #ffffff — cards elevados sobre o fundo */
+    --card-foreground: 220 30% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 12%;
+    --popover-foreground: 220 30% 11%;
 
     /* Primária: azul-índigo vibrante */
-    --primary: 226 71% 52%;         /* #2f6fed */
+    --primary: 224 76% 48%;         /* #1a55e0 — botões e destaque primário */
     --primary-foreground: 0 0% 100%;
 
-    /* Secundária: cinza-azulado suave */
-    --secondary: 214 32% 91%;       /* #dce4f0 */
-    --secondary-foreground: 220 25% 22%;
+    /* Secundária: azul-slate suave */
+    --secondary: 215 30% 84%;       /* #c4d2e6 */
+    --secondary-foreground: 220 30% 20%;
 
     /* Tons neutros */
-    --muted: 214 20% 94%;           /* #eaeef4 */
-    --muted-foreground: 220 14% 46%; /* #6b7589 */
-    --accent: 226 71% 96%;          /* #eef2fd */
-    --accent-foreground: 226 71% 40%;
+    --muted: 216 24% 86%;           /* #ccd7e8 */
+    --muted-foreground: 218 18% 42%; /* #5d7191 */
+    --accent: 224 76% 94%;          /* #e8effc */
+    --accent-foreground: 224 76% 35%;
 
     /* Estados */
-    --destructive: 4 86% 58%;       /* #e84545 */
+    --destructive: 4 86% 55%;       /* #e03535 */
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 88%;          /* #d8e0ec */
-    --input: 214 20% 88%;
-    --ring: 226 71% 52%;
+    --border: 216 26% 79%;          /* #b3c4d9 — bordas claramente visíveis */
+    --input: 216 26% 79%;
+    --ring: 224 76% 48%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Sidebar: navy escuro para máxima separação visual */
+    --sidebar-background: 222 45% 18%;   /* #1a2540 */
+    --sidebar-foreground: 210 40% 88%;   /* #cddaed */
+    --sidebar-primary: 213 94% 65%;      /* #5aaaf7 */
+    --sidebar-primary-foreground: 222 45% 10%;
+    --sidebar-accent: 222 40% 26%;       /* #28375a */
+    --sidebar-accent-foreground: 210 50% 90%;
+    --sidebar-border: 222 38% 28%;       /* #2d3f66 */
+    --sidebar-ring: 213 94% 65%;
   }
 
   .dark {
@@ -91,6 +93,37 @@
   }
 }
 
+/* ═══ Light Mode Enhancements ════════════════════════════════════════════════ */
+
+/* Elevação dos Cards shadcn no tema light: sombra + borda mais visível */
+:not(.dark) .rounded-lg.border.bg-card {
+  box-shadow: 0 2px 8px rgba(15, 30, 70, 0.07), 0 1px 3px rgba(15, 30, 70, 0.05);
+}
+
+/* Scrollbar global no tema light */
+:not(.dark) *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+:not(.dark) *::-webkit-scrollbar-track {
+  background: rgba(180, 200, 225, 0.2);
+  border-radius: 4px;
+}
+:not(.dark) *::-webkit-scrollbar-thumb {
+  background: #9ab3cc;
+  border-radius: 4px;
+}
+:not(.dark) *::-webkit-scrollbar-thumb:hover {
+  background: #7a9bb8;
+}
+
+/* Inputs com fundo levemente branco para destaque no tema light */
+:not(.dark) input,
+:not(.dark) textarea,
+:not(.dark) select {
+  background-color: #ffffff !important;
+}
+
 /* ═══ Reset & Base ════════════════════════════════════════════════════════════ */
 * {
   margin: 0;
@@ -102,8 +135,8 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 1.6;
-  color: #181f2e;
-  background-color: #f7f9fb;
+  color: #151c2c;
+  background-color: #dde5f0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -546,9 +579,11 @@ body.dark {
 
 /* Header */
 .header {
-  background-color: var(--background);
+  /* Gradiente sutil do branco ao azul-slate muito leve */
+  background: linear-gradient(135deg, #f8faff 0%, #f0f5fc 100%);
   color: var(--foreground);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid #b3c4d9;
+  box-shadow: 0 2px 8px rgba(15, 30, 70, 0.06);
   z-index: 10;
   transition: background-color 0.2s, border-color 0.2s;
 }
@@ -669,14 +704,15 @@ body.dark {
 .sidebar {
   position: relative;
   width: 240px;
-  background: #ffffff;
-  border-right: 1px solid #e8edf3;
+  /* Navy escuro — máxima separação visual do conteúdo */
+  background: linear-gradient(180deg, #1a2540 0%, #1e2d50 100%);
+  border-right: 1px solid #28395e;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
   transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 3px 0 16px rgba(10, 18, 40, 0.18);
 }
 
 .sidebar.collapsed {
@@ -693,10 +729,10 @@ body.dark {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 7px;
-  background: #f8fafc;
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  color: #8ab4d8;
   cursor: pointer;
   transition: background 0.18s, color 0.18s, border-color 0.18s;
   z-index: 10;
@@ -704,9 +740,9 @@ body.dark {
 }
 
 .sidebar-collapse-btn:hover {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  color: #2563eb;
+  background: rgba(90, 170, 247, 0.2);
+  border-color: rgba(90, 170, 247, 0.5);
+  color: #5aaaf7;
 }
 
 .sidebar.collapsed .sidebar-collapse-btn {
@@ -721,12 +757,12 @@ body.dark {
   overflow-x: hidden;
   padding: 52px 0 12px;
   scrollbar-width: thin;
-  scrollbar-color: #e2e8f0 transparent;
+  scrollbar-color: #3a5280 transparent;
 }
 
 .sidebar-nav::-webkit-scrollbar { width: 4px; }
 .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
-.sidebar-nav::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: #3a5280; border-radius: 4px; }
 
 /* ── Divider label ── */
 .nav-divider-label {
@@ -734,7 +770,7 @@ body.dark {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #cbd5e1;
+  color: rgba(170, 195, 225, 0.55);
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -750,7 +786,7 @@ body.dark {
   border-radius: 9px;
   font-size: 13.5px;
   font-weight: 500;
-  color: #475569;
+  color: rgba(190, 215, 240, 0.85);
   text-decoration: none;
   transition: background 0.18s, color 0.18s;
   white-space: nowrap;
@@ -758,13 +794,13 @@ body.dark {
 }
 
 .nav-link.solo:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: rgba(90, 170, 247, 0.12);
+  color: #e8f0fb;
 }
 
 .nav-link.solo.active {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  color: #1d4ed8;
+  background: linear-gradient(135deg, rgba(90, 170, 247, 0.22) 0%, rgba(60, 140, 230, 0.18) 100%);
+  color: #7dc8ff;
   font-weight: 600;
 }
 
@@ -786,7 +822,7 @@ body.dark {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: rgba(150, 185, 220, 0.65);
   text-transform: uppercase;
   transition: color 0.18s;
   white-space: nowrap;
@@ -794,11 +830,11 @@ body.dark {
 }
 
 .nav-section-header:hover {
-  color: #334155;
+  color: rgba(190, 215, 240, 0.9);
 }
 
 .nav-section-header.open {
-  color: #1e40af;
+  color: #7dc8ff;
 }
 
 .nav-section-icon {
@@ -852,7 +888,7 @@ body.dark {
   border-radius: 8px;
   font-size: 13px;
   font-weight: 450;
-  color: #64748b;
+  color: rgba(180, 210, 235, 0.75);
   text-decoration: none;
   transition: background 0.17s, color 0.17s;
   white-space: nowrap;
@@ -860,13 +896,13 @@ body.dark {
 }
 
 .nav-link:hover {
-  background: #f8fafc;
-  color: #1e293b;
+  background: rgba(90, 170, 247, 0.12);
+  color: #e8f0fb;
 }
 
 .nav-link.active {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  color: #1d4ed8;
+  background: linear-gradient(135deg, rgba(90, 170, 247, 0.25) 0%, rgba(60, 140, 230, 0.2) 100%);
+  color: #7dc8ff;
   font-weight: 600;
 }
 
@@ -915,19 +951,19 @@ body.dark {
   width: 36px;
   height: 36px;
   border-radius: 9px;
-  color: #94a3b8;
+  color: rgba(150, 185, 220, 0.75);
   text-decoration: none;
   transition: background 0.17s, color 0.17s;
 }
 
 .nav-icon-btn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: rgba(90, 170, 247, 0.15);
+  color: #e8f0fb;
 }
 
 .nav-icon-btn.active {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(90, 170, 247, 0.25);
+  color: #7dc8ff;
 }
 
 /* ── Sidebar footer ── */
@@ -936,13 +972,13 @@ body.dark {
   align-items: center;
   gap: 8px;
   padding: 12px 18px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
   overflow: hidden;
 }
 
 .sidebar-footer-badge {
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: linear-gradient(135deg, #3b82f6, #7c3aed);
   color: white;
   font-size: 10px;
   font-weight: 700;
@@ -954,7 +990,7 @@ body.dark {
 
 .sidebar-footer-text {
   font-size: 11px;
-  color: #94a3b8;
+  color: rgba(150, 185, 220, 0.65);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -971,16 +1007,21 @@ body.dark {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
-  background-color: #f0f4f9;
+  /* Fundo azul-slate médio — claramente diferente dos cards brancos */
+  background-color: #dde5f0;
+  background-image: 
+    radial-gradient(at 20% 10%, rgba(99, 152, 220, 0.08) 0px, transparent 50%),
+    radial-gradient(at 80% 90%, rgba(79, 130, 210, 0.06) 0px, transparent 50%);
 }
 
 .welcome-card {
   background: #ffffff;
   border-radius: 14px;
   padding: 32px;
-  box-shadow: 0 1px 4px rgba(15,23,46,0.06), 0 4px 16px rgba(15,23,46,0.04);
+  /* Sombra mais pronunciada para elevar o card sobre o fundo slate */
+  box-shadow: 0 2px 8px rgba(15,30,70,0.08), 0 8px 24px rgba(15,30,70,0.06);
   margin-bottom: 24px;
-  border: 1px solid #e8eef6;
+  border: 1px solid #b3c4d9;
 }
 
 .welcome-card .logo-container {
@@ -1022,14 +1063,17 @@ body.dark {
 
 .info-card {
   background: #ffffff;
-  border: 1px solid #e2eaf4;
+  border: 1px solid #b3c4d9;
   border-radius: 12px;
   padding: 20px;
-  transition: box-shadow 0.2s;
+  transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+  box-shadow: 0 2px 8px rgba(15,30,70,0.06);
 }
 
 .info-card:hover {
-  box-shadow: 0 4px 16px rgba(15,23,46,0.08);
+  box-shadow: 0 6px 20px rgba(15,30,70,0.12);
+  border-color: #8aabcc;
+  transform: translateY(-1px);
 }
 
 .info-card h3 {
@@ -1117,10 +1161,11 @@ body.dark {
 }
 
 .sprint-info {
-  background: white;
+  background: #ffffff;
+  border: 1px solid #b3c4d9;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(15,30,70,0.06);
 }
 
 .sprint-info h3 {
@@ -1176,10 +1221,10 @@ body.dark {
 
 /* Footer */
 .footer {
-  background: #ffffff;
-  border-top: 1px solid #e2eaf4;
+  background: #f3f7fc;
+  border-top: 1px solid #b3c4d9;
   padding: 10px 24px;
-  color: #7e90aa;
+  color: #5d7191;
   font-size: 12px;
   z-index: 10;
 }
