@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 16;
+const CURRENT_SCHEMA_VERSION = 17;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -1041,6 +1041,74 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       logInfo('Migration v16: Todas as 8 categorias de sistema garantidas');
     } catch (error) {
       logError('Erro ao aplicar migration versão 16', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 17: Remover eh_local da tabela tipos_exame e adicionar campos_especificos na tabela reps
+  if (fromVersion < 17) {
+    try {
+      // 17a. Remover coluna eh_local
+      const tipoExameCols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(tipos_exame)'
+      );
+      const hasEhLocal = tipoExameCols.some(c => c.name === 'eh_local');
+
+      if (hasEhLocal) {
+        // SQLite não suporta DROP COLUMN direto em versões antigas.
+        // Recriar a tabela sem a coluna eh_local.
+        // Desabilitar FKs temporariamente para evitar constraint violations
+        await executeNonQuery('PRAGMA foreign_keys = OFF');
+        try {
+          await executeNonQuery('DROP TABLE IF EXISTS tipos_exame_v17');
+          await executeNonQuery(`
+            CREATE TABLE tipos_exame_v17 (
+              id TEXT PRIMARY KEY,
+              codigo TEXT NOT NULL UNIQUE,
+              nome TEXT NOT NULL,
+              descricao TEXT,
+              template_padrao TEXT,
+              ativo BOOLEAN DEFAULT 1,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+          `);
+
+          await executeNonQuery(`
+            INSERT INTO tipos_exame_v17 (id, codigo, nome, descricao, template_padrao, ativo, created_at, updated_at)
+            SELECT id, codigo, nome, descricao, template_padrao, ativo, created_at, updated_at
+            FROM tipos_exame
+          `);
+
+          await executeNonQuery('DROP TABLE tipos_exame');
+          await executeNonQuery('ALTER TABLE tipos_exame_v17 RENAME TO tipos_exame');
+        } finally {
+          await executeNonQuery('PRAGMA foreign_keys = ON');
+        }
+
+        logInfo('Migration v17a: Coluna eh_local removida de tipos_exame');
+      } else {
+        logInfo('Migration v17a: Coluna eh_local já não existe');
+      }
+
+      // 17b. Adicionar coluna campos_especificos na tabela reps
+      const repsCols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(reps)'
+      );
+      const hasCamposEspecificos = repsCols.some(c => c.name === 'campos_especificos');
+
+      if (!hasCamposEspecificos) {
+        await executeNonQuery(
+          'ALTER TABLE reps ADD COLUMN campos_especificos TEXT'
+        );
+        logInfo('Migration v17b: Coluna campos_especificos adicionada à tabela reps');
+      } else {
+        logInfo('Migration v17b: Coluna campos_especificos já existe');
+      }
+
+      logInfo('Migration v17: Concluída');
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 17', error);
       throw error;
     }
   }

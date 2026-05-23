@@ -53,6 +53,7 @@ export const registerRepHandlers = (): void => {
       if (data.numero_ip) sanitizedData.numero_ip = sanitizeInput(data.numero_ip);
       if (data.observacoes) sanitizedData.observacoes = sanitizeInput(data.observacoes);
       if (data.prazo) sanitizedData.prazo = data.prazo;
+      if (data.campos_especificos) sanitizedData.campos_especificos = data.campos_especificos;
 
       const rep = await repService.create(sanitizedData);
       logInfo('REP criada', { numero: data.numero, id: rep.id });
@@ -146,6 +147,7 @@ export const registerRepHandlers = (): void => {
       if (data.numero_ip !== undefined) sanitizedData.numero_ip = sanitizeInput(data.numero_ip);
       if (data.observacoes !== undefined) sanitizedData.observacoes = sanitizeInput(data.observacoes);
       if (data.prazo !== undefined) sanitizedData.prazo = data.prazo;
+      if (data.campos_especificos !== undefined) sanitizedData.campos_especificos = data.campos_especificos;
 
       const updated = await repService.update(id, sanitizedData);
 

@@ -8,8 +8,8 @@ export const repSchema = z.object({
   data_requisicao: z.string().min(1, "Data é obrigatória"),
   prazo: z.string().nullable().optional(),
   status: z.string().default("Pendente"),
-  tipo_solicitacao: z.string().max(50).nullable().optional(),
-  numero_documento: z.string().max(30).nullable().optional(),
+  tipo_solicitacao: z.string().min(1, "Tipo de solicitação é obrigatório").max(50),
+  numero_documento: z.string().min(1, "Nº da solicitação é obrigatório").max(30),
   data_documento: z.string().nullable().optional(),
   autoridade_solicitante: z.string().max(200).nullable().optional(),
   nome_envolvido: z.string().max(200).nullable().optional(),
@@ -25,6 +25,7 @@ export const repSchema = z.object({
   numero_bo: z.string().max(30).nullable().optional(),
   numero_ip: z.string().max(30).nullable().optional(),
   observacoes: z.string().max(1000).nullable().optional(),
+  campos_especificos: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 })

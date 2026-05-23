@@ -1,0 +1,176 @@
+import React from 'react';
+import { FormField, FormItem, FormControl, FormMessage } from '@/components/forms/form';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { ExamSectionProps } from './types';
+
+const CORES = [
+  'Amarelo', 'Azul', 'Bege', 'Branco', 'Cinza', 'Dourado',
+  'Laranja', 'Marrom', 'Preto', 'Prata', 'Rosa', 'Roxo', 'Verde', 'Vermelho',
+] as const;
+
+const CONSERVACOES = ['péssimo', 'ruim', 'regular', 'bom'] as const;
+
+const Label = ({ children }: { children: React.ReactNode }) => (
+  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+    {children}
+  </label>
+);
+
+export const NumeracaoFields: React.FC<ExamSectionProps> = ({ form }) => (
+  <div className="space-y-4">
+    <FormField
+      control={form.control}
+      name="numeracao_veiculo"
+      render={({ field }) => (
+        <FormItem>
+          <Label>Veículo *</Label>
+          <FormControl>
+            <Input placeholder="Marca, modelo ou tipo do veículo" maxLength={25} {...field} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormField
+        control={form.control}
+        name="numeracao_placa"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Placa</Label>
+            <FormControl>
+              <Input placeholder="ABC1234 ou ABC1B23" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="numeracao_fabricacao"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Fabricação/Modelo</Label>
+            <FormControl>
+              <Input placeholder="2020/2021" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormField
+        control={form.control}
+        name="numeracao_cor"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Cor</Label>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a cor..." />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {CORES.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="numeracao_conservacao"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Conservação</Label>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {CONSERVACOES.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormField
+        control={form.control}
+        name="numeracao_chassi"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Chassi</Label>
+            <FormControl>
+              <Input placeholder="Até 17 caracteres alfanuméricos" maxLength={17} {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="numeracao_chassi_revelado"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Chassi Revelado</Label>
+            <FormControl>
+              <Input placeholder="Chassi após revelação química" maxLength={17} {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormField
+        control={form.control}
+        name="numeracao_motor"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Motor</Label>
+            <FormControl>
+              <Input placeholder="Até 12 caracteres alfanuméricos" maxLength={12} {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="numeracao_motor_revelado"
+        render={({ field }) => (
+          <FormItem>
+            <Label>Motor Revelado</Label>
+            <FormControl>
+              <Input placeholder="Motor após revelação química" maxLength={12} {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </div>
+  </div>
+);

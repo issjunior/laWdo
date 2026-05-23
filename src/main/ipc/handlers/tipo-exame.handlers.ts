@@ -74,8 +74,7 @@ export const registerTipoExameHandlers = (): void => {
       const sanitizedData = {
         codigo: sanitizeInput(tipoExameData.codigo),
         nome: sanitizeInput(tipoExameData.nome),
-        descricao: tipoExameData.descricao ? sanitizeInput(tipoExameData.descricao) : null,
-        eh_local: tipoExameData.eh_local ? 1 : 0
+        descricao: tipoExameData.descricao ? sanitizeInput(tipoExameData.descricao) : null
       }
 
       logInfo('Criando novo tipo de exame', { nome: sanitizedData.nome })
@@ -112,7 +111,6 @@ export const registerTipoExameHandlers = (): void => {
       if (updateData.codigo) sanitizedData.codigo = sanitizeInput(updateData.codigo)
       if (updateData.nome) sanitizedData.nome = sanitizeInput(updateData.nome)
       if (updateData.descricao !== undefined) sanitizedData.descricao = sanitizeInput(updateData.descricao)
-      if (updateData.eh_local !== undefined) sanitizedData.eh_local = updateData.eh_local ? 1 : 0
 
       logInfo('Atualizando tipo de exame', { id })
       const updatedTipoExame = await tipoExameService.update(id, sanitizedData)

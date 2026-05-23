@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/forms/form';
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, User, Clock3, Link2, AlertTriangle, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, Lock, Zap } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { type REP } from '@/lib/validators';
@@ -31,30 +31,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-
-interface REPFormData {
-  numero: string;
-  solicitante_id: string;
-  tipo_exame_id: string;
-  template_id: string;
-  data_requisicao: string;
-  tipo_solicitacao: string;
-  numero_documento: string;
-  data_documento: string;
-  autoridade_solicitante: string;
-  nome_envolvido: string;
-  data_acionamento: string;
-  data_chegada: string;
-  data_saida: string;
-  local_fato: string;
-  latitude: string;
-  longitude: string;
-  lacre_entrada: string;
-  lacre_saida: string;
-  numero_bo: string;
-  numero_ip: string;
-  observacoes: string;
-}
+import {
+  getSectionsForExame,
+  EXAM_FIELD_MAP,
+} from '@/components/rep/exam-fields';
+import type { REPFormData } from '@/components/rep/exam-fields';
 
 const emptyForm = (): REPFormData => ({
   numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0],
@@ -62,6 +43,10 @@ const emptyForm = (): REPFormData => ({
   autoridade_solicitante: '', nome_envolvido: '', data_acionamento: '',
   data_chegada: '', data_saida: '', local_fato: '', latitude: '', longitude: '',
   lacre_entrada: '', lacre_saida: '', numero_bo: '', numero_ip: '', observacoes: '',
+  numeracao_veiculo: '', numeracao_placa: '', numeracao_fabricacao: '',
+  numeracao_cor: '', numeracao_conservacao: 'regular',
+  numeracao_chassi: '', numeracao_chassi_revelado: '',
+  numeracao_motor: '', numeracao_motor_revelado: '',
 });
 
 const FIELD_PLACEHOLDER: Record<string, string> = {
@@ -106,33 +91,6 @@ function formatarNumeroREP(raw: string): string {
   return `${formattedRepNum}-${year}`;
 }
 
-const repFormSchema = z.object({
-  numero: z
-    .string()
-    .min(1, 'Número da REP é obrigatório')
-    .regex(/^(\d{1,3}|\d{1,3}\.\d{3})-\d{4}$/, 'Formato inválido. Use algo entre 1-AAAA e 000.000-AAAA'),
-  solicitante_id: z.string().optional(),
-  tipo_exame_id: z.string().optional(),
-  template_id: z.string().optional(),
-  data_requisicao: z.string().min(1, 'Data da solicitação é obrigatória'),
-  tipo_solicitacao: z.string().min(1, 'Tipo de solicitação é obrigatório').max(50, 'Tipo de solicitação deve ter no máximo 50 caracteres'),
-  numero_documento: z.string().min(1, 'Nº da solicitação é obrigatório').max(30, 'Nº do documento deve ter no máximo 30 caracteres'),
-  data_documento: z.string().optional(),
-  autoridade_solicitante: z.string().max(200, 'Autoridade deve ter no máximo 200 caracteres').optional(),
-  nome_envolvido: z.string().max(200, 'Nome do envolvido deve ter no máximo 200 caracteres').optional(),
-  data_acionamento: z.string().optional(),
-  data_chegada: z.string().optional(),
-  data_saida: z.string().optional(),
-  local_fato: z.string().max(500, 'Local do fato deve ter no máximo 500 caracteres').optional(),
-  latitude: z.string().optional(),
-  longitude: z.string().optional(),
-  lacre_entrada: z.string().max(50, 'Lacre de entrada deve ter no máximo 50 caracteres').optional(),
-  lacre_saida: z.string().max(50, 'Lacre de saída deve ter no máximo 50 caracteres').optional(),
-  numero_bo: z.string().max(30, 'Nº do BO deve ter no máximo 30 caracteres').optional(),
-  numero_ip: z.string().max(30, 'Nº do IP deve ter no máximo 30 caracteres').optional(),
-  observacoes: z.string().max(1000, 'Observações devem ter no máximo 1000 caracteres').optional(),
-});
-
 function getLoggedUserId(): string | undefined {
   try {
     const raw = sessionStorage.getItem('lawdo_auth_user');
@@ -143,7 +101,46 @@ function getLoggedUserId(): string | undefined {
   }
 }
 
-function prepareForApi(data: REPFormData) {
+function buildCamposEspecificos(data: REPFormData, codigo: string): string | undefined {
+  if (codigo === 'I-801') {
+    return JSON.stringify({
+      numeracao: {
+        veiculo: data.numeracao_veiculo || '',
+        placa: data.numeracao_placa || '',
+        fabricacao: data.numeracao_fabricacao || '',
+        cor: data.numeracao_cor || '',
+        conservacao: data.numeracao_conservacao || 'regular',
+        chassi: data.numeracao_chassi || '',
+        chassi_revelado: data.numeracao_chassi_revelado || '',
+        motor: data.numeracao_motor || '',
+        motor_revelado: data.numeracao_motor_revelado || '',
+      },
+    });
+  }
+  return undefined;
+}
+
+function parseCamposEspecificos(json: string | null | undefined): Partial<REPFormData> {
+  if (!json) return {};
+  try {
+    const data = JSON.parse(json);
+    return {
+      numeracao_veiculo: data.numeracao?.veiculo || '',
+      numeracao_placa: data.numeracao?.placa || '',
+      numeracao_fabricacao: data.numeracao?.fabricacao || '',
+      numeracao_cor: data.numeracao?.cor || '',
+      numeracao_conservacao: data.numeracao?.conservacao || 'regular',
+      numeracao_chassi: data.numeracao?.chassi || '',
+      numeracao_chassi_revelado: data.numeracao?.chassi_revelado || '',
+      numeracao_motor: data.numeracao?.motor || '',
+      numeracao_motor_revelado: data.numeracao?.motor_revelado || '',
+    };
+  } catch {
+    return {};
+  }
+}
+
+function prepareForApi(data: REPFormData, codigo: string | undefined) {
   const payload: Record<string, unknown> = {
     numero: data.numero,
     data_requisicao: data.data_requisicao,
@@ -172,6 +169,11 @@ function prepareForApi(data: REPFormData) {
   if (data.numero_bo) payload.numero_bo = data.numero_bo;
   if (data.numero_ip) payload.numero_ip = data.numero_ip;
   if (data.observacoes) payload.observacoes = data.observacoes;
+
+  if (codigo) {
+    const campos = buildCamposEspecificos(data, codigo);
+    if (campos) payload.campos_especificos = campos;
+  }
 
   return payload;
 }
@@ -224,17 +226,73 @@ export const REPsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRep, setEditingRep] = useState<REP | null>(null);
-  const form = useForm<REPFormData>({
-    resolver: zodResolver(repFormSchema),
-    defaultValues: emptyForm(),
-    mode: 'onBlur',
-  });
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [solicitantes, setSolicitantes] = useState<any[]>([]);
   const [tiposExame, setTiposExame] = useState<any[]>([]);
   const [templatesVinculados, setTemplatesVinculados] = useState<any[]>([]);
+
+  // Ref para o superRefine sempre ter os tiposExame atualizados
+  const tiposExameRef = useRef<any[]>([]);
+  useEffect(() => { tiposExameRef.current = tiposExame; }, [tiposExame]);
+
+  // Schema com validação condicional via superRefine
+  const repFormSchema = useMemo(() => z.object({
+    numero: z
+      .string()
+      .min(1, 'Número da REP é obrigatório')
+      .regex(/^(\d{1,3}|\d{1,3}\.\d{3})-\d{4}$/, 'Formato inválido. Use algo entre 1-AAAA e 000.000-AAAA'),
+    solicitante_id: z.string().optional(),
+    tipo_exame_id: z.string().optional(),
+    template_id: z.string().optional(),
+    data_requisicao: z.string().min(1, 'Data da solicitação é obrigatória'),
+    tipo_solicitacao: z.string().min(1, 'Tipo de solicitação é obrigatório').max(50, 'Tipo de solicitação deve ter no máximo 50 caracteres'),
+    numero_documento: z.string().min(1, 'Nº da solicitação é obrigatório').max(30, 'Nº do documento deve ter no máximo 30 caracteres'),
+    data_documento: z.string().optional(),
+    autoridade_solicitante: z.string().max(200, 'Autoridade deve ter no máximo 200 caracteres').optional(),
+    nome_envolvido: z.string().max(200, 'Nome do envolvido deve ter no máximo 200 caracteres').optional(),
+    data_acionamento: z.string().optional(),
+    data_chegada: z.string().optional(),
+    data_saida: z.string().optional(),
+    local_fato: z.string().max(500, 'Local do fato deve ter no máximo 500 caracteres').optional(),
+    latitude: z.string().optional(),
+    longitude: z.string().optional(),
+    lacre_entrada: z.string().max(50, 'Lacre de entrada deve ter no máximo 50 caracteres').optional(),
+    lacre_saida: z.string().max(50, 'Lacre de saída deve ter no máximo 50 caracteres').optional(),
+    numero_bo: z.string().max(30, 'Nº do BO deve ter no máximo 30 caracteres').optional(),
+    numero_ip: z.string().max(30, 'Nº do IP deve ter no máximo 30 caracteres').optional(),
+    observacoes: z.string().max(1000, 'Observações devem ter no máximo 1000 caracteres').optional(),
+    numeracao_veiculo: z.string().max(25, 'Máximo 25 caracteres').optional(),
+    numeracao_placa: z.string().regex(/^[A-Za-z]{3}-?(\d{4}|\d[A-Za-z]\d{2})$/, 'Formato inválido. Use ABC1234, ABC-1234, ABC1B23 ou ABC-1B23').optional().or(z.literal('')),
+    numeracao_fabricacao: z.string().regex(/^\d{4}\/\d{4}$/, 'Formato inválido. Use ano/ano (ex: 2020/2021)').optional().or(z.literal('')),
+    numeracao_cor: z.string().optional(),
+    numeracao_conservacao: z.string().optional(),
+    numeracao_chassi: z.string().regex(/^[A-Za-z0-9]{0,17}$/, 'Apenas caracteres alfanuméricos, até 17').optional(),
+    numeracao_chassi_revelado: z.string().regex(/^[A-Za-z0-9]{0,17}$/, 'Apenas caracteres alfanuméricos, até 17').optional(),
+    numeracao_motor: z.string().regex(/^[A-Za-z0-9]{0,12}$/, 'Apenas caracteres alfanuméricos, até 12').optional(),
+    numeracao_motor_revelado: z.string().regex(/^[A-Za-z0-9]{0,12}$/, 'Apenas caracteres alfanuméricos, até 12').optional(),
+  }).superRefine((data, ctx) => {
+    if (!data.tipo_exame_id) return;
+    const tipos = tiposExameRef.current;
+    const tipo = tipos.find(t => t.id === data.tipo_exame_id);
+    if (!tipo) return;
+    const sections = EXAM_FIELD_MAP[tipo.codigo] || [];
+
+    if (sections.includes('local_fato') && !data.local_fato?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Local do fato é obrigatório para este tipo de exame', path: ['local_fato'] });
+    }
+    if (sections.includes('numeracao') && !data.numeracao_veiculo?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Veículo é obrigatório', path: ['numeracao_veiculo'] });
+    }
+  }), []);
+
+  const form = useForm<REPFormData>({
+    resolver: zodResolver(repFormSchema),
+    defaultValues: emptyForm(),
+    mode: 'onChange',
+  });
 
   // Estados para o Dialog "Criar Laudo" (REPs órfãs)
   const [criarLaudoOpen, setCriarLaudoOpen] = useState(false);
@@ -250,6 +308,12 @@ export const REPsPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteDialogRep, setDeleteDialogRep] = useState<REP | null>(null);
 
+  // Estado de desbloqueio dos campos específicos (Nível 3)
+  const [camposEspecificosDesbloqueados, setCamposEspecificosDesbloqueados] = useState(false);
+
+  // Controle do accordion (expande N3 automaticamente ao desbloquear)
+  const [accordionValue, setAccordionValue] = useState<string[]>(["dados-solicitacao", "documentos"]);
+
   const carregarREPs = useCallback(async () => {
     try {
       setLoading(true); setError(null);
@@ -257,7 +321,6 @@ export const REPsPage: React.FC = () => {
       if (r.success && r.data) {
         setReps(r.data);
 
-        // Carregar laudos para identificar quais REPs têm laudo vinculado
         try {
           const laudosResp = await window.ipcAPI.laudo.findAll();
           if (laudosResp.success && laudosResp.data) {
@@ -267,7 +330,6 @@ export const REPsPage: React.FC = () => {
             setRepsComLaudo(idsComLaudo);
           }
         } catch {
-          // Silencioso: badges não serão exibidos, mas a tabela funciona normalmente
         }
       } else {
         setError(r.error);
@@ -307,34 +369,66 @@ export const REPsPage: React.FC = () => {
     })();
   }, [tipoExameId, showForm]);
 
+  // Revalidar campos condicionais quando o tipo de exame muda
+  useEffect(() => {
+    if (tipoExameId) {
+      form.trigger(['local_fato', 'numeracao_veiculo', 'numeracao_placa', 'numeracao_fabricacao', 'numeracao_chassi', 'numeracao_chassi_revelado', 'numeracao_motor', 'numeracao_motor_revelado']);
+    }
+  }, [tipoExameId]);
+
   const tipoExameSelecionado = tipoExameId
     ? tiposExame.find(t => t.id === tipoExameId)
     : null;
-  const isExameLocal = tipoExameSelecionado?.eh_local === true || tipoExameSelecionado?.eh_local === 1;
+
+  // Seções dinâmicas baseadas no tipo de exame
+  const examSections = useMemo(() => {
+    if (!tipoExameSelecionado) return [];
+    return getSectionsForExame(tipoExameSelecionado.codigo);
+  }, [tipoExameSelecionado, tiposExame]);
+
+  const groupedSections = examSections.filter(s => s.group);
+  const standaloneSections = examSections.filter(s => !s.group);
+
+  // Desbloqueio do Nível 3
+  const [numero, data_requisicao, tipo_solicitacao, numero_documento] = form.watch(['numero', 'data_requisicao', 'tipo_solicitacao', 'numero_documento']);
+  const canUnlockSpecificFields = !!(numero && data_requisicao && tipo_solicitacao && numero_documento && tipoExameId);
+
+  useEffect(() => {
+    if (canUnlockSpecificFields && !camposEspecificosDesbloqueados) {
+      setCamposEspecificosDesbloqueados(true);
+    }
+  }, [canUnlockSpecificFields, camposEspecificosDesbloqueados]);
+
+  // Expande N3 automaticamente ao desbloquear
+  useEffect(() => {
+    if (camposEspecificosDesbloqueados) {
+      setAccordionValue(["dados-solicitacao", "documentos", "campos-especificos"]);
+    }
+  }, [camposEspecificosDesbloqueados]);
 
   const handleNovo = () => {
     setEditingRep(null);
     setError(null);
     setSuccess(null);
     setTemplatesVinculados([]);
+    setCamposEspecificosDesbloqueados(false);
+    setAccordionValue(["dados-solicitacao", "documentos"]);
     form.reset(emptyForm());
     setSubmitting(false);
     setShowForm(true);
-
-    // Força a limpeza de estilos residuais do Radix UI (ex: Select) que podem travar a tela
     document.body.style.pointerEvents = '';
   };
 
   const handleCancelar = () => {
     setShowForm(false);
     setEditingRep(null);
+    setCamposEspecificosDesbloqueados(false);
+    setAccordionValue(["dados-solicitacao", "documentos"]);
     form.reset(emptyForm());
     setTemplatesVinculados([]);
     setError(null);
     setSuccess(null);
     setSubmitting(false);
-
-    // Força a limpeza de estilos residuais do Radix UI (ex: Select) que podem travar a tela
     document.body.style.pointerEvents = '';
   };
 
@@ -343,7 +437,6 @@ export const REPsPage: React.FC = () => {
     setError(null);
     setSuccess(null);
 
-    // Busca o template_id salvo no laudo ANTES de abrir o formulário
     let templateId = '';
     if (rep.tipo_exame_id) {
       try {
@@ -352,10 +445,8 @@ export const REPsPage: React.FC = () => {
           templateId = r.data.template_id;
         }
       } catch {
-        // Sem laudo vinculado — mantém vazio
       }
 
-      // Carregar os templates correspondentes imediatamente para garantir que o Select os tenha no primeiro render
       try {
         const templatesResp = await window.ipcAPI.template.findByTipoExame(rep.tipo_exame_id);
         if (templatesResp.success && templatesResp.data) {
@@ -370,6 +461,14 @@ export const REPsPage: React.FC = () => {
     } else {
       setTemplatesVinculados([]);
     }
+
+    // Parse campos_especificos JSON para campos de numeração
+    const especificos = parseCamposEspecificos(rep.campos_especificos);
+
+    // Se a REP já tem tipo de exame com campos específicos, desbloqueia o Nível 3
+    const tipo = tiposExame.find(t => t.id === rep.tipo_exame_id);
+    const hasSpecificSections = tipo ? getSectionsForExame(tipo.codigo).length > 0 : false;
+    setCamposEspecificosDesbloqueados(hasSpecificSections);
 
     form.reset({
       numero: rep.numero,
@@ -393,6 +492,15 @@ export const REPsPage: React.FC = () => {
       numero_bo: rep.numero_bo || '',
       numero_ip: rep.numero_ip || '',
       observacoes: rep.observacoes || '',
+      numeracao_veiculo: especificos.numeracao_veiculo || '',
+      numeracao_placa: especificos.numeracao_placa || '',
+      numeracao_fabricacao: especificos.numeracao_fabricacao || '',
+      numeracao_cor: especificos.numeracao_cor || '',
+      numeracao_conservacao: especificos.numeracao_conservacao || 'regular',
+      numeracao_chassi: especificos.numeracao_chassi || '',
+      numeracao_chassi_revelado: especificos.numeracao_chassi_revelado || '',
+      numeracao_motor: especificos.numeracao_motor || '',
+      numeracao_motor_revelado: especificos.numeracao_motor_revelado || '',
     });
     setShowForm(true);
   };
@@ -429,7 +537,6 @@ export const REPsPage: React.FC = () => {
     setCriarLaudoSubmitting(false);
     setCriarLaudoOpen(true);
 
-    // Se a REP já tem tipo de exame, carregar os templates imediatamente
     if (rep.tipo_exame_id) {
       (async () => {
         const r = await window.ipcAPI.template.findByTipoExame(rep.tipo_exame_id!);
@@ -473,7 +580,6 @@ export const REPsPage: React.FC = () => {
     }
   };
 
-  // Carregar templates quando o tipo de exame muda no Dialog
   const handleCriarLaudoTipoExameChange = async (tipoExameId: string) => {
     setCriarLaudoTipoExameId(tipoExameId);
     setCriarLaudoTemplateId('');
@@ -496,7 +602,8 @@ export const REPsPage: React.FC = () => {
       setSuccess(null);
       setSubmitting(true);
 
-      const apiData = prepareForApi(data);
+      const codigo = tipoExameSelecionado?.codigo;
+      const apiData = prepareForApi(data, codigo);
 
       if (editingRep) {
         const r = await window.ipcAPI.rep.update(editingRep.id, apiData);
@@ -651,7 +758,6 @@ export const REPsPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Dialog "Criar Laudo" para REPs órfãs */}
         <Dialog open={criarLaudoOpen} onOpenChange={setCriarLaudoOpen}>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
@@ -720,7 +826,6 @@ export const REPsPage: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de confirmação de exclusão */}
         <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
@@ -798,7 +903,11 @@ export const REPsPage: React.FC = () => {
               {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
               {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
 
-              <Accordion type="multiple" defaultValue={["dados-solicitacao", "envolvido-local", "documentos"]} className="space-y-4">
+              <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="space-y-4">
+
+                {/* ============================================ */}
+                {/* NÍVEL 1: Dados da Solicitação */}
+                {/* ============================================ */}
                 <AccordionItem value="dados-solicitacao">
                   <AccordionTrigger className="text-base font-semibold">
                     <span className="inline-flex items-center gap-2">
@@ -953,7 +1062,7 @@ export const REPsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <FormField
                       control={form.control}
@@ -999,20 +1108,6 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="envolvido-local">
-                  <AccordionTrigger className="text-base font-semibold">
-                    <span className="inline-flex items-center gap-2">
-                      <User size={14} />
-                      Envolvido e Local
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-4">Dados da pessoa envolvida e, quando aplicável, do local do fato.</p>
-                <div className={`grid grid-cols-1 ${isExameLocal ? 'md:grid-cols-2' : ''} gap-4`}>
                   <div>
                     <FormField
                       control={form.control}
@@ -1028,122 +1123,13 @@ export const REPsPage: React.FC = () => {
                       )}
                     />
                   </div>
-                  {isExameLocal && (
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="local_fato"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="local_fato" mostrar={mostrarPlaceholders}>Local do Fato</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input placeholder="Descrição do local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  )}
                 </div>
-                {isExameLocal && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="latitude"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="latitude" mostrar={mostrarPlaceholders}>Latitude</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input type="number" step="any" placeholder="-25.4284" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="longitude"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="longitude" mostrar={mostrarPlaceholders}>Longitude</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input type="number" step="any" placeholder="-49.2674" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                )}
                   </AccordionContent>
                 </AccordionItem>
 
-                {isExameLocal && (
-                  <AccordionItem value="acionamento">
-                    <AccordionTrigger className="text-base font-semibold">
-                      <span className="inline-flex items-center gap-2">
-                        <Clock3 size={14} />
-                        Acionamento
-                      </span>
-                    </AccordionTrigger>
-                    <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
-                      <p className="text-xs text-muted-foreground mb-4">Linha do tempo de atendimento no local.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="data_acionamento"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="data_acionamento" mostrar={mostrarPlaceholders}>Data/Hora Acionamento</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="data_chegada"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="data_chegada" mostrar={mostrarPlaceholders}>Data/Hora Chegada</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="data_saida"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="data_saida" mostrar={mostrarPlaceholders}>Data/Hora Saída</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input type="datetime-local" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                )}
-
+                {/* ============================================ */}
+                {/* NÍVEL 2: Documentos Associados */}
+                {/* ============================================ */}
                 <AccordionItem value="documentos">
                   <AccordionTrigger className="text-base font-semibold">
                     <span className="inline-flex items-center gap-2">
@@ -1240,11 +1226,68 @@ export const REPsPage: React.FC = () => {
                 </div>
                   </AccordionContent>
                 </AccordionItem>
+
+                {/* ============================================ */}
+                {/* NÍVEL 3: Campos Específicos (bloqueado/desbloqueado) */}
+                {/* ============================================ */}
+                {examSections.length > 0 && (
+                  <AccordionItem
+                    value="campos-especificos"
+                    className={!camposEspecificosDesbloqueados ? 'opacity-60' : ''}
+                  >
+                    <AccordionTrigger className="text-base font-semibold">
+                      {camposEspecificosDesbloqueados
+                        ? (
+                          <span className="inline-flex items-center gap-2">
+                            <Zap size={14} />
+                            Campos Específicos — {tipoExameSelecionado?.nome}
+                          </span>
+                        )
+                        : (
+                          <span className="inline-flex items-center gap-2">
+                            <Lock size={14} />
+                            Preencha os campos obrigatórios acima para desbloquear
+                          </span>
+                        )
+                      }
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
+                      {camposEspecificosDesbloqueados ? (
+                        <>
+                          {groupedSections.length > 0 && (
+                            <div className="space-y-4">
+                              <h4 className="font-medium text-sm">Envolvido e Local</h4>
+                              {groupedSections.map(s => (
+                                <s.component key={s.id} form={form} mostrarPlaceholders={mostrarPlaceholders} />
+                              ))}
+                            </div>
+                          )}
+
+                          {standaloneSections.map(s => (
+                            <div key={s.id} className="space-y-3">
+                              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                <s.icon size={14} />
+                                <span>{s.label}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{s.description}</p>
+                              <s.component form={form} mostrarPlaceholders={mostrarPlaceholders} />
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-3">
+                          <Lock size={28} className="opacity-30" />
+                          <p className="text-sm text-center max-w-md">Selecione o tipo de exame e preencha os campos obrigatórios (Nº REP, Data de Recebimento, Tipo de Solicitação, Nº da Solicitação) para desbloquear os campos específicos.</p>
+                        </div>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
               </Accordion>
 
               <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
                 <Button variant="outline" type="button" onClick={handleCancelar}>Cancelar</Button>
-                <Button type="submit" disabled={submitting} className="flex items-center gap-2">
+                <Button type="submit" disabled={submitting || !form.formState.isValid} className="flex items-center gap-2">
                   <Plus size={16} /> {submitting ? 'Salvando...' : editingRep ? 'Atualizar' : 'Criar'} REP
                 </Button>
               </div>

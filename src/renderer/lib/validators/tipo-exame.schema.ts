@@ -16,7 +16,6 @@ export const tipoExameSchema = z.object({
     .max(500, "Descrição não pode exceder 500 caracteres")
     .optional()
     .nullable(),
-  eh_local: z.boolean().default(false),
   ativo: z.boolean().default(true),
   data_criacao: z.date().default(() => new Date()),
   data_atualizacao: z.date().default(() => new Date()),
@@ -47,7 +46,6 @@ export const tipoExameResponseSchema = tipoExameSchema.omit({
   data_atualizacao: true,
 }).partial({
   descricao: true,
-  eh_local: true,
 })
 
 // Tipos inferidos

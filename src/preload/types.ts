@@ -101,12 +101,10 @@ export interface TipoExameCreateData {
   codigo: string
   nome: string
   descricao?: string
-  eh_local?: boolean
 }
 
 export interface TipoExameUpdateData {
   codigo?: string
   nome?: string
   descricao?: string
-  eh_local?: boolean
 }

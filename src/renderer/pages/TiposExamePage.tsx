@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -38,7 +37,6 @@ export const TiposExamePage: React.FC = () => {
     codigo: '',
     nome: '',
     descricao: '',
-    eh_local: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -138,7 +136,6 @@ export const TiposExamePage: React.FC = () => {
       codigo: '',
       nome: '',
       descricao: '',
-      eh_local: false,
     });
     setError(null);
     setSuccess(null);
@@ -152,7 +149,6 @@ export const TiposExamePage: React.FC = () => {
       codigo: tipo.codigo,
       nome: tipo.nome,
       descricao: tipo.descricao || '',
-      eh_local: tipo.eh_local === true || tipo.eh_local === 1,
     });
     setError(null);
     setSuccess(null);
@@ -256,24 +252,6 @@ export const TiposExamePage: React.FC = () => {
       cell: ({ row }) => (
         <span className="font-medium">{row.getValue('nome')}</span>
       ),
-    },
-    {
-      id: 'tipo',
-      accessorFn: (row) => (row.eh_local === true || row.eh_local === 1 ? 'Local' : 'Laboratorial'),
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Tipo" />
-      ),
-      cell: ({ row }) => {
-        const isLocal = row.original.eh_local === true || row.original.eh_local === 1;
-        return (
-          <Badge
-            variant={isLocal ? 'default' : 'secondary'}
-            className="rounded-full"
-          >
-            {isLocal ? 'Local' : 'Laboratorial'}
-          </Badge>
-        );
-      },
     },
     {
       accessorKey: 'ativo',
@@ -537,21 +515,6 @@ export const TiposExamePage: React.FC = () => {
                   }
                   placeholder="Ex: Exame de DNA, Perícia Balística..."
                 />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="eh_local"
-                  checked={formData.eh_local}
-                  onChange={(e) =>
-                    setFormData({ ...formData, eh_local: e.target.checked })
-                  }
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <Label htmlFor="eh_local" className="text-sm font-medium cursor-pointer">
-                  É exame de local
-                </Label>
               </div>
 
               <div className="space-y-2">

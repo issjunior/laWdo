@@ -42,7 +42,6 @@ export interface TipoExameRow extends DatabaseRow {
   codigo: string
   nome: string
   descricao?: string
-  eh_local: boolean | number
   template_padrao?: string
   created_at: string
 }
@@ -73,6 +72,7 @@ export interface REPRow extends DatabaseRow {
   numero_bo?: string
   numero_ip?: string
   observacoes?: string
+  campos_especificos?: string
   created_at: string
   updated_at: string
 }
