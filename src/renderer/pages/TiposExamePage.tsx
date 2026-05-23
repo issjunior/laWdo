@@ -20,7 +20,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Plus, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Eye, EyeOff, FlaskConical, Loader2, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
@@ -41,6 +42,7 @@ export const TiposExamePage: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const inativosCount = todosTipos.filter(t => !t.ativo).length;
 
   // Carregar tipos de exame
   const carregarTiposExame = useCallback(async () => {
@@ -120,12 +122,12 @@ export const TiposExamePage: React.FC = () => {
           await carregarTiposExame();
         }
         await carregarTodosTipos();
+        toast.success(result.message || 'Status alterado com sucesso!');
       } else {
-        alert(`Erro ao alterar status: ${result.error}`);
+        toast.error(result.error || 'Erro ao alterar status');
       }
     } catch (error) {
-      console.error('Erro ao alterar status:', error);
-      alert('Erro ao alterar status do tipo de exame');
+      toast.error('Erro ao alterar status do tipo de exame');
     }
   };
 
@@ -226,12 +228,12 @@ export const TiposExamePage: React.FC = () => {
           await carregarTiposExame();
         }
         await carregarTodosTipos();
+        toast.success('Tipo de exame excluído com sucesso!');
       } else {
-        alert(`Erro ao excluir: ${result.error}`);
+        toast.error(result.error || 'Erro ao excluir');
       }
     } catch (error) {
-      console.error('Erro ao excluir tipo de exame:', error);
-      alert('Erro ao excluir tipo de exame');
+      toast.error('Erro ao excluir tipo de exame');
     }
   };
 
@@ -375,23 +377,47 @@ export const TiposExamePage: React.FC = () => {
           </Button>
         </div>
 
-        {/* Card de total */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Cards de estatísticas */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Total de Tipos de Exame
-              </CardTitle>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
+              <FlaskConical size={16} className="text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-sm flex items-center space-x-2">
-                <span className="text-green-600 font-medium">
-                  {todosTipos.filter((t) => !!t.ativo).length} Ativos
-                </span>
-                <span className="text-red-600 font-medium">
-                  {todosTipos.filter((t) => !t.ativo).length} Inativos
-                </span>
-              </div>
+              <p className="text-3xl font-bold">{todosTipos.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Tipos de exame cadastrados</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-green-200 dark:border-green-800">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Ativos</CardTitle>
+              <div className="h-2 w-2 rounded-full bg-green-500" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                {todosTipos.filter((t) => !!t.ativo).length}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Disponíveis para laudos</p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`border-red-200 dark:border-red-800 ${inativosCount > 0 && !mostrarTodos ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+            onClick={() => { if (inativosCount > 0 && !mostrarTodos) setMostrarTodos(true); }}
+          >
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">Inativos</CardTitle>
+              <div className="h-2 w-2 rounded-full bg-red-500" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-red-600 dark:text-red-400">
+                {inativosCount}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {inativosCount > 0 && !mostrarTodos ? 'Clique para revelar' : 'Ocultos da lista'}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -403,7 +429,12 @@ export const TiposExamePage: React.FC = () => {
               <div>
                 <CardTitle>Lista de Tipos de Exame</CardTitle>
                 <CardDescription>
-                  {mostrarTodos ? 'Todos' : 'Apenas Ativos'}
+                  {mostrarTodos
+                    ? `${tiposExame.length} tipo(s) no total`
+                    : `${tiposExame.length} ativo(s)`}
+                  {!mostrarTodos && inativosCount > 0 && (
+                    <span className="text-red-600 ml-2">({inativosCount} inativo{inativosCount > 1 ? 's' : ''} oculto{inativosCount > 1 ? 's' : ''})</span>
+                  )}
                 </CardDescription>
               </div>
               <Button
@@ -413,17 +444,33 @@ export const TiposExamePage: React.FC = () => {
                 className="flex items-center gap-1.5"
               >
                 {mostrarTodos ? <Eye size={14} /> : <EyeOff size={14} />}
-                {mostrarTodos ? 'Mostrar Ativos' : 'Apenas Ativos'}
+                {mostrarTodos ? 'Ocultar inativos' : `Mostrar todos${inativosCount > 0 ? ` (${inativosCount})` : ''}`}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8 text-gray-500">Carregando...</div>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+                <Loader2 size={24} className="animate-spin" />
+                <span className="text-sm">Carregando tipos de exame...</span>
+              </div>
             ) : error && tiposExame.length === 0 ? (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+                <AlertCircle size={24} className="text-destructive" />
+                <span className="text-sm text-destructive">{error}</span>
+              </div>
+            ) : tiposExame.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+                <FlaskConical size={32} className="opacity-40" />
+                <span className="text-sm">
+                  {mostrarTodos ? 'Nenhum tipo de exame cadastrado.' : 'Nenhum tipo de exame ativo.'}
+                </span>
+                {!mostrarTodos && inativosCount > 0 && (
+                  <Button variant="link" size="sm" onClick={() => setMostrarTodos(true)} className="text-xs">
+                    Mostrar {inativosCount} inativo{inativosCount > 1 ? 's' : ''}
+                  </Button>
+                )}
+              </div>
             ) : (
               <DataTable
                 columns={columnDefs}

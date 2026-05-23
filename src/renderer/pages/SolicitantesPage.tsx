@@ -17,7 +17,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Plus, Edit, Trash2, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Eye, EyeOff, Building2, Users, Loader2, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
@@ -39,8 +40,8 @@ export const SolicitantesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
-  const [removidoRecentemente, setRemovidoRecentemente] = useState<string | null>(null);
   const [errors, setErrors] = useState<Partial<Solicitante>>({});
+  const inativosCount = todosSolicitantes.filter(s => !s.ativo).length;
 
   // Carregar solicitantes
   const carregarSolicitantes = useCallback(async (showAll = false) => {
@@ -166,7 +167,8 @@ export const SolicitantesPage: React.FC = () => {
 
         if (result.success) {
           setSuccess('Solicitante atualizado com sucesso!');
-          await carregarSolicitantes();
+          await carregarSolicitantes(mostrarTodos);
+          await carregarTodosSolicitantes();
           setTimeout(() => setDialogOpen(false), 1000);
         } else {
           setError(result.error || 'Erro ao atualizar solicitante');
@@ -181,7 +183,8 @@ export const SolicitantesPage: React.FC = () => {
 
         if (result.success) {
           setSuccess('Solicitante criado com sucesso!');
-          await carregarSolicitantes();
+          await carregarSolicitantes(mostrarTodos);
+          await carregarTodosSolicitantes();
           setTimeout(() => setDialogOpen(false), 1000);
         } else {
           setError(result.error || 'Erro ao criar solicitante');
@@ -204,14 +207,13 @@ export const SolicitantesPage: React.FC = () => {
 
       if (result.success) {
         await carregarSolicitantes(mostrarTodos);
-        setSuccess('Solicitante desativado com sucesso!');
-        setTimeout(() => setSuccess(null), 3000);
+        await carregarTodosSolicitantes();
+        toast.success('Solicitante desativado com sucesso!');
       } else {
-        setError(result.error || 'Erro ao desativar solicitante');
+        toast.error(result.error || 'Erro ao desativar solicitante');
       }
     } catch (error) {
-      console.error('Erro ao desativar solicitante:', error);
-      setError('Erro ao desativar solicitante');
+      toast.error('Erro ao desativar solicitante');
     }
   };
 
@@ -226,14 +228,13 @@ export const SolicitantesPage: React.FC = () => {
 
       if (result.success) {
         await carregarSolicitantes(mostrarTodos);
-        setSuccess('Solicitante excluído permanentemente!');
-        setTimeout(() => setSuccess(null), 3000);
+        await carregarTodosSolicitantes();
+        toast.success('Solicitante excluído permanentemente!');
       } else {
-        setError(result.error || 'Erro ao excluir permanentemente');
+        toast.error(result.error || 'Erro ao excluir permanentemente');
       }
     } catch (error) {
-      console.error('Erro ao excluir permanentemente:', error);
-      setError('Erro ao excluir permanentemente');
+      toast.error('Erro ao excluir permanentemente');
     }
   };
 
@@ -250,19 +251,17 @@ export const SolicitantesPage: React.FC = () => {
 
       if (result.success) {
         const novoStatus = !solicitante.ativo;
+        await carregarTodosSolicitantes();
 
         if (!mostrarTodos && !!solicitante.ativo && novoStatus === false) {
-          // ApenasAtivos + Desativando: remover da lista local
           setSolicitantes(prev => prev.filter(s => s.id !== solicitante.id));
-          setRemovidoRecentemente(solicitante.id);
-          setTimeout(() => setRemovidoRecentemente(null), 3000);
-          setSuccess(`Solicitante desativado com sucesso!`);
+          toast.success('Solicitante desativado com sucesso!');
         } else {
-          // Outros casos: recarregar normalmente
           await carregarSolicitantes(mostrarTodos);
+          toast.success(`Solicitante ${novoStatus ? 'ativado' : 'desativado'} com sucesso!`);
         }
       } else {
-        alert(`Erro ao alterar status: ${result.error}`);
+        toast.error(result.error || 'Erro ao alterar status');
       }
     } catch (error) {
       console.error('Erro ao alterar status:', error);
@@ -401,23 +400,47 @@ export const SolicitantesPage: React.FC = () => {
           </Button>
         </div>
 
-        {/* Card de estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Cards de estatísticas */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Total de Solicitantes
-              </CardTitle>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
+              <Users size={16} className="text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-sm flex items-center space-x-2">
-                <span className="text-green-600 font-medium">
-                  {todosSolicitantes.filter((s) => !!s.ativo).length} Ativos
-                </span>
-                <span className="text-red-600 font-medium">
-                  {todosSolicitantes.filter((s) => !s.ativo).length} Inativos
-                </span>
-              </div>
+              <p className="text-3xl font-bold">{todosSolicitantes.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Solicitantes cadastrados</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-green-200 dark:border-green-800">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Ativos</CardTitle>
+              <div className="h-2 w-2 rounded-full bg-green-500" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                {todosSolicitantes.filter((s) => !!s.ativo).length}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Disponíveis para laudos</p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`border-red-200 dark:border-red-800 ${inativosCount > 0 && !mostrarTodos ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+            onClick={() => { if (inativosCount > 0 && !mostrarTodos) setMostrarTodos(true); }}
+          >
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">Inativos</CardTitle>
+              <div className="h-2 w-2 rounded-full bg-red-500" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-red-600 dark:text-red-400">
+                {inativosCount}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {inativosCount > 0 && !mostrarTodos ? 'Clique para revelar' : 'Ocultos da lista'}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -429,7 +452,12 @@ export const SolicitantesPage: React.FC = () => {
               <div>
                 <CardTitle>Lista de Solicitantes</CardTitle>
                 <CardDescription>
-                  {mostrarTodos ? 'Todos' : 'Apenas Ativos'}
+                  {mostrarTodos
+                    ? `${solicitantes.length} solicitante(s) no total`
+                    : `${solicitantes.length} ativo(s)`}
+                  {!mostrarTodos && inativosCount > 0 && (
+                    <span className="text-red-600 ml-2">({inativosCount} inativo{inativosCount > 1 ? 's' : ''} oculto{inativosCount > 1 ? 's' : ''})</span>
+                  )}
                 </CardDescription>
               </div>
               <Button
@@ -439,15 +467,33 @@ export const SolicitantesPage: React.FC = () => {
                 className="flex items-center gap-1.5"
               >
                 {mostrarTodos ? <Eye size={14} /> : <EyeOff size={14} />}
-                {mostrarTodos ? 'Mostrar Ativos' : 'Apenas Ativos'}
+                {mostrarTodos ? 'Ocultar inativos' : `Mostrar todos${inativosCount > 0 ? ` (${inativosCount})` : ''}`}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8 text-gray-500">Carregando...</div>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+                <Loader2 size={24} className="animate-spin" />
+                <span className="text-sm">Carregando solicitantes...</span>
+              </div>
             ) : error && solicitantes.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">{error}</div>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+                <AlertCircle size={24} className="text-destructive" />
+                <span className="text-sm text-destructive">{error}</span>
+              </div>
+            ) : solicitantes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+                <Building2 size={32} className="opacity-40" />
+                <span className="text-sm">
+                  {mostrarTodos ? 'Nenhum solicitante cadastrado.' : 'Nenhum solicitante ativo.'}
+                </span>
+                {!mostrarTodos && inativosCount > 0 && (
+                  <Button variant="link" size="sm" onClick={() => setMostrarTodos(true)} className="text-xs">
+                    Mostrar {inativosCount} inativo{inativosCount > 1 ? 's' : ''}
+                  </Button>
+                )}
+              </div>
             ) : (
               <DataTable
                 columns={columnDefs}
@@ -458,13 +504,6 @@ export const SolicitantesPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
-
-        {/* Toast de sucesso */}
-        {removidoRecentemente && (
-          <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
-            Solicitante desativado com sucesso!
-          </div>
-        )}
 
         {/* Diálogo de criação/edição */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -539,6 +578,24 @@ export const SolicitantesPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
+                  <label htmlFor="telefone" className="text-sm font-medium">
+                    Telefone
+                  </label>
+                  <Input
+                    id="telefone"
+                    value={formData.telefone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefone: e.target.value })
+                    }
+                    placeholder="(99) 99999-9999"
+                    className={errors.telefone ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  />
+                  {errors.telefone && (
+                    <p className="text-xs text-red-600">{errors.telefone}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
                   <label htmlFor="email" className="text-sm font-medium">
                     E-mail
                   </label>
@@ -559,7 +616,7 @@ export const SolicitantesPage: React.FC = () => {
               </div>
 
               {/* Mensagens de erro/sucesso */}
-              {error && !errors.nome && !errors.tipo && (
+              {error && (
                 <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
                   {error}
                 </div>

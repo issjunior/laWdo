@@ -110,11 +110,11 @@ export const registerSolicitanteHandlers = (): void => {
 
       // Sanitizar dados de entrada
       const sanitizedData: any = {}
-      if (updateData.nome) sanitizedData.nome = sanitizeInput(updateData.nome)
-      if (updateData.tipo) sanitizedData.tipo = sanitizeInput(updateData.tipo)
-      if (updateData.endereco) sanitizedData.endereco = sanitizeInput(updateData.endereco)
-      if (updateData.telefone) sanitizedData.telefone = sanitizeInput(updateData.telefone)
-      if (updateData.email) sanitizedData.email = sanitizeInput(updateData.email)
+      if (updateData.nome !== undefined) sanitizedData.nome = sanitizeInput(updateData.nome)
+      if (updateData.tipo !== undefined) sanitizedData.tipo = sanitizeInput(updateData.tipo ?? '')
+      if (updateData.endereco !== undefined) sanitizedData.endereco = sanitizeInput(updateData.endereco ?? '')
+      if (updateData.telefone !== undefined) sanitizedData.telefone = sanitizeInput(updateData.telefone ?? '')
+      if (updateData.email !== undefined) sanitizedData.email = sanitizeInput(updateData.email ?? '')
       if (updateData.ativo !== undefined) sanitizedData.ativo = updateData.ativo ? 1 : 0
 
       logInfo('Atualizando solicitante', { id })
