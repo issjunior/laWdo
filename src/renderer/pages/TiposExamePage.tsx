@@ -371,10 +371,6 @@ export const TiposExamePage: React.FC = () => {
               Gerencie os tipos de exame pericial e suas informações
             </p>
           </div>
-          <Button onClick={handleNovo} className="flex items-center gap-2">
-            <Plus size={16} />
-            Novo Tipo de Exame
-          </Button>
         </div>
 
         {/* Cards de estatísticas */}
@@ -420,6 +416,13 @@ export const TiposExamePage: React.FC = () => {
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={handleNovo} className="flex items-center gap-2">
+            <Plus size={16} />
+            Novo Tipo de Exame
+          </Button>
         </div>
 
         {/* Tabela com DataTable */}

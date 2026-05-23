@@ -394,10 +394,6 @@ export const SolicitantesPage: React.FC = () => {
               Gerencie órgãos solicitantes (varas, delegacias, órgãos públicos)
             </p>
           </div>
-          <Button onClick={handleNovo} className="flex items-center gap-2">
-            <Plus size={16} />
-            Novo Solicitante
-          </Button>
         </div>
 
         {/* Cards de estatísticas */}
@@ -443,6 +439,13 @@ export const SolicitantesPage: React.FC = () => {
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={handleNovo} className="flex items-center gap-2">
+            <Plus size={16} />
+            Novo Solicitante
+          </Button>
         </div>
 
         {/* Tabela com DataTable */}
