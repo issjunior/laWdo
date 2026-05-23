@@ -65,8 +65,9 @@ const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   { chave: 'perito_cargo', valor: '', descricao: 'Cargo do perito', categoria_id: 'cat-perito' },
   { chave: 'perito_lotacao', valor: '', descricao: 'Lotação/unidade do perito', categoria_id: 'cat-perito' },
   { chave: 'perito_matricula', valor: '', descricao: 'Matrícula funcional do perito', categoria_id: 'cat-perito' },
-  // Datas (1)
+  // Datas (2)
   { chave: 'data_atual', valor: '', descricao: 'Data atual do sistema', categoria_id: 'cat-datas' },
+  { chave: 'data_extenso_recebimento_rep', valor: '', descricao: 'Data de recebimento da REP por extenso (ex: 23 de maio de 2026)', categoria_id: 'cat-datas' },
 ];
 
 class PlaceholderService extends BaseService<PlaceholderRow> {

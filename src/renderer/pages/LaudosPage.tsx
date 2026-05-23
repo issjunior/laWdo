@@ -68,6 +68,28 @@ function formatarData(iso: string | undefined): string {
   }
 }
 
+function formatarDataExtenso(iso: string | undefined): string {
+  if (!iso) return '-';
+  try {
+    const data = new Date(iso);
+    if (isNaN(data.getTime())) return iso;
+    return data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch {
+    return iso;
+  }
+}
+
+function formatarDataHora(iso: string | undefined): string {
+  if (!iso) return '-';
+  try {
+    const data = new Date(iso);
+    if (isNaN(data.getTime())) return iso;
+    return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
 const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solicitanteNome?: string; tipoExameNome?: string; tipoExameCodigo?: string }) => {
   if (!repData) return html;
 
@@ -99,15 +121,10 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     'rep_prazo': repData.prazo || '',
     'rep_tipo_solicitacao': repData.tipo_solicitacao || '',
     'rep_numero_documento': repData.numero_documento || '',
-    'rep_data_documento': repData.data_documento || '',
-    'rep_autoridade_solicitante': repData.autoridade_solicitante || '',
-    'rep_nome_envolvido': repData.nome_envolvido || '',
-    'rep_local_fato': repData.local_fato || '',
-    'rep_latitude': repData.latitude != null ? String(repData.latitude) : '',
-    'rep_longitude': repData.longitude != null ? String(repData.longitude) : '',
-    'rep_data_acionamento': repData.data_acionamento || '',
-    'rep_data_chegada': repData.data_chegada || '',
-    'rep_data_saida': repData.data_saida || '',
+    'rep_data_documento': formatarData(repData.data_documento),
+    'rep_data_acionamento': formatarDataHora(repData.data_acionamento),
+    'rep_data_chegada': formatarDataHora(repData.data_chegada),
+    'rep_data_saida': formatarDataHora(repData.data_saida),
     'rep_numero_bo': repData.numero_bo || '',
     'rep_numero_ip': repData.numero_ip || '',
     'rep_lacre_entrada': repData.lacre_entrada || '',
@@ -136,15 +153,10 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     'data_recebimento_rep': formatarData(repData.data_requisicao),
     'tipo_solicitacao_rep': repData.tipo_solicitacao || '',
     'numero_solicitacao_rep': repData.numero_documento || '',
-    'data_solicitacao_rep': repData.data_documento || '',
-    'autoridade_solicitante_rep': repData.autoridade_solicitante || '',
-    'nome_envolvido': repData.nome_envolvido || '',
-    'local_fato': repData.local_fato || '',
-    'latitude': repData.latitude != null ? String(repData.latitude) : '',
-    'longitude': repData.longitude != null ? String(repData.longitude) : '',
-    'data_acionamento_local': repData.data_acionamento || '',
-    'data_chegada_local': repData.data_chegada || '',
-    'data_saida_local': repData.data_saida || '',
+    'data_solicitacao_rep': formatarData(repData.data_documento),
+    'data_acionamento_local': formatarDataHora(repData.data_acionamento),
+    'data_chegada_local': formatarDataHora(repData.data_chegada),
+    'data_saida_local': formatarDataHora(repData.data_saida),
     'numero_bo': repData.numero_bo || '',
     'numero_ip': repData.numero_ip || '',
     'lacre_entrada': repData.lacre_entrada || '',
@@ -164,6 +176,7 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
 
     // Geral
     'data_atual': new Date().toLocaleDateString('pt-BR'),
+    'data_extenso_recebimento_rep': formatarDataExtenso(repData.data_requisicao),
   };
 
   try {

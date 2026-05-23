@@ -442,7 +442,7 @@ export const TemplatesPage: React.FC = () => {
           if (sec.id) {
             await window.ipcAPI.template.updateSecao(sec.id, {
               nome: sec.nome.trim(),
-              conteudo: removerFormatacaoPlaceholders(sec.conteudo),
+              conteudo: sec.conteudo,
               ordem: i,
             });
             idsOrdenados.push(sec.id);
@@ -451,7 +451,7 @@ export const TemplatesPage: React.FC = () => {
               template_id: templateId,
               nome: sec.nome.trim(),
               ordem: i,
-              conteudo: removerFormatacaoPlaceholders(sec.conteudo),
+              conteudo: sec.conteudo,
             });
             if (r.success) idsOrdenados.push(r.data.id);
           }

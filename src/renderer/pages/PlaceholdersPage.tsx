@@ -40,7 +40,8 @@ const PLACEHOLDERS_SISTEMA_CHAVES = [
   'numero_bo', 'numero_ip', 'lacre_entrada', 'lacre_saida', 'observacoes_rep',
   'solicitante_nome', 'tipo_exame_nome', 'tipo_exame_codigo',
   'perito_nome', 'perito_cargo', 'perito_lotacao', 'perito_matricula',
-  'data_atual'
+  'data_atual',
+  'data_extenso_recebimento_rep'
 ];
 
 /* ── COMPONENTES DRAG & DROP ── */
@@ -566,6 +567,7 @@ export const PlaceholdersPage: React.FC = () => {
                data={filtradosPorBusca}
                searchColumn="chave"
                searchPlaceholder="Filtrar tabela..."
+               hideSearch
              />
           </div>
         ) : (

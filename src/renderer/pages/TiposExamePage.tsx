@@ -249,7 +249,7 @@ export const TiposExamePage: React.FC = () => {
     {
       accessorKey: 'nome',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Nome" />
+        <DataTableColumnHeader column={column} title="Tipo de exame" />
       ),
       cell: ({ row }) => (
         <span className="font-medium">{row.getValue('nome')}</span>
