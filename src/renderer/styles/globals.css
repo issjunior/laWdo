@@ -400,6 +400,11 @@ body.dark {
   color: #c8d5e4;
 }
 
+.dark p.text-destructive,
+.dark .text-destructive {
+  color: #f87171 !important;
+}
+
 /* ── Dialog/Modal text visibility ── */
 .dark [role="dialog"] h2,
 .dark [role="dialog"] h3,
