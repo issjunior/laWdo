@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, Lock, Zap, ArrowRight, ChevronDown, ChevronUp, Layers, Hash, Type, AlignLeft, Tag, LayoutGrid, List, Settings } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Lock, Zap, ArrowRight, ChevronDown, ChevronUp, Layers, Hash, Type, AlignLeft, Tag, LayoutGrid, List, Settings, Copy } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Placeholder } from '@/lib/validators';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -68,7 +68,7 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
       style={style}
       {...listeners}
       {...attributes}
-      className={`relative overflow-hidden mb-1.5 cursor-grab hover:shadow-md transition-shadow 
+      className={`relative overflow-hidden mb-1.5 cursor-grab hover:shadow-md transition-shadow bg-${categoria.cor}-50/30 dark:bg-${categoria.cor}-900/10 border-${categoria.cor}-200 dark:border-${categoria.cor}-800/40
         ${isDragging ? 'opacity-50 border-primary ring-2 ring-primary/50' : ''} 
         ${isOverlay ? 'shadow-xl cursor-grabbing scale-105 rotate-2' : ''}
         ${isSysPlaceholder ? 'border-blue-200 dark:border-blue-800/60' : ''}
@@ -163,7 +163,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
     return (
       <div
         ref={setNodeRef}
-        className={`flex flex-col items-center rounded-xl border bg-muted/20 py-3 px-2 gap-3 cursor-pointer hover:bg-muted/40 transition-colors shrink-0 w-12
+        className={`flex flex-col items-center rounded-xl border bg-${categoria.cor}-50/20 dark:bg-${categoria.cor}-900/10 py-3 px-2 gap-3 cursor-pointer hover:bg-muted/40 transition-colors shrink-0 w-12
           ${isOver ? `ring-2 ring-${categoria.cor}-500/50` : ''}
         `}
         onClick={onToggle}
@@ -184,7 +184,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
   return (
     <div 
       ref={setNodeRef} 
-      className={`flex flex-col flex-1 min-w-[270px] max-w-[310px] rounded-xl border bg-muted/20 
+      className={`flex flex-col flex-1 min-w-[270px] max-w-[310px] rounded-xl border bg-${categoria.cor}-50/15 dark:bg-${categoria.cor}-900/10 
       ${isOver ? `ring-2 ring-${categoria.cor}-500/50 bg-${categoria.cor}-50/50 dark:bg-${categoria.cor}-900/10` : ''}`}
     >
       <div className={`p-3 border-b bg-${categoria.cor}-50/50 dark:bg-${categoria.cor}-900/20 flex items-center justify-between rounded-t-xl`}>
@@ -204,14 +204,28 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
       </div>
       <div className="p-3 flex-1 overflow-y-auto min-h-[150px]">
         {placeholders.map(p => {
-          const deletavel = !PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) && !CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
+          const isSystem = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
+          const copyToClipboard = () => {
+            const template = `{{${p.chave}}}`;
+            navigator.clipboard.writeText(template).catch(() => {});
+          };
           return (
             <div key={p.id} className="group relative">
               <DraggableCard p={p} categoria={categoria} />
-              {/* Actions overlay for DND mode */}
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex bg-background/90 rounded border shadow-sm z-10">
-                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(p)}><Edit size={12} /></Button>
-                 <Button variant="ghost" size="icon" className={`h-6 w-6 ${deletavel ? 'text-destructive hover:text-destructive' : 'text-muted-foreground/30'}`} onClick={() => deletavel && onDelete(p.id)} disabled={!deletavel}><Trash2 size={12} /></Button>
+                {isSystem ? (
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard} title="Copiar placeholder">
+                    <Copy size={12} />
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(p)}><Edit size={12} /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => onDelete(p.id)}><Trash2 size={12} /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard} title="Copiar placeholder">
+                      <Copy size={12} />
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           );
