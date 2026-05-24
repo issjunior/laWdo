@@ -242,6 +242,7 @@ const registerAuthHandlers = (): void => {
             cargo: user.cargo,
             lotacao: user.lotacao,
             email: user.email,
+            foto_url: user.foto_url || null,
           },
         };
       }

@@ -21,6 +21,7 @@ export interface UserRow extends DatabaseRow {
   ativo: boolean
   data_criacao: string
   data_atualizacao: string
+  foto_url?: string
 }
 
 // Solicitante (órgão/vara/delegacia)

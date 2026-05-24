@@ -1,8 +1,10 @@
-﻿import { ipcMain } from 'electron'
+﻿import { ipcMain, app } from 'electron'
 import { logInfo, logError } from '../../utils/logger.js'
 import { userService } from '../../services/user.service.js'
 import { sanitizeInput } from '../../security/index.js'
 import bcrypt from 'bcrypt'
+import fs from 'fs'
+import path from 'path'
 
 /**
  * Registra handlers IPC para operações de usuário
@@ -294,6 +296,70 @@ export const registerUserHandlers = (): void => {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
       }
+    }
+  })
+
+  /**
+   * Upload de avatar do usuário
+   */
+  ipcMain.handle('user:uploadAvatar', async (event, userId: string, base64Data: string) => {
+    try {
+      if (!userId || typeof userId !== 'string') {
+        return { success: false, error: 'ID de usuário inválido' }
+      }
+      if (!base64Data || typeof base64Data !== 'string') {
+        return { success: false, error: 'Dados da imagem inválidos' }
+      }
+
+      const avatarsDir = path.join(app.getPath('userData'), 'avatars')
+      if (!fs.existsSync(avatarsDir)) {
+        fs.mkdirSync(avatarsDir, { recursive: true })
+      }
+
+      const ext = base64Data.startsWith('data:image/png') ? 'png' : 'jpg'
+      const fileName = `${userId}.${ext}`
+      const filePath = path.join(avatarsDir, fileName)
+
+      const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, '')
+      fs.writeFileSync(filePath, Buffer.from(base64Image, 'base64'))
+
+      await userService.update(userId, { foto_url: filePath } as any)
+
+      logInfo('Avatar salvo com sucesso', { userId })
+      return { success: true, data: { foto_url: filePath }, message: 'Avatar atualizado com sucesso' }
+    } catch (error) {
+      logError('Erro ao fazer upload de avatar', { userId, error })
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }
+    }
+  })
+
+  /**
+   * Obter avatar do usuário
+   */
+  ipcMain.handle('user:getAvatar', async (event, userId: string) => {
+    try {
+      if (!userId || typeof userId !== 'string') {
+        return { success: false, error: 'ID de usuário inválido' }
+      }
+
+      const user = await userService.findById(userId)
+      if (!user || !user.foto_url) {
+        return { success: false, error: 'Avatar não encontrado' }
+      }
+
+      if (!fs.existsSync(user.foto_url)) {
+        return { success: false, error: 'Arquivo de avatar não encontrado' }
+      }
+
+      const ext = path.extname(user.foto_url).toLowerCase().replace('.', '') || 'png'
+      const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png'
+      const data = fs.readFileSync(user.foto_url)
+      const base64 = `data:${mimeType};base64,${data.toString('base64')}`
+
+      return { success: true, data: { foto_url: base64 } }
+    } catch (error) {
+      logError('Erro ao obter avatar', { userId, error })
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }
     }
   })
 

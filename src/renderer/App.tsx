@@ -40,7 +40,7 @@ const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; curren
 }) => {
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AppSidebar currentUser={currentUser} onLogout={onLogout} />
       <SidebarInset>
         <div className="flex flex-col h-screen overflow-hidden bg-background">
           <Header onLogout={onLogout} currentUser={currentUser} />

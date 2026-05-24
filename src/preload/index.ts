@@ -7,6 +7,7 @@ import type {
   UserProfileUpdateData,
   UserResponse,
   PaginatedUserResponse,
+  UserAvatarResponse,
   SolicitanteFilters,
   SolicitanteCreateData,
   SolicitanteUpdateData,
@@ -42,6 +43,7 @@ export interface IpcAPI {
 
   // Sistema
   restartApp: () => Promise<void>;
+  closeApp: () => Promise<void>;
   openDevTools: () => void;
 
   // Banco de dados
@@ -60,6 +62,8 @@ export interface IpcAPI {
     findByEmail: (email: string) => Promise<UserResponse>;
     findActivePeritos: () => Promise<UserResponse>;
     updateProfile: (userId: string, profileData: UserProfileUpdateData) => Promise<UserResponse>;
+    uploadAvatar: (userId: string, base64Data: string) => Promise<UserAvatarResponse>;
+    getAvatar: (userId: string) => Promise<UserAvatarResponse>;
   };
 
   // Solicitantes
@@ -198,6 +202,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Sistema
   'restart-app',
+  'close-app',
   'open-dev-tools',
 
   // Banco de dados
@@ -215,6 +220,8 @@ const ALLOWED_CHANNELS = new Set([
   'user:findByEmail',
   'user:findActivePeritos',
   'user:updateProfile',
+  'user:uploadAvatar',
+  'user:getAvatar',
 
   // Solicitantes
   'solicitante:findAll',
@@ -342,6 +349,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   // Sistema
   restartApp: () => ipcRenderer.invoke('restart-app'),
+  closeApp: () => ipcRenderer.invoke('close-app'),
   openDevTools: () => ipcRenderer.send('open-dev-tools'),
 
   // Banco de dados
@@ -431,6 +439,23 @@ contextBridge.exposeInMainWorld('ipcAPI', {
         throw new Error('Dados do perfil inválidos');
       }
       return ipcRenderer.invoke('user:updateProfile', userId.trim(), profileData);
+    },
+
+    uploadAvatar: (userId: string, base64Data: string) => {
+      if (typeof userId !== 'string' || !userId.trim()) {
+        throw new Error('ID do usuário inválido');
+      }
+      if (typeof base64Data !== 'string' || !base64Data) {
+        throw new Error('Dados da imagem inválidos');
+      }
+      return ipcRenderer.invoke('user:uploadAvatar', userId.trim(), base64Data);
+    },
+
+    getAvatar: (userId: string) => {
+      if (typeof userId !== 'string' || !userId.trim()) {
+        throw new Error('ID do usuário inválido');
+      }
+      return ipcRenderer.invoke('user:getAvatar', userId.trim());
     },
   },
 

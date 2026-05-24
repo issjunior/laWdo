@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { User, AlertCircle, KeyRound } from 'lucide-react';
+import { User, AlertCircle, KeyRound, Camera } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from '@/components/ui/avatar';
+import { AvatarUploadDialog } from '@/components/avatar/AvatarUploadDialog';
 import {
   Form,
   FormControl,
@@ -59,6 +61,8 @@ export const PerfilPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 
   const form = useForm<PerfilUpdateFormValues>({
     resolver: zodResolver(perfilValidationSchema),
@@ -72,6 +76,23 @@ export const PerfilPage: React.FC = () => {
       confirmarSenha: '',
     },
   });
+
+  const loadAvatar = useCallback(async () => {
+    const raw = sessionStorage.getItem(AUTH_USER_KEY);
+    const user = raw ? JSON.parse(raw) : null;
+    if (!user?.id) return;
+
+    if (user?.foto_url) {
+      try {
+        const result = await window.ipcAPI.user.getAvatar(user.id);
+        if (result.success && result.data?.foto_url) {
+          setFotoUrl(result.data.foto_url);
+          return;
+        }
+      } catch { }
+    }
+    setFotoUrl(null);
+  }, []);
 
   useEffect(() => {
     const rawUser = sessionStorage.getItem(AUTH_USER_KEY);
@@ -91,10 +112,11 @@ export const PerfilPage: React.FC = () => {
         senha: '',
         confirmarSenha: '',
       });
+      loadAvatar();
     } catch {
       // sem ação
     }
-  }, [form]);
+  }, [form, loadAvatar]);
 
   const onSubmit = async (data: PerfilUpdateFormValues) => {
     if (!userId) {
@@ -147,6 +169,27 @@ export const PerfilPage: React.FC = () => {
     }
   };
 
+  const handleAvatarUpdated = useCallback((newFotoUrl: string) => {
+    setFotoUrl(newFotoUrl);
+    const raw = sessionStorage.getItem(AUTH_USER_KEY);
+    if (raw) {
+      try {
+        const user = JSON.parse(raw);
+        user.foto_url = 'updated';
+        sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+        window.dispatchEvent(new Event('storage'));
+      } catch { }
+    }
+  }, []);
+
+  const userName = form.watch('nome') || 'Usuário';
+  const initials = userName
+    .split(' ')
+    .map((n: string) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -180,7 +223,43 @@ export const PerfilPage: React.FC = () => {
         </div>
       )}
 
-      <Card className="max-w-2xl">
+      <Card>
+        <CardHeader>
+          <CardTitle>Foto de Perfil</CardTitle>
+          <CardDescription>Clique no avatar para alterar sua foto.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setUploadDialogOpen(true)}
+              className="relative rounded-full transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            >
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={fotoUrl || undefined} />
+                <AvatarFallback className="text-xl">{initials}</AvatarFallback>
+              </Avatar>
+              <AvatarBadge className="h-3.5 w-3.5" />
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity hover:opacity-100">
+                <Camera className="h-6 w-6 text-white" />
+              </div>
+            </button>
+            <div>
+              <p className="font-medium">{userName}</p>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs text-muted-foreground"
+                onClick={() => setUploadDialogOpen(true)}
+              >
+                <Camera className="mr-1 h-3 w-3" />
+                {fotoUrl ? 'Alterar foto' : 'Adicionar foto'}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <CardTitle>Informações do Usuário</CardTitle>
           <CardDescription>Mantenha seus dados atualizados.</CardDescription>
@@ -362,6 +441,17 @@ export const PerfilPage: React.FC = () => {
           </Form>
         </CardContent>
       </Card>
+
+      {userId && (
+        <AvatarUploadDialog
+          open={uploadDialogOpen}
+          onOpenChange={setUploadDialogOpen}
+          userId={userId}
+          currentFotoUrl={fotoUrl}
+          userName={userName}
+          onAvatarUpdated={handleAvatarUpdated}
+        />
+      )}
     </div>
   );
 };

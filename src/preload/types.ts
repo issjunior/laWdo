@@ -46,6 +46,13 @@ export interface UserProfileUpdateData {
   senha?: string
 }
 
+export interface UserAvatarResponse {
+  success: boolean
+  data?: { foto_url: string }
+  message?: string
+  error?: string
+}
+
 /**
  * Resposta padrão para operações de usuário
  */

@@ -14,7 +14,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 17;
+const CURRENT_SCHEMA_VERSION = 18;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -86,7 +86,8 @@ const createDatabaseSchema = async (): Promise<void> => {
         senha_hash TEXT NOT NULL,
         ativo BOOLEAN DEFAULT 1,
         data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP,
-        data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
+        data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+        foto_url TEXT
       )
     `);
 
@@ -1109,6 +1110,30 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       logInfo('Migration v17: Concluída');
     } catch (error) {
       logError('Erro ao aplicar migration versão 17', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 18: Adicionar coluna foto_url na tabela users
+  if (fromVersion < 18) {
+    try {
+      const userCols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(users)'
+      );
+      const hasFotoUrl = userCols.some(c => c.name === 'foto_url');
+
+      if (!hasFotoUrl) {
+        await executeNonQuery(
+          'ALTER TABLE users ADD COLUMN foto_url TEXT'
+        );
+        logInfo('Migration v18: Coluna foto_url adicionada à tabela users');
+      } else {
+        logInfo('Migration v18: Coluna foto_url já existe');
+      }
+
+      logInfo('Migration v18: Concluída');
+    } catch (error) {
+      logError('Erro ao aplicar migration versão 18', error);
       throw error;
     }
   }

@@ -61,16 +61,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
         <SidebarTrigger className="-ml-1" />
         
         <div className="flex items-center gap-6 ml-auto">
-          {/* 1. Usuário */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold tracking-tight text-foreground">
-              {currentUser?.name || currentUser?.username || 'Usuário'}
-            </span>
-          </div>
-
-          <div className="h-4 w-[1px] bg-border mx-1" />
-
-          {/* 2. Escolha de Tema */}
+          {/* Escolha de Tema */}
           <button
             onClick={toggleDarkMode}
             className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
@@ -80,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
             <span className="hidden md:inline text-muted-foreground font-medium">Tema</span>
           </button>
 
-          {/* 3. Informação (Dialog) */}
+          {/* Informação (Dialog) */}
           <Dialog>
             <DialogTrigger asChild>
               <button className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm" title="Suporte Técnico">
@@ -171,10 +162,10 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           <button 
             onClick={onLogout} 
             className="p-2 hover:bg-destructive/10 hover:text-destructive rounded-md transition-colors flex items-center gap-2 text-sm" 
-            title="Sair do sistema"
+            title="Logout"
           >
             <LogOut size={18} />
-            <span className="hidden md:inline font-medium">Sair</span>
+            <span className="hidden md:inline font-medium">Logout</span>
           </button>
         </div>
       </div>
