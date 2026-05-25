@@ -467,12 +467,6 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
             <ImageIcon size={16} /> Inserir Todas no Laudo
           </Button>
         )}
-        <Button variant="outline" className="w-full gap-2" onClick={() => {
-          onRefreshHtml();
-          toast.success('Legendas das figuras renumeradas');
-        }}>
-          <ListChecks size={16} /> Indexar
-        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -522,7 +516,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       {/* ─── Figuras já existentes no editor ─── */}
       {figurasNoEditor && figurasNoEditor.length > 0 && (
         <div className="border-t pt-3">
-          <div className="flex items-center gap-1.5 px-4 mb-3">
+          <div className="flex items-center gap-1.5 px-4 mb-2">
             <span className="text-xs font-medium text-muted-foreground">Figuras no Laudo</span>
             <Badge variant="secondary" className="h-4 px-1.5 text-[10px] rounded-full">{figurasNoEditor.length}</Badge>
             <TooltipProvider>
@@ -535,6 +529,14 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          </div>
+          <div className="px-4 mb-3">
+            <Button variant="outline" className="w-full gap-2" onClick={() => {
+              onRefreshHtml();
+              toast.success('Legendas das figuras renumeradas');
+            }}>
+              <ListChecks size={16} /> Indexar
+            </Button>
           </div>
           <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar px-4">
             {figurasNoEditor.map((fig, idx) => (
