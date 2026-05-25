@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 
 interface TinyMceEditorProps {
@@ -14,9 +14,11 @@ interface TinyMceEditorProps {
   onImageInserted?: () => void;
   /** Tema do editor: 'light' (padrão), 'dark' ou 'auto' (segue preferência do sistema) */
   theme?: 'light' | 'dark' | 'auto';
+  /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
+  placeholderChaves?: string[];
 }
 
-export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
+export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<HTMLDivElement>> = ({
   value,
   onChange,
   height = 300,
@@ -25,6 +27,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
   editorId,
   onImageInserted,
   theme = 'light',
+  placeholderChaves,
+  ...rest
 }) => {
   const editorRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -37,8 +41,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
   };
   const resolved = resolveTheme();
 
+  useEffect(() => {
+    if (editorRef.current && placeholderChaves) {
+      (editorRef.current as any)._placeholderChaves = new Set(placeholderChaves);
+    }
+  }, [placeholderChaves]);
+
   return (
-    <div className={ready ? '' : 'opacity-0'}>
+    <div className={ready ? '' : 'opacity-0'} {...rest}>
       <Editor
         key={resolved}
         id={editorId}
@@ -112,8 +122,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
               padding: 12px;
             }
             .placeholder-tag {
-              background-color: #e8f0fe;
-              color: #1a73e8;
+              background-color: ${resolved === 'dark' ? 'rgba(138,180,248,0.15)' : '#e8f0fe'};
+              color: ${resolved === 'dark' ? '#8ab4f8' : '#1a73e8'};
               border-radius: 4px;
               padding: 2px 6px;
               font-weight: 500;
@@ -169,7 +179,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: any) => {
             editor.addCommand('insertPlaceholder', (_ui: any, placeholder: { chave: string }) => {
-              const html = `<span class="placeholder-tag" contenteditable="false" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
+              const html = `<span class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
             });
 
@@ -221,22 +231,97 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps> = ({
             });
 
             // Repassar evento de clique direito para o componente pai (Shadcn ContextMenu)
-            editor.on('contextmenu', (e: any) => {
-              const container = editor.getContainer();
-              const rect = container.getBoundingClientRect();
-              
-              // Criar evento de clique direito simulado no documento pai
-              const newEvent = new MouseEvent('contextmenu', {
-                bubbles: true,
-                cancelable: true,
-                view: window,
-                clientX: e.clientX + rect.left,
-                clientY: e.clientY + rect.top,
+            // Usamos init + listener nativo porque contextmenu:false desabilita o plugin
+            // e o editor event 'contextmenu' nunca dispara.
+            editor.on('init', () => {
+              const doc = editor.getDoc();
+              if (!doc) return;
+
+              doc.addEventListener('contextmenu', (e: MouseEvent) => {
+                e.preventDefault();
+
+                const container = editor.getContainer();
+                const iframe = editor.iframeElement as HTMLIFrameElement | null;
+                const iframeRect = iframe?.getBoundingClientRect() ?? container.getBoundingClientRect();
+
+                const newEvent = new MouseEvent('contextmenu', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window,
+                  clientX: e.clientX + iframeRect.left,
+                  clientY: e.clientY + iframeRect.top,
+                });
+
+                container.dispatchEvent(newEvent);
               });
-              
-              // Disparar no container para que o ContextMenuTrigger capture
-              container.dispatchEvent(newEvent);
             });
+
+            // ─── Auto-converter {{chave}} digitado manualmente em span estilizado ─────
+            if (placeholderChaves && placeholderChaves.length > 0) {
+              (editor as any)._placeholderChaves = new Set(placeholderChaves);
+
+              let placeholderTimer: ReturnType<typeof setTimeout> | null = null;
+
+              const converterPlaceholderLocal = () => {
+                const chavesSet: Set<string> = (editor as any)._placeholderChaves;
+                if (!chavesSet || chavesSet.size === 0) return;
+
+                const rng = editor.selection.getRng();
+                if (!rng || !rng.startContainer) return;
+
+                const textNode = rng.startContainer;
+                if (textNode.nodeType !== 3) return;
+
+                const parent = textNode.parentElement;
+                if (parent?.classList?.contains('placeholder-tag')) return;
+                if (parent?.getAttribute?.('data-placeholder')) return;
+
+                const text = textNode.textContent || '';
+                const regex = /\{\{([^{}]+)\}\}/g;
+                const substituicoes: { pos: number; fim: number; chave: string }[] = [];
+                let match: RegExpExecArray | null;
+
+                while ((match = regex.exec(text)) !== null) {
+                  if (chavesSet.has(match[1])) {
+                    substituicoes.push({ pos: match.index, fim: match.index + match[0].length, chave: match[1] });
+                  }
+                }
+
+                if (substituicoes.length === 0) return;
+
+                const bookmark = editor.selection.getBookmark(2, true);
+
+                const fragment = document.createDocumentFragment();
+                let cursor = 0;
+                for (const s of substituicoes) {
+                  if (s.pos > cursor) {
+                    fragment.appendChild(document.createTextNode(text.substring(cursor, s.pos)));
+                  }
+                  const span = document.createElement('span');
+                  span.className = 'placeholder-tag';
+                  span.setAttribute('data-placeholder', `{{${s.chave}}}`);
+                  span.textContent = `{{${s.chave}}}`;
+                  fragment.appendChild(span);
+                  cursor = s.fim;
+                }
+                if (cursor < text.length) {
+                  fragment.appendChild(document.createTextNode(text.substring(cursor)));
+                }
+
+                textNode.parentNode?.replaceChild(fragment, textNode);
+
+                editor.selection.moveToBookmark(bookmark);
+              };
+
+              editor.on('input', () => {
+                if (placeholderTimer) clearTimeout(placeholderTimer);
+                placeholderTimer = setTimeout(converterPlaceholderLocal, 600);
+              });
+
+              editor.on('remove', () => {
+                if (placeholderTimer) clearTimeout(placeholderTimer);
+              });
+            }
           },
         }}
       />

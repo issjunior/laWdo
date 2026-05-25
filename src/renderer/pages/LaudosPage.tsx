@@ -14,7 +14,7 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { AISectionToolbar } from '@/components/ai/AISectionToolbar';
 import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
-import { removerFormatacaoPlaceholders, cn } from '@/lib/utils';
+import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -323,67 +323,6 @@ function reconstruirConteudo(secoes: SecaoEditor[]): string {
   return secoes.map(s => `<h2>${s.titulo}</h2>\n${s.conteudo}`).join('\n');
 }
 
-/** Converte placeholders {{chave}} textuais em spans estilizados (formato TinyMCE),
- *  preservando placeholders que já estão no formato span. */
-function converterPlaceholdersTextuais(html: string, chavesValidas: string[]): string {
-  if (!html || chavesValidas.length === 0) return html;
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const chavesSet = new Set(chavesValidas);
-
-  // Percorre todos os nós de texto do DOM
-  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-  const textNodes: Text[] = [];
-  while (walker.nextNode()) {
-    textNodes.push(walker.currentNode as Text);
-  }
-
-  const regex = /\{\{([^{}]+)\}\}/g;
-
-  for (const textNode of textNodes) {
-    // Não processar texto dentro de spans de placeholder já existentes
-    const parent = textNode.parentElement;
-    if (parent?.classList?.contains('placeholder-tag')) continue;
-    if (parent?.getAttribute?.('data-placeholder')) continue;
-
-    const text = textNode.textContent || '';
-    const substituicoes: { pos: number; fim: number; chave: string }[] = [];
-    let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(text)) !== null) {
-      if (chavesSet.has(match[1])) {
-        substituicoes.push({ pos: match.index, fim: match.index + match[0].length, chave: match[1] });
-      }
-    }
-
-    if (substituicoes.length === 0) continue;
-
-    // Constrói fragmento com texto + spans intercalados
-    const fragment = document.createDocumentFragment();
-    let cursor = 0;
-    for (const s of substituicoes) {
-      if (s.pos > cursor) {
-        fragment.appendChild(document.createTextNode(text.substring(cursor, s.pos)));
-      }
-      const span = document.createElement('span');
-      span.className = 'placeholder-tag';
-      span.setAttribute('contenteditable', 'false');
-      span.setAttribute('data-placeholder', `{{${s.chave}}}`);
-      span.textContent = `{{${s.chave}}}`;
-      fragment.appendChild(span);
-      cursor = s.fim;
-    }
-    if (cursor < text.length) {
-      fragment.appendChild(document.createTextNode(text.substring(cursor)));
-    }
-
-    textNode.parentNode?.replaceChild(fragment, textNode);
-  }
-
-  return doc.body.innerHTML;
-}
-
 export const LaudosPage: React.FC = () => {
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -392,9 +331,18 @@ export const LaudosPage: React.FC = () => {
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
-  const [singleSelectedHtml, setSingleSelectedHtml] = useState('');
-  const [singleSelectionHasText, setSingleSelectionHasText] = useState(false);
-  const [singleSelectionHasImage, setSingleSelectionHasImage] = useState(false);
+  const singleTemImagens = useMemo(() => {
+    if (!singleEditorHtml) return false;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(singleEditorHtml, 'text/html');
+      return Array.from(doc.querySelectorAll('img')).some(
+        (img) => img.src.startsWith('data:') || img.src.startsWith('http')
+      );
+    } catch {
+      return false;
+    }
+  }, [singleEditorHtml]);
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -427,6 +375,10 @@ export const LaudosPage: React.FC = () => {
 
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
+
+  const SINGLE_CHAT_KEY = 'single-editor';
+
+  const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
 
   const [editorTheme, setEditorTheme] = useState<'light' | 'dark' | 'auto'>(() => {
     try { return (localStorage.getItem('laudo_editor_theme') as 'light' | 'dark' | 'auto') || 'light'; }
@@ -511,47 +463,6 @@ export const LaudosPage: React.FC = () => {
     setEditorMode('multi');
   }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
-  const getSingleEditorSelectionHtml = () => {
-    const editor = (window as any).tinymce?.get('laudo-single-editor');
-    if (!editor) return '';
-    const selectedHtml = String(editor.selection?.getContent({ format: 'html' }) || '').trim();
-    return selectedHtml;
-  };
-
-  const refreshSingleSelectionState = useCallback(() => {
-    if (editorMode !== 'single') {
-      setSingleSelectionHasText(false);
-      setSingleSelectionHasImage(false);
-      return;
-    }
-
-    const selectedHtml = getSingleEditorSelectionHtml();
-    if (!selectedHtml) {
-      setSingleSelectionHasText(false);
-      setSingleSelectionHasImage(false);
-      return;
-    }
-
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(selectedHtml, 'text/html');
-      const text = (doc.body.textContent || '').trim();
-      const hasText = text.length > 0;
-      const hasImage = doc.querySelectorAll('img').length > 0;
-      setSingleSelectionHasText(hasText);
-      setSingleSelectionHasImage(hasImage);
-    } catch {
-      setSingleSelectionHasText(false);
-      setSingleSelectionHasImage(false);
-    }
-  }, [editorMode]);
-
-  useEffect(() => {
-    if (editorMode !== 'single') return;
-    const timer = window.setInterval(refreshSingleSelectionState, 250);
-    return () => window.clearInterval(timer);
-  }, [editorMode, refreshSingleSelectionState]);
-
   const carregarPlaceholders = useCallback(async () => {
     const rCat = await window.ipcAPI.categoria.findAll();
     if (rCat.success && rCat.data) {
@@ -634,7 +545,7 @@ export const LaudosPage: React.FC = () => {
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const editor = (window as any).tinymce?.get(editorId);
     if (editor) {
-      editor.insertContent(`{{${chave}}}`);
+      editor.execCommand('insertPlaceholder', false, { chave });
     }
   };
 
@@ -1160,12 +1071,11 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleEditar = (laudo: LaudoItem) => {
-    const parsedSecoes = parseConteudoEmSecoes(laudo.conteudo || '');
+    const parsedSecoes = parseConteudoEmSecoes(converterPlaceholdersTextuais(laudo.conteudo || '', placeholderChaves));
     setEditando(laudo);
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
     setEditorMode('single');
-    setSingleSelectedHtml('');
     setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
@@ -1179,7 +1089,6 @@ export const LaudosPage: React.FC = () => {
     setSecoes([]);
     setSingleEditorHtml('');
     setEditorMode('single');
-    setSingleSelectedHtml('');
     setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
@@ -1433,12 +1342,7 @@ export const LaudosPage: React.FC = () => {
             .join('');
           editor.insertContent(descHtml);
         } else {
-          const selectedHtml = getSingleEditorSelectionHtml();
-          if (selectedHtml) {
-            editor.selection.setContent(texto);
-          } else {
-            editor.insertContent(texto);
-          }
+          editor.setContent(texto);
         }
         setSingleEditorHtml(editor.getContent());
         setIaSheetOpen(false);
@@ -1475,8 +1379,7 @@ export const LaudosPage: React.FC = () => {
   const handleSendChatMessage = (message: string) => {
     if (iaSheetSecaoIdx !== null) {
       if (iaSheetSecaoIdx === -1) {
-        const html = getSingleEditorSelectionHtml() || singleSelectedHtml;
-        handlePerguntar(message, html, -1, 'Seleção no editor único');
+        handlePerguntar(message, singleEditorHtml, -1, 'Editor único');
         return;
       }
       const html = secoes[iaSheetSecaoIdx]?.conteudo || '';
@@ -1754,24 +1657,22 @@ export const LaudosPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-1.5">
                       <Bot size={14} className="text-primary" />
-                      <span className="text-xs font-medium text-muted-foreground">IA (seleção):</span>
+                      <span className="text-xs font-medium text-muted-foreground">IA:</span>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={!singleSelectionHasText}
+                      disabled={iaLoading}
                       onClick={async () => {
-                        const selectedHtml = getSingleEditorSelectionHtml();
-                        if (!selectedHtml) {
-                          setIaError('Selecione um trecho no editor único para usar a IA.');
+                        if (!singleEditorHtml.trim()) {
+                          setIaError('Editor vazio');
                           return;
                         }
-                        setSingleSelectedHtml(selectedHtml);
                         setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Seleção no editor único');
+                        setIaSheetSecaoTitulo('Editor único');
                         setIaSheetOpen(true);
-                        await handleRevisarOrtografia(selectedHtml, -1);
+                        await handleRevisarOrtografia(singleEditorHtml, -1);
                       }}
                     >
                       <SpellCheck size={12} /> Ortografia
@@ -1780,18 +1681,16 @@ export const LaudosPage: React.FC = () => {
                       variant="outline"
                       size="sm"
                       className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={!singleSelectionHasText}
+                      disabled={iaLoading}
                       onClick={async () => {
-                        const selectedHtml = getSingleEditorSelectionHtml();
-                        if (!selectedHtml) {
-                          setIaError('Selecione um trecho no editor único para usar a IA.');
+                        if (!singleEditorHtml.trim()) {
+                          setIaError('Editor vazio');
                           return;
                         }
-                        setSingleSelectedHtml(selectedHtml);
                         setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Seleção no editor único');
+                        setIaSheetSecaoTitulo('Editor único');
                         setIaSheetOpen(true);
-                        await handleAdequarEscrita(selectedHtml, -1);
+                        await handleAdequarEscrita(singleEditorHtml, -1);
                       }}
                     >
                       <PenLine size={12} /> Adequar
@@ -1800,26 +1699,19 @@ export const LaudosPage: React.FC = () => {
                       variant="outline"
                       size="sm"
                       className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={!singleSelectionHasImage}
+                      disabled={iaLoading || !singleTemImagens}
                       onClick={async () => {
-                        const selectedHtml = getSingleEditorSelectionHtml();
-                        if (!selectedHtml) {
-                          setIaError('Selecione um trecho com imagem no editor único.');
-                          return;
-                        }
                         const parser = new DOMParser();
-                        const doc = parser.parseFromString(selectedHtml, 'text/html');
-                        const imagens = Array.from(doc.querySelectorAll('img')).map((img) => ({
-                          src: img.getAttribute('src') || img.src,
-                          alt: img.alt,
-                        }));
+                        const doc = parser.parseFromString(singleEditorHtml, 'text/html');
+                        const imagens = Array.from(doc.querySelectorAll('img'))
+                          .filter(img => img.src.startsWith('data:') || img.src.startsWith('http'))
+                          .map((img) => ({ src: img.src, alt: img.alt }));
                         if (imagens.length === 0) {
-                          setIaError('Nenhuma imagem encontrada na seleção.');
+                          setIaError('Nenhuma imagem encontrada no editor.');
                           return;
                         }
-                        setSingleSelectedHtml(selectedHtml);
                         setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Seleção no editor único');
+                        setIaSheetSecaoTitulo('Editor único');
                         setIaSheetOpen(true);
                         await handleDescreverImagem(imagens, -1);
                       }}
@@ -1837,22 +1729,16 @@ export const LaudosPage: React.FC = () => {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 disabled:opacity-45 disabled:cursor-not-allowed"
-                        disabled={!singleSelectionHasText || !singlePergunta.trim()}
+                        disabled={iaLoading || !singlePergunta.trim()}
                         onClick={async () => {
-                          const selectedHtml = getSingleEditorSelectionHtml();
-                          if (!selectedHtml) {
-                            setIaError('Selecione um trecho no editor único para perguntar à IA.');
-                            return;
-                          }
                           if (!singlePergunta.trim()) {
                             setIaError('Digite uma pergunta para a IA.');
                             return;
                           }
-                          setSingleSelectedHtml(selectedHtml);
                           setIaSheetSecaoIdx(-1);
-                          setIaSheetSecaoTitulo('Seleção no editor único');
+                          setIaSheetSecaoTitulo('Editor único');
                           setIaSheetOpen(true);
-                          await handlePerguntar(singlePergunta, selectedHtml, -1, 'Seleção no editor único');
+                          await handlePerguntar(singlePergunta, singleEditorHtml, -1, 'Editor único');
                           setSinglePergunta('');
                         }}
                       >
@@ -1871,6 +1757,7 @@ export const LaudosPage: React.FC = () => {
                         laudoId={editando.id}
                         onImageInserted={() => setImageInsertCounter(c => c + 1)}
                         theme={editorTheme}
+                        placeholderChaves={placeholderChaves}
                       />
                     </PlaceholderContextMenu>
                   </div>
@@ -1918,6 +1805,7 @@ export const LaudosPage: React.FC = () => {
                               laudoId={editando.id}
                               onImageInserted={() => setImageInsertCounter(c => c + 1)}
                               theme={editorTheme}
+                              placeholderChaves={placeholderChaves}
                             />
                           </PlaceholderContextMenu>
                         </CollapsibleContent>

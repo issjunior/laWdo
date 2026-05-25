@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Save, Eye, EyeOff } from 'lucide-react';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
-import { removerFormatacaoPlaceholders } from '@/lib/utils';
+import { removerFormatacaoPlaceholders, converterPlaceholdersTextuais } from '@/lib/utils';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -33,6 +33,8 @@ export const CabecalhoPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
 
+  const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
+
   const CHAVE_CONFIG = 'cabecalho_laudo';
 
   const carregarCabecalho = useCallback(async () => {
@@ -40,7 +42,7 @@ export const CabecalhoPage: React.FC = () => {
       setLoading(true);
       const result = await window.ipcAPI.configuracao.obter(CHAVE_CONFIG);
       if (result.success && result.data) {
-        setConteudo(result.data);
+        setConteudo(converterPlaceholdersTextuais(result.data, placeholderChaves));
       }
     } catch (err: any) {
       console.error('Erro ao carregar cabeçalho:', err);
@@ -64,7 +66,7 @@ export const CabecalhoPage: React.FC = () => {
   const inserirPlaceholder = (chave: string) => {
     const editor = (window as any).tinymce?.get('cabecalho-editor');
     if (editor) {
-      editor.insertContent(`{{${chave}}}`);
+      editor.execCommand('insertPlaceholder', false, { chave });
     }
   };
 
@@ -155,6 +157,7 @@ export const CabecalhoPage: React.FC = () => {
                   onChange={setConteudo}
                   height={400}
                   placeholder="Digite o cabeçalho padrão dos laudos..."
+                  placeholderChaves={placeholderChaves}
                 />
               </ContextMenuTrigger>
               <ContextMenuContent className="w-64">

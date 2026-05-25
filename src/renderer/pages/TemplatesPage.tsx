@@ -26,7 +26,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
-import { removerFormatacaoPlaceholders } from '@/lib/utils';
+import { removerFormatacaoPlaceholders, converterPlaceholdersTextuais } from '@/lib/utils';
 import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -117,6 +117,8 @@ export const TemplatesPage: React.FC = () => {
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
+
+  const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
 
   const carregarTemplates = useCallback(async () => {
     try {
@@ -225,7 +227,7 @@ export const TemplatesPage: React.FC = () => {
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const editor = (window as any).tinymce?.get(editorId);
     if (editor) {
-      editor.insertContent(`{{${chave}}}`);
+      editor.execCommand('insertPlaceholder', false, { chave });
     }
   };
 
@@ -265,8 +267,8 @@ export const TemplatesPage: React.FC = () => {
     if (r.success && r.data) {
       const s: SecaoItem[] = r.data;
       setSecoesDb(s);
-      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' })));
-      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' }))));
+      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' })));
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' }))));
     } else {
       setSecoesDb([]);
       setSecoes([emptySecaoForm()]);
@@ -335,8 +337,8 @@ export const TemplatesPage: React.FC = () => {
       if (r.success && r.data) {
         const s: SecaoItem[] = r.data;
         setSecoesDb(s);
-        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' })));
-        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo || '' }))));
+        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' })));
+        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' }))));
       } else {
         setSecoesDb([]);
         setSecoes([emptySecaoForm()]);
@@ -475,7 +477,7 @@ export const TemplatesPage: React.FC = () => {
         const r = await window.ipcAPI.template.findSecoes(templateId);
         if (r.success) {
           setSecoesDb(r.data);
-          const nextSecoes = r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo || '' }));
+          const nextSecoes = r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves) : '' }));
           setSecoes(nextSecoes);
           setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
         }
@@ -1030,6 +1032,7 @@ export const TemplatesPage: React.FC = () => {
                     onChange={setSingleEditorHtml}
                     height={520}
                     placeholder="Edite o laudo completo..."
+                    placeholderChaves={placeholderChaves}
                   />
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-64">
@@ -1095,6 +1098,7 @@ export const TemplatesPage: React.FC = () => {
                       onChange={html => updateSecao(index, 'conteudo', html)}
                       height={250}
                       placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
+                      placeholderChaves={placeholderChaves}
                     />
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-64">
