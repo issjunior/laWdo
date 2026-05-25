@@ -93,7 +93,7 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
               )}
             </div>
             <div className="flex items-center gap-1.5 mt-1">
-              <IconComp size={11} className="text-muted-foreground" />
+              <IconComp size={categoria.icone === 'Car' ? 13 : 11} className="text-muted-foreground" />
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium truncate">
                 {categoria.label}
               </span>
@@ -177,7 +177,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
         onClick={onToggle}
         title={`Expandir: ${categoria.label} (${placeholders.length})`}
       >
-        <IconComp size={16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400 shrink-0`} />
+        <IconComp size={categoria.icone === 'Car' ? 18 : 16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400 shrink-0`} />
         <span
           className={`text-[11px] font-semibold text-${categoria.cor}-700 dark:text-${categoria.cor}-300 whitespace-nowrap`}
           style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
@@ -197,7 +197,7 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
     >
       <div className={`p-3 border-b bg-${categoria.cor}-50/50 dark:bg-${categoria.cor}-900/20 flex items-center justify-between rounded-t-xl`}>
         <div className="flex items-center gap-2">
-          <IconComp size={16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400`} />
+          <IconComp size={categoria.icone === 'Car' ? 18 : 16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400`} />
           <h3 className={`font-semibold text-sm text-${categoria.cor}-700 dark:text-${categoria.cor}-300`}>{categoria.label}</h3>
           <Badge variant="secondary" className="text-[10px] h-4 px-1">{placeholders.length}</Badge>
         </div>
@@ -479,7 +479,7 @@ export const PlaceholdersPage: React.FC = () => {
         return (
           <div className="flex items-center gap-1.5">
             <Badge variant="outline" className={`text-[10px] h-5 px-1.5 gap-1 border-${cat.cor}-200 text-${cat.cor}-600`}>
-              <Icon size={10} />
+              <Icon size={cat.icone === 'Car' ? 12 : 10} />
               {cat.label}
             </Badge>
             {sistema && (

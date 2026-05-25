@@ -352,7 +352,7 @@ const PlaceholderContextMenu: React.FC<{
           return (
             <ContextMenuSub key={cat.id}>
               <ContextMenuSubTrigger>
-                <IconComp size={14} className="mr-2" />
+                <IconComp size={(cat as any).icone === 'Car' ? 16 : 14} className="mr-2" />
                 <span>{cat.label}</span>
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="w-56 max-h-[350px] overflow-y-auto">

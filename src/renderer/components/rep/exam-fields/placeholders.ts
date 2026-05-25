@@ -20,7 +20,7 @@ export const EXAM_PLACEHOLDER_CATEGORIES: ExamPlaceholderCategory[] = [
     codigo: 'I-801',
     label: 'I-801 - Numerações Identificadoras',
     cor: 'amber',
-    icone: 'Hash',
+    icone: 'Car',
   },
 ];
 

@@ -46,7 +46,7 @@ const RENOMEACOES: Record<string, string> = {
 };
 
 const EXAM_PLACEHOLDER_CATEGORIES = [
-  { id: 'cat-exam-I-801', codigo: 'I-801', label: 'I-801 - Numerações Identificadoras', cor: 'amber', icone: 'Hash', is_sistema: 1, ordem: 10 },
+  { id: 'cat-exam-I-801', codigo: 'I-801', label: 'I-801 - Numerações Identificadoras', cor: 'amber', icone: 'Car', is_sistema: 1, ordem: 10 },
 ];
 
 const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [

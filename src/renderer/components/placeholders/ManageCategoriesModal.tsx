@@ -175,7 +175,7 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
                     <div key={cat.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-${cat.cor}-100 dark:bg-${cat.cor}-900/30 text-${cat.cor}-600 dark:text-${cat.cor}-400`}>
-                          <Icon size={20} />
+                          <Icon size={cat.icone === 'Car' ? 22 : 20} />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
