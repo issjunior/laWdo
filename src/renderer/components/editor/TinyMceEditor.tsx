@@ -189,7 +189,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: any) => {
             editor.addCommand('insertPlaceholder', (_ui: any, placeholder: { chave: string }) => {
-              const html = `<span class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
+              const html = `<span contenteditable="false" class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
             });
 
@@ -309,6 +309,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                   }
                   const span = document.createElement('span');
                   span.className = 'placeholder-tag';
+                  span.setAttribute('contenteditable', 'false');
                   span.setAttribute('data-placeholder', `{{${s.chave}}}`);
                   span.textContent = `{{${s.chave}}}`;
                   fragment.appendChild(span);

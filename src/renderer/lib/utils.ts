@@ -52,6 +52,7 @@ export function converterPlaceholdersTextuais(html: string, chavesValidas: strin
       }
       const span = document.createElement('span');
       span.className = 'placeholder-tag';
+      span.setAttribute('contenteditable', 'false');
       span.setAttribute('data-placeholder', `{{${s.chave}}}`);
       span.textContent = `{{${s.chave}}}`;
       fragment.appendChild(span);
