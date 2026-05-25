@@ -34,6 +34,15 @@ const RENOMEACOES: Record<string, string> = {
   'rep_lacre_entrada': 'lacre_entrada',
   'rep_lacre_saida': 'lacre_saida',
   'rep_observacoes': 'observacoes_rep',
+  'numeracao_veiculo': 'veiculo',
+  'numeracao_placa': 'placa',
+  'numeracao_fabricacao': 'fabricacao_modelo',
+  'numeracao_cor': 'cor',
+  'numeracao_conservacao': 'conservacao',
+  'numeracao_chassi': 'chassi',
+  'numeracao_chassi_revelado': 'chassi_revelado',
+  'numeracao_motor': 'motor',
+  'numeracao_motor_revelado': 'motor_revelado',
 };
 
 const EXAM_PLACEHOLDER_CATEGORIES = [
@@ -41,15 +50,15 @@ const EXAM_PLACEHOLDER_CATEGORIES = [
 ];
 
 const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
-  { chave: 'numeracao_veiculo',          valor: '', descricao: 'Marca, modelo ou tipo do veículo periciado',       categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_placa',            valor: '', descricao: 'Placa de identificação do veículo',                 categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_fabricacao',       valor: '', descricao: 'Ano de fabricação e modelo do veículo',             categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_cor',              valor: '', descricao: 'Cor do veículo',                                     categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_conservacao',      valor: '', descricao: 'Estado de conservação do veículo',                   categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_chassi',           valor: '', descricao: 'Nº do chassi (até 17 caracteres alfanuméricos)',    categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_chassi_revelado',  valor: '', descricao: 'Chassi após revelação química',                      categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_motor',            valor: '', descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     categoria_id: 'cat-exam-I-801' },
-  { chave: 'numeracao_motor_revelado',   valor: '', descricao: 'Motor após revelação química',                       categoria_id: 'cat-exam-I-801' },
+  { chave: 'veiculo',                    valor: '', descricao: 'Marca, modelo ou tipo do veículo periciado',       categoria_id: 'cat-exam-I-801' },
+  { chave: 'placa',                      valor: '', descricao: 'Placa de identificação do veículo',                 categoria_id: 'cat-exam-I-801' },
+  { chave: 'fabricacao_modelo',          valor: '', descricao: 'Ano de fabricação e modelo do veículo',             categoria_id: 'cat-exam-I-801' },
+  { chave: 'cor',                        valor: '', descricao: 'Cor do veículo',                                     categoria_id: 'cat-exam-I-801' },
+  { chave: 'conservacao',                valor: '', descricao: 'Estado de conservação do veículo',                   categoria_id: 'cat-exam-I-801' },
+  { chave: 'chassi',                     valor: '', descricao: 'Nº do chassi (até 17 caracteres alfanuméricos)',    categoria_id: 'cat-exam-I-801' },
+  { chave: 'chassi_revelado',            valor: '', descricao: 'Chassi após revelação química',                      categoria_id: 'cat-exam-I-801' },
+  { chave: 'motor',                      valor: '', descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     categoria_id: 'cat-exam-I-801' },
+  { chave: 'motor_revelado',             valor: '', descricao: 'Motor após revelação química',                       categoria_id: 'cat-exam-I-801' },
 ];
 
 function getExamCategoryId(codigo: string): string {

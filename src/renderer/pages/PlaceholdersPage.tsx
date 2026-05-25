@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, Lock, Zap, ArrowRight, ChevronDown, ChevronUp, Layers, Hash, Type, AlignLeft, Tag, LayoutGrid, List, Settings, Copy } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Lock, ChevronDown, ChevronUp, Layers, Hash, Type, AlignLeft, Tag, LayoutGrid, List, Settings, Copy } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Placeholder } from '@/lib/validators';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -21,7 +21,7 @@ import { DndContext, useDroppable, useDraggable, DragOverlay, closestCorners } f
 
 // Modais e Componentes
 import { ManageCategoriesModal, CategoriaPlaceholderRow } from '@/components/placeholders/ManageCategoriesModal';
-import { CAMPOS_ESPECIFICOS_PLACEHOLDERS, EXAM_PLACEHOLDER_CATEGORIES } from '@/components/rep/exam-fields/placeholders';
+import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 
 interface PlaceholderFormData {
   chave: string;
@@ -58,7 +58,7 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
 
   if (!categoria) return null;
   const isSysCat = categoria.is_sistema === 1;
-  const isSysPlaceholder = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave);
+  const isSysPlaceholder = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
 
   const IconComp = (LucideIcons as any)[categoria.icone] || LucideIcons.Tag;
 
@@ -91,20 +91,6 @@ const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, ca
                   Fixo
                 </Badge>
               )}
-              {(() => {
-                const examPH = CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(ep => ep.chave === p.chave);
-                if (!examPH) return null;
-                const examCat = EXAM_PLACEHOLDER_CATEGORIES.find(c => c.codigo === examPH.categoria_exam_codigo);
-                return (
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] h-4 px-1 gap-1 shrink-0 border-${examCat?.cor || 'amber'}-200 text-${examCat?.cor || 'amber'}-600 dark:text-${examCat?.cor || 'amber'}-300 dark:border-${examCat?.cor || 'amber'}-800/60`}
-                  >
-                    <Zap size={8} />
-                    {examPH.categoria_exam_codigo}
-                  </Badge>
-                );
-              })()}
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               <IconComp size={11} className="text-muted-foreground" />
@@ -158,6 +144,28 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
   });
 
   const IconComp = (LucideIcons as any)[categoria.icone] || LucideIcons.Tag;
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const handleCopy = (chave: string, id: string) => {
+    const template = `{{${chave}}}`;
+    const fallback = () => {
+      const textarea = document.createElement('textarea');
+      textarea.value = template;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    };
+    try {
+      navigator.clipboard.writeText(template).catch(fallback);
+    } catch {
+      fallback();
+    }
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
 
   if (!open) {
     return (
@@ -205,23 +213,24 @@ const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onTo
       <div className="p-3 flex-1 overflow-y-auto min-h-[150px]">
         {placeholders.map(p => {
           const isSystem = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
-          const copyToClipboard = () => {
-            const template = `{{${p.chave}}}`;
-            navigator.clipboard.writeText(template).catch(() => {});
-          };
           return (
             <div key={p.id} className="group relative">
               <DraggableCard p={p} categoria={categoria} />
+              {copiedId === p.id && (
+                <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] text-green-600 font-medium bg-background border border-green-300 rounded px-1.5 py-0.5 shadow-sm z-20">
+                  Copiado!
+                </span>
+              )}
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex bg-background/90 rounded border shadow-sm z-10">
                 {isSystem ? (
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard} title="Copiar placeholder">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(p.chave, p.id)} title="Copiar placeholder">
                     <Copy size={12} />
                   </Button>
                 ) : (
                   <>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(p)}><Edit size={12} /></Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => onDelete(p.id)}><Trash2 size={12} /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyToClipboard} title="Copiar placeholder">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(p.chave, p.id)} title="Copiar placeholder">
                       <Copy size={12} />
                     </Button>
                   </>
@@ -466,7 +475,7 @@ export const PlaceholdersPage: React.FC = () => {
         if (!cat) return null;
         const Icon = (LucideIcons as any)[cat.icone] || LucideIcons.Tag;
         const p = row.original;
-        const sistema = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave);
+        const sistema = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
         return (
           <div className="flex items-center gap-1.5">
             <Badge variant="outline" className={`text-[10px] h-5 px-1.5 gap-1 border-${cat.cor}-200 text-${cat.cor}-600`}>
@@ -479,17 +488,6 @@ export const PlaceholdersPage: React.FC = () => {
                 Fixo
               </Badge>
             )}
-            {(() => {
-              const examPH = CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(ep => ep.chave === p.chave);
-              if (!examPH) return null;
-              const examCat = EXAM_PLACEHOLDER_CATEGORIES.find(c => c.codigo === examPH.categoria_exam_codigo);
-              return (
-                <Badge variant="outline" className={`text-[10px] h-5 px-1.5 gap-1 shrink-0 border-${examCat?.cor || 'amber'}-200 text-${examCat?.cor || 'amber'}-600`}>
-                  <Zap size={9} />
-                  {examPH.categoria_exam_codigo}
-                </Badge>
-              );
-            })()}
           </div>
         );
       },

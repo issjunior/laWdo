@@ -25,15 +25,15 @@ export const EXAM_PLACEHOLDER_CATEGORIES: ExamPlaceholderCategory[] = [
 ];
 
 export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
-  { chave: 'numeracao_veiculo',          label: 'Veículo',            descricao: 'Marca, modelo ou tipo do veículo periciado',       jsonPath: 'numeracao.veiculo',          categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_placa',            label: 'Placa',              descricao: 'Placa de identificação do veículo',                 jsonPath: 'numeracao.placa',            categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_fabricacao',       label: 'Fabricação/Modelo',  descricao: 'Ano de fabricação e modelo do veículo',             jsonPath: 'numeracao.fabricacao',       categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_cor',              label: 'Cor',                descricao: 'Cor do veículo',                                     jsonPath: 'numeracao.cor',              categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_conservacao',      label: 'Conservação',        descricao: 'Estado de conservação do veículo',                   jsonPath: 'numeracao.conservacao',      categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_chassi',           label: 'Chassi',             descricao: 'Nº do chassi (até 17 caracteres alfanuméricos)',    jsonPath: 'numeracao.chassi',           categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_chassi_revelado',  label: 'Chassi Revelado',    descricao: 'Chassi após revelação química',                      jsonPath: 'numeracao.chassi_revelado',  categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_motor',            label: 'Motor',              descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     jsonPath: 'numeracao.motor',            categoria_exam_codigo: 'I-801' },
-  { chave: 'numeracao_motor_revelado',   label: 'Motor Revelado',     descricao: 'Motor após revelação química',                       jsonPath: 'numeracao.motor_revelado',   categoria_exam_codigo: 'I-801' },
+  { chave: 'veiculo',                    label: 'Veículo',            descricao: 'Marca, modelo ou tipo do veículo periciado',       jsonPath: 'numeracao.veiculo',          categoria_exam_codigo: 'I-801' },
+  { chave: 'placa',                      label: 'Placa',              descricao: 'Placa de identificação do veículo',                 jsonPath: 'numeracao.placa',            categoria_exam_codigo: 'I-801' },
+  { chave: 'fabricacao_modelo',          label: 'Fabricação/Modelo',  descricao: 'Ano de fabricação e modelo do veículo',             jsonPath: 'numeracao.fabricacao',       categoria_exam_codigo: 'I-801' },
+  { chave: 'cor',                        label: 'Cor',                descricao: 'Cor do veículo',                                     jsonPath: 'numeracao.cor',              categoria_exam_codigo: 'I-801' },
+  { chave: 'conservacao',                label: 'Conservação',        descricao: 'Estado de conservação do veículo',                   jsonPath: 'numeracao.conservacao',      categoria_exam_codigo: 'I-801' },
+  { chave: 'chassi',                     label: 'Chassi',             descricao: 'Nº do chassi (até 17 caracteres alfanuméricos)',    jsonPath: 'numeracao.chassi',           categoria_exam_codigo: 'I-801' },
+  { chave: 'chassi_revelado',            label: 'Chassi Revelado',    descricao: 'Chassi após revelação química',                      jsonPath: 'numeracao.chassi_revelado',  categoria_exam_codigo: 'I-801' },
+  { chave: 'motor',                      label: 'Motor',              descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     jsonPath: 'numeracao.motor',            categoria_exam_codigo: 'I-801' },
+  { chave: 'motor_revelado',             label: 'Motor Revelado',     descricao: 'Motor após revelação química',                       jsonPath: 'numeracao.motor_revelado',   categoria_exam_codigo: 'I-801' },
 ];
 
 export function getExamCategoryId(codigo: string): string {
