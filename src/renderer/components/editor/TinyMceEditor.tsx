@@ -35,7 +35,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
 
   const resolveTheme = () => {
     if (theme === 'auto') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      return document.body.classList.contains('dark') ? 'dark' : 'light';
     }
     return theme;
   };

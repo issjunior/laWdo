@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner';
 import {
   Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
-  FileText, GripVertical, Layers, Eye, LayoutGrid, List, Upload,
+  FileText, GripVertical, Layers, Eye, LayoutGrid, List, Upload, Sun, Moon, SunMoon,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -119,6 +119,22 @@ export const TemplatesPage: React.FC = () => {
   const [showImportDialog, setShowImportDialog] = useState(false);
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
+
+  const [editorTheme, setEditorTheme] = useState<'light' | 'dark' | 'auto'>(() => {
+    try { return (localStorage.getItem('laudo_editor_theme') as 'light' | 'dark' | 'auto') || 'auto'; }
+    catch { return 'auto'; }
+  });
+
+  const toggleEditorTheme = useCallback(() => {
+    setEditorTheme(prev => {
+      const next = prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light';
+      try { localStorage.setItem('laudo_editor_theme', next); } catch {}
+      return next;
+    });
+  }, []);
+
+  const themeLabel = editorTheme === 'light' ? 'Claro' : editorTheme === 'dark' ? 'Escuro' : 'Auto';
+  const ThemeIcon = editorTheme === 'light' ? Sun : editorTheme === 'dark' ? Moon : SunMoon;
 
   const carregarTemplates = useCallback(async () => {
     try {
@@ -991,24 +1007,47 @@ export const TemplatesPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
-                <Button
-                  variant={editorMode === 'multi' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleEditorModeChange('multi')}
-                  className="h-8 px-2.5"
-                  title="Múltiplos editores por seção"
-                >
-                  <Layers size={14} />
-                </Button>
-                <Button
-                  variant={editorMode === 'single' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleEditorModeChange('single')}
-                  className="h-8 px-2.5"
-                  title="Editor único (laudo inteiro)"
-                >
-                  <FileText size={14} />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={editorMode === 'multi' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => handleEditorModeChange('multi')}
+                      className="h-8 px-2.5"
+                    >
+                      <Layers size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">Editor com múltiplas seções separadas</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={editorMode === 'single' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => handleEditorModeChange('single')}
+                      className="h-8 px-2.5"
+                    >
+                      <FileText size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">Editor único com laudo inteiro</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleEditorTheme}
+                      className="h-8 px-2.5"
+                    >
+                      <ThemeIcon size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Tema do editor: {themeLabel} {editorTheme === 'auto' ? '(segue o tema do sistema)' : ''}
+                  </TooltipContent>
+                </Tooltip>
               </div>
               {editorMode === 'multi' && (
                 <Button variant="outline" size="sm" onClick={handleAddSecao} className="flex items-center gap-1">
@@ -1033,6 +1072,7 @@ export const TemplatesPage: React.FC = () => {
                     height={520}
                     placeholder="Edite o laudo completo..."
                     placeholderChaves={placeholderChaves}
+                    theme={editorTheme}
                   />
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-64">
@@ -1099,6 +1139,7 @@ export const TemplatesPage: React.FC = () => {
                       height={250}
                       placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
                       placeholderChaves={placeholderChaves}
+                      theme={editorTheme}
                     />
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-64">

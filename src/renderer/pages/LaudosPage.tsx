@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, ExternalLink, Tag } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -381,8 +381,8 @@ export const LaudosPage: React.FC = () => {
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
 
   const [editorTheme, setEditorTheme] = useState<'light' | 'dark' | 'auto'>(() => {
-    try { return (localStorage.getItem('laudo_editor_theme') as 'light' | 'dark' | 'auto') || 'light'; }
-    catch { return 'light'; }
+    try { return (localStorage.getItem('laudo_editor_theme') as 'light' | 'dark' | 'auto') || 'auto'; }
+    catch { return 'auto'; }
   });
 
   const toggleEditorTheme = useCallback(() => {
@@ -394,7 +394,7 @@ export const LaudosPage: React.FC = () => {
   }, []);
 
   const themeLabel = editorTheme === 'light' ? 'Claro' : editorTheme === 'dark' ? 'Escuro' : 'Auto';
-  const ThemeIcon = editorTheme === 'light' ? Sun : editorTheme === 'dark' ? Moon : Sun;
+  const ThemeIcon = editorTheme === 'light' ? Sun : editorTheme === 'dark' ? Moon : SunMoon;
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
     if (secoesFonte.length === 0) return '';
@@ -1608,44 +1608,48 @@ export const LaudosPage: React.FC = () => {
             </div>
             <div className="flex items-center justify-end">
               <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
-                <Button
-                  variant={editorMode === 'multi' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleEditorModeChange('multi')}
-                  className="h-8 px-2.5"
-                  title="Múltiplas seções"
-                >
-                  <Layers size={14} />
-                </Button>
-                <Button
-                  variant={editorMode === 'single' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => handleEditorModeChange('single')}
-                  className="h-8 px-2.5"
-                  title="Editor único"
-                >
-                  <List size={14} />
-                </Button>
-              </div>
-              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={editorMode === 'multi' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => handleEditorModeChange('multi')}
+                      className="h-8 px-2.5"
+                    >
+                      <Layers size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">Editor com múltiplas seções separadas</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={editorMode === 'single' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => handleEditorModeChange('single')}
+                      className="h-8 px-2.5"
+                    >
+                      <List size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">Editor único com laudo inteiro</TooltipContent>
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={toggleEditorTheme}
-                      className="h-8 px-2.5 gap-1"
-                      title={`Tema do editor: ${themeLabel}`}
+                      className="h-8 px-2.5"
                     >
                       <ThemeIcon size={14} />
-                      <span className="text-[10px] font-medium">{themeLabel}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">
-                    Alternar entre temas Claro, Escuro e Auto (segue o sistema)
+                    Tema do editor: {themeLabel} {editorTheme === 'auto' ? '(segue o tema do sistema)' : ''}
                   </TooltipContent>
                 </Tooltip>
-              </TooltipProvider>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
