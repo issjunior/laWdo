@@ -25,6 +25,7 @@ import {
   Info,
   Plus,
   Image as ImageIcon,
+  ListChecks,
   ExternalLink
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -408,7 +409,6 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       prev.filter(img => img.id !== id).map((img, idx) => ({ ...img, sequencia: idx + 1, numero_figura: idx + 1 }))
     );
     onDeleteImage?.(id);
-    onRefreshHtml();
   };
 
   const handleUpdateLegenda = (id: string, legenda: string) => {
@@ -467,6 +467,12 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
             <ImageIcon size={16} /> Inserir Todas no Laudo
           </Button>
         )}
+        <Button variant="outline" className="w-full gap-2" onClick={() => {
+          onRefreshHtml();
+          toast.success('Legendas das figuras renumeradas');
+        }}>
+          <ListChecks size={16} /> Indexar
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">

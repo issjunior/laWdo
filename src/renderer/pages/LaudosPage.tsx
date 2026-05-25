@@ -43,6 +43,19 @@ import {
 import { reindexarFiguras } from '@/lib/figuras';
 import { toast } from 'sonner';
 
+function buildFigureHtml(url: string, id: string, legenda: string): string {
+  return (
+    `<figure class="laudo-figure" data-image-id="${id}" style="text-align:center;margin:12px auto;max-width:100%">` +
+    `<img src="${url}" alt="${legenda}" style="max-width:100%;height:auto;border:1px solid #ddd;border-radius:4px;padding:4px"/>` +
+    `<figcaption style="font-size:13px;color:#666;font-weight:bold;margin-top:4px">Figura XX${legenda ? ': ' + legenda : ''}</figcaption>` +
+    `</figure><br>`
+  );
+}
+
+function buildFiguresHtml(imagens: Array<{ url: string; id: string; legenda: string }>): string {
+  return imagens.map(img => buildFigureHtml(img.url, img.id, img.legenda)).join('');
+}
+
 interface Placeholder {
   id: string;
   chave: string;
@@ -442,6 +455,11 @@ export const LaudosPage: React.FC = () => {
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
 
+  const [ilustracoesKey, setIlustracoesKey] = useState(0);
+  const [ilustracoesRemounting, setIlustracoesRemounting] = useState(false);
+  const remountScheduledRef = useRef(false);
+  const scrollRestoreRef = useRef<number | null>(null);
+
   const SINGLE_CHAT_KEY = 'single-editor';
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
@@ -637,13 +655,19 @@ export const LaudosPage: React.FC = () => {
       novas.splice(idxConsideracoes, 0, novaSecao);
       idx = idxConsideracoes;
     } else {
-      const idxConclusao = titulosUpper.indexOf('CONCLUSÃO');
-      if (idxConclusao >= 0) {
-        novas.splice(idxConclusao, 0, novaSecao);
-        idx = idxConclusao;
+      const idxEncerramento = titulosUpper.indexOf('ENCERRAMENTO');
+      if (idxEncerramento >= 0) {
+        novas.splice(idxEncerramento, 0, novaSecao);
+        idx = idxEncerramento;
       } else {
-        idx = novas.length;
-        novas.push(novaSecao);
+        const idxConclusao = titulosUpper.indexOf('CONCLUSÃO');
+        if (idxConclusao >= 0) {
+          novas.splice(idxConclusao, 0, novaSecao);
+          idx = idxConclusao;
+        } else {
+          idx = novas.length;
+          novas.push(novaSecao);
+        }
       }
     }
 
@@ -667,7 +691,7 @@ export const LaudosPage: React.FC = () => {
           id,
           url: img?.getAttribute('src') || '',
           thumbnailUrl: img?.getAttribute('src') || '',
-          legenda: figcaption?.textContent?.replace(/^Fig(?:ura|\.)\s*\d+[:\s]*\s*/i, '').trim() || '',
+          legenda: figcaption?.textContent?.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '').trim() || '',
           numero_figura: idx + 1,
           sequencia: idx + 1,
           created_at: '',
@@ -698,39 +722,105 @@ export const LaudosPage: React.FC = () => {
     }
   }, [editorMode, secoes]);
 
+  const atualizarConteudoSecao = useCallback((idx: number, novoConteudo: string) => {
+    setSecoes(prev => {
+      const novas = [...prev];
+      novas[idx] = { ...novas[idx], conteudo: novoConteudo };
+      return novas;
+    });
+  }, []);
+
+  const obterEditorIlustracoes = useCallback((): {
+    editorId: string;
+    idx: number;
+    editor: any | null;
+    secoesAtuais: SecaoEditor[];
+  } => {
+    if (editorMode === 'single') {
+      const editor = (window as any).tinymce?.get('laudo-single-editor');
+      return { editorId: 'laudo-single-editor', idx: -1, editor, secoesAtuais: secoes };
+    }
+    const { idx, secoes: secoesAtuais } = garantirSecaoIlustracoes();
+    const editor = (window as any).tinymce?.get(`secao-${idx}`);
+    return { editorId: `secao-${idx}`, idx, editor, secoesAtuais };
+  }, [editorMode, secoes, garantirSecaoIlustracoes]);
+
+  const aplicarFigurasNoEditor = useCallback((
+    operacao: string,
+    imagens: Array<{ url: string; id: string; legenda: string }>,
+    substituirConteudo: boolean = false,
+  ): { metodo: 'execCommand' | 'remount'; count: number } => {
+    const { editorId, idx, editor } = obterEditorIlustracoes();
+
+    if (editor && editor.initialized && editor.getBody()) {
+      if (substituirConteudo) {
+        const body = editor.getBody();
+        Array.from(body.querySelectorAll('.laudo-figure')).forEach(fig => {
+          const next = fig.nextElementSibling;
+          fig.remove();
+          if (next && (next.tagName === 'BR' || next.tagName === 'P')) next.remove();
+        });
+      }
+      for (const img of imagens) {
+        editor.execCommand('insertLaudoImage', false, {
+          url: img.url, id: img.id, legenda: img.legenda
+        });
+      }
+      console.info(`[ilustracoes] ${operacao}: execCommand ${editorId} ✓ ${imagens.length} figs`);
+      return { metodo: 'execCommand', count: imagens.length };
+    }
+
+    const secaoIlus = secoes.find(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+    const isNewOrEmpty = !secaoIlus || secaoIlus.conteudo === '<p>&nbsp;</p>';
+    const baseContent = (substituirConteudo || isNewOrEmpty)
+      ? ''
+      : (secaoIlus?.conteudo || '');
+
+    atualizarConteudoSecao(idx, baseContent + buildFiguresHtml(imagens));
+
+    if (editor?.getBody()) {
+      scrollRestoreRef.current = editor.getBody().parentElement?.scrollTop || 0;
+    }
+
+    setIlustracoesRemounting(true);
+
+    if (!remountScheduledRef.current) {
+      remountScheduledRef.current = true;
+      queueMicrotask(() => {
+        setIlustracoesKey(k => k + 1);
+        remountScheduledRef.current = false;
+      });
+    }
+
+    const status = editor ? 'loaded-without-body' : 'not-loaded';
+    console.warn(`[ilustracoes] ${operacao}: remount ${editorId} (editor: ${status}) ${imagens.length} figs`);
+    return { metodo: 'remount', count: imagens.length };
+  }, [secoes, obterEditorIlustracoes, atualizarConteudoSecao]);
+
+  const handleIlustracoesEditorInit = useCallback((editor: any) => {
+    if (scrollRestoreRef.current !== null && editor.getBody()) {
+      const scrollContainer = editor.getBody().parentElement;
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollRestoreRef.current;
+      }
+      scrollRestoreRef.current = null;
+    }
+    setIlustracoesRemounting(false);
+    console.info('[ilustracoes] remount: editor inicializado, scroll restaurado ✓');
+  }, []);
+
   /**
    * Sincroniza a ordem das figuras no editor com a ordem do painel de ilustrações.
    * Chamado após drag-and-drop no painel (painel → editor).
    */
-  const sincronizarOrdemEditor = useCallback((imagensOrdenadas: { url: string; id: string; legenda: string }[]) => {
+  const sincronizarOrdemEditor = useCallback((
+    imagensOrdenadas: Array<{ url: string; id: string; legenda: string }>
+  ) => {
     if (editorMode === 'single') return;
     const idxIlustracoes = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
     if (idxIlustracoes < 0) return;
-
-    const editor = (window as any).tinymce?.get(`secao-${idxIlustracoes}`);
-    if (!editor) return;
-
-    const body = editor.getBody();
-    // Remover todas as figuras atuais (e parágrafos espaçadores)
-    const figurasAtuais = Array.from(body.querySelectorAll('.laudo-figure'));
-    figurasAtuais.forEach(fig => {
-      const next = fig.nextElementSibling;
-      fig.remove();
-      if (next && (next.tagName === 'BR' || next.tagName === 'P')) {
-        next.remove();
-      }
-    });
-
-    // Reinserir na nova ordem (sem reindexar a cada inserção)
-    imagensOrdenadas.forEach(img => {
-      editor.execCommand('insertLaudoImage', false, {
-        url: img.url, id: img.id, legenda: img.legenda, skipReindex: true
-      });
-    });
-
-    // Reindexar uma única vez no final
-    editor.execCommand('reindexFiguras');
-  }, [editorMode, secoes]);
+    aplicarFigurasNoEditor('reorder', imagensOrdenadas, true);
+  }, [editorMode, secoes, aplicarFigurasNoEditor]);
 
   const panelCallbacksRef = useRef<{
     onInsertImage: (url: string, id: string, legenda: string) => void;
@@ -758,39 +848,104 @@ export const LaudosPage: React.FC = () => {
     onInsertImage: (url, id, legenda) => {
       if (editorMode === 'single') {
         const editor = (window as any).tinymce?.get('laudo-single-editor');
-        if (editor) {
-          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
-          toast.success('Imagem inserida');
+        if (!editor) {
+          console.error('[ilustracoes] insertImage: ERRO single mode - editor not found');
+          toast.error('Editor não encontrado. Tente recarregar a página.');
+          return;
         }
+        const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
+        let idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+        let secoesComIlus = [...secoesAtualizadas];
+        if (idxIlus < 0) {
+          const titulos = secoesAtualizadas.map(s => s.titulo.trim().toUpperCase());
+          const idxRef = titulos.indexOf('CONSIDERAÇÕES FINAIS');
+          if (idxRef >= 0) { idxIlus = idxRef; }
+          else {
+            const idxEnc = titulos.indexOf('ENCERRAMENTO');
+            if (idxEnc >= 0) { idxIlus = idxEnc; }
+            else {
+              const idxConcl = titulos.indexOf('CONCLUSÃO');
+              idxIlus = idxConcl >= 0 ? idxConcl : secoesAtualizadas.length;
+            }
+          }
+          secoesComIlus.splice(idxIlus, 0, { titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
+        }
+        const secaoIlus = secoesComIlus[idxIlus];
+        const baseContent = secaoIlus.conteudo === '<p>&nbsp;</p>' ? '' : secaoIlus.conteudo;
+        secoesComIlus[idxIlus] = { ...secaoIlus, conteudo: baseContent + buildFigureHtml(url, id, legenda) };
+        setSecoes(secoesComIlus);
+        const novoHtml = buildSingleHtmlFromSecoes(secoesComIlus);
+        setSingleEditorHtml(novoHtml);
+        editor.setContent(novoHtml);
+        toast.success('Imagem inserida na seção ILUSTRAÇÕES');
         return;
       }
-
-      const { idx, secoes: novasSecoes } = garantirSecaoIlustracoes();
-      const editor = (window as any).tinymce?.get(`secao-${idx}`);
-
-      if (editor) {
-        editor.execCommand('insertLaudoImage', false, { url, id, legenda });
+      const r = aplicarFigurasNoEditor('insertImage', [{ url, id, legenda }]);
+      if (r.metodo === 'execCommand') {
+        toast.success('Imagem inserida na seção ILUSTRAÇÕES');
       } else {
-        const figureHtml = `<figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;"><img src="${url}" alt="${legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" /><figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">${legenda}</figcaption></figure><br>`;
-        const baseContent = novasSecoes[idx].conteudo === '<p>&nbsp;</p>' ? '' : novasSecoes[idx].conteudo;
-        atualizarConteudoSecao(idx, reindexarFiguras(baseContent + figureHtml));
+        toast.info('Imagem adicionada. O editor está carregando — a figura aparecerá em instantes.');
       }
-
-      toast.success('Imagem inserida na seção ILUSTRAÇÕES');
     },
     onDeleteImage: (imageId) => {
       if (editorMode === 'single') {
         const editor = (window as any).tinymce?.get('laudo-single-editor');
-        if (editor) {
-          editor.execCommand('removeLaudoImage', false, { id: imageId });
-          setSingleEditorHtml(editor.getContent());
+        if (!editor) return;
+        editor.execCommand('removeLaudoImage', false, { id: imageId });
+        const novoHtml = editor.getContent();
+        setSingleEditorHtml(novoHtml);
+
+        const novasSecoes = parseSingleHtmlToSecoes(novoHtml, secoes);
+        const idxIlus = novasSecoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+        if (idxIlus >= 0) {
+          const temFiguras = extrairFigurasDoHtml(novasSecoes[idxIlus].conteudo).length > 0;
+          if (!temFiguras) {
+            novasSecoes.splice(idxIlus, 1);
+            setSecoesColapsadas(prev => {
+              const novo: Record<number, boolean> = {};
+              Object.keys(prev).forEach(k => {
+                const i = Number(k);
+                if (i < idxIlus) novo[i] = prev[i];
+                else if (i > idxIlus) novo[i - 1] = prev[i];
+              });
+              return novo;
+            });
+            toast.success('Seção ILUSTRAÇÕES removida');
+          }
         }
+        setSecoes(novasSecoes);
+        console.info('[ilustracoes] deleteImage: single mode ✓');
         return;
       }
-      const idxIlustracoes = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-      if (idxIlustracoes < 0) return;
+      const idxIlustracoes = secoes.findIndex(
+        s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES'
+      );
+      if (idxIlustracoes < 0) {
+        console.warn('[ilustracoes] deleteImage: seção ILUSTRAÇÕES não encontrada');
+        return;
+      }
       const editor = (window as any).tinymce?.get(`secao-${idxIlustracoes}`);
-      if (!editor) return;
+      if (!editor || !editor.getBody()) {
+        console.warn(
+          `[ilustracoes] deleteImage: secao-${idxIlustracoes} editor not ready, falling back to state-path`
+        );
+        setSecoes(prev => {
+          const novas = [...prev];
+          const secao = novas[idxIlustracoes];
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(secao.conteudo, 'text/html');
+          const figure = doc.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
+          if (figure) {
+            const next = figure.nextElementSibling;
+            figure.remove();
+            if (next && (next.tagName === 'BR' || next.tagName === 'P')) next.remove();
+          }
+          novas[idxIlustracoes] = { ...secao, conteudo: doc.body.innerHTML || '<p>&nbsp;</p>' };
+          return novas;
+        });
+        toast.success('Figura removida da seção ILUSTRAÇÕES');
+        return;
+      }
       editor.execCommand('removeLaudoImage', false, { id: imageId });
       atualizarConteudoSecao(idxIlustracoes, editor.getContent());
       const temFiguras = editor.getBody()?.querySelector('.laudo-figure');
@@ -803,14 +958,15 @@ export const LaudosPage: React.FC = () => {
         setSecoesColapsadas(prev => {
           const novo: Record<number, boolean> = {};
           Object.keys(prev).forEach(k => {
-            const idx = Number(k);
-            if (idx < idxIlustracoes) novo[idx] = prev[idx];
-            else if (idx > idxIlustracoes) novo[idx - 1] = prev[idx];
+            const i = Number(k);
+            if (i < idxIlustracoes) novo[i] = prev[i];
+            else if (i > idxIlustracoes) novo[i - 1] = prev[i];
           });
           return novo;
         });
         toast.success('Seção ILUSTRAÇÕES removida');
       }
+      console.info(`[ilustracoes] deleteImage: execCommand secao-${idxIlustracoes} ✓`);
     },
     onUpdateLegenda: (id, legenda) => {
       const atualizarFigcaption = (editor: any) => {
@@ -819,9 +975,9 @@ export const LaudosPage: React.FC = () => {
           const figcaption = figure.querySelector('figcaption');
           if (figcaption) {
             const legendaAtual = figcaption.textContent || '';
-            const match = legendaAtual.match(/Fig(?:ura|\.)\s*(\d+)/i);
+            const match = legendaAtual.match(/Fig(?:ura|\.)\s*(\d+|XX)/i);
             const num = match ? match[1] : '';
-            const numFormatado = num ? num.padStart(2, '0') : 'XX';
+            const numFormatado = num === 'XX' ? 'XX' : (num ? num.padStart(2, '0') : 'XX');
             figcaption.textContent = legenda
               ? `Figura ${numFormatado}: ${legenda}`
               : `Figura ${numFormatado}`;
@@ -835,7 +991,9 @@ export const LaudosPage: React.FC = () => {
       if (editorMode === 'single') {
         const editor = (window as any).tinymce?.get('laudo-single-editor');
         if (editor && atualizarFigcaption(editor)) {
-          setSingleEditorHtml(editor.getContent());
+          const novoHtml = editor.getContent();
+          setSingleEditorHtml(novoHtml);
+          setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
         }
         return;
       }
@@ -847,11 +1005,32 @@ export const LaudosPage: React.FC = () => {
         }
       }
     },
-    onReorder: (imagens) => { sincronizarOrdemEditor(imagens); },
+    onReorder: (imagens) => {
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (!editor) return;
+        const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
+        const idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+        if (idxIlus < 0) return;
+        const secoesReordenadas = [...secoesAtualizadas];
+        secoesReordenadas[idxIlus] = { ...secoesAtualizadas[idxIlus], conteudo: buildFiguresHtml(imagens.map(i => ({ url: i.url, id: i.id, legenda: i.legenda }))) };
+        setSecoes(secoesReordenadas);
+        const novoHtml = buildSingleHtmlFromSecoes(secoesReordenadas);
+        setSingleEditorHtml(novoHtml);
+        editor.setContent(novoHtml);
+        return;
+      }
+      sincronizarOrdemEditor(imagens.map(i => ({ url: i.url, id: i.id, legenda: i.legenda })));
+    },
     onRefreshHtml: () => {
       if (editorMode === 'single') {
         const editor = (window as any).tinymce?.get('laudo-single-editor');
-        if (editor) editor.execCommand('reindexFiguras');
+        if (editor) {
+          editor.execCommand('reindexFiguras');
+          const novoHtml = editor.getContent();
+          setSingleEditorHtml(novoHtml);
+          setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
+        }
       } else {
         setSecoes(prev => prev.map(s => ({ ...s, conteudo: reindexarFiguras(s.conteudo) })));
       }
@@ -865,32 +1044,41 @@ export const LaudosPage: React.FC = () => {
       if (editorMode === 'single') {
         const editor = (window as any).tinymce?.get('laudo-single-editor');
         if (editor) {
-          for (const img of imagens) {
-            editor.execCommand('insertLaudoImage', false, { url: img.url, id: img.id, legenda: img.legenda, skipReindex: true });
+          const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
+          let idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+          let secoesComIlus = [...secoesAtualizadas];
+          if (idxIlus < 0) {
+            const titulos = secoesAtualizadas.map(s => s.titulo.trim().toUpperCase());
+            const idxRef = titulos.indexOf('CONSIDERAÇÕES FINAIS');
+            if (idxRef >= 0) { idxIlus = idxRef; }
+            else {
+              const idxEnc = titulos.indexOf('ENCERRAMENTO');
+              if (idxEnc >= 0) { idxIlus = idxEnc; }
+              else {
+                const idxConcl = titulos.indexOf('CONCLUSÃO');
+                idxIlus = idxConcl >= 0 ? idxConcl : secoesAtualizadas.length;
+              }
+            }
+            secoesComIlus.splice(idxIlus, 0, { titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
           }
-          editor.execCommand('reindexFiguras');
-          toast.success(`${imagens.length} imagens inseridas`);
+          const secaoIlus = secoesComIlus[idxIlus];
+          const baseContent = secaoIlus.conteudo === '<p>&nbsp;</p>' ? '' : secaoIlus.conteudo;
+          secoesComIlus[idxIlus] = { ...secaoIlus, conteudo: baseContent + buildFiguresHtml(imagens.map(i => ({ url: i.url, id: i.id, legenda: i.legenda }))) };
+          setSecoes(secoesComIlus);
+          const novoHtml = buildSingleHtmlFromSecoes(secoesComIlus);
+          setSingleEditorHtml(novoHtml);
+          editor.setContent(novoHtml);
+          toast.success(`${imagens.length} imagens inseridas na seção ILUSTRAÇÕES`);
         }
         return;
       }
 
-      const { idx, secoes: novasSecoes } = garantirSecaoIlustracoes();
-      const editor = (window as any).tinymce?.get(`secao-${idx}`);
-
-      if (editor) {
-        for (const img of imagens) {
-          editor.execCommand('insertLaudoImage', false, { url: img.url, id: img.id, legenda: img.legenda, skipReindex: true });
-        }
-        editor.execCommand('reindexFiguras');
+      const r = aplicarFigurasNoEditor('insertAll', imagens.map(i => ({ url: i.url, id: i.id, legenda: i.legenda })));
+      if (r.metodo === 'execCommand') {
+        toast.success(`${r.count} imagens inseridas na seção ILUSTRAÇÕES`);
       } else {
-        const figuresHtml = imagens.map(img =>
-          `<figure class="laudo-figure" data-image-id="${img.id}" style="text-align: center; margin: 12px auto; max-width: 100%;"><img src="${img.url}" alt="${img.legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" /><figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">${img.legenda}</figcaption></figure><br>`
-        ).join('');
-        const baseContent = novasSecoes[idx].conteudo === '<p>&nbsp;</p>' ? '' : novasSecoes[idx].conteudo;
-        atualizarConteudoSecao(idx, reindexarFiguras(baseContent + figuresHtml));
+        toast.info(`${r.count} imagens adicionadas. O editor está carregando — as figuras aparecerão em instantes.`);
       }
-
-      toast.success(`${imagens.length} imagens inseridas na seção ILUSTRAÇÕES`);
     },
     onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
     onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
@@ -1030,6 +1218,8 @@ export const LaudosPage: React.FC = () => {
         : '';
       fullHtml += secoesHtml;
 
+      fullHtml = reindexarFiguras(fullHtml);
+
       // 4. Aplicar placeholders (incluindo relacionamentos)
       const htmlProcessado = aplicarPlaceholders(fullHtml, repData, {
         solicitanteNome,
@@ -1144,14 +1334,6 @@ export const LaudosPage: React.FC = () => {
     } finally {
       setSalvando(false);
     }
-  };
-
-  const atualizarConteudoSecao = (idx: number, novoConteudo: string) => {
-    setSecoes(prev => {
-      const novas = [...prev];
-      novas[idx] = { ...novas[idx], conteudo: novoConteudo };
-      return novas;
-    });
   };
 
   const handleOpenSheet = (idx: number, titulo: string) => {
@@ -1773,9 +1955,11 @@ export const LaudosPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-6 pb-4">
-                    {secoes.map((secao, idx) => (
+                    {secoes.map((secao, idx) => {
+                      const isIlustracoes = secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES';
+                      return (
                       <Collapsible
-                        key={idx}
+                        key={isIlustracoes ? `ilus-${ilustracoesKey}` : idx}
                         open={!secoesColapsadas[idx]}
                         onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
                         className="border rounded-lg bg-card shadow-sm"
@@ -1807,20 +1991,33 @@ export const LaudosPage: React.FC = () => {
                             onOpenSheet={handleOpenSheet}
                           />
                           <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder}>
-                            <TinyMceEditor
-                              editorId={`secao-${idx}`}
-                              initialValue={secao.conteudo}
-                              onChange={(txt) => atualizarConteudoSecao(idx, txt)}
-                              height={400}
-                              laudoId={editando.id}
-                              onImageInserted={() => setImageInsertCounter(c => c + 1)}
-                              theme={editorTheme}
-                              placeholderChaves={placeholderChaves}
-                            />
+                            <div className={isIlustracoes ? 'relative' : ''}>
+                              <TinyMceEditor
+                                editorId={`secao-${idx}`}
+                                initialValue={secao.conteudo}
+                                onChange={(txt) => atualizarConteudoSecao(idx, txt)}
+                                height={400}
+                                laudoId={editando.id}
+                                onImageInserted={() => setImageInsertCounter(c => c + 1)}
+                                theme={editorTheme}
+                                placeholderChaves={placeholderChaves}
+                                onEditorInit={isIlustracoes ? handleIlustracoesEditorInit : undefined}
+                              />
+
+                              {isIlustracoes && ilustracoesRemounting && (
+                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded">
+                                  <div className="flex flex-col items-center gap-3">
+                                    <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                    <span className="text-sm text-muted-foreground">Carregando editor...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </PlaceholderContextMenu>
                         </CollapsibleContent>
                       </Collapsible>
-                    ))}
+                    );
+                    })}
                   </div>
                 )}
               </div>

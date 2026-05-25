@@ -19,6 +19,8 @@ interface TinyMceEditorProps {
   theme?: 'light' | 'dark' | 'auto';
   /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
   placeholderChaves?: string[];
+  /** Callback disparado quando o editor termina de inicializar */
+  onEditorInit?: (editor: any) => void;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<HTMLDivElement>> = ({
@@ -32,6 +34,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   onImageInserted,
   theme = 'light',
   placeholderChaves,
+  onEditorInit,
   ...rest
 }) => {
   const editorRef = useRef<any>(null);
@@ -63,6 +66,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
         onInit={(_evt, editor) => {
           editorRef.current = editor;
           setReady(true);
+          onEditorInit?.(editor);
         }}
         {...(isUncontrolled
           ? { initialValue: stableInitialValue }
@@ -172,11 +176,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                     const html = `
                       <figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;">
                         <img src="${dataUri}" alt="" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />
-                        <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;"></figcaption>
+                        <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">Figura XX</figcaption>
                       </figure>
                       <br>`;
                     editor.insertContent(html);
-                    editor.execCommand('reindexFiguras');
                     onImageInserted?.();
                   }
                 };
@@ -193,17 +196,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               editor.insertContent(html);
             });
 
-            editor.addCommand('insertLaudoImage', (_ui: any, data: { url: string, id: string, legenda: string, skipReindex?: boolean }) => {
+            editor.addCommand('insertLaudoImage', (_ui: any, data: { url: string, id: string, legenda: string }) => {
               const html = `
                 <figure class="laudo-figure" data-image-id="${data.id}" style="text-align: center; margin: 12px auto; max-width: 100%;">
                   <img src="${data.url}" alt="${data.legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />
-                  <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">${data.legenda}</figcaption>
+                  <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">Figura XX${data.legenda ? ': ' + data.legenda : ''}</figcaption>
                 </figure>
                 <br>`;
               editor.insertContent(html);
-              if (!data.skipReindex) {
-                editor.execCommand('reindexFiguras');
-              }
             });
 
             editor.addCommand('reindexFiguras', () => {
@@ -216,7 +216,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                 const img = figure.querySelector('img');
                 if (figcaption) {
                   const legendaAtual = figcaption.textContent || '';
-                  const textoLimpo = legendaAtual.replace(/^Fig(?:ura|\.)\s*\d+[:\s]*\s*/i, '');
+                  const textoLimpo = legendaAtual.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '');
                   figcaption.textContent = textoLimpo ? `Figura ${numFormatado}: ${textoLimpo}` : `Figura ${numFormatado}`;
                   if (img) {
                     (img as HTMLImageElement).alt = figcaption.textContent;
@@ -237,7 +237,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                   nextSibling.remove();
                 }
               }
-              editor.execCommand('reindexFiguras');
             });
 
             // Repassar evento de clique direito para o componente pai (Shadcn ContextMenu)

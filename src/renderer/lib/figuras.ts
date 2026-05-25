@@ -22,7 +22,7 @@ export function reindexarFiguras(html: string): string {
     if (figcaption) {
       // Preserva o conteúdo da legenda, atualizando apenas o prefixo "Figura XX: "
       const legendaAtual = figcaption.textContent || '';
-      const textoLimpo = legendaAtual.replace(/^Fig(?:ura|\.)\s*\d+[:\s]*\s*/i, '');
+      const textoLimpo = legendaAtual.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '');
       figcaption.textContent = textoLimpo ? `Figura ${numFormatado}: ${textoLimpo}` : `Figura ${numFormatado}`;
 
       // Sincroniza o alt da imagem se existir
