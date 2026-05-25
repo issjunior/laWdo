@@ -619,45 +619,37 @@ export const LaudosPage: React.FC = () => {
    * Verifica e cria a seção "ILUSTRAÇÕES" no modo multi-seção.
    * Retorna o índice da seção de ilustrações.
    */
-  const garantirSecaoIlustracoes = useCallback((): number => {
-    // Verifica se já existe
+  const garantirSecaoIlustracoes = useCallback((): { idx: number; secoes: SecaoEditor[] } => {
     const idxExistente = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-    if (idxExistente >= 0) return idxExistente;
+    if (idxExistente >= 0) return { idx: idxExistente, secoes };
 
-    // Criar nova seção
     const novaSecao: SecaoEditor = {
       titulo: 'ILUSTRAÇÕES',
       conteudo: '<p>&nbsp;</p>',
     };
 
     const titulosUpper = secoes.map(s => s.titulo.trim().toUpperCase());
+    let idx: number;
+    const novas: SecaoEditor[] = [...secoes];
 
-    // 1. Tentar inserir antes de "CONSIDERAÇÕES FINAIS"
     const idxConsideracoes = titulosUpper.indexOf('CONSIDERAÇÕES FINAIS');
     if (idxConsideracoes >= 0) {
-      const novas = [...secoes];
       novas.splice(idxConsideracoes, 0, novaSecao);
-      setSecoes(novas);
-      // Garantir que a seção esteja aberta
-      setSecoesColapsadas(prev => ({ ...prev, [idxConsideracoes]: false }));
-      return idxConsideracoes;
+      idx = idxConsideracoes;
+    } else {
+      const idxConclusao = titulosUpper.indexOf('CONCLUSÃO');
+      if (idxConclusao >= 0) {
+        novas.splice(idxConclusao, 0, novaSecao);
+        idx = idxConclusao;
+      } else {
+        idx = novas.length;
+        novas.push(novaSecao);
+      }
     }
 
-    // 2. Tentar inserir antes de "CONCLUSÃO"
-    const idxConclusao = titulosUpper.indexOf('CONCLUSÃO');
-    if (idxConclusao >= 0) {
-      const novas = [...secoes];
-      novas.splice(idxConclusao, 0, novaSecao);
-      setSecoes(novas);
-      setSecoesColapsadas(prev => ({ ...prev, [idxConclusao]: false }));
-      return idxConclusao;
-    }
-
-    // 3. Inserir ao final
-    const idxFinal = secoes.length;
-    setSecoes(prev => [...prev, novaSecao]);
-    setSecoesColapsadas(prev => ({ ...prev, [idxFinal]: false }));
-    return idxFinal;
+    setSecoes(novas);
+    setSecoesColapsadas(prev => ({ ...prev, [idx]: false }));
+    return { idx, secoes: novas };
   }, [secoes]);
 
   /** Extrai figuras do HTML de um editor (modo multi ou single) */
@@ -705,29 +697,6 @@ export const LaudosPage: React.FC = () => {
       }
     }
   }, [editorMode, secoes]);
-
-  /**
-   * Aguarda até que uma instância TinyMCE com o editorId especificado esteja disponível.
-   * Útil quando uma nova seção é criada dinamicamente e o editor ainda está inicializando.
-   */
-  const aguardarEditor = (editorId: string, timeout = 3000, interval = 100): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      const start = Date.now();
-      const check = () => {
-        const editor = (window as any).tinymce?.get(editorId);
-        if (editor) {
-          resolve(editor);
-          return;
-        }
-        if (Date.now() - start > timeout) {
-          reject(new Error(`Editor ${editorId} não ficou pronto no tempo esperado`));
-          return;
-        }
-        setTimeout(check, interval);
-      };
-      check();
-    });
-  };
 
   /**
    * Sincroniza a ordem das figuras no editor com a ordem do painel de ilustrações.
@@ -786,24 +755,28 @@ export const LaudosPage: React.FC = () => {
   });
 
   panelCallbacksRef.current = {
-    onInsertImage: async (url, id, legenda) => {
+    onInsertImage: (url, id, legenda) => {
       if (editorMode === 'single') {
         const editor = (window as any).tinymce?.get('laudo-single-editor');
         if (editor) {
           editor.execCommand('insertLaudoImage', false, { url, id, legenda });
           toast.success('Imagem inserida');
         }
-      } else {
-        const idxIlustracoes = garantirSecaoIlustracoes();
-        const editorId = `secao-${idxIlustracoes}`;
-        try {
-          const editor = await aguardarEditor(editorId, 3000, 100);
-          editor.execCommand('insertLaudoImage', false, { url, id, legenda });
-          toast.success('Imagem inserida na seção ILUSTRAÇÕES');
-        } catch {
-          toast.error('Editor da seção ILUSTRAÇÕES não está pronto. Tente novamente em instantes.');
-        }
+        return;
       }
+
+      const { idx, secoes: novasSecoes } = garantirSecaoIlustracoes();
+      const editor = (window as any).tinymce?.get(`secao-${idx}`);
+
+      if (editor) {
+        editor.execCommand('insertLaudoImage', false, { url, id, legenda });
+      } else {
+        const figureHtml = `<figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;"><img src="${url}" alt="${legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" /><figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">${legenda}</figcaption></figure><br>`;
+        const baseContent = novasSecoes[idx].conteudo === '<p>&nbsp;</p>' ? '' : novasSecoes[idx].conteudo;
+        atualizarConteudoSecao(idx, reindexarFiguras(baseContent + figureHtml));
+      }
+
+      toast.success('Imagem inserida na seção ILUSTRAÇÕES');
     },
     onDeleteImage: (imageId) => {
       if (editorMode === 'single') {
@@ -884,25 +857,40 @@ export const LaudosPage: React.FC = () => {
       }
     },
     onInsertAll: (imagens) => {
-      const carregarEInserirTodas = async () => {
-        try {
-          if (!imagens || imagens.length === 0) {
-            toast.info('Nenhuma imagem carregada para inserir');
-            return;
-          }
-          const idxIlustracoes = garantirSecaoIlustracoes();
-          const editorId = `secao-${idxIlustracoes}`;
-          const editor = await aguardarEditor(editorId, 3000, 100);
+      if (!imagens || imagens.length === 0) {
+        toast.info('Nenhuma imagem carregada para inserir');
+        return;
+      }
+
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (editor) {
           for (const img of imagens) {
             editor.execCommand('insertLaudoImage', false, { url: img.url, id: img.id, legenda: img.legenda, skipReindex: true });
           }
           editor.execCommand('reindexFiguras');
-          toast.success(`${imagens.length} imagens inseridas na seção ILUSTRAÇÕES`);
-        } catch (error: any) {
-          toast.error('Erro ao inserir imagens: ' + (error.message || 'Tente novamente'));
+          toast.success(`${imagens.length} imagens inseridas`);
         }
-      };
-      carregarEInserirTodas();
+        return;
+      }
+
+      const { idx, secoes: novasSecoes } = garantirSecaoIlustracoes();
+      const editor = (window as any).tinymce?.get(`secao-${idx}`);
+
+      if (editor) {
+        for (const img of imagens) {
+          editor.execCommand('insertLaudoImage', false, { url: img.url, id: img.id, legenda: img.legenda, skipReindex: true });
+        }
+        editor.execCommand('reindexFiguras');
+      } else {
+        const figuresHtml = imagens.map(img =>
+          `<figure class="laudo-figure" data-image-id="${img.id}" style="text-align: center; margin: 12px auto; max-width: 100%;"><img src="${img.url}" alt="${img.legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" /><figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">${img.legenda}</figcaption></figure><br>`
+        ).join('');
+        const baseContent = novasSecoes[idx].conteudo === '<p>&nbsp;</p>' ? '' : novasSecoes[idx].conteudo;
+        atualizarConteudoSecao(idx, reindexarFiguras(baseContent + figuresHtml));
+      }
+
+      toast.success(`${imagens.length} imagens inseridas na seção ILUSTRAÇÕES`);
     },
     onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
     onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
