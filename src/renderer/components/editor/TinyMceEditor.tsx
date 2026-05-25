@@ -2,7 +2,10 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 
 interface TinyMceEditorProps {
-  value: string;
+  /** Modo controlado: conteúdo sincronizado com estado React. Pode causar salto de cursor com HTML complexo. Use initialValue para evitar. */
+  value?: string;
+  /** Modo NÃO controlado: conteúdo inicial fixo, sem sincronização automática. Ideal para editores com HTML complexo (ex: seções). */
+  initialValue?: string;
   onChange: (html: string) => void;
   height?: number;
   placeholder?: string;
@@ -20,6 +23,7 @@ interface TinyMceEditorProps {
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<HTMLDivElement>> = ({
   value,
+  initialValue,
   onChange,
   height = 300,
   placeholder,
@@ -32,6 +36,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
 }) => {
   const editorRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
+
+  const [stableInitialValue] = useState(initialValue);
+  const isUncontrolled = initialValue !== undefined;
 
   const resolveTheme = () => {
     if (theme === 'auto') {
@@ -57,7 +64,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
           editorRef.current = editor;
           setReady(true);
         }}
-        value={value}
+        {...(isUncontrolled
+          ? { initialValue: stableInitialValue }
+          : { value: value || '' }
+        )}
         onEditorChange={(html: string) => onChange(html)}
         init={{
           license_key: 'gpl',
