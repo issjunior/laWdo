@@ -15,7 +15,7 @@ export const registerBackupHandlers = (): void => {
       if (!window) return { success: false, error: 'Nenhuma janela ativa' };
 
       const result = await dialog.showSaveDialog(window, {
-        title: 'Salvar backup do Laudo Pericial',
+        title: 'Salvar backup do laWdo',
         defaultPath: `laudo_pericial_backup_${new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)}.zip`,
         filters: [{ name: 'Arquivo ZIP', extensions: ['zip'] }],
       });

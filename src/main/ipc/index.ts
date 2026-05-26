@@ -85,7 +85,7 @@ const registerUtilityHandlers = (): void => {
 
     return {
       version: '0.1.0',
-      name: 'Laudo Pericial PCP',
+      name: 'laWdo',
       electron: process.versions.electron,
       node: process.versions.node,
       chrome: process.versions.chrome,

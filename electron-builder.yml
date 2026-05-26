@@ -1,5 +1,5 @@
 appId: br.gov.pr.pcp.laudopericial
-productName: Laudo Pericial PCP
+productName: laWdo
 copyright: Copyright © 2024 Polícia Científica do Paraná
 directories:
   output: dist
@@ -31,7 +31,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Laudo Pericial PCP
+  shortcutName: laWdo
 
 mac:
   target: dmg

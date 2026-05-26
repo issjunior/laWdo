@@ -41,7 +41,7 @@ const LoadingScreen = () => (
         marginBottom: '20px',
       }}
     />
-    <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>Laudo Pericial PCP</h1>
+    <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>laWdo</h1>
     <p style={{ fontSize: '16px', opacity: 0.8 }}>
       {hasIpcApi() ? 'Inicializando aplicacao...' : 'Aguardando conexao...'}
     </p>
@@ -78,7 +78,7 @@ const initApp = async () => {
       // Mock para desenvolvimento
       window.ipcAPI = {
         ping: async () => 'pong (mock)',
-        getAppInfo: async () => ({ version: '0.1.0-dev', name: 'Laudo Pericial PCP' }),
+        getAppInfo: async () => ({ version: '0.1.0-dev', name: 'laWdo' }),
         logInfo: (msg: string) => console.log(`[INFO] ${msg}`),
         logError: (msg: string, err?: any) => console.error(`[ERROR] ${msg}`, err),
         executeQuery: async () => ({ success: false, message: 'Mock mode' }),

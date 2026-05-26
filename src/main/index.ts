@@ -37,7 +37,7 @@ const createWindow = (): void => {
       sandbox: true,
     },
     icon: path.join(__dirname, '../../public/assets/icon.png'),
-    title: 'Laudo Pericial PCP',
+    title: 'laWdo',
     show: false, // Mostrar apenas quando estiver pronto
   });
 

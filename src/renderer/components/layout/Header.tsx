@@ -74,16 +74,16 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           {/* Informação (Dialog) */}
           <Dialog>
             <DialogTrigger asChild>
-              <button className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm" title="Suporte Técnico">
+              <button className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm" title="Sugestão">
                 <Info size={18} className="text-muted-foreground" />
-                <span className="hidden md:inline text-muted-foreground font-medium">Suporte</span>
+                <span className="hidden md:inline text-muted-foreground font-medium">Sugestão</span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[400px]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Info className="h-5 w-5 text-primary" />
-                  Suporte Técnico
+                  Sugestão
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
@@ -114,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    Carregando detalhes do suporte...
+                    Carregando...
                   </div>
                 )}
 

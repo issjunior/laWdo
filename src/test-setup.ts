@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/mock/app/path'),
     getAppPath: vi.fn(() => '/mock/app'),
-    getName: vi.fn(() => 'LaudoPericialTest'),
+    getName: vi.fn(() => 'laWdoTest'),
     getVersion: vi.fn(() => '0.1.0-test'),
   },
   ipcMain: {
@@ -28,7 +28,7 @@ Object.defineProperty(window, 'electronAPI', {
   value: {
     ping: vi.fn(() => Promise.resolve('pong')),
     getAppInfo: vi.fn(() => Promise.resolve({
-      name: 'Laudo Pericial Test',
+      name: 'laWdo Test',
       version: '0.1.0-test',
     })),
     logInfo: vi.fn(() => Promise.resolve()),

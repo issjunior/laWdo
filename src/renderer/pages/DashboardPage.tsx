@@ -11,7 +11,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     <main className="main-content">
       <div className="welcome-card">
         <div className="logo-container">
-          <img src={logo} alt="Logo Laudo Pericial" className="dashboard-logo" />
+          <img src={logo} alt="Logo laWdo" className="dashboard-logo" />
         </div>
       </div>
 

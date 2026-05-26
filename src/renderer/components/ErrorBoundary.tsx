@@ -95,7 +95,7 @@ export class ErrorBoundary extends Component<Props, State> {
       };
 
       // Abrir email para reportar erro
-      const subject = encodeURIComponent('Erro no Laudo Pericial');
+      const subject = encodeURIComponent('Erro no laWdo');
       const body = encodeURIComponent(
         `Detalhes do erro:\n\n${JSON.stringify(errorDetails, null, 2)}`
       );
