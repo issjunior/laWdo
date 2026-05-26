@@ -169,6 +169,8 @@ export interface IpcAPI {
   backup: {
     criar: () => Promise<{ success: boolean; path?: string; error?: string }>;
     restaurar: () => Promise<{ success: boolean; error?: string }>;
+    configExportar: () => Promise<{ success: boolean; path?: string; error?: string }>;
+    configImportar: () => Promise<{ success: boolean; error?: string }>;
   };
 
   // Logs do sistema
@@ -302,6 +304,8 @@ const ALLOWED_CHANNELS = new Set([
   // Backup
   'backup:criar',
   'backup:restaurar',
+  'backup:config-exportar',
+  'backup:config-importar',
 
   // Logs do sistema
   'log:listar',
@@ -696,6 +700,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   backup: {
     criar: () => ipcRenderer.invoke('backup:criar'),
     restaurar: () => ipcRenderer.invoke('backup:restaurar'),
+    configExportar: () => ipcRenderer.invoke('backup:config-exportar'),
+    configImportar: () => ipcRenderer.invoke('backup:config-importar'),
   },
 
   log: {
