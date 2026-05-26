@@ -49,6 +49,9 @@ export const MargensPage: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [isCustom, setIsCustom] = useState(false);
 
+  const a4Aspect = MARGINS_A4_MM.width / MARGINS_A4_MM.height;
+  const pageCm = { w: MARGINS_A4_MM.width / 10, h: MARGINS_A4_MM.height / 10 };
+
   useEffect(() => {
     (async () => {
       try {
@@ -104,8 +107,6 @@ export const MargensPage: React.FC = () => {
     }
   };
 
-  const a4Aspect = MARGINS_A4_MM.width / MARGINS_A4_MM.height;
-
   if (loading) {
     return (
       <div className="container mx-auto px-2 py-6 space-y-6 animate-fade-in">
@@ -120,7 +121,7 @@ export const MargensPage: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto px-2 py-6 space-y-6 animate-fade-in max-w-5xl">
+    <div className="container mx-auto px-2 py-6 space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
@@ -150,19 +151,17 @@ export const MargensPage: React.FC = () => {
             <CardDescription>Folha A4 com as margens em escala proporcional</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
-            <div
-              className="relative w-full max-w-[300px] bg-muted/40 rounded-xl border p-2"
-            >
+            <div className="relative w-full">
               <div
-                className="relative mx-auto overflow-hidden rounded border bg-white dark:bg-slate-100 shadow-sm"
+                className="relative mx-auto overflow-hidden rounded border bg-white dark:bg-slate-100 shadow-sm max-h-[75vh]"
                 style={{ aspectRatio: a4Aspect.toString() }}
               >
                 {/* Top margin */}
                 <div
                   className="absolute top-0 left-0 right-0 flex items-end justify-center transition-all duration-200"
                   style={{
-                    height: `${(margins.top / MARGINS_MAX) * 100}%`,
-                    maxHeight: `${(MARGINS_MAX / MARGINS_A4_MM.height) * 100}%`,
+                    height: `${(margins.top / pageCm.h) * 100}%`,
+                    maxHeight: `${(MARGINS_MAX / pageCm.h) * 100}%`,
                     background: `linear-gradient(to bottom, var(--blue-500, #3b82f6) 0%, transparent 100%)`,
                     opacity: 0.3,
                   }}
@@ -175,8 +174,8 @@ export const MargensPage: React.FC = () => {
                 <div
                   className="absolute bottom-0 left-0 right-0 flex items-start justify-center transition-all duration-200"
                   style={{
-                    height: `${(margins.bottom / MARGINS_MAX) * 100}%`,
-                    maxHeight: `${(MARGINS_MAX / MARGINS_A4_MM.height) * 100}%`,
+                    height: `${(margins.bottom / pageCm.h) * 100}%`,
+                    maxHeight: `${(MARGINS_MAX / pageCm.h) * 100}%`,
                     background: `linear-gradient(to top, var(--orange-500, #f97316) 0%, transparent 100%)`,
                     opacity: 0.3,
                   }}
@@ -189,8 +188,8 @@ export const MargensPage: React.FC = () => {
                 <div
                   className="absolute top-0 bottom-0 left-0 flex items-center justify-end transition-all duration-200"
                   style={{
-                    width: `${(margins.left / MARGINS_MAX) * 100}%`,
-                    maxWidth: `${(MARGINS_MAX / MARGINS_A4_MM.width) * 100}%`,
+                    width: `${(margins.left / pageCm.w) * 100}%`,
+                    maxWidth: `${(MARGINS_MAX / pageCm.w) * 100}%`,
                     background: `linear-gradient(to right, var(--purple-500, #a855f7) 0%, transparent 100%)`,
                     opacity: 0.3,
                   }}
@@ -203,8 +202,8 @@ export const MargensPage: React.FC = () => {
                 <div
                   className="absolute top-0 bottom-0 right-0 flex items-center justify-start transition-all duration-200"
                   style={{
-                    width: `${(margins.right / MARGINS_MAX) * 100}%`,
-                    maxWidth: `${(MARGINS_MAX / MARGINS_A4_MM.width) * 100}%`,
+                    width: `${(margins.right / pageCm.w) * 100}%`,
+                    maxWidth: `${(MARGINS_MAX / pageCm.w) * 100}%`,
                     background: `linear-gradient(to left, var(--green-500, #22c55e) 0%, transparent 100%)`,
                     opacity: 0.3,
                   }}
@@ -217,10 +216,10 @@ export const MargensPage: React.FC = () => {
                 <div
                   className="absolute border border-dashed border-muted-foreground/30 flex items-center justify-center"
                   style={{
-                    top: `${(margins.top / MARGINS_MAX) * 100}%`,
-                    bottom: `${(margins.bottom / MARGINS_MAX) * 100}%`,
-                    left: `${((margins.left / MARGINS_MAX) * 50)}%`,
-                    right: `${((margins.right / MARGINS_MAX) * 50)}%`,
+                    top: `${(margins.top / pageCm.h) * 100}%`,
+                    bottom: `${(margins.bottom / pageCm.h) * 100}%`,
+                    left: `${(margins.left / pageCm.w) * 100}%`,
+                    right: `${(margins.right / pageCm.w) * 100}%`,
                   }}
                 >
                   <span className="text-[9px] text-muted-foreground/50 select-none whitespace-nowrap">

@@ -1,7 +1,7 @@
 # Margens do PDF — Documentação de implementação
 
 > **Data:** 2026-05-26
-> **Versão:** v1.2
+> **Versão:** v1.3
 > **Objetivo:** Permitir ao usuário configurar margens customizadas para geração de PDF dos laudos via sidebar.
 
 ---
@@ -141,6 +141,15 @@ Página de configuração com:
 - Texto dos labels usa `text-{color}-600 dark:text-{color}-400`
 - Slider track usa `bg-primary/20`, range usa `bg-primary`, thumb usa `bg-background`
 - Nenhuma cor hardcoded — respeita `globals.css`
+
+**Preview visual (cálculo proporcional):**
+- O retângulo A4 usa `aspectRatio: 210/297`
+- As margens são convertidas de cm para % da página usando as dimensões reais da folha:
+  - `pageCm = { w: MARGINS_A4_MM.width / 10, h: MARGINS_A4_MM.height / 10 }` (21cm × 29.7cm)
+  - Overlay vertical: `height: (margins.top / pageCm.h) × 100%`
+  - Overlay horizontal: `width: (margins.left / pageCm.w) × 100%`
+  - Área de conteúdo: posicionada com `top`, `bottom`, `left`, `right` usando essas mesmas proporções
+- Exemplo com 2.5 cm de margem superior: overlay ocupa `2.5 / 29.7 ≈ 8.4%` da altura
 
 ### 4.2. `Slider` (shadcn/ui)
 
@@ -331,7 +340,7 @@ const result = await window.ipcAPI.template.previewPDF(html, await getMargens())
 - [ ] `npm run build` compila sem erros (main + preload + renderer)
 - [ ] Página `/margens` acessível via sidebar
 - [ ] Sliders sincronizados com inputs numéricos
-- [ ] Preview visual A4 responde em tempo real
+- [ ] Preview visual A4 usa proporções reais (2.5 cm ≈ 8.4% da altura, não 50%)
 - [ ] Persistência funciona (salvar → recarregar página → valores mantidos)
 - [ ] PDF gerado com margens customizadas (Laudos, Templates, Cabeçalho)
 - [ ] PDF gerado corretamente sem margens configuradas (compatibilidade)

@@ -1145,7 +1145,7 @@ export const LaudosPage: React.FC = () => {
         .join('\n');
 
       let fullHtml = cabecalhoHtml
-        ? `<div class="cabecalho" style="border-bottom:2px solid #000;padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
+        ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
         : '';
       fullHtml += secoesHtml;
 
