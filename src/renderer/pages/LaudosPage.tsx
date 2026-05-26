@@ -1134,7 +1134,13 @@ export const LaudosPage: React.FC = () => {
       // 3. Montar HTML completo
       const secoesAtuais = getSecoesSincronizadas();
       const secoesHtml = secoesAtuais
-        .map((s, i) => `<h2>${i + 1}. ${s.titulo}</h2>${s.conteudo}`)
+        .map((s, i) => {
+          const tituloRaw = (s.titulo || '').trim();
+          const titulo = /^(?:se[cç]ão\b|\d+[\s\.\-\:]|[a-zA-Z][\.\-\:]\s|[IVXLCDM]+[\.\-\:]\s)/i.test(tituloRaw)
+            ? tituloRaw
+            : `${i + 1}. ${tituloRaw}`;
+          return `<h2>${titulo}</h2>${s.conteudo}`;
+        })
         .join('\n');
 
       let fullHtml = cabecalhoHtml

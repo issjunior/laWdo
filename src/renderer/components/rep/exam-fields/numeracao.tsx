@@ -152,7 +152,7 @@ export const NumeracaoFields: React.FC<ExamSectionProps> = ({ form }) => (
           <FormItem>
             <Label>Motor</Label>
             <FormControl>
-              <Input placeholder="Até 12 caracteres alfanuméricos" maxLength={12} {...field} />
+              <Input placeholder="Até 15 caracteres alfanuméricos" maxLength={15} {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -165,7 +165,7 @@ export const NumeracaoFields: React.FC<ExamSectionProps> = ({ form }) => (
           <FormItem>
             <Label>Motor Revelado</Label>
             <FormControl>
-              <Input placeholder="Motor após revelação química" maxLength={12} {...field} />
+              <Input placeholder="Motor após revelação química" maxLength={15} {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>

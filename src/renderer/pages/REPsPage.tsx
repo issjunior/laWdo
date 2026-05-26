@@ -280,8 +280,8 @@ export const REPsPage: React.FC = () => {
     numeracao_conservacao: z.string().optional(),
     numeracao_chassi: z.string().regex(/^[A-Za-z0-9]{0,17}$/, 'Apenas caracteres alfanuméricos, até 17').optional(),
     numeracao_chassi_revelado: z.string().regex(/^[A-Za-z0-9]{0,17}$/, 'Apenas caracteres alfanuméricos, até 17').optional(),
-    numeracao_motor: z.string().regex(/^[A-Za-z0-9]{0,12}$/, 'Apenas caracteres alfanuméricos, até 12').optional(),
-    numeracao_motor_revelado: z.string().regex(/^[A-Za-z0-9]{0,12}$/, 'Apenas caracteres alfanuméricos, até 12').optional(),
+    numeracao_motor: z.string().regex(/^[A-Za-z0-9]{0,15}$/, 'Apenas caracteres alfanuméricos, até 15').optional(),
+    numeracao_motor_revelado: z.string().regex(/^[A-Za-z0-9]{0,15}$/, 'Apenas caracteres alfanuméricos, até 15').optional(),
   }).superRefine((data, ctx) => {
     if (!data.tipo_exame_id) return;
     const tipos = tiposExameRef.current;
