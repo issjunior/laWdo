@@ -5,17 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Save, Eye, Sun, Moon, SunMoon } from 'lucide-react';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { removerFormatacaoPlaceholders, converterPlaceholdersTextuais } from '@/lib/utils';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+import { PlaceholderContextMenu, type CategoriaItem } from '@/components/editor/PlaceholderContextMenu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Dialog,
@@ -28,7 +18,7 @@ interface Placeholder {
   id: string;
   chave: string;
   descricao: string;
-  categoria: string;
+  categoria_id: string;
 }
 
 export const CabecalhoPage: React.FC = () => {
@@ -41,6 +31,7 @@ export const CabecalhoPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaItem[]>([]);
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
 
@@ -77,6 +68,10 @@ export const CabecalhoPage: React.FC = () => {
   }, []);
 
   const carregarPlaceholders = useCallback(async () => {
+    const rCat = await window.ipcAPI.categoria.findAll();
+    if (rCat.success && rCat.data) {
+      setCategorias(rCat.data);
+    }
     const r = await window.ipcAPI.placeholder.findAll();
     if (r.success && r.data) {
       setPlaceholders(r.data);
@@ -88,8 +83,8 @@ export const CabecalhoPage: React.FC = () => {
     carregarPlaceholders();
   }, [carregarCabecalho, carregarPlaceholders]);
 
-  const inserirPlaceholder = (chave: string) => {
-    const editor = (window as any).tinymce?.get('cabecalho-editor');
+  const inserirPlaceholder = (editorId: string, chave: string) => {
+    const editor = (window as any).tinymce?.get(editorId);
     if (editor) {
       editor.execCommand('insertPlaceholder', false, { chave });
     }
@@ -251,8 +246,12 @@ export const CabecalhoPage: React.FC = () => {
           {loading ? (
             <div className="text-center py-8 text-gray-500">Carregando...</div>
           ) : (
-            <ContextMenu>
-              <ContextMenuTrigger>
+            <PlaceholderContextMenu
+              editorId="cabecalho-editor"
+              categorias={categorias}
+              placeholders={placeholders}
+              onInsertPlaceholder={inserirPlaceholder}
+            >
                 <TinyMceEditor
                   editorId="cabecalho-editor"
                   value={conteudo}
@@ -262,33 +261,7 @@ export const CabecalhoPage: React.FC = () => {
                   placeholderChaves={placeholderChaves}
                   theme={editorTheme}
                 />
-              </ContextMenuTrigger>
-              <ContextMenuContent className="w-64">
-                <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
-                <ContextMenuSeparator />
-                {Array.from(new Set(placeholders.map(p => p.categoria))).sort().map(cat => (
-                  <ContextMenuSub key={cat}>
-                    <ContextMenuSubTrigger>{cat || 'Outros'}</ContextMenuSubTrigger>
-                    <ContextMenuSubContent className="w-56">
-                      {placeholders
-                        .filter(p => p.categoria === cat)
-                        .sort((a, b) => a.chave.localeCompare(b.chave))
-                        .map(p => (
-                          <ContextMenuItem
-                            key={p.id}
-                            onClick={() => inserirPlaceholder(p.chave)}
-                          >
-                            <div className="flex flex-col">
-                              <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
-                              {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
-                            </div>
-                          </ContextMenuItem>
-                        ))}
-                    </ContextMenuSubContent>
-                  </ContextMenuSub>
-                ))}
-              </ContextMenuContent>
-            </ContextMenu>
+            </PlaceholderContextMenu>
           )}
         </CardContent>
       </Card>

@@ -14,17 +14,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { removerFormatacaoPlaceholders, converterPlaceholdersTextuais } from '@/lib/utils';
 import { z } from 'zod';
@@ -1063,8 +1053,12 @@ export const TemplatesPage: React.FC = () => {
               <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                 Estrutura por seções preservada automaticamente. Para adicionar/remover seções, volte ao modo multi-editor.
               </div>
-              <ContextMenu>
-                <ContextMenuTrigger>
+              <PlaceholderContextMenu
+                editorId="template-single-editor"
+                categorias={categorias}
+                placeholders={placeholders}
+                onInsertPlaceholder={inserirPlaceholder}
+              >
                   <TinyMceEditor
                     editorId="template-single-editor"
                     value={singleEditorHtml}
@@ -1074,35 +1068,7 @@ export const TemplatesPage: React.FC = () => {
                     placeholderChaves={placeholderChaves}
                     theme={editorTheme}
                   />
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-64">
-                  <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
-                  <ContextMenuSeparator />
-                  {categorias.map(cat => (
-                    <ContextMenuSub key={cat.id}>
-                      <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
-                        {cat.label}
-                      </ContextMenuSubTrigger>
-                      <ContextMenuSubContent className="w-56">
-                        {placeholders
-                          .filter(p => p.categoria_id === cat.id)
-                          .sort((a, b) => a.chave.localeCompare(b.chave))
-                          .map(p => (
-                            <ContextMenuItem
-                              key={p.id}
-                              onClick={() => inserirPlaceholder('template-single-editor', p.chave)}
-                            >
-                              <div className="flex flex-col">
-                                <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
-                                {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
-                              </div>
-                            </ContextMenuItem>
-                          ))}
-                      </ContextMenuSubContent>
-                    </ContextMenuSub>
-                  ))}
-                </ContextMenuContent>
-              </ContextMenu>
+              </PlaceholderContextMenu>
             </>
           ) : secoes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -1130,8 +1096,12 @@ export const TemplatesPage: React.FC = () => {
                     <X size={14} />
                   </Button>
                 </div>
-                <ContextMenu>
-                  <ContextMenuTrigger>
+                <PlaceholderContextMenu
+                  editorId={`template-secao-${index}`}
+                  categorias={categorias}
+                  placeholders={placeholders}
+                  onInsertPlaceholder={inserirPlaceholder}
+                >
                     <TinyMceEditor
                       editorId={`template-secao-${index}`}
                       value={secao.conteudo}
@@ -1141,35 +1111,7 @@ export const TemplatesPage: React.FC = () => {
                       placeholderChaves={placeholderChaves}
                       theme={editorTheme}
                     />
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-64">
-                    <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
-                    <ContextMenuSeparator />
-                    {categorias.map(cat => (
-                      <ContextMenuSub key={cat.id}>
-                        <ContextMenuSubTrigger className={`text-${cat.cor}-700 dark:text-${cat.cor}-300`}>
-                          {cat.label}
-                        </ContextMenuSubTrigger>
-                        <ContextMenuSubContent className="w-56">
-                          {placeholders
-                            .filter(p => p.categoria_id === cat.id)
-                            .sort((a, b) => a.chave.localeCompare(b.chave))
-                            .map(p => (
-                              <ContextMenuItem
-                                key={p.id}
-                                onClick={() => inserirPlaceholder(`template-secao-${index}`, p.chave)}
-                              >
-                                <div className="flex flex-col">
-                                  <span className="font-mono text-xs">{`{{${p.chave}}}`}</span>
-                                  {p.descricao && <span className="text-[10px] text-muted-foreground truncate">{p.descricao}</span>}
-                                </div>
-                              </ContextMenuItem>
-                            ))}
-                        </ContextMenuSubContent>
-                      </ContextMenuSub>
-                    ))}
-                  </ContextMenuContent>
-                </ContextMenu>
+                </PlaceholderContextMenu>
               </div>
             ))
           )}
