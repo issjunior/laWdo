@@ -34,6 +34,8 @@ import {
 import {
   getSectionsForExame,
   EXAM_FIELD_MAP,
+  serializeCamposEspecificos,
+  deserializeCamposEspecificos,
 } from '@/components/rep/exam-fields';
 import type { REPFormData } from '@/components/rep/exam-fields';
 
@@ -110,45 +112,6 @@ function getLoggedUserId(): string | undefined {
   }
 }
 
-function buildCamposEspecificos(data: REPFormData, codigo: string): string | undefined {
-  if (codigo === 'I-801') {
-    return JSON.stringify({
-      numeracao: {
-        veiculo: data.numeracao_veiculo || '',
-        placa: data.numeracao_placa || '',
-        fabricacao: data.numeracao_fabricacao || '',
-        cor: data.numeracao_cor || '',
-        conservacao: data.numeracao_conservacao || 'regular',
-        chassi: data.numeracao_chassi || '',
-        chassi_revelado: data.numeracao_chassi_revelado || '',
-        motor: data.numeracao_motor || '',
-        motor_revelado: data.numeracao_motor_revelado || '',
-      },
-    });
-  }
-  return undefined;
-}
-
-function parseCamposEspecificos(json: string | null | undefined): Partial<REPFormData> {
-  if (!json) return {};
-  try {
-    const data = JSON.parse(json);
-    return {
-      numeracao_veiculo: data.numeracao?.veiculo || '',
-      numeracao_placa: data.numeracao?.placa || '',
-      numeracao_fabricacao: data.numeracao?.fabricacao || '',
-      numeracao_cor: data.numeracao?.cor || '',
-      numeracao_conservacao: data.numeracao?.conservacao || 'regular',
-      numeracao_chassi: data.numeracao?.chassi || '',
-      numeracao_chassi_revelado: data.numeracao?.chassi_revelado || '',
-      numeracao_motor: data.numeracao?.motor || '',
-      numeracao_motor_revelado: data.numeracao?.motor_revelado || '',
-    };
-  } catch {
-    return {};
-  }
-}
-
 function prepareForApi(data: REPFormData, codigo: string | undefined) {
   const payload: Record<string, unknown> = {
     numero: data.numero,
@@ -180,8 +143,7 @@ function prepareForApi(data: REPFormData, codigo: string | undefined) {
   if (data.observacoes) payload.observacoes = data.observacoes;
 
   if (codigo) {
-    const campos = buildCamposEspecificos(data, codigo);
-    payload.campos_especificos = campos || null;
+    payload.campos_especificos = serializeCamposEspecificos(codigo, data) || null;
   }
 
   return payload;
@@ -471,13 +433,13 @@ export const REPsPage: React.FC = () => {
       setTemplatesVinculados([]);
     }
 
-    // Parse campos_especificos JSON para campos de numeração
-    const especificos = parseCamposEspecificos(rep.campos_especificos);
-
     // Se a REP já tem tipo de exame com campos específicos, desbloqueia o Nível 3
     const tipo = tiposExame.find(t => t.id === rep.tipo_exame_id);
     const hasSpecificSections = tipo ? getSectionsForExame(tipo.codigo).length > 0 : false;
     setCamposEspecificosDesbloqueados(hasSpecificSections);
+
+    // Parse campos_especificos via service registry
+    const especificos = deserializeCamposEspecificos(tipo?.codigo ?? '', rep.campos_especificos);
 
     form.reset({
       numero: rep.numero,

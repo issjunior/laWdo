@@ -53,11 +53,16 @@ src/
 │   ├── components/
 │   │   └── rep/
 │   │       └── exam-fields/           ← NOVO diretório
-│   │           ├── index.ts           ← SECTION_REGISTRY + EXAM_FIELD_MAP
+│   │           ├── index.ts           ← SECTION_REGISTRY + EXAM_FIELD_MAP + EXAM_SERVICE_REGISTRY
 │   │           ├── types.ts           ← ExamSection, ExamSectionProps
+│   │           ├── placeholders.ts    ← categorias + campos de placeholder para templates
 │   │           ├── local-fato.tsx     ← campos: local_fato, latitude, longitude
 │   │           ├── acionamento.tsx    ← campos: data_acionamento, data_chegada, data_saida
-│   │           └── numeracao.tsx      ← campos placeholder I-801
+│   │           ├── numeracao.tsx      ← campos: numeração veicular I-801
+│   │           └── services/          ← NOVO subdiretório
+│   │               ├── types.ts       ← ExamService interface
+│   │               ├── numeracao.service.ts  ← serialize/deserialize I-801 + defaults + masks
+│   │               └── loc.service.ts       ← serialize/deserialize LOC (se necessário)
 │   ├── lib/
 │   │   └── validators/
 │   │       ├── tipo-exame.schema.ts   ← REMOVE eh_local
@@ -103,10 +108,11 @@ src/
 
 **Fluxo de dados:**
 ```
-Form (REPFormData) → prepareForApi() → IPC handler → SQLite (reps.campos_especificos)
+Form (REPFormData) → prepareForApi(data, codigo)
                      ↓
-              Campos LOC → colunas nativas (local_fato, lat, lon, datas...)
-              Campos I-801 → JSON.stringify() → campos_especificos
+              Campos comuns/LOC → colunas nativas (numero, local_fato, lat, lon...)
+              Campos I-801 → EXAM_SERVICE_REGISTRY['I-801'].serialize(data)
+                             → JSON.stringify() → campos_especificos
 ```
 
 ---
@@ -226,6 +232,89 @@ export function getSectionsForExame(codigo: string): ExamSection[] {
   return ids.map(id => SECTION_REGISTRY[id]).filter(Boolean);
 }
 ```
+
+---
+
+## 3.5. ExamService Registry — Serialização por tipo de exame
+
+Além do `SECTION_REGISTRY` (que mapeia tipo → componentes visuais), existe o **`EXAM_SERVICE_REGISTRY`** que encapsula toda a lógica de dados específica do tipo de exame: serialização, desserialização, defaults e máscaras.
+
+Isso remove os blocos `if (codigo === 'I-801')` que estavam hardcoded na `REPsPage.tsx`.
+
+### Interface
+
+```ts
+// exam-fields/services/types.ts
+export interface ExamService {
+  codigo: string;
+  /** Serializa campos do form em objeto JS → será convertido a JSON pelo REPsPage */
+  serialize: (data: REPFormData) => Record<string, unknown>;
+  /** Desserializa JSON do banco de volta para Partial<REPFormData> */
+  deserialize: (json: unknown) => Partial<REPFormData>;
+  /** Valores default aplicados na serialização quando o campo está vazio */
+  fieldDefaults?: Record<string, string>;
+  /** Funções de formatação aplicadas durante digitação (onChange) */
+  fieldMasks?: Record<string, (value: string) => string>;
+}
+```
+
+### Registry
+
+```ts
+// exam-fields/index.ts
+import { numeracaoService } from './services/numeracao.service';
+
+export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
+  'I-801': numeracaoService,
+  // 'LOC' não precisa: campos são colunas nativas, campos_especificos = null
+};
+```
+
+### Como a REPsPage.tsx consome
+
+```ts
+// Ao salvar (substitui buildCamposEspecificos hardcoded):
+const service = EXAM_SERVICE_REGISTRY[codigo];
+if (service) {
+  const obj = service.serialize(data);
+  // Aplica fieldDefaults (ex: placa vazia → 'sem identificação')
+  for (const [key, defaultVal] of Object.entries(service.fieldDefaults ?? {})) {
+    if (!obj[key]) obj[key] = defaultVal;
+  }
+  payload.campos_especificos = JSON.stringify(obj);
+}
+
+// Ao carregar para edição (substitui parseCamposEspecificos hardcoded):
+const service = EXAM_SERVICE_REGISTRY[codigo];
+const especificos = service?.deserialize(JSON.parse(rep.campos_especificos)) ?? {};
+```
+
+### Fluxo completo
+
+```
+REPsPage.tsx                              exam-fields/
+  │                                           │
+  │  preparar save                            │
+  ├──► EXAM_SERVICE_REGISTRY[codigo]          │
+  │      .serialize(data)          ────►  numeracao.service.ts
+  │        │                                 │ placa: data.placa || 'sem identificação'
+  │        ▼                                 │ fabricacao: data.fabricacao || ''
+  │      payload.campos_especificos          │ ...
+  │                                           │
+  │  preparar edit                            │
+  ├──► EXAM_SERVICE_REGISTRY[codigo]          │
+  │      .deserialize(json)        ────►  numeracao.service.ts
+  │        │                                 │ 'sem identificação' → ''
+  │        ▼                                 │
+  │      form.reset({...especificos})        │
+```
+
+### Vantagens
+
+- **REPsPage.tsx fica genérica**: não sabe nomes de campos, defaults ou formato JSON de cada tipo.
+- **Novo tipo de exame**: basta criar um `ExamService` e registrá-lo — sem tocar em `REPsPage.tsx`.
+- **Defaults por campo**: `fieldDefaults = { placa: 'sem identificação' }` aplicado na serialização.
+- **Máscaras de input**: `fieldMasks = { fabricacao: (v) => formatarFabricacao(v) }` exportado para o componente UI.
 
 ---
 
@@ -464,9 +553,16 @@ export const AcionamentoFields: React.FC<ExamSectionProps> = ({ form, mostrarPla
 ### Fase 3 — Section Registry
 - [x] Criar `src/renderer/components/rep/exam-fields/types.ts` (inclui `REPFormData`)
 - [x] Criar `src/renderer/components/rep/exam-fields/index.ts` (registry + mapa + helper)
+- [x] Criar `src/renderer/components/rep/exam-fields/placeholders.ts` (categorias + campos placeholder)
 - [x] Criar `src/renderer/components/rep/exam-fields/local-fato.tsx`
 - [x] Criar `src/renderer/components/rep/exam-fields/acionamento.tsx`
 - [x] Criar `src/renderer/components/rep/exam-fields/numeracao.tsx` (placeholder I-801)
+
+### Fase 3.5 — ExamService Registry (serialização modular)
+- [x] Criar `src/renderer/components/rep/exam-fields/services/types.ts` (interface `ExamService`)
+- [x] Criar `src/renderer/components/rep/exam-fields/services/numeracao.service.ts` (serialize/deserialize I-801 + fieldDefaults + fieldMasks)
+- [x] Registrar `EXAM_SERVICE_REGISTRY` em `exam-fields/index.ts`
+- [x] Adicionar helpers `serializeCamposEspecificos()` e `deserializeCamposEspecificos()` em `exam-fields/index.ts`
 
 ### Fase 4 — REPsPage Refatoração
 - [x] Mover `nome_envolvido` para "Dados da Solicitação" (Nível 1, row com autoridade)
@@ -477,9 +573,10 @@ export const AcionamentoFields: React.FC<ExamSectionProps> = ({ form, mostrarPla
 - [x] Schema Zod com `superRefine` condicional (via `useMemo` + `tiposExameRef`)
 - [x] `useEffect` no `tipo_exame_id` → `form.trigger(['local_fato', 'numeracao_descricao'])`
 - [x] Botão Salvar: `disabled={submitting || !form.formState.isValid}`
-- [x] `prepareForApi(data, codigo)`: serializar I-801 em `campos_especificos` JSON
+- [x] `prepareForApi(data, codigo)`: delegar serialização a `EXAM_SERVICE_REGISTRY[codigo].serialize(data)`
 - [x] Modo `onChange` no `useForm` para feedback inline imediato
-- [x] `handleEditar`: parse `campos_especificos` JSON → form fields + desbloqueio automático
+- [x] `handleEditar`: delegar desserialização a `EXAM_SERVICE_REGISTRY[codigo].deserialize(json)`
+- [x] Remover funções hardcoded `buildCamposEspecificos()` e `parseCamposEspecificos()`
 
 ### Fase 5 — Cleanup
 - [x] `preload/types.ts`: remover `eh_local` de `TipoExameCreateData`/`UpdateData`

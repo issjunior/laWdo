@@ -60,7 +60,20 @@ export const NumeracaoFields: React.FC<ExamSectionProps> = ({ form }) => (
           <FormItem>
             <Label>Fabricação/Modelo</Label>
             <FormControl>
-              <Input placeholder="2020/2021" {...field} />
+              <Input
+                placeholder="2020/2021"
+                maxLength={9}
+                inputMode="numeric"
+                value={field.value}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
+                  let masked = raw;
+                  if (raw.length > 4) {
+                    masked = raw.slice(0, 4) + '/' + raw.slice(4);
+                  }
+                  field.onChange(masked);
+                }}
+              />
             </FormControl>
             <FormMessage />
           </FormItem>

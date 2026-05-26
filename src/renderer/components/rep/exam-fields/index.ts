@@ -2,9 +2,12 @@ import { MapPin, Clock, Hash } from 'lucide-react';
 import { LocalFatoFields } from './local-fato';
 import { AcionamentoFields } from './acionamento';
 import { NumeracaoFields } from './numeracao';
+import { numeracaoService } from './services/numeracao.service';
 import type { ExamSection } from './types';
+import type { ExamService } from './services/types';
 
 export type { ExamSection, ExamSectionProps, REPFormData } from './types';
+export type { ExamService } from './services/types';
 export * from './placeholders';
 
 export const SECTION_REGISTRY: Record<string, ExamSection> = {
@@ -39,7 +42,40 @@ export const EXAM_FIELD_MAP: Record<string, string[]> = {
   'I-801': ['numeracao'],
 };
 
+export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
+  'I-801': numeracaoService,
+};
+
 export function getSectionsForExame(codigo: string): ExamSection[] {
   const ids = EXAM_FIELD_MAP[codigo] || [];
   return ids.map(id => SECTION_REGISTRY[id]).filter(Boolean);
+}
+
+export function serializeCamposEspecificos(codigo: string, data: import('./types').REPFormData): string | undefined {
+  const service = EXAM_SERVICE_REGISTRY[codigo];
+  if (!service) return undefined;
+
+  const dataWithDefaults = { ...data } as Record<string, string>;
+  for (const [field, defaultVal] of Object.entries(service.fieldDefaults ?? {})) {
+    if (!dataWithDefaults[field]) {
+      dataWithDefaults[field] = defaultVal;
+    }
+  }
+
+  return JSON.stringify(service.serialize(dataWithDefaults as import('./types').REPFormData));
+}
+
+export function deserializeCamposEspecificos(codigo: string, json: string | null | undefined): Partial<import('./types').REPFormData> {
+  if (!json) return {};
+  const service = EXAM_SERVICE_REGISTRY[codigo];
+  if (!service) return {};
+  try {
+    return service.deserialize(JSON.parse(json));
+  } catch {
+    return {};
+  }
+}
+
+export function getFieldMasks(codigo: string): Record<string, (v: string) => string> {
+  return EXAM_SERVICE_REGISTRY[codigo]?.fieldMasks ?? {};
 }
