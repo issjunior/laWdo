@@ -14,6 +14,7 @@ const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default:
 const ModelosIAPage = lazy(() => import('@/pages/ModelosIAPage').then(m => ({ default: m.ModelosIAPage })));
 const BackupPage = lazy(() => import('@/pages/BackupPage').then(m => ({ default: m.BackupPage })));
 const LogsPage = lazy(() => import('@/pages/LogsPage').then(m => ({ default: m.LogsPage })));
+const MargensPage = lazy(() => import('@/pages/MargensPage').then(m => ({ default: m.MargensPage })));
 const IlustracoesPanelWindow = lazy(() => import('@/pages/IlustracoesPanelWindow'));
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -124,6 +125,7 @@ const App = () => {
                     <Route path="/modelos-ia" element={<ModelosIAPage />} />
                     <Route path="/backup" element={<BackupPage />} />
                     <Route path="/logs" element={<LogsPage />} />
+                    <Route path="/margens" element={<MargensPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Routes>
                 </Layout>

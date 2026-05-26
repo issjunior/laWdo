@@ -5,6 +5,8 @@ import { templateService } from '../../services/template.service.js';
 import path from 'path';
 import fs from 'fs';
 
+const CM_TO_INCHES = 1 / 2.54;
+
 export const registerTemplateHandlers = (): void => {
   /** Listar todos os templates (com contagem de seções) */
   ipcMain.handle('template:findAll', async () => {
@@ -162,9 +164,13 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Gerar PDF de preview do laudo (exibido no Dialog via protocolo customizado) */
-  ipcMain.handle('template:previewPDF', async (_event, html: string) => {
+  ipcMain.handle('template:previewPDF', async (_event, opts: { html: string; margins?: { top: number; right: number; bottom: number; left: number } }) => {
     let win: BrowserWindow | null = null;
     try {
+      const { html, margins } = opts;
+      const hasMargins = margins && (margins.top > 0 || margins.right > 0 || margins.bottom > 0 || margins.left > 0);
+      const bodyPadding = hasMargins ? '15px 20px' : '50px 60px';
+
       const docHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -176,7 +182,7 @@ export const registerTemplateHandlers = (): void => {
     font-size: 13px;
     line-height: 1.7;
     color: #1a1a1a;
-    padding: 50px 60px;
+    padding: ${bodyPadding};
     max-width: 210mm;
     margin: 0 auto;
   }
@@ -208,10 +214,19 @@ export const registerTemplateHandlers = (): void => {
       await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(docHtml)}`);
       await new Promise(resolve => setTimeout(resolve, 800));
 
+      const pdfMargins = margins
+        ? {
+            top:    margins.top    * CM_TO_INCHES,
+            right:  margins.right  * CM_TO_INCHES,
+            bottom: margins.bottom * CM_TO_INCHES,
+            left:   margins.left   * CM_TO_INCHES,
+          }
+        : { top: 0, bottom: 0, left: 0, right: 0 };
+
       const buffer = Buffer.from(await win.webContents.printToPDF({
         printBackground: true,
         preferCSSPageSize: true,
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        margins: pdfMargins,
       }));
 
       win.close();

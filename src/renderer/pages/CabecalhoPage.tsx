@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getMargens } from '@/lib/margens';
 
 interface Placeholder {
   id: string;
@@ -126,7 +127,7 @@ export const CabecalhoPage: React.FC = () => {
         html = html.split(placeholder).join(value);
       }
 
-      const result = await window.ipcAPI.template.previewPDF(html);
+      const result = await window.ipcAPI.template.previewPDF(html, await getMargens());
       if (result.success && result.data) {
         const byteChars = atob(result.data);
         const byteNums = new Array(byteChars.length);

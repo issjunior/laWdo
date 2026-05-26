@@ -82,6 +82,7 @@ const templateFormSchema = z.object({
 });
 
 import { ImportTemplateDialog } from '@/components/template/ImportTemplateDialog';
+import { getMargens } from '@/lib/margens';
 
 export const TemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
@@ -497,7 +498,7 @@ export const TemplatesPage: React.FC = () => {
 
   /** Converte HTML em PDF e exibe no dialog */
   const gerarEExibirPdf = async (fullHtml: string) => {
-    const result = await window.ipcAPI.template.previewPDF(fullHtml);
+    const result = await window.ipcAPI.template.previewPDF(fullHtml, await getMargens());
     if (result.success && result.data) {
       const byteChars = atob(result.data);
       const byteNums = new Array(byteChars.length);

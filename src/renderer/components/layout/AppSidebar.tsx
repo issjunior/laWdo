@@ -14,6 +14,7 @@ import {
   Database,
   Camera,
   LogOut,
+  Ruler,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -83,6 +84,7 @@ const menuItems = [
     icon: Settings,
     items: [
       { title: 'Modelos IA', path: '/modelos-ia', icon: Brain },
+      { title: 'Margens do PDF', path: '/margens', icon: Ruler },
       { title: 'Backup', path: '/backup', icon: Database },
       { title: 'Logs', path: '/logs', icon: FileText },
       { title: 'Perfil', path: '/perfil', icon: UserCircle },

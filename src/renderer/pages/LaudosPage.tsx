@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { reindexarFiguras } from '@/lib/figuras';
+import { getMargens } from '@/lib/margens';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -1158,7 +1159,7 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 5. Gerar PDF via IPC (usando o mesmo handler do template)
-      const result = await window.ipcAPI.template.previewPDF(htmlProcessado);
+      const result = await window.ipcAPI.template.previewPDF(htmlProcessado, await getMargens());
       if (result.success && result.data) {
         const byteChars = atob(result.data);
         const byteNums = new Array(byteChars.length);
