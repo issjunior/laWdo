@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, nativeImage } from 'electron';
+import { ipcMain, dialog, BrowserWindow, nativeImage, app } from 'electron';
 import { logInfo, logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
@@ -166,6 +166,7 @@ export const registerTemplateHandlers = (): void => {
   /** Gerar PDF de preview do laudo (exibido no Dialog via protocolo customizado) */
   ipcMain.handle('template:previewPDF', async (_event, opts: { html: string; margins?: { top: number; right: number; bottom: number; left: number }; headerTemplate?: string }) => {
     let win: BrowserWindow | null = null;
+    let tmpPath: string | null = null;
     try {
       const { html, margins, headerTemplate } = opts;
        const hasMargins = margins && (margins.top > 0 || margins.right > 0 || margins.bottom > 0 || margins.left > 0);
@@ -213,7 +214,9 @@ export const registerTemplateHandlers = (): void => {
         webPreferences: { nodeIntegration: false, contextIsolation: true },
       });
 
-      await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(docHtml)}`);
+      tmpPath = path.join(app.getPath('temp'), `preview-${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, docHtml, 'utf-8');
+      await win.loadFile(tmpPath);
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const pdfMargins = margins
@@ -267,11 +270,14 @@ export const registerTemplateHandlers = (): void => {
       win.close();
       win = null;
 
+      try { fs.unlinkSync(tmpPath); } catch { /* ignora */ }
+
       const base64PDF = buffer.toString('base64');
       logInfo('PDF de preview gerado com sucesso (imagens otimizadas)');
       return { success: true, data: base64PDF };
     } catch (error: any) {
       logError('Erro ao gerar PDF de preview', error);
+      if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch { /* ignora */ } }
       if (win) { try { win.close(); } catch { /* ignora */ } }
       return { success: false, error: error.message };
     }
