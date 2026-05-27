@@ -67,7 +67,7 @@ interface Categoria {
 function formatarData(iso: string | undefined): string {
   if (!iso) return '-';
   try {
-    const data = new Date(iso);
+    const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
     if (isNaN(data.getTime())) return iso;
     return data.toLocaleDateString('pt-BR');
   } catch {
@@ -78,7 +78,7 @@ function formatarData(iso: string | undefined): string {
 function formatarDataExtenso(iso: string | undefined): string {
   if (!iso) return '-';
   try {
-    const data = new Date(iso);
+    const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
     if (isNaN(data.getTime())) return iso;
     return data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
   } catch {
@@ -89,7 +89,7 @@ function formatarDataExtenso(iso: string | undefined): string {
 function formatarDataHora(iso: string | undefined): string {
   if (!iso) return '-';
   try {
-    const data = new Date(iso);
+    const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
     if (isNaN(data.getTime())) return iso;
     return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch {
