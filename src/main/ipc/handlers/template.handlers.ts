@@ -233,7 +233,7 @@ export const registerTemplateHandlers = (): void => {
 
       if (headerTemplate) {
         printOptions.displayHeaderFooter = true;
-        printOptions.headerTemplate = `<div style="padding-left:${leftPad};padding-right:${rightPad};width:100%;box-sizing:border-box;font-size:10pt;line-height:1.3;">${headerTemplate}</div>`;
+        printOptions.headerTemplate = `<div style="padding-left:${leftPad};padding-right:${rightPad};width:100%;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1.7;color:#1a1a1a;">${headerTemplate}</div>`;
         printOptions.footerTemplate = '<html><head></head><body></body></html>';
       }
 
