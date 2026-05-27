@@ -235,9 +235,30 @@ export const registerTemplateHandlers = (): void => {
         const alignMatch = headerTemplate.match(/^\{\{ALIGN:([^}]+)\}\}/);
         const align = alignMatch ? alignMatch[1] : 'flex-start';
         const cleanTemplate = headerTemplate.replace(/^\{\{ALIGN:[^}]+\}\}/, '');
+        const textAlign = align === 'flex-end' ? 'right' : align === 'center' ? 'center' : 'left';
 
         printOptions.displayHeaderFooter = true;
-        printOptions.headerTemplate = `<div style="display:flex;flex-direction:column;align-items:${align};padding-left:${leftPad};padding-right:${rightPad};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1;color:#1a1a1a;">${cleanTemplate}</div>`;
+        printOptions.headerTemplate = `<style>
+  .header-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    text-align: ${textAlign};
+    padding-left: ${leftPad};
+    padding-right: ${rightPad};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    line-height: 1.1;
+    color: #1a1a1a;
+  }
+  .header-container p, .header-container div {
+    margin: 0;
+    padding: 0;
+    line-height: 1.1;
+  }
+</style>
+<div class="header-container">${cleanTemplate}</div>`;
         printOptions.footerTemplate = '<html><head></head><body></body></html>';
       }
 

@@ -33,10 +33,6 @@ export function buildHeaderTemplate(templateHtml: string, replacements: Record<s
 
   const align = detectAlignment(html);
 
-  html = html.replace(/;\s*text-align:\s*\w+/gi, '');
-  html = html.replace(/text-align:\s*\w+;\s*/gi, '');
-  html = html.replace(/text-align:\s*\w+/gi, '');
-
   return { html: `{{ALIGN:${align}}}${html}`, align };
 }
 

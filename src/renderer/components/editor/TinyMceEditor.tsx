@@ -87,6 +87,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
           content_css: resolved === 'dark' ? './tinymce/skins/content/dark/content.css' : './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
           toolbar_mode: 'wrap',
+          line_height_formats: '1 1.1 1.2 1.3 1.4 1.5 2',
           image_advtab: true,
           image_title: true,
           relative_urls: false,
@@ -117,7 +118,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
           ],
           toolbar:
             'undo redo | ' +
-            'styles fontsize fontfamily | ' +
+            'styles fontsize fontfamily lineheight | ' +
             'bold italic underline strikethrough | ' +
             'forecolor backcolor | ' +
             'alignleft aligncenter alignright alignjustify | ' +
