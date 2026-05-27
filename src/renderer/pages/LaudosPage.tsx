@@ -1093,6 +1093,22 @@ export const LaudosPage: React.FC = () => {
     try {
       setCarregandoPreview(true);
       setError(null);
+
+      let secoesAtuais: SecaoEditor[];
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const latestHtml = editor ? editor.getContent() : singleEditorHtml;
+        setSingleEditorHtml(latestHtml);
+        secoesAtuais = parseSingleHtmlToSecoes(latestHtml, secoes);
+      } else {
+        secoesAtuais = [];
+        for (let idx = 0; idx < secoes.length; idx++) {
+          const editor = (window as any).tinymce?.get(`secao-${idx}`);
+          const conteudo = editor ? editor.getContent() : secoes[idx].conteudo;
+          if (editor) atualizarConteudoSecao(idx, conteudo);
+          secoesAtuais.push({ ...secoes[idx], conteudo });
+        }
+      }
       
       // 1. Buscar dados da REP para placeholders
       const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
@@ -1132,7 +1148,6 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 3. Montar HTML completo
-      const secoesAtuais = getSecoesSincronizadas();
       const secoesHtml = secoesAtuais
         .map((s, i) => {
           const tituloRaw = (s.titulo || '').trim();
@@ -1216,9 +1231,21 @@ export const LaudosPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const secoesAtuais = getSecoesSincronizadas();
+      let secoesAtuais: SecaoEditor[];
       if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const latestHtml = editor ? editor.getContent() : singleEditorHtml;
+        setSingleEditorHtml(latestHtml);
+        secoesAtuais = parseSingleHtmlToSecoes(latestHtml, secoes);
         setSecoes(secoesAtuais);
+      } else {
+        secoesAtuais = [];
+        for (let idx = 0; idx < secoes.length; idx++) {
+          const editor = (window as any).tinymce?.get(`secao-${idx}`);
+          const conteudo = editor ? editor.getContent() : secoes[idx].conteudo;
+          if (editor) atualizarConteudoSecao(idx, conteudo);
+          secoesAtuais.push({ ...secoes[idx], conteudo });
+        }
       }
 
       // 1. Reindexar figuras fisicamente para garantir ordem definitiva
