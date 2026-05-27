@@ -168,8 +168,8 @@ export const registerTemplateHandlers = (): void => {
     let win: BrowserWindow | null = null;
     try {
       const { html, margins, headerTemplate } = opts;
-      const hasMargins = margins && (margins.top > 0 || margins.right > 0 || margins.bottom > 0 || margins.left > 0);
-      const bodyPadding = hasMargins ? '12px 0' : '50px 60px';
+       const hasMargins = margins && (margins.top > 0 || margins.right > 0 || margins.bottom > 0 || margins.left > 0);
+      const bodyPadding = hasMargins ? '0 0 12px 0' : '50px 60px';
       const leftPad = hasMargins ? `${margins!.left}cm` : '60px';
       const rightPad = hasMargins ? `${margins!.right}cm` : '60px';
 
