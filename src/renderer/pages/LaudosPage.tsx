@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { reindexarFiguras } from '@/lib/figuras';
 import { getMargens } from '@/lib/margens';
+import { buildPdfHeaderConfig } from '@/lib/pdf-header';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -1126,11 +1127,9 @@ export const LaudosPage: React.FC = () => {
       }
 
       // 2. Buscar cabeçalho das configurações
-      let cabecalhoHtml = '';
-      const headerResult = await window.ipcAPI.configuracao.obter('cabecalho_laudo');
-      if (headerResult.success && headerResult.data) {
-        cabecalhoHtml = headerResult.data;
-      }
+      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+        numeroRepFallback: repData.numero || '',
+      });
 
       // 3. Montar HTML completo
       const secoesAtuais = getSecoesSincronizadas();
@@ -1144,8 +1143,8 @@ export const LaudosPage: React.FC = () => {
         })
         .join('\n');
 
-      let fullHtml = cabecalhoHtml
-        ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
+      let fullHtml = cabecalhoPrimeiraPagina
+        ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
         : '';
       fullHtml += secoesHtml;
 
@@ -1159,7 +1158,7 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 5. Gerar PDF via IPC (usando o mesmo handler do template)
-      const result = await window.ipcAPI.template.previewPDF(htmlProcessado, await getMargens());
+      const result = await window.ipcAPI.template.previewPDF(htmlProcessado, await getMargens(), headerTemplate || undefined);
       if (result.success && result.data) {
         const byteChars = atob(result.data);
         const byteNums = new Array(byteChars.length);

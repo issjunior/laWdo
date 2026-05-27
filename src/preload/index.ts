@@ -144,7 +144,7 @@ export interface IpcAPI {
     updateSecao: (id: string, data: any) => Promise<UserResponse>;
     deleteSecao: (id: string) => Promise<UserResponse>;
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
-    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }) => Promise<UserResponse>;
+    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => Promise<UserResponse>;
     importarArquivo: () => Promise<{ success: boolean; data?: any; error?: string }>;
   };
 
@@ -666,7 +666,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     updateSecao: (id: string, data: any) => ipcRenderer.invoke('template:updateSecao', id, data),
     deleteSecao: (id: string) => ipcRenderer.invoke('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
-    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }) => ipcRenderer.invoke('template:previewPDF', { html, margins }),
+    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => ipcRenderer.invoke('template:previewPDF', { html, margins, headerTemplate }),
     importarArquivo: () => ipcRenderer.invoke('template:importarArquivo'),
   },
 

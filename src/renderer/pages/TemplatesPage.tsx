@@ -83,6 +83,7 @@ const templateFormSchema = z.object({
 
 import { ImportTemplateDialog } from '@/components/template/ImportTemplateDialog';
 import { getMargens } from '@/lib/margens';
+import { buildPdfHeaderConfig } from '@/lib/pdf-header';
 
 export const TemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
@@ -497,8 +498,8 @@ export const TemplatesPage: React.FC = () => {
   };
 
   /** Converte HTML em PDF e exibe no dialog */
-  const gerarEExibirPdf = async (fullHtml: string) => {
-    const result = await window.ipcAPI.template.previewPDF(fullHtml, await getMargens());
+  const gerarEExibirPdf = async (fullHtml: string, headerTemplate?: string) => {
+    const result = await window.ipcAPI.template.previewPDF(fullHtml, await getMargens(), headerTemplate);
     if (result.success && result.data) {
       const byteChars = atob(result.data);
       const byteNums = new Array(byteChars.length);
@@ -514,17 +515,15 @@ export const TemplatesPage: React.FC = () => {
     }
   };
 
-  /** Monta o HTML com cabeçalho + placeholders substituídos */
+  /** Monta o HTML com cabeçalho + placeholders substituídos. Retorna o HTML completo e o headerTemplate. */
   const montarHtmlPreview = async (
     secoesFonte: { nome: string; conteudo?: string }[],
     templateNome: string,
     tipoExameNome: string,
-  ) => {
-    let cabecalhoHtml = '';
-    const headerResult = await window.ipcAPI.configuracao.obter('cabecalho_laudo');
-    if (headerResult.success && headerResult.data) {
-      cabecalhoHtml = headerResult.data;
-    }
+  ): Promise<{ fullHtml: string; headerTemplate: string }> => {
+    const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      numeroRepFallback: '321.654-2026',
+    });
 
     const secoesHtml = secoesFonte
       .filter(s => s.nome.trim())
@@ -535,8 +534,8 @@ export const TemplatesPage: React.FC = () => {
       })
       .join('\n');
 
-    let fullHtml = cabecalhoHtml
-      ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoHtml}</div>`
+    let fullHtml = cabecalhoPrimeiraPagina
+      ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
       : '';
     fullHtml += secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>';
 
@@ -576,7 +575,7 @@ export const TemplatesPage: React.FC = () => {
       fullHtml = fullHtml.split(oldFormat).join(value);
     }
 
-    return fullHtml;
+    return { fullHtml, headerTemplate };
   };
 
   /** Pré-visualizar a partir do editor (usa estado atual das seções) */
@@ -589,8 +588,8 @@ export const TemplatesPage: React.FC = () => {
         : secoes;
 
       const tipoExameNome = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '';
-      const fullHtml = await montarHtmlPreview(secoesParaPreview, templateForm.nome, tipoExameNome);
-      await gerarEExibirPdf(fullHtml);
+      const { fullHtml, headerTemplate } = await montarHtmlPreview(secoesParaPreview, templateForm.nome, tipoExameNome);
+      await gerarEExibirPdf(fullHtml, headerTemplate);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao gerar PDF');
       setShowPreview(false);
@@ -609,12 +608,12 @@ export const TemplatesPage: React.FC = () => {
       const loadedSecoes: { nome: string; conteudo?: string }[] =
         secResult.success && secResult.data ? secResult.data : [];
 
-      const fullHtml = await montarHtmlPreview(
+      const { fullHtml, headerTemplate } = await montarHtmlPreview(
         loadedSecoes,
         template.nome,
         template.tipo_exame_nome || '',
       );
-      await gerarEExibirPdf(fullHtml);
+      await gerarEExibirPdf(fullHtml, headerTemplate);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao gerar PDF');
       setShowPreview(false);

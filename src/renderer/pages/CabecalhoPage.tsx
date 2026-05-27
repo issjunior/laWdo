@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getMargens } from '@/lib/margens';
+import { buildHeaderTemplate } from '@/lib/pdf-header';
 
 interface Placeholder {
   id: string;
@@ -22,10 +23,14 @@ interface Placeholder {
   categoria_id: string;
 }
 
+const DEFAUL_PAGINAS_HTML = `<p style="text-align: right;">FLS. {{pagina}}/{{totalPaginas}}</p>\n<p style="text-align: right;">LAUDO n&ordm; {{numero_rep}}</p>`;
+
 export const CabecalhoPage: React.FC = () => {
   const [conteudo, setConteudo] = useState('');
+  const [conteudoPaginas, setConteudoPaginas] = useState(DEFAUL_PAGINAS_HTML);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [salvandoPaginas, setSalvandoPaginas] = useState(false);
   const [preview, setPreview] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -53,6 +58,7 @@ export const CabecalhoPage: React.FC = () => {
   const ThemeIcon = editorTheme === 'light' ? Sun : editorTheme === 'dark' ? Moon : SunMoon;
 
   const CHAVE_CONFIG = 'cabecalho_laudo';
+  const CHAVE_CONFIG_PAGINAS = 'cabecalho_paginas';
 
   const carregarCabecalho = useCallback(async () => {
     try {
@@ -65,6 +71,20 @@ export const CabecalhoPage: React.FC = () => {
       console.error('Erro ao carregar cabeçalho:', err);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const carregarCabecalhoPaginas = useCallback(async () => {
+    try {
+      const result = await window.ipcAPI.configuracao.obter(CHAVE_CONFIG_PAGINAS);
+      if (result.success && result.data) {
+        console.log('[CabecalhoPage:load] cabecalho_paginas loaded from DB, length:', result.data.length);
+        setConteudoPaginas(converterPlaceholdersTextuais(result.data, placeholderChaves));
+      } else {
+        console.log('[CabecalhoPage:load] cabecalho_paginas NOT found in DB, using default');
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar cabeçalho de páginas:', err);
     }
   }, []);
 
@@ -81,8 +101,9 @@ export const CabecalhoPage: React.FC = () => {
 
   useEffect(() => {
     carregarCabecalho();
+    carregarCabecalhoPaginas();
     carregarPlaceholders();
-  }, [carregarCabecalho, carregarPlaceholders]);
+  }, [carregarCabecalho, carregarCabecalhoPaginas, carregarPlaceholders]);
 
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const editor = (window as any).tinymce?.get(editorId);
@@ -95,8 +116,20 @@ export const CabecalhoPage: React.FC = () => {
     try {
       setGeneratingPdf(true);
       setPreview(true);
+      setError(null);
 
-      let html = conteudo || '';
+      console.log('[CabecalhoPage:preview] conteudoPaginas length:', conteudoPaginas.length);
+      console.log('[CabecalhoPage:preview] conteudoPaginas (first 300):', conteudoPaginas?.substring(0, 300));
+
+      const headerTemplate = buildHeaderTemplate(conteudoPaginas, { numero_rep: '321.654-2026' });
+
+      console.log('[CabecalhoPage:preview] headerTemplate length:', headerTemplate.length);
+      console.log('[CabecalhoPage:preview] headerTemplate (first 300):', headerTemplate?.substring(0, 300));
+      console.log('[CabecalhoPage:preview] headerTemplate truthy:', !!headerTemplate);
+
+      const primeiroHtml = conteudo || '';
+      let bodyHtml = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${primeiroHtml}</div>`;
+      bodyHtml += '<p style="color:#999;font-style:italic;">Pré-visualização do conteúdo do laudo...</p>';
 
       let peritoNome = '';
       let peritoCargo = '';
@@ -121,13 +154,15 @@ export const CabecalhoPage: React.FC = () => {
         '{{perito_lotacao}}': peritoLotacao,
         '{{perito_matricula}}': peritoMatricula,
         '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
+        '{{laudo.numero}}': '<strong>2026/00123</strong>',
+        '{{numero_rep}}': '<strong>321.654-2026</strong>',
       };
 
       for (const [placeholder, value] of Object.entries(replacements)) {
-        html = html.split(placeholder).join(value);
+        bodyHtml = bodyHtml.split(placeholder).join(value);
       }
 
-      const result = await window.ipcAPI.template.previewPDF(html, await getMargens());
+      const result = await window.ipcAPI.template.previewPDF(bodyHtml, await getMargens(), headerTemplate || undefined);
       if (result.success && result.data) {
         const byteChars = atob(result.data);
         const byteNums = new Array(byteChars.length);
@@ -160,11 +195,11 @@ export const CabecalhoPage: React.FC = () => {
         CHAVE_CONFIG,
         removerFormatacaoPlaceholders(conteudo),
         'html',
-        'Cabeçalho padrão para todos os laudos'
+        'Cabeçalho da primeira página'
       );
 
       if (result.success) {
-        setSuccess('Cabeçalho salvo com sucesso!');
+        setSuccess('Cabeçalho da primeira página salvo com sucesso!');
         setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(result.error || 'Erro ao salvar cabeçalho');
@@ -177,6 +212,35 @@ export const CabecalhoPage: React.FC = () => {
     }
   };
 
+  const handleSalvarPaginas = async () => {
+    try {
+      setSalvandoPaginas(true);
+      setError(null);
+      setSuccess(null);
+
+      const result = await window.ipcAPI.configuracao.salvar(
+        CHAVE_CONFIG_PAGINAS,
+        removerFormatacaoPlaceholders(conteudoPaginas),
+        'html',
+        'Cabeçalho de todas as páginas com contador de folhas'
+      );
+
+      if (result.success) {
+        setSuccess('Cabeçalho de páginas salvo com sucesso!');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(result.error || 'Erro ao salvar cabeçalho');
+      }
+    } catch (err: any) {
+      console.error('Erro ao salvar cabeçalho:', err);
+      setError(err.message || 'Erro ao salvar cabeçalho');
+    } finally {
+      setSalvandoPaginas(false);
+    }
+  };
+
+  const extraPlaceholderChaves = useMemo(() => [...placeholderChaves, 'pagina', 'totalPaginas'], [placeholderChaves]);
+
   return (
     <TooltipProvider>
     <div className="container mx-auto p-6 space-y-6">
@@ -184,7 +248,7 @@ export const CabecalhoPage: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold">Cabeçalho de Laudos</h1>
           <p className="text-gray-600 mt-2">
-            Configure o texto que aparecerá no início de todos os laudos, independentemente do template
+            Configure os cabeçalhos que aparecerão na geração dos laudos em PDF
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -197,10 +261,23 @@ export const CabecalhoPage: React.FC = () => {
             <Eye size={16} />
             {generatingPdf ? 'Gerando PDF...' : 'Visualizar'}
           </Button>
-          <Button onClick={handleSalvar} disabled={salvando} className="flex items-center gap-2">
-            <Save size={16} />
-            {salvando ? 'Salvando...' : 'Salvar'}
-          </Button>
+          <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleEditorTheme}
+                  className="h-8 px-2.5"
+                >
+                  <ThemeIcon size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Tema do editor: {themeLabel} {editorTheme === 'auto' ? '(segue o tema do sistema)' : ''}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </div>
 
@@ -219,27 +296,54 @@ export const CabecalhoPage: React.FC = () => {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Editor de Cabeçalho</CardTitle>
+              <CardTitle>Cabeçalho de Todas as Páginas</CardTitle>
               <CardDescription>
-                Use o editor abaixo para formatar o cabeçalho dos laudos. Você pode inserir placeholders como nome do perito, número do laudo, etc.
+                Aplicado em <strong>todas</strong> as páginas do PDF na margem superior direita.
+                Contém o contador de folhas automático. Use <code>{'{{pagina}}'}</code> para o número da folha corrente e <code>{'{{totalPaginas}}'}</code> para o total de folhas.
+                Os placeholders do sistema (ex: <code>{'{{numero_rep}}'}</code>) também são suportados.
               </CardDescription>
             </div>
-            <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleEditorTheme}
-                  className="h-8 px-2.5"
-                >
-                  <ThemeIcon size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">
-                Tema do editor: {themeLabel} {editorTheme === 'auto' ? '(segue o tema do sistema)' : ''}
-              </TooltipContent>
-            </Tooltip>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Carregando...</div>
+          ) : (
+            <PlaceholderContextMenu
+              editorId="cabecalho-paginas-editor"
+              categorias={categorias}
+              placeholders={placeholders}
+              onInsertPlaceholder={inserirPlaceholder}
+            >
+              <TinyMceEditor
+                editorId="cabecalho-paginas-editor"
+                value={conteudoPaginas}
+                onChange={setConteudoPaginas}
+                height={150}
+                placeholder="FLS. {{pagina}}/{{totalPaginas}}&#10;LAUDO nº {{numero_rep}}"
+                placeholderChaves={extraPlaceholderChaves}
+                theme={editorTheme}
+              />
+            </PlaceholderContextMenu>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={handleSalvarPaginas} disabled={salvandoPaginas} className="flex items-center gap-2">
+              <Save size={16} />
+              {salvandoPaginas ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Cabeçalho da Primeira Página</CardTitle>
+              <CardDescription>
+                Aplicado somente na <strong>primeira página</strong> do laudo.
+                Use o editor para inserir o conteúdo livre com imagens, tabelas e formatação.
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -258,12 +362,18 @@ export const CabecalhoPage: React.FC = () => {
                   value={conteudo}
                   onChange={setConteudo}
                   height={400}
-                  placeholder="Digite o cabeçalho padrão dos laudos..."
+                  placeholder="Digite o cabeçalho da primeira página..."
                   placeholderChaves={placeholderChaves}
                   theme={editorTheme}
                 />
             </PlaceholderContextMenu>
           )}
+          <div className="flex justify-end">
+            <Button onClick={handleSalvar} disabled={salvando} className="flex items-center gap-2">
+              <Save size={16} />
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

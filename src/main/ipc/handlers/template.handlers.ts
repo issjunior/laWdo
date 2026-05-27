@@ -164,12 +164,14 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Gerar PDF de preview do laudo (exibido no Dialog via protocolo customizado) */
-  ipcMain.handle('template:previewPDF', async (_event, opts: { html: string; margins?: { top: number; right: number; bottom: number; left: number } }) => {
+  ipcMain.handle('template:previewPDF', async (_event, opts: { html: string; margins?: { top: number; right: number; bottom: number; left: number }; headerTemplate?: string }) => {
     let win: BrowserWindow | null = null;
     try {
-      const { html, margins } = opts;
+      const { html, margins, headerTemplate } = opts;
       const hasMargins = margins && (margins.top > 0 || margins.right > 0 || margins.bottom > 0 || margins.left > 0);
-      const bodyPadding = hasMargins ? '15px 20px' : '50px 60px';
+      const bodyPadding = hasMargins ? '12px 0' : '50px 60px';
+      const leftPad = hasMargins ? `${margins!.left}cm` : '60px';
+      const rightPad = hasMargins ? `${margins!.right}cm` : '60px';
 
       const docHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -223,11 +225,19 @@ export const registerTemplateHandlers = (): void => {
           }
         : { top: 0, bottom: 0, left: 0, right: 0 };
 
-      const buffer = Buffer.from(await win.webContents.printToPDF({
+      const printOptions: Electron.PrintToPDFOptions = {
         printBackground: true,
         preferCSSPageSize: true,
         margins: pdfMargins,
-      }));
+      };
+
+      if (headerTemplate) {
+        printOptions.displayHeaderFooter = true;
+        printOptions.headerTemplate = `<div style="padding-left:${leftPad};padding-right:${rightPad};width:100%;box-sizing:border-box;font-size:10pt;line-height:1.3;">${headerTemplate}</div>`;
+        printOptions.footerTemplate = '<html><head></head><body></body></html>';
+      }
+
+      const buffer = Buffer.from(await win.webContents.printToPDF(printOptions));
 
       win.close();
       win = null;
