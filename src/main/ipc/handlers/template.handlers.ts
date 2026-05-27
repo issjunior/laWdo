@@ -232,8 +232,12 @@ export const registerTemplateHandlers = (): void => {
       };
 
       if (headerTemplate) {
+        const alignMatch = headerTemplate.match(/^\{\{ALIGN:([^}]+)\}\}/);
+        const align = alignMatch ? alignMatch[1] : 'flex-start';
+        const cleanTemplate = headerTemplate.replace(/^\{\{ALIGN:[^}]+\}\}/, '');
+
         printOptions.displayHeaderFooter = true;
-        printOptions.headerTemplate = `<div style="padding-left:${leftPad};padding-right:${rightPad};width:100%;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1.7;color:#1a1a1a;">${headerTemplate}</div>`;
+        printOptions.headerTemplate = `<div style="display:flex;flex-direction:column;align-items:${align};padding-left:${leftPad};padding-right:${rightPad};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1;color:#1a1a1a;">${cleanTemplate}</div>`;
         printOptions.footerTemplate = '<html><head></head><body></body></html>';
       }
 

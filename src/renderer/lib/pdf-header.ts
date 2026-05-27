@@ -4,16 +4,22 @@ function stripDataPlaceholderSpans(html: string): string {
   return html.replace(DATA_PLACEHOLDER_SPAN_RE, '{{$1}}');
 }
 
+function detectAlignment(html: string): string {
+  const match = html.match(/text-align:\s*(right|center|left)/i);
+  if (!match || match[1].toLowerCase() === 'left') return 'flex-start';
+  if (match[1].toLowerCase() === 'center') return 'center';
+  return 'flex-end';
+}
+
 /**
  * Converts user-authored HTML into Chromium's headerTemplate format.
  * - Strips TinyMCE's data-placeholder spans, extracting {{chave}} from attributes
  * - Replaces {{pagina}} / {{totalPaginas}} with Chromium's page number spans
  * - Replaces other placeholders using the provided replacements map
+ * - Detects text-align from TinyMCE and returns appropriate flex alignment
  */
-export function buildHeaderTemplate(templateHtml: string, replacements: Record<string, string> = {}): string {
-  if (!templateHtml) return '';
-
-  const debugTag = '[pdf-header:buildHeaderTemplate]';
+export function buildHeaderTemplate(templateHtml: string, replacements: Record<string, string> = {}): { html: string; align: string } {
+  if (!templateHtml) return { html: '', align: 'flex-start' };
 
   let html = stripDataPlaceholderSpans(templateHtml);
 
@@ -25,11 +31,13 @@ export function buildHeaderTemplate(templateHtml: string, replacements: Record<s
     html = html.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value || '');
   }
 
-  if (html !== templateHtml) {
-    console.debug(`${debugTag} transformed (${templateHtml.length} → ${html.length} chars)`);
-  }
+  const align = detectAlignment(html);
 
-  return html;
+  html = html.replace(/;\s*text-align:\s*\w+/gi, '');
+  html = html.replace(/text-align:\s*\w+;\s*/gi, '');
+  html = html.replace(/text-align:\s*\w+/gi, '');
+
+  return { html: `{{ALIGN:${align}}}${html}`, align };
 }
 
 export interface PdfHeaderConfig {
@@ -68,11 +76,11 @@ export async function buildPdfHeaderConfig(opts: PdfHeaderOptions = {}): Promise
     Object.assign(replacements, opts.extraReplacements);
   }
 
-  const headerTemplate = cabecalhoPaginasHtml
+  const result = cabecalhoPaginasHtml
     ? buildHeaderTemplate(cabecalhoPaginasHtml, replacements)
-    : '';
+    : { html: '', align: 'flex-start' };
 
-  console.debug(`${debugTag} headerTemplate: ${headerTemplate ? `${headerTemplate.length} chars` : 'vazio'} | cabecalhoPrimeiraPagina: ${cabecalhoPrimeiraPagina ? `${cabecalhoPrimeiraPagina.length} chars` : 'vazio'}`);
+  console.debug(`${debugTag} headerTemplate: ${result.html ? `${result.html.length} chars` : 'vazio'} | align: ${result.align} | cabecalhoPrimeiraPagina: ${cabecalhoPrimeiraPagina ? `${cabecalhoPrimeiraPagina.length} chars` : 'vazio'}`);
 
-  return { headerTemplate, cabecalhoPrimeiraPagina };
+  return { headerTemplate: result.html, cabecalhoPrimeiraPagina };
 }

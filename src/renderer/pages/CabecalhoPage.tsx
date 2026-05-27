@@ -121,7 +121,7 @@ export const CabecalhoPage: React.FC = () => {
       console.log('[CabecalhoPage:preview] conteudoPaginas length:', conteudoPaginas.length);
       console.log('[CabecalhoPage:preview] conteudoPaginas (first 300):', conteudoPaginas?.substring(0, 300));
 
-      const headerTemplate = buildHeaderTemplate(conteudoPaginas, { numero_rep: '321.654-2026' });
+      const { html: headerTemplate } = buildHeaderTemplate(conteudoPaginas, { numero_rep: 'XXX.XXX-YYYY' });
 
       console.log('[CabecalhoPage:preview] headerTemplate length:', headerTemplate.length);
       console.log('[CabecalhoPage:preview] headerTemplate (first 300):', headerTemplate?.substring(0, 300));
@@ -155,7 +155,7 @@ export const CabecalhoPage: React.FC = () => {
         '{{perito_matricula}}': peritoMatricula,
         '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),
         '{{laudo.numero}}': '<strong>2026/00123</strong>',
-        '{{numero_rep}}': '<strong>321.654-2026</strong>',
+        '{{numero_rep}}': '<strong>XXX.XXX-YYYY</strong>',
       };
 
       for (const [placeholder, value] of Object.entries(replacements)) {
@@ -319,7 +319,7 @@ export const CabecalhoPage: React.FC = () => {
                 editorId="cabecalho-paginas-editor"
                 value={conteudoPaginas}
                 onChange={setConteudoPaginas}
-                height={150}
+                height={300}
                 placeholder="FLS. {{pagina}}/{{totalPaginas}}&#10;LAUDO nº {{numero_rep}}"
                 placeholderChaves={extraPlaceholderChaves}
                 theme={editorTheme}
@@ -361,7 +361,7 @@ export const CabecalhoPage: React.FC = () => {
                   editorId="cabecalho-editor"
                   value={conteudo}
                   onChange={setConteudo}
-                  height={400}
+                  height={300}
                   placeholder="Digite o cabeçalho da primeira página..."
                   placeholderChaves={placeholderChaves}
                   theme={editorTheme}
