@@ -29,10 +29,10 @@ import {
 } from '@/lib/margens';
 
 const STYLES = {
-  top:    { color: 'var(--blue-500, #3b82f6)', label: 'Superior' },
-  right:  { color: 'var(--green-500, #22c55e)', label: 'Direita' },
-  bottom: { color: 'var(--orange-500, #f97316)', label: 'Inferior' },
-  left:   { color: 'var(--purple-500, #a855f7)', label: 'Esquerda' },
+  top:    { color: '#4f6ef7', colorSolid: '#4f6ef7', stripClass: 'bg-indigo-500',  textClass: 'text-indigo-600 dark:text-indigo-400',  ringClass: 'focus-visible:ring-indigo-500',  label: 'Superior'  },
+  right:  { color: '#0d9488', colorSolid: '#0d9488', stripClass: 'bg-teal-600',    textClass: 'text-teal-700  dark:text-teal-400',    ringClass: 'focus-visible:ring-teal-500',    label: 'Direita'   },
+  bottom: { color: '#d97706', colorSolid: '#d97706', stripClass: 'bg-amber-500',   textClass: 'text-amber-600 dark:text-amber-400',   ringClass: 'focus-visible:ring-amber-500',   label: 'Inferior'  },
+  left:   { color: '#7c3aed', colorSolid: '#7c3aed', stripClass: 'bg-violet-600',  textClass: 'text-violet-600 dark:text-violet-400', ringClass: 'focus-visible:ring-violet-500',  label: 'Esquerda'  },
 } as const;
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -158,72 +158,90 @@ export const MargensPage: React.FC = () => {
               >
                 {/* Top margin */}
                 <div
-                  className="absolute top-0 left-0 right-0 flex items-end justify-center transition-all duration-200"
+                  className="absolute top-0 left-0 right-0 flex flex-col items-center justify-end transition-all duration-300"
                   style={{
                     height: `${(margins.top / pageCm.h) * 100}%`,
                     maxHeight: `${(MARGINS_MAX / pageCm.h) * 100}%`,
-                    background: `linear-gradient(to bottom, var(--blue-500, #3b82f6) 0%, transparent 100%)`,
-                    opacity: 0.3,
+                    background: `linear-gradient(to bottom, ${STYLES.top.color}33 0%, transparent 100%)`,
                   }}
                 >
-                  <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 mb-0.5 bg-background/80 px-1 rounded">
+                  <div
+                    className="absolute top-0 left-0 right-0 h-[3px] transition-all duration-300"
+                    style={{ backgroundColor: STYLES.top.color }}
+                  />
+                  <span className={`text-[10px] font-bold mb-0.5 px-1.5 py-0.5 rounded-sm ${STYLES.top.textClass}`}
+                    style={{ backgroundColor: `${STYLES.top.color}18` }}>
                     {margins.top} cm
                   </span>
                 </div>
                 {/* Bottom margin */}
                 <div
-                  className="absolute bottom-0 left-0 right-0 flex items-start justify-center transition-all duration-200"
+                  className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-start transition-all duration-300"
                   style={{
                     height: `${(margins.bottom / pageCm.h) * 100}%`,
                     maxHeight: `${(MARGINS_MAX / pageCm.h) * 100}%`,
-                    background: `linear-gradient(to top, var(--orange-500, #f97316) 0%, transparent 100%)`,
-                    opacity: 0.3,
+                    background: `linear-gradient(to top, ${STYLES.bottom.color}33 0%, transparent 100%)`,
                   }}
                 >
-                  <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 mt-0.5 bg-background/80 px-1 rounded">
+                  <div
+                    className="absolute bottom-0 left-0 right-0 h-[3px] transition-all duration-300"
+                    style={{ backgroundColor: STYLES.bottom.color }}
+                  />
+                  <span className={`text-[10px] font-bold mt-0.5 px-1.5 py-0.5 rounded-sm ${STYLES.bottom.textClass}`}
+                    style={{ backgroundColor: `${STYLES.bottom.color}18` }}>
                     {margins.bottom} cm
                   </span>
                 </div>
                 {/* Left margin */}
                 <div
-                  className="absolute top-0 bottom-0 left-0 flex items-center justify-end transition-all duration-200"
+                  className="absolute top-0 bottom-0 left-0 flex items-center justify-end transition-all duration-300"
                   style={{
                     width: `${(margins.left / pageCm.w) * 100}%`,
                     maxWidth: `${(MARGINS_MAX / pageCm.w) * 100}%`,
-                    background: `linear-gradient(to right, var(--purple-500, #a855f7) 0%, transparent 100%)`,
-                    opacity: 0.3,
+                    background: `linear-gradient(to right, ${STYLES.left.color}33 0%, transparent 100%)`,
                   }}
                 >
-                  <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 mr-0.5 bg-background/80 px-1 rounded whitespace-nowrap">
+                  <div
+                    className="absolute top-0 bottom-0 left-0 w-[3px] transition-all duration-300"
+                    style={{ backgroundColor: STYLES.left.color }}
+                  />
+                  <span className={`text-[10px] font-bold mr-0.5 px-1.5 py-0.5 rounded-sm whitespace-nowrap ${STYLES.left.textClass}`}
+                    style={{ backgroundColor: `${STYLES.left.color}18` }}>
                     {margins.left} cm
                   </span>
                 </div>
                 {/* Right margin */}
                 <div
-                  className="absolute top-0 bottom-0 right-0 flex items-center justify-start transition-all duration-200"
+                  className="absolute top-0 bottom-0 right-0 flex items-center justify-start transition-all duration-300"
                   style={{
                     width: `${(margins.right / pageCm.w) * 100}%`,
                     maxWidth: `${(MARGINS_MAX / pageCm.w) * 100}%`,
-                    background: `linear-gradient(to left, var(--green-500, #22c55e) 0%, transparent 100%)`,
-                    opacity: 0.3,
+                    background: `linear-gradient(to left, ${STYLES.right.color}33 0%, transparent 100%)`,
                   }}
                 >
-                  <span className="text-[10px] font-semibold text-green-600 dark:text-green-400 ml-0.5 bg-background/80 px-1 rounded">
+                  <div
+                    className="absolute top-0 bottom-0 right-0 w-[3px] transition-all duration-300"
+                    style={{ backgroundColor: STYLES.right.color }}
+                  />
+                  <span className={`text-[10px] font-bold ml-0.5 px-1.5 py-0.5 rounded-sm ${STYLES.right.textClass}`}
+                    style={{ backgroundColor: `${STYLES.right.color}18` }}>
                     {margins.right} cm
                   </span>
                 </div>
                 {/* Content area with dashed border */}
                 <div
-                  className="absolute border border-dashed border-muted-foreground/30 flex items-center justify-center"
+                  className="absolute flex items-center justify-center"
                   style={{
                     top: `${(margins.top / pageCm.h) * 100}%`,
                     bottom: `${(margins.bottom / pageCm.h) * 100}%`,
                     left: `${(margins.left / pageCm.w) * 100}%`,
                     right: `${(margins.right / pageCm.w) * 100}%`,
+                    outline: '2px dashed rgba(100,116,139,0.55)',
+                    outlineOffset: '-1px',
                   }}
                 >
-                  <span className="text-[9px] text-muted-foreground/50 select-none whitespace-nowrap">
-                    conteúdo
+                  <span className="text-[11px] font-bold select-none whitespace-nowrap tracking-[0.18em] uppercase text-muted-foreground/80">
+                    Conteúdo
                   </span>
                 </div>
               </div>
@@ -242,11 +260,20 @@ export const MargensPage: React.FC = () => {
               return (
                 <div key={side} className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-1.5 text-sm font-medium cursor-default">
-                      <span className="text-muted-foreground">{iconMap[side]}</span>
+                    <Label className="flex items-center gap-2 text-sm font-semibold cursor-default">
+                      <span
+                        className="inline-flex items-center justify-center w-5 h-5 rounded"
+                        style={{ color: style.color, backgroundColor: `${style.color}18` }}
+                      >
+                        {iconMap[side]}
+                      </span>
+                      <span
+                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: style.color }}
+                      />
                       {style.label}
                     </Label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <Input
                         type="number"
                         min={MARGINS_MIN}
@@ -254,7 +281,8 @@ export const MargensPage: React.FC = () => {
                         step={MARGINS_STEP}
                         value={margins[side]}
                         onChange={e => handleInputChange(side, e)}
-                        className="w-16 h-7 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className={`w-16 h-7 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-semibold ${style.ringClass}`}
+                        style={{ borderColor: `${style.color}55`, color: style.color }}
                       />
                       <span className="text-xs text-muted-foreground w-4">cm</span>
                     </div>
@@ -266,10 +294,11 @@ export const MargensPage: React.FC = () => {
                     max={MARGINS_MAX}
                     step={MARGINS_STEP}
                     className="[&_[role=slider]]:h-4 [&_[role=slider]]:w-4"
+                    style={{ '--slider-color': style.color } as React.CSSProperties}
                   />
-                   <div className="flex justify-between text-[10px] text-muted-foreground">
-                     <span>0 cm</span>
-                     <span>{MARGINS_MAX} cm</span>
+                  <div className="flex justify-between text-[10px] text-muted-foreground/70">
+                    <span>0 cm</span>
+                    <span>{MARGINS_MAX} cm</span>
                   </div>
                 </div>
               );
