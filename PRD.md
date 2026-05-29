@@ -33,7 +33,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 
 - **Registro de REP:** Captura de dados de acionamento, envolvidos, lacres de entrada/saída, localização com inputs personalizados a depender do tipo de exame.
 - **Indicadores:** Dashboard com indicadores de REPs pendentes, em andamento e concluídas e outros indicadores de produtividade.
-- **Histórico e :** Rastreamento do ciclo de vida da REP (Pendente -> Em Andamento -> Concluído) e Laudo (Pendente -> Em andamento -> Concluído -> Entregue)
+- **Histórico e :** Rastreamento do ciclo de vida da REP (Pendente -> Em Andamento -> Concluído) e Laudo (Em andamento → Concluído → Entregue)
 
 ### FR4: Editor de Laudos (O Coração do Sistema)
 
@@ -61,7 +61,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 ### FR8: Exportação e Auditoria
 
 - **Múltiplos Formatos:** Geração de PDF, DOCX (Word) e ODT (LibreOffice).
-- **Log de Auditoria:** Registro detalhado de quando e o que foi alterado em cada laudo e msg importantes para debug.
+- **Log de Auditoria:** Registro de login, exclusões, backup/restauração e transições de status de REPs e Laudos com snapshot antes/depois na tabela `logs_auditoria`. Logs de sistema em JSON estruturado com filtro por módulo e viewer com abas Sistema/Auditoria.
 - **Backup/Restauração:** Ferramenta para exportar e importar o banco de dados e as imagens em um pacote ZIP.
 - **Sincronização com o google drive:** envio de backup completo de forma automatica por periodos programados pelo usuario. 
 
@@ -90,6 +90,6 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 
 ## 8. Status Atual de Implementação
 
-- **Já implementado:** Autenticação local e perfil de perito, cadastros de solicitantes e tipos de exame, templates de laudo dinâmicos com menu de contexto por categoria, placeholders dinâmicos (com Kanban horizontal expansível/colapsável de categorias), editor TinyMCE independente por seção, upload de imagens locais com protocolo `laudo-img://`, preview interno de PDF, logs de auditoria e backup/restauração robusta via ZIP.
+- **Já implementado:** Autenticação local e perfil de perito, cadastros de solicitantes e tipos de exame, templates de laudo dinâmicos com menu de contexto por categoria, placeholders dinâmicos (com Kanban horizontal expansível/colapsável de categorias), editor TinyMCE independente por seção, upload de imagens locais com protocolo `laudo-img://`, preview interno de PDF, sistema de logs modular com JSON estruturado e viewer com abas Sistema/Auditoria, auditoria de ações sensíveis e ciclo de vida de REPs e Laudos, exclusão de logs com autenticação por senha, exclusão automática da auditoria dos backups ZIP, backup/restauração robusta via ZIP.
 - **Assistência de IA Avançada:** Assistente de IA integrado (`AISheet`) com revisão de ortografia e adequação de tom sob aprovação expressa do perito (sem substituição silenciosa). Resolução automática de placeholders para valores reais antes de enviar ao Groq. Descrição inteligente de evidências fotográficas locais (`laudo-img://`) convertidas dinamicamente para Base64 no backend, utilizando o modelo vision ativo `meta-llama/llama-4-scout-17b-16e-instruct`. Inserção de respostas de IA diretamente na posição atual do cursor no editor de texto.
 - **Em desenvolvimento:** Geração de PDF final persistente, exportação DOCX/ODT, snapshots de laudos e apêndice automático de figuras.
