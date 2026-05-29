@@ -1,5 +1,6 @@
 import { ipcMain, dialog, BrowserWindow, nativeImage, app } from 'electron';
 import { logInfo, logError } from '../../utils/logger.js';
+import { auditDelete, auditExport } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
 import path from 'path';
@@ -86,6 +87,7 @@ export const registerTemplateHandlers = (): void => {
     try {
       await templateService.delete(id);
       logInfo(`Template excluído: ${id}`);
+      auditDelete('', 'templates', id, `Template ${id} excluído`);
       return { success: true, message: 'Template excluído com sucesso' };
     } catch (error: any) {
       logError('Erro ao excluir template', error);

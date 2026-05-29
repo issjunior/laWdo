@@ -79,8 +79,10 @@ const initApp = async () => {
       window.ipcAPI = {
         ping: async () => 'pong (mock)',
         getAppInfo: async () => ({ version: '0.1.0-dev', name: 'laWdo' }),
-        logInfo: (msg: string) => console.log(`[INFO] ${msg}`),
-        logError: (msg: string, err?: any) => console.error(`[ERROR] ${msg}`, err),
+        logInfo: (_module: string, msg: string) => console.log(`[INFO] ${msg}`),
+        logError: (_module: string, msg: string, err?: any) => console.error(`[ERROR] ${msg}`, err),
+        logWarning: (_module: string, msg: string) => console.warn(`[WARN] ${msg}`),
+        verifyPassword: async () => ({ success: true, valid: true }),
         executeQuery: async () => ({ success: false, message: 'Mock mode' }),
         login: async () => ({ success: true, user: { id: 1, name: 'Usuario Mock', username: 'mock', email: 'mock@pcp.pr.gov.br', cargo: 'Perito Oficial Criminal', lotacao: 'Curitiba', foto_url: null } }),
         closeApp: async () => { console.log('Mock: closeApp'); },
@@ -108,6 +110,21 @@ const initApp = async () => {
           findByTipo: async () => ({ success: true, data: [] }),
           findTipos: async () => ({ success: true, data: [] }),
           findAtivos: async () => ({ success: true, data: [] }),
+        },
+        log: {
+          listar: async () => ({ success: true, data: [] }),
+          limpar: async () => ({ success: true }),
+          listarAuditoria: async () => ({ success: true, data: [], total: 0 }),
+          limparAuditoria: async () => ({ success: true, count: 0 }),
+          contar: async () => ({ success: true, data: { sistema: 0, auditoria: 0 } }),
+        },
+        laudo: {
+          findAll: async () => ({ success: true, data: [] }),
+          findByRepId: async () => ({ success: false, error: 'Mock mode' }),
+          updateConteudo: async () => ({ success: false, error: 'Mock mode' }),
+          create: async () => ({ success: false, error: 'Mock mode' }),
+          delete: async () => ({ success: false, error: 'Mock mode' }),
+          updateStatus: async () => ({ success: false, error: 'Mock mode' }),
         },
       };
     }

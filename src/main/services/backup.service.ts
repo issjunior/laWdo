@@ -1,9 +1,11 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import sqlite3 from 'sqlite3';
 import AdmZip from 'adm-zip';
-import { logError, logInfo } from '../utils/logger.js';
-import { closeDatabase } from '../database/sqlite.js';
+import { getLogger } from '../utils/logger.js';
+import { closeDatabase } from '../database/sqlite.js'
+const log = getLogger('backup');
 
 // Diretório do banco de dados
 const DB_DIR = app.getPath('userData');
@@ -23,25 +25,47 @@ export const criarBackup = async (destino: string): Promise<{ success: boolean; 
 
     const zip = new AdmZip();
 
-    // Adicionar banco de dados ao ZIP
-    zip.addLocalFile(DB_PATH, '', 'laudopericial.db');
-    logInfo('Banco de dados adicionado ao ZIP de backup', { dbPath: DB_PATH });
+    const tempDbPath = path.join(DB_DIR, `_backup_temp_${Date.now()}.db`);
+    fs.copyFileSync(DB_PATH, tempDbPath);
+    log.info('Cópia temporária do banco criada para limpeza de auditoria');
+
+    const tempDb = new sqlite3.Database(tempDbPath);
+    await new Promise<void>((resolve, reject) => {
+      tempDb.run('DELETE FROM logs_auditoria', (err) => {
+        if (err) { reject(err); } else { resolve(); }
+      });
+    });
+    log.info('Registros de auditoria removidos da cópia de backup');
+
+    await new Promise<void>((resolve, reject) => {
+      tempDb.run('VACUUM', (err) => {
+        if (err) { reject(err); } else { resolve(); }
+      });
+    });
+    tempDb.close();
+
+    zip.addLocalFile(tempDbPath, '', 'laudopericial.db');
+    log.info('Banco de dados (sem auditoria) adicionado ao ZIP de backup');
 
     // Adicionar pasta de imagens ao ZIP (recursivamente)
     if (fs.existsSync(IMAGES_DIR)) {
       zip.addLocalFolder(IMAGES_DIR, 'imagens');
-      logInfo('Pasta de imagens adicionada ao ZIP de backup', { imagesDir: IMAGES_DIR });
+      log.info('Pasta de imagens adicionada ao ZIP de backup', { imagesDir: IMAGES_DIR });
     } else {
-      logInfo('Pasta de imagens não existe; backup conterá apenas o banco de dados');
+      log.info('Pasta de imagens não existe; backup conterá apenas o banco de dados');
     }
 
     // Gravar arquivo ZIP
     zip.writeZip(destino);
 
-    logInfo('Backup ZIP criado com sucesso', { destino });
+    if (fs.existsSync(tempDbPath)) {
+      fs.unlinkSync(tempDbPath);
+    }
+
+    log.info('Backup ZIP criado com sucesso', { destino });
     return { success: true, path: destino };
   } catch (error) {
-    logError('Erro ao criar backup ZIP', error);
+    log.error('Erro ao criar backup ZIP', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erro desconhecido ao criar backup',
@@ -73,23 +97,23 @@ export const restaurarBackup = async (origem: string): Promise<{ success: boolea
     // Criar pré-backup do estado atual antes de sobrescrever
     const preRestorePath = path.join(DB_DIR, `pre_restore_${Date.now()}.zip`);
     await criarBackup(preRestorePath);
-    logInfo('Pré-backup do estado atual criado antes da restauração', { preRestorePath });
+    log.info('Pré-backup do estado atual criado antes da restauração', { preRestorePath });
 
     // Fechar conexão com o banco de dados
     await closeDatabase();
-    logInfo('Conexão com banco de dados fechada para restauração');
+    log.info('Conexão com banco de dados fechada para restauração');
 
     // Extrair ZIP para diretório temporário
     const tempExtractDir = path.join(DB_DIR, `restore_${Date.now()}`);
     fs.mkdirSync(tempExtractDir, { recursive: true });
     zip.extractAllTo(tempExtractDir, true);
-    logInfo('Backup extraído para diretório temporário', { tempExtractDir });
+    log.info('Backup extraído para diretório temporário', { tempExtractDir });
 
     // Substituir banco de dados
     const extractedDbPath = path.join(tempExtractDir, 'laudopericial.db');
     if (fs.existsSync(extractedDbPath)) {
       fs.copyFileSync(extractedDbPath, DB_PATH);
-      logInfo('Banco de dados substituído');
+      log.info('Banco de dados substituído');
     }
 
     // Substituir pasta de imagens
@@ -100,21 +124,21 @@ export const restaurarBackup = async (origem: string): Promise<{ success: boolea
       }
       fs.mkdirSync(path.dirname(IMAGES_DIR), { recursive: true });
       fs.renameSync(extractedImagesPath, IMAGES_DIR);
-      logInfo('Pasta de imagens substituída');
+      log.info('Pasta de imagens substituída');
     }
 
     // Limpar diretório temporário
     fs.rmSync(tempExtractDir, { recursive: true, force: true });
-    logInfo('Diretório temporário de restauração removido');
+    log.info('Diretório temporário de restauração removido');
 
     // Reiniciar aplicação
-    logInfo('Restauração concluída. Reiniciando aplicação...');
+    log.info('Restauração concluída. Reiniciando aplicação...');
     app.relaunch();
     app.exit(0);
 
     return { success: true };
   } catch (error) {
-    logError('Erro ao restaurar backup', error);
+    log.error('Erro ao restaurar backup', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erro desconhecido ao restaurar backup',

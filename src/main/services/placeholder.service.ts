@@ -1,6 +1,7 @@
 import { BaseService } from './base.service.js';
-import { logInfo, logError } from '../utils/logger.js';
-import { executeNonQuery } from '../database/sqlite.js';
+import { getLogger } from '../utils/logger.js';
+import { executeNonQuery } from '../database/sqlite.js'
+const log = getLogger('placeholder');
 
 export interface PlaceholderRow {
   id: string;
@@ -148,9 +149,9 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
           migradas++;
         }
       }
-      logInfo('Migração de placeholders concluída', { migradas, puladas });
+      log.info('Migração de placeholders concluída', { migradas, puladas });
     } catch (error) {
-      logError('Erro ao migrar placeholders', error);
+      log.error('Erro ao migrar placeholders', error);
       throw error;
     }
     return { migradas, puladas };
@@ -265,9 +266,9 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
           await this.create(p);
         }
       }
-      logInfo('Seed de placeholders do sistema concluído', { total: PLACEHOLDERS_SISTEMA.length + CAMPOS_ESPECIFICOS_PLACEHOLDERS.length });
+      log.info('Seed de placeholders do sistema concluído', { total: PLACEHOLDERS_SISTEMA.length + CAMPOS_ESPECIFICOS_PLACEHOLDERS.length });
     } catch (error) {
-      logError('Erro ao semear placeholders do sistema', error);
+      log.error('Erro ao semear placeholders do sistema', error);
       throw error;
     }
   }

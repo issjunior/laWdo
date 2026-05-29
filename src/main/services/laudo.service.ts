@@ -1,8 +1,10 @@
 import { BaseService } from './base.service.js';
 import { LaudoRow } from '../types/database.js';
-import { logError, logInfo } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js';
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { randomUUID } from 'crypto';
+
+const log = getLogger('laudo')
 
 export class LaudoService extends BaseService<LaudoRow> {
   constructor() {
@@ -51,7 +53,7 @@ export class LaudoService extends BaseService<LaudoRow> {
         now,
       ]);
 
-      logInfo(`Laudo criado automaticamente para REP ${params.rep_id}`, { laudoId: id, templateId: params.template_id });
+      log.info(`Laudo criado automaticamente para REP ${params.rep_id}`, { laudoId: id, templateId: params.template_id });
 
       const [laudo] = await executeQuery<LaudoRow>(
         'SELECT * FROM laudos WHERE id = ?',
@@ -59,7 +61,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       );
       return laudo;
     } catch (error) {
-      logError('Erro ao criar laudo inicial', error);
+      log.error('Erro ao criar laudo inicial', error);
       throw error;
     }
   }
@@ -73,7 +75,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       );
       return rows[0] || null;
     } catch (error) {
-      logError('Erro ao buscar laudo por REP', error);
+      log.error('Erro ao buscar laudo por REP', error);
       throw error;
     }
   }
@@ -113,7 +115,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       `;
       return await executeQuery<any>(sql);
     } catch (error) {
-      logError('Erro ao buscar laudos com REPs', error);
+      log.error('Erro ao buscar laudos com REPs', error);
       throw error;
     }
   }
@@ -130,7 +132,35 @@ export class LaudoService extends BaseService<LaudoRow> {
       const rows = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [id]);
       return rows[0];
     } catch (error) {
-      logError('Erro ao atualizar conteúdo do laudo', error);
+      log.error('Erro ao atualizar conteúdo do laudo', error);
+      throw error;
+    }
+  }
+
+  /** Atualizar status do laudo */
+  async updateStatus(id: string, status: string): Promise<LaudoRow> {
+    try {
+      const now = new Date().toISOString();
+      const updates: string[] = ['status = ?'];
+      const params: string[] = [status];
+
+      if (status === 'Concluído') {
+        updates.push('data_conclusao = ?');
+        params.push(now);
+      }
+      if (status === 'Entregue') {
+        updates.push('data_entrega = ?');
+        params.push(now);
+      }
+
+      params.push(id);
+      const sql = `UPDATE laudos SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+      await executeNonQuery(sql, params);
+
+      const rows = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [id]);
+      return rows[0];
+    } catch (error) {
+      log.error('Erro ao atualizar status do laudo', { id, status, error });
       throw error;
     }
   }
@@ -145,7 +175,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       }
       await executeNonQuery('DELETE FROM laudos WHERE rep_id = ?', [repId]);
     } catch (error) {
-      logError('Erro ao deletar laudo por rep_id', { repId, error });
+      log.error('Erro ao deletar laudo por rep_id', { repId, error });
       throw error;
     }
   }
@@ -161,10 +191,10 @@ export class LaudoService extends BaseService<LaudoRow> {
 
       await this.delete(laudoId);
 
-      logInfo('Laudo excluído', { laudoId, repId: laudo.rep_id });
+      log.info('Laudo excluído', { laudoId, repId: laudo.rep_id });
       return { rep_id: laudo.rep_id };
     } catch (error) {
-      logError('Erro ao deletar laudo', { laudoId, error });
+      log.error('Erro ao deletar laudo', { laudoId, error });
       throw error;
     }
   }

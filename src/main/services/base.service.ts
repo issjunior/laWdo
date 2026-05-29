@@ -1,5 +1,7 @@
-import { logError, logInfo, logDebug } from '../utils/logger.js'
+import { getLogger } from '../utils/logger.js'
 import { executeQuery, executeNonQuery } from '../database/sqlite.js'
+
+const log = getLogger('database')
 
 /**
  * Serviço base com operações CRUD comuns
@@ -58,7 +60,7 @@ export abstract class BaseService<T extends Record<string, any>> {
       const rows = await executeQuery<T>(sql, params)
       return rows
     } catch (error) {
-      logError(`Erro ao buscar registros de ${this.tableName}`, error)
+      log.error(`Erro ao buscar registros de ${this.tableName}`, error)
       throw error
     }
   }
@@ -77,7 +79,7 @@ export abstract class BaseService<T extends Record<string, any>> {
 
       return rows[0]
     } catch (error) {
-      logError(`Erro ao buscar ${this.tableName} por ID`, { id, error })
+      log.error(`Erro ao buscar ${this.tableName} por ID`, { id, error })
       throw error
     }
   }
@@ -112,10 +114,10 @@ export abstract class BaseService<T extends Record<string, any>> {
         throw new Error(`Falha ao recuperar ${this.tableName} criado`)
       }
 
-      logInfo(`${this.tableName} criado`, { id })
+      log.info(`${this.tableName} criado`, { id })
       return created
     } catch (error) {
-      logError(`Erro ao criar ${this.tableName}`, { data, error })
+      log.error(`Erro ao criar ${this.tableName}`, { data, error })
       throw error
     }
   }
@@ -148,10 +150,10 @@ export abstract class BaseService<T extends Record<string, any>> {
       await executeNonQuery(sql, [...values, updatedAt, id])
 
       const updated = await this.findById(id)
-      logInfo(`${this.tableName} atualizado`, { id })
+      log.info(`${this.tableName} atualizado`, { id })
       return updated
     } catch (error) {
-      logError(`Erro ao atualizar ${this.tableName}`, { id, data, error })
+      log.error(`Erro ao atualizar ${this.tableName}`, { id, data, error })
       throw error
     }
   }
@@ -169,10 +171,10 @@ export abstract class BaseService<T extends Record<string, any>> {
       const sql = `DELETE FROM ${this.tableName} WHERE ${this.primaryKey} = ?`
       await executeNonQuery(sql, [id])
 
-      logInfo(`${this.tableName} excluído`, { id })
+      log.info(`${this.tableName} excluído`, { id })
       return true
     } catch (error) {
-      logError(`Erro ao excluir ${this.tableName}`, { id, error })
+      log.error(`Erro ao excluir ${this.tableName}`, { id, error })
       throw error
     }
   }
@@ -199,7 +201,7 @@ export abstract class BaseService<T extends Record<string, any>> {
 
       return rows[0]?.count || 0
     } catch (error) {
-      logError(`Erro ao contar registros de ${this.tableName}`, error)
+      log.error(`Erro ao contar registros de ${this.tableName}`, error)
       throw error
     }
   }

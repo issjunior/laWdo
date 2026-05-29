@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { logInfo, logError } from '../../utils/logger.js'
+import { auditDelete } from '../../services/audit-log.service.js'
 import { tipoExameService } from '../../services/tipo-exame.service.js'
 import { sanitizeInput } from '../../security/index.js'
 
@@ -150,6 +151,7 @@ export const registerTipoExameHandlers = (): void => {
 
       logInfo('Excluindo tipo de exame', { id })
       const deleted = await tipoExameService.delete(id)
+      auditDelete('', 'tipos_exame', id, `Tipo de exame ${id} excluído`)
 
       if (!deleted) {
         return {

@@ -1,7 +1,9 @@
 import { ipcMain, BrowserWindow, app } from 'electron';
-import { logInfo, logError, logDebug, logWarning } from '../utils/logger.js';
+import { getLogger, type LogModule } from '../utils/logger.js'
+const log = getLogger('ipc');
 import { sanitizeInput, validateSqlQuery } from '../security/index.js';
-import { registerUserHandlers } from './handlers/user.handlers.js';
+import { auditLogin, auditLogout } from '../services/audit-log.service.js';
+import { registerUserHandlers, registerVerifyPasswordHandler } from './handlers/user.handlers.js';
 import { registerSolicitanteHandlers } from './handlers/solicitante.handlers.js';
 import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers.js';
 import { registerConfiguracaoHandlers } from './handlers/configuracao.handlers.js';
@@ -32,7 +34,7 @@ export const registerIpcHandlers = (options: {
   rendererHtmlPath: string;
   isDev: boolean;
 }): void => {
-  logInfo('Registrando handlers IPC...');
+  log.info('Registrando handlers IPC...');
 
   // Utilitários
   registerUtilityHandlers();
@@ -51,6 +53,7 @@ export const registerIpcHandlers = (options: {
 
   // Handlers específicos por entidade
   registerUserHandlers();
+  registerVerifyPasswordHandler();
   registerSolicitanteHandlers();
   registerTipoExameHandlers();
   registerConfiguracaoHandlers();
@@ -65,7 +68,7 @@ export const registerIpcHandlers = (options: {
   registerLogSystemHandlers();
   registerIlustracoesHandlers(options);
 
-  logInfo('Handlers IPC registrados com sucesso');
+  log.info('Handlers IPC registrados com sucesso');
 };
 
 /**
@@ -74,7 +77,7 @@ export const registerIpcHandlers = (options: {
 const registerUtilityHandlers = (): void => {
   // Ping - teste de conexão
   ipcMain.handle('ping', async (): Promise<string> => {
-    logDebug('Ping recebido');
+    log.debug('Ping recebido');
     return 'pong';
   });
 
@@ -101,30 +104,42 @@ const registerUtilityHandlers = (): void => {
  * Handlers de log
  */
 const registerLogHandlers = (): void => {
-  // Log de informação
-  ipcMain.on('log-info', (event, message: string) => {
+  const defaultLogger = getLogger('sistema');
+
+  ipcMain.on('log-info', (_event, module: string, message: string) => {
     if (typeof message === 'string') {
-      logInfo(`[Renderer] ${sanitizeInput(message)}`);
-    } else {
-      logError('Tentativa de log com mensagem inválida', message);
+      const logger = (module && typeof module === 'string') ? getLogger(module as LogModule) : defaultLogger;
+      logger.info(`[Renderer] ${sanitizeInput(message)}`);
     }
   });
 
-  // Log de erro
-  ipcMain.on('log-error', (event, message: string, error?: any) => {
+  ipcMain.on('log-error', (_event, module: string, message: string, error?: any) => {
     if (typeof message === 'string') {
-      logError(`[Renderer] ${sanitizeInput(message)}`, error);
-    } else {
-      logError('Tentativa de log de erro com mensagem inválida', { message, error });
+      const logger = (module && typeof module === 'string') ? getLogger(module as LogModule) : defaultLogger;
+      logger.error(`[Renderer] ${sanitizeInput(message)}`, error);
     }
   });
 
-  // Log de warning
-  ipcMain.on('log-warning', (event, message: string) => {
+  ipcMain.on('log-warning', (_event, module: string, message: string) => {
     if (typeof message === 'string') {
-      logWarning(`[Renderer] ${sanitizeInput(message)}`);
-    } else {
-      logError('Tentativa de log de warning com mensagem inválida', message);
+      const logger = (module && typeof module === 'string') ? getLogger(module as LogModule) : defaultLogger;
+      logger.warn(`[Renderer] ${sanitizeInput(message)}`);
+    }
+  });
+
+  ipcMain.on('log-batch', (_event, entries: Array<{ module: string; level: string; message: string; error?: any }>) => {
+    if (!Array.isArray(entries)) return;
+    for (const entry of entries) {
+      if (typeof entry.message !== 'string') continue;
+      const module = (entry.module && typeof entry.module === 'string') ? entry.module as LogModule : 'renderer';
+      const logger = getLogger(module);
+      const msg = `[Renderer] ${sanitizeInput(entry.message)}`;
+      switch (entry.level) {
+        case 'error': logger.error(msg, entry.error); break;
+        case 'warn': logger.warn(msg); break;
+        case 'debug': logger.debug(msg); break;
+        default: logger.info(msg);
+      }
     }
   });
 };
@@ -135,7 +150,7 @@ const registerLogHandlers = (): void => {
 const registerSystemHandlers = (): void => {
   // Reiniciar aplicativo
   ipcMain.handle('restart-app', async () => {
-    logInfo('Reiniciando aplicativo...');
+    log.info('Reiniciando aplicativo...');
     setTimeout(() => {
       app.relaunch();
       app.exit(0);
@@ -148,13 +163,13 @@ const registerSystemHandlers = (): void => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window) {
       window.webContents.openDevTools({ mode: 'detach' });
-      logInfo('DevTools abertos');
+      log.info('DevTools abertos');
     }
   });
 
   // Fechar aplicativo
   ipcMain.handle('close-app', async () => {
-    logInfo('Fechando aplicativo...');
+    log.info('Fechando aplicativo...');
     app.quit();
     return { success: true };
   });
@@ -169,7 +184,7 @@ const registerDatabaseHandlers = (): void => {
     try {
       // Validação de segurança
       if (!validateSqlQuery(query)) {
-        logError('Query rejeitada por validação de segurança', query);
+        log.error('Query rejeitada por validação de segurança', query);
         return {
           success: false,
           error: 'Query rejeitada por motivos de segurança',
@@ -185,7 +200,7 @@ const registerDatabaseHandlers = (): void => {
         return param;
       });
 
-      logDebug(`Executando query: ${query.substring(0, 50)}...`, {
+      log.debug(`Executando query: ${query.substring(0, 50)}...`, {
         params: sanitizedParams,
       });
 
@@ -198,7 +213,7 @@ const registerDatabaseHandlers = (): void => {
         queryExecuted: query.substring(0, 100) + '...',
       };
     } catch (error) {
-      logError('Erro ao executar query', { query, error });
+      log.error('Erro ao executar query', { query, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
@@ -226,11 +241,12 @@ const registerAuthHandlers = (): void => {
       const sanitizedUsername = sanitizeInput(username);
       const sanitizedPassword = sanitizeInput(password);
 
-      logInfo(`Tentativa de login: ${sanitizedUsername}`);
+      log.info(`Tentativa de login: ${sanitizedUsername}`);
 
       const user = await userService.authenticate(sanitizedUsername, sanitizedPassword)
       if (user) {
-        logInfo(`Login bem-sucedido: ${sanitizedUsername}`);
+        log.info(`Login bem-sucedido: ${sanitizedUsername}`);
+        auditLogin(user.id, true);
         return {
           success: true,
           user: {
@@ -247,13 +263,14 @@ const registerAuthHandlers = (): void => {
         };
       }
 
-      logWarning(`Login falhou: ${sanitizedUsername}`);
+      log.warn(`Login falhou: ${sanitizedUsername}`);
+      auditLogin('', false);
       return {
         success: false,
         error: 'Usuário ou senha incorretos',
       };
     } catch (error) {
-      logError('Erro no processo de login', error);
+      log.error('Erro no processo de login', error);
       return {
         success: false,
         error: 'Erro interno no servidor',
@@ -263,7 +280,7 @@ const registerAuthHandlers = (): void => {
 
   // Logout
   ipcMain.handle('logout', async () => {
-    logInfo('Logout solicitado');
+    log.info('Logout solicitado');
     return { success: true };
   });
 
@@ -291,7 +308,7 @@ export const sendToRenderer = (channel: string, data: any): void => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, data);
   } else {
-    logError('Janela principal não disponível para enviar mensagem', { channel });
+    log.error('Janela principal não disponível para enviar mensagem', { channel });
   }
 };
 

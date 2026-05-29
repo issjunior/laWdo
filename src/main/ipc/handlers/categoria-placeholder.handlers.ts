@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { logInfo, logError } from '../../utils/logger.js';
+import { auditDelete } from '../../services/audit-log.service.js';
 import { categoriaService } from '../../services/categoria-placeholder.service.js';
 import { sanitizeInput } from '../../security/index.js';
 
@@ -86,6 +87,7 @@ export const registerCategoriaHandlers = (): void => {
     try {
       if (!id || typeof id !== 'string') return { success: false, error: 'ID inválido' };
       await categoriaService.delete(id);
+      auditDelete('', 'categorias_placeholders', id, `Categoria ${id} excluída`);
       return { success: true, message: 'Categoria excluída com sucesso' };
     } catch (error) {
       logError('Erro ao excluir categoria', { id, error });

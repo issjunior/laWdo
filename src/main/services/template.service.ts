@@ -1,8 +1,9 @@
 import { BaseService } from './base.service.js';
 import { TemplateRow, SecaoTemplateRow } from '../types/database.js';
-import { logError } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js';
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'crypto'
+const log = getLogger('template');
 
 export class TemplateService extends BaseService<TemplateRow> {
   constructor() {
@@ -19,7 +20,7 @@ export class TemplateService extends BaseService<TemplateRow> {
       `;
       return await executeQuery<TemplateRow>(sql, [tipoExameId]);
     } catch (error) {
-      logError('Erro ao buscar templates por tipo de exame', error);
+      log.error('Erro ao buscar templates por tipo de exame', error);
       throw error;
     }
   }
@@ -37,7 +38,7 @@ export class TemplateService extends BaseService<TemplateRow> {
       `;
       return await executeQuery<TemplateRow & { qtd_secoes: number; tipo_exame_nome?: string; tipo_exame_codigo?: string }>(sql);
     } catch (error) {
-      logError('Erro ao buscar templates com seções', error);
+      log.error('Erro ao buscar templates com seções', error);
       throw error;
     }
   }
@@ -50,7 +51,7 @@ export class TemplateService extends BaseService<TemplateRow> {
       const sql = 'SELECT * FROM secoes_template WHERE template_id = ? ORDER BY ordem ASC';
       return await executeQuery<SecaoTemplateRow>(sql, [templateId]);
     } catch (error) {
-      logError('Erro ao buscar seções do template', error);
+      log.error('Erro ao buscar seções do template', error);
       throw error;
     }
   }
@@ -67,7 +68,7 @@ export class TemplateService extends BaseService<TemplateRow> {
       const rows = await executeQuery<SecaoTemplateRow>('SELECT * FROM secoes_template WHERE id = ?', [id]);
       return rows[0];
     } catch (error) {
-      logError('Erro ao criar seção do template', error);
+      log.error('Erro ao criar seção do template', error);
       throw error;
     }
   }
@@ -94,7 +95,7 @@ export class TemplateService extends BaseService<TemplateRow> {
       const rows = await executeQuery<SecaoTemplateRow>('SELECT * FROM secoes_template WHERE id = ?', [id]);
       return rows[0];
     } catch (error) {
-      logError('Erro ao atualizar seção do template', error);
+      log.error('Erro ao atualizar seção do template', error);
       throw error;
     }
   }
@@ -104,7 +105,7 @@ export class TemplateService extends BaseService<TemplateRow> {
     try {
       await executeNonQuery('DELETE FROM secoes_template WHERE id = ?', [id]);
     } catch (error) {
-      logError('Erro ao excluir seção do template', error);
+      log.error('Erro ao excluir seção do template', error);
       throw error;
     }
   }
@@ -119,7 +120,7 @@ export class TemplateService extends BaseService<TemplateRow> {
         );
       }
     } catch (error) {
-      logError('Erro ao reordenar seções do template', error);
+      log.error('Erro ao reordenar seções do template', error);
       throw error;
     }
   }

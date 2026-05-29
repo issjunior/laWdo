@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { randomUUID } from 'crypto';
 import { logInfo, logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
+import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { repService } from '../../services/rep.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { REPRow } from '../../types/database.js';
@@ -58,6 +59,11 @@ export const registerRepHandlers = (): void => {
       const rep = await repService.create(sanitizedData);
       logInfo('REP criada', { numero: data.numero, id: rep.id });
 
+      auditCicloVida('', 'rep', rep.id, 'criacao', `REP ${data.numero} criada`, null, {
+        numero: data.numero, status: 'Pendente',
+        solicitante_id: data.solicitante_id, tipo_exame_id: data.tipo_exame_id,
+      });
+
       // Criar laudo automaticamente (exceto para template sistema "Não definido")
       if (data.template_id && data.perito_id && data.template_id !== 'tpl-nao-definido') {
         try {
@@ -67,6 +73,11 @@ export const registerRepHandlers = (): void => {
             template_id: data.template_id,
           });
           logInfo('Laudo criado automaticamente para REP', { repId: rep.id });
+          auditCicloVida('', 'laudo', rep.id, 'criacao',
+            `Laudo criado automaticamente para REP ${data.numero}`,
+            null,
+            { rep_id: rep.id, perito_id: data.perito_id, template_id: data.template_id },
+          );
         } catch (laudoError) {
           logError('Erro ao criar laudo automático — REP criada sem laudo', laudoError);
           // Não falha a criação da REP se o laudo falhar
@@ -149,19 +160,34 @@ export const registerRepHandlers = (): void => {
       if (data.prazo !== undefined) sanitizedData.prazo = data.prazo;
       if (data.campos_especificos !== undefined) sanitizedData.campos_especificos = data.campos_especificos;
 
+      const repAntes = await repService.findById(id);
+      const statusAnterior = repAntes?.status;
       const updated = await repService.update(id, sanitizedData);
+
+      if (sanitizedData.status && sanitizedData.status !== statusAnterior) {
+        auditCicloVida('', 'rep', id, 'transicao_status',
+          `REP ${repAntes?.numero ?? id}: ${statusAnterior ?? '?'} → ${sanitizedData.status}`,
+          { status: statusAnterior },
+          { status: sanitizedData.status },
+        );
+      }
 
       if (data.template_id && data.template_id !== 'tpl-nao-definido') {
         const laudoExistente = await laudoService.findByRepId(id);
         if (!laudoExistente) {
           if (data.perito_id) {
             try {
-              await laudoService.criarLaudoInicial({
-                rep_id: id,
-                perito_id: data.perito_id,
-                template_id: data.template_id,
-              });
-              logInfo('Laudo criado automaticamente na atualização da REP', { repId: id });
+                await laudoService.criarLaudoInicial({
+                  rep_id: id,
+                  perito_id: data.perito_id,
+                  template_id: data.template_id,
+                });
+                logInfo('Laudo criado automaticamente na atualização da REP', { repId: id });
+                auditCicloVida('', 'laudo', id, 'criacao',
+                  `Laudo criado automaticamente na atualização da REP ${id}`,
+                  null,
+                  { rep_id: id, perito_id: data.perito_id, template_id: data.template_id },
+                );
             } catch (laudoError) {
               logError('Erro ao criar laudo automático na edição da REP', laudoError);
             }
@@ -193,11 +219,13 @@ export const registerRepHandlers = (): void => {
     try {
       if (!id) return { success: false, error: 'ID inválido' };
 
-      // Deleta o laudo vinculado antes da REP (evita SQLITE_CONSTRAINT)
+      const rep = await repService.findById(id);
+
       await laudoService.deletarPorRepId(id);
 
       await repService.delete(id);
       logInfo('REP excluída', { id });
+      auditDelete('', 'reps', id, `REP ${rep?.numero ?? id} excluída`);
       return { success: true, message: 'REP excluída com sucesso!' };
     } catch (error) {
       logError('Erro ao excluir REP', { id, error });
@@ -218,7 +246,16 @@ export const registerRepHandlers = (): void => {
       if (!validStatuses.includes(status)) {
         return { success: false, error: 'Status inválido' };
       }
+      const repAntes = await repService.findById(id);
+      const statusAnterior = repAntes?.status;
       const updated = await repService.updateStatus(id, status);
+
+      auditCicloVida('', 'rep', id, 'transicao_status',
+        `REP ${repAntes?.numero ?? id}: ${statusAnterior ?? '?'} → ${status}`,
+        statusAnterior ? { status: statusAnterior } : null,
+        { status },
+      );
+
       return { success: true, data: updated, message: `Status atualizado para "${status}"` };
     } catch (error) {
       logError('Erro ao atualizar status da REP', { id, status, error });

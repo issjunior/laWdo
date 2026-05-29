@@ -1,20 +1,23 @@
-import { logInfo, logError } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
 import {
   getDatabase,
-  executeNonQuery,
   executeQuery,
-  backupDatabase as sqliteBackup,
+  executeNonQuery,
+  executeSingle,
+  closeDatabase,
 } from './sqlite.js';
+
+const log = getLogger('database');
 
 // Diretório do banco de dados
 const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 19;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -24,34 +27,34 @@ export const setupDatabase = async (): Promise<void> => {
     // Garantir que o diretório existe
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
-      logInfo(`Diretório de dados criado: ${DB_DIR}`);
+      log.info(`Diretório de dados criado: ${DB_DIR}`);
     }
 
     // Garantir que o diretório de imagens existe
     const imagensDir = path.join(DB_DIR, 'imagens');
     if (!fs.existsSync(imagensDir)) {
       fs.mkdirSync(imagensDir, { recursive: true });
-      logInfo(`Diretório de imagens criado: ${imagensDir}`);
+      log.info(`Diretório de imagens criado: ${imagensDir}`);
     }
 
     // Verificar se o arquivo de banco de dados existe
     const dbExists = fs.existsSync(DB_PATH);
 
     if (!dbExists) {
-      logInfo(`Banco de dados não encontrado. Criando novo: ${DB_PATH}`);
+      log.info(`Banco de dados não encontrado. Criando novo: ${DB_PATH}`);
       await createDatabaseSchema();
       await setSchemaVersion(CURRENT_SCHEMA_VERSION);
     } else {
-      logInfo(`Banco de dados encontrado: ${DB_PATH}`);
+      log.info(`Banco de dados encontrado: ${DB_PATH}`);
       await checkAndApplyMigrations();
     }
 
     // Testar conexão
     await testDatabaseConnection();
 
-    logInfo('Banco de dados inicializado com sucesso');
+    log.info('Banco de dados inicializado com sucesso');
   } catch (error) {
-    logError('Erro ao inicializar banco de dados', error);
+    log.error('Erro ao inicializar banco de dados', error);
     throw error;
   }
 };
@@ -60,7 +63,7 @@ export const setupDatabase = async (): Promise<void> => {
  * Cria o schema inicial do banco de dados
  */
 const createDatabaseSchema = async (): Promise<void> => {
-  logInfo('Criando schema inicial do banco de dados...');
+  log.info('Criando schema inicial do banco de dados...');
 
   try {
     // Criar tabela de schema version
@@ -283,9 +286,9 @@ const createDatabaseSchema = async (): Promise<void> => {
       'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_created ON logs_auditoria(created_at)'
     );
 
-    logInfo('Schema inicial criado com sucesso');
+    log.info('Schema inicial criado com sucesso');
   } catch (error) {
-    logError('Erro ao criar schema inicial', error);
+    log.error('Erro ao criar schema inicial', error);
     throw error;
   }
 };
@@ -295,7 +298,7 @@ const createDatabaseSchema = async (): Promise<void> => {
  */
 const setSchemaVersion = async (version: number): Promise<void> => {
   await executeNonQuery('INSERT INTO schema_version (version) VALUES (?)', [version]);
-  logInfo(`Schema version definida para ${version}`);
+  log.info(`Schema version definida para ${version}`);
 };
 
 /**
@@ -320,15 +323,15 @@ const checkAndApplyMigrations = async (): Promise<void> => {
   const currentVersion = await getSchemaVersion();
 
   if (currentVersion < CURRENT_SCHEMA_VERSION) {
-    logInfo(`Aplicando migrations da versão ${currentVersion} para ${CURRENT_SCHEMA_VERSION}...`);
+    log.info(`Aplicando migrations da versão ${currentVersion} para ${CURRENT_SCHEMA_VERSION}...`);
 
     // Aqui você pode adicionar lógica de migrations específicas
     await applyMigrations(currentVersion);
 
     await setSchemaVersion(CURRENT_SCHEMA_VERSION);
-    logInfo('Migrations aplicadas com sucesso');
+    log.info('Migrations aplicadas com sucesso');
   } else {
-    logInfo(`Schema está atualizado (versão ${currentVersion})`);
+    log.info(`Schema está atualizado (versão ${currentVersion})`);
   }
 };
 
@@ -356,11 +359,11 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
 
         if (!hasAtivoColumn) {
           await executeNonQuery('ALTER TABLE solicitantes ADD COLUMN ativo BOOLEAN DEFAULT 1');
-          logInfo('Campo ativo adicionado na tabela solicitantes');
+          log.info('Campo ativo adicionado na tabela solicitantes');
         }
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 2', error);
+      log.error('Erro ao aplicar migration versão 2', error);
       throw error;
     }
   }
@@ -385,11 +388,11 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
           await executeNonQuery(
             'UPDATE tipos_exame SET updated_at = created_at WHERE updated_at IS NULL'
           );
-          logInfo('Campo updated_at adicionado na tabela tipos_exame');
+          log.info('Campo updated_at adicionado na tabela tipos_exame');
         }
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 3', error);
+      log.error('Erro ao aplicar migration versão 3', error);
       throw error;
     }
   }
@@ -414,7 +417,7 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
 
         if (!hasLotacao) {
           await executeNonQuery('ALTER TABLE users ADD COLUMN lotacao TEXT');
-          logInfo('Campo lotacao adicionado na tabela users');
+          log.info('Campo lotacao adicionado na tabela users');
         }
 
         if (!hasUsername) {
@@ -429,21 +432,21 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
             )
             WHERE username IS NULL OR username = ''
           `);
-          logInfo('Campo username adicionado na tabela users');
+          log.info('Campo username adicionado na tabela users');
         }
 
         if (!hasSenhaHash) {
           await executeNonQuery("ALTER TABLE users ADD COLUMN senha_hash TEXT DEFAULT 'senha_temporaria'");
-          logInfo('Campo senha_hash adicionado na tabela users');
+          log.info('Campo senha_hash adicionado na tabela users');
         }
 
         if (!hasAtivo) {
           await executeNonQuery('ALTER TABLE users ADD COLUMN ativo BOOLEAN DEFAULT 1');
-          logInfo('Campo ativo adicionado na tabela users');
+          log.info('Campo ativo adicionado na tabela users');
         }
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 4', error);
+      log.error('Erro ao aplicar migration versão 4', error);
       throw error;
     }
   }
@@ -481,7 +484,7 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
               WHERE data_criacao IS NULL
             `);
           }
-          logInfo('Campo data_criacao adicionado na tabela users');
+          log.info('Campo data_criacao adicionado na tabela users');
         }
 
         if (!hasDataAtualizacao) {
@@ -505,11 +508,11 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
               WHERE data_atualizacao IS NULL
             `);
           }
-          logInfo('Campo data_atualizacao adicionado na tabela users');
+          log.info('Campo data_atualizacao adicionado na tabela users');
         }
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 5', error);
+      log.error('Erro ao aplicar migration versão 5', error);
       throw error;
     }
   }
@@ -529,12 +532,12 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
 
         if (!columns.some(col => col.name === 'codigo')) {
           await executeNonQuery('ALTER TABLE tipos_exame ADD COLUMN codigo TEXT NOT NULL DEFAULT \'\'');
-          logInfo('Campo codigo adicionado na tabela tipos_exame');
+          log.info('Campo codigo adicionado na tabela tipos_exame');
         }
 
         if (!columns.some(col => col.name === 'eh_local')) {
           await executeNonQuery('ALTER TABLE tipos_exame ADD COLUMN eh_local INTEGER NOT NULL DEFAULT 0');
-          logInfo('Campo eh_local adicionado na tabela tipos_exame');
+          log.info('Campo eh_local adicionado na tabela tipos_exame');
         }
 
         // Buscar tipos existentes e gerar códigos automáticos se estiverem vazios
@@ -547,7 +550,7 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         }
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 6', error);
+      log.error('Erro ao aplicar migration versão 6', error);
       throw error;
     }
   }
@@ -630,10 +633,10 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
 
         await executeNonQuery('PRAGMA foreign_keys = ON');
 
-        logInfo('Migration v7: UNIQUE de nome removido, codigo definido como UNIQUE');
+        log.info('Migration v7: UNIQUE de nome removido, codigo definido como UNIQUE');
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 7', error);
+      log.error('Erro ao aplicar migration versão 7', error);
       throw error;
     }
   }
@@ -651,9 +654,9 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
-      logInfo('Migration v8: Tabela configuracoes criada');
+      log.info('Migration v8: Tabela configuracoes criada');
     } catch (error) {
-      logError('Erro ao aplicar migration versão 8', error);
+      log.error('Erro ao aplicar migration versão 8', error);
       throw error;
     }
   }
@@ -691,10 +694,10 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         await addColumnIfMissing('numero_bo', 'TEXT');
         await addColumnIfMissing('numero_ip', 'TEXT');
 
-        logInfo('Migration v9: Colunas expandidas na tabela reps');
+        log.info('Migration v9: Colunas expandidas na tabela reps');
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 9', error);
+      log.error('Erro ao aplicar migration versão 9', error);
       throw error;
     }
   }
@@ -724,7 +727,7 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         );
 
         if (colunasComNotNull.length > 0) {
-          logInfo(`Migration v10: Corrigindo NOT NULL em: ${colunasComNotNull.map(c => c.name).join(', ')}`);
+          log.info(`Migration v10: Corrigindo NOT NULL em: ${colunasComNotNull.map(c => c.name).join(', ')}`);
 
           // Recriar a tabela com schema correto
           await executeNonQuery(`
@@ -769,13 +772,13 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
           await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_status ON reps(status)');
           await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_solicitante ON reps(solicitante_id)');
 
-          logInfo('Migration v10: Constraints NOT NULL removidas com sucesso');
+          log.info('Migration v10: Constraints NOT NULL removidas com sucesso');
         } else {
-          logInfo('Migration v10: Nenhuma coluna com NOT NULL indevido encontrada');
+          log.info('Migration v10: Nenhuma coluna com NOT NULL indevido encontrada');
         }
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 10', error);
+      log.error('Erro ao aplicar migration versão 10', error);
       throw error;
     }
   }
@@ -808,9 +811,9 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         )
       `);
 
-      logInfo('Migration v11: Tabelas templates e secoes_template criadas');
+      log.info('Migration v11: Tabelas templates e secoes_template criadas');
     } catch (error) {
-      logError('Erro ao aplicar migration versão 11', error);
+      log.error('Erro ao aplicar migration versão 11', error);
       throw error;
     }
   }
@@ -823,10 +826,10 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
 
       if (!hasTemplateId) {
         await executeNonQuery('ALTER TABLE laudos ADD COLUMN template_id TEXT');
-        logInfo('Migration v12: Coluna template_id adicionada na tabela laudos');
+        log.info('Migration v12: Coluna template_id adicionada na tabela laudos');
       }
     } catch (error) {
-      logError('Erro ao aplicar migration versão 12', error);
+      log.error('Erro ao aplicar migration versão 12', error);
       throw error;
     }
   }
@@ -879,9 +882,9 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         VALUES ('tpl-nao-definido', 'Não definido', 'Template padrão do sistema. Nenhum laudo é gerado automaticamente.', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `);
 
-      logInfo('Migration v13: tipo_exame_id nullable + Template "Não definido" criado');
+      log.info('Migration v13: tipo_exame_id nullable + Template "Não definido" criado');
     } catch (error) {
-      logError('Erro ao aplicar migration versão 13', error);
+      log.error('Erro ao aplicar migration versão 13', error);
       throw error;
     }
   }
@@ -963,11 +966,11 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         await executeNonQuery('ALTER TABLE placeholders_v15 RENAME TO placeholders');
         
         await executeNonQuery('PRAGMA foreign_keys = ON');
-        logInfo('Migration v15: Tabela categorias_placeholders criada e placeholders atualizada');
+        log.info('Migration v15: Tabela categorias_placeholders criada e placeholders atualizada');
       }
 
     } catch (error) {
-      logError('Erro ao aplicar migration versão 15', error);
+      log.error('Erro ao aplicar migration versão 15', error);
       throw error;
     }
   }
@@ -1005,7 +1008,7 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         // Deleta categorias conflitantes (placeholders viram categoria_id=NULL)
         for (const conflito of conflitantes) {
           await executeNonQuery('DELETE FROM categorias_placeholders WHERE id = ?', [conflito.id]);
-          logInfo(`Migration v16: Categoria conflitante "${cat.label}" (${conflito.id}) removida`);
+          log.info(`Migration v16: Categoria conflitante "${cat.label}" (${conflito.id}) removida`);
         }
 
         // Insere ou atualiza a categoria do sistema (agora sem conflito de label UNIQUE)
@@ -1035,13 +1038,13 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
           );
         }
         if (placeholderIds.length > 0) {
-          logInfo(`Migration v16: ${placeholderIds.length} placeholder(s) movidos para categoria "${cat.label}" (${cat.id})`);
+          log.info(`Migration v16: ${placeholderIds.length} placeholder(s) movidos para categoria "${cat.label}" (${cat.id})`);
         }
       }
 
-      logInfo('Migration v16: Todas as 8 categorias de sistema garantidas');
+      log.info('Migration v16: Todas as 8 categorias de sistema garantidas');
     } catch (error) {
-      logError('Erro ao aplicar migration versão 16', error);
+      log.error('Erro ao aplicar migration versão 16', error);
       throw error;
     }
   }
@@ -1087,9 +1090,9 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
           await executeNonQuery('PRAGMA foreign_keys = ON');
         }
 
-        logInfo('Migration v17a: Coluna eh_local removida de tipos_exame');
+        log.info('Migration v17a: Coluna eh_local removida de tipos_exame');
       } else {
-        logInfo('Migration v17a: Coluna eh_local já não existe');
+        log.info('Migration v17a: Coluna eh_local já não existe');
       }
 
       // 17b. Adicionar coluna campos_especificos na tabela reps
@@ -1102,14 +1105,14 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         await executeNonQuery(
           'ALTER TABLE reps ADD COLUMN campos_especificos TEXT'
         );
-        logInfo('Migration v17b: Coluna campos_especificos adicionada à tabela reps');
+        log.info('Migration v17b: Coluna campos_especificos adicionada à tabela reps');
       } else {
-        logInfo('Migration v17b: Coluna campos_especificos já existe');
+        log.info('Migration v17b: Coluna campos_especificos já existe');
       }
 
-      logInfo('Migration v17: Concluída');
+      log.info('Migration v17: Concluída');
     } catch (error) {
-      logError('Erro ao aplicar migration versão 17', error);
+      log.error('Erro ao aplicar migration versão 17', error);
       throw error;
     }
   }
@@ -1126,19 +1129,63 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         await executeNonQuery(
           'ALTER TABLE users ADD COLUMN foto_url TEXT'
         );
-        logInfo('Migration v18: Coluna foto_url adicionada à tabela users');
+        log.info('Migration v18: Coluna foto_url adicionada à tabela users');
       } else {
-        logInfo('Migration v18: Coluna foto_url já existe');
+        log.info('Migration v18: Coluna foto_url já existe');
       }
 
-      logInfo('Migration v18: Concluída');
+      log.info('Migration v18: Concluída');
     } catch (error) {
-      logError('Erro ao aplicar migration versão 18', error);
+      log.error('Erro ao aplicar migration versão 18', error);
       throw error;
     }
   }
 
-  logInfo(`Aplicadas migrations da versão ${fromVersion}`);
+  // Migration versão 19: Expandir logs_auditoria para auditoria completa
+  if (fromVersion < 19) {
+    try {
+      const logCols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(logs_auditoria)'
+      );
+
+      const colunasParaAdicionar = [
+        { nome: 'tipo_acao', def: "TEXT NOT NULL DEFAULT 'outro'" },
+        { nome: 'modulo', def: "TEXT NOT NULL DEFAULT 'sistema'" },
+        { nome: 'nivel', def: "TEXT NOT NULL DEFAULT 'info'" },
+        { nome: 'mensagem', def: 'TEXT' },
+        { nome: 'dados_anteriores', def: 'TEXT' },
+        { nome: 'dados_novos', def: 'TEXT' },
+      ];
+
+      for (const col of colunasParaAdicionar) {
+        if (!logCols.some(c => c.name === col.nome)) {
+          await executeNonQuery(
+            `ALTER TABLE logs_auditoria ADD COLUMN ${col.nome} ${col.def}`
+          );
+          log.info(
+            `Migration v19: Coluna ${col.nome} adicionada à tabela logs_auditoria`
+          );
+        }
+      }
+
+      await executeNonQuery(
+        'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_modulo ON logs_auditoria(modulo)'
+      );
+      await executeNonQuery(
+        'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_tipo ON logs_auditoria(tipo_acao)'
+      );
+      await executeNonQuery(
+        'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidade, entidade_id)'
+      );
+
+      log.info('Migration v19: Concluída');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 19', error);
+      throw error;
+    }
+  }
+
+  log.info(`Aplicadas migrations da versão ${fromVersion}`);
 };
 
 /**
@@ -1148,12 +1195,12 @@ const testDatabaseConnection = async (): Promise<void> => {
   try {
     const result = await executeQuery<{ test: number }>('SELECT 1 as test');
     if (result[0]?.test === 1) {
-      logInfo('Teste de conexão com banco de dados: OK');
+      log.info('Teste de conexão com banco de dados: OK');
     } else {
       throw new Error('Teste de conexão falhou');
     }
   } catch (error) {
-    logError('Teste de conexão com banco de dados falhou', error);
+    log.error('Teste de conexão com banco de dados falhou', error);
     throw error;
   }
 };
@@ -1172,10 +1219,10 @@ export const backupDatabase = async (backupPath?: string): Promise<string> => {
     // Copiar arquivo do banco de dados
     fs.copyFileSync(DB_PATH, backupFilePath);
 
-    logInfo(`Backup criado: ${backupFilePath}`);
+    log.info(`Backup criado: ${backupFilePath}`);
     return backupFilePath;
   } catch (error) {
-    logError('Erro ao criar backup do banco de dados', error);
+    log.error('Erro ao criar backup do banco de dados', error);
     throw error;
   }
 };
@@ -1193,14 +1240,14 @@ export const restoreDatabase = async (backupPath: string): Promise<void> => {
     const currentBackupPath = await backupDatabase(
       path.join(DB_DIR, `pre_restore_${Date.now()}.db`)
     );
-    logInfo(`Backup pré-restauração criado: ${currentBackupPath}`);
+    log.info(`Backup pré-restauração criado: ${currentBackupPath}`);
 
     // Restaurar backup
     fs.copyFileSync(backupPath, DB_PATH);
 
-    logInfo(`Banco de dados restaurado de: ${backupPath}`);
+    log.info(`Banco de dados restaurado de: ${backupPath}`);
   } catch (error) {
-    logError('Erro ao restaurar banco de dados', error);
+    log.error('Erro ao restaurar banco de dados', error);
     throw error;
   }
 };
@@ -1211,10 +1258,10 @@ export const restoreDatabase = async (backupPath: string): Promise<void> => {
 export const checkDatabaseIntegrity = async (): Promise<boolean> => {
   try {
     // TODO: Implementar verificação real de integridade
-    logInfo('Verificação de integridade do banco de dados (mock)');
+    log.info('Verificação de integridade do banco de dados (mock)');
     return true;
   } catch (error) {
-    logError('Erro ao verificar integridade do banco de dados', error);
+    log.error('Erro ao verificar integridade do banco de dados', error);
     return false;
   }
 };
@@ -1238,7 +1285,7 @@ export const getDatabaseInfo = (): {
       lastModified: stats?.mtime,
     };
   } catch (error) {
-    logError('Erro ao obter informações do banco de dados', error);
+    log.error('Erro ao obter informações do banco de dados', error);
     return {
       path: DB_PATH,
       size: 0,

@@ -1562,6 +1562,38 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
+  const handleUpdateStatus = async (laudo: LaudoItem, novoStatus: string) => {
+    try {
+      setError(null);
+      const r = await window.ipcAPI.laudo.updateStatus(laudo.id, novoStatus);
+      if (r.success) {
+        setSuccess(r.message || `Status atualizado para "${novoStatus}"`);
+        carregarLaudos();
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(r.error || 'Erro ao atualizar status');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Erro ao atualizar status');
+    }
+  };
+
+  const statusDisponiveis = useCallback((statusAtual: string): Array<{ label: string; value: string; variant: 'default' | 'secondary' | 'outline' }> => {
+    switch (statusAtual) {
+      case 'Em andamento':
+        return [{ label: 'Concluir', value: 'Concluído', variant: 'outline' }];
+      case 'Concluído':
+        return [
+          { label: 'Entregar', value: 'Entregue', variant: 'secondary' },
+          { label: 'Reabrir', value: 'Em andamento', variant: 'default' },
+        ];
+      case 'Entregue':
+        return [{ label: 'Reabrir', value: 'Concluído', variant: 'outline' }];
+      default:
+        return [];
+    }
+  }, []);
+
   const laudoColumns = useMemo<ColumnDef<LaudoItem>[]>(() => [
     {
       accessorKey: 'data_requisicao',
@@ -1646,6 +1678,23 @@ export const LaudosPage: React.FC = () => {
         const laudo = row.original;
         return (
           <div className="flex justify-end gap-1">
+            {statusDisponiveis(laudo.status).map(op => (
+              <Tooltip key={op.value}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleUpdateStatus(laudo, op.value)}
+                    aria-label={op.label}
+                  >
+                    {op.value === 'Concluído' ? <List size={14} /> :
+                     op.value === 'Entregue' ? <Send size={14} /> :
+                     <RefreshCw size={14} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{op.label}</TooltipContent>
+              </Tooltip>
+            ))}
             <Button variant="ghost" size="sm" onClick={() => handleEditar(laudo)} aria-label={`Editar laudo da REP ${laudo.rep_numero}`}>
               <Edit size={14} />
             </Button>
@@ -1662,7 +1711,7 @@ export const LaudosPage: React.FC = () => {
         );
       },
     },
-  ], [handleEditar]);
+  ], [handleEditar, handleUpdateStatus, statusDisponiveis]);
 
   // Modo editor com múltiplas seções
   if (editando) {

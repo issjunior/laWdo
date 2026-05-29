@@ -1,5 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { logError } from '../../utils/logger.js';
+import { auditBackup, auditExport } from '../../services/audit-log.service.js';
 import { criarBackup, restaurarBackup } from '../../services/backup.service.js';
 import { exportarConfig, importarConfig } from '../../services/config-backup.service.js';
 
@@ -26,6 +27,7 @@ export const registerBackupHandlers = (): void => {
       }
 
       const r = await criarBackup(result.filePath);
+      if (r.success) auditBackup('', 'criar', result.filePath);
       return r;
     } catch (error) {
       logError('Erro no handler backup:criar', error);
@@ -55,6 +57,7 @@ export const registerBackupHandlers = (): void => {
       }
 
       const r = await restaurarBackup(result.filePaths[0]);
+      if (r.success) auditBackup('', 'restaurar', result.filePaths[0]);
       return r;
     } catch (error) {
       logError('Erro no handler backup:restaurar', error);
@@ -84,7 +87,9 @@ export const registerBackupHandlers = (): void => {
         return { success: false, error: 'Operacao cancelada pelo usuario' };
       }
 
-      return await exportarConfig(result.filePath);
+      const r = await exportarConfig(result.filePath);
+      if (r.success) auditExport('', 'Configuracao do sistema', result.filePath);
+      return r;
     } catch (error) {
       logError('Erro no handler backup:config-exportar', error);
       return {
@@ -112,7 +117,9 @@ export const registerBackupHandlers = (): void => {
         return { success: false, error: 'Operacao cancelada pelo usuario' };
       }
 
-      return await importarConfig(result.filePaths[0]);
+      const r = await importarConfig(result.filePaths[0]);
+      if (r.success) auditExport('', 'Importacao de configuracao', result.filePaths[0]);
+      return r;
     } catch (error) {
       logError('Erro no handler backup:config-importar', error);
       return {

@@ -1,5 +1,6 @@
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
-import { logInfo, logError } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js'
+const log = getLogger('configuracao');
 
 export interface ConfiguracaoRow {
   chave: string
@@ -22,7 +23,7 @@ class ConfiguracaoService {
       );
       return rows.length > 0 ? rows[0].valor : null;
     } catch (error) {
-      logError('Erro ao obter configuração', { chave, error });
+      log.error('Erro ao obter configuração', { chave, error });
       throw error;
     }
   }
@@ -42,16 +43,16 @@ class ConfiguracaoService {
           'UPDATE configuracoes SET valor = ?, tipo = ?, descricao = ?, updated_at = CURRENT_TIMESTAMP WHERE chave = ?',
           [valor, tipo, descricao, chave]
         );
-        logInfo('Configuração atualizada', { chave });
+        log.info('Configuração atualizada', { chave });
       } else {
         await executeNonQuery(
           'INSERT INTO configuracoes (chave, valor, tipo, descricao) VALUES (?, ?, ?, ?)',
           [chave, valor, tipo, descricao]
         );
-        logInfo('Configuração criada', { chave });
+        log.info('Configuração criada', { chave });
       }
     } catch (error) {
-      logError('Erro ao salvar configuração', { chave, error });
+      log.error('Erro ao salvar configuração', { chave, error });
       throw error;
     }
   }

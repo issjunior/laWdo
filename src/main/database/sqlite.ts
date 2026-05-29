@@ -1,8 +1,10 @@
-import { logInfo, logError, logDebug } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
 import sqlite3 from 'sqlite3';
+
+const log = getLogger('database');
 
 // Configuração do banco de dados
 const DB_DIR = app.getPath('userData');
@@ -23,15 +25,15 @@ export const getDatabase = async (): Promise<any> => {
     // Garantir que o diretório existe
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
-      logInfo(`Diretório de dados criado: ${DB_DIR}`);
+      log.info(`Diretório de dados criado: ${DB_DIR}`);
     }
 
-    logInfo(`Conectando ao banco de dados: ${DB_PATH}`);
+    log.info(`Conectando ao banco de dados: ${DB_PATH}`);
 
     // Criar nova conexão
     dbInstance = new sqlite3.Database(DB_PATH, (err: any) => {
       if (err) {
-        logError('Erro ao conectar ao SQLite', err);
+        log.error('Erro ao conectar ao SQLite', err);
         throw err;
       }
     });
@@ -43,11 +45,11 @@ export const getDatabase = async (): Promise<any> => {
       dbInstance.run('PRAGMA synchronous = NORMAL;');
     });
 
-    logInfo(`Conexão com SQLite estabelecida com sucesso: ${DB_PATH}`);
+    log.info(`Conexão com SQLite estabelecida com sucesso: ${DB_PATH}`);
 
     return dbInstance;
   } catch (error) {
-    logError('Erro ao conectar ao banco de dados SQLite', error);
+    log.error('Erro ao conectar ao banco de dados SQLite', error);
     throw error;
   }
 };
@@ -60,9 +62,9 @@ export const closeDatabase = async (): Promise<void> => {
     try {
       await dbInstance.close();
       dbInstance = null;
-      logInfo('Conexão com banco de dados fechada');
+      log.info('Conexão com banco de dados fechada');
     } catch (error) {
-      logError('Erro ao fechar conexão com banco de dados', error);
+      log.error('Erro ao fechar conexão com banco de dados', error);
     }
   }
 };
@@ -75,18 +77,18 @@ export const executeQuery = async <T = any>(sql: string, params: any[] = []): Pr
 
   return new Promise((resolve, reject) => {
     try {
-      logDebug(`Executando query: ${sql}`, { params });
+      log.debug(`Executando query: ${sql}`, { params });
 
       db.all(sql, params, (err: any, rows: any[]) => {
         if (err) {
-          logError('Erro ao executar query', { sql, params, error: err });
+          log.error('Erro ao executar query', { sql, params, error: err });
           reject(err);
         } else {
           resolve(rows as T[]);
         }
       });
     } catch (error) {
-      logError('Erro ao executar query', { sql, params, error });
+      log.error('Erro ao executar query', { sql, params, error });
       reject(error);
     }
   });
@@ -100,18 +102,18 @@ export const executeNonQuery = async (sql: string, params: any[] = []): Promise<
 
   return new Promise((resolve, reject) => {
     try {
-      logDebug(`Executando non-query: ${sql}`, { params });
+      log.debug(`Executando non-query: ${sql}`, { params });
 
       db.run(sql, params, function (err: any) {
         if (err) {
-          logError('Erro ao executar non-query', { sql, params, error: err });
+          log.error('Erro ao executar non-query', { sql, params, error: err });
           reject(err);
         } else {
           resolve();
         }
       });
     } catch (error) {
-      logError('Erro ao executar non-query', { sql, params, error });
+      log.error('Erro ao executar non-query', { sql, params, error });
       reject(error);
     }
   });
@@ -128,18 +130,18 @@ export const executeSingle = async <T = any>(
 
   return new Promise((resolve, reject) => {
     try {
-      logDebug(`Executando query única: ${sql}`, { params });
+      log.debug(`Executando query única: ${sql}`, { params });
 
       db.get(sql, params, (err: any, row: any) => {
         if (err) {
-          logError('Erro ao executar query única', { sql, params, error: err });
+          log.error('Erro ao executar query única', { sql, params, error: err });
           reject(err);
         } else {
           resolve(row || null);
         }
       });
     } catch (error) {
-      logError('Erro ao executar query única', { sql, params, error });
+      log.error('Erro ao executar query única', { sql, params, error });
       reject(error);
     }
   });
@@ -150,7 +152,7 @@ export const executeSingle = async <T = any>(
  */
 export const beginTransaction = async (): Promise<void> => {
   await executeNonQuery('BEGIN TRANSACTION');
-  logDebug('Transação iniciada');
+  log.debug('Transação iniciada');
 };
 
 /**
@@ -158,7 +160,7 @@ export const beginTransaction = async (): Promise<void> => {
  */
 export const commitTransaction = async (): Promise<void> => {
   await executeNonQuery('COMMIT');
-  logDebug('Transação commitada');
+  log.debug('Transação commitada');
 };
 
 /**
@@ -166,7 +168,7 @@ export const commitTransaction = async (): Promise<void> => {
  */
 export const rollbackTransaction = async (): Promise<void> => {
   await executeNonQuery('ROLLBACK');
-  logDebug('Transação revertida');
+  log.debug('Transação revertida');
 };
 
 /**
@@ -181,7 +183,7 @@ export const withTransaction = async <T>(fn: () => Promise<T>): Promise<T> => {
     return result;
   } catch (error) {
     await rollbackTransaction();
-    logError('Erro na transação - revertendo', error);
+    log.error('Erro na transação - revertendo', error);
     throw error;
   }
 };
@@ -197,7 +199,7 @@ export const tableExists = async (tableName: string): Promise<boolean> => {
     );
     return result?.count === 1;
   } catch (error) {
-    logError('Erro ao verificar existência de tabela', { tableName, error });
+    log.error('Erro ao verificar existência de tabela', { tableName, error });
     return false;
   }
 };
@@ -233,17 +235,17 @@ export const backupDatabase = async (backupPath?: string): Promise<string> => {
         // Fazer backup usando VACUUM INTO
         db.run(`VACUUM INTO '${backupFilePath}'`, (err: any) => {
           if (err) {
-            logError('Erro ao criar backup do banco de dados', err);
+            log.error('Erro ao criar backup do banco de dados', err);
             reject(err);
           } else {
-            logInfo(`Backup criado: ${backupFilePath}`);
+            log.info(`Backup criado: ${backupFilePath}`);
             resolve(backupFilePath);
           }
         });
       });
     });
   } catch (error) {
-    logError('Erro ao criar backup do banco de dados', error);
+    log.error('Erro ao criar backup do banco de dados', error);
     throw error;
   }
 };

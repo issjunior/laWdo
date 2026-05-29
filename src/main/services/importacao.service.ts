@@ -8,7 +8,8 @@ import mammoth from 'mammoth';
 import sanitizeHtml from 'sanitize-html';
 import path from 'path';
 import fs from 'fs';
-import { logInfo } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js'
+const log = getLogger('laudo');
 
 export interface SecaoImportada {
   nome: string;
@@ -127,11 +128,11 @@ function isTituloCandidato(linha: string): boolean {
 // ─── Processamento PDF ────────────────────────────────────
 
 async function processarPDF(filePath: string): Promise<SecaoImportada[]> {
-  logInfo(`Iniciando extração de PDF: ${filePath}`);
+  log.info(`Iniciando extração de PDF: ${filePath}`);
 
   const result = await extractText(filePath);
   const textoBruto = result.text.join('\n');
-  logInfo(`Texto extraído do PDF: ${textoBruto.length} caracteres`);
+  log.info(`Texto extraído do PDF: ${textoBruto.length} caracteres`);
 
   const linhas = textoBruto.split(/\r?\n/);
   const secoes: { nome: string; linhas: string[] }[] = [];
@@ -209,11 +210,11 @@ function escapeHtml(text: string): string {
 // ─── Processamento DOCX ───────────────────────────────────
 
 async function processarDOCX(filePath: string): Promise<SecaoImportada[]> {
-  logInfo(`Iniciando extração de DOCX: ${filePath}`);
+  log.info(`Iniciando extração de DOCX: ${filePath}`);
 
   const result = await mammoth.convertToHtml({ path: filePath });
   const rawText = (await mammoth.extractRawText({ path: filePath })).value;
-  logInfo(`HTML extraído do DOCX: ${result.value.length} caracteres`);
+  log.info(`HTML extraído do DOCX: ${result.value.length} caracteres`);
 
   const html = result.value;
 
@@ -315,6 +316,6 @@ export async function importarDocumento(filePath: string): Promise<ResultadoImpo
     throw new Error('Formato não suportado');
   }
 
-  logInfo(`Importação concluída: ${nomeArquivo} — ${secoes.length} seções detectadas`);
+  log.info(`Importação concluída: ${nomeArquivo} — ${secoes.length} seções detectadas`);
   return { nomeArquivo, secoes };
 }

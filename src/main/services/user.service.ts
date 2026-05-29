@@ -1,7 +1,9 @@
 ﻿import { BaseService } from './base.service.js'
 import { UserRow } from '../types/database.js'
-import { logInfo, logError, logDebug } from '../utils/logger.js'
+import { getLogger } from '../utils/logger.js'
 import { executeNonQuery } from '../database/sqlite.js'
+
+const log = getLogger('auth')
 import bcrypt from 'bcrypt'
 // A senha e armazenada em hash bcrypt.
 
@@ -45,7 +47,7 @@ export class UserService extends BaseService<UserRow> {
       }
       return created
     } catch (error) {
-      logError('Erro ao criar usu�rio', { data, error })
+      log.error('Erro ao criar usu�rio', { data, error })
       throw error
     }
   }
@@ -78,7 +80,7 @@ export class UserService extends BaseService<UserRow> {
       await executeNonQuery(sql, [...values, now, id])
       return await this.findById(id)
     } catch (error) {
-      logError('Erro ao atualizar usu�rio', { id, data, error })
+      log.error('Erro ao atualizar usu�rio', { id, data, error })
       throw error
     }
   }
@@ -87,7 +89,7 @@ export class UserService extends BaseService<UserRow> {
     try {
       const user = await this.findByLogin(login)
       if (!user) {
-        logInfo('Tentativa de autentica��o com usu�rio n�o encontrado', { login })
+        log.info('Tentativa de autentica��o com usu�rio n�o encontrado', { login })
         return null
       }
 
@@ -100,14 +102,14 @@ export class UserService extends BaseService<UserRow> {
       }
 
       if (!validPassword) {
-        logInfo('Tentativa de autentica��o com senha inv�lida', { login, userId: user.id })
+        log.info('Tentativa de autentica��o com senha inv�lida', { login, userId: user.id })
         return null
       }
 
-      logInfo('Autentica��o bem-sucedida', { login, userId: user.id })
+      log.info('Autentica��o bem-sucedida', { login, userId: user.id })
       return user
     } catch (error) {
-      logError('Erro na autentica��o', { login, error })
+      log.error('Erro na autentica��o', { login, error })
       throw error
     }
   }
@@ -118,7 +120,7 @@ export class UserService extends BaseService<UserRow> {
       const rows = await this.executeCustomQuery<UserRow>(sql, [login, login])
       return rows.length > 0 ? rows[0] : null
     } catch (error) {
-      logError('Erro ao buscar usu�rio por login', { login, error })
+      log.error('Erro ao buscar usu�rio por login', { login, error })
       throw error
     }
   }
@@ -134,7 +136,7 @@ export class UserService extends BaseService<UserRow> {
 
       return rows[0]
     } catch (error) {
-      logError(`Erro ao buscar usu�rio por email`, { email, error })
+      log.error(`Erro ao buscar usu�rio por email`, { email, error })
       throw error
     }
   }
@@ -145,7 +147,7 @@ export class UserService extends BaseService<UserRow> {
       const rows = await this.executeCustomQuery<UserRow>(sql, [matricula])
       return rows.length > 0 ? rows[0] : null
     } catch (error) {
-      logError(`Erro ao buscar usu�rio por matr�cula`, { matricula, error })
+      log.error(`Erro ao buscar usu�rio por matr�cula`, { matricula, error })
       throw error
     }
   }
@@ -155,10 +157,10 @@ export class UserService extends BaseService<UserRow> {
     profileData: Partial<Omit<UserRow, 'id' | 'created_at' | 'updated_at'>>
   ): Promise<UserRow | null> {
     try {
-      logDebug('Atualizando perfil do usu�rio', { userId, fields: Object.keys(profileData).join(', ') })
+      log.debug('Atualizando perfil do usu�rio', { userId, fields: Object.keys(profileData).join(', ') })
       return await this.update(userId, profileData)
     } catch (error) {
-      logError('Erro ao atualizar perfil', { userId, error })
+      log.error('Erro ao atualizar perfil', { userId, error })
       throw error
     }
   }
@@ -169,24 +171,24 @@ export class UserService extends BaseService<UserRow> {
       const rows = await this.executeCustomQuery<UserRow>(sql)
       return rows
     } catch (error) {
-      logError('Erro ao buscar peritos ativos', error)
+      log.error('Erro ao buscar peritos ativos', error)
       throw error
     }
   }
 
   async deactivate(userId: string): Promise<boolean> {
     try {
-      logInfo('Usu�rio desativado (soft delete)', { userId })
+      log.info('Usu�rio desativado (soft delete)', { userId })
       return true
     } catch (error) {
-      logError('Erro ao desativar usu�rio', { userId, error })
+      log.error('Erro ao desativar usu�rio', { userId, error })
       throw error
     }
   }
 
   async generateActivityReport(userId: string, startDate?: Date, endDate?: Date): Promise<any> {
     try {
-      logInfo('Relat�rio de atividades solicitado', { userId, startDate, endDate })
+      log.info('Relat�rio de atividades solicitado', { userId, startDate, endDate })
       return {
         userId,
         period: { startDate, endDate },
@@ -195,7 +197,7 @@ export class UserService extends BaseService<UserRow> {
         atividades: []
       }
     } catch (error) {
-      logError('Erro ao gerar relat�rio de atividades', { userId, error })
+      log.error('Erro ao gerar relat�rio de atividades', { userId, error })
       throw error
     }
   }

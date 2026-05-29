@@ -1,5 +1,9 @@
-import { app, session } from 'electron';
-import { logInfo, logWarning } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js'
+
+const log = getLogger('sistema')
+
+import { app, session } from 'electron'
+
 
 /**
  * Configuração de segurança para a aplicação Electron
@@ -8,7 +12,7 @@ import { logInfo, logWarning } from '../utils/logger.js';
  */
 
 export const setupSecurity = (): void => {
-  logInfo('Configurando medidas de segurança...');
+  log.info('Configurando medidas de segurança...');
 
   // 1. Configurar Content Security Policy (CSP)
   setupContentSecurityPolicy();
@@ -22,7 +26,7 @@ export const setupSecurity = (): void => {
   // 4. Configurar proteções adicionais
   setupAdditionalProtections();
 
-  logInfo('Medidas de segurança configuradas com sucesso');
+  log.info('Medidas de segurança configuradas com sucesso');
 };
 
 /**
@@ -54,7 +58,7 @@ const setupContentSecurityPolicy = (): void => {
     });
   });
 
-  logInfo('Content Security Policy configurada');
+  log.info('Content Security Policy configurada');
 };
 
 /**
@@ -66,10 +70,10 @@ const setupSessionPermissions = (): void => {
     const allowedPermissions = ['media', 'geolocation', 'notifications', 'midiSysex'];
 
     if (allowedPermissions.includes(permission)) {
-      logWarning(`Permissão ${permission} solicitada - negada por padrão`);
+      log.warn(`Permissão ${permission} solicitada - negada por padrão`);
       callback(false); // Negar todas as permissões por padrão
     } else {
-      logWarning(`Permissão desconhecida ${permission} solicitada - negada`);
+      log.warn(`Permissão desconhecida ${permission} solicitada - negada`);
       callback(false);
     }
   });
@@ -77,7 +81,7 @@ const setupSessionPermissions = (): void => {
   // Nota: registerSchemesAsPrivileged foi removido no Electron v29+
   // Para versões 29+, usar protocol.registerSchemesAsPrivileged diretamente
   // ou implementar lógica personalizada se necessário
-  logInfo(
+  log.info(
     'Permissões da sessão configuradas (registerSchemesAsPrivileged não suportado no Electron 29+)'
   );
 };
@@ -103,7 +107,7 @@ const setupSecurityHeaders = (): void => {
     });
   });
 
-  logInfo('Headers de segurança configurados');
+  log.info('Headers de segurança configurados');
 };
 
 /**
@@ -123,7 +127,7 @@ const setupAdditionalProtections = (): void => {
   // Configurar política de origem cruzada
   app.commandLine.appendSwitch('disable-site-isolation-trials', 'true');
 
-  logInfo('Proteções adicionais configuradas');
+  log.info('Proteções adicionais configuradas');
 };
 
 /**
@@ -175,7 +179,7 @@ export const validateSqlQuery = (query: string): boolean => {
   );
 
   if (containsDangerousCommand) {
-    logWarning(`Query potencialmente perigosa detectada: ${query.substring(0, 100)}`);
+    log.warn(`Query potencialmente perigosa detectada: ${query.substring(0, 100)}`);
     return false;
   }
 
@@ -188,10 +192,10 @@ export const validateSqlQuery = (query: string): boolean => {
 export const setupCertificateValidation = (): void => {
   if (process.env.NODE_ENV === 'production') {
     app.commandLine.appendSwitch('ignore-certificate-errors', 'false');
-    logInfo('Validação de certificados SSL habilitada');
+    log.info('Validação de certificados SSL habilitada');
   } else {
     app.commandLine.appendSwitch('ignore-certificate-errors', 'true');
-    logWarning('Validação de certificados SSL desabilitada (modo desenvolvimento)');
+    log.warn('Validação de certificados SSL desabilitada (modo desenvolvimento)');
   }
 };
 

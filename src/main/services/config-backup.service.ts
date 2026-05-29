@@ -1,8 +1,9 @@
 import { app } from 'electron';
 import fs from 'fs';
 import AdmZip from 'adm-zip';
-import { logError, logInfo } from '../utils/logger.js';
-import { executeQuery, executeNonQuery, withTransaction } from '../database/sqlite.js';
+import { getLogger } from '../utils/logger.js';
+import { executeQuery, executeNonQuery, withTransaction } from '../database/sqlite.js'
+const log = getLogger('configuracao');
 
 const CHAVES_IA_EXCLUIDAS = ['api_key_groq', 'modelo_ia_padrao'];
 
@@ -51,18 +52,18 @@ export const exportarConfig = async (
           (r: any) => !CHAVES_IA_EXCLUIDAS.includes(r.chave)
         );
         zip.addFile(`${tabela}.json`, Buffer.from(JSON.stringify(filtrado, null, 2), 'utf-8'));
-        logInfo(`Tabela ${tabela} exportada: ${filtrado.length} registros (${rows.length - filtrado.length} IA excluidos)`);
+        log.info(`Tabela ${tabela} exportada: ${filtrado.length} registros (${rows.length - filtrado.length} IA excluidos)`);
       } else {
         zip.addFile(`${tabela}.json`, Buffer.from(JSON.stringify(rows, null, 2), 'utf-8'));
-        logInfo(`Tabela ${tabela} exportada: ${rows.length} registros`);
+        log.info(`Tabela ${tabela} exportada: ${rows.length} registros`);
       }
     }
 
     zip.writeZip(destino);
-    logInfo('Backup de configuracao criado com sucesso', { destino });
+    log.info('Backup de configuracao criado com sucesso', { destino });
     return { success: true, path: destino };
   } catch (error) {
-    logError('Erro ao exportar configuracao', error);
+    log.error('Erro ao exportar configuracao', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erro ao exportar configuracao',
@@ -111,7 +112,7 @@ export const importarConfig = async (
       const registros = JSON.parse(entry.getData().toString('utf-8'));
 
       if (!Array.isArray(registros) || registros.length === 0) {
-        logInfo(`Tabela ${tabela}: vazia, nada a importar`);
+        log.info(`Tabela ${tabela}: vazia, nada a importar`);
         continue;
       }
 
@@ -130,13 +131,13 @@ export const importarConfig = async (
         }
       });
 
-      logInfo(`Tabela ${tabela}: ${registros.length} registros importados`);
+      log.info(`Tabela ${tabela}: ${registros.length} registros importados`);
     }
 
-    logInfo('Configuracao importada com sucesso');
+    log.info('Configuracao importada com sucesso');
     return { success: true };
   } catch (error) {
-    logError('Erro ao importar configuracao', error);
+    log.error('Erro ao importar configuracao', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erro ao importar configuracao',

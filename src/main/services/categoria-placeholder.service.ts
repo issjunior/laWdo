@@ -1,6 +1,7 @@
 import { BaseService } from './base.service.js';
-import { logInfo, logError } from '../utils/logger.js';
-import { withTransaction, executeNonQuery } from '../database/sqlite.js';
+import { getLogger } from '../utils/logger.js';
+import { withTransaction, executeNonQuery } from '../database/sqlite.js'
+const log = getLogger('placeholder');
 
 export interface CategoriaPlaceholderRow {
   id: string;
@@ -63,10 +64,10 @@ class CategoriaService extends BaseService<CategoriaPlaceholderRow> {
         await executeNonQuery('DELETE FROM categorias_placeholders WHERE id = ?', [id]);
       });
 
-      logInfo(`Categoria ${id} excluída com sucesso e placeholders movidos.`);
+      log.info(`Categoria ${id} excluída com sucesso e placeholders movidos.`);
       return true;
     } catch (error) {
-      logError('Erro ao excluir categoria (transação falhou)', error);
+      log.error('Erro ao excluir categoria (transação falhou)', error);
       throw error;
     }
   }

@@ -1,7 +1,8 @@
 import { BaseService } from './base.service.js'
 import { SolicitanteRow } from '../types/database.js'
-import { logInfo, logError, logDebug } from '../utils/logger.js'
+import { getLogger } from '../utils/logger.js'
 import { encrypt, decrypt } from '../security/crypto.js'
+const log = getLogger('solicitante')
 
 /**
  * Serviço para gerenciamento de solicitantes (órgãos, varas, delegacias)
@@ -29,7 +30,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
 
       return decrypted
     } catch (error) {
-      logError('Erro ao descriptografar campos do solicitante', { solicitante, error })
+      log.error('Erro ao descriptografar campos do solicitante', { solicitante, error })
       throw error
     }
   }
@@ -62,7 +63,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       }
       return null
     } catch (error) {
-      logError(`Erro ao buscar solicitante por nome`, { nome, error })
+      log.error(`Erro ao buscar solicitante por nome`, { nome, error })
       throw error
     }
   }
@@ -79,7 +80,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       )
       return decryptedRows.filter((row): row is SolicitanteRow => row !== null)
     } catch (error) {
-      logError(`Erro ao buscar solicitantes por tipo`, { tipo, error })
+      log.error(`Erro ao buscar solicitantes por tipo`, { tipo, error })
       throw error
     }
   }
@@ -93,7 +94,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       const rows = await this.executeCustomQuery<{ tipo: string }>(sql)
       return rows.map(row => row.tipo)
     } catch (error) {
-      logError(`Erro ao buscar tipos de solicitantes`, error)
+      log.error(`Erro ao buscar tipos de solicitantes`, error)
       throw error
     }
   }
@@ -123,7 +124,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       )
       return decryptedRows.filter((row): row is SolicitanteRow => row !== null)
     } catch (error) {
-      logError(`Erro ao buscar registros de ${this.tableName}`, error)
+      log.error(`Erro ao buscar registros de ${this.tableName}`, error)
       throw error
     }
   }
@@ -139,7 +140,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       }
       return null
     } catch (error) {
-      logError(`Erro ao buscar ${this.tableName} por ID`, { id, error })
+      log.error(`Erro ao buscar ${this.tableName} por ID`, { id, error })
       throw error
     }
   }
@@ -158,7 +159,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       }
       return null
     } catch (error) {
-      logError(`Erro ao atualizar ${this.tableName}`, { id, data, error })
+      log.error(`Erro ao atualizar ${this.tableName}`, { id, data, error })
       throw error
     }
   }
@@ -179,14 +180,14 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
         encryptedData.email = await encrypt(data.email)
       }
 
-      logDebug('Criando solicitante', { nome: data.nome })
+      log.debug('Criando solicitante', { nome: data.nome })
 
       const solicitante = await this.create(encryptedData)
-      logDebug('Solicitante criado', { id: solicitante.id, nome: solicitante.nome })
+      log.debug('Solicitante criado', { id: solicitante.id, nome: solicitante.nome })
 
       return solicitante
     } catch (error) {
-      logError('Erro ao criar solicitante', { data, error })
+      log.error('Erro ao criar solicitante', { data, error })
       throw error
     }
   }
@@ -208,16 +209,16 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
         encryptedData.email = await encrypt(data.email)
       }
 
-      logDebug('Atualizando solicitante', { id })
+      log.debug('Atualizando solicitante', { id })
       const updated = await this.update(id, encryptedData)
 
       if (updated) {
-        logDebug('Solicitante atualizado', { id, nome: updated.nome })
+        log.debug('Solicitante atualizado', { id, nome: updated.nome })
       }
 
       return updated
     } catch (error) {
-      logError('Erro ao atualizar solicitante', { id, data, error })
+      log.error('Erro ao atualizar solicitante', { id, data, error })
       throw error
     }
   }
@@ -257,7 +258,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       )
       return decryptedRows.filter((row): row is SolicitanteRow => row !== null)
     } catch (error) {
-      logError('Erro ao buscar solicitantes ativos', { filters, options, error })
+      log.error('Erro ao buscar solicitantes ativos', { filters, options, error })
       throw error
     }
   }
@@ -267,11 +268,11 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
    */
   async desativarSolicitante(id: string): Promise<void> {
     try {
-      logInfo(`Desativando solicitante ${id}`)
+      log.info(`Desativando solicitante ${id}`)
       const sql = 'UPDATE solicitantes SET ativo = 0 WHERE id = ?'
       await this.executeCustomQuery<SolicitanteRow>(sql, [id])
     } catch (error) {
-      logError('Erro ao desativar solicitante', { id, error })
+      log.error('Erro ao desativar solicitante', { id, error })
       throw error
     }
   }
@@ -303,21 +304,21 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
       `
 
       params.push(limit, offset)
-      logDebug('🔍findAllSemFiltroStatus - SQL:', { sql, filters, options, params })
+      log.debug('🔍findAllSemFiltroStatus - SQL:', { sql, filters, options, params })
 
       const rows = await this.executeCustomQuery<SolicitanteRow>(sql, params)
 
-      logDebug('🔍findAllSemFiltroStatus - Rows:', { totalRows: rows.length, solicitantes: rows })
+      log.debug('🔍findAllSemFiltroStatus - Rows:', { totalRows: rows.length, solicitantes: rows })
 
       const decryptedRows = await Promise.all(
         rows.map(row => this.decryptFields(row))
       )
-      logDebug('🔍findAllSemFiltroStatus - Decrypted:', { decryptedRows: decryptedRows.filter((row): row is SolicitanteRow => row !== null) })
+      log.debug('🔍findAllSemFiltroStatus - Decrypted:', { decryptedRows: decryptedRows.filter((row): row is SolicitanteRow => row !== null) })
 
       const filteredRows = decryptedRows.filter((row): row is SolicitanteRow => row !== null)
       return filteredRows
     } catch (error) {
-      logError('Erro ao buscar todos os solicitantes', { filters, options, error })
+      log.error('Erro ao buscar todos os solicitantes', { filters, options, error })
       throw error
     }
   }

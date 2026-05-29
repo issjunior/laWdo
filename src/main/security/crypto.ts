@@ -1,6 +1,8 @@
-import { logInfo, logError, logDebug } from '../utils/logger.js';
+import { getLogger } from '../utils/logger.js';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
+
+const log = getLogger('sistema')
 
 /**
  * Módulo de criptografia para dados sensíveis
@@ -36,7 +38,7 @@ const deriveKey = (password: string, salt: Buffer): Promise<Buffer> => {
  */
 export const encrypt = async (text: string): Promise<string> => {
   try {
-    logDebug('Criptografando texto...');
+    log.debug('Criptografando texto...');
 
     // Gerar salt e IV aleatórios
     const salt = crypto.randomBytes(SALT_LENGTH);
@@ -60,7 +62,7 @@ export const encrypt = async (text: string): Promise<string> => {
 
     return result.toString('base64');
   } catch (error) {
-    logError('Erro ao criptografar texto', error);
+    log.error('Erro ao criptografar texto', error);
     throw error;
   }
 };
@@ -70,7 +72,7 @@ export const encrypt = async (text: string): Promise<string> => {
  */
 export const decrypt = async (encryptedData: string): Promise<string> => {
   try {
-    logDebug('Descriptografando texto...');
+    log.debug('Descriptografando texto...');
 
     // Converter de base64 para buffer
     const data = Buffer.from(encryptedData, 'base64');
@@ -94,7 +96,7 @@ export const decrypt = async (encryptedData: string): Promise<string> => {
 
     return decrypted.toString('utf8');
   } catch (error) {
-    logError('Erro ao descriptografar texto', error);
+    log.error('Erro ao descriptografar texto', error);
     throw error;
   }
 };
@@ -104,14 +106,14 @@ export const decrypt = async (encryptedData: string): Promise<string> => {
  */
 export const hashPassword = async (password: string): Promise<string> => {
   try {
-    logDebug('Criando hash de senha...');
+    log.debug('Criando hash de senha...');
 
     const saltRounds = 10;
 
     const hash = await bcrypt.hash(password, saltRounds);
     return hash;
   } catch (error) {
-    logError('Erro ao criar hash de senha', error);
+    log.error('Erro ao criar hash de senha', error);
     throw error;
   }
 };
@@ -121,17 +123,17 @@ export const hashPassword = async (password: string): Promise<string> => {
  */
 export const verifyPassword = async (password: string, hash: string): Promise<boolean> => {
   try {
-    logDebug('Verificando senha...');
+    log.debug('Verificando senha...');
 
     const isValid = await bcrypt.compare(password, hash);
 
     if (!isValid) {
-      logWarning('Senha inválida');
+      log.warn('Senha inválida');
     }
 
     return isValid;
   } catch (error) {
-    logError('Erro ao verificar senha', error);
+    log.error('Erro ao verificar senha', error);
     return false;
   }
 };
@@ -167,11 +169,6 @@ export const isEncrypted = (text: string): boolean => {
   } catch (error) {
     return false;
   }
-};
-
-// Função de log local
-const logWarning = (message: string): void => {
-  console.warn(`⚠️  ${message}`);
 };
 
 // Exportar funções principais

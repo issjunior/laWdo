@@ -98,8 +98,14 @@ export interface LogAuditoriaRow extends DatabaseRow {
   id: number
   usuario_id?: string
   acao: string
+  tipo_acao?: string
+  modulo?: string
   entidade: string
   entidade_id?: string
+  nivel?: string
+  mensagem?: string
+  dados_anteriores?: string
+  dados_novos?: string
   detalhes?: string
   ip_address?: string
   user_agent?: string

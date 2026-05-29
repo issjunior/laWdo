@@ -365,3 +365,44 @@ export const registerUserHandlers = (): void => {
 
   logInfo('Handlers de usuário registrados com sucesso')
 }
+
+let verifyAttempts = new Map<string, { count: number; lastAttempt: number }>();
+
+export const registerVerifyPasswordHandler = (): void => {
+  ipcMain.handle('user:verifyPassword', async (_event, userId: string, senha: string) => {
+    try {
+      if (!userId || !senha) return { success: false, valid: false, error: 'Dados inválidos' };
+
+      const now = Date.now();
+      const attempts = verifyAttempts.get(userId) || { count: 0, lastAttempt: 0 };
+      if (now - attempts.lastAttempt < 30000 && attempts.count >= 3) {
+        return { success: false, valid: false, error: 'Muitas tentativas. Aguarde 30 segundos.' };
+      }
+      if (now - attempts.lastAttempt > 30000) {
+        verifyAttempts.set(userId, { count: 1, lastAttempt: now });
+      } else {
+        verifyAttempts.set(userId, { count: attempts.count + 1, lastAttempt: now });
+      }
+
+      const user = await userService.findById(userId);
+      if (!user) return { success: false, valid: false, error: 'Usuário não encontrado' };
+
+      let validPassword = false;
+      const senhaHash = user.senha_hash || '';
+      if (senhaHash.startsWith('$2a$') || senhaHash.startsWith('$2b$') || senhaHash.startsWith('$2y$')) {
+        validPassword = await bcrypt.compare(senha, senhaHash);
+      } else {
+        validPassword = senha === senhaHash;
+      }
+
+      if (validPassword) {
+        verifyAttempts.delete(userId);
+      }
+
+      return { success: true, valid: validPassword };
+    } catch (error) {
+      logError('Erro ao verificar senha', { userId, error });
+      return { success: false, valid: false, error: 'Erro interno' };
+    }
+  });
+};

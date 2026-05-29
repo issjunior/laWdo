@@ -3,37 +3,72 @@ import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
 
-// Diretório de logs
 const LOGS_DIR = path.join(app.getPath('userData'), 'logs');
 
-// Garantir que o diretório de logs exista
 if (!fs.existsSync(LOGS_DIR)) {
   fs.mkdirSync(LOGS_DIR, { recursive: true });
 }
 
-// Configuração de rotação de logs (5 MB por arquivo, máximo 5 arquivos)
 const LOG_ROTATION_CONFIG = {
-  maxSize: 5 * 1024 * 1024, // 5 MB
+  maxSize: 5 * 1024 * 1024,
   maxFiles: 5,
-  tailable: true,
 };
 
-// Formato personalizado para logs
-const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+export type LogModule =
+  | 'database' | 'auth' | 'laudo' | 'template' | 'rep'
+  | 'solicitante' | 'tipo_exame' | 'placeholder' | 'backup'
+  | 'configuracao' | 'ia' | 'ilustracao' | 'renderer' | 'sistema'
+  | 'ipc' | 'security';
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const LEVEL_RANK: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
+const DEFAULT_LEVELS: Partial<Record<LogModule, LogLevel>> = {
+  database: 'info',
+  renderer: 'warn',
+  ilustracao: 'warn',
+  ia: 'debug',
+};
+
+const moduleLogLevels: Partial<Record<LogModule, LogLevel>> = { ...DEFAULT_LEVELS };
+
+function shouldLog(module: LogModule, level: LogLevel): boolean {
+  const configured = moduleLogLevels[module] ?? 'info';
+  return LEVEL_RANK[level] >= LEVEL_RANK[configured];
+}
+
+const fileFormat = winston.format.combine(
+  winston.format.timestamp(),
   winston.format.errors({ stack: true }),
-  winston.format.printf(({ timestamp, level, message, stack }) => {
-    const logMessage = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
-    return stack ? `${logMessage}\n${stack}` : logMessage;
-  })
+  winston.format.json(),
 );
 
-// Logger principal
-export const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
-  format: logFormat,
+const consoleFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.colorize(),
+  winston.format.printf(({ timestamp, level, module, message, duration, ...rest }) => {
+    const parts: string[] = [`[${timestamp}]`, level];
+    if (module) parts.push(`[${module as string}]`);
+    parts.push(`: ${message as string}`);
+    if (duration !== undefined) parts.push(` (${duration}ms)`);
+    const restKeys = Object.keys(rest).filter(k => k !== 'timestamp' && k !== 'level' && k !== 'message' && k !== 'module' && k !== 'duration' && k !== 'stack');
+    if (restKeys.length > 0) {
+      parts.push(' ' + JSON.stringify(Object.fromEntries(restKeys.map(k => [k, rest[k]]))));
+    }
+    return parts.join('');
+  }),
+);
+
+const baseLogger = winston.createLogger({
+  level: 'debug',
+  format: fileFormat,
   transports: [
-    // Log para arquivo com rotação
     new winston.transports.File({
       filename: path.join(LOGS_DIR, 'error.log'),
       level: 'error',
@@ -48,37 +83,99 @@ export const logger = winston.createLogger({
   ],
 });
 
-// Adicionar log para console em desenvolvimento
 if (process.env.NODE_ENV === 'development') {
-  logger.add(
-    new winston.transports.Console({
-      format: winston.format.combine(winston.format.colorize(), logFormat),
-    })
+  baseLogger.add(
+    new winston.transports.Console({ format: consoleFormat }),
   );
 }
 
-// Funções utilitárias de log
+export interface ILogger {
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, errorOrMeta?: unknown): void;
+  debug(message: string | (() => string), meta?: Record<string, unknown>): void;
+}
+
+class ModuleLogger implements ILogger {
+  constructor(private module: LogModule) {}
+
+  info(message: string, meta?: Record<string, unknown>): void {
+    if (!shouldLog(this.module, 'info')) return;
+    baseLogger.info(message, { module: this.module, ...meta });
+  }
+
+  warn(message: string, meta?: Record<string, unknown>): void {
+    if (!shouldLog(this.module, 'warn')) return;
+    baseLogger.warn(message, { module: this.module, ...meta });
+  }
+
+  error(message: string, errorOrMeta?: unknown): void {
+    if (!shouldLog(this.module, 'error')) return;
+    if (errorOrMeta instanceof Error) {
+      baseLogger.error(message, {
+        module: this.module,
+        error: { message: errorOrMeta.message, stack: errorOrMeta.stack },
+      });
+    } else if (errorOrMeta && typeof errorOrMeta === 'object') {
+      baseLogger.error(message, { module: this.module, ...(errorOrMeta as Record<string, unknown>) });
+    } else if (errorOrMeta !== undefined && errorOrMeta !== null) {
+      baseLogger.error(message, { module: this.module, detail: String(errorOrMeta) });
+    } else {
+      baseLogger.error(message, { module: this.module });
+    }
+  }
+
+  debug(message: string | (() => string), meta?: Record<string, unknown>): void {
+    if (!shouldLog(this.module, 'debug')) return;
+    const msg = typeof message === 'function' ? message() : message;
+    baseLogger.debug(msg, { module: this.module, ...meta });
+  }
+}
+
+const loggerCache = new Map<LogModule, ILogger>();
+
+export function getLogger(module: LogModule): ILogger {
+  if (!loggerCache.has(module)) {
+    loggerCache.set(module, new ModuleLogger(module));
+  }
+  return loggerCache.get(module)!;
+}
+
+export function setModuleLogLevel(module: LogModule, level: LogLevel): void {
+  moduleLogLevels[module] = level;
+}
+
+export function getModuleLogLevels(): Partial<Record<LogModule, LogLevel>> {
+  return { ...moduleLogLevels };
+}
+
 export const logInfo = (message: string, meta?: any) => {
-  logger.info(message, meta);
+  baseLogger.info(message, { module: 'sistema', ...meta });
 };
 
-export const logError = (message: string, error?: any) => {
+export const logError = (message: string, error?: unknown) => {
   if (error instanceof Error) {
-    logger.error(`${message}: ${error.message}`, { stack: error.stack });
+    baseLogger.error(message, {
+      module: 'sistema',
+      error: { message: error.message, stack: error.stack },
+    });
+  } else if (error && typeof error === 'object') {
+    baseLogger.error(message, { module: 'sistema', ...(error as Record<string, unknown>) });
+  } else if (error !== undefined && error !== null) {
+    baseLogger.error(message, { module: 'sistema', detail: String(error) });
   } else {
-    logger.error(message, error);
+    baseLogger.error(message, { module: 'sistema' });
   }
 };
 
 export const logWarning = (message: string, meta?: any) => {
-  logger.warn(message, meta);
+  baseLogger.warn(message, { module: 'sistema', ...meta });
 };
 
 export const logDebug = (message: string, meta?: any) => {
-  logger.debug(message, meta);
+  baseLogger.debug(message, { module: 'sistema', ...meta });
 };
 
-// Função para setup do sistema de logs
 export const setupLogging = () => {
   logInfo('Sistema de logs inicializado', {
     logsDir: LOGS_DIR,
@@ -86,89 +183,83 @@ export const setupLogging = () => {
     appVersion: app.getVersion(),
   });
 
-  // Capturar erros não tratados
   process.on('uncaughtException', error => {
-    logError('Erro não tratado', error);
+    baseLogger.error('Erro não tratado', {
+      module: 'sistema',
+      error: { message: error.message, stack: error.stack },
+    });
   });
 
-  process.on('unhandledRejection', (reason, promise) => {
-    logError('Promise rejeitada não tratada', { reason, promise });
+  process.on('unhandledRejection', (reason) => {
+    baseLogger.error('Promise rejeitada não tratada', {
+      module: 'sistema',
+      reason: reason instanceof Error ? { message: reason.message, stack: reason.stack } : String(reason),
+    });
   });
 };
 
-/**
- * Entrada de log estruturada
- */
 export interface LogEntry {
-  id: string;
   timestamp: string;
-  level: 'error' | 'warn' | 'info' | 'debug';
+  level: LogLevel;
+  module: LogModule;
   message: string;
+  error?: { message: string; stack?: string };
+  duration?: number;
+  [key: string]: unknown;
 }
 
-/**
- * Parseia uma linha de log do Winston no formato: [YYYY-MM-DD HH:mm:ss] LEVEL: mensagem
- */
-const parseLogLine = (line: string): LogEntry | null => {
+function parseJsonLogLine(line: string): LogEntry | null {
+  try {
+    const parsed = JSON.parse(line) as LogEntry;
+    if (!parsed.timestamp || !parsed.level || !parsed.message) return null;
+    if (!parsed.module) parsed.module = 'sistema';
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function parseLegacyLogLine(line: string): LogEntry | null {
   const match = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+(\w+):\s+(.*)$/);
   if (!match) return null;
   const [, timestamp, level, message] = match;
-  const normalizedLevel = level.toLowerCase();
-  const validLevel: LogEntry['level'] =
-    normalizedLevel === 'error' || normalizedLevel === 'warn' || normalizedLevel === 'info' || normalizedLevel === 'debug'
-      ? normalizedLevel
-      : 'info';
+  const validLevels = ['error', 'warn', 'info', 'debug'];
   return {
-    id: `${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
     timestamp,
-    level: validLevel,
+    level: validLevels.includes(level.toLowerCase()) ? level.toLowerCase() as LogLevel : 'info',
+    module: 'sistema',
     message,
   };
-};
+}
 
-/**
- * Lê todos os arquivos de log (combined.log, error.log e rotações) e retorna entradas parseadas
- */
 export const getAllLogs = (): LogEntry[] => {
   try {
     const entries: LogEntry[] = [];
-
-    // Lê apenas combined.log e suas rotações (error.log é subset)
-    const files = fs.readdirSync(LOGS_DIR).filter(
-      f => /^combined\.log(\.\d+)?$/.test(f)
-    );
+    const files = fs.readdirSync(LOGS_DIR).filter(f => /^combined\.log(\.\d+)?$/.test(f));
 
     for (const file of files) {
       const filepath = path.join(LOGS_DIR, file);
       const content = fs.readFileSync(filepath, 'utf-8');
       const lines = content.split('\n');
 
-      let currentEntry: LogEntry | null = null;
-
       for (const rawLine of lines) {
         const line = rawLine.trim();
         if (!line) continue;
 
-        const parsed = parseLogLine(line);
-        if (parsed) {
-          if (currentEntry) {
-            entries.push(currentEntry);
-          }
-          currentEntry = parsed;
-        } else if (currentEntry) {
-          // Stack trace ou continuação da mensagem anterior
-          currentEntry.message += '\n' + line;
+        const jsonEntry = parseJsonLogLine(line);
+        if (jsonEntry) {
+          entries.push(jsonEntry);
+          continue;
         }
-      }
 
-      if (currentEntry) {
-        entries.push(currentEntry);
+        const legacyEntry = parseLegacyLogLine(line);
+        if (legacyEntry) {
+          entries.push(legacyEntry);
+        }
       }
     }
 
-    // Ordena por timestamp descendente (mais recente primeiro)
     entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
     return entries;
   } catch (err) {
     logError('Erro ao ler logs do sistema', err);
@@ -176,21 +267,12 @@ export const getAllLogs = (): LogEntry[] => {
   }
 };
 
-/**
- * Limpa (trunca) todos os arquivos de log do sistema (combined.log e error.log)
- */
 export const clearAllLogs = (): { success: boolean; error?: string } => {
   try {
-    const files = fs.readdirSync(LOGS_DIR).filter(
-      f => /^(combined|error)\.log(\.\d+)?$/.test(f)
-    );
-
+    const files = fs.readdirSync(LOGS_DIR).filter(f => /^(combined|error)\.log(\.\d+)?$/.test(f));
     for (const file of files) {
-      const filepath = path.join(LOGS_DIR, file);
-      // Trunca o arquivo (mantém o arquivo vazio)
-      fs.writeFileSync(filepath, '', 'utf-8');
+      fs.writeFileSync(path.join(LOGS_DIR, file), '', 'utf-8');
     }
-
     logInfo('Logs do sistema limpos pelo usuário');
     return { success: true };
   } catch (err) {
@@ -198,48 +280,36 @@ export const clearAllLogs = (): { success: boolean; error?: string } => {
     return { success: false, error: String(err) };
   }
 };
-// Função para obter logs recentes (útil para debug)
+
 export const getRecentLogs = (lines: number = 100): string[] => {
   try {
     const logFile = path.join(LOGS_DIR, 'combined.log');
-    if (!fs.existsSync(logFile)) {
-      return ['Arquivo de log não encontrado'];
-    }
-
+    if (!fs.existsSync(logFile)) return ['Arquivo de log não encontrado'];
     const content = fs.readFileSync(logFile, 'utf-8');
-    const logLines = content.split('\n').filter(line => line.trim());
-    return logLines.slice(-lines);
+    return content.split('\n').filter(l => l.trim()).slice(-lines);
   } catch (error) {
     logError('Erro ao ler logs', error);
     return [`Erro ao ler logs: ${error}`];
   }
 };
 
-// Limpar logs antigos (mantém apenas últimos 6 meses)
 export const cleanupOldLogs = () => {
   try {
     const files = fs.readdirSync(LOGS_DIR);
     const now = Date.now();
-    const sixMonthsAgo = now - 6 * 30 * 24 * 60 * 60 * 1000; // 6 meses em milissegundos
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
 
-    files.forEach(file => {
+    for (const file of files) {
       const filePath = path.join(LOGS_DIR, file);
       const stats = fs.statSync(filePath);
-
-      if (stats.mtimeMs < sixMonthsAgo) {
+      if (stats.mtimeMs < thirtyDaysAgo) {
         fs.unlinkSync(filePath);
         logInfo(`Log antigo removido: ${file}`);
       }
-    });
+    }
   } catch (error) {
     logError('Erro ao limpar logs antigos', error);
   }
 };
 
-// Exportar interface para TypeScript
-export interface Logger {
-  info: (message: string, meta?: any) => void;
-  error: (message: string, error?: any) => void;
-  warn: (message: string, meta?: any) => void;
-  debug: (message: string, meta?: any) => void;
-}
+export { baseLogger as logger };

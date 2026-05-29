@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { logInfo, logError } from '../../utils/logger.js'
+import { auditDelete } from '../../services/audit-log.service.js'
 import { solicitanteService } from '../../services/solicitante.service.js'
 import { sanitizeInput } from '../../security/index.js'
 
@@ -223,6 +224,7 @@ export const registerSolicitanteHandlers = (): void => {
 
       logInfo('Desativando solicitante (soft delete)', { id })
       await solicitanteService.desativarSolicitante(id)
+      auditDelete('', 'solicitantes', id, `Solicitante ${id} desativado`)
 
       return {
         success: true,

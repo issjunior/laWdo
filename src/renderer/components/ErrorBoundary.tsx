@@ -27,59 +27,37 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log do erro para serviço de monitoramento
-    console.error('❌ Erro não tratado no React:', error);
-    console.error('Component stack:', errorInfo.componentStack);
-
-    // Armazenar informações do erro
     this.setState({ error, errorInfo });
 
-    // Tentar enviar para logs do sistema
     try {
-      if (window.electronAPI?.logError) {
-        window.electronAPI.logError(
-          'Erro no React',
-          `${error.message}\n${error.stack}\n${errorInfo.componentStack}`
-        );
-      }
-    } catch (apiError) {
-      console.error('Erro ao tentar logar erro via IPC:', apiError);
+      window.ipcAPI?.logError('renderer', 'Erro não tratado no React',
+        new Error(`${error.message}\n${error.stack}\n${errorInfo.componentStack}`),
+      );
+    } catch {
+      // silencioso — não podemos logar se o IPC falhar
     }
   }
 
   private handleRestartApp = (): void => {
     try {
-      if (window.electronAPI?.restartApp) {
-        window.electronAPI.restartApp();
-      } else {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Erro ao tentar reiniciar aplicação:', error);
+      window.ipcAPI?.restartApp?.() ?? window.location.reload();
+    } catch {
       window.location.reload();
     }
   };
 
   private handleClearCache = (): void => {
-    try {
-      if (window.electronAPI?.clearCache) {
-        window.electronAPI.clearCache();
-      } else {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Erro ao limpar cache:', error);
-    }
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.reload();
   };
 
   private handleGoToHome = (): void => {
-    try {
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Erro ao navegar para home:', error);
-    }
+    window.location.href = '/';
+  };
+
+  private handleCreateReport = (): void => {
+    window.location.href = '/laudos/novo';
   };
 
   private handleReportError = (): void => {
@@ -255,16 +233,11 @@ export const useErrorBoundary = () => {
   const [error, setError] = React.useState<Error | null>(null);
 
   const handleError = React.useCallback((error: Error) => {
-    console.error('Erro capturado:', error);
     setError(error);
-
-    // Log para sistema
     try {
-      if (window.electronAPI?.logError) {
-        window.electronAPI.logError('Erro capturado via hook', error.message);
-      }
-    } catch (apiError) {
-      console.error('Erro ao logar via IPC:', apiError);
+      window.ipcAPI?.logError('renderer', 'Erro capturado via hook', error);
+    } catch {
+      // silencioso
     }
   }, []);
 

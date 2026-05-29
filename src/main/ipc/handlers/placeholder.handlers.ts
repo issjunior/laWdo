@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { logInfo, logError } from '../../utils/logger.js';
+import { auditDelete } from '../../services/audit-log.service.js';
 import { placeholderService } from '../../services/placeholder.service.js';
 import { sanitizeInput } from '../../security/index.js';
 
@@ -69,6 +70,7 @@ export const registerPlaceholderHandlers = (): void => {
     try {
       if (!id || typeof id !== 'string') return { success: false, error: 'ID inválido' };
       await placeholderService.delete(id);
+      auditDelete('', 'placeholders', id, `Placeholder ${id} excluído`);
       return { success: true, message: 'Placeholder excluído com sucesso' };
     } catch (error) {
       logError('Erro ao excluir placeholder', { id, error });

@@ -37,9 +37,9 @@ export interface IpcAPI {
   }>;
 
   // Logs
-  logInfo: (message: string) => void;
-  logError: (message: string, error?: any) => void;
-  logWarning: (message: string) => void;
+  logInfo: (module: string, message: string) => void;
+  logError: (module: string, message: string, error?: any) => void;
+  logWarning: (module: string, message: string) => void;
 
   // Sistema
   restartApp: () => Promise<void>;
@@ -49,8 +49,9 @@ export interface IpcAPI {
   // Banco de dados
   executeQuery: (query: string, params?: any[]) => Promise<any>;
 
-  // Autenticação (exemplo - será expandido)
+  // Autenticação
   login: (username: string, password: string) => Promise<{ success: boolean; user?: any }>;
+  verifyPassword: (userId: string, password: string) => Promise<{ success: boolean; valid: boolean; error?: string }>;
 
   // Usuários
   user: {
@@ -155,6 +156,7 @@ export interface IpcAPI {
     updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
     delete: (laudoId: string) => Promise<UserResponse>;
+    updateStatus: (laudoId: string, status: string) => Promise<UserResponse>;
   };
 
   // IA / Integração Groq
@@ -175,8 +177,11 @@ export interface IpcAPI {
 
   // Logs do sistema
   log: {
-    listar: () => Promise<{ success: boolean; data?: LogEntry[]; error?: string }>;
+    listar: (filters?: Record<string, unknown>) => Promise<{ success: boolean; data?: LogEntry[]; error?: string }>;
     limpar: () => Promise<{ success: boolean; error?: string }>;
+    listarAuditoria: (filters?: Record<string, unknown>) => Promise<{ success: boolean; data?: any[]; total?: number; error?: string }>;
+    limparAuditoria: (userId?: string) => Promise<{ success: boolean; count?: number; error?: string }>;
+    contar: () => Promise<{ success: boolean; data?: { sistema: number; auditoria: number }; error?: string }>;
   };
 
   // Painel de Ilustrações (janela separada)
@@ -201,6 +206,7 @@ const ALLOWED_CHANNELS = new Set([
   'log-info',
   'log-error',
   'log-warning',
+  'log-batch',
 
   // Sistema
   'restart-app',
@@ -212,6 +218,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Autenticação
   'login',
+  'user:verifyPassword',
 
   // Usuários
   'user:findAll',
@@ -294,6 +301,7 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:updateConteudo',
   'laudo:create',
   'laudo:delete',
+  'laudo:updateStatus',
 
   // IA
   'ia:revisarOrtografia',
@@ -310,6 +318,9 @@ const ALLOWED_CHANNELS = new Set([
   // Logs do sistema
   'log:listar',
   'log:limpar',
+  'log:listar-auditoria',
+  'log:limpar-auditoria',
+  'log:contar',
 
   // Painel de Ilustrações
   'ilustracoes:open-panel',
@@ -327,28 +338,28 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
 
   // Logs
-  logInfo: (message: string) => {
+  logInfo: (module: string, message: string) => {
     if (typeof message !== 'string') {
       console.error('Tentativa de log com mensagem inválida:', message);
       return;
     }
-    ipcRenderer.send('log-info', message);
+    ipcRenderer.send('log-info', module, message);
   },
 
-  logError: (message: string, error?: any) => {
+  logError: (module: string, message: string, error?: any) => {
     if (typeof message !== 'string') {
       console.error('Tentativa de log de erro com mensagem inválida:', message);
       return;
     }
-    ipcRenderer.send('log-error', message, error);
+    ipcRenderer.send('log-error', module, message, error);
   },
 
-  logWarning: (message: string) => {
+  logWarning: (module: string, message: string) => {
     if (typeof message !== 'string') {
       console.error('Tentativa de log de warning com mensagem inválida:', message);
       return;
     }
-    ipcRenderer.send('log-warning', message);
+    ipcRenderer.send('log-warning', module, message);
   },
 
   // Sistema
@@ -382,6 +393,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     }
 
     return ipcRenderer.invoke('login', username.trim(), password.trim());
+  },
+
+  verifyPassword: (userId: string, password: string) => {
+    if (typeof userId !== 'string' || typeof password !== 'string') return Promise.resolve({ success: false, valid: false, error: 'Dados inválidos' });
+    return ipcRenderer.invoke('user:verifyPassword', userId, password);
   },
 
   // Usuários
@@ -676,6 +692,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => ipcRenderer.invoke('laudo:create', data),
     delete: (laudoId: string) => ipcRenderer.invoke('laudo:delete', laudoId),
+    updateStatus: (laudoId: string, status: string) => ipcRenderer.invoke('laudo:updateStatus', laudoId, status),
   },
 
   ia: {
@@ -705,8 +722,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   log: {
-    listar: () => ipcRenderer.invoke('log:listar'),
+    listar: (filters?: Record<string, unknown>) => ipcRenderer.invoke('log:listar', filters),
     limpar: () => ipcRenderer.invoke('log:limpar'),
+    listarAuditoria: (filters?: Record<string, unknown>) => ipcRenderer.invoke('log:listar-auditoria', filters),
+    limparAuditoria: (userId?: string) => ipcRenderer.invoke('log:limpar-auditoria', userId),
+    contar: () => ipcRenderer.invoke('log:contar'),
   },
 
   ilustracoes: {
