@@ -1189,9 +1189,9 @@ export const REPsPage: React.FC = () => {
                   </AccordionTrigger>
                   <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-4">Vínculos e observações importantes da REP.</p>
-                {(!form.watch('numero_bo') && !form.watch('numero_ip')) ? (
+                {(!form.watch('numero_bo') && !form.watch('numero_ip')) && (
                   <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
-                    <CardHeader className="pb-3">
+                    <CardHeader className="pt-2 pb-3">
                       <CardTitle className="text-sm flex items-center gap-2 text-amber-800 dark:text-amber-400">
                         <AlertTriangle className="h-4 w-4" />
                         Requisito GDL
@@ -1200,75 +1200,41 @@ export const REPsPage: React.FC = () => {
                         O GDL só aceitará o envio de laudos com o nº do BO ou nº do IP preenchidos.
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="numero_bo"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO</LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input placeholder="Boletim de Ocorrência" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="numero_ip"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="numero_ip" mostrar={mostrarPlaceholders}>Nº do IP</LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input placeholder="Inquérito Policial" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
                   </Card>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="numero_bo"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input placeholder="Boletim de Ocorrência" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <FormField
-                        control={form.control}
-                        name="numero_ip"
-                        render={({ field }) => (
-                          <FormItem>
-                            <LabelWithPlaceholder field="numero_ip" mostrar={mostrarPlaceholders}>Nº do IP</LabelWithPlaceholder>
-                            <FormControl>
-                              <Input placeholder="Inquérito Policial" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
                 )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <FormField
+                      control={form.control}
+                      name="numero_bo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO</LabelWithPlaceholder>
+                          <FormControl>
+                            <Input placeholder="Boletim de Ocorrência" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <FormField
+                      control={form.control}
+                      name="numero_ip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <LabelWithPlaceholder field="numero_ip" mostrar={mostrarPlaceholders}>Nº do IP</LabelWithPlaceholder>
+                          <FormControl>
+                            <Input placeholder="Inquérito Policial" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <FormField
