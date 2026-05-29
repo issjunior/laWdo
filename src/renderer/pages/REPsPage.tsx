@@ -87,6 +87,14 @@ const FIELD_PLACEHOLDER: Record<string, string> = {
   numeracao_motor_revelado: 'motor_revelado',
 };
 
+function formatarNumeroBO(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 4) return digits;
+  const year = digits.slice(0, 4);
+  const num = digits.slice(4, 10);
+  return `${year}/${num}`;
+}
+
 function formatarNumeroREP(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
   const len = digits.length;
@@ -1212,7 +1220,7 @@ export const REPsPage: React.FC = () => {
                         <FormItem>
                           <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO</LabelWithPlaceholder>
                           <FormControl>
-                            <Input placeholder="Boletim de Ocorrência" {...field} />
+                            <Input placeholder="2026/123456" value={field.value} onChange={e => field.onChange(formatarNumeroBO(e.target.value))} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

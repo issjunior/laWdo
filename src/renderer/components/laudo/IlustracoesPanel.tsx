@@ -533,9 +533,9 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           <div className="px-4 mb-3">
             <Button variant="outline" className="w-full gap-2" onClick={() => {
               onRefreshHtml();
-              toast.success('Legendas das figuras renumeradas');
+              toast.success('Figuras atualizadas e renumeradas');
             }}>
-              <ListChecks size={16} /> Indexar
+              <ListChecks size={16} /> Atualizar Figuras
             </Button>
           </div>
           <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar px-4">

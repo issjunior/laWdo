@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -342,7 +342,7 @@ export const LaudosPage: React.FC = () => {
       const parser = new DOMParser();
       const doc = parser.parseFromString(singleEditorHtml, 'text/html');
       return Array.from(doc.querySelectorAll('img')).some(
-        (img) => img.src.startsWith('data:') || img.src.startsWith('http')
+        (img) => img.src.startsWith('data:') || img.src.startsWith('http') || img.src.startsWith('blob:')
       );
     } catch {
       return false;
@@ -376,8 +376,6 @@ export const LaudosPage: React.FC = () => {
   const togglePanel = useCallback(() => {
     setPanelCollapsed(prev => !prev);
   }, []);
-  const [imageInsertCounter, setImageInsertCounter] = useState(0);
-
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
 
@@ -952,13 +950,25 @@ export const LaudosPage: React.FC = () => {
       if (editorMode === 'single') {
         const editor = (window as any).tinymce?.get('laudo-single-editor');
         if (editor) {
-          editor.execCommand('reindexFiguras');
+          editor.execCommand('scanAndWrapImages');
           const novoHtml = editor.getContent();
           setSingleEditorHtml(novoHtml);
           setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
         }
       } else {
-        setSecoes(prev => prev.map(s => ({ ...s, conteudo: reindexarFiguras(s.conteudo) })));
+        setSecoes(prev => {
+          const novas = [...prev];
+          for (let idx = 0; idx < prev.length; idx++) {
+            const editor = (window as any).tinymce?.get(`secao-${idx}`);
+            if (editor) {
+              editor.execCommand('scanAndWrapImages');
+              novas[idx] = { ...novas[idx], conteudo: editor.getContent() };
+            } else {
+              novas[idx] = { ...novas[idx], conteudo: reindexarFiguras(prev[idx].conteudo) };
+            }
+          }
+          return novas;
+        });
       }
     },
     onInsertAll: (imagens) => {
@@ -1711,6 +1721,19 @@ export const LaudosPage: React.FC = () => {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => panelCallbacksRef.current.onRefreshHtml()}
+                  className="h-9 w-9"
+                >
+                  <RefreshCw size={15} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Atualizar figuras (numeração e legendas)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
                   <ArrowLeft size={16} /> Voltar
                 </Button>
@@ -1904,7 +1927,6 @@ export const LaudosPage: React.FC = () => {
                         height={560}
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
-                        onImageInserted={() => setImageInsertCounter(c => c + 1)}
                         theme={editorTheme}
                         placeholderChaves={placeholderChaves}
                       />
@@ -1955,7 +1977,6 @@ export const LaudosPage: React.FC = () => {
                                 onChange={(txt) => atualizarConteudoSecao(idx, txt)}
                                 height={400}
                                 laudoId={editando.id}
-                                onImageInserted={() => setImageInsertCounter(c => c + 1)}
                                 theme={editorTheme}
                                 placeholderChaves={placeholderChaves}
                                 onEditorInit={isIlustracoes ? handleIlustracoesEditorInit : undefined}

@@ -1,6 +1,79 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 
+/* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
+
+/** Markup interno da figura (sem <br> ao final) — usado para criar elementos DOM */
+function buildFigureInnerHtml(url: string, id: string, legenda: string): string {
+  return (
+    `<figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;">` +
+    `<img src="${url}" alt="${legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />` +
+    `<figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">Figura XX${legenda ? ': ' + legenda : ''}</figcaption>` +
+    `</figure>`
+  );
+}
+
+/** Markup completo da figura com <br> ao final — ideal para insertContent */
+function buildFigureHtml(url: string, id: string, legenda: string): string {
+  return buildFigureInnerHtml(url, id, legenda) + '<br>';
+}
+
+/** Converte um <img> órfão em um elemento <figure class="laudo-figure"> com id e figcaption */
+function wrapImgAsFigure(img: HTMLImageElement): HTMLElement {
+  const id = crypto.randomUUID();
+  const template = document.createElement('template');
+  template.innerHTML = buildFigureInnerHtml(img.src, id, img.alt || '').trim();
+  return template.content.firstElementChild as HTMLElement;
+}
+
+/**
+ * Varre um nó-fragmento e converte <img>s órfãos (fora de .laudo-figure)
+ * em figuras estruturadas. Retorna quantos foram convertidos.
+ */
+function processarImagensPuras(raiz: Node): number {
+  let count = 0;
+  if (!(raiz instanceof Element) && !(raiz instanceof DocumentFragment)) return count;
+
+  const imagens = Array.from(
+    (raiz as Element).querySelectorAll?.('img') ?? []
+  );
+
+  for (const img of imagens) {
+    const htmlImg = img as HTMLImageElement;
+    if (htmlImg.closest('.laudo-figure')) continue;
+    if (!htmlImg.src || (!htmlImg.src.startsWith('data:') && !htmlImg.src.startsWith('http') && !htmlImg.src.startsWith('blob:'))) continue;
+
+    const figure = wrapImgAsFigure(htmlImg);
+    htmlImg.parentNode?.replaceChild(figure, htmlImg);
+    count++;
+  }
+
+  return count;
+}
+
+/** Varre o body do editor e converte todos os <img>s órfãos em figuras laudo-figure */
+function scanEditorForRawImages(editor: any): number {
+  const body = editor.getBody();
+  if (!body) return 0;
+
+  const rawImages = Array.from(body.querySelectorAll('img')).filter(
+    (img: any) =>
+      !img.closest('.laudo-figure') &&
+      (img.src?.startsWith('data:') || img.src?.startsWith('http') || img.src?.startsWith('blob:'))
+  ) as HTMLImageElement[];
+
+  if (rawImages.length === 0) return 0;
+
+  editor.undoManager.transact(() => {
+    for (const img of rawImages) {
+      const figure = wrapImgAsFigure(img);
+      img.parentNode?.replaceChild(figure, img);
+    }
+  });
+
+  return rawImages.length;
+}
+
 interface TinyMceEditorProps {
   /** Modo controlado: conteúdo sincronizado com estado React. Pode causar salto de cursor com HTML complexo. Use initialValue para evitar. */
   value?: string;
@@ -90,6 +163,26 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
           line_height_formats: '1 1.1 1.2 1.3 1.4 1.5 2',
           image_advtab: true,
           image_title: true,
+
+          // ─── Upload de imagens (converte blob→dataURI na origem) ──
+          images_upload_handler: (blobInfo: any) =>
+            new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.readAsDataURL(blobInfo.blob());
+            }),
+
+          paste_data_images: true,
+
+          // ─── Pós-processamento de conteúdo colado ──────────
+          paste_postprocess: (_editor: any, args: any) => {
+            const fragment = args.node;
+            if (!fragment) return;
+            const convertidas = processarImagensPuras(fragment);
+            if (convertidas > 0) {
+              onImageInserted?.();
+            }
+          },
           relative_urls: false,
           remove_script_host: false,
           convert_urls: false,
@@ -103,6 +196,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
             'link',
             'lists',
             'media',
+            'paste',
             'searchreplace',
             'table',
             'visualblocks',
@@ -174,13 +268,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                   const dataUri = reader.result as string;
                   const editor = (window as any).tinymce.get(editorId);
                   if (editor) {
-                    const html = `
-                      <figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;">
-                        <img src="${dataUri}" alt="" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />
-                        <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">Figura XX</figcaption>
-                      </figure>
-                      <br>`;
-                    editor.insertContent(html);
+                    editor.insertContent(buildFigureHtml(dataUri, id, ''));
                     onImageInserted?.();
                   }
                 };
@@ -198,13 +286,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
             });
 
             editor.addCommand('insertLaudoImage', (_ui: any, data: { url: string, id: string, legenda: string }) => {
-              const html = `
-                <figure class="laudo-figure" data-image-id="${data.id}" style="text-align: center; margin: 12px auto; max-width: 100%;">
-                  <img src="${data.url}" alt="${data.legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />
-                  <figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">Figura XX${data.legenda ? ': ' + data.legenda : ''}</figcaption>
-                </figure>
-                <br>`;
-              editor.insertContent(html);
+              editor.insertContent(buildFigureHtml(data.url, data.id, data.legenda));
             });
 
             editor.addCommand('reindexFiguras', () => {
@@ -240,6 +322,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               }
             });
 
+            editor.addCommand('scanAndWrapImages', () => {
+              const count = scanEditorForRawImages(editor);
+              editor.execCommand('reindexFiguras');
+              return count;
+            });
+
             // Repassar evento de clique direito para o componente pai (Shadcn ContextMenu)
             // Usamos init + listener nativo porque contextmenu:false desabilita o plugin
             // e o editor event 'contextmenu' nunca dispara.
@@ -264,6 +352,62 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
 
                 container.dispatchEvent(newEvent);
               });
+
+              // ─── Observer para imagens arrastadas/soltadas ─────
+              const body = editor.getBody();
+              if (body) {
+                let processando = false;
+
+                const figuraObserver = new MutationObserver((mutations) => {
+                  if (processando) return;
+
+                  const rawImages: HTMLImageElement[] = [];
+                  for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                      if (node.nodeType !== 1) continue;
+                      const el = node as Element;
+
+                      if (el.tagName === 'IMG' && !el.closest('.laudo-figure')) {
+                        const src = (el as HTMLImageElement).src;
+                        if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
+                          rawImages.push(el as HTMLImageElement);
+                        }
+                      }
+
+                      el.querySelectorAll('img').forEach(nestedImg => {
+                        if (!nestedImg.closest('.laudo-figure')) {
+                          const src = (nestedImg as HTMLImageElement).src;
+                          if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
+                            rawImages.push(nestedImg as HTMLImageElement);
+                          }
+                        }
+                      });
+                    }
+                  }
+
+                  if (rawImages.length === 0) return;
+
+                  processando = true;
+                  figuraObserver.disconnect();
+
+                  editor.undoManager.transact(() => {
+                    for (const img of rawImages) {
+                      const figure = wrapImgAsFigure(img);
+                      img.parentNode?.replaceChild(figure, img);
+                    }
+                  });
+
+                  onChange(editor.getContent());
+
+                  figuraObserver.observe(body, { childList: true, subtree: true });
+                  processando = false;
+                  onImageInserted?.();
+                });
+
+                figuraObserver.observe(body, { childList: true, subtree: true });
+
+                editor.on('remove', () => figuraObserver.disconnect());
+              }
             });
 
             // ─── Auto-converter {{chave}} digitado manualmente em span estilizado ─────
