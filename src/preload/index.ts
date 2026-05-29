@@ -155,7 +155,7 @@ export interface IpcAPI {
     findByRepId: (repId: string) => Promise<UserResponse>;
     updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
-    delete: (laudoId: string) => Promise<UserResponse>;
+    delete: (laudoId: string, userId?: string) => Promise<UserResponse>;
     updateStatus: (laudoId: string, status: string) => Promise<UserResponse>;
   };
 
@@ -691,7 +691,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findByRepId: (repId: string) => ipcRenderer.invoke('laudo:findByRepId', repId),
     updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => ipcRenderer.invoke('laudo:create', data),
-    delete: (laudoId: string) => ipcRenderer.invoke('laudo:delete', laudoId),
+    delete: (laudoId: string, userId?: string) => ipcRenderer.invoke('laudo:delete', laudoId, userId),
     updateStatus: (laudoId: string, status: string) => ipcRenderer.invoke('laudo:updateStatus', laudoId, status),
   },
 

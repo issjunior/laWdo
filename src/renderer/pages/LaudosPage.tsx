@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -369,6 +369,10 @@ export const LaudosPage: React.FC = () => {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
+  const [senhaExclusao, setSenhaExclusao] = useState('');
+  const [senhaExclusaoErro, setSenhaExclusaoErro] = useState('');
+  const [verificandoSenhaExclusao, setVerificandoSenhaExclusao] = useState(false);
+  const [passoExclusao, setPassoExclusao] = useState<'confirmar' | 'senha' | 'confirmado'>('confirmar');
   const [iluminacoesPanelOpen, setIlustracoesPanelOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
@@ -1543,15 +1547,62 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
+  function getCurrentUserId(): string {
+    try {
+      const raw = sessionStorage.getItem('lawdo_auth_user');
+      return raw ? JSON.parse(raw)?.id ?? '' : '';
+    } catch { return ''; }
+  }
+
+  const precisaSenhaParaExcluir = (status: string) =>
+    status === 'Concluído' || status === 'Entregue';
+
+  const handleAbrirExclusao = (laudo: LaudoItem) => {
+    setLaudoParaExcluir(laudo);
+    setSenhaExclusao('');
+    setSenhaExclusaoErro('');
+    setVerificandoSenhaExclusao(false);
+    setPassoExclusao(precisaSenhaParaExcluir(laudo.status) ? 'senha' : 'confirmado');
+    setDeleteDialogOpen(true);
+  };
+
+  const handleVerificarSenhaExclusao = async () => {
+    if (!senhaExclusao) {
+      setSenhaExclusaoErro('Digite sua senha para continuar.');
+      return;
+    }
+    const userId = getCurrentUserId();
+    if (!userId) {
+      setSenhaExclusaoErro('Sessão não encontrada. Faça login novamente.');
+      return;
+    }
+    setVerificandoSenhaExclusao(true);
+    try {
+      const r = await window.ipcAPI.verifyPassword(userId, senhaExclusao);
+      if (r.valid) {
+        setSenhaExclusaoErro('');
+        setPassoExclusao('confirmado');
+      } else {
+        setSenhaExclusaoErro(r.error || 'Senha incorreta.');
+      }
+    } catch {
+      setSenhaExclusaoErro('Erro ao verificar senha.');
+    } finally {
+      setVerificandoSenhaExclusao(false);
+    }
+  };
+
   const handleExcluir = async () => {
     if (!laudoParaExcluir) return;
     try {
       setError(null);
-      const r = await window.ipcAPI.laudo.delete(laudoParaExcluir.id);
+      const userId = precisaSenhaParaExcluir(laudoParaExcluir.status) ? getCurrentUserId() : undefined;
+      const r = await window.ipcAPI.laudo.delete(laudoParaExcluir.id, userId);
       if (r.success) {
         setSuccess(r.message || 'Laudo excluído com sucesso!');
         setDeleteDialogOpen(false);
         setLaudoParaExcluir(null);
+        setSenhaExclusao('');
         carregarLaudos();
         setTimeout(() => setSuccess(null), 3000);
       } else {
@@ -1567,9 +1618,7 @@ export const LaudosPage: React.FC = () => {
       setError(null);
       const r = await window.ipcAPI.laudo.updateStatus(laudo.id, novoStatus);
       if (r.success) {
-        setSuccess(r.message || `Status atualizado para "${novoStatus}"`);
         carregarLaudos();
-        setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(r.error || 'Erro ao atualizar status');
       }
@@ -1578,21 +1627,11 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const statusDisponiveis = useCallback((statusAtual: string): Array<{ label: string; value: string; variant: 'default' | 'secondary' | 'outline' }> => {
-    switch (statusAtual) {
-      case 'Em andamento':
-        return [{ label: 'Concluir', value: 'Concluído', variant: 'outline' }];
-      case 'Concluído':
-        return [
-          { label: 'Entregar', value: 'Entregue', variant: 'secondary' },
-          { label: 'Reabrir', value: 'Em andamento', variant: 'default' },
-        ];
-      case 'Entregue':
-        return [{ label: 'Reabrir', value: 'Concluído', variant: 'outline' }];
-      default:
-        return [];
-    }
-  }, []);
+  const botoesAcaoStatus = useMemo(() => [
+    { label: 'Entregar',  value: 'Entregue',     icon: Send,        enabled: (s: string) => s === 'Concluído',      disabledHint: 'Disponível apenas para laudos Concluídos' },
+    { label: 'Concluir',  value: 'Concluído',    icon: CheckCircle, enabled: (s: string) => s === 'Em andamento',   disabledHint: 'Disponível apenas para laudos Em andamento' },
+    { label: 'Preencher', value: 'Em andamento', icon: null, enabled: () => true },
+  ], []);
 
   const laudoColumns = useMemo<ColumnDef<LaudoItem>[]>(() => [
     {
@@ -1655,12 +1694,12 @@ export const LaudosPage: React.FC = () => {
       ),
       cell: ({ row }) => {
         const status = row.getValue('status') as string;
-        const variantMap: Record<string, 'default' | 'secondary' | 'outline'> = {
-          'Em andamento': 'default',
-          'Concluído': 'outline',
-          'Entregue': 'secondary',
+        const statusStyles: Record<string, string> = {
+          'Em andamento': 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700',
+          'Concluído': 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700',
+          'Entregue': 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700',
         };
-        return <Badge variant={variantMap[status] || 'secondary'}>{status}</Badge>;
+        return <Badge className={statusStyles[status] || ''}>{status}</Badge>;
       },
     },
     {
@@ -1676,32 +1715,53 @@ export const LaudosPage: React.FC = () => {
       header: () => <span className="sr-only">Ações</span>,
       cell: ({ row }) => {
         const laudo = row.original;
+        const isReadonly = laudo.status === 'Concluído' || laudo.status === 'Entregue';
         return (
           <div className="flex justify-end gap-1">
-            {statusDisponiveis(laudo.status).map(op => (
-              <Tooltip key={op.value}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleUpdateStatus(laudo, op.value)}
-                    aria-label={op.label}
-                  >
-                    {op.value === 'Concluído' ? <List size={14} /> :
-                     op.value === 'Entregue' ? <Send size={14} /> :
-                     <RefreshCw size={14} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{op.label}</TooltipContent>
-              </Tooltip>
-            ))}
-            <Button variant="ghost" size="sm" onClick={() => handleEditar(laudo)} aria-label={`Editar laudo da REP ${laudo.rep_numero}`}>
-              <Edit size={14} />
-            </Button>
+            {botoesAcaoStatus.map(op => {
+              const isPreencher = op.value === 'Em andamento';
+              const habilitado = isPreencher || op.enabled(laudo.status);
+
+              let icon;
+              let tooltip;
+              let onClick;
+              if (isPreencher) {
+                icon = isReadonly ? <RotateCcw size={14} /> : <Edit size={14} />;
+                tooltip = isReadonly
+                  ? 'Reabrir para edição — status voltará para Em andamento'
+                  : 'Abrir editor';
+                onClick = async () => {
+                  if (isReadonly) await handleUpdateStatus(laudo, 'Em andamento');
+                  handleEditar(laudo);
+                };
+              } else {
+                const IconComponent = op.icon!;
+                icon = <IconComponent size={14} />;
+                tooltip = habilitado ? op.label : op.disabledHint;
+                onClick = () => handleUpdateStatus(laudo, op.value!);
+              }
+
+              return (
+                <Tooltip key={op.label}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!habilitado}
+                      onClick={onClick}
+                      className={!habilitado ? 'opacity-30' : ''}
+                    >
+                      {icon}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{tooltip}</TooltipContent>
+                </Tooltip>
+              );
+            })}
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setLaudoParaExcluir(laudo); setDeleteDialogOpen(true); }}
+              onClick={() => handleAbrirExclusao(laudo)}
               aria-label={`Excluir laudo da REP ${laudo.rep_numero}`}
               className="text-destructive hover:text-destructive"
             >
@@ -1711,7 +1771,7 @@ export const LaudosPage: React.FC = () => {
         );
       },
     },
-  ], [handleEditar, handleUpdateStatus, statusDisponiveis]);
+  ], [handleEditar, handleUpdateStatus, botoesAcaoStatus]);
 
   // Modo editor com múltiplas seções
   if (editando) {
@@ -1821,7 +1881,11 @@ export const LaudosPage: React.FC = () => {
                   {editando.data_conclusao ? ` &middot; Concluído em ${formatarData(editando.data_conclusao)}` : ''}
                 </CardDescription>
               </div>
-              <Badge variant={editando.status === 'Concluído' ? 'outline' : editando.status === 'Entregue' ? 'secondary' : 'default'}>{editando.status}</Badge>
+              <Badge className={
+                editando.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700' :
+                editando.status === 'Entregue' ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700' :
+                'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
+              }>{editando.status}</Badge>
             </div>
             <div className="flex items-center justify-end">
               <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
@@ -2192,23 +2256,92 @@ export const LaudosPage: React.FC = () => {
       </Card>
 
       {/* Dialog de confirmação para exclusão de laudo */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+        if (!open) { setSenhaExclusao(''); setSenhaExclusaoErro(''); }
+        setDeleteDialogOpen(open);
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Excluir Laudo</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="h-5 w-5" />
+              Excluir Laudo
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <p>Tem certeza que deseja excluir o laudo da REP nº <strong>{laudoParaExcluir?.rep_numero}</strong>?</p>
-            <Alert variant="destructive">
-              <AlertDescription>
-                A REP vinculada voltará para o status <strong>Pendente</strong>.
-              </AlertDescription>
-            </Alert>
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleExcluir}>Excluir Laudo</Button>
-          </div>
+
+          {passoExclusao === 'senha' ? (
+            <>
+              <div className="space-y-3">
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    <strong>ATENÇÃO:</strong> Este laudo está <strong>{laudoParaExcluir?.status}</strong>. A exclusão é irreversível, a REP
+                    voltará para <strong>Pendente</strong> e esta ação requer autenticação.
+                  </AlertDescription>
+                </Alert>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Lock className="h-4 w-4" />
+                    Digite sua senha para confirmar a exclusão
+                  </div>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={senhaExclusao}
+                    onChange={e => { setSenhaExclusao(e.target.value); setSenhaExclusaoErro(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleVerificarSenhaExclusao(); }}
+                    disabled={verificandoSenhaExclusao}
+                    autoFocus
+                  />
+                  {senhaExclusaoErro && (
+                    <p className="text-sm text-destructive">{senhaExclusaoErro}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={verificandoSenhaExclusao}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleVerificarSenhaExclusao}
+                  disabled={verificandoSenhaExclusao || !senhaExclusao}
+                >
+                  {verificandoSenhaExclusao ? 'Verificando...' : 'Verificar Senha'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {precisaSenhaParaExcluir(laudoParaExcluir?.status ?? '') ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      Confirmação final: o laudo <strong>{laudoParaExcluir?.status}</strong> da REP nº{' '}
+                      <strong>{laudoParaExcluir?.rep_numero}</strong> será permanentemente excluído.
+                      A REP vinculada voltará para o status <strong>Pendente</strong>.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <>
+                    <p>Tem certeza que deseja excluir o laudo da REP nº <strong>{laudoParaExcluir?.rep_numero}</strong>?</p>
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        A REP vinculada voltará para o status <strong>Pendente</strong>.
+                      </AlertDescription>
+                    </Alert>
+                  </>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                {passoExclusao === 'confirmado' ? (
+                  <Button variant="ghost" size="sm" onClick={() => { setPassoExclusao('senha'); setSenhaExclusao(''); }}>
+                    Voltar
+                  </Button>
+                ) : null}
+                <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
+                <Button variant="destructive" onClick={handleExcluir}>Excluir Laudo</Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

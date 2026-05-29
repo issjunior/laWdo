@@ -507,6 +507,16 @@ body.dark {
   color: #d1d5db !important;
 }
 
+/* ── Status badges — amber (Em andamento) ── */
+.dark .bg-amber-100 { background-color: rgba(180, 83, 9, 0.3) !important; }
+.dark .text-amber-800 { color: #fcd34d !important; }
+.dark .border-amber-300 { border-color: rgba(180, 83, 9, 0.5) !important; }
+
+/* ── Status badges — blue (Entregue) ── */
+.dark .bg-blue-100 { background-color: rgba(30, 64, 175, 0.3) !important; }
+.dark .text-blue-800 { color: #93c5fd !important; }
+.dark .border-blue-300 { border-color: rgba(30, 64, 175, 0.5) !important; }
+
 /* ── Inputs dark mode — garante legibilidade ── */
 .dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
 .dark textarea,

@@ -99,19 +99,28 @@ export const registerLaudoHandlers = (): void => {
 
   /**
    * Excluir laudo e resetar status da REP para Pendente
+   * @param laudoId ID do laudo
+   * @param userId ID do usuário (opcional, para auditoria)
    */
-  ipcMain.handle('laudo:delete', async (_event, laudoId: string) => {
+  ipcMain.handle('laudo:delete', async (_event, laudoId: string, userId?: string) => {
     try {
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
 
+      const laudo = await laudoService.findById(laudoId);
+      if (!laudo) return { success: false, error: 'Laudo não encontrado' };
+
+      const statusAnterior = laudo.status;
       const { rep_id } = await laudoService.deletar(laudoId);
       await repService.updateStatus(rep_id, 'Pendente');
 
-      logInfo('Laudo excluído e REP resetada para Pendente', { laudoId, repId: rep_id });
-      auditDelete('', 'laudos', laudoId, `Laudo ${laudoId} excluído`, `REP ${rep_id} resetada para Pendente`);
-      auditCicloVida('', 'rep', rep_id, 'transicao_status',
+      const uid = userId || '';
+      logInfo('Laudo excluído e REP resetada para Pendente', { laudoId, repId: rep_id, status: statusAnterior });
+      auditDelete(uid, 'laudos', laudoId,
+        `Laudo ${laudoId} excluído (status: ${statusAnterior})`,
+        `REP ${rep_id} resetada para Pendente`);
+      auditCicloVida(uid, 'rep', rep_id, 'transicao_status',
         `REP ${rep_id} resetada para Pendente (laudo excluído)`,
-        { status: 'Concluído' },
+        { status: statusAnterior },
         { status: 'Pendente', motivo: 'laudo_excluido' },
       );
       return { success: true, message: 'Laudo excluído. A REP voltou para o status Pendente.' };
