@@ -1,8 +1,7 @@
-# Plano de Otimização de Logs — LaudoPericial
+# Módulo de Logs — LaudoPericial
 
-> **Status**: CONCLUÍDO (2025-05-29)  
-> **Início**: 2025-05-29  
-> **Objetivo**: Sistema de logs modular, assíncrono e de alta performance, com auditoria de ações sensíveis e rastreamento do ciclo de vida de REPs e Laudos.
+> **Status**: Implementado (2025-05-29)  
+> **Escopo**: Sistema de logs modular, JSON estruturado, auditoria de ações sensíveis, exclusão de logs dos backups
 
 ---
 
@@ -14,9 +13,6 @@
 | 63 `console.*` diretos sem categoria | Logs perdidos em produção, sem filtro, sem módulo | 48 renderer + 15 main |
 | 448 chamadas Winston sem módulo | Impossível filtrar por área do sistema | Todos os serviços/handlers |
 | `logs_auditoria` nunca populada | Sem rastreabilidade de ações de usuário | Tabela existe, schema definido, 0 INSERTs |
-| Laudo sem transição de status | `concluido` e `entregue` definidos no Zod mas inalcançáveis | Nenhum handler implementado |
-| Schema DB ≠ Schema Zod na `logs_auditoria` | Colunas esperadas pelo Zod não existem na tabela | Zod: `tipo_acao`, `modulo`, `nivel` não estão no DB |
-| `data_conclusao` e `data_entrega` nunca preenchidos | Ciclo de vida do laudo incompleto | `laudo.service.ts` |
 | Backup ZIP inclui `logs_auditoria` | Dados de auditoria vazam em backups | `backup.service.ts` — DB inteiro é copiado |
 | `fs.readFileSync/writeFileSync` em operações de log | Bloqueia event loop | `logger.ts:137,191,209` |
 
@@ -264,29 +260,32 @@ CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidad
 
 ---
 
-## Tarefas Pendentes
+## Pontos de Atenção para Manutenção
 
-### Console.* residuais no renderer
+### Arquivos de log
 
-~50 chamadas de `console.log/error/warn/info` ainda existem em páginas renderer (CabecalhoPage, LaudosPage, SolicitantesPage, TiposExamePage, PerfilPage, ModelosIAPage). Os mais críticos (ErrorBoundary, LogsPage) foram limpos. Os demais podem ser migrados sob demanda — não bloqueiam o funcionamento.
+- **Formato**: JSON (uma linha = um objeto). O parser em `logger.ts:getAllLogs()` lê tanto JSON quanto o formato legado `[timestamp] LEVEL: message`.
+- **Localização**: `%APPDATA%/laWdo/logs/combined.log` e `error.log`
+- **Rotação**: 5 MB por arquivo, máximo 5 arquivos
+- **Retenção**: `cleanupOldLogs()` remove arquivos com mais de 30 dias
 
----
+### Níveis por módulo
 
-## Tarefas Pendentes
+Definidos em `moduleLogLevels` no `logger.ts`. Alterações em runtime via `setModuleLogLevel(module, level)`.
 
-### Onda B — Ciclo de Vida Completo do Laudo
+### Logs de auditoria
 
-| # | Fase | Descrição |
-|---|---|---|
-| B1 | `laudo:updateStatus` handler | IPC handler para transição `Em andamento → Concluído → Entregue` |
-| B2 | `laudoService.updateStatus` | Método que atualiza status + preenche `data_conclusao`/`data_entrega` |
-| B3 | Wire auditoria | `auditCicloVida` nas transições de status do laudo |
-| B4 | UI de status | Badges/botões na interface para concluir/entregar laudo |
+- Tabela `logs_auditoria` no SQLite, migration v19 adicionou 6 colunas
+- Inserção é **fire-and-forget**: não bloqueia a operação principal
+- Excluída automaticamente de backups ZIP (`backup.service.ts` copia DB → DELETE FROM logs_auditoria → ZIP)
+- Limpeza manual via LogsPage exige senha e registra `limpeza_logs`
 
-### Migração de imports (A12)
+### `user:verifyPassword`
 
-~30 arquivos no `src/main/` ainda usam `import { logInfo, logError } from '../utils/logger.js'` em vez de `import { getLogger } from '../utils/log-factory.js'`. As funções `logInfo/Error` ainda funcionam (foram mantidas para compatibilidade), mas logam com `module: 'sistema'`. Migrar progressivamente para `getLogger(module)`.
+- Rate-limit: 3 tentativas em 30 segundos
+- Usado para limpeza de logs e exclusão de laudos finalizados
+- Não retorna dados do usuário, apenas `{ valid: boolean }`
 
-### Console.* residuais no renderer
+### Console.* residuais
 
-~50 chamadas de `console.log/error/warn/info` ainda existem em páginas renderer (CabecalhoPage, LaudosPage, SolicitantesPage, TiposExamePage, PerfilPage, ModelosIAPage). Os mais críticos (ErrorBoundary, LogsPage) foram limpos. Os demais podem ser migrados sob demanda.
+~50 chamadas de `console.log/error/warn/info` ainda existem em páginas renderer. As funções `logInfo/Error/Warn` standalone ainda são exportadas de `logger.ts` para compatibilidade — logam com `module: 'sistema'`. O caminho recomendado é `import { getLogger } from '../utils/logger.js'` seguido de `const log = getLogger('modulo')`.
