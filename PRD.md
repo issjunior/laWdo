@@ -1,20 +1,19 @@
-# PRD - Product Requirements Document: Laudo Pericial Desktop (PCP)
+# PRD - Product Requirements Document: laWdo
 
 ## 1. Visão Geral do Produto
 
-O **Laudo Pericial Desktop** é uma evolução do sistema atual baseado em Streamlit para uma aplicação nativa de alta performance utilizando **Electron**. O objetivo é fornecer aos Peritos Criminais da Polícia Científica uma ferramenta robusta, offline-first, para a gestão de Requisições de Exame Pericial (REP) e a elaboração de laudos técnicos com auxílio de Inteligência Artificial.
+O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma aplicação nativa de alta performance utilizando **Electron**. O objetivo é fornecer aos Peritos Criminais da Polícia Científica uma ferramenta robusta, offline-first, para a gestão de Requisições de Exame Pericial (REP) e a elaboração de laudos técnicos com auxílio de Inteligência Artificial.
 
 ## 2. Objetivos Estratégicos
 
-- **Performance Nativa:** Eliminar o lag de renderização do Streamlit, proporcionando uma interface instantânea.
 - **Edição Avançada:** Oferecer um editor Rich Text (TinyMCE) modular e segmentado por seções.
 - **Gestão de Mídias:** Otimizar o manuseio de imagens locais, garantindo organização e numeração automática de figuras.
 - **Automação Inteligente:** Integrar modelos de linguagem (LLMs) para revisão de texto e descrição técnica de evidências fotográficas.
-- **Portabilidade de Dados:** Manter a base de dados em SQLite para fácil backup e eventual sincronização com nuvem.
+- **Portabilidade de Dados:** Manter a base de dados em SQLite e imagens aparte para fácil backup e eventual sincronização com nuvem.
 
 ## 3. Público-Alvo
 
-- Peritos Oficiais Criminais da Polícia Científica do Paraná.
+- Peritos Criminais.
 
 ## 4. Requisitos Funcionais (FR)
 
@@ -32,13 +31,13 @@ O **Laudo Pericial Desktop** é uma evolução do sistema atual baseado em Strea
 
 ### FR3: Gestão de REPs (Requisição de Exame Pericial)
 
-- **Registro de REP:** Captura de dados de acionamento, envolvidos, lacres de entrada/saída e localização.
-- **Controle de Prazos:** Dashboard com indicadores de REPs pendentes, em andamento e atrasadas.
-- **Histórico de Status:** Rastreamento do ciclo de vida da requisição (Pendente -> Em Andamento -> Concluído). Implmentado no MENU Auditoria.
+- **Registro de REP:** Captura de dados de acionamento, envolvidos, lacres de entrada/saída, localização com inputs personalizados a depender do tipo de exame.
+- **Indicadores:** Dashboard com indicadores de REPs pendentes, em andamento e concluídas e outros indicadores de produtividade.
+- **Histórico e :** Rastreamento do ciclo de vida da REP (Pendente -> Em Andamento -> Concluído) e Laudo (Pendente -> Em andamento -> Concluído -> Entregue)
 
 ### FR4: Editor de Laudos (O Coração do Sistema)
 
-- **Estrutura Modular:** Edição do laudo dividida por seções independentes baseadas no template ou visualização do laudo sob um unico editor de texto.
+- **Estrutura Modular:** Edição do laudo dividida por seções independentes baseadas no template ou visualização do laudo sob um unico editor de texto (padrão).
 - **Rich Text Editor:** Suporte a formatação avançada, tabelas e listas via TinyMCE.
 - **Snapshots:** Histórico das últimas 3 versões salvas para recuperação de desastres.
 
@@ -62,12 +61,13 @@ O **Laudo Pericial Desktop** é uma evolução do sistema atual baseado em Strea
 ### FR8: Exportação e Auditoria
 
 - **Múltiplos Formatos:** Geração de PDF, DOCX (Word) e ODT (LibreOffice).
-- **Log de Auditoria:** Registro detalhado de quem, quando e o que foi alterado em cada laudo.
+- **Log de Auditoria:** Registro detalhado de quando e o que foi alterado em cada laudo e msg importantes para debug.
 - **Backup/Restauração:** Ferramenta para exportar e importar o banco de dados e as imagens em um pacote ZIP.
+- **Sincronização com o google drive:** envio de backup completo de forma automatica por periodos programados pelo usuario. 
 
 ## 5. Requisitos Não Funcionais (NFR)
 
-- **Offline-first:** O sistema deve ser totalmente funcional sem internet (exceto funções de IA).
+- **Offline-first:** O sistema deve ser totalmente funcional sem internet (exceto funções de IA e sincronização com google drive).
 - **Interface Premium:** Design moderno utilizando Shadcn/ui com suporte a Dark Mode.
 - **Performance de Banco:** Queries otimizadas no SQLite para suportar milhares de registros sem lentidão.
 - **Segurança:** Criptografia de dados sensíveis e sanitização de entradas para prevenir SQL Injection.
