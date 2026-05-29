@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, Lock, Zap } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, Lock, Zap, ClipboardPen } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { type REP } from '@/lib/validators';
@@ -38,6 +38,10 @@ import {
   deserializeCamposEspecificos,
 } from '@/components/rep/exam-fields';
 import type { REPFormData } from '@/components/rep/exam-fields';
+import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteFormFields';
+import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
+import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
+import type { CreateTipoExameInput } from '@/lib/validators';
 
 const emptyForm = (): REPFormData => ({
   numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0],
@@ -284,6 +288,18 @@ export const REPsPage: React.FC = () => {
 
   // Controle do accordion (expande N3 automaticamente ao desbloquear)
   const [accordionValue, setAccordionValue] = useState<string[]>(["dados-solicitacao", "documentos"]);
+
+  // Quick-create dialog states
+  const [solicitanteQCOpen, setSolicitanteQCOpen] = useState(false);
+  const [solicitanteQCFormData, setSolicitanteQCFormData] = useState<CreateSolicitanteInput>({ nome: '', tipo: '', endereco: '', telefone: '', email: '' });
+  const [solicitanteQCErrors, setSolicitanteQCErrors] = useState<Partial<Record<keyof CreateSolicitanteInput, string>>>({});
+  const [solicitanteQCError, setSolicitanteQCError] = useState<string | null>(null);
+  const [solicitanteQCSubmitting, setSolicitanteQCSubmitting] = useState(false);
+
+  const [tipoExameQCOpen, setTipoExameQCOpen] = useState(false);
+  const [tipoExameQCFormData, setTipoExameQCFormData] = useState<CreateTipoExameInput>({ codigo: '', nome: '', descricao: '' });
+  const [tipoExameQCError, setTipoExameQCError] = useState<string | null>(null);
+  const [tipoExameQCSubmitting, setTipoExameQCSubmitting] = useState(false);
 
   const carregarREPs = useCallback(async () => {
     try {
@@ -601,6 +617,69 @@ export const REPsPage: React.FC = () => {
       setSubmitting(false);
     }
   });
+
+  const handleSalvarSolicitanteQC = async () => {
+    setSolicitanteQCError(null);
+    setSolicitanteQCErrors({});
+
+    const validation = createSolicitanteSchema.safeParse(solicitanteQCFormData);
+    if (!validation.success) {
+      const fieldErrors: Partial<Record<keyof CreateSolicitanteInput, string>> = {};
+      validation.error.errors.forEach((err) => {
+        const field = err.path[0] as keyof CreateSolicitanteInput;
+        fieldErrors[field] = err.message;
+      });
+      setSolicitanteQCErrors(fieldErrors);
+      return;
+    }
+
+    try {
+      setSolicitanteQCSubmitting(true);
+      const r = await window.ipcAPI.solicitante.create(solicitanteQCFormData);
+      if (r.success) {
+        await carregarSolicitantes();
+        if (r.data?.id) form.setValue('solicitante_id', r.data.id);
+        setSolicitanteQCOpen(false);
+        setSolicitanteQCFormData({ nome: '', tipo: '', endereco: '', telefone: '', email: '' });
+      } else {
+        setSolicitanteQCError(r.error || 'Erro ao criar solicitante');
+      }
+    } catch (e: any) {
+      setSolicitanteQCError(e.message || 'Erro ao criar solicitante');
+    } finally {
+      setSolicitanteQCSubmitting(false);
+    }
+  };
+
+  const handleSalvarTipoExameQC = async () => {
+    setTipoExameQCError(null);
+
+    if (!tipoExameQCFormData.codigo.trim()) {
+      setTipoExameQCError('O código do exame no GDL é obrigatório.');
+      return;
+    }
+    if (!tipoExameQCFormData.nome.trim()) {
+      setTipoExameQCError('O nome do tipo de exame é obrigatório.');
+      return;
+    }
+
+    try {
+      setTipoExameQCSubmitting(true);
+      const r = await window.ipcAPI.tipoExame.create(tipoExameQCFormData);
+      if (r.success) {
+        await carregarTiposExame();
+        if (r.data?.id) form.setValue('tipo_exame_id', r.data.id);
+        setTipoExameQCOpen(false);
+        setTipoExameQCFormData({ codigo: '', nome: '', descricao: '' });
+      } else {
+        setTipoExameQCError(r.error || 'Erro ao criar tipo de exame');
+      }
+    } catch (e: any) {
+      setTipoExameQCError(e.message || 'Erro ao criar tipo de exame');
+    } finally {
+      setTipoExameQCSubmitting(false);
+    }
+  };
 
   const columnDefs = useMemo<ColumnDef<REP>[]>(() => [
     {
@@ -932,7 +1011,7 @@ export const REPsPage: React.FC = () => {
                       name="solicitante_id"
                       render={({ field }) => (
                         <FormItem>
-                          <LabelWithPlaceholder field="solicitante_id" mostrar={mostrarPlaceholders}>Solicitante</LabelWithPlaceholder>
+                          <LabelWithPlaceholder field="solicitante_id" mostrar={mostrarPlaceholders}>Solicitante <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setSolicitanteQCOpen(true); }} /></LabelWithPlaceholder>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger><SelectValue placeholder="Selecione o órgão..." /></SelectTrigger>
@@ -958,7 +1037,7 @@ export const REPsPage: React.FC = () => {
                       name="tipo_exame_id"
                       render={({ field }) => (
                         <FormItem>
-                          <LabelWithPlaceholder field="tipo_exame_id" mostrar={mostrarPlaceholders}>Tipo de Exame</LabelWithPlaceholder>
+                          <LabelWithPlaceholder field="tipo_exame_id" mostrar={mostrarPlaceholders}>Tipo de Exame <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTipoExameQCOpen(true); }} /></LabelWithPlaceholder>
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
@@ -1310,6 +1389,74 @@ export const REPsPage: React.FC = () => {
         </Card>
       )}
     </div>
+
+      {/* Quick-create Solicitante Dialog */}
+      <Dialog open={solicitanteQCOpen} onOpenChange={setSolicitanteQCOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Novo Solicitante</DialogTitle>
+            <DialogDescription>
+              Preencha as informações para cadastrar um novo solicitante.
+            </DialogDescription>
+          </DialogHeader>
+          <SolicitanteFormFields
+            formData={solicitanteQCFormData}
+            onChange={setSolicitanteQCFormData}
+            errors={solicitanteQCErrors}
+            error={solicitanteQCError}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSolicitanteQCOpen(false);
+                setSolicitanteQCError(null);
+                setSolicitanteQCErrors({});
+                setSolicitanteQCFormData({ nome: '', tipo: '', endereco: '', telefone: '', email: '' });
+              }}
+              disabled={solicitanteQCSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleSalvarSolicitanteQC} disabled={solicitanteQCSubmitting}>
+              {solicitanteQCSubmitting ? 'Criando...' : 'Criar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick-create Tipo Exame Dialog */}
+      <Dialog open={tipoExameQCOpen} onOpenChange={setTipoExameQCOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Novo Tipo de Exame</DialogTitle>
+            <DialogDescription>
+              Preencha as informações para criar um novo tipo de exame.
+            </DialogDescription>
+          </DialogHeader>
+          <TipoExameFormFields
+            formData={tipoExameQCFormData}
+            onChange={setTipoExameQCFormData}
+            error={tipoExameQCError}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTipoExameQCOpen(false);
+                setTipoExameQCError(null);
+                setTipoExameQCFormData({ codigo: '', nome: '', descricao: '' });
+              }}
+              disabled={tipoExameQCSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleSalvarTipoExameQC} disabled={tipoExameQCSubmitting}>
+              {tipoExameQCSubmitting ? 'Criando...' : 'Criar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       </TooltipProvider>
   );
 };

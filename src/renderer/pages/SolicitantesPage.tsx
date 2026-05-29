@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +21,8 @@ import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { solicitanteSchema, createSolicitanteSchema, type Solicitante } from '@/lib/validators/solicitante.schema';
+import { createSolicitanteSchema, type Solicitante } from '@/lib/validators/solicitante.schema';
+import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteFormFields';
 
 export const SolicitantesPage: React.FC = () => {
   const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
@@ -524,112 +524,13 @@ export const SolicitantesPage: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="nome" className="text-sm font-medium">
-                    Solicitante *
-                  </label>
-                  <Input
-                    id="nome"
-                    value={formData.nome}
-                    onChange={(e) =>
-                      setFormData({ ...formData, nome: e.target.value })
-                    }
-                    placeholder="Ex: Tribunal de Justiça do Paraná"
-                    className={errors.nome ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                  />
-                  {errors.nome && (
-                    <p className="text-xs text-red-600">{errors.nome}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="tipo" className="text-sm font-medium">
-                    Responsável/Contato
-                  </label>
-                  <Input
-                    id="tipo"
-                    value={formData.tipo}
-                    onChange={(e) =>
-                      setFormData({ ...formData, tipo: e.target.value })
-                    }
-                    placeholder="Ex: Vara Criminal, Delegacia, Ministério Público"
-                    className={errors.tipo ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                  />
-                  {errors.tipo && (
-                    <p className="text-xs text-red-600">{errors.tipo}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="endereco" className="text-sm font-medium">
-                    Endereço
-                  </label>
-                  <Input
-                    id="endereco"
-                    value={formData.endereco}
-                    onChange={(e) =>
-                      setFormData({ ...formData, endereco: e.target.value })
-                    }
-                    placeholder="Endereço completo"
-                    className={errors.endereco ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                  />
-                  {errors.endereco && (
-                    <p className="text-xs text-red-600">{errors.endereco}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="telefone" className="text-sm font-medium">
-                    Telefone
-                  </label>
-                  <Input
-                    id="telefone"
-                    value={formData.telefone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, telefone: e.target.value })
-                    }
-                    placeholder="(99) 99999-9999"
-                    className={errors.telefone ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                  />
-                  {errors.telefone && (
-                    <p className="text-xs text-red-600">{errors.telefone}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium">
-                    E-mail
-                  </label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    placeholder="email@tjpr.jus.br"
-                    className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                  />
-                  {errors.email && (
-                    <p className="text-xs text-red-600">{errors.email}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Mensagens de erro/sucesso */}
-              {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
-                  {error}
-                </div>
-              )}
-              {success && (
-                <div className="text-sm text-green-600 bg-green-50 p-3 rounded">
-                  {success}
-                </div>
-              )}
-            </div>
+            <SolicitanteFormFields
+              formData={formData}
+              onChange={setFormData}
+              errors={errors}
+              error={error}
+              success={success}
+            />
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>

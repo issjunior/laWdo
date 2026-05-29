@@ -2,29 +2,15 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Plus, Edit, Trash2, X, Eye, EyeOff, FlaskConical, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TipoExame, CreateTipoExameInput } from '@/lib/validators';
+import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 
 export const TiposExamePage: React.FC = () => {
   const [tiposExame, setTiposExame] = useState<TipoExame[]>([]);
@@ -477,61 +463,12 @@ export const TiposExamePage: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              {success && (
-                <Alert className="bg-green-50 border-green-200">
-                  <AlertDescription className="text-green-800">{success}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-2">
-                <label htmlFor="codigo" className="text-sm font-medium">
-                  Código do exame no GDL *
-                </label>
-                <Input
-                  id="codigo"
-                  value={formData.codigo}
-                  onChange={(e) =>
-                    setFormData({ ...formData, codigo: e.target.value })
-                  }
-                  placeholder="Ex: DNA, BAL, LOC..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="nome" className="text-sm font-medium">
-                  Nome do tipo de exame *
-                </label>
-                <Input
-                  id="nome"
-                  value={formData.nome}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nome: e.target.value })
-                  }
-                  placeholder="Ex: Exame de DNA, Perícia Balística..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="descricao" className="text-sm font-medium">
-                  Descrição do exame
-                </label>
-                <Textarea
-                  id="descricao"
-                  value={formData.descricao}
-                  onChange={(e) =>
-                    setFormData({ ...formData, descricao: e.target.value })
-                  }
-                  placeholder="Descrição detalhada do tipo de exame..."
-                  rows={4}
-                />
-              </div>
-            </div>
+            <TipoExameFormFields
+              formData={formData}
+              onChange={setFormData}
+              error={error}
+              success={success}
+            />
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
