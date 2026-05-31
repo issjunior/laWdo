@@ -2242,6 +2242,7 @@ export const LaudosPage: React.FC = () => {
             <DataTable
               columns={laudoColumns}
               data={laudos}
+              enableRowPinning
               hideSearch
               defaultSorting={[{ id: "data_requisicao", desc: true }]}
               initialColumnVisibility={{

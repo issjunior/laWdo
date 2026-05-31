@@ -594,9 +594,12 @@ export function LogsPage() {
                   <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex gap-2">
                 <Button variant="outline" size="sm" onClick={limparFiltrosSistema}>
                   <RotateCcw className="mr-2 h-4 w-4" />Limpar Filtros
+                </Button>
+                <Button size="sm" onClick={carregarLogsSistema}>
+                  <Search className="mr-2 h-4 w-4" />Filtrar
                 </Button>
               </div>
             </CardContent>
@@ -661,9 +664,12 @@ export function LogsPage() {
                   <Input type="date" value={dataFimAudit} onChange={e => setDataFimAudit(e.target.value)} />
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex gap-2">
                 <Button variant="outline" size="sm" onClick={limparFiltrosAuditoria}>
                   <RotateCcw className="mr-2 h-4 w-4" />Limpar Filtros
+                </Button>
+                <Button size="sm" onClick={carregarLogsAuditoria}>
+                  <Search className="mr-2 h-4 w-4" />Filtrar
                 </Button>
               </div>
             </CardContent>
