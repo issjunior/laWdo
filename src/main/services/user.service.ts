@@ -43,11 +43,11 @@ export class UserService extends BaseService<UserRow> {
 
       const created = await this.findById(id)
       if (!created) {
-        throw new Error('Falha ao recuperar usu�rio criado')
+        throw new Error('Falha ao recuperar usuário criado')
       }
       return created
     } catch (error) {
-      log.error('Erro ao criar usu�rio', { data, error })
+      log.error('Erro ao criar usuário', { data, error })
       throw error
     }
   }
@@ -80,7 +80,7 @@ export class UserService extends BaseService<UserRow> {
       await executeNonQuery(sql, [...values, now, id])
       return await this.findById(id)
     } catch (error) {
-      log.error('Erro ao atualizar usu�rio', { id, data, error })
+      log.error('Erro ao atualizar usuário', { id, data, error })
       throw error
     }
   }
@@ -89,7 +89,7 @@ export class UserService extends BaseService<UserRow> {
     try {
       const user = await this.findByLogin(login)
       if (!user) {
-        log.info('Tentativa de autentica��o com usu�rio n�o encontrado', { login })
+        log.info('Tentativa de autenticação com usuário não encontrado', { login })
         return null
       }
 
@@ -102,14 +102,14 @@ export class UserService extends BaseService<UserRow> {
       }
 
       if (!validPassword) {
-        log.info('Tentativa de autentica��o com senha inv�lida', { login, userId: user.id })
+        log.info('Tentativa de autenticação com senha inválida', { login, userId: user.id })
         return null
       }
 
-      log.info('Autentica��o bem-sucedida', { login, userId: user.id })
+      log.info('Autenticação bem-sucedida', { login, userId: user.id })
       return user
     } catch (error) {
-      log.error('Erro na autentica��o', { login, error })
+      log.error('Erro na autenticação', { login, error })
       throw error
     }
   }
@@ -120,7 +120,7 @@ export class UserService extends BaseService<UserRow> {
       const rows = await this.executeCustomQuery<UserRow>(sql, [login, login])
       return rows.length > 0 ? rows[0] : null
     } catch (error) {
-      log.error('Erro ao buscar usu�rio por login', { login, error })
+      log.error('Erro ao buscar usuário por login', { login, error })
       throw error
     }
   }
@@ -136,7 +136,7 @@ export class UserService extends BaseService<UserRow> {
 
       return rows[0]
     } catch (error) {
-      log.error(`Erro ao buscar usu�rio por email`, { email, error })
+      log.error(`Erro ao buscar usuário por email`, { email, error })
       throw error
     }
   }
@@ -147,7 +147,7 @@ export class UserService extends BaseService<UserRow> {
       const rows = await this.executeCustomQuery<UserRow>(sql, [matricula])
       return rows.length > 0 ? rows[0] : null
     } catch (error) {
-      log.error(`Erro ao buscar usu�rio por matr�cula`, { matricula, error })
+      log.error(`Erro ao buscar usuário por matrícula`, { matricula, error })
       throw error
     }
   }
@@ -157,7 +157,7 @@ export class UserService extends BaseService<UserRow> {
     profileData: Partial<Omit<UserRow, 'id' | 'created_at' | 'updated_at'>>
   ): Promise<UserRow | null> {
     try {
-      log.debug('Atualizando perfil do usu�rio', { userId, fields: Object.keys(profileData).join(', ') })
+      log.debug('Atualizando perfil do usuário', { userId, fields: Object.keys(profileData).join(', ') })
       return await this.update(userId, profileData)
     } catch (error) {
       log.error('Erro ao atualizar perfil', { userId, error })
@@ -178,17 +178,17 @@ export class UserService extends BaseService<UserRow> {
 
   async deactivate(userId: string): Promise<boolean> {
     try {
-      log.info('Usu�rio desativado (soft delete)', { userId })
+      log.info('Usuário desativado (soft delete)', { userId })
       return true
     } catch (error) {
-      log.error('Erro ao desativar usu�rio', { userId, error })
+      log.error('Erro ao desativar usuário', { userId, error })
       throw error
     }
   }
 
   async generateActivityReport(userId: string, startDate?: Date, endDate?: Date): Promise<any> {
     try {
-      log.info('Relat�rio de atividades solicitado', { userId, startDate, endDate })
+      log.info('Relatório de atividades solicitado', { userId, startDate, endDate })
       return {
         userId,
         period: { startDate, endDate },
@@ -197,7 +197,7 @@ export class UserService extends BaseService<UserRow> {
         atividades: []
       }
     } catch (error) {
-      log.error('Erro ao gerar relat�rio de atividades', { userId, error })
+      log.error('Erro ao gerar relatório de atividades', { userId, error })
       throw error
     }
   }

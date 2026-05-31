@@ -13,13 +13,17 @@ import {
   Filter,
   Database,
   ClipboardList,
+  Activity,
+  ShieldCheck,
+  HardDrive,
+  Clock,
 } from 'lucide-react';
 
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -427,6 +431,65 @@ export function LogsPage() {
             Limpar Logs
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-5 w-5 text-blue-500" />
+              Log de Sistema
+            </CardTitle>
+            <CardDescription>
+              Registros técnicos da operação do software. Use para diagnosticar erros, monitorar
+              performance e depurar o comportamento da aplicação.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <HardDrive className="h-3 w-3" />
+                Arquivos JSON em disco
+              </Badge>
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Clock className="h-3 w-3" />
+                Retenção: 30 dias
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Ex: erro de conexão com banco, query lenta, aviso de memória, debug de template IA
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-amber-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-amber-500" />
+              Log de Auditoria
+            </CardTitle>
+            <CardDescription>
+              Rastreabilidade das ações dos usuários sobre os dados. Garante conformidade legal e
+              permite identificar quem fez o quê e quando.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <HardDrive className="h-3 w-3" />
+                Tabela SQLite no banco
+              </Badge>
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Clock className="h-3 w-3" />
+                Retenção: Indefinido
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Ex: login de usuário, exclusão de REP, transição de status do laudo, exportação de
+              backup
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
