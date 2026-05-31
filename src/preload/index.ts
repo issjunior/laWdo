@@ -100,6 +100,7 @@ export interface IpcAPI {
   rep: {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
+    findByNumero: (numero: string) => Promise<UserResponse>;
     create: (data: any) => Promise<UserResponse>;
     update: (id: string, data: any) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
@@ -182,6 +183,7 @@ export interface IpcAPI {
     listarAuditoria: (filters?: Record<string, unknown>) => Promise<{ success: boolean; data?: any[]; total?: number; error?: string }>;
     limparAuditoria: (userId?: string) => Promise<{ success: boolean; count?: number; error?: string }>;
     contar: () => Promise<{ success: boolean; data?: { sistema: number; auditoria: number }; error?: string }>;
+    timelineRep: (repId: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
   };
 
   // Painel de Ilustrações (janela separada)
@@ -261,6 +263,7 @@ const ALLOWED_CHANNELS = new Set([
   'rep:create',
   'rep:findAll',
   'rep:findById',
+  'rep:findByNumero',
   'rep:update',
   'rep:delete',
   'rep:updateStatus',
@@ -321,6 +324,7 @@ const ALLOWED_CHANNELS = new Set([
   'log:listar-auditoria',
   'log:limpar-auditoria',
   'log:contar',
+  'log:timeline-rep',
 
   // Painel de Ilustrações
   'ilustracoes:open-panel',
@@ -647,6 +651,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   rep: {
     findAll: () => ipcRenderer.invoke('rep:findAll'),
     findById: (id: string) => ipcRenderer.invoke('rep:findById', id),
+    findByNumero: (numero: string) => ipcRenderer.invoke('rep:findByNumero', numero),
     create: (data: any) => ipcRenderer.invoke('rep:create', data),
     update: (id: string, data: any) => ipcRenderer.invoke('rep:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('rep:delete', id),
@@ -727,6 +732,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     listarAuditoria: (filters?: Record<string, unknown>) => ipcRenderer.invoke('log:listar-auditoria', filters),
     limparAuditoria: (userId?: string) => ipcRenderer.invoke('log:limpar-auditoria', userId),
     contar: () => ipcRenderer.invoke('log:contar'),
+    timelineRep: (repId: string) => ipcRenderer.invoke('log:timeline-rep', repId),
   },
 
   ilustracoes: {

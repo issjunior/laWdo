@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, Lock, Zap, ClipboardPen } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, Lock, Zap, ClipboardPen, Clock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { type REP } from '@/lib/validators';
@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import {
   getSectionsForExame,
   EXAM_FIELD_MAP,
@@ -289,6 +290,10 @@ export const REPsPage: React.FC = () => {
 
   // Estados para o Alert Dialog de exclusão
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Estados para o Dialog de Linha do Tempo
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [timelineRep, setTimelineRep] = useState<REP | null>(null);
   const [deleteDialogRep, setDeleteDialogRep] = useState<REP | null>(null);
 
   // Estado de desbloqueio dos campos específicos (Nível 3)
@@ -770,6 +775,9 @@ export const REPsPage: React.FC = () => {
                 <FileText size={14} />
               </Button>
             )}
+            <Button variant="ghost" size="sm" onClick={() => { setTimelineRep(rep); setTimelineOpen(true); }} title="Histórico">
+              <Clock size={14} />
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => handleEditar(rep)} aria-label={`Editar REP ${rep.numero}`}>
               <Edit size={14} />
             </Button>
@@ -909,6 +917,15 @@ export const REPsPage: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+      {timelineRep && (
+        <RepTimelineDialog
+          open={timelineOpen}
+          onOpenChange={setTimelineOpen}
+          repId={timelineRep.id}
+          repNumero={timelineRep.numero}
+        />
+      )}
       </div>
       </TooltipProvider>
     );

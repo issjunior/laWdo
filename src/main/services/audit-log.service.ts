@@ -243,6 +243,28 @@ export async function clearAuditLogs(): Promise<{ success: boolean; count: numbe
   }
 }
 
+export async function getTimelineRep(
+  repId: string,
+): Promise<{ success: boolean; data?: Record<string, unknown>[]; error?: string }> {
+  try {
+    const sql = `
+      SELECT la.*, 'REP' as origem FROM logs_auditoria la
+      WHERE la.modulo IN ('rep', 'reps') AND la.entidade_id = ?
+      UNION ALL
+      SELECT la.*, 'Laudo' as origem FROM logs_auditoria la
+      LEFT JOIN laudos ld ON la.entidade_id = ld.id
+      WHERE ld.rep_id = ?
+         OR (la.modulo IN ('laudo', 'laudos') AND la.entidade_id = ?)
+      ORDER BY created_at ASC
+    `;
+    const data = await executeQuery<Record<string, unknown>>(sql, [repId, repId, repId]);
+    return { success: true, data };
+  } catch (err) {
+    log.error('Erro ao buscar timeline da REP', err instanceof Error ? err : new Error(String(err)));
+    return { success: false, error: String(err) };
+  }
+}
+
 export async function countAuditLogs(): Promise<number> {
   try {
     const result = await executeQuery<{ total: number }>(

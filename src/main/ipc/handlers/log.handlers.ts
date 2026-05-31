@@ -4,6 +4,7 @@ import {
   listAuditLogs,
   clearAuditLogs,
   countAuditLogs,
+  getTimelineRep,
   auditLimpezaLogs,
 } from '../../services/audit-log.service.js';
 
@@ -59,6 +60,16 @@ export const registerLogSystemHandlers = (): void => {
       return { success: true, data: result.data, total: result.total };
     } catch (error) {
       logError('Erro ao listar auditoria', error);
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle('log:timeline-rep', async (_event, repId: string) => {
+    try {
+      const result = await getTimelineRep(repId);
+      return result;
+    } catch (error) {
+      logError('Erro ao buscar timeline da REP', error);
       return { success: false, error: String(error) };
     }
   });

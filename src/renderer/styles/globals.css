@@ -1320,3 +1320,24 @@ body.dark {
     width: 100%;
   }
 }
+
+/* ═══ Dual-Track Timeline ════════════════════════════════════════════════════ */
+
+.dual-track-container {
+  container-type: inline-size;
+}
+
+.dual-track-dot {
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+/* Dark mode: ghost track dashed line */
+.dark .dual-track-container .border-dashed {
+  border-color: rgba(168, 85, 247, 0.12) !important;
+}
+
+/* Dark mode: connection arrows visibility */
+.dark .dual-track-container svg {
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.08));
+}

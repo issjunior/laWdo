@@ -128,6 +128,21 @@ export const registerRepHandlers = (): void => {
     }
   });
 
+  ipcMain.handle('rep:findByNumero', async (_event, numero: string) => {
+    try {
+      if (!numero) return { success: false, error: 'Número inválido' };
+      const rep = await repService.findByNumero(numero.trim());
+      if (!rep) return { success: false, error: 'REP não encontrada' };
+      return { success: true, data: rep };
+    } catch (error) {
+      logError('Erro ao buscar REP por número', { numero, error });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
+      };
+    }
+  });
+
   /**
    * Atualizar REP
    */

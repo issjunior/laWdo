@@ -21,6 +21,7 @@ import {
 
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
+import { DualTrackTimeline } from '@/components/timeline/DualTrackTimeline';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -138,7 +139,7 @@ const formatarTimestamp = (ts: string): string => {
 };
 
 export function LogsPage() {
-  const [aba, setAba] = useState<'sistema' | 'auditoria'>('sistema');
+  const [aba, setAba] = useState<'sistema' | 'auditoria' | 'timeline'>('sistema');
   const [logsSistema, setLogsSistema] = useState<SystemLog[]>([]);
   const [logsAuditoria, setLogsAuditoria] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,6 +163,12 @@ export function LogsPage() {
 
   const [contagemSistema, setContagemSistema] = useState(0);
   const [contagemAuditoria, setContagemAuditoria] = useState(0);
+
+  const [timelineRepNumero, setTimelineRepNumero] = useState('');
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineRepId, setTimelineRepId] = useState<string | null>(null);
+  const [timelineRepEncontrada, setTimelineRepEncontrada] = useState<any>(null);
+  const [timelineError, setTimelineError] = useState('');
 
   useEffect(() => {
     carregarLogsSistema();
@@ -239,6 +246,31 @@ export function LogsPage() {
     setFiltroNivelAudit('todos');
     setDataInicioAudit('');
     setDataFimAudit('');
+  };
+
+  const handleBuscarTimeline = async () => {
+    const numero = timelineRepNumero.trim();
+    if (!numero) {
+      setTimelineError('Digite o número da REP');
+      return;
+    }
+    setTimelineLoading(true);
+    setTimelineError('');
+    setTimelineRepId(null);
+    setTimelineRepEncontrada(null);
+    try {
+      const r = await window.ipcAPI.rep.findByNumero(numero);
+      if (r.success && r.data) {
+        setTimelineRepId(r.data.id);
+        setTimelineRepEncontrada(r.data);
+      } else {
+        setTimelineError(r.error || 'REP não encontrada');
+      }
+    } catch (err) {
+      setTimelineError(String(err));
+    } finally {
+      setTimelineLoading(false);
+    }
   };
 
   const abrirDialogLimpeza = () => {
@@ -539,7 +571,7 @@ export function LogsPage() {
         )}
       </div>
 
-      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria')}>
+      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria' | 'timeline')}>
         <TabsList>
           <TabsTrigger value="sistema" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -548,6 +580,10 @@ export function LogsPage() {
           <TabsTrigger value="auditoria" className="flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
             Auditoria
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Linha do Tempo
           </TabsTrigger>
         </TabsList>
 
@@ -691,6 +727,68 @@ export function LogsPage() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="timeline" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Buscar REP
+              </CardTitle>
+              <CardDescription>
+                Digite o número da REP para visualizar a linha do tempo completa do ciclo de vida
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ex: 045-2026"
+                  value={timelineRepNumero}
+                  onChange={e => setTimelineRepNumero(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleBuscarTimeline(); }}
+                />
+                <Button onClick={handleBuscarTimeline} disabled={timelineLoading}>
+                  {timelineLoading ? (
+                    <span className="flex items-center gap-1">Buscando...</span>
+                  ) : (
+                    <span className="flex items-center gap-1"><Search className="h-4 w-4" /> Buscar</span>
+                  )}
+                </Button>
+              </div>
+              {timelineError && (
+                <p className="text-sm text-destructive mt-2">{timelineError}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {timelineRepEncontrada && (
+            <Card className="border-emerald-200 dark:border-emerald-800">
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:border-emerald-700 dark:bg-emerald-950/30">
+                    REP {timelineRepEncontrada.numero}
+                  </Badge>
+                  {timelineRepEncontrada.status && (
+                    <Badge variant={
+                      timelineRepEncontrada.status === 'Pendente' ? 'secondary' :
+                      timelineRepEncontrada.status === 'Em Andamento' ? 'default' : 'outline'
+                    }>
+                      {timelineRepEncontrada.status}
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {timelineRepId && (
+            <Card>
+              <CardContent className="pt-6">
+                <DualTrackTimeline repId={timelineRepId} repNumero={timelineRepEncontrada?.numero} />
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

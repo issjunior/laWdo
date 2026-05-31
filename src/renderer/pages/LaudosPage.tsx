@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import {
@@ -376,6 +377,9 @@ export const LaudosPage: React.FC = () => {
   const [iluminacoesPanelOpen, setIlustracoesPanelOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
+
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [timelineLaudo, setTimelineLaudo] = useState<LaudoItem | null>(null);
 
   const togglePanel = useCallback(() => {
     setPanelCollapsed(prev => !prev);
@@ -1758,6 +1762,18 @@ export const LaudosPage: React.FC = () => {
                 </Tooltip>
               );
             })}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setTimelineLaudo(laudo); setTimelineOpen(true); }}
+                >
+                  <Clock size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Histórico</TooltipContent>
+            </Tooltip>
             <Button
               variant="ghost"
               size="sm"
@@ -2345,6 +2361,15 @@ export const LaudosPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {timelineLaudo && (
+        <RepTimelineDialog
+          open={timelineOpen}
+          onOpenChange={setTimelineOpen}
+          repId={timelineLaudo.rep_id}
+          repNumero={timelineLaudo.rep_numero}
+        />
+      )}
     </div>
   );
 };
