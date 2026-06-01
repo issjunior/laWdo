@@ -1,7 +1,7 @@
 # Histórico / Linha do Tempo REP e Laudo
 
-> **Status**: Implementado (2026-05-31)
-> **Escopo**: Timeline de trilha dupla com eventos de REP e Laudo, conexões direcionais, trilha fantasma
+> **Status**: Implementado e Refinado (2026-05-31)
+> **Escopo**: Timeline de trilha dupla com eventos de REP e Laudo, conexões direcionais, trilha fantasma e visual premium responsivo.
 
 ---
 
@@ -31,19 +31,19 @@ simultâneos lado a lado.
 │                        │           │                      │
 │  ●── Pendente          │           │                      │
 │  │   REP criada        │           │                      │
-│  │   15/03 14:30       │           │                      │
+│  │   15/03/2026 14:30  │           │                      │
 │                        │           │                      │
 │  ●── Em Andamento      │── REP→Laudo──►  ●── Em andamento │
-│  │   16/03 09:15       │  Iniciou laudo  │   16/03 09:15  │
+│  │   16/03/2026 09:15  │  Iniciou laudo  │   16/03/2026 09:15  │
 │                        │           │                      │
 │                        │           │  ●── Concluído        │
-│                        │           │  │   18/03 16:45      │
+│                        │           │  │   18/03/2026 16:45  │
 │                        │           │                      │
 │  ●── Concluído         │◄── Laudo→REP ──┤                  │
-│  │   18/03 16:45       │  Concluiu REP │                  │
+│  │   18/03/2026 16:45  │  Concluiu REP │                  │
 │                        │           │                      │
 │                        │           │  ●── Entregue         │
-│                        │           │  │   20/03 10:00      │
+│                        │           │  │   20/03/2026 10:00  │
 │                        │           │                      │
 │  (trilha fantasma)     │           │  ─ ─ ─ ─ ─ ─ ─ ─  │
 │                        │           │  Aguardando laudo    │
@@ -52,13 +52,14 @@ simultâneos lado a lado.
 
 ### Identidade visual por trilha
 
-| Atributo | REP | Laudo |
+| Atributo | REP (Azul) | Laudo (Violeta) |
 |----------|-----|-------|
-| Cor da linha | `blue-400` | `purple-400` |
-| Cor do dot | `blue-500` | `purple-500` |
-| Cor do card | borda `blue-200` | borda `purple-200` |
-| Badge origem | "REP" outline | "Laudo" outline |
-| Linha fantasma | — | `border-dashed border-purple-300/30` |
+| Cor da linha | Gradiente de opacidade `blue-400` / `blue-600` | Gradiente de opacidade `violet-400` / `violet-600` |
+| Diâmetro da Linha | `w-[3px]` (3px) | `w-[3px]` (3px) |
+| Estilo do Dot | `w-4 h-4` com sombra em anel suave (`dual-track-dot-rep`) | `w-4 h-4` com sombra em anel suave (`dual-track-dot-laudo`) |
+| Estilo do Card | Borda fina premium + hover com `translateY(-1px)` e sombra | Borda fina premium + hover com `translateY(-1px)` e sombra |
+| Badge origem | Pill badge com ícone ScrollText ("REP") | Pill badge com ícone History ("Laudo") |
+| Linha fantasma | — | `border-dashed` (`dual-track-ghost` glassmorphism) |
 
 ### Conexões com direção (setas)
 
@@ -72,7 +73,7 @@ simultâneos lado a lado.
 
 ### Trilha fantasma
 
-Quando não há eventos de Laudo (antes da criação ou após exclusão), a coluna Laudo mostra uma linha tracejada opaca com o texto "Aguardando criação do laudo".
+Quando não há eventos de Laudo (antes da criação ou após exclusão), a coluna Laudo mostra uma linha tracejada opaca com o texto "Aguardando criação do laudo" no formato de card fantasma com efeito glassmorphism e bordas pontilhadas.
 
 ---
 
@@ -92,14 +93,14 @@ src/
 │   └── index.ts                      ← log.timelineRep(), rep.findByNumero()
 └── renderer/
     ├── components/timeline/
-    │   ├── DualTrackTimeline.tsx     ← Componente principal (~300 linhas)
-    │   └── RepTimelineDialog.tsx     ← Dialog wrapper
+    │   ├── DualTrackTimeline.tsx     ← Componente principal com subcomponentes auxiliares
+    │   └── RepTimelineDialog.tsx     ← Dialog wrapper com fix de scroll e layout flex
     ├── pages/
     │   ├── LogsPage.tsx              ← 3ª aba "Linha do Tempo"
     │   ├── REPsPage.tsx              ← Botão Histórico
     │   └── LaudosPage.tsx            ← Botão Histórico
     └── styles/
-        └── globals.css               ← Estilos .dual-track-*
+        └── globals.css               ← Estilos personalizados sob .dual-track-*
 ```
 
 ### Fluxo de dados
@@ -136,9 +137,9 @@ DualTrackTimeline(repId)
   │
   ▼
 Render: grid 3-colunas com linhas cronológicas unificadas
-  - Linhas verticais contínuas (REP azul, Laudo violeta) como fundo
+  - Linhas verticais contínuas com gradiente (REP azul, Laudo violeta) como fundo
   - Cada row = 1 instante no tempo: evento REP, Laudo, ou ambos
-  - Gutter central: setas de conexão com labels nas rows conectadas
+  - Gutter central (60px): setas de conexão com labels nas rows conectadas
   - Se !hasLaudoEvents: trilha fantasma tracejada na coluna Laudo
 ```
 
@@ -174,9 +175,15 @@ A query cobre 3 cenários de dados:
 
 ---
 
-## Componentes UI
+## Componentes UI & Refinamentos Premium
 
 ### DualTrackTimeline
+
+Componente principal refatorado para usar uma estrutura modularizada e classes personalizadas de CSS para micro-animações e efeitos visuais:
+- **`TimelineSkeleton`**: Renderiza 3 linhas simuladas com efeito shimmer (`dual-track-shimmer`) em vez de um spinner estático, melhorando a percepção de velocidade de carregamento.
+- **`EmptyState`**: Exibe uma mensagem amigável acompanhada de um ícone ilustrativo centralizado quando não há dados para a REP informada.
+- **`EventCard`**: Renderiza os cards de eventos da timeline. Cada card possui um ícone posicionado dentro de um círculo colorido sutil correspondente, cabeçalhos pill badges customizados e efeito hover de elevação.
+- **`ConnectionGutter`**: Componente dedicado a renderizar a seta de direção com um badge flutuante estilizado no vão central da timeline.
 
 **Props:**
 ```typescript
@@ -186,13 +193,10 @@ interface DualTrackTimelineProps {
 }
 ```
 
-**Estados internos:**
-- `loading` — spinner enquanto carrega
-- `error` — alert destrutivo se falhar
-- `empty` — mensagem "Nenhum evento" se array vazio
-- `hasLaudoEvents` — controla trilha fantasma vs sólida
-
 ### RepTimelineDialog
+
+Wrapper do diálogo modal otimizado para usabilidade:
+- **Fix de Acessibilidade do Botão Fechar**: O botão "Fechar" (x) do Dialog agora permanece fixo no topo direito e não é mais ocultado ao rolar a lista de eventos. Isso foi alcançado estruturando o modal em contêineres flex, onde a cabeceira e o botão de fechar permanecem em `flex-shrink-0` e a timeline em si fica dentro de uma div com `flex-1 overflow-y-auto`.
 
 **Props:**
 ```typescript
@@ -204,43 +208,41 @@ interface RepTimelineDialogProps {
 }
 ```
 
-Dialog com `max-w-4xl max-h-[85vh]` para acomodar as duas colunas.
+---
+
+## Design System & CSS Customizado
+
+Toda a estilização premium está centralizada em `src/renderer/styles/globals.css` sob a classe wrapper `.dual-track-timeline`, o que facilita a manutenção e evita poluição por classes utilitárias repetitivas:
+
+1. **Micro-Animações**:
+   - `timeline-row-in`: Efeito de entrada de cada linha da timeline com uma leve transição lateral (`translateX(-10px)` para `0`) e fade-in gradual.
+2. **Dots de Evento**:
+   - `.dual-track-dot-rep` / `.dual-track-dot-laudo`: Possuem uma sombra em anel expandida e translúcida (efeito glow) que destaca o ponto da trilha.
+3. **Linhas**:
+   - `.dual-track-line-rep` / `.dual-track-line-laudo`: Usam um gradiente de opacidade de cima para baixo de 3px de largura para suavizar o visual.
+4. **Cards e Badges**:
+   - `.dual-track-card`: Efeito hover com `transform: translateY(-1px)` e sombra suave.
+   - `.dual-track-header-rep` / `.dual-track-header-laudo`: Pill badges com texto em caixa alta e cores semitransparentes.
 
 ---
 
 ## Dark Mode
 
-Suporte completo via classes `dark:` no Tailwind e overrides no `globals.css`:
-
-- Linhas de trilha: `dark:bg-blue-600` / `dark:bg-purple-600`
-- Bordas de cards: `dark:border-blue-800` / `dark:border-purple-800`
-- Badges: classes `dark:` já existentes nos status styles (âmbar, emerald, blue)
-- Trilha fantasma: `dark:border-purple-700/30`
-- Setas de conexão: `filter: drop-shadow` para visibilidade
-- Placeholder "Aguardando": `opacity-20` / `opacity-40` para sutileza
+Suporte premium aprimorado via variáveis de cor e seletores `dark:` no Tailwind CSS integrados às classes globais:
+- **Cards Fantasma**: Visual em estilo glassmorphism que se adapta perfeitamente ao fundo escuro.
+- **Bordas**: Linhas de trilha e cards ajustados para tons mais profundos de azul e violeta no modo escuro para evitar contraste excessivo e cansaço visual.
+- **Conectores**: Badges de conexão no gutter com gradiente e borda sutilmente iluminada.
 
 ---
 
 ## Pontos de Atenção para Manutenção
 
-1. **A query aceita `modulo IN ('rep', 'reps')`** — necessário porque `auditDelete` grava o nome da tabela (`'reps'`, `'laudos'`) enquanto `auditCicloVida` grava `'rep'`/`'laudo'`.
-
-2. **Fallback `entidade_id = repId` no UNION de Laudo** — cobre o caso de `rep:create` auditar laudo auto-criado com `entidade_id = rep.id` em vez de `laudo.id`.
-
-3. **Detecção de conexão por timestamp (≤ 2s)** — os handlers escrevem eventos REP e Laudo sequencialmente de forma síncrona, então timestamps ficam dentro de milissegundos. Se houver latência de I/O, o threshold de 2s cobre.
-
-4. **Trilha fantasma** — controlada por `hasLaudoEvents`. Se `laudoEvents.length === 0`, a coluna Laudo renderiza linha tracejada + placeholder. Se um laudo for criado depois, a timeline reflete automaticamente ao recarregar.
-
-5. **Grid CSS `grid-template-columns: 1fr 48px 1fr`** — as duas trilhas ocupam espaço igual, o gutter central (48px) contém as setas de conexão.
-
-6. **Linhas verticais contínuas** — Renderizadas como camada de fundo (`absolute inset-0 z-0`) cobrindo toda a altura. Os dots e cards ficam em `z-10` por cima.
-
-7. **Alinhamento cronológico** — `processEvents()` faz merge ordenado por `created_at`. Pares de eventos com tracks diferentes e timestamp ≤ 2s são agrupados na mesma row com conexão detectada.
-
-8. **O Dialog usa `max-w-4xl`** (mais largo que o padrão `max-w-2xl` do RepTimeline antigo) para acomodar as duas colunas confortavelmente.
-
-9. **Animação escalonada** — cada row recebe `animationDelay` via prop `style` inline calculado por `rowIndex * 50ms`, criando efeito de revelação sequencial.
-
-10. **Ícones contextuais** — `getEventIcon()` escolhe entre `ScrollText` (REP) vs `FilePlus` (Laudo) para criação, `CheckCircle`/`Send`/`RotateCcw` para transições específicas, `Trash2` para exclusão.
-
-11. **`RepTimelineDialog` no return correto** — `REPsPage.tsx` tem dois blocos de retorno (tabela quando `!showForm` e formulário). O dialog deve obrigatoriamente ficar dentro do `if (!showForm)`, mesmo bloco onde os botões de ação estão. Se colocado no return do formulário, o dialog nunca renderiza ao clicar "Histórico" na tabela.
+1. **Formatação de Data/Hora Brasileira**: As datas vindas do banco de dados (SQLite) utilizam formato ISO com espaço (ex: `2026-05-29 21:15:00`). O helper `formatTimestamp` primeiro normaliza substituindo o espaço por `T` e então usa uma formatação manual e determinística (`dd/MM/yyyy HH:mm`) com `padStart`. Isto garante consistência em diferentes locales no ambiente do Electron.
+2. **Largura da Grid CSS**: A grid usa o layout `grid-template-columns: 1fr 60px 1fr` para garantir espaço suficiente para o badge de conexão com label de texto no meio.
+3. **Rolagem do Dialog**: A rolagem vertical (`overflow-y-auto`) deve sempre ficar na div filha da timeline dentro do `DialogContent`, e nunca diretamente no `DialogContent`, a fim de preservar o posicionamento absoluto do botão nativo de fechar do Radix UI / Shadcn.
+4. **A query aceita `modulo IN ('rep', 'reps')`** — necessário porque `auditDelete` grava o nome da tabela (`'reps'`, `'laudos'`) enquanto `auditCicloVida` grava `'rep'`/`'laudo'`.
+5. **Fallback `entidade_id = repId` no UNION de Laudo** — cobre o caso de `rep:create` auditar laudo auto-criado com `entidade_id = rep.id` em vez de `laudo.id`.
+6. **Detecção de conexão por timestamp (≤ 2s)** — os handlers escrevem eventos REP e Laudo sequencialmente de forma síncrona, então timestamps ficam dentro de milissegundos. Se houver latência de I/O, o threshold de 2s cobre.
+7. **Trilha fantasma** — controlada por `hasLaudoEvents`. Se `laudoEvents.length === 0`, a coluna Laudo renderiza linha tracejada + placeholder. Se um laudo for criado depois, a timeline reflete automaticamente ao recarregar.
+8. **Animação escalonada** — cada row recebe `animationDelay` via prop `style` inline calculado por `rowIndex * 50ms`, criando efeito de revelação sequencial.
+9. **`RepTimelineDialog` no return correto** — `REPsPage.tsx` tem dois blocos de retorno (tabela quando `!showForm` e formulário). O dialog deve obrigatoriamente ficar dentro do `if (!showForm)`, mesmo bloco onde os botões de ação estão.
