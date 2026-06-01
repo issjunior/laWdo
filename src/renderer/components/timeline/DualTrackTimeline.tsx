@@ -12,6 +12,7 @@ import {
   Loader2,
   ArrowRight,
   ArrowLeft,
+  History,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -62,18 +63,18 @@ const repStatusStyles: Record<string, string> = {
 function getEventIcon(event: TimelineEvent): React.ReactNode {
   const { tipo_acao, acao, origem } = event;
   if (tipo_acao === 'criacao') {
-    return origem === 'REP' ? <ScrollText size={14} /> : <FilePlus size={14} />;
+    return origem === 'REP' ? <ScrollText size={13} /> : <FilePlus size={13} />;
   }
-  if (tipo_acao === 'atualizacao') return <Edit size={14} />;
+  if (tipo_acao === 'atualizacao') return <Edit size={13} />;
   if (tipo_acao === 'transicao_status') {
-    if (acao.includes('Conclu')) return <CheckCircle size={14} />;
-    if (acao.includes('Entregue')) return <Send size={14} />;
+    if (acao.includes('Conclu')) return <CheckCircle size={13} />;
+    if (acao.includes('Entregue')) return <Send size={13} />;
     if (acao.includes('Em andamento') || acao.includes('Em Andamento') || acao.includes('Reabert'))
-      return <RotateCcw size={14} />;
-    return <ArrowRightLeft size={14} />;
+      return <RotateCcw size={13} />;
+    return <ArrowRightLeft size={13} />;
   }
-  if (tipo_acao === 'exclusao') return <Trash2 size={14} />;
-  return <Clock size={14} />;
+  if (tipo_acao === 'exclusao') return <Trash2 size={13} />;
+  return <Clock size={13} />;
 }
 
 function getDotColor(track: 'rep' | 'laudo', event: TimelineEvent): string {
@@ -116,14 +117,23 @@ function extractStatusFromEvent(event: TimelineEvent): string | null {
 
 function formatTimestamp(ts: string): string {
   try {
-    const date = new Date(ts + (ts.includes('T') ? '' : 'T00:00:00'));
+    // Normaliza separador de espaço para T e garante parte de hora
+    const normalized = ts.trim().replace(' ', 'T');
+    const iso = normalized.includes('T') ? normalized : `${normalized}T00:00:00`;
+    const date = new Date(iso);
     if (isNaN(date.getTime())) return ts;
-    return date.toLocaleString('pt-BR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dia  = pad(date.getDate());
+    const mes  = pad(date.getMonth() + 1);
+    const ano  = date.getFullYear();
+    const hora = pad(date.getHours());
+    const min  = pad(date.getMinutes());
+    // Só exibe hora se não for meia-noite (data-only sem hora real)
+    const temHora = normalized.includes('T') && !normalized.endsWith('T00:00:00');
+    return temHora ? `${dia}/${mes}/${ano} ${hora}:${min}` : `${dia}/${mes}/${ano}`;
   } catch { return ts; }
 }
+
 
 function getStatusBadge(event: TimelineEvent): { label: string; className: string } | null {
   const status = extractStatusFromEvent(event);
@@ -210,6 +220,151 @@ function processEvents(allEvents: TimelineEvent[]): {
   return { rows, hasLaudoEvents: laudoEvents.length > 0 };
 }
 
+/* ─── Skeleton Loader ─────────────────────────────────────────────────────── */
+function TimelineSkeleton() {
+  return (
+    <div className="dual-track-container space-y-0">
+      {/* Header skeleton */}
+      <div className="grid grid-cols-[1fr_60px_1fr] gap-0 mb-4">
+        <div className="flex justify-center">
+          <div className="dual-track-skeleton h-6 w-16 rounded-full" />
+        </div>
+        <div />
+        <div className="flex justify-center">
+          <div className="dual-track-skeleton h-6 w-16 rounded-full" />
+        </div>
+      </div>
+      {/* Row skeletons */}
+      {[0, 1, 2].map(i => (
+        <div key={i} className="grid grid-cols-[1fr_60px_1fr] gap-0 min-h-[72px]">
+          <div className="flex items-center justify-center pr-4">
+            {i % 2 === 0 && (
+              <div className="dual-track-skeleton h-14 w-full rounded-xl" />
+            )}
+          </div>
+          <div className="flex items-center justify-center">
+            <div className="dual-track-skeleton h-3 w-3 rounded-full" />
+          </div>
+          <div className="flex items-center justify-center pl-4">
+            {i % 2 === 1 && (
+              <div className="dual-track-skeleton h-14 w-full rounded-xl" />
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Empty State ─────────────────────────────────────────────────────────── */
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-14 gap-3 text-center">
+      {/* Inline SVG illustration */}
+      <svg
+        width="64"
+        height="64"
+        viewBox="0 0 64 64"
+        fill="none"
+        className="opacity-30"
+        aria-hidden="true"
+      >
+        <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="2" strokeDasharray="4 3" className="text-muted-foreground" />
+        <circle cx="32" cy="22" r="4" fill="currentColor" className="text-blue-400" opacity="0.6" />
+        <circle cx="32" cy="42" r="4" fill="currentColor" className="text-purple-400" opacity="0.6" />
+        <line x1="32" y1="26" x2="32" y2="38" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" className="text-muted-foreground" opacity="0.5" />
+      </svg>
+      <p className="text-sm font-medium text-muted-foreground">Nenhum evento registrado</p>
+      <p className="text-xs text-muted-foreground opacity-60 max-w-[200px]">
+        Os eventos aparecerão aqui conforme a REP e o Laudo evoluírem.
+      </p>
+    </div>
+  );
+}
+
+/* ─── Event Card ──────────────────────────────────────────────────────────── */
+function EventCard({
+  event,
+  track,
+}: {
+  event: TimelineEvent;
+  track: 'rep' | 'laudo';
+}) {
+  const sb = getStatusBadge(event);
+  const cardClass = track === 'rep'
+    ? 'dual-track-card dual-track-card-rep'
+    : 'dual-track-card dual-track-card-laudo';
+  const borderClass = track === 'rep'
+    ? 'border-blue-200 dark:border-blue-800/70'
+    : 'border-purple-200 dark:border-purple-800/70';
+
+  return (
+    <Card className={`p-3 shadow-sm ${cardClass} ${borderClass}`}>
+      <div className="flex items-start gap-2.5">
+        {/* Icon bubble */}
+        <div className={`
+          mt-0.5 flex-shrink-0 p-1 rounded-md
+          ${track === 'rep'
+            ? 'bg-blue-50 dark:bg-blue-950/40'
+            : 'bg-purple-50 dark:bg-purple-950/40'
+          }
+          ${getIconColor(track, event)}
+        `}>
+          {getEventIcon(event)}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          {/* Action label */}
+          <p className="text-xs font-semibold leading-tight text-foreground mb-1 line-clamp-2">
+            {event.acao}
+          </p>
+
+          {/* Status badge + timestamp */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {sb && (
+              <Badge className={`text-[9px] px-1.5 py-0 h-4 border font-medium ${sb.className}`}>
+                {sb.label}
+              </Badge>
+            )}
+            <span className="dual-track-timestamp">
+              {formatTimestamp(event.created_at)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ─── Connection Gutter ───────────────────────────────────────────────────── */
+function ConnectionGutter({ connection }: { connection: ConnectionLine }) {
+  const isRepToLaudo = connection.direction === 'rep→laudo';
+  const lineColor = isRepToLaudo ? 'bg-blue-400 dark:bg-blue-500' : 'bg-purple-400 dark:bg-purple-500';
+  const badgeClass = isRepToLaudo
+    ? 'dual-track-conn-badge dual-track-conn-rep-laudo'
+    : 'dual-track-conn-badge dual-track-conn-laudo-rep';
+
+  return (
+    <div className="flex flex-col items-center gap-0.5 w-full">
+      {/* Arrow line */}
+      <div className="flex items-center gap-0 w-full justify-center">
+        {!isRepToLaudo && (
+          <ArrowLeft size={11} className={isRepToLaudo ? 'text-blue-500' : 'text-purple-500'} />
+        )}
+        <div className={`h-px flex-1 max-w-[20px] ${lineColor}`} />
+        {isRepToLaudo && (
+          <ArrowRight size={11} className="text-blue-500" />
+        )}
+      </div>
+      {/* Label badge */}
+      <span className={badgeClass}>
+        {connection.label}
+      </span>
+    </div>
+  );
+}
+
+/* ─── Main Component ──────────────────────────────────────────────────────── */
 export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
   const [allEvents, setAllEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,13 +393,7 @@ export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
     return () => { cancelled = true; };
   }, [repId]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (loading) return <TimelineSkeleton />;
 
   if (error) {
     return (
@@ -254,138 +403,108 @@ export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
     );
   }
 
-  if (allEvents.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
-        <Clock className="h-10 w-10 opacity-30" />
-        <p className="text-sm">Nenhum evento registrado para esta REP</p>
-      </div>
-    );
-  }
+  if (allEvents.length === 0) return <EmptyState />;
 
   const { rows, hasLaudoEvents } = processEvents(allEvents);
 
   return (
     <div className="dual-track-container">
-      {/* Header labels */}
-      <div className="grid grid-cols-[1fr_48px_1fr] gap-0 mb-3">
+
+      {/* ── Track header labels ── */}
+      <div className="grid grid-cols-[1fr_60px_1fr] gap-0 mb-4">
         <div className="flex justify-center">
-          <Badge variant="outline" className="border-blue-300 text-blue-600 dark:border-blue-600 dark:text-blue-400 text-xs">
+          <span className="dual-track-header-rep">
+            <ScrollText size={10} />
             REP
-          </Badge>
+          </span>
         </div>
         <div />
         <div className="flex justify-center">
-          <Badge variant="outline" className="border-purple-300 text-purple-600 dark:border-purple-600 dark:text-purple-400 text-xs">
+          <span className="dual-track-header-laudo">
+            <History size={10} />
             Laudo
-          </Badge>
+          </span>
         </div>
       </div>
 
-      {/* Timeline body */}
+      {/* ── Timeline body ── */}
       <div className="relative">
-        {/* Continuous vertical track lines */}
+
+        {/* Continuous vertical track lines (background layer) */}
         <div className="absolute inset-0 pointer-events-none z-0">
-          <div className="grid grid-cols-[1fr_48px_1fr] gap-0 h-full">
+          <div className="grid grid-cols-[1fr_60px_1fr] gap-0 h-full">
+            {/* REP track line */}
             <div className="relative">
-              <div className="absolute right-[-0.5px] top-0 bottom-0 w-0.5 bg-blue-400 dark:bg-blue-600" />
+              <div className="dual-track-line-rep absolute right-[-1.5px] top-0 bottom-0 w-[3px]" />
             </div>
             <div />
+            {/* Laudo track line */}
             <div className="relative">
               {hasLaudoEvents ? (
-                <div className="absolute left-[-0.5px] top-0 bottom-0 w-0.5 bg-purple-400 dark:bg-purple-600" />
+                <div className="dual-track-line-laudo absolute left-[-1.5px] top-0 bottom-0 w-[3px]" />
               ) : (
-                <div className="absolute left-[-0.5px] top-0 bottom-0 w-0.5 border-l-2 border-dashed border-purple-300/30 dark:border-purple-700/30" />
+                <div className="absolute left-[-1.5px] top-0 bottom-0 w-[3px] border-l-2 border-dashed border-purple-300/30 dark:border-purple-700/20" />
               )}
             </div>
           </div>
         </div>
 
-        {/* Rows */}
-        <div className="relative z-1">
+        {/* ── Rows ── */}
+        <div className="relative" style={{ zIndex: 1 }}>
           {rows.map((row, rowIndex) => (
             <div
               key={rowIndex}
-              className="grid grid-cols-[1fr_48px_1fr] gap-0 min-h-[56px] animate-fade-in"
-              style={{ animationDelay: `${rowIndex * 50}ms` }}
+              className="grid grid-cols-[1fr_60px_1fr] gap-0 min-h-[68px] timeline-row-animate"
+              style={{ animationDelay: `${rowIndex * 55}ms` }}
             >
               {/* REP column */}
-              <div className="relative flex items-center justify-center pr-3">
+              <div className="relative flex items-center justify-center pr-4">
                 {row.repEvent ? (
                   <div className="relative w-full">
+                    {/* Dot */}
                     <div
-                      className={`dual-track-dot absolute right-[-11px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-background ring-2 ring-background z-10 ${getDotColor('rep', row.repEvent)}`}
+                      className={`
+                        dual-track-dot dual-track-dot-rep
+                        absolute right-[-13px] top-1/2 -translate-y-1/2
+                        w-4 h-4 rounded-full
+                        border-2 border-background
+                        z-10
+                        ${getDotColor('rep', row.repEvent)}
+                      `}
                     />
-                    <Card className="p-2.5 mr-4 border-blue-200 dark:border-blue-800 shadow-sm">
-                      <div className="flex items-start gap-2">
-                        <div className={`mt-0.5 flex-shrink-0 ${getIconColor('rep', row.repEvent)}`}>
-                          {getEventIcon(row.repEvent)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                            {(() => {
-                              const sb = getStatusBadge(row.repEvent);
-                              return sb ? <Badge className={`text-[9px] px-1 py-0 h-4 ${sb.className}`}>{sb.label}</Badge> : null;
-                            })()}
-                            <span className="text-[9px] text-muted-foreground">{formatTimestamp(row.repEvent.created_at)}</span>
-                          </div>
-                          <p className="text-xs font-medium">{row.repEvent.acao}</p>
-                        </div>
-                      </div>
-                    </Card>
+                    {/* Card */}
+                    <EventCard event={row.repEvent} track="rep" />
                   </div>
                 ) : (
-                  <div className="h-2" />
+                  <div className="h-3" />
                 )}
               </div>
 
-              {/* Gutter (connection arrows) */}
-              <div className="relative flex items-center justify-center">
-                {row.connection && (
-                  <div className="flex flex-col items-center gap-0">
-                    <div className="flex items-center gap-0.5">
-                      <div className={`h-px w-3 ${row.connection.direction === 'rep→laudo' ? 'bg-blue-400' : 'bg-purple-400'}`} />
-                      {row.connection.direction === 'rep→laudo' ? (
-                        <ArrowRight size={12} className="text-blue-500" />
-                      ) : (
-                        <ArrowLeft size={12} className="text-purple-500" />
-                      )}
-                      <div className={`h-px w-3 ${row.connection.direction === 'rep→laudo' ? 'bg-blue-400' : 'bg-purple-400'}`} />
-                    </div>
-                    <span className="text-[8px] text-muted-foreground mt-0.5 whitespace-nowrap">
-                      {row.connection.label}
-                    </span>
-                  </div>
-                )}
+              {/* Gutter */}
+              <div className="relative flex items-center justify-center px-1">
+                {row.connection && <ConnectionGutter connection={row.connection} />}
               </div>
 
               {/* Laudo column */}
-              <div className="relative flex items-center justify-center pl-3">
+              <div className="relative flex items-center justify-center pl-4">
                 {row.laudoEvent ? (
                   <div className="relative w-full">
+                    {/* Dot */}
                     <div
-                      className={`dual-track-dot absolute left-[-11px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-background ring-2 ring-background z-10 ${getDotColor('laudo', row.laudoEvent)}`}
+                      className={`
+                        dual-track-dot dual-track-dot-laudo
+                        absolute left-[-13px] top-1/2 -translate-y-1/2
+                        w-4 h-4 rounded-full
+                        border-2 border-background
+                        z-10
+                        ${getDotColor('laudo', row.laudoEvent)}
+                      `}
                     />
-                    <Card className="p-2.5 ml-4 border-purple-200 dark:border-purple-800 shadow-sm">
-                      <div className="flex items-start gap-2">
-                        <div className={`mt-0.5 flex-shrink-0 ${getIconColor('laudo', row.laudoEvent)}`}>
-                          {getEventIcon(row.laudoEvent)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                            {(() => {
-                              const sb = getStatusBadge(row.laudoEvent);
-                              return sb ? <Badge className={`text-[9px] px-1 py-0 h-4 ${sb.className}`}>{sb.label}</Badge> : null;
-                            })()}
-                            <span className="text-[9px] text-muted-foreground">{formatTimestamp(row.laudoEvent.created_at)}</span>
-                          </div>
-                          <p className="text-xs font-medium">{row.laudoEvent.acao}</p>
-                        </div>
-                      </div>
-                    </Card>
+                    {/* Card */}
+                    <EventCard event={row.laudoEvent} track="laudo" />
                   </div>
                 ) : (
-                  <div className="h-2" />
+                  <div className="h-3" />
                 )}
               </div>
             </div>
@@ -393,14 +512,18 @@ export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
 
           {/* Ghost placeholder when no laudo events exist */}
           {!hasLaudoEvents && (
-            <div className="grid grid-cols-[1fr_48px_1fr] gap-0 min-h-[80px] animate-fade-in">
+            <div
+              className="grid grid-cols-[1fr_60px_1fr] gap-0 min-h-[88px] timeline-row-animate"
+              style={{ animationDelay: `${rows.length * 55}ms` }}
+            >
               <div />
               <div />
-              <div className="relative flex items-center justify-center pl-3">
-                <div className="flex flex-col items-center justify-center py-4 text-muted-foreground gap-1">
-                  <Clock className="h-5 w-5 opacity-15" />
-                  <p className="text-[10px] opacity-30">Aguardando</p>
-                  <p className="text-[10px] opacity-30">criação do laudo</p>
+              <div className="flex items-center justify-center pl-4 pr-2">
+                <div className="dual-track-ghost w-full flex flex-col items-center justify-center py-5 gap-1.5">
+                  <Clock className="h-5 w-5 text-purple-400/40 dark:text-purple-500/30" />
+                  <p className="text-[10px] font-medium text-muted-foreground opacity-50 text-center leading-tight">
+                    Aguardando<br />criação do laudo
+                  </p>
                 </div>
               </div>
             </div>
