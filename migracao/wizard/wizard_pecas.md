@@ -89,7 +89,7 @@ ALTER TABLE laudos ADD COLUMN respostas_wizard TEXT;  -- JSON snapshot
 |---|---|---|
 | `tipo_criacao` | TEXT | `'template'` ou `'wizard'` |
 | `wizard_id` | TEXT FK | Wizard usado (nulo se template) |
-| `respostas_wizard` | TEXT | JSON com as respostas do perito (para retroatividade) |
+| `respostas_wizard` | TEXT | **Cache JSON** das respostas do perito (snapshot desnormalizado para consulta rápida). A fonte da verdade é a tabela `respostas_wizard`. |
 
 **Constraint `rep_id UNIQUE`:** Remover — uma REP pode ter até 2 laudos (1 template + 1 wizard). A restrição é aplicada em camada de aplicação (ver seção 12.6).
 
@@ -144,7 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_laudos_rep ON laudos(rep_id);
 CREATE TABLE wizards (
   id TEXT PRIMARY KEY,
   tipo_exame_id TEXT NOT NULL,
-  template_id TEXT,
+  template_id TEXT NOT NULL,
   nome TEXT NOT NULL,
   descricao TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
@@ -158,7 +158,7 @@ CREATE TABLE wizards (
 | Coluna | Descrição |
 |---|---|
 | `tipo_exame_id` | Tipo de exame ao qual o wizard pertence (obrigatório) |
-| `template_id` | Template vinculado (opcional). Se informado, define as seções disponíveis. Se nulo, wizard é genérico. |
+| `template_id` | Template vinculado **(obrigatório)**. Define as seções onde as peças serão inseridas. Wizard sem template não faz sentido funcional. |
 
 #### `etapas_wizard`
 
@@ -270,7 +270,29 @@ CREATE TABLE respostas_wizard (
 );
 ```
 
-Armazena cada escolha do perito. Permite reabrir o wizard e restaurar o estado anterior (retroatividade).
+Armazena cada escolha do perito. **Esta é a fonte da verdade** para restaurar o estado do wizard. A coluna `laudos.respostas_wizard` é um cache JSON desnormalizado, atualizado em conjunto com esta tabela.
+
+**Índices para as novas tabelas (migration v20c):**
+
+```sql
+-- Performance: buscar respostas por laudo (tela de preenchimento)
+CREATE INDEX IF NOT EXISTS idx_respostas_wizard_laudo ON respostas_wizard(laudo_id);
+
+-- Performance: calcular peças por wizard
+CREATE INDEX IF NOT EXISTS idx_regras_wizard_wizard ON regras_wizard(wizard_id);
+
+-- Performance: buscar etapas por wizard
+CREATE INDEX IF NOT EXISTS idx_etapas_wizard_wizard ON etapas_wizard(wizard_id);
+
+-- Performance: buscar opções por etapa
+CREATE INDEX IF NOT EXISTS idx_opcoes_etapa_etapa ON opcoes_etapa(etapa_id);
+
+-- Performance: busca de peças por categoria
+CREATE INDEX IF NOT EXISTS idx_pecas_categoria ON pecas(categoria);
+
+-- Performance: busca de wizards por tipo_exame
+CREATE INDEX IF NOT EXISTS idx_wizards_tipo_exame ON wizards(tipo_exame_id);
+```
 
 ---
 
@@ -282,7 +304,7 @@ Adicionar em `src/main/types/database.ts`:
 export interface WizardRow {
   id: string
   tipo_exame_id: string
-  template_id: string | null
+  template_id: string
   nome: string
   descricao?: string
   ativo: boolean
@@ -405,6 +427,48 @@ Dado um wizard + mapa de respostas `{"etapa_arma": "revolver", "etapa_calibre": 
 4. Junta com a peça (`pecas`) e seção (`secoes_template`) correspondentes
 5. Retorna lista de `{ peca, secao, ordem }`
 
+**Matriz de matching condição ↔ resposta:**
+
+```ts
+/**
+ * Verifica se uma condição da regra é satisfeita pela resposta do perito.
+ *
+ * | tipo_input da etapa  | resposta (tipo)  | condição na regra | match?           |
+ * |----------------------|------------------|--------------------|------------------|
+ * | select, radio        | string           | "revolver"         | igualdade exata  |
+ * | checkbox (multipla)  | string[]         | "revolver"         | array.includes   |
+ * | checkbox (multipla)  | string[]         | ["a","c"]          | TODAS no array   |
+ * | text                 | string           | "qualquer"         | igualdade exata  |
+ * | text                 | string           | "*"                | sempre true      |
+ * | image                | string (path)    | "*"                | sempre true      |
+ * | (sem resposta)       | undefined        | qualquer           | false            |
+ */
+function condicaoSatisfeita(
+  resposta: string | string[] | undefined,
+  condicao: string | string[]
+): boolean {
+  if (resposta === undefined || resposta === null) return false;
+
+  // Wildcard: condição "*" casa com qualquer resposta não-vazia
+  if (condicao === '*') return true;
+
+  // Resposta é array (checkbox/multipla_escolha)
+  if (Array.isArray(resposta)) {
+    if (Array.isArray(condicao)) {
+      // Todas as condições precisam estar no array de respostas
+      return condicao.every(c => resposta.includes(c));
+    }
+    // Condição única: basta estar presente no array
+    return resposta.includes(condicao);
+  }
+
+  // Resposta é string: match exato
+  return resposta === condicao;
+}
+```
+
+> **Nota:** As condições no JSON da regra são sempre strings. Quando uma etapa `multipla_escolha` precisa casar com múltiplos valores, usa-se um array JSON: `{"etapa_tags": ["revolver", "taurus"]}`. O parser trata ambos os formatos.
+
 ### 4.5 `src/main/services/laudo.service.ts` — alterações nos métodos existentes
 
 #### 4.5.1 `criarLaudoInicial()` (template) — adicionar verificação de bloqueio
@@ -436,18 +500,29 @@ async criarLaudoInicial(params: {
 }
 ```
 
-#### 4.5.2 `criarLaudoWizard()` — novo método (suporta criação vazia/rascunho)
+#### 4.5.2 `criarLaudoWizardRascunho()` + `gerarLaudoWizard()` — dois métodos separados
+
+A criação do laudo wizard é dividida em **dois métodos** com responsabilidades distintas (evita ambiguidade de um método único com parâmetro opcional):
+
+##### 4.5.2a `criarLaudoWizardRascunho()` — chamado pelo `rep:create`/`rep:update`
 
 ```ts
-interface CriarLaudoWizardParams {
+interface CriarLaudoWizardRascunhoParams {
   rep_id: string
   perito_id: string
   wizard_id: string
-  template_id: string      // template vinculado ao wizard
-  respostas?: Record<string, string | string[]>  // OPCIONAL — se vazio, cria rascunho
+  template_id: string     // obtido do wizard (obrigatório)
 }
 
-async criarLaudoWizard(params: CriarLaudoWizardParams): Promise<LaudoRow> {
+/**
+ * Cria um laudo wizard VAZIO (rascunho) vinculado à REP.
+ * - conteudo = '' (será preenchido depois ao clicar "Gerar Laudo Wizard")
+ * - respostas_wizard = '{}'
+ * - status = 'Em andamento'
+ *
+ * Chamado automaticamente quando uma REP é criada/editada com modo_criacao='wizard'.
+ */
+async criarLaudoWizardRascunho(params: CriarLaudoWizardRascunhoParams): Promise<LaudoRow> {
   // 0a. VALIDAR: já existe laudo wizard para esta REP?
   const existeWizard = await executeQuery<LaudoRow>(
     "SELECT id FROM laudos WHERE rep_id = ? AND tipo_criacao = 'wizard'",
@@ -466,33 +541,97 @@ async criarLaudoWizard(params: CriarLaudoWizardParams): Promise<LaudoRow> {
     throw new Error('Não é possível criar laudo wizard: já existe laudo template concluído/entregue para esta REP');
   }
 
-  // Se respostas vier vazio/ausente → cria laudo RASCUNHO
-  //   conteudo = ''  (será preenchido ao clicar "Gerar Laudo Wizard")
-  //   respostas_wizard = '{}'
-  // Se respostas vier preenchido → cria laudo completo
-  //   calcula peças, gera HTML, salva conteúdo
+  // 1. Inserir laudo rascunho
+  const id = randomUUID();
+  const now = new Date().toISOString();
 
-  const temRespostas = params.respostas && Object.keys(params.respostas).length > 0;
+  await executeNonQuery(
+    `INSERT INTO laudos (id, rep_id, perito_id, template_id, wizard_id, conteudo, status, tipo_criacao, respostas_wizard, data_inicio, versao, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, '', 'Em andamento', 'wizard', '{}', ?, 1, ?, ?)`,
+    [id, params.rep_id, params.perito_id, params.template_id, params.wizard_id, now, now, now]
+  );
 
-  let conteudo = '';
-  if (temRespostas) {
-    // 1. Carregar seções do template
-    // 2. Calcular peças com base nas respostas
-    // 3. Para cada seção, concatenar: conteúdo base da seção + peças
-    // 4. Gerar conteúdo HTML final
-  }
-
-  // 5. Salvar laudo com tipo_criacao='wizard', wizard_id, respostas_wizard (JSON)
-  // 6. Se tiver respostas, salvar na tabela respostas_wizard
+  const [laudo] = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [id]);
+  return laudo;
 }
 ```
 
-**Dois cenários de chamada:**
+##### 4.5.2b `gerarLaudoWizard()` — chamado pelo botão "Gerar Laudo Wizard"
 
-| Cenário | Quem chama | `respostas` | Resultado |
-|---|---|---|---|
-| REP criada com Wizard | `rep:create` / `rep:update` | vazio/ausente | Laudo rascunho (`conteudo=''`, `Em andamento`) |
-| Usuário clicou "Gerar Laudo Wizard" | `laudo:createWizard` | preenchido | Laudo completo com HTML gerado |
+```ts
+interface GerarLaudoWizardParams {
+  laudo_id?: string       // se existir, ATUALIZA laudo existente; senão CRIA novo
+  rep_id: string
+  perito_id: string
+  wizard_id: string
+  template_id: string
+  respostas: Record<string, string | string[]>   // OBRIGATÓRIO
+  pecas_selecionadas?: string[]                   // IDs que o usuário marcou no PecasChecklist
+}
+
+/**
+ * Gera o laudo completo a partir das respostas do wizard.
+ * - Se laudo_id for informado: atualiza laudo existente (reaplicação)
+ * - Se laudo_id NÃO for informado: cria novo laudo (primeira geração)
+ * - Calcula peças, gera HTML, salva conteúdo e respostas
+ */
+async gerarLaudoWizard(params: GerarLaudoWizardParams): Promise<LaudoRow> {
+  const laudo = params.laudo_id ? await this.findById(params.laudo_id) : null;
+
+  if (laudo) {
+    // REAPLICAÇÃO: laudo já existe
+    if (laudo.status === 'Bloqueado') {
+      throw new Error('Não é possível gerar: laudo está bloqueado');
+    }
+    if (laudo.tipo_criacao !== 'wizard') {
+      throw new Error('Este laudo não é do tipo wizard');
+    }
+  } else {
+    // PRIMEIRA GERAÇÃO: validar unicidade e bloqueio
+    const existeWizard = await executeQuery<LaudoRow>(
+      "SELECT id FROM laudos WHERE rep_id = ? AND tipo_criacao = 'wizard'",
+      [params.rep_id]
+    );
+    if (existeWizard.length > 0) {
+      throw new Error('Já existe um laudo (Wizard) para esta REP');
+    }
+
+    const templateFinalizado = await executeQuery<LaudoRow>(
+      "SELECT id FROM laudos WHERE rep_id = ? AND tipo_criacao = 'template' AND status IN ('Concluído', 'Entregue')",
+      [params.rep_id]
+    );
+    if (templateFinalizado.length > 0) {
+      throw new Error('Não é possível criar laudo wizard: já existe laudo template concluído/entregue');
+    }
+  }
+
+  // 1. Carregar seções do template
+  // 2. Calcular peças com base nas respostas (chamar regraWizardService.calcularPecas)
+  // 3. Filtrar por pecas_selecionadas (se informado)
+  // 4. Para cada seção, concatenar: conteúdo base da seção + peças (com data-peca-id e data-peca-hash)
+  // 5. Gerar conteúdo HTML final
+  // 6. Se laudo existe → UPDATE; senão → INSERT
+  // 7. Atualizar laudos.respostas_wizard (cache JSON)
+  // 8. Sobrescrever registros em respostas_wizard (tabela)
+}
+```
+
+**Canais IPC correspondentes:**
+
+| Canal | Serviço chamado | Quem chama |
+|---|---|---|
+| `laudo:createWizardRascunho` | `criarLaudoWizardRascunho()` | `rep:create` / `rep:update` (criação automática) |
+| `laudo:gerarWizard` | `gerarLaudoWizard()` | WizardLaudoPage (botão "Gerar Laudo Wizard") |
+| `laudo:salvarProgressoWizard` | `salvarProgressoWizard()` | WizardLaudoPage (botão "Salvar Progresso") |
+
+**Cenários de uso:**
+
+| Cenário | Canal IPC | `laudo_id` | `respostas` | Resultado |
+|---|---|---|---|---|
+| REP criada com Wizard | `laudo:createWizardRascunho` | — (cria novo) | — (sem respostas) | Laudo rascunho (`conteudo=''`, `Em andamento`) |
+| REP editada para Wizard | `laudo:createWizardRascunho` | — (cria novo) | — (sem respostas) | Idem |
+| Usuário clicou "Gerar Laudo Wizard" (1ª vez) | `laudo:gerarWizard` | — (cria novo) | preenchido | Laudo completo com HTML gerado |
+| Usuário reaplicou wizard (laudo já existia) | `laudo:gerarWizard` | informado (atualiza) | preenchido | Laudo atualizado, edições manuais preservadas |
 
 O laudo rascunho permite que o usuário:
 - Salve progresso parcial (respostas via `salvarProgressoWizard`)
@@ -554,14 +693,23 @@ async updateStatus(id: string, novoStatus: string): Promise<LaudoRow> {
 }
 ```
 
-#### 4.5.4 `deletar()` — desbloquear o outro laudo se necessário
+#### 4.5.4 `deletar()` — desbloquear o outro laudo + limpeza completa
 
 ```ts
-async deletar(id: string): Promise<void> {
+/**
+ * Ordem de deleção de um laudo (template ou wizard):
+ *
+ * 1. Desbloquear laudo irmão (se este estiver Concluído/Entregue)
+ * 2. Deletar imagens do diretório do laudo (fs.rmSync)
+ * 3. FK CASCADE cuida de: respostas_wizard (ON DELETE CASCADE no laudo_id)
+ * 4. Deletar o laudo
+ * 5. Se não houver mais laudos para esta REP → resetar status para 'Pendente'
+ */
+async deletar(id: string): Promise<{ rep_id: string }> {
   const laudo = await this.findById(id);
   if (!laudo) throw new Error('Laudo não encontrado');
 
-  // Se este laudo está Concluído/Entregue, desbloquear o outro
+  // 1. Se este laudo está Concluído/Entregue, desbloquear o outro
   if (laudo.status === 'Concluído' || laudo.status === 'Entregue') {
     const outroTipo = laudo.tipo_criacao === 'template' ? 'wizard' : 'template';
     await executeNonQuery(
@@ -571,18 +719,39 @@ async deletar(id: string): Promise<void> {
     );
   }
 
-  // Deletar laudo e imagens órfãs
-  // ... (resto igual ao existente)
+  // 2. Deletar imagens do diretório do laudo
+  const laudoDir = path.join(app.getPath('userData'), 'laudos', id);
+  if (fs.existsSync(laudoDir)) {
+    fs.rmSync(laudoDir, { recursive: true, force: true });
+  }
 
-  // Resetar status da REP se não houver mais laudos
+  // 3. FK CASCADE cuida automaticamente de:
+  //    - respostas_wizard (ON DELETE CASCADE no laudo_id)
+  //    NÃO é necessário deletar manualmente
+
+  // 4. Deletar o laudo
+  await this.delete(id);
+
+  // 5. Resetar status da REP se não houver mais laudos
   const laudosRestantes = await executeQuery<LaudoRow>(
     "SELECT id FROM laudos WHERE rep_id = ?", [laudo.rep_id]
   );
   if (laudosRestantes.length === 0) {
     await repService.updateStatus(laudo.rep_id, 'Pendente');
   }
+
+  return { rep_id: laudo.rep_id };
 }
 ```
+
+**Tabela de limpeza de recursos órfãos:**
+
+| Recurso | Como é limpo |
+|---|---|
+| `respostas_wizard` (tabela) | `ON DELETE CASCADE` no FK `laudo_id` → automático |
+| `laudos.respostas_wizard` (coluna JSON) | Junto com a row do laudo no DELETE |
+| Imagens do laudo (`laudos/{laudoId}/`) | `fs.rmSync` com `recursive: true, force: true` |
+| Laudo irmão bloqueado | Desbloqueado automaticamente → `Em andamento` |
 
 #### 4.5.5 `salvarProgressoWizard()` — salvar respostas sem gerar laudo
 
@@ -591,6 +760,10 @@ async deletar(id: string): Promise<void> {
  * Salva as respostas parciais do wizard sem recalcular peças nem gerar HTML.
  * O laudo continua com status "Em andamento" e conteúdo atual inalterado.
  * Usado pelo botão "Salvar Progresso" na WizardLaudoPage.
+ *
+ * ATUALIZA AMBAS as fontes na mesma transação:
+ * 1. laudos.respostas_wizard (cache JSON) — para consulta rápida
+ * 2. respostas_wizard (tabela) — source of truth para restauração
  */
 async salvarProgressoWizard(
   laudoId: string,
@@ -602,13 +775,13 @@ async salvarProgressoWizard(
     throw new Error('Não é possível salvar progresso: laudo está bloqueado');
   }
 
-  // Atualizar snapshot JSON no laudo
+  // Atualizar snapshot JSON no laudo (cache)
   await executeNonQuery(
     `UPDATE laudos SET respostas_wizard = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
     [JSON.stringify(respostas), laudoId]
   );
 
-  // Sobrescrever registros em respostas_wizard (UPSERT por etapa_id + laudo_id)
+  // Sobrescrever registros em respostas_wizard (source of truth)
   await executeNonQuery(
     `DELETE FROM respostas_wizard WHERE laudo_id = ?`,
     [laudoId]
@@ -625,15 +798,77 @@ async salvarProgressoWizard(
 }
 ```
 
+**Formato do JSON cache (`laudos.respostas_wizard`):**
+```json
+{
+  "etapa_arma": "revolver",
+  "etapa_calibre": "38",
+  "etapa_tags": ["ferrugem", "oxidacao"],
+  "etapa_observacao": "texto livre digitado pelo perito",
+  "_wizard_id": "wiz_abc123",
+  "_atualizado_em": "2026-06-04T10:30:00Z"
+}
+```
+
+> **Dupla persistência:** A tabela `respostas_wizard` é a **fonte da verdade** (normalizada, usada para restaurar o estado do WizardLaudoPage). A coluna `laudos.respostas_wizard` é um **cache JSON desnormalizado** (para consultas rápidas sem JOIN, exibição em tooltips, etc.). Ambas são atualizadas atomicamente nas operações de save.
+
+**Ciclo de vida completo da WizardLaudoPage:**
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│               WIZARDLAUDOPAGE — CICLO DE VIDA                     │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  1. AO CARREGAR (mount):                                          │
+│     → Buscar laudo por rep_id (laudo:findByRepId)                 │
+│     → Carregar wizard (wizard:getArvore)                          │
+│     → Se laudo existe: carregar respostas da TABELA               │
+│       respostas_wizard (source of truth) e restaurar inputs       │
+│     → Chamar regra-wizard:calcularPecas() para preview inicial    │
+│     → Renderizar PecasChecklist (reativo, atualiza a cada input)  │
+│                                                                    │
+│  2. A CADA MUDANÇA DE RESPOSTA (onChange):                        │
+│     → Atualizar estado local (React useState)                     │
+│     → Recalcular PecasChecklist via calcularPecas()               │
+│       (chamada IPC a cada mudança ou debounced 300ms)             │
+│     → LaudoPreview atualiza em tempo real                         │
+│     → NADA é persistido no banco ainda                            │
+│                                                                    │
+│  3. "SALVAR PROGRESSO" (botão):                                   │
+│     → Chamar laudo:salvarProgressoWizard                          │
+│     → Persiste respostas na TABELA + cache JSON no laudo          │
+│     → NÃO recalcula nem gera HTML do laudo                        │
+│     → Laudo.conteudo permanece inalterado (ou vazio)              │
+│     → Toast: "Progresso salvo. Você pode continuar depois."       │
+│     → Usuário pode fechar a página e voltar depois                │
+│                                                                    │
+│  4. "GERAR LAUDO WIZARD" (botão):                                 │
+│     → Validar etapas obrigatórias (ver seção 6.4)                 │
+│     → Chamar laudo:gerarWizard com respostas + pecas_selecionadas │
+│     → Backend: calcula peças, gera HTML completo, salva           │
+│     → Redirecionar para LaudosPage com toast:                     │
+│       "Laudo gerado! Deseja adicionar ilustrações?"               │
+│                                                                    │
+│  5. REABERTURA (laudo já existia):                                │
+│     → Carregar respostas da tabela respostas_wizard               │
+│     → Restaurar inputs e PecasChecklist                           │
+│     → Se laudo.status === 'Bloqueado':                            │
+│       → Exibir Alert com Lock                                    │
+│       → Todos os inputs e botões desabilitados                    │
+│       → Preview visível em modo readonly                          │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
 **Fluxo de save progress:**
 1. Usuário está na WizardLaudoPage preenchendo as perguntas
 2. Responde algumas etapas, mas não todas
 3. Clica "Salvar Progresso" → `laudo:salvarProgressoWizard` é chamado
-4. Respostas são persistidas no banco (`respostas_wizard` JSON + tabela `respostas_wizard`)
+4. Respostas são persistidas no banco (cache JSON `laudos.respostas_wizard` + tabela `respostas_wizard`)
 5. Usuário pode fechar a página e voltar depois
-6. Ao reabrir, `WizardLaudoPage` carrega `respostas_wizard` do laudo e restaura os inputs
+6. Ao reabrir, `WizardLaudoPage` carrega da tabela `respostas_wizard` (source of truth) e restaura os inputs
 7. Continua de onde parou
-8. Quando terminar, clica "Gerar Laudo Wizard" → chama `reaplicarRespostas` que calcula peças e gera HTML
+8. Quando terminar, clica "Gerar Laudo Wizard" → chama `laudo:gerarWizard` que calcula peças e gera HTML
 
 ### 4.6 Retroatividade (Gerar/Atualizar laudo final)
 
@@ -647,14 +882,56 @@ async reaplicarRespostas(laudoId: string, novasRespostas: Record<string, string 
 
   // 1. Carregar laudo e wizard vinculado
   // 2. Recalcular peças com novas respostas
-  // 3. Para cada seção: substituir blocos de peças antigas pelos novos
-  //    (identificar blocos por data-peca-id no HTML)
-  // 4. Conteúdo FORA dos marcadores data-peca-id é PRESERVADO:
+  // 3. Para cada peça calculada:
+  //    a. Localizar o bloco data-peca-id no HTML atual
+  //    b. Comparar o hash do conteúdo atual (data-peca-hash) com o hash original
+  //    c. Se hash igual → peça NÃO foi editada → substituir pelo novo conteúdo
+  //    d. Se hash diferente → peça foi editada manualmente → PRESERVAR edição do perito
+  // 4. Peças que não estão mais nas regras → remover blocos data-peca-id
+  // 5. Peças novas → inserir nas seções corretas
+  // 6. Conteúdo FORA dos marcadores data-peca-id é SEMPRE preservado:
   //    - Ilustrações (<figure class="laudo-figure">)
   //    - Edições manuais do usuário no TinyMCE
   //    - Cabeçalhos, rodapés, formatação customizada
-  // 5. Atualizar laudo.conteudo e respostas_wizard
-  // 6. Sobrescrever registros em respostas_wizard
+  // 7. Atualizar laudo.conteudo e respostas_wizard
+  // 8. Sobrescrever registros em respostas_wizard
+}
+```
+
+**Detecção de edição manual via hash:**
+
+Cada peça inserida no HTML carrega um hash do conteúdo original:
+
+```html
+<div data-peca-id="abc123" data-peca-hash="a1b2c3d4e5f6" class="peca-wizard">
+  <p>Trata-se de um revólver...</p>
+</div>
+```
+
+Na reaplicação, o algoritmo `reaplicarBlocoPeca()`:
+
+```ts
+function reaplicarBlocoPeca(
+  pecaId: string,
+  novoConteudo: string,
+  htmlAtual: string
+): string {
+  const blocoAtual = extrairConteudoBloco(htmlAtual, pecaId);
+  const hashAtual = extrairHash(htmlAtual, pecaId);
+  const hashOriginal = calcularHash(novoConteudo);
+
+  if (!blocoAtual) {
+    // Peça nova (não existe no HTML) → inserir
+    return inserirBloco(htmlAtual, pecaId, novoConteudo, hashOriginal);
+  }
+
+  if (hashAtual && hashAtual !== calcularHash(blocoAtual)) {
+    // Hash mudou → perito editou manualmente → PRESERVAR
+    return htmlAtual;
+  }
+
+  // Hash igual → peça intacta → substituir com novo conteúdo
+  return substituirBloco(htmlAtual, pecaId, novoConteudo, hashOriginal);
 }
 ```
 
@@ -763,14 +1040,81 @@ Adicionar handlers + atualizar validação de status:
 const statusValidos = ['Em andamento', 'Concluído', 'Entregue', 'Bloqueado'];
 
 // Novos handlers:
-ipcMain.handle('laudo:createWizard', async (_, params) => {
-  return laudoService.criarLaudoWizard(params)
+ipcMain.handle('laudo:createWizardRascunho', async (_, params) => {
+  return laudoService.criarLaudoWizardRascunho(params)
 })
 
-ipcMain.handle('laudo:reaplicarWizard', async (_, laudoId, respostas) => {
-  return laudoService.reaplicarRespostas(laudoId, respostas)
+ipcMain.handle('laudo:gerarWizard', async (_, params) => {
+  return laudoService.gerarLaudoWizard(params)
+})
+
+ipcMain.handle('laudo:salvarProgressoWizard', async (_, laudoId, respostas) => {
+  await laudoService.salvarProgressoWizard(laudoId, respostas)
+  return { success: true }
 })
 ```
+
+### 5.4b Alterar `rep.handlers.ts` — suporte a `modo_criacao='wizard'`
+
+```ts
+// rep:create — adicionar suporte a wizard:
+ipcMain.handle('rep:create', async (_event, data) => {
+  // ... validações existentes (numero, duplicidade) ...
+
+  const { modo_criacao, wizard_id, template_id, perito_id, ...repData } = data;
+
+  // 1. Criar REP (sempre acontece)
+  const rep = await repService.create(sanitizedRepData);
+
+  // 2. Criar laudo conforme modo
+  if (modo_criacao === 'wizard' && wizard_id && perito_id) {
+    // Validar: wizard existe e pertence ao tipo_exame da REP
+    const wizard = await wizardService.findById(wizard_id);
+    if (!wizard || wizard.tipo_exame_id !== rep.tipo_exame_id) {
+      // Não falha a criação da REP, mas retorna aviso
+      return { 
+        success: true, 
+        data: rep, 
+        warning: 'Wizard inválido para este tipo de exame. Laudo não foi criado.'
+      };
+    }
+
+    try {
+      await laudoService.criarLaudoWizardRascunho({
+        rep_id: rep.id,
+        perito_id,
+        wizard_id,
+        template_id: wizard.template_id,
+      });
+      logInfo('Laudo wizard rascunho criado automaticamente para REP', { repId: rep.id });
+      auditCicloVida('', 'laudo', rep.id, 'criacao',
+        `Laudo wizard rascunho criado automaticamente para REP ${data.numero}`,
+        null,
+        { rep_id: rep.id, perito_id, wizard_id, tipo_criacao: 'wizard' },
+      );
+    } catch (laudoError) {
+      // REP foi criada, laudo não. Retorna warning para o frontend exibir toast
+      logError('Erro ao criar laudo wizard rascunho — REP criada sem laudo', laudoError);
+      return { 
+        success: true, 
+        data: rep, 
+        warning: 'REP criada, mas houve erro ao criar o laudo wizard. Você pode criá-lo depois.'
+      };
+    }
+  } else if (template_id && perito_id && template_id !== 'tpl-nao-definido') {
+    // Fluxo template existente (mantido igual)
+    try {
+      await laudoService.criarLaudoInicial({ rep_id: rep.id, perito_id, template_id });
+    } catch (laudoError) {
+      logError('Erro ao criar laudo automático — REP criada sem laudo', laudoError);
+    }
+  }
+
+  return { success: true, data: rep };
+});
+```
+
+> **Transação:** SQLite não suporta transações atômicas multi-tabela. A REP é a entidade primária — sempre é criada. O laudo é derivado. Se a criação do laudo falhar, a REP sobrevive e o `warning` permite que o frontend exiba um toast informativo e o usuário crie o laudo manualmente depois.
 
 ### 5.5 Canais IPC (preload)
 
@@ -815,7 +1159,7 @@ Adicionar ao `ALLOWED_CHANNELS`:
 'peca:findAll', 'peca:findById', 'peca:create', 'peca:update', 'peca:delete',
 'peca:search', 'peca:findByCategoria',
 'regra-wizard:findByWizard', 'regra-wizard:save', 'regra-wizard:calcularPecas',
-'laudo:createWizard', 'laudo:reaplicarWizard',
+'laudo:createWizardRascunho', 'laudo:gerarWizard', 'laudo:salvarProgressoWizard',
 ```
 
 ---
@@ -1254,7 +1598,7 @@ const colunas: ColumnDef<WizardItem>[] = [
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="wiz-template">Template</Label>
+          <Label htmlFor="wiz-template">Template *</Label>
           <Select>
             <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
             <SelectContent>
@@ -1266,7 +1610,7 @@ const colunas: ColumnDef<WizardItem>[] = [
     </div>
     <DialogFooter>
       <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-      <Button onClick={handleCriar} disabled={!nome || !tipoExameId}>
+      <Button onClick={handleCriar} disabled={!nome || !tipoExameId || !templateId}>
         Criar e Editar Etapas
       </Button>
     </DialogFooter>
@@ -1852,14 +2196,92 @@ switch (etapa.tipo_input) {
 ```
 
 **Funcionalidades:**
-- Renderização dinâmica das etapas com base na árvore
-- Ao selecionar opção em etapa pai, revela etapa filha
+- Renderização dinâmica das etapas com base na árvore (pré-ordem: raiz → filhas)
+- Ao selecionar opção em etapa pai, revela etapa filha no stepper
 - Coluna direita: preview em tempo real do laudo sendo montado (readonly, agrupado por seção)
 - Checkboxes para desmarcar peças (o usuário escolhe quais entram)
-- Botão "Gerar Laudo Wizard" → chama `laudo:createWizard`
+- Botão "Gerar Laudo Wizard" → chama `laudo:gerarWizard`
 - Após gerar, redireciona para `LaudosPage` com o laudo criado
 - Se reaberto (laudo já existe): carrega respostas anteriores, permite alterar
 - **Se laudo estiver `Bloqueado`:** exibe `Alert` com `Lock` icon. Stepper e inputs desabilitados. Botões "Salvar Progresso" e "Gerar" ocultos. Apenas preview visível em modo readonly.
+
+**Regras de cascata (etapas filhas):**
+
+```ts
+/**
+ * Constrói a lista de passos visíveis no stepper percorrendo a árvore
+ * em pré-ordem (raiz → filhas em ordem). Etapas filhas só aparecem
+ * quando a opção pai correspondente foi selecionada.
+ */
+function buildPassosVisiveis(
+  arvore: ArvoreWizard,
+  respostas: Record<string, string | string[]>
+): PassoWizard[] {
+  const passos: PassoWizard[] = [];
+  const etapasMap = new Map(arvore.etapas.map(e => [e.id, e]));
+
+  function walk(etapas: EtapaWizard[], nivel: number) {
+    for (const etapa of etapas.sort((a, b) => a.ordem - b.ordem)) {
+      passos.push({ ...etapa, nivel });
+
+      // Se esta etapa tem resposta e a opção escolhida dispara uma etapa filha
+      const resposta = respostas[etapa.id];
+      if (resposta !== undefined && resposta !== '') {
+        const valores = Array.isArray(resposta) ? resposta : [resposta];
+        for (const opcao of etapa.opcoes) {
+          if (valores.includes(opcao.valor) && opcao.etapa_filha_id) {
+            const filha = etapasMap.get(opcao.etapa_filha_id);
+            if (filha) walk([filha], nivel + 1);
+          }
+        }
+      }
+    }
+  }
+
+  const raizes = arvore.etapas
+    .filter(e => !e.etapa_pai_id)
+    .sort((a, b) => a.ordem - b.ordem);
+  walk(raizes, 0);
+  return passos;
+}
+```
+
+**Limpeza em cascata (quando o pai muda):**
+
+| Situação | Comportamento |
+|---|---|
+| Usuário troca opção pai | Respostas das etapas filhas são **limpas** automaticamente |
+| Etapa filha tinha resposta preenchida | Exibir **diálogo de confirmação**: "Mudar esta opção limpará as respostas de: [lista etapas filhas]. Continuar?" |
+| Etapas filhas removidas do stepper | Imediatamente — só reaparecem se nova opção disparar filha |
+| Ordem no stepper | Pré-ordem (raiz, depois filhas em ordem). Nível visual: raiz sem indentação, filhas com ícone de sub-item |
+
+**Validação de etapas obrigatórias:**
+
+```tsx
+// No WizardLaudoPage:
+const todasObrigatoriasRespondidas = useMemo(() => {
+  return passosVisiveis
+    .filter(e => e.obrigatorio)
+    .every(e => {
+      const resposta = respostas[e.id];
+      if (resposta === undefined || resposta === null || resposta === '') return false;
+      if (e.multipla_escolha && Array.isArray(resposta) && resposta.length === 0) return false;
+      return true;
+    });
+}, [passosVisiveis, respostas]);
+
+const podeGerar = todasObrigatoriasRespondidas && !laudoBloqueado;
+```
+
+**Feedback visual no stepper:**
+
+| Estado | Ícone/Estilo |
+|---|---|
+| Etapa obrigatória não respondida | Ícone `AlertTriangle` âmbar no círculo do passo |
+| Etapa opcional não respondida | Círculo vazio normal (pending) |
+| Etapa respondida (obrigatória ou não) | ✓ verde (completed) |
+| Botão "Gerar Laudo Wizard" | Desabilitado + tooltip: "Responda todas as etapas obrigatórias antes de gerar o laudo" |
+| Mensagem de erro inline | Label abaixo da pergunta: "Esta pergunta é obrigatória." em `text-destructive` |
 
 **Após "Gerar Laudo Wizard":**
 - Exibe toast de sucesso com link: "Laudo gerado. Deseja adicionar ilustrações?"
@@ -1937,9 +2359,21 @@ No Accordion "Dados da Solicitação", após o Select de Template, adicionar:
 
 **Ao salvar a REP com Wizard:**
 - `rep:create` / `rep:update` recebe `modo_criacao='wizard'` e `wizard_id`
-- Backend cria o laudo wizard como **rascunho** (`conteudo=''`, `respostas_wizard='{}'`) via `criarLaudoWizard`
-- Após salvar, exibe toast: "REP salva. Deseja preencher o Wizard agora?" com botão que redireciona para `/reps/:repId/wizard`
-- Ou o usuário fecha o toast e preenche depois pela REPsPage ou LaudosPage
+- Backend chama `laudoService.criarLaudoWizardRascunho()` (cria laudo vazio: `conteudo=''`, `respostas_wizard='{}'`, status `Em andamento`)
+- Se a criação do laudo falhar: REP é mantida, `warning` é retornado no response, frontend exibe toast "REP criada, mas houve erro ao criar o laudo wizard. Você pode criá-lo depois."
+- Após salvar com sucesso, exibe toast: "REP salva. Deseja preencher o Wizard agora?" com botão que redireciona para `/reps/:repId/wizard`
+- Ou o usuário fecha o toast e preenche depois pela REPsPage (badge "W") ou LaudosPage (botão "Preencher")
+
+**Fluxo detalhado no backend (ver seção 5.4b):**
+1. REP é criada normalmente (`repService.create`)
+2. Se `modo_criacao === 'wizard'`:
+   - Valida que o wizard existe e pertence ao `tipo_exame_id` da REP
+   - Chama `criarLaudoWizardRascunho()` que:
+     - Verifica unicidade (não pode já existir wizard para esta REP)
+     - Verifica bloqueio (não pode existir template Concluído/Entregue)
+     - Insere laudo com `conteudo=''`, `tipo_criacao='wizard'`, status `Em andamento`
+   - Se falhar: REP sobrevive, retorna `warning` (não `error`)
+3. Auditoria: registra criação do laudo wizard rascunho via `auditCicloVida`
 
 #### 6.5.2 DataTable: badges clicáveis + botões condicionais
 
@@ -2248,13 +2682,13 @@ Laudos `Bloqueado` não exibem botões de ação exceto "Excluir" com tooltip ex
 2. `wizard.service.ts` + CRUD de wizard, getArvoreCompleta, saveArvoreCompleta
 3. `peca.service.ts` — CRUD + search
 4. `regra-wizard.service.ts` — CRUD + calcularPecas (lógica central)
-5. `laudo.service.ts` — método `criarLaudoWizard` + `reaplicarRespostas` + bloqueio/desbloqueio em `updateStatus` e `deletar` + verificação de bloqueio em `criarLaudoInicial`
+5. `laudo.service.ts` — métodos `criarLaudoWizardRascunho`, `gerarLaudoWizard`, `salvarProgressoWizard`, `reaplicarRespostas` + bloqueio/desbloqueio em `updateStatus` e `deletar` + verificação de bloqueio em `criarLaudoInicial`
 
 ### Fase 3 — IPC Handlers + Preload
 1. `wizard.handlers.ts` — todos os canais listados na seção 5.1
 2. `peca.handlers.ts` — seção 5.2
 3. `regra-wizard.handlers.ts` — seção 5.3
-4. Atualizar `laudo.handlers.ts` — adicionar `laudo:createWizard` e `laudo:reaplicarWizard`
+4. Atualizar `laudo.handlers.ts` — adicionar `laudo:createWizardRascunho`, `laudo:gerarWizard`, `laudo:salvarProgressoWizard`
 5. Atualizar `ipc/index.ts` — registrar novos handlers
 6. Atualizar `preload/index.ts` — expor API + allowed channels
 
@@ -2275,7 +2709,7 @@ Laudos `Bloqueado` não exibem botões de ação exceto "Excluir" com tooltip ex
 2. `WizardStepper`, `WizardEtapaRenderer`, `PecasChecklist`, `LaudoPreview`
 3. Lógica de cascata: ao selecionar opção, revela etapa filha
 4. Cálculo de peças em tempo real (chamada IPC `regra-wizard:calcularPecas`)
-5. Botão "Gerar Laudo Wizard" e integração com `laudo:createWizard`
+5. Botão "Gerar Laudo Wizard" e integração com `laudo:gerarWizard`
 6. Retroatividade: reabrir wizard de laudo existente
 7. Tratar laudo `Bloqueado`: readonly, mensagem informativa, sem ações de edição
 
@@ -2311,20 +2745,41 @@ SQLite não suporta `ALTER TABLE DROP CONSTRAINT`. A migration v20a precisa:
 3. Drop tabela antiga, rename nova
 4. Recriar índices
 
-### 12.2 Retroatividade — marcadores HTML
-Para identificar blocos de peças no HTML e substituí-los na reaplicação, cada peça inserida deve ser envolta em um marcador:
+### 12.2 Retroatividade — marcadores HTML com hash
+
+Para identificar blocos de peças no HTML e detectar edições manuais, cada peça inserida é envolta em um marcador com hash:
 
 ```html
-<!-- data-peca-id="abc123" data-secao-id="xyz456" -->
-<div data-peca-id="abc123" class="peca-wizard">
+<div data-peca-id="abc123" data-peca-hash="a1b2c3d4e5f6" class="peca-wizard">
   <p>Trata-se de um revólver...</p>
 </div>
 ```
 
-Na reaplicação, o serviço localiza todos os `data-peca-id`, remove os que não estão mais nas novas regras, insere os novos, preserva o conteúdo fora desses marcadores (edições manuais do perito).
+**Atributos:**
+| Atributo | Descrição |
+|---|---|
+| `data-peca-id` | ID da peça no banco. Usado para localizar o bloco na reaplicação. |
+| `data-peca-hash` | Hash SHA-256 do conteúdo original da peça. Usado para detectar se o perito editou manualmente. |
 
-### 12.3 Template_id obrigatório no wizard?
-Se o wizard tem `template_id = NULL`, não há seções definidas. Neste caso, as peças seriam concatenadas sequencialmente. **Recomendação:** exigir `template_id` em wizards — um wizard sempre precisa saber em quais seções inserir as peças.
+**Algoritmo de reaplicação:**
+1. Parse do HTML atual → extrair todos os blocos `[data-peca-id]` com seus hashes
+2. Para cada peça calculada pelas novas regras:
+   - Se o bloco NÃO existe no HTML → inserir (peça nova)
+   - Se o bloco existe E `hash atual === hash armazenado` → substituir (peça intacta)
+   - Se o bloco existe E `hash atual !== hash armazenado` → preservar (perito editou)
+3. Blocos que não estão nas novas regras → remover
+4. Conteúdo FORA de `[data-peca-id]` é sempre preservado (ilustrações, formatação customizada, etc.)
+
+Ver seção 4.6 para o código completo de `reaplicarRespostas()`.
+
+### 12.3 `template_id` — obrigatório no wizard
+
+`wizards.template_id` é **NOT NULL**. Um wizard sem template não tem seções definidas para inserir as peças — não faz sentido funcional. O template vinculado define:
+- Quais seções estarão disponíveis no `VinculadorPecaDialog` (Select de seção alvo)
+- A ordem das seções no laudo final
+- O conteúdo base de cada seção (antes das peças)
+
+Se no futuro houver necessidade de wizard sem template (peças concatenadas sequencialmente), uma migration futura pode relaxar a constraint.
 
 ### 12.4 Múltiplos laudos por REP + Integração com LaudosPage
 
@@ -2415,6 +2870,7 @@ const handleEditar = (laudo: LaudoItem) => {
 - Handlers seguem o mesmo padrão de `try/catch` + `success/error` response
 - IDs usam `randomUUID()` do crypto
 - Rotas seguem o padrão React Router v7
+- **Auditoria (FR8):** Todos os novos handlers que alteram estado (`laudo:createWizardRascunho`, `laudo:gerarWizard`, `laudo:salvarProgressoWizard`, `wizard:create`, `wizard:update`, `wizard:delete`, `wizard:saveArvore`) devem emitir `auditCicloVida` com snapshot antes/depois, seguindo o padrão dos handlers existentes
 
 **Componentes (shadcn/ui new-york style):**
 - Todos os componentes de UI usam shadcn/ui importados de `@/components/ui/`
@@ -2519,8 +2975,8 @@ async criarLaudoInicial(params: { rep_id, perito_id, template_id }): Promise<Lau
   // ... resto da lógica existente
 }
 
-// Em criarLaudoWizard:
-async criarLaudoWizard(params: CriarLaudoWizardParams): Promise<LaudoRow> {
+// Em criarLaudoWizardRascunho:
+async criarLaudoWizardRascunho(params: CriarLaudoWizardRascunhoParams): Promise<LaudoRow> {
   // Validar se já existe laudo wizard
   const existente = await executeQuery<LaudoRow>(
     "SELECT id FROM laudos WHERE rep_id = ? AND tipo_criacao = 'wizard'",
@@ -2628,9 +3084,9 @@ Ao deletar um laudo `Concluído` ou `Entregue`, o outro laudo (se estiver `Bloqu
 |---|---|---|
 | `src/main/database/index.ts` | Migration v20 (a+b) | Fase 1 |
 | `src/main/types/database.ts` | Novas interfaces | Fase 1 |
-| `src/main/services/laudo.service.ts` | `criarLaudoWizard`, `reaplicarRespostas`, bloqueio/desbloqueio em `updateStatus` e `deletar`, verificação de bloqueio em `criarLaudoInicial` | Fase 2 |
-| `src/main/ipc/handlers/laudo.handlers.ts` | Novos handlers wizard, status `Bloqueado` na validação | Fase 3 |
-| `src/main/ipc/handlers/rep.handlers.ts` | `rep:create`/`rep:update`: suporte a `modo_criacao='wizard'` + `wizard_id` → cria laudo wizard rascunho | Fase 3 |
+| `src/main/services/laudo.service.ts` | `criarLaudoWizardRascunho`, `gerarLaudoWizard`, `salvarProgressoWizard`, `reaplicarRespostas` (com hash), bloqueio/desbloqueio em `updateStatus`, `deletar` (com limpeza de imagens), verificação de bloqueio em `criarLaudoInicial` | Fase 2 |
+| `src/main/ipc/handlers/laudo.handlers.ts` | Handlers `laudo:createWizardRascunho`, `laudo:gerarWizard`, `laudo:salvarProgressoWizard`, status `Bloqueado` na validação | Fase 3 |
+| `src/main/ipc/handlers/rep.handlers.ts` | `rep:create`/`rep:update`: suporte a `modo_criacao='wizard'` + `wizard_id` → chama `criarLaudoWizardRascunho`, retorna `warning` em caso de falha | Fase 3 |
 | `src/main/ipc/index.ts` | Registrar novos handlers | Fase 3 |
 | `src/preload/index.ts` | Novos canais na API + ALLOWED_CHANNELS | Fase 3 |
 | `src/preload/types.ts` | Tipos para wizard/peca/regra | Fase 3 |
