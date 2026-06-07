@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -31,6 +32,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { reindexarFiguras } from '@/lib/figuras';
 import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
@@ -276,6 +284,8 @@ interface LaudoItem {
   data_requisicao?: string;
   tipo_solicitacao?: string;
   numero_documento?: string;
+  tipo_criacao?: string;
+  wizard_id?: string;
 }
 
 interface SecaoEditor {
@@ -330,6 +340,7 @@ function reconstruirConteudo(secoes: SecaoEditor[]): string {
 }
 
 export const LaudosPage: React.FC = () => {
+  const navigate = useNavigate();
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<LaudoItem | null>(null);
@@ -1215,6 +1226,10 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleEditar = (laudo: LaudoItem) => {
+    if (laudo.tipo_criacao === 'wizard') {
+      navigate(`/laudos/${laudo.id}/wizard`);
+      return;
+    }
     const parsedSecoes = parseConteudoEmSecoes(converterPlaceholdersTextuais(laudo.conteudo || '', placeholderChaves));
     setEditando(laudo);
     setSecoes(parsedSecoes);
@@ -1722,6 +1737,18 @@ export const LaudosPage: React.FC = () => {
         const isReadonly = laudo.status === 'Concluído' || laudo.status === 'Entregue';
         return (
           <div className="flex justify-end gap-1">
+            {/* Preencher via Wizard — disponível para qualquer laudo */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm"
+                  onClick={() => navigate(`/laudos/${laudo.id}/wizard`)}
+                >
+                  <Wand2 size={14} className="text-violet-500" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Preencher via Wizard</TooltipContent>
+            </Tooltip>
+
             {botoesAcaoStatus.map(op => {
               const isPreencher = op.value === 'Em andamento';
               const habilitado = isPreencher || op.enabled(laudo.status);

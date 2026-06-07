@@ -9,7 +9,21 @@ import { repService } from '../../services/rep.service.js';
  */
 export const registerLaudoHandlers = (): void => {
   /**
-   * Buscar laudo por REP
+   * Buscar laudo por ID
+   */
+  ipcMain.handle('laudo:findById', async (_event, id: string) => {
+    try {
+      if (!id) return { success: false, error: 'ID inválido' };
+      const laudo = await laudoService.findById(id);
+      return { success: true, data: laudo };
+    } catch (error) {
+      logError('Erro ao buscar laudo por ID', { id, error });
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
+  });
+
+  /**
+   * Buscar laudo por REP (retorna o primeiro — compatibilidade legada)
    */
   ipcMain.handle('laudo:findByRepId', async (_event, repId: string) => {
     try {
@@ -18,6 +32,23 @@ export const registerLaudoHandlers = (): void => {
       return { success: true, data: laudo };
     } catch (error) {
       logError('Erro ao buscar laudo por REP', { repId, error });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+      };
+    }
+  });
+
+  /**
+   * Buscar todos os laudos de uma REP (template + wizard)
+   */
+  ipcMain.handle('laudo:findAllByRepId', async (_event, repId: string) => {
+    try {
+      if (!repId) return { success: false, error: 'ID da REP inválido' };
+      const laudos = await laudoService.findAllByRepId(repId);
+      return { success: true, data: laudos };
+    } catch (error) {
+      logError('Erro ao buscar laudos por REP', { repId, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
@@ -94,6 +125,45 @@ export const registerLaudoHandlers = (): void => {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
       };
+    }
+  });
+
+  /**
+   * Gerar laudo wizard (preenche laudo existente com peças)
+   */
+  ipcMain.handle('laudo:gerarWizard', async (_event, params: any) => {
+    try {
+      const laudo = await laudoService.gerarLaudoWizard(params);
+      return { success: true, data: laudo };
+    } catch (error) {
+      logError('Erro ao gerar laudo wizard', { params, error });
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
+  });
+
+  /**
+   * Salvar progresso do wizard (respostas parciais)
+   */
+  ipcMain.handle('laudo:salvarProgressoWizard', async (_event, laudoId: string, respostas: any) => {
+    try {
+      await laudoService.salvarProgressoWizard(laudoId, respostas);
+      return { success: true, message: 'Progresso salvo' };
+    } catch (error) {
+      logError('Erro ao salvar progresso do wizard', { laudoId, error });
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
+  });
+
+  /**
+   * Buscar respostas salvas de um laudo wizard
+   */
+  ipcMain.handle('laudo:getRespostasWizard', async (_event, laudoId: string) => {
+    try {
+      const respostas = await laudoService.getRespostasWizard(laudoId);
+      return { success: true, data: respostas };
+    } catch (error) {
+      logError('Erro ao buscar respostas do wizard', { laudoId, error });
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
     }
   });
 

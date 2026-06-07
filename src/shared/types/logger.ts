@@ -19,6 +19,9 @@ export const LOG_MODULES = [
   'sistema',
   'ipc',
   'security',
+  'wizard',
+  'peca',
+  'regra-wizard',
 ] as const;
 
 export type LogModule = (typeof LOG_MODULES)[number];

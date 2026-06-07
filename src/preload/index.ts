@@ -153,11 +153,55 @@ export interface IpcAPI {
   // Laudos
   laudo: {
     findAll: () => Promise<UserResponse>;
+    findAllByRepId: (repId: string) => Promise<UserResponse>;
+    findById: (id: string) => Promise<UserResponse>;
     findByRepId: (repId: string) => Promise<UserResponse>;
     updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
     delete: (laudoId: string, userId?: string) => Promise<UserResponse>;
     updateStatus: (laudoId: string, status: string) => Promise<UserResponse>;
+    gerarWizard: (params: any) => Promise<UserResponse>;
+    salvarProgressoWizard: (laudoId: string, respostas: any) => Promise<UserResponse>;
+    getRespostasWizard: (laudoId: string) => Promise<UserResponse>;
+  };
+
+  // Wizard
+  wizard: {
+    findAll: () => Promise<UserResponse>;
+    findById: (id: string) => Promise<UserResponse>;
+    findByTipoExame: (tipoExameId: string) => Promise<UserResponse>;
+    create: (data: any) => Promise<UserResponse>;
+    update: (id: string, data: any) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+    getArvore: (wizardId: string) => Promise<UserResponse>;
+    saveArvore: (wizardId: string, arvore: any) => Promise<UserResponse>;
+  };
+
+  // Peças (Banco de Peças)
+  categoriaPeca: {
+    findAll: () => Promise<UserResponse>;
+    findArvore: () => Promise<UserResponse>;
+    create: (data: any) => Promise<UserResponse>;
+    update: (id: string, data: any) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+  };
+
+  peca: {
+    findAll: () => Promise<UserResponse>;
+    findById: (id: string) => Promise<UserResponse>;
+    create: (data: any) => Promise<UserResponse>;
+    update: (id: string, data: any) => Promise<UserResponse>;
+    delete: (id: string) => Promise<UserResponse>;
+    search: (query: string) => Promise<UserResponse>;
+    findByCategoria: (categoriaId: string) => Promise<UserResponse>;
+    findByCategoriaRecursiva: (categoriaId: string) => Promise<UserResponse>;
+  };
+
+  // Regras do Wizard
+  regraWizard: {
+    findByWizard: (wizardId: string) => Promise<UserResponse>;
+    save: (regras: any[]) => Promise<UserResponse>;
+    calcularPecas: (wizardId: string, respostas: any) => Promise<UserResponse>;
   };
 
   // IA / Integração Groq
@@ -299,12 +343,49 @@ const ALLOWED_CHANNELS = new Set([
   'template:importarArquivo',
 
   // Laudos
+  'laudo:findById',
   'laudo:findByRepId',
+  'laudo:findAllByRepId',
   'laudo:findAll',
   'laudo:updateConteudo',
   'laudo:create',
   'laudo:delete',
   'laudo:updateStatus',
+  'laudo:gerarWizard',
+  'laudo:salvarProgressoWizard',
+  'laudo:getRespostasWizard',
+
+  // Wizards
+  'wizard:findAll',
+  'wizard:findById',
+  'wizard:findByTipoExame',
+  'wizard:create',
+  'wizard:update',
+  'wizard:delete',
+  'wizard:getArvore',
+  'wizard:saveArvore',
+
+  // Peças
+  'peca:findAll',
+  'peca:findById',
+  'peca:create',
+  'peca:update',
+  'peca:delete',
+  'peca:search',
+  'peca:findByCategoria',
+  'peca:findByCategoriaRecursiva',
+
+  // Categorias de Peças
+  'categoria-peca:findAll',
+  'categoria-peca:findArvore',
+  'categoria-peca:create',
+  'categoria-peca:update',
+  'categoria-peca:delete',
+
+  // Regras Wizard
+  'regra-wizard:findByWizard',
+  'regra-wizard:save',
+  'regra-wizard:calcularPecas',
 
   // IA
   'ia:revisarOrtografia',
@@ -693,11 +774,52 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   laudo: {
     findAll: () => ipcRenderer.invoke('laudo:findAll'),
+    findAllByRepId: (repId: string) => ipcRenderer.invoke('laudo:findAllByRepId', repId),
+    findById: (id: string) => ipcRenderer.invoke('laudo:findById', id),
     findByRepId: (repId: string) => ipcRenderer.invoke('laudo:findByRepId', repId),
     updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => ipcRenderer.invoke('laudo:create', data),
     delete: (laudoId: string, userId?: string) => ipcRenderer.invoke('laudo:delete', laudoId, userId),
     updateStatus: (laudoId: string, status: string) => ipcRenderer.invoke('laudo:updateStatus', laudoId, status),
+    gerarWizard: (params: any) => ipcRenderer.invoke('laudo:gerarWizard', params),
+    salvarProgressoWizard: (laudoId: string, respostas: any) => ipcRenderer.invoke('laudo:salvarProgressoWizard', laudoId, respostas),
+    getRespostasWizard: (laudoId: string) => ipcRenderer.invoke('laudo:getRespostasWizard', laudoId),
+  },
+
+  wizard: {
+    findAll: () => ipcRenderer.invoke('wizard:findAll'),
+    findById: (id: string) => ipcRenderer.invoke('wizard:findById', id),
+    findByTipoExame: (tipoExameId: string) => ipcRenderer.invoke('wizard:findByTipoExame', tipoExameId),
+    create: (data: any) => ipcRenderer.invoke('wizard:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('wizard:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('wizard:delete', id),
+    getArvore: (wizardId: string) => ipcRenderer.invoke('wizard:getArvore', wizardId),
+    saveArvore: (wizardId: string, arvore: any) => ipcRenderer.invoke('wizard:saveArvore', wizardId, arvore),
+  },
+
+  categoriaPeca: {
+    findAll: () => ipcRenderer.invoke('categoria-peca:findAll'),
+    findArvore: () => ipcRenderer.invoke('categoria-peca:findArvore'),
+    create: (data: any) => ipcRenderer.invoke('categoria-peca:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('categoria-peca:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('categoria-peca:delete', id),
+  },
+
+  peca: {
+    findAll: () => ipcRenderer.invoke('peca:findAll'),
+    findById: (id: string) => ipcRenderer.invoke('peca:findById', id),
+    create: (data: any) => ipcRenderer.invoke('peca:create', data),
+    update: (id: string, data: any) => ipcRenderer.invoke('peca:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('peca:delete', id),
+    search: (query: string) => ipcRenderer.invoke('peca:search', query),
+    findByCategoria: (categoriaId: string) => ipcRenderer.invoke('peca:findByCategoria', categoriaId),
+    findByCategoriaRecursiva: (categoriaId: string) => ipcRenderer.invoke('peca:findByCategoriaRecursiva', categoriaId),
+  },
+
+  regraWizard: {
+    findByWizard: (wizardId: string) => ipcRenderer.invoke('regra-wizard:findByWizard', wizardId),
+    save: (regras: any[]) => ipcRenderer.invoke('regra-wizard:save', regras),
+    calcularPecas: (wizardId: string, respostas: any) => ipcRenderer.invoke('regra-wizard:calcularPecas', wizardId, respostas),
   },
 
   ia: {

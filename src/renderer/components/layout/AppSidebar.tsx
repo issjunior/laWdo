@@ -15,6 +15,9 @@ import {
   Camera,
   LogOut,
   Ruler,
+  Wand2,
+  Package,
+  Layers,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -77,6 +80,15 @@ const menuItems = [
     icon: FileText,
     items: [
       { title: 'Editor de Laudos', path: '/laudos', icon: FileText },
+    ],
+  },
+  {
+    title: 'Wizard',
+    icon: Wand2,
+    items: [
+      { title: 'Categorias', path: '/categorias-pecas', icon: Layers },
+      { title: 'Peças', path: '/pecas', icon: Package },
+      { title: 'Wizards', path: '/wizards', icon: Wand2 },
     ],
   },
   {

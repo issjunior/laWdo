@@ -91,6 +91,9 @@ export interface LaudoRow extends DatabaseRow {
   versao: number
   created_at: string
   updated_at: string
+  tipo_criacao?: string
+  wizard_id?: string
+  respostas_wizard?: string
 }
 
 // Placeholder
@@ -138,6 +141,94 @@ export interface SecaoTemplateRow extends DatabaseRow {
   updated_at: string
 }
 
+// Wizard
+export interface WizardRow extends DatabaseRow {
+  id: string
+  tipo_exame_id: string
+  template_id: string
+  nome: string
+  descricao?: string
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Etapa do Wizard
+export interface EtapaWizardRow extends DatabaseRow {
+  id: string
+  wizard_id: string
+  etapa_pai_id: string | null
+  pergunta: string
+  descricao_ajuda?: string
+  tipo_input: 'select' | 'radio' | 'checkbox' | 'text' | 'image'
+  nivel: number
+  ordem: number
+  obrigatorio: boolean
+  multipla_escolha: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Opção de Etapa
+export interface OpcaoEtapaRow extends DatabaseRow {
+  id: string
+  etapa_id: string
+  label: string
+  valor: string
+  etapa_filha_id: string | null
+  ordem: number
+  created_at: string
+}
+
+// Categoria de Peça
+export interface CategoriaPecaRow extends DatabaseRow {
+  id: string
+  chave: string
+  label: string
+  descricao?: string
+  cor?: string
+  icone?: string
+  parent_id?: string | null
+  is_sistema: number
+  ordem: number
+  created_at: string
+  updated_at: string
+}
+
+// Peça (Banco de Peças)
+export interface PecaRow extends DatabaseRow {
+  id: string
+  nome: string
+  descricao?: string
+  conteudo: string
+  categoria_id?: string
+  tags?: string
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Regra do Wizard
+export interface RegraWizardRow extends DatabaseRow {
+  id: string
+  wizard_id: string
+  peca_id: string
+  secao_template_id: string | null
+  condicoes: string
+  ordem: number
+  created_at: string
+}
+
+// Resposta do Wizard
+export interface RespostaWizardRow extends DatabaseRow {
+  id: string
+  laudo_id: string
+  etapa_id: string
+  opcao_id: string | null
+  valor_texto: string | null
+  created_at: string
+}
+
 /**
  * Mapeamento de tipos por nome de entidade
  */
@@ -151,6 +242,13 @@ export type EntityRow =
   | LogAuditoriaRow
   | TemplateRow
   | SecaoTemplateRow
+  | WizardRow
+  | EtapaWizardRow
+  | OpcaoEtapaRow
+  | PecaRow
+  | CategoriaPecaRow
+  | RegraWizardRow
+  | RespostaWizardRow
 
 /**
  * Resultado de query

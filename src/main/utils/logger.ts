@@ -18,7 +18,7 @@ export type LogModule =
   | 'database' | 'auth' | 'laudo' | 'template' | 'rep'
   | 'solicitante' | 'tipo_exame' | 'placeholder' | 'backup'
   | 'configuracao' | 'ia' | 'ilustracao' | 'renderer' | 'sistema'
-  | 'ipc' | 'security';
+  | 'ipc' | 'security' | 'wizard' | 'peca' | 'regra-wizard';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

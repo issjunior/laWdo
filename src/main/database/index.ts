@@ -17,7 +17,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 19;
+const CURRENT_SCHEMA_VERSION = 21;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -1181,6 +1181,367 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.info('Migration v19: Concluída');
     } catch (error) {
       log.error('Erro ao aplicar migration versão 19', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 20: Wizards e Banco de Peças
+  if (fromVersion < 20) {
+    try {
+      await executeNonQuery('PRAGMA foreign_keys = OFF');
+      try {
+        // --- v20a: Recriar laudos sem UNIQUE em rep_id + novas colunas ---
+        const laudosExistTable = await executeQuery<{ name: string }>(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='laudos'"
+        );
+        if (laudosExistTable.length > 0) {
+          const laudosCols = await executeQuery<{ name: string; notnull: number; dflt_value: string | null }>('PRAGMA table_info(laudos)');
+          const hasTipoCriacao = laudosCols.some(c => c.name === 'tipo_criacao');
+          const hasRepIdUnique = laudosCols.some(c => c.name === 'rep_id' && c.notnull === 1);
+          const needRecreate = !hasTipoCriacao || hasRepIdUnique;
+
+          if (needRecreate) {
+            await executeNonQuery('DROP TABLE IF EXISTS laudos_v20');
+            await executeNonQuery(`
+              CREATE TABLE laudos_v20 (
+                id TEXT PRIMARY KEY,
+                rep_id TEXT NOT NULL,
+                perito_id TEXT NOT NULL,
+                template_id TEXT NOT NULL,
+                conteudo TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Em andamento',
+                data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
+                data_conclusao DATETIME,
+                data_entrega DATETIME,
+                versao INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                tipo_criacao TEXT NOT NULL DEFAULT 'template',
+                wizard_id TEXT,
+                respostas_wizard TEXT,
+                FOREIGN KEY (rep_id) REFERENCES reps(id),
+                FOREIGN KEY (perito_id) REFERENCES users(id),
+                FOREIGN KEY (template_id) REFERENCES templates(id),
+                FOREIGN KEY (wizard_id) REFERENCES wizards(id)
+              )
+            `);
+
+            await executeNonQuery(`
+              INSERT INTO laudos_v20 (
+                id, rep_id, perito_id, template_id, conteudo, status,
+                data_inicio, data_conclusao, data_entrega, versao,
+                created_at, updated_at
+              )
+              SELECT
+                id, rep_id, perito_id, template_id, conteudo, status,
+                data_inicio, data_conclusao, data_entrega, versao,
+                created_at, updated_at
+              FROM laudos
+            `);
+
+            await executeNonQuery('DROP TABLE laudos');
+            await executeNonQuery('ALTER TABLE laudos_v20 RENAME TO laudos');
+
+            await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_status ON laudos(status)');
+            await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_laudos_rep ON laudos(rep_id)');
+            log.info('Migration v20a: Laudos recriada sem UNIQUE + colunas tipo_criacao, wizard_id, respostas_wizard');
+          } else {
+            log.info('Migration v20a: Tabela laudos já contém as novas colunas, skip');
+          }
+        }
+
+        // --- v20b: Criar novas tabelas do wizard ---
+
+        await executeNonQuery(`
+          CREATE TABLE IF NOT EXISTS wizards (
+            id TEXT PRIMARY KEY,
+            tipo_exame_id TEXT NOT NULL,
+            template_id TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id),
+            FOREIGN KEY (template_id) REFERENCES templates(id)
+          )
+        `);
+
+        await executeNonQuery(`
+          CREATE TABLE IF NOT EXISTS etapas_wizard (
+            id TEXT PRIMARY KEY,
+            wizard_id TEXT NOT NULL,
+            etapa_pai_id TEXT,
+            pergunta TEXT NOT NULL,
+            descricao_ajuda TEXT,
+            tipo_input TEXT NOT NULL DEFAULT 'select',
+            nivel INTEGER NOT NULL DEFAULT 0,
+            ordem INTEGER NOT NULL DEFAULT 0,
+            obrigatorio INTEGER NOT NULL DEFAULT 1,
+            multipla_escolha INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (wizard_id) REFERENCES wizards(id) ON DELETE CASCADE,
+            FOREIGN KEY (etapa_pai_id) REFERENCES etapas_wizard(id) ON DELETE SET NULL
+          )
+        `);
+
+        await executeNonQuery(`
+          CREATE TABLE IF NOT EXISTS opcoes_etapa (
+            id TEXT PRIMARY KEY,
+            etapa_id TEXT NOT NULL,
+            label TEXT NOT NULL,
+            valor TEXT NOT NULL,
+            etapa_filha_id TEXT,
+            ordem INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (etapa_id) REFERENCES etapas_wizard(id) ON DELETE CASCADE,
+            FOREIGN KEY (etapa_filha_id) REFERENCES etapas_wizard(id) ON DELETE SET NULL
+          )
+        `);
+
+        await executeNonQuery(`
+          CREATE TABLE IF NOT EXISTS pecas (
+            id TEXT PRIMARY KEY,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            conteudo TEXT NOT NULL,
+            categoria TEXT,
+            tags TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        await executeNonQuery(`
+          CREATE TABLE IF NOT EXISTS regras_wizard (
+            id TEXT PRIMARY KEY,
+            wizard_id TEXT NOT NULL,
+            peca_id TEXT NOT NULL,
+            secao_template_id TEXT,
+            condicoes TEXT NOT NULL DEFAULT '{}',
+            ordem INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (wizard_id) REFERENCES wizards(id) ON DELETE CASCADE,
+            FOREIGN KEY (peca_id) REFERENCES pecas(id) ON DELETE CASCADE,
+            FOREIGN KEY (secao_template_id) REFERENCES secoes_template(id) ON DELETE SET NULL
+          )
+        `);
+
+        await executeNonQuery(`
+          CREATE TABLE IF NOT EXISTS respostas_wizard (
+            id TEXT PRIMARY KEY,
+            laudo_id TEXT NOT NULL,
+            etapa_id TEXT NOT NULL,
+            opcao_id TEXT,
+            valor_texto TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (laudo_id) REFERENCES laudos(id) ON DELETE CASCADE,
+            FOREIGN KEY (etapa_id) REFERENCES etapas_wizard(id),
+            FOREIGN KEY (opcao_id) REFERENCES opcoes_etapa(id) ON DELETE SET NULL
+          )
+        `);
+
+        log.info('Migration v20b: Novas tabelas wizard criadas');
+
+        // --- v20c: Índices ---
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_respostas_wizard_laudo ON respostas_wizard(laudo_id)');
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_regras_wizard_wizard ON regras_wizard(wizard_id)');
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_etapas_wizard_wizard ON etapas_wizard(wizard_id)');
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_opcoes_etapa_etapa ON opcoes_etapa(etapa_id)');
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_pecas_categoria ON pecas(categoria)');
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_wizards_tipo_exame ON wizards(tipo_exame_id)');
+
+        log.info('Migration v20c: Índices criados');
+      } finally {
+        await executeNonQuery('PRAGMA foreign_keys = ON');
+      }
+
+      log.info('Migration v20: Concluída (Wizards e Banco de Peças)');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 20', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 21: Categorização de peças com suporte a subcategorias
+  if (fromVersion < 21) {
+    try {
+      await executeNonQuery('PRAGMA foreign_keys = OFF');
+      try {
+        // --- v21a: Criar tabela categorias_pecas ---
+        await executeNonQuery(`
+          CREATE TABLE IF NOT EXISTS categorias_pecas (
+            id TEXT PRIMARY KEY,
+            chave TEXT NOT NULL UNIQUE,
+            label TEXT NOT NULL UNIQUE,
+            descricao TEXT,
+            cor TEXT,
+            icone TEXT,
+            parent_id TEXT,
+            is_sistema INTEGER NOT NULL DEFAULT 0,
+            ordem INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (parent_id) REFERENCES categorias_pecas(id) ON DELETE SET NULL
+          )
+        `);
+        log.info('Migration v21a: Tabela categorias_pecas criada');
+
+        // --- v21b: Seed de categorias do sistema ---
+        const now = new Date().toISOString();
+        const catIds: Record<string, string> = {
+          armas: 'cat-peca-armas',
+          'arma-de-fogo': 'cat-peca-arma-fogo',
+          'arma-pressao': 'cat-peca-arma-pressao',
+          simulacro: 'cat-peca-simulacro',
+          veiculos: 'cat-peca-veiculos',
+          carro: 'cat-peca-carro',
+          caminhao: 'cat-peca-caminhao',
+          reboque: 'cat-peca-reboque',
+          semirreboque: 'cat-peca-semirreboque',
+          'sem-categoria': 'cat-peca-sem-categoria',
+        };
+
+        // Categorias pai primeiro (parent_id NULL)
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'armas', 'Armas', 'red', 'Crosshair', NULL, 1, 10, ?, ?)
+        `, [catIds.armas, now, now]);
+
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'veiculos', 'Veículos', 'blue', 'Car', NULL, 1, 20, ?, ?)
+        `, [catIds.veiculos, now, now]);
+
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'sem_categoria', 'Sem categoria', 'slate', 'Puzzle', NULL, 1, 999, ?, ?)
+        `, [catIds['sem-categoria'], now, now]);
+
+        // Subcategorias de Armas
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'arma_de_fogo', 'Arma de Fogo', 'red', 'Flame', ?, 1, 11, ?, ?)
+        `, [catIds['arma-de-fogo'], catIds.armas, now, now]);
+
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'arma_de_pressao', 'Arma de Pressão', 'red', 'Wind', ?, 1, 12, ?, ?)
+        `, [catIds['arma-pressao'], catIds.armas, now, now]);
+
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'simulacro', 'Simulacro', 'red', 'Copy', ?, 1, 13, ?, ?)
+        `, [catIds.simulacro, catIds.armas, now, now]);
+
+        // Subcategorias de Veículos
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'carro', 'Carro', 'blue', 'CarFront', ?, 1, 21, ?, ?)
+        `, [catIds.carro, catIds.veiculos, now, now]);
+
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'caminhao', 'Caminhão', 'blue', 'Truck', ?, 1, 22, ?, ?)
+        `, [catIds.caminhao, catIds.veiculos, now, now]);
+
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'reboque', 'Reboque', 'blue', 'Anchor', ?, 1, 23, ?, ?)
+        `, [catIds.reboque, catIds.veiculos, now, now]);
+
+        await executeNonQuery(`
+          INSERT OR IGNORE INTO categorias_pecas (id, chave, label, cor, icone, parent_id, is_sistema, ordem, created_at, updated_at)
+          VALUES (?, 'semirreboque', 'Semirreboque', 'blue', 'Link2', ?, 1, 24, ?, ?)
+        `, [catIds.semirreboque, catIds.veiculos, now, now]);
+
+        log.info('Migration v21b: Categorias de sistema seedadas');
+
+        // --- v21c: Recriar tabela pecas com categoria_id no lugar de categoria ---
+        const pecasCols = await executeQuery<{ name: string }>('PRAGMA table_info(pecas)');
+        const hasCategoriaId = pecasCols.some(c => c.name === 'categoria_id');
+        const hasCategoria = pecasCols.some(c => c.name === 'categoria');
+
+        if (!hasCategoriaId && hasCategoria) {
+          // 1. Migrar categorias free-text existentes para a tabela categorias_pecas
+          const categoriasUnicas = await executeQuery<{ categoria: string }>(
+            "SELECT DISTINCT categoria FROM pecas WHERE categoria IS NOT NULL AND categoria != '' AND ativo = 1"
+          );
+
+          for (const row of categoriasUnicas) {
+            const catLabel = row.categoria.trim();
+            const catChave = catLabel
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              .toUpperCase()
+              .replace(/\s+/g, '_')
+              .replace(/[^A-Z0-9_]/g, '');
+            const catId = `cat-peca-user-${catChave.toLowerCase()}`;
+            await executeNonQuery(`
+              INSERT OR IGNORE INTO categorias_pecas (id, chave, label, is_sistema, ordem, created_at, updated_at)
+              VALUES (?, ?, ?, 0, 100, ?, ?)
+            `, [catId, catChave, catLabel, now, now]);
+          }
+
+          // 2. Recriar tabela pecas com categoria_id
+          await executeNonQuery('DROP TABLE IF EXISTS pecas_v21');
+          await executeNonQuery(`
+            CREATE TABLE pecas_v21 (
+              id TEXT PRIMARY KEY,
+              nome TEXT NOT NULL,
+              descricao TEXT,
+              conteudo TEXT NOT NULL,
+              categoria_id TEXT,
+              tags TEXT,
+              ativo INTEGER NOT NULL DEFAULT 1,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (categoria_id) REFERENCES categorias_pecas(id) ON DELETE SET NULL
+            )
+          `);
+
+          // 3. Migrar dados: mapear categoria free-text para categoria_id
+          await executeNonQuery(`
+            INSERT INTO pecas_v21 (id, nome, descricao, conteudo, categoria_id, tags, ativo, created_at, updated_at)
+            SELECT
+              p.id,
+              p.nome,
+              p.descricao,
+              p.conteudo,
+              cp.id AS categoria_id,
+              p.tags,
+              p.ativo,
+              p.created_at,
+              p.updated_at
+            FROM pecas p
+            LEFT JOIN categorias_pecas cp ON (
+              cp.label = TRIM(p.categoria)
+              AND cp.is_sistema = 0
+              AND cp.parent_id IS NULL
+            )
+          `);
+
+          await executeNonQuery('DROP TABLE pecas');
+          await executeNonQuery('ALTER TABLE pecas_v21 RENAME TO pecas');
+
+          log.info('Migration v21c: Tabela pecas recriada com categoria_id');
+        } else {
+          log.info('Migration v21c: Tabela pecas já possui categoria_id, skip');
+        }
+
+        // --- v21d: Índices ---
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_pecas_categoria_id ON pecas(categoria_id)');
+        await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_categorias_pecas_parent ON categorias_pecas(parent_id)');
+
+        log.info('Migration v21d: Índices criados');
+      } finally {
+        await executeNonQuery('PRAGMA foreign_keys = ON');
+      }
+
+      log.info('Migration v21: Concluída (Categorização de Peças)');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 21', error);
       throw error;
     }
   }

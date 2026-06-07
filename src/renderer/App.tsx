@@ -16,6 +16,11 @@ const BackupPage = lazy(() => import('@/pages/BackupPage').then(m => ({ default:
 const LogsPage = lazy(() => import('@/pages/LogsPage').then(m => ({ default: m.LogsPage })));
 const MargensPage = lazy(() => import('@/pages/MargensPage').then(m => ({ default: m.MargensPage })));
 const IlustracoesPanelWindow = lazy(() => import('@/pages/IlustracoesPanelWindow'));
+const PecasPage = lazy(() => import('@/pages/PecasPage'));
+const CategoriasPecasPage = lazy(() => import('@/pages/CategoriasPecasPage'));
+const WizardsPage = lazy(() => import('@/pages/WizardsPage'));
+const WizardEditorPage = lazy(() => import('@/pages/WizardEditorPage'));
+const WizardLaudoPage = lazy(() => import('@/pages/WizardLaudoPage'));
 import { AuthPage } from '@/pages/AuthPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -126,6 +131,12 @@ const App = () => {
                     <Route path="/backup" element={<BackupPage />} />
                     <Route path="/logs" element={<LogsPage />} />
                     <Route path="/margens" element={<MargensPage />} />
+                    <Route path="/pecas" element={<PecasPage />} />
+                    <Route path="/categorias-pecas" element={<CategoriasPecasPage />} />
+                    <Route path="/wizards" element={<WizardsPage />} />
+                    <Route path="/wizards/:id" element={<WizardEditorPage />} />
+                    <Route path="/reps/:repId/wizard" element={<WizardLaudoPage />} />
+                    <Route path="/laudos/:laudoId/wizard" element={<WizardLaudoPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Routes>
                 </Layout>

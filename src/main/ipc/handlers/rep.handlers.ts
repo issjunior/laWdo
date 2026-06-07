@@ -80,7 +80,6 @@ export const registerRepHandlers = (): void => {
           );
         } catch (laudoError) {
           logError('Erro ao criar laudo automático — REP criada sem laudo', laudoError);
-          // Não falha a criação da REP se o laudo falhar
         }
       }
 

@@ -17,6 +17,10 @@ import { registerIAHandlers } from './handlers/ia.handlers.js';
 import { registerBackupHandlers } from './handlers/backup.handlers.js';
 import { registerLogSystemHandlers } from './handlers/log.handlers.js';
 import { registerIlustracoesHandlers } from './handlers/ilustracoes.handlers.js';
+import { registerWizardHandlers } from './handlers/wizard.handlers.js';
+import { registerPecaHandlers } from './handlers/peca.handlers.js';
+import { registerCategoriaPecaHandlers } from './handlers/categoria-peca.handlers.js';
+import { registerRegraWizardHandlers } from './handlers/regra-wizard.handlers.js';
 import { userService } from '../services/user.service.js';
 
 /**
@@ -67,6 +71,10 @@ export const registerIpcHandlers = (options: {
   registerBackupHandlers();
   registerLogSystemHandlers();
   registerIlustracoesHandlers(options);
+  registerWizardHandlers();
+  registerPecaHandlers();
+  registerCategoriaPecaHandlers();
+  registerRegraWizardHandlers();
 
   log.info('Handlers IPC registrados com sucesso');
 };
