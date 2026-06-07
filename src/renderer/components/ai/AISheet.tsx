@@ -44,17 +44,37 @@ export const AISheet: React.FC<AISheetProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [modelName, setModelName] = useState<string>('Carregando...');
+
   // Auto-scroll para a última mensagem
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Focar textarea ao abrir
+  // Focar textarea ao abrir e buscar modelo de IA
   useEffect(() => {
     if (open) {
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 100);
+
+      // Buscar provedor e modelo configurados
+      window.ipcAPI.configuracao.obter('provedor_ia').then(res => {
+        if (res.success && res.data) {
+          const prov = res.data;
+          const keyModelo = prov === 'gemini' ? 'modelo_gemini_padrao' : 'modelo_ia_padrao';
+          window.ipcAPI.configuracao.obter(keyModelo).then(mRes => {
+            const provedorStr = prov === 'gemini' ? 'Google Gemini' : 'Groq';
+            if (mRes.success && mRes.data) {
+              setModelName(`${provedorStr} · ${mRes.data}`);
+            } else {
+              setModelName(provedorStr);
+            }
+          });
+        } else {
+          setModelName('Nenhuma IA configurada');
+        }
+      });
     }
   }, [open]);
 
@@ -97,9 +117,15 @@ export const AISheet: React.FC<AISheetProps> = ({
               </Button>
             </SheetClose>
           </div>
-          <p className="text-xs text-muted-foreground mt-1 truncate">
-            Seção: {secaoTitulo}
-          </p>
+          <div className="mt-1 flex flex-col gap-0.5">
+            <p className="text-xs text-primary font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/70 animate-pulse"></span>
+              Modelo Ativo: {modelName}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              Contexto atual: Seção "{secaoTitulo}"
+            </p>
+          </div>
         </SheetHeader>
 
         {/* Área de mensagens */}

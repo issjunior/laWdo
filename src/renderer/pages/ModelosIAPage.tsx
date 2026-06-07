@@ -26,8 +26,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Eye, EyeOff, Save, CheckCircle, AlertTriangle, Loader2, Info, ShieldCheck } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Eye,
+  EyeOff,
+  Save,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
+  ShieldCheck,
+  ExternalLink,
+  Lock,
+  Server,
+  KeyRound,
+  BookOpen,
+} from 'lucide-react';
 
 const iaConfigSchema = z.object({
   provedor: z.enum(['groq', 'gemini']),
@@ -58,7 +87,7 @@ export const ModelosIAPage: React.FC = () => {
   const [testando, setTestando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [testSuccess, setTestSuccess] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ status: 'success' | 'error', message: string } | null>(null);
 
   const form = useForm<IAConfigForm>({
     resolver: zodResolver(iaConfigSchema),
@@ -144,34 +173,70 @@ export const ModelosIAPage: React.FC = () => {
     try {
       setTestando(true);
       setError(null);
-      setTestSuccess(null);
+      setTestResult(null);
 
       const r = await window.ipcAPI.ia.perguntar('Diga apenas "OK" sem nenhum texto adicional.', '');
 
       if (r.success && r.data && (r.data as string).toLowerCase().includes('ok')) {
-        setTestSuccess(`Conexão com a API ${provedorNome} estabelecida com sucesso!`);
-        setTimeout(() => setTestSuccess(null), 3000);
+        const msg = `Conexão com a API ${provedorNome} estabelecida com sucesso!`;
+        setTestResult({ status: 'success', message: msg });
+        window.ipcAPI.logInfo('IA', msg);
       } else if (!r.success) {
-        setError(r.error || 'Erro ao testar conexão');
+        const erroDetalhe = r.error ? `\n\nDetalhes do erro: ${r.error}` : '';
+        const msg = `Ops! Não conseguimos conectar com o ${provedorNome}. Por favor, confira se a sua chave de API está correta e tente novamente.${erroDetalhe}`;
+        setTestResult({ status: 'error', message: msg });
+        window.ipcAPI.logError('IA', msg, r.error);
       } else {
-        setError('Resposta inesperada da API. Verifique sua chave.');
+        const msg = `Ops! O ${provedorNome} retornou uma resposta inesperada. Confira se a sua chave está correta e tente novamente.`;
+        setTestResult({ status: 'error', message: msg });
+        window.ipcAPI.logError('IA', msg, r.data);
       }
-    } catch (_e) {
-      setError('Erro ao testar conexão');
+    } catch (_e: any) {
+      const erroTecnico = _e?.message || 'Erro desconhecido';
+      const msg = `Ops! Algo deu errado ao tentar falar com o ${provedorNome}. Verifique sua conexão e sua chave de API.\n\nDetalhes: ${erroTecnico}`;
+      setTestResult({ status: 'error', message: msg });
+      window.ipcAPI.logError('IA', msg, _e);
     } finally {
       setTestando(false);
     }
   };
 
+  const modelOptions = provedor === 'gemini' ? GEMINI_MODEL_OPTIONS : GROQ_MODEL_OPTIONS;
+  const modelFieldName = provedor === 'gemini' ? 'modeloGemini' as const : 'modeloGroq' as const;
+  const apiKeyFieldName = provedor === 'gemini' ? 'apiKeyGemini' as const : 'apiKeyGroq' as const;
+  const apiKeyPlaceholder = provedor === 'gemini' ? 'AIza...' : 'gsk_...';
+
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
+      {/* ── Título da Página ── */}
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Modelos de IA</h1>
         <p className="text-muted-foreground mt-1">
-          Configure a integração com IA (Groq ou Gemini) para assistência na escrita de laudos.
+          Configure a integração com IA para assistência na escrita de laudos periciais.
+          Atualmente o sistema suporta <strong>Google Gemini</strong> e <strong>Groq</strong> —
+          novos provedores serão adicionados em versões futuras.
         </p>
       </div>
 
+      {/* ── Alert: Recomendação ── */}
+      <Alert className="border-primary/30 bg-primary/5 dark:bg-primary/10">
+        <ShieldCheck className="h-5 w-5 text-primary" />
+        <AlertTitle className="font-semibold text-primary">
+          Recomendação:
+        </AlertTitle>
+        <AlertDescription className="mt-1.5 text-sm text-foreground/80">
+          Recomenda-se o uso do <strong>Google Gemini</strong> com o email institucional{' '}
+          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">
+            @policiacientifica.pr.gov.br
+          </code>
+          . Ao utilizar uma conta institucional/Workspace, o Google{' '}
+          <strong>não compartilha seus dados</strong> com terceiros e{' '}
+          <strong>não utiliza as informações enviadas para treinamento</strong> de seus modelos de IA,
+          garantindo a privacidade dos dados periciais.
+        </AlertDescription>
+      </Alert>
+
+      {/* ── Alertas de Feedback (Erro / Sucesso) ── */}
       {error && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -186,25 +251,46 @@ export const ModelosIAPage: React.FC = () => {
           </AlertDescription>
         </Alert>
       )}
-      {testSuccess && (
-        <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50">
-          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-          <AlertDescription className="text-green-800 dark:text-green-400">
-            {testSuccess}
-          </AlertDescription>
-        </Alert>
-      )}
+      <Dialog open={!!testResult} onOpenChange={(open) => !open && setTestResult(null)}>
+        <DialogContent className="sm:max-w-[425px] text-center">
+          <DialogHeader>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-4">
+              {testResult?.status === 'success' ? (
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                  <AlertTriangle className="h-6 w-6 text-destructive" />
+                </div>
+              )}
+            </div>
+            <DialogTitle className="text-center text-xl">
+              Teste de Conexão: {testResult?.status === 'success' ? 'Sucesso' : 'Falha'}
+            </DialogTitle>
+            <DialogDescription className="text-center mt-2 text-base whitespace-pre-line">
+              {testResult?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center mt-4">
+            <Button onClick={() => setTestResult(null)} className="w-full sm:w-auto min-w-[120px]">
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Form {...form}>
         <form onSubmit={handleSalvar} className="space-y-6">
-          {/* Configuração do Provedor */}
+          {/* ── Card: Configuração do Provedor ── */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Configuração {provedorNome} API</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <KeyRound size={18} className="text-primary" />
+                Configuração do Provedor
+              </CardTitle>
               <CardDescription>
-                {provedor === 'groq'
-                  ? 'Insira sua chave de API da Groq para habilitar o assistente de IA nos laudos.'
-                  : 'Insira sua chave de API do Gemini para habilitar o assistente de IA nos laudos.'}
+                Selecione o provedor de IA, o modelo desejado e insira sua chave de API.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -222,8 +308,15 @@ export const ModelosIAPage: React.FC = () => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="gemini">
+                          <span className="flex items-center gap-2">
+                            Google Gemini
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              Recomendado
+                            </Badge>
+                          </span>
+                        </SelectItem>
                         <SelectItem value="groq">Groq (LLaMA, Mixtral)</SelectItem>
-                        <SelectItem value="gemini">Google Gemini</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -231,143 +324,64 @@ export const ModelosIAPage: React.FC = () => {
                 )}
               />
 
-              {provedor === 'groq' ? (
-                <>
-                  {/* Chave de API Groq */}
-                  <FormField
-                    control={form.control}
-                    name="apiKeyGroq"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Chave de API Groq</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input
-                              type={mostrarChave ? 'text' : 'password'}
-                              placeholder="gsk_..."
-                              {...field}
-                              value={field.value || ''}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                              onClick={() => setMostrarChave((v) => !v)}
-                            >
-                              {mostrarChave ? <EyeOff size={14} /> : <Eye size={14} />}
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Obtenha sua chave gratuitamente em{' '}
-                          <a
-                            href="https://console.groq.com/keys"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline hover:text-primary"
-                          >
-                            console.groq.com/keys
-                          </a>
-                        </p>
-                      </FormItem>
-                    )}
-                  />
+              <Separator />
 
-                  {/* Modelo Padrão Groq */}
-                  <FormField
-                    control={form.control}
-                    name="modeloGroq"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Modelo Padrão</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um modelo..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {GROQ_MODEL_OPTIONS.map((m) => (
-                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
-              ) : (
-                <>
-                  {/* Chave de API Gemini */}
-                  <FormField
-                    control={form.control}
-                    name="apiKeyGemini"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Chave de API Gemini</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input
-                              type={mostrarChave ? 'text' : 'password'}
-                              placeholder="AIza..."
-                              {...field}
-                              value={field.value || ''}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                              onClick={() => setMostrarChave((v) => !v)}
-                            >
-                              {mostrarChave ? <EyeOff size={14} /> : <Eye size={14} />}
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Obtenha sua chave gratuitamente em{' '}
-                          <a
-                            href="https://aistudio.google.com/apikey"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline hover:text-primary"
-                          >
-                            aistudio.google.com/apikey
-                          </a>
-                        </p>
-                      </FormItem>
-                    )}
-                  />
+              {/* Modelo Padrão (dinâmico conforme provedor) */}
+              <FormField
+                control={form.control}
+                name={modelFieldName}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Modelo Padrão — {provedorNome}</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um modelo..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {modelOptions.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                  {/* Modelo Padrão Gemini */}
-                  <FormField
-                    control={form.control}
-                    name="modeloGemini"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Modelo Padrão</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um modelo..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {GEMINI_MODEL_OPTIONS.map((m) => (
-                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
-              )}
+              <Separator />
+
+              {/* Chave de API (dinâmica conforme provedor) */}
+              <FormField
+                control={form.control}
+                name={apiKeyFieldName}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Chave de API — {provedorNome}</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          type={mostrarChave ? 'text' : 'password'}
+                          placeholder={apiKeyPlaceholder}
+                          {...field}
+                          value={field.value || ''}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                          onClick={() => setMostrarChave((v) => !v)}
+                        >
+                          {mostrarChave ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </Button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               {/* Ações */}
               <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
@@ -393,86 +407,110 @@ export const ModelosIAPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Card de Instruções Gemini — uso institucional */}
-          {provedor === 'gemini' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ShieldCheck size={18} className="text-muted-foreground" />
-                  Gemini — Uso Institucional
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  <strong>Email institucional obrigatório:</strong> Para garantir a
-                  privacidade e segurança dos dados periciais, crie sua conta no
-                  Google AI Studio utilizando exclusivamente seu email institucional{' '}
-                  <code className="bg-muted px-1 py-0.5 rounded text-xs">@policiacientifica.pr.gov.br</code>.
-                  O Google <strong>não</strong> utiliza dados enviados por contas
-                  institucionais/enterprise para treinamento de modelos.
-                </p>
-                <p>
-                  <strong>Como obter a chave:</strong>
-                  <ol className="list-decimal ml-4 mt-1 space-y-1">
-                    <li>Acesse{' '}
-                      <a
-                        href="https://aistudio.google.com/apikey"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline hover:text-primary"
-                      >
-                        aistudio.google.com/apikey
-                      </a>
-                    </li>
-                    <li>Faça login com seu email @policiacientifica.pr.gov.br</li>
-                    <li>Clique em &quot;Criar chave de API&quot;</li>
-                    <li>Copie a chave e cole no campo acima</li>
-                  </ol>
-                </p>
-                <p>
-                  <strong>Cota gratuita:</strong> O Google AI Studio oferece cota
-                  gratuita generosa para uso em desenvolvimento. Modelos Gemini
-                  têm excelente desempenho em português jurídico/técnico.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Card de Instruções — Segurança */}
+          {/* ── Card: Como Obter sua Chave de API ── */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <Info size={18} className="text-muted-foreground" />
-                Informações de Segurança
+                <BookOpen size={18} className="text-primary" />
+                Como Obter sua Chave de API
               </CardTitle>
+              <CardDescription>
+                Siga as instruções abaixo para criar sua chave de API gratuitamente.
+                O sistema está preparado para os provedores <strong>Google Gemini</strong> e{' '}
+                <strong>Groq</strong>. Outros provedores serão disponibilizados em atualizações futuras.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                <strong>Sua chave fica segura:</strong> As chaves de API são
-                armazenadas localmente no banco de dados SQLite do aplicativo
-                (fora da árvore do projeto). As chamadas para as APIs são feitas
-                pelo processo principal do Electron — as chaves{' '}
-                <strong>nunca</strong> são expostas no navegador/renderer.
-              </p>
-              {provedor === 'groq' && (
-                <p>
-                  <strong>Uso gratuito:</strong> A Groq oferece créditos gratuitos
-                  para desenvolvedores. Verifique os limites de rate e preços em{' '}
-                  <a
-                    href="https://groq.com/pricing"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline hover:text-primary"
-                  >
-                    groq.com/pricing
-                  </a>.
-                </p>
-              )}
-              <p>
-                <strong>Dados sensíveis:</strong> Ao usar IA, o conteúdo das seções
-                do laudo é enviado para os servidores do provedor configurado
-                (Groq ou Google). Não envie dados pessoais sensíveis ou sigilosos
-                sem avaliação prévia.
+            <CardContent>
+              <Accordion type="single" collapsible defaultValue="gemini">
+                {/* Gemini — Recomendado */}
+                <AccordionItem value="gemini">
+                  <AccordionTrigger className="hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      Google Gemini
+                      <Badge className="text-[10px] px-1.5 py-0">
+                        Recomendado
+                      </Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-3 pl-1">
+                      <ol className="list-decimal ml-4 space-y-2 text-sm text-muted-foreground">
+                        <li>
+                          Acesse{' '}
+                          <a
+                            href="https://aistudio.google.com/apikey"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:text-primary/80"
+                          >
+                            aistudio.google.com/apikey
+                            <ExternalLink size={12} />
+                          </a>
+                        </li>
+                        <li>
+                          Faça login com seu email institucional{' '}
+                          <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">
+                            @policiacientifica.pr.gov.br
+                          </code>
+                        </li>
+                        <li>Clique em <strong>"Criar chave de API"</strong> (ou "Create API Key")</li>
+                        <li>Copie a chave gerada e cole no campo <em>"Chave de API"</em> acima</li>
+                      </ol>
+                      <p className="text-xs text-muted-foreground/80 mt-2">
+                        <strong>Cota gratuita:</strong> O Google AI Studio oferece cota gratuita generosa.
+                        Modelos Gemini têm excelente desempenho em português jurídico/técnico.
+                      </p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Groq */}
+                <AccordionItem value="groq">
+                  <AccordionTrigger className="hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      Groq (LLaMA, Mixtral)
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-3 pl-1">
+                      <ol className="list-decimal ml-4 space-y-2 text-sm text-muted-foreground">
+                        <li>
+                          Acesse{' '}
+                          <a
+                            href="https://console.groq.com/keys"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:text-primary/80"
+                          >
+                            console.groq.com/keys
+                            <ExternalLink size={12} />
+                          </a>
+                        </li>
+                        <li>Crie uma conta gratuita ou faça login</li>
+                        <li>Clique em <strong>"Create API Key"</strong></li>
+                        <li>Copie a chave gerada e cole no campo <em>"Chave de API"</em> acima</li>
+                      </ol>
+                      <p className="text-xs text-muted-foreground/80 mt-2">
+                        <strong>Uso gratuito:</strong> A Groq oferece créditos gratuitos para desenvolvedores.
+                        Verifique os limites em{' '}
+                        <a
+                          href="https://groq.com/pricing"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:text-primary/80"
+                        >
+                          groq.com/pricing
+                          <ExternalLink size={12} />
+                        </a>.
+                      </p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
+              {/* Nota: novos provedores futuros */}
+              <p className="mt-4 text-xs text-muted-foreground/70 text-center">
+                🔌 Suporte a novos provedores de IA será adicionado em versões futuras do sistema.
               </p>
             </CardContent>
           </Card>
