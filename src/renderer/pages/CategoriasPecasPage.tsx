@@ -3,22 +3,51 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, Plus, Lock, Check, FolderTree } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { SortableCategoryTree, type CategoriaNode } from '@/components/categorias/SortableCategoryTree';
 import { toast } from 'sonner';
 
-const ALLOWED_COLORS = ['slate', 'red', 'orange', 'amber', 'emerald', 'teal', 'blue', 'indigo', 'violet', 'fuchsia', 'pink', 'rose'];
+const ALLOWED_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
 
-const POPULAR_ICONS = [
-  'Tag', 'Folder', 'File', 'FileText', 'Image', 'Box', 'Layers', 'Puzzle',
-  'Settings', 'Tool', 'Shield', 'Lock', 'Key', 'User', 'Users', 'UserCheck',
-  'Briefcase', 'Building', 'MapPin', 'Calendar', 'Clock', 'Zap', 'Star',
-  'Heart', 'Flag', 'Bell', 'Info', 'AlertCircle', 'CheckCircle',
-  'Crosshair', 'Flame', 'Wind', 'Copy', 'Car', 'CarFront', 'Truck', 'Anchor',
+const ICON_CATEGORIES = [
+  {
+    label: 'Armas / Balística',
+    icons: ['Sword', 'Swords', 'Bomb', 'Target', 'Crosshair', 'ShieldOff', 'ShieldAlert'],
+  },
+  {
+    label: 'Laboratório / Química',
+    icons: ['Microscope', 'FlaskConical', 'FlaskRound', 'TestTube', 'TestTubes', 'Beaker', 'Dna', 'Thermometer', 'Droplets'],
+  },
+  {
+    label: 'Veículos',
+    icons: ['Car', 'CarFront', 'Truck', 'Bus', 'Ship', 'Plane', 'Bike', 'Navigation', 'Compass', 'Anchor'],
+  },
+  {
+    label: 'Forense Digital',
+    icons: ['Smartphone', 'HardDrive', 'Monitor', 'Camera', 'Database', 'Binary', 'Laptop', 'Cpu', 'Server', 'Usb', 'Wifi', 'Router'],
+  },
+  {
+    label: 'Documentação',
+    icons: ['ClipboardList', 'ClipboardCheck', 'FileSearch', 'FileWarning', 'NotebookPen', 'BookOpen', 'BookText', 'Bookmark', 'File', 'FileText', 'Copy', 'Map', 'Image'],
+  },
+  {
+    label: 'Vestígios / Objetos',
+    icons: ['Footprints', 'Glasses', 'Scan', 'ScanFace', 'ScanEye', 'Fingerprint', 'Syringe', 'Pill', 'Bone', 'PawPrint', 'Leaf', 'Shell', 'DollarSign', 'Banknote', 'Wallet', 'Gem', 'Crown'],
+  },
+  {
+    label: 'Ferramentas',
+    icons: ['Ruler', 'Wrench', 'Hammer', 'Axe', 'Drill', 'Shovel', 'Scissors', 'Flashlight', 'Tool', 'Settings'],
+  },
+  {
+    label: 'Justiça / Geral Forense',
+    icons: ['Scale', 'Skull', 'Gavel', 'Siren', 'Cctv', 'Satellite', 'Radio', 'Megaphone', 'BrainCircuit', 'Shield', 'Lock', 'Key', 'Weight'],
+  },
+  {
+    label: 'Geral',
+    icons: ['Tag', 'Folder', 'Box', 'Layers', 'Puzzle', 'User', 'Users', 'UserCheck', 'Briefcase', 'Building', 'MapPin', 'Calendar', 'Clock', 'Zap', 'Star', 'Heart', 'Flag', 'Bell', 'Info', 'AlertCircle', 'CheckCircle', 'Flame', 'Wind', 'Globe', 'Tv', 'Printer', 'Medal', 'Award', 'Trophy', 'BadgeCheck', 'ShieldCheck'],
+  },
 ];
 
 interface CategoriaFull {
@@ -324,8 +353,8 @@ const CategoriasPecasPage: React.FC = () => {
   );
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto h-full flex flex-col p-4 md:p-6 space-y-6">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Categorias de Peças</h1>
           <p className="text-muted-foreground mt-1">
@@ -337,10 +366,10 @@ const CategoriasPecasPage: React.FC = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         {/* Left: Tree */}
-        <Card className="lg:col-span-1">
-          <CardHeader className="pb-2">
+        <Card className="lg:col-span-1 flex flex-col min-h-0">
+          <CardHeader className="pb-2 shrink-0">
             <CardTitle className="text-base flex items-center gap-2">
               <FolderTree size={18} /> Árvore
             </CardTitle>
@@ -348,7 +377,7 @@ const CategoriasPecasPage: React.FC = () => {
               Arraste categorias sobre outras para aninhar. Solte fora para desaninhar.
             </CardDescription>
           </CardHeader>
-          <CardContent className="max-h-[calc(100vh-280px)] overflow-y-auto">
+          <CardContent className="flex-1 min-h-0 overflow-y-auto">
             <SortableCategoryTree
               arvore={arvoreNodes}
               selectedId={selectedId}
@@ -361,8 +390,8 @@ const CategoriasPecasPage: React.FC = () => {
         </Card>
 
         {/* Right: Form / Info */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
+        <Card className="lg:col-span-2 flex flex-col min-h-0">
+          <CardHeader className="pb-2 shrink-0">
             <CardTitle className="text-base">
               {isCreating ? 'Nova Categoria' : selectedCat ? 'Editar Categoria' : 'Selecione uma categoria'}
             </CardTitle>
@@ -376,7 +405,7 @@ const CategoriasPecasPage: React.FC = () => {
                   : 'Clique em uma categoria na árvore para editá-la.'}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 flex-1 min-h-0 overflow-y-auto">
             {!isCreating && selectedCat && (
               <Button
                 variant="outline"
@@ -394,24 +423,25 @@ const CategoriasPecasPage: React.FC = () => {
 
             {(isCreating || selectedCat) ? (
               <>
-                <div className="space-y-2">
-                  <Label>Nome</Label>
-                  <Input
-                    value={formData.label}
-                    onChange={e => setFormData({ ...formData, label: e.target.value })}
-                    placeholder="Ex: Armas"
-                    disabled={selectedCat?.is_sistema === 1 && !isCreating}
-                  />
-                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nome</Label>
+                    <Input
+                      value={formData.label}
+                      onChange={e => setFormData({ ...formData, label: e.target.value })}
+                      placeholder="Ex: Armas"
+                      disabled={selectedCat?.is_sistema === 1 && !isCreating}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Descrição</Label>
-                  <Textarea
-                    value={formData.descricao}
-                    onChange={e => setFormData({ ...formData, descricao: e.target.value })}
-                    placeholder="Opcional..."
-                    rows={2}
-                  />
+                  <div className="space-y-2">
+                    <Label>Descrição</Label>
+                    <Input
+                      value={formData.descricao}
+                      onChange={e => setFormData({ ...formData, descricao: e.target.value })}
+                      placeholder="Opcional..."
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -433,22 +463,29 @@ const CategoriasPecasPage: React.FC = () => {
 
                 <div className="space-y-2">
                   <Label>Ícone</Label>
-                  <div className="grid grid-cols-8 sm:grid-cols-10 gap-2 border rounded-lg p-3 max-h-40 overflow-y-auto bg-muted/10">
-                    {POPULAR_ICONS.map(iconName => {
-                      const IconComp = (LucideIcons as any)[iconName];
-                      if (!IconComp) return null;
-                      return (
-                        <button
-                          key={iconName}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, icone: iconName })}
-                          className={`p-2 rounded-md flex justify-center items-center hover:bg-muted transition-colors ${formData.icone === iconName ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground'}`}
-                          title={iconName}
-                        >
-                          <IconComp size={20} />
-                        </button>
-                      );
-                    })}
+                  <div className="border rounded-lg p-3 h-40 resize-y min-h-[120px] max-h-[400px] overflow-y-auto bg-muted/10">
+                    {ICON_CATEGORIES.map(cat => (
+                      <div key={cat.label} className="mb-3 last:mb-0">
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">{cat.label}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cat.icons.map(iconName => {
+                            const IconComp = (LucideIcons as any)[iconName];
+                            if (!IconComp) return null;
+                            return (
+                              <button
+                                key={iconName}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, icone: iconName })}
+                                className={`p-1.5 rounded-md flex justify-center items-center hover:bg-muted transition-colors ${formData.icone === iconName ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground'}`}
+                                title={iconName}
+                              >
+                                <IconComp size={18} />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

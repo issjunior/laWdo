@@ -51,7 +51,7 @@ const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; curren
         <div className="flex flex-col h-screen overflow-hidden bg-background">
           <Header onLogout={onLogout} currentUser={currentUser} />
           <main className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-[1600px] mx-auto">
+            <div className="max-w-[1600px] mx-auto h-full">
               {children}
             </div>
           </main>

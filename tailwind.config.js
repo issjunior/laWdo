@@ -4,19 +4,19 @@ export default {
   content: ['./src/renderer/**/*.{ts,tsx,js,jsx}', './src/renderer/index.html'],
   safelist: [
     {
-      pattern: /^(bg|text|border|ring)-(slate|red|orange|amber|emerald|teal|blue|indigo|violet|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900)$/,
+      pattern: /^(bg|text|border|ring)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900)$/,
       variants: ['hover', 'dark'],
     },
     {
-      pattern: /^(bg)-(slate|red|orange|amber|emerald|teal|blue|indigo|violet|fuchsia|pink|rose)-(50|900)\/(10|15|20|30|40|50)$/,
+      pattern: /^(bg)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|900)\/(10|15|20|30|40|50)$/,
       variants: ['dark'],
     },
     {
-      pattern: /^(border)-(slate|red|orange|amber|emerald|teal|blue|indigo|violet|fuchsia|pink|rose)-(800)\/(40)$/,
+      pattern: /^(border)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(800)\/(40)$/,
       variants: ['dark'],
     },
     {
-      pattern: /^(ring)-(slate|red|orange|amber|emerald|teal|blue|indigo|violet|fuchsia|pink|rose)-(500)\/(50)$/,
+      pattern: /^(ring)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(500)\/(50)$/,
       variants: ['dark'],
     },
   ],

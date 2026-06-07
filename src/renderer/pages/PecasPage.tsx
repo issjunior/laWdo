@@ -158,7 +158,13 @@ const PecasPage: React.FC = () => {
   };
 
   const filteredPecas = pecas.filter(p => {
-    if (categoriaFiltro !== 'todas' && p.categoria_id !== categoriaFiltro) return false;
+    if (categoriaFiltro !== 'todas') {
+      if (categoriaFiltro === 'sem-categoria') {
+        if (p.categoria_id) return false;
+      } else if (p.categoria_id !== categoriaFiltro) {
+        return false;
+      }
+    }
     if (busca) {
       const q = busca.toLowerCase();
       const tags: string[] = p.tags ? (typeof p.tags === 'string' ? JSON.parse(p.tags) : p.tags) : [];
@@ -304,6 +310,9 @@ const PecasPage: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas</SelectItem>
+                    {pecas.some(p => !p.categoria_id) && (
+                      <SelectItem value="sem-categoria">Sem categoria</SelectItem>
+                    )}
                     {renderCategoriaOptions(categoriasArvore)}
                   </SelectContent>
                 </Select>
