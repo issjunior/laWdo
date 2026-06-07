@@ -17,6 +17,13 @@
 
  Abordagem Recomendada
 
+ Ponto único de escolha do modelo de IA
+
+ Toda a decisão de qual provedor e modelo de IA será usado acontece exclusivamente na página ModelosIAPage.tsx. O perito escolhe o
+ provedor e o modelo nessa página — essa escolha é persistida na tabela configuracoes e lida pelo backend a cada chamada. Nenhum outro
+ ponto do sistema (toolbar, sheet, editor) expõe ou toma essa decisão; eles apenas disparam ações de IA sem saber qual provedor está
+ configurado.
+
  Segurança da Chave de API
 
  A chave da API Groq será armazenada na tabela configuracoes (chave-valor) e as chamadas HTTP serão feitas pelo processo main do Electron, nunca

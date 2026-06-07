@@ -18,11 +18,15 @@ Atualmente o perito só pode usar Groq. Adicionar Gemini:
 
 ## Abordagem
 
+### Ponto único de escolha: `ModelosIAPage.tsx`
+
+**Toda a decisão de qual modelo de IA será usado acontece exclusivamente na página `ModelosIAPage.tsx`.** O perito escolhe o provedor (Groq ou Gemini) e o modelo dentro daquele provedor. Essa escolha é persistida em `configuracoes` e lida pelo backend a cada chamada. Nenhum outro ponto do sistema expõe essa decisão — os componentes de toolbar, sheet e editor apenas disparam as ações de IA sem saber qual provedor está por trás.
+
 ### UI: Select de provedor no topo do Card de configuração
 
 Na página `ModelosIAPage.tsx`, um **Select** no topo do Card permite escolher entre **Groq** e **Gemini**. Os campos de API Key e modelo são renderizados condicionalmente conforme o provedor selecionado. O formulário usa `react-hook-form` + `zod` (padrão já existente) com schema estendido para ambos provedores.
 
-### Backend: Roteamento por provedor
+### Backend: Roteamento transparente por provedor
 
 O handler `ia.handlers.ts` ganha uma função `chamarIA()` que lê a config `provedor_ia` e roteia para `chamarGroq()` (existente) ou `chamarGemini()` (nova). Ambos usam o mesmo formato de request OpenAI-compatível. Os 4 handlers IPC (`revisarOrtografia`, `adequarEscrita`, `descreverImagem`, `perguntar`) passam a chamar `chamarIA()` em vez de `chamarGroq()` diretamente.
 

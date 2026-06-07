@@ -5,23 +5,40 @@ import { logError, logInfo } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
-const MODELOS_DISPONIVEIS = [
+const GROQ_MODELS = [
   'llama-3.3-70b-versatile',
   'meta-llama/llama-4-scout-17b-16e-instruct',
   'gemma2-9b-it',
   'mixtral-8x7b-32768',
 ];
 
-const MODELO_PADRAO = 'llama-3.3-70b-versatile';
-const MODELO_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const GEMINI_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
+];
 
-async function obterConfigIA(): Promise<{ apiKey: string | null; modelo: string }> {
+const MODELO_PADRAO_GROQ = 'llama-3.3-70b-versatile';
+const MODELO_VISION_GROQ = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const MODELO_PADRAO_GEMINI = 'gemini-2.5-flash';
+
+async function obterConfigGroq(): Promise<{ apiKey: string | null; modelo: string }> {
   const apiKey = await configuracaoService.obter('api_key_groq');
   const modeloSalvo = await configuracaoService.obter('modelo_ia_padrao');
-  const modelo = modeloSalvo && MODELOS_DISPONIVEIS.includes(modeloSalvo)
+  const modelo = modeloSalvo && GROQ_MODELS.includes(modeloSalvo)
     ? modeloSalvo
-    : MODELO_PADRAO;
+    : MODELO_PADRAO_GROQ;
+  return { apiKey, modelo };
+}
+
+async function obterConfigGemini(): Promise<{ apiKey: string | null; modelo: string }> {
+  const apiKey = await configuracaoService.obter('api_key_gemini');
+  const modeloSalvo = await configuracaoService.obter('modelo_gemini_padrao');
+  const modelo = modeloSalvo && GEMINI_MODELS.includes(modeloSalvo)
+    ? modeloSalvo
+    : MODELO_PADRAO_GEMINI;
   return { apiKey, modelo };
 }
 
@@ -29,11 +46,13 @@ async function chamarGroq(
   messages: Array<{ role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] }>,
   modelo?: string
 ): Promise<string> {
-  const { apiKey, modelo: modeloPadrao } = await obterConfigIA();
+  const { apiKey, modelo: modeloPadrao } = await obterConfigGroq();
 
   if (!apiKey) {
     throw new Error('Chave de API Groq não configurada. Configure em Configurações → Modelos IA.');
   }
+
+  const modeloFinal = modelo && GROQ_MODELS.includes(modelo) ? modelo : modeloPadrao;
 
   const resposta = await fetch(GROQ_API_URL, {
     method: 'POST',
@@ -42,7 +61,7 @@ async function chamarGroq(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: modelo || modeloPadrao,
+      model: modeloFinal,
       messages,
       temperature: 0.3,
       max_tokens: 4096,
@@ -56,6 +75,52 @@ async function chamarGroq(
 
   const json = (await resposta.json()) as { choices?: Array<{ message?: { content?: string } }> };
   return json.choices?.[0]?.message?.content || '';
+}
+
+async function chamarGemini(
+  messages: Array<{ role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] }>,
+  modelo?: string
+): Promise<string> {
+  const { apiKey, modelo: modeloPadrao } = await obterConfigGemini();
+
+  if (!apiKey) {
+    throw new Error('Chave de API Gemini não configurada. Configure em Configurações → Modelos IA.');
+  }
+
+  const modeloFinal = modelo && GEMINI_MODELS.includes(modelo) ? modelo : modeloPadrao;
+
+  const resposta = await fetch(GEMINI_API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modeloFinal,
+      messages,
+      temperature: 0.3,
+      max_tokens: 4096,
+    }),
+  });
+
+  if (!resposta.ok) {
+    const erroTexto = await resposta.text();
+    throw new Error(`Erro da API Gemini (${resposta.status}): ${erroTexto}`);
+  }
+
+  const json = (await resposta.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  return json.choices?.[0]?.message?.content || '';
+}
+
+async function chamarIA(
+  messages: Array<{ role: string; content: string | { type: string; text?: string; image_url?: { url: string } }[] }>,
+  modelo?: string
+): Promise<string> {
+  const provedor = (await configuracaoService.obter('provedor_ia')) || 'groq';
+  if (provedor === 'gemini') {
+    return chamarGemini(messages, modelo);
+  }
+  return chamarGroq(messages, modelo);
 }
 
 /** Extrai texto puro do HTML, ignorando spans de placeholder (usando regex — DOMParser não disponível no Node.js do processo main) */
@@ -80,7 +145,7 @@ function obterMimeType(ext: string): string {
 }
 
 /**
- * Registra handlers IPC para integração com IA (Groq)
+ * Registra handlers IPC para integração com IA (Groq / Gemini)
  */
 export const registerIAHandlers = (): void => {
   /**
@@ -104,7 +169,7 @@ export const registerIAHandlers = (): void => {
 Texto:
 ${texto}`;
 
-      const resposta = await chamarGroq([
+      const resposta = await chamarIA([
         { role: 'system', content: 'Você é um assistente de revisão textual para peritos criminais. Responda apenas com o texto revisado.' },
         { role: 'user', content: prompt },
       ]);
@@ -137,7 +202,7 @@ ${texto}`;
 Texto original:
 ${texto}`;
 
-      const resposta = await chamarGroq([
+      const resposta = await chamarIA([
         { role: 'system', content: 'Você é um perito criminal forense experiente. Reescreva textos em linguagem técnica pericial formal. Responda apenas com o texto reescrito.' },
         { role: 'user', content: prompt },
       ]);
@@ -190,12 +255,12 @@ ${texto}`;
         return { success: false, error: 'Nenhuma imagem válida para descrição (apenas data-URI, URLs HTTP/HTTPS ou imagens do laudo são suportadas)' };
       }
 
-      const resposta = await chamarGroq(
+      const resposta = await chamarIA(
         [
           { role: 'system', content: 'Você é um perito criminal especialista em descrição de evidências fotográficas. Responda apenas com a descrição técnica.' },
           { role: 'user', content: content },
         ],
-        MODELO_VISION
+        MODELO_VISION_GROQ
       );
 
       return { success: true, data: resposta };
@@ -228,7 +293,7 @@ ${contexto ? `\nContexto da seção atual do laudo:\n${contexto}` : ''}`,
         { role: 'user', content: pergunta },
       ];
 
-      const resposta = await chamarGroq(messages);
+      const resposta = await chamarIA(messages);
       return { success: true, data: resposta };
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : 'Erro ao processar pergunta';

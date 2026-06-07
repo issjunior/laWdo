@@ -5,7 +5,7 @@ import { getLogger } from '../utils/logger.js';
 import { executeQuery, executeNonQuery, withTransaction } from '../database/sqlite.js'
 const log = getLogger('configuracao');
 
-const CHAVES_IA_EXCLUIDAS = ['api_key_groq', 'modelo_ia_padrao'];
+const CHAVES_IA_EXCLUIDAS = ['api_key_groq', 'api_key_gemini', 'modelo_ia_padrao', 'modelo_gemini_padrao', 'provedor_ia'];
 
 interface ManifestConfig {
   version: number;
