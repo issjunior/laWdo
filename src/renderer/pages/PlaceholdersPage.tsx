@@ -293,7 +293,7 @@ export const PlaceholdersPage: React.FC = () => {
           <div className="flex items-center gap-1.5">
             <Badge variant="outline" className={`text-[10px] h-5 px-1.5 gap-1 border-${cat.cor}-200 text-${cat.cor}-600`}>
               <Icon size={cat.icone === 'Car' ? 12 : 10} />
-              {cat.label}
+{cat.label.split(' - ')[0]}
             </Badge>
             {sistema && (
               <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1 shrink-0 border-blue-200 text-blue-600">
@@ -554,7 +554,7 @@ export const PlaceholdersPage: React.FC = () => {
                       <p className="text-sm">Nenhum placeholder nesta categoria</p>
                     </div>
                   ) : (
-                    <DataTable columns={columnDefs} data={filtrados} searchColumn="chave" searchPlaceholder="Buscar placeholder..." hideSearch />
+                    <DataTable columns={columnDefs} data={filtrados} searchColumn="chave" searchPlaceholder="Buscar placeholder..." hideSearch initialColumnVisibility={{ valor: false }} />
                   )}
                 </>
               ) : (
