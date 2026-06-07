@@ -6,7 +6,6 @@ import {
 import * as LucideIcons from 'lucide-react';
 import {
   ChevronRight, GripVertical, Lock, FolderTree,
-  ArrowUpFromLine,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +25,6 @@ export interface SortableCategoryTreeProps {
   onSelect: (id: string) => void;
   onAdd: (parentId: string | null) => void;
   onMove: (id: string, newParentId: string | null) => void;
-  onOutdent?: (id: string) => void;
 }
 
 function getDescendantIds(node: CategoriaNode): Set<string> {
@@ -53,11 +51,10 @@ interface TreeNodeProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAdd: (parentId: string | null) => void;
-  onOutdent?: (id: string) => void;
 }
 
 const TreeNode: React.FC<TreeNodeProps> = ({
-  node, depth, selectedId, onSelect, onAdd, onOutdent,
+  node, depth, selectedId, onSelect, onAdd,
 }) => {
   const [expanded, setExpanded] = useState(true);
 
@@ -128,17 +125,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           <ChevronRight size={14} className={cn('transition-transform text-muted-foreground', expanded && 'rotate-90')} />
         </button>
 
-        {/* Outdent — promote to root (visible on hover for non-system non-root nodes) */}
-        {!isSys && depth > 0 && onOutdent && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onOutdent(node.id); }}
-            className="p-0.5 hover:bg-muted rounded shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-            title="Mover para raiz (desaninhar)"
-          >
-            <ArrowUpFromLine size={13} />
-          </button>
-        )}
-
         {/* Icon */}
         <div className={cn(
           'w-6 h-6 rounded flex items-center justify-center shrink-0',
@@ -178,7 +164,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               selectedId={selectedId}
               onSelect={onSelect}
               onAdd={onAdd}
-              onOutdent={onOutdent}
             />
           ))}
         </div>
@@ -212,7 +197,7 @@ function DroppableRoot({ children }: { children: React.ReactNode }) {
 }
 
 export function SortableCategoryTree({
-  arvore, selectedId, onSelect, onAdd, onMove, onOutdent,
+  arvore, selectedId, onSelect, onAdd, onMove,
 }: SortableCategoryTreeProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -271,7 +256,6 @@ export function SortableCategoryTree({
               selectedId={selectedId}
               onSelect={onSelect}
               onAdd={onAdd}
-              onOutdent={onOutdent}
             />
           ))
         )}

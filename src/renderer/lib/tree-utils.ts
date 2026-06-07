@@ -87,16 +87,15 @@ export function buildParentOptions(tree: CategoriaFull[], excludeId: string, noP
 
   const options: ParentOption[] = [{ value: '__none__', label: noParentLabel }];
 
-  function walk(nodes: CategoriaFull[], depth: number) {
+  function walk(nodes: CategoriaFull[]) {
     for (const node of nodes) {
       if (excludeIds.has(node.id)) continue;
-      const prefix = '\u00A0\u00A0'.repeat(depth) + (depth > 0 ? '\u2514 ' : '');
-      options.push({ value: node.id, label: prefix + node.label });
-      walk(node.subcategorias || [], depth + 1);
+      options.push({ value: node.id, label: node.label });
+      walk(node.subcategorias || []);
     }
   }
 
-  walk(tree, 0);
+  walk(tree);
   return options;
 }
 

@@ -222,10 +222,6 @@ const CategoriasPecasPage: React.FC = () => {
     }
   }, [arvore]);
 
-  const handleOutdent = useCallback(async (id: string) => {
-    await handleMove(id, null);
-  }, [handleMove]);
-
   const handleDelete = useCallback((id: string) => {
     const cat = findCat(arvore, id);
     if (cat) setDeleteTarget(cat);
@@ -306,7 +302,6 @@ const CategoriasPecasPage: React.FC = () => {
               onSelect={handleSelect}
               onAdd={handleAdd}
               onMove={handleMove}
-              onOutdent={handleOutdent}
             />
           </CardContent>
         </Card>
