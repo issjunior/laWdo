@@ -118,6 +118,7 @@ export interface IpcAPI {
   // Placeholders
   categoria: {
     findAll: () => Promise<UserResponse>;
+    findArvore: () => Promise<UserResponse>;
     create: (data: any) => Promise<UserResponse>;
     update: (id: string, data: any) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
@@ -314,6 +315,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Categorias de Placeholders
   'categoria:findAll',
+  'categoria:findArvore',
   'categoria:create',
   'categoria:update',
   'categoria:delete',
@@ -741,6 +743,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   categoria: {
     findAll: () => ipcRenderer.invoke('categoria:findAll'),
+    findArvore: () => ipcRenderer.invoke('categoria:findArvore'),
     create: (data: any) => ipcRenderer.invoke('categoria:create', data),
     update: (id: string, data: any) => ipcRenderer.invoke('categoria:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('categoria:delete', id),

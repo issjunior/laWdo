@@ -1,6 +1,6 @@
 import { BaseService } from './base.service.js';
 import { getLogger } from '../utils/logger.js';
-import { withTransaction, executeNonQuery } from '../database/sqlite.js'
+import { withTransaction, executeNonQuery, executeQuery } from '../database/sqlite.js'
 const log = getLogger('placeholder');
 
 export interface CategoriaPlaceholderRow {
@@ -10,6 +10,7 @@ export interface CategoriaPlaceholderRow {
   descricao: string | null;
   cor: string | null;
   icone: string | null;
+  parent_id: string | null;
   is_sistema: number;
   ordem: number;
   created_at: string;
@@ -54,13 +55,19 @@ class CategoriaService extends BaseService<CategoriaPlaceholderRow> {
 
     try {
       await withTransaction(async () => {
-        // 1. Move os placeholders para a categoria "Sem Categoria" ('cat-sem-categoria')
+        // 1. Mover subcategorias para raiz
+        await executeNonQuery(
+          'UPDATE categorias_placeholders SET parent_id = NULL, updated_at = ? WHERE parent_id = ?',
+          [new Date().toISOString(), id]
+        );
+
+        // 2. Move os placeholders para a categoria "Sem Categoria" ('cat-sem-categoria')
         await executeNonQuery(
           'UPDATE placeholders SET categoria_id = ?, updated_at = ? WHERE categoria_id = ?',
           ['cat-sem-categoria', new Date().toISOString(), id]
         );
 
-        // 2. Exclui a categoria
+        // 3. Exclui a categoria
         await executeNonQuery('DELETE FROM categorias_placeholders WHERE id = ?', [id]);
       });
 
@@ -70,6 +77,44 @@ class CategoriaService extends BaseService<CategoriaPlaceholderRow> {
       log.error('Erro ao excluir categoria (transação falhou)', error);
       throw error;
     }
+  }
+
+  async findAllOrdered(): Promise<CategoriaPlaceholderRow[]> {
+    const rows = await executeQuery<CategoriaPlaceholderRow>(
+      'SELECT * FROM categorias_placeholders ORDER BY is_sistema DESC, ordem ASC, label ASC'
+    );
+    return rows;
+  }
+
+  async findSubcategorias(parentId: string): Promise<CategoriaPlaceholderRow[]> {
+    return executeQuery<CategoriaPlaceholderRow>(
+      'SELECT * FROM categorias_placeholders WHERE parent_id = ? ORDER BY ordem ASC, label ASC',
+      [parentId]
+    );
+  }
+
+  async findArvore(): Promise<(CategoriaPlaceholderRow & { subcategorias: CategoriaPlaceholderRow[] })[]> {
+    const todas = await this.findAllOrdered();
+    const build = (parentId: string | null): (CategoriaPlaceholderRow & { subcategorias: CategoriaPlaceholderRow[] })[] =>
+      todas
+        .filter(c => (parentId === null ? !c.parent_id : c.parent_id === parentId))
+        .map(c => ({ ...c, subcategorias: build(c.id) }));
+    return build(null);
+  }
+
+  async findWithDescendants(categoriaId: string): Promise<CategoriaPlaceholderRow[]> {
+    const result: CategoriaPlaceholderRow[] = [];
+    const fila = [categoriaId];
+    while (fila.length > 0) {
+      const id = fila.shift()!;
+      const cat = await this.findById(id);
+      if (cat) {
+        result.push(cat);
+        const subs = await this.findSubcategorias(id);
+        fila.push(...subs.map(s => s.id));
+      }
+    }
+    return result;
   }
 }
 

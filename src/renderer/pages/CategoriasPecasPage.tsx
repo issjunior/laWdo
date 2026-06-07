@@ -3,115 +3,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, Plus, Lock, Check, FolderTree } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { SortableCategoryTree, type CategoriaNode } from '@/components/categorias/SortableCategoryTree';
 import { toast } from 'sonner';
+import { ALLOWED_COLORS, ICON_CATEGORIES } from '@/lib/category-constants';
+import {
+  type CategoriaFull,
+  findCat,
+  removeFromTree,
+  insertIntoTree,
+  moveNodeInTree,
+  updateNodeInTree,
+  toTreeNode,
+  buildParentOptions,
+} from '@/lib/tree-utils';
 
-const ALLOWED_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
-
-const ICON_CATEGORIES = [
-  {
-    label: 'Armas / Balística',
-    icons: ['Sword', 'Swords', 'Bomb', 'Target', 'Crosshair', 'ShieldOff', 'ShieldAlert'],
-  },
-  {
-    label: 'Laboratório / Química',
-    icons: ['Microscope', 'FlaskConical', 'FlaskRound', 'TestTube', 'TestTubes', 'Beaker', 'Dna', 'Thermometer', 'Droplets'],
-  },
-  {
-    label: 'Veículos',
-    icons: ['Car', 'CarFront', 'Truck', 'Bus', 'Ship', 'Plane', 'Bike', 'Navigation', 'Compass', 'Anchor'],
-  },
-  {
-    label: 'Forense Digital',
-    icons: ['Smartphone', 'HardDrive', 'Monitor', 'Camera', 'Database', 'Binary', 'Laptop', 'Cpu', 'Server', 'Usb', 'Wifi', 'Router'],
-  },
-  {
-    label: 'Documentação',
-    icons: ['ClipboardList', 'ClipboardCheck', 'FileSearch', 'FileWarning', 'NotebookPen', 'BookOpen', 'BookText', 'Bookmark', 'File', 'FileText', 'Copy', 'Map', 'Image'],
-  },
-  {
-    label: 'Vestígios / Objetos',
-    icons: ['Footprints', 'Glasses', 'Scan', 'ScanFace', 'ScanEye', 'Fingerprint', 'Syringe', 'Pill', 'Bone', 'PawPrint', 'Leaf', 'Shell', 'DollarSign', 'Banknote', 'Wallet', 'Gem', 'Crown'],
-  },
-  {
-    label: 'Ferramentas',
-    icons: ['Ruler', 'Wrench', 'Hammer', 'Axe', 'Drill', 'Shovel', 'Scissors', 'Flashlight', 'Tool', 'Settings'],
-  },
-  {
-    label: 'Justiça / Geral Forense',
-    icons: ['Scale', 'Skull', 'Gavel', 'Siren', 'Cctv', 'Satellite', 'Radio', 'Megaphone', 'BrainCircuit', 'Shield', 'Lock', 'Key', 'Weight'],
-  },
-  {
-    label: 'Geral',
-    icons: ['Tag', 'Folder', 'Box', 'Layers', 'Puzzle', 'User', 'Users', 'UserCheck', 'Briefcase', 'Building', 'MapPin', 'Calendar', 'Clock', 'Zap', 'Star', 'Heart', 'Flag', 'Bell', 'Info', 'AlertCircle', 'CheckCircle', 'Flame', 'Wind', 'Globe', 'Tv', 'Printer', 'Medal', 'Award', 'Trophy', 'BadgeCheck', 'ShieldCheck'],
-  },
-];
-
-interface CategoriaFull {
-  id: string;
-  chave: string;
-  label: string;
-  descricao: string | null;
-  cor: string;
-  icone: string;
-  parent_id: string | null;
-  is_sistema: number;
-  ordem: number;
-  subcategorias: CategoriaFull[];
-}
-
-function toTreeNode(cat: CategoriaFull): CategoriaNode {
-  return {
-    id: cat.id,
-    label: cat.label,
-    cor: cat.cor || 'slate',
-    icone: cat.icone || 'Tag',
-    is_sistema: cat.is_sistema,
-    ordem: cat.ordem,
-    subcategorias: (cat.subcategorias || []).map(toTreeNode),
-  };
-}
-
-function removeFromTree(nodes: CategoriaFull[], id: string): { node: CategoriaFull | null; tree: CategoriaFull[] } {
-  for (let i = 0; i < nodes.length; i++) {
-    if (nodes[i].id === id) {
-      return { node: nodes[i], tree: [...nodes.slice(0, i), ...nodes.slice(i + 1)] };
-    }
-    const { node, tree: updated } = removeFromTree(nodes[i].subcategorias || [], id);
-    if (node) {
-      const newNodes = [...nodes];
-      newNodes[i] = { ...nodes[i], subcategorias: updated };
-      return { node, tree: newNodes };
-    }
-  }
-  return { node: null, tree: nodes };
-}
-
-function insertIntoTree(nodes: CategoriaFull[], targetId: string, node: CategoriaFull): CategoriaFull[] {
-  return nodes.map(n => {
-    if (n.id === targetId) {
-      return { ...n, subcategorias: [...(n.subcategorias || []), node] };
-    }
-    return { ...n, subcategorias: insertIntoTree(n.subcategorias || [], targetId, node) };
-  });
-}
-
-function moveNodeInTree(tree: CategoriaFull[], nodeId: string, newParentId: string | null): CategoriaFull[] {
-  const { node: removed, tree: without } = removeFromTree(tree, nodeId);
-  if (!removed) return tree;
-  if (!newParentId) return [...without, removed];
-  return insertIntoTree(without, newParentId, removed);
-}
-
-function updateNodeInTree(node: CategoriaFull, id: string, updates: Partial<CategoriaFull>): CategoriaFull {
-  if (node.id === id) return { ...node, ...updates };
-  return { ...node, subcategorias: (node.subcategorias || []).map(c => updateNodeInTree(c, id, updates)) };
-}
-
-const emptyForm = { label: '', descricao: '', cor: 'slate', icone: 'Tag' };
+const emptyForm = { label: '', descricao: '', cor: 'slate', icone: 'Tag', parent_id: '__none__' as string };
 
 const CategoriasPecasPage: React.FC = () => {
   const [arvore, setArvore] = useState<CategoriaFull[]>([]);
@@ -127,15 +37,6 @@ const CategoriasPecasPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<CategoriaFull | null>(null);
 
   const selectedCat = selectedId ? findCat(arvore, selectedId) : null;
-
-  function findCat(tree: CategoriaFull[], id: string): CategoriaFull | null {
-    for (const cat of tree) {
-      if (cat.id === id) return cat;
-      const found = findCat(cat.subcategorias || [], id);
-      if (found) return found;
-    }
-    return null;
-  }
 
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -172,6 +73,7 @@ const CategoriasPecasPage: React.FC = () => {
         descricao: selectedCat.descricao || '',
         cor: selectedCat.cor || 'slate',
         icone: selectedCat.icone || 'Tag',
+        parent_id: selectedCat.parent_id || '__none__',
       });
       setFormError(null);
     }
@@ -208,6 +110,7 @@ const CategoriasPecasPage: React.FC = () => {
       descricao: formData.descricao.trim() || null,
       cor: formData.cor,
       icone: formData.icone,
+      parent_id: formData.parent_id === '__none__' ? null : formData.parent_id,
     };
 
     try {
@@ -266,8 +169,22 @@ const CategoriasPecasPage: React.FC = () => {
             setFormError(res.error || 'Erro ao atualizar');
           }
         } else {
+          const newParentId = formData.parent_id === '__none__' ? null : formData.parent_id;
+          payload.parent_id = newParentId;
+          const parentChanged = (selectedCat.parent_id || null) !== newParentId;
           const prevArvore = arvore;
-          setArvore(prev => prev.map(c => updateNodeInTree(c, selectedCat.id, payload)));
+
+          if (parentChanged) {
+            setArvore(prev => {
+              const { tree: without } = removeFromTree(prev, selectedCat.id);
+              const updated = { ...selectedCat, ...payload };
+              if (!updated.parent_id) return [...without, updated];
+              return insertIntoTree(without, updated.parent_id, updated);
+            });
+          } else {
+            setArvore(prev => prev.map(c => updateNodeInTree(c, selectedCat.id, payload)));
+          }
+
           const res = await window.ipcAPI.categoriaPeca.update(selectedCat.id, payload);
           if (res.success) {
             toast.success('Categoria atualizada');
@@ -340,6 +257,11 @@ const CategoriasPecasPage: React.FC = () => {
   const arvoreNodes: CategoriaNode[] = arvore
     .filter(c => c.id !== 'cat-peca-sem-categoria')
     .map(toTreeNode);
+
+  const parentOptions = (() => {
+    if (!selectedId) return [];
+    return buildParentOptions(arvore, selectedId);
+  })();
 
   if (loading) return (
     <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin" /></div>
@@ -443,6 +365,21 @@ const CategoriasPecasPage: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                {/* Categoria pai */}
+                {!isCreating && selectedCat && selectedCat.is_sistema !== 1 && (
+                  <div className="space-y-2">
+                    <Label>Categoria pai</Label>
+                    <Select value={formData.parent_id} onValueChange={v => setFormData({ ...formData, parent_id: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {parentOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Cor</Label>

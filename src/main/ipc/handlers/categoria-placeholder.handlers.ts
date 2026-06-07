@@ -10,6 +10,16 @@ const ALLOWED_COLORS = ['slate', 'red', 'orange', 'amber', 'emerald', 'teal', 'b
 export const registerCategoriaHandlers = (): void => {
   logInfo('Registrando handlers de categoria de placeholder...');
 
+  ipcMain.handle('categoria:findArvore', async () => {
+    try {
+      const data = await categoriaService.findArvore();
+      return { success: true, data };
+    } catch (error) {
+      logError('Erro ao buscar árvore de categorias', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
+  });
+
   ipcMain.handle('categoria:findAll', async () => {
     try {
       const rows = await categoriaService.findAll();
@@ -39,6 +49,7 @@ export const registerCategoriaHandlers = (): void => {
         descricao: data.descricao ? sanitizeInput(data.descricao) : null,
         cor: sanitizeInput(cor),
         icone: data.icone ? sanitizeInput(data.icone) : 'Tag',
+        parent_id: data.parent_id || null,
         is_sistema: 0,
         ordem: typeof data.ordem === 'number' ? data.ordem : 99,
       };
@@ -69,6 +80,7 @@ export const registerCategoriaHandlers = (): void => {
       }
       if (data.icone !== undefined) updateData.icone = data.icone ? sanitizeInput(data.icone) : 'Tag';
       if (data.ordem !== undefined && typeof data.ordem === 'number') updateData.ordem = data.ordem;
+      if (data.parent_id !== undefined) updateData.parent_id = data.parent_id || null;
 
       const row = await categoriaService.update(id, updateData);
       if (!row) return { success: false, error: 'Categoria não encontrada' };

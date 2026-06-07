@@ -2,26 +2,34 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, Lock, ChevronDown, ChevronUp, Layers, Hash, Type, AlignLeft, Tag, LayoutGrid, List, Settings, Copy } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Placeholder } from '@/lib/validators';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
-// Dnd Kit
-import { DndContext, useDroppable, useDraggable, DragOverlay, closestCorners } from '@dnd-kit/core';
-
-// Modais e Componentes
-import { ManageCategoriesModal, CategoriaPlaceholderRow } from '@/components/placeholders/ManageCategoriesModal';
+import { toast } from 'sonner';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
+import { ManageCategoriesModal, CategoriaPlaceholderRow } from '@/components/placeholders/ManageCategoriesModal';
+import { SortableCategoryTree } from '@/components/categorias/SortableCategoryTree';
+import { Loader2, AlertCircle, Plus, Lock, Check, FolderTree, Search, Edit, Trash2, Settings, Hash } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
+import { ALLOWED_COLORS, ICON_CATEGORIES } from '@/lib/category-constants';
+import {
+  type CategoriaFull,
+  findCat,
+  removeFromTree,
+  insertIntoTree,
+  moveNodeInTree,
+  updateNodeInTree,
+  toTreeNode,
+  flattenTree,
+  buildParentOptions,
+} from '@/lib/tree-utils';
 
 interface PlaceholderFormData {
   chave: string;
@@ -34,6 +42,8 @@ const emptyForm = (defaultCat: string): PlaceholderFormData => ({
   chave: '', valor: '', descricao: '', categoria_id: defaultCat,
 });
 
+const catEmptyForm = { label: '', descricao: '', cor: 'slate', icone: 'Tag', parent_id: '__none__' as string };
+
 const PLACEHOLDERS_SISTEMA_CHAVES = [
   'numero_rep', 'data_recebimento_rep', 'tipo_solicitacao_rep', 'numero_solicitacao_rep',
   'data_solicitacao_rep', 'autoridade_solicitante_rep', 'nome_envolvido', 'local_fato',
@@ -45,261 +55,46 @@ const PLACEHOLDERS_SISTEMA_CHAVES = [
   'data_extenso_recebimento_rep'
 ];
 
-/* ── COMPONENTES DRAG & DROP ── */
-const DraggableCard = ({ p, categoria, isOverlay = false }: { p: Placeholder, categoria: CategoriaPlaceholderRow | undefined, isOverlay?: boolean }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: p.id,
-    data: { placeholder: p }
-  });
-
-  const style = transform ? {
-    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-  } : undefined;
-
-  if (!categoria) return null;
-  const isSysCat = categoria.is_sistema === 1;
-  const isSysPlaceholder = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
-
-  const IconComp = (LucideIcons as any)[categoria.icone] || LucideIcons.Tag;
-
-  return (
-    <Card
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className={`relative overflow-hidden mb-1.5 cursor-grab hover:shadow-md transition-shadow bg-${categoria.cor}-50/30 dark:bg-${categoria.cor}-900/10 border-${categoria.cor}-200 dark:border-${categoria.cor}-800/40
-        ${isDragging ? 'opacity-50 border-primary ring-2 ring-primary/50' : ''} 
-        ${isOverlay ? 'shadow-xl cursor-grabbing scale-105 rotate-2' : ''}
-        ${isSysPlaceholder ? 'border-blue-200 dark:border-blue-800/60' : ''}
-      `}
-    >
-      <div
-        className={`absolute left-0 top-0 bottom-0 w-1 bg-${categoria.cor}-500`}
-      />
-      <CardHeader className="pb-3 pl-5 pt-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <code className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted font-mono text-xs font-semibold text-foreground truncate">
-                <Hash size={10} className="mr-1 text-muted-foreground shrink-0" />
-                {`{{${p.chave}}}`}
-              </code>
-              {isSysPlaceholder && (
-                <Badge variant="outline" className="text-[10px] h-4 px-1 gap-1 shrink-0 border-blue-200 text-blue-600 dark:text-blue-300">
-                  <Lock size={8} />
-                  Fixo
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1">
-              <IconComp size={categoria.icone === 'Car' ? 13 : 11} className="text-muted-foreground" />
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium truncate">
-                {categoria.label}
-              </span>
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 pl-5 pb-3 space-y-2">
-        {!isSysPlaceholder && p.valor && (
-          <div className="flex items-start gap-2">
-            <Type size={12} className="text-muted-foreground mt-0.5 shrink-0" />
-            <p className="text-xs text-foreground font-medium truncate" title={p.valor}>{p.valor}</p>
-          </div>
-        )}
-        {p.descricao && (
-          <div className="flex items-start gap-2">
-            <AlignLeft size={12} className="text-muted-foreground mt-0.5 shrink-0" />
-            <p className="text-[10px] text-muted-foreground leading-snug line-clamp-2" title={p.descricao}>{p.descricao}</p>
-          </div>
-        )}
-        {(() => {
-          const examPH = CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(ep => ep.chave === p.chave);
-          if (!examPH) return null;
-          return (
-            <div className="flex items-start gap-2">
-              <code className="text-[9px] text-muted-foreground/60 truncate" title={`JSON path: ${examPH.jsonPath}`}>
-                {examPH.jsonPath}
-              </code>
-            </div>
-          );
-        })()}
-      </CardContent>
-    </Card>
-  );
-};
-
-const DroppableColumn = ({ categoria, placeholders, onEdit, onDelete, open, onToggle }: { 
-  categoria: CategoriaPlaceholderRow, 
-  placeholders: Placeholder[], 
-  onEdit: (p: Placeholder) => void, 
-  onDelete: (id: string) => void,
-  open: boolean,
-  onToggle: () => void,
-}) => {
-  const { isOver, setNodeRef } = useDroppable({
-    id: categoria.id,
-    data: { categoria }
-  });
-
-  const IconComp = (LucideIcons as any)[categoria.icone] || LucideIcons.Tag;
-  const [copiedId, setCopiedId] = React.useState<string | null>(null);
-
-  const handleCopy = (chave: string, id: string) => {
-    const template = `{{${chave}}}`;
-    const fallback = () => {
-      const textarea = document.createElement('textarea');
-      textarea.value = template;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    };
-    try {
-      navigator.clipboard.writeText(template).catch(fallback);
-    } catch {
-      fallback();
-    }
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
-
-  if (!open) {
-    return (
-      <div
-        ref={setNodeRef}
-        className={`flex flex-col items-center rounded-xl border bg-${categoria.cor}-50/20 dark:bg-${categoria.cor}-900/10 py-3 px-2 gap-3 cursor-pointer hover:bg-muted/40 transition-colors shrink-0 w-12
-          ${isOver ? `ring-2 ring-${categoria.cor}-500/50` : ''}
-        `}
-        onClick={onToggle}
-        title={`Expandir: ${categoria.label} (${placeholders.length})`}
-      >
-        <IconComp size={categoria.icone === 'Car' ? 18 : 16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400 shrink-0`} />
-        <span
-          className={`text-[11px] font-semibold text-${categoria.cor}-700 dark:text-${categoria.cor}-300 whitespace-nowrap`}
-          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-        >
-          {categoria.label}
-        </span>
-        <Badge variant="secondary" className="text-[10px] h-4 px-1">{placeholders.length}</Badge>
-      </div>
-    );
-  }
-
-  return (
-    <div 
-      ref={setNodeRef} 
-      className={`flex flex-col flex-1 min-w-[270px] max-w-[310px] rounded-xl border bg-${categoria.cor}-50/15 dark:bg-${categoria.cor}-900/10 
-      ${isOver ? `ring-2 ring-${categoria.cor}-500/50 bg-${categoria.cor}-50/50 dark:bg-${categoria.cor}-900/10` : ''}`}
-    >
-      <div className={`p-3 border-b bg-${categoria.cor}-50/50 dark:bg-${categoria.cor}-900/20 flex items-center justify-between rounded-t-xl`}>
-        <div className="flex items-center gap-2">
-          <IconComp size={categoria.icone === 'Car' ? 18 : 16} className={`text-${categoria.cor}-600 dark:text-${categoria.cor}-400`} />
-          <h3 className={`font-semibold text-sm text-${categoria.cor}-700 dark:text-${categoria.cor}-300`}>{categoria.label}</h3>
-          <Badge variant="secondary" className="text-[10px] h-4 px-1">{placeholders.length}</Badge>
-        </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
-          title="Recolher coluna"
-        >
-          <ChevronDown size={14} className="rotate-90" />
-        </button>
-      </div>
-      <div className="p-3 flex-1 overflow-y-auto min-h-[150px]">
-        {placeholders.map(p => {
-          const isSystem = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
-          return (
-            <div key={p.id} className="group relative">
-              <DraggableCard p={p} categoria={categoria} />
-              {copiedId === p.id && (
-                <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] text-green-600 font-medium bg-background border border-green-300 rounded px-1.5 py-0.5 shadow-sm z-20">
-                  Copiado!
-                </span>
-              )}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex bg-background/90 rounded border shadow-sm z-10">
-                {isSystem ? (
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(p.chave, p.id)} title="Copiar placeholder">
-                    <Copy size={12} />
-                  </Button>
-                ) : (
-                  <>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(p)}><Edit size={12} /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => onDelete(p.id)}><Trash2 size={12} /></Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(p.chave, p.id)} title="Copiar placeholder">
-                      <Copy size={12} />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        {placeholders.length === 0 && (
-          <div className="h-full flex flex-col justify-center items-center text-muted-foreground/50 border-2 border-dashed rounded-lg p-4 text-center">
-            <span className="text-xs">Solte aqui</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 /* ── COMPONENTE PRINCIPAL ── */
 export const PlaceholdersPage: React.FC = () => {
+  const [categorias, setCategorias] = useState<CategoriaFull[]>([]);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
-  const [categorias, setCategorias] = useState<CategoriaPlaceholderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState(false);
+
+  const [catFormData, setCatFormData] = useState(catEmptyForm);
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [catFormError, setCatFormError] = useState<string | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<CategoriaFull | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPlaceholder, setEditingPlaceholder] = useState<Placeholder | null>(null);
   const [formData, setFormData] = useState<PlaceholderFormData>(emptyForm(''));
-  const [error, setError] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [showInstructions, setShowInstructions] = useState(false);
+  const [formError, setFormErrorState] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
-  // Accordion: no máximo 3 categorias expandidas por vez
-  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
-
-  const MAX_EXPANDED = 3;
-
-  // DND Overlay
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
 
   /* ── Carregamento ── */
   const carregarDados = useCallback(async () => {
+    setLoading(true); setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      setLoadError(null);
       await window.ipcAPI.placeholder.migrateSistema();
-      const seedResult = await window.ipcAPI.placeholder.seedSistema();
-      if (!seedResult.success) {
-        setLoadError(seedResult.error || 'Erro ao semear placeholders do sistema');
-      }
-      
-      const rPlaceholders = await window.ipcAPI.placeholder.findAll();
-      const rCategorias = await window.ipcAPI.categoria.findAll();
-
-      if (rCategorias.success && rCategorias.data) {
-        setCategorias(rCategorias.data);
-      }
-      if (rPlaceholders.success && rPlaceholders.data) {
-        setPlaceholders(rPlaceholders.data);
-      } else {
-        setLoadError(rPlaceholders.error || 'Erro ao carregar dados');
-      }
-    } catch (err: any) {
-      setLoadError(err.message || 'Erro ao carregar dados');
+      await window.ipcAPI.placeholder.seedSistema();
+      const [rPlaceholders, rCategorias] = await Promise.all([
+        window.ipcAPI.placeholder.findAll(),
+        window.ipcAPI.categoria.findArvore(),
+      ]);
+      if (rPlaceholders.success) setPlaceholders(rPlaceholders.data || []);
+      if (rCategorias.success) setCategorias(rCategorias.data || []);
+    } catch (e: any) {
+      setError(e.message || 'Erro ao carregar');
     } finally {
       setLoading(false);
     }
@@ -307,50 +102,98 @@ export const PlaceholdersPage: React.FC = () => {
 
   useEffect(() => { carregarDados(); }, [carregarDados]);
 
-  // Inicializa as 3 primeiras categorias expandidas ao carregar
-  useEffect(() => {
-    if (categorias.length > 0 && expandedCategories.length === 0) {
-      const primeiras = categorias
-        .sort((a, b) => a.ordem - b.ordem)
-        .slice(0, MAX_EXPANDED)
-        .map(c => c.id);
-      setExpandedCategories(primeiras);
-    }
-  }, [categorias]);
+  /* ── Árvore ── */
+  const selectedCat = selectedCatId ? findCat(categorias, selectedCatId) : null;
 
-  const toggleExpand = useCallback((catId: string) => {
-    setExpandedCategories(prev => {
-      if (prev.includes(catId)) {
-        return prev.filter(id => id !== catId);
-      }
-      if (prev.length >= MAX_EXPANDED) {
-        return [...prev.slice(1), catId];
-      }
-      return [...prev, catId];
-    });
+  const handleSelect = useCallback((id: string) => {
+    setSelectedCatId(id);
+    setEditingCategory(false);
   }, []);
 
-  /* ── Filtro ── */
-  const filtradosPorBusca = useMemo(
-    () =>
-      placeholders.filter(p => {
-        const cat = categorias.find(c => c.id === p.categoria_id);
-        const catLabel = cat ? cat.label : '';
-        return p.chave.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.valor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.descricao || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        catLabel.toLowerCase().includes(searchTerm.toLowerCase())
-      }),
-    [placeholders, searchTerm, categorias]
-  );
+  const handleTreeAdd = useCallback((parentId: string | null) => {
+    setManageCategoriesOpen(true);
+  }, []);
 
-  /* ── Ações de Placeholders ── */
+  const handleMove = useCallback(async (id: string, newParentId: string | null) => {
+    const cat = findCat(categorias, id);
+    if (cat?.is_sistema === 1) return;
+    const prev = categorias;
+    setCategorias(prev => moveNodeInTree(prev, id, newParentId));
+    try {
+      const res = await window.ipcAPI.categoria.update(id, { parent_id: newParentId });
+      if (res.success) toast.success('Categoria movida');
+      else { setCategorias(prev); toast.error(res.error || 'Erro ao mover'); }
+    } catch { setCategorias(prev); }
+  }, [categorias]);
+
+  const handleOutdent = useCallback((id: string) => handleMove(id, null), [handleMove]);
+
+  /* ── Edição inline de categoria ── */
+  const handleEditCategory = () => {
+    if (!selectedCat) return;
+    setCatFormData({
+      label: selectedCat.label,
+      descricao: selectedCat.descricao || '',
+      cor: selectedCat.cor || 'slate',
+      icone: selectedCat.icone || 'Tag',
+      parent_id: selectedCat.parent_id || '__none__',
+    });
+    setCatFormError(null);
+    setEditingCategory(true);
+  };
+
+  const handleSaveCategory = async () => {
+    if (!catFormData.label.trim()) { setCatFormError('Nome obrigatório'); return; }
+    if (!selectedCat) return;
+    setSavingCategory(true); setCatFormError(null);
+    const newParentId = catFormData.parent_id === '__none__' ? null : catFormData.parent_id;
+    const payload = { label: catFormData.label.trim(), descricao: catFormData.descricao.trim() || null, cor: catFormData.cor, icone: catFormData.icone, parent_id: newParentId };
+    const parentChanged = (selectedCat.parent_id || null) !== newParentId;
+    const prev = categorias;
+
+    if (parentChanged) {
+      setCategorias(prev => {
+        const { tree: without } = removeFromTree(prev, selectedCat.id);
+        const updated = { ...selectedCat, ...payload };
+        if (!updated.parent_id) return [...without, updated];
+        return insertIntoTree(without, updated.parent_id, updated);
+      });
+    } else {
+      setCategorias(prev => prev.map(c => updateNodeInTree(c, selectedCat.id, payload)));
+    }
+
+    try {
+      const res = await window.ipcAPI.categoria.update(selectedCat.id, payload);
+      if (res.success) { toast.success('Atualizada'); setEditingCategory(false); }
+      else { setCategorias(prev); setCatFormError(res.error || 'Erro'); }
+    } catch { setCategorias(prev); }
+    setSavingCategory(false);
+  };
+
+  const handleDeleteCategory = () => {
+    if (!selectedCat) return;
+    setDeleteTarget(selectedCat);
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!deleteTarget) return;
+    const prev = categorias;
+    setCategorias(prev => removeFromTree(prev, deleteTarget.id).tree);
+    setDeleteTarget(null);
+    if (selectedCatId === deleteTarget.id) setSelectedCatId(null);
+    try {
+      const res = await window.ipcAPI.categoria.delete(deleteTarget.id);
+      if (res.success) { toast.success('Excluída'); carregarDados(); }
+      else { setCategorias(prev); toast.error(res.error || 'Erro'); }
+    } catch { setCategorias(prev); }
+  };
+
+  /* ── Placeholders ── */
   const handleNovo = () => {
     setEditingPlaceholder(null);
-    const catPadrao = categorias.find(c => c.chave === 'Personalizado')?.id || categorias[0]?.id || '';
-    setFormData(emptyForm(catPadrao));
-    setError(null);
-    setSuccess(null);
+    setFormData(emptyForm(selectedCatId || ''));
+    setFormErrorState(null);
+    setFormSuccess(null);
     setDialogOpen(true);
   };
 
@@ -360,10 +203,10 @@ export const PlaceholdersPage: React.FC = () => {
       chave: p.chave,
       valor: p.valor || '',
       descricao: p.descricao || '',
-      categoria_id: p.categoria_id || categorias[0]?.id || '',
+      categoria_id: p.categoria_id || '',
     });
-    setError(null);
-    setSuccess(null);
+    setFormErrorState(null);
+    setFormSuccess(null);
     setDialogOpen(true);
   };
 
@@ -371,25 +214,16 @@ export const PlaceholdersPage: React.FC = () => {
     if (!confirm('Tem certeza que deseja excluir este placeholder?')) return;
     try {
       const r = await window.ipcAPI.placeholder.delete(id);
-      if (r.success) {
-        await carregarDados();
-      } else {
-        alert(`Erro: ${r.error}`);
-      }
-    } catch (err: any) {
-      alert('Erro ao excluir placeholder');
-    }
+      if (r.success) await carregarDados();
+      else alert(`Erro: ${r.error}`);
+    } catch { alert('Erro ao excluir placeholder'); }
   };
 
   const handleSalvar = async () => {
     try {
-      setError(null);
-      setSuccess(null);
-
-      if (!formData.chave.trim()) {
-        setError('A chave do placeholder é obrigatória.');
-        return;
-      }
+      setFormErrorState(null);
+      setFormSuccess(null);
+      if (!formData.chave.trim()) { setFormErrorState('A chave do placeholder é obrigatória.'); return; }
 
       const payload = {
         chave: formData.chave,
@@ -401,59 +235,38 @@ export const PlaceholdersPage: React.FC = () => {
       if (editingPlaceholder) {
         const r = await window.ipcAPI.placeholder.update(editingPlaceholder.id, payload);
         if (r.success) {
-          setSuccess('Atualizado com sucesso!');
+          setFormSuccess('Atualizado com sucesso!');
           await carregarDados();
           setTimeout(() => setDialogOpen(false), 1000);
-        } else {
-          setError(r.error || 'Erro ao atualizar');
-        }
+        } else setFormErrorState(r.error || 'Erro ao atualizar');
       } else {
         const r = await window.ipcAPI.placeholder.create(payload);
         if (r.success) {
-          setSuccess('Criado com sucesso!');
+          setFormSuccess('Criado com sucesso!');
           await carregarDados();
           setTimeout(() => setDialogOpen(false), 1000);
-        } else {
-          setError(r.error || 'Erro ao criar');
-        }
+        } else setFormErrorState(r.error || 'Erro ao criar');
       }
     } catch (err: any) {
-      setError(err.message || 'Erro ao salvar placeholder');
+      setFormErrorState(err.message || 'Erro ao salvar placeholder');
     }
   };
 
-  /* ── Drag & Drop Handlers ── */
-  const handleDragStart = (event: any) => {
-    setActiveDragId(event.active.id);
-  };
+  /* ── Filtro ── */
+  const placeholdersDaCategoria = useMemo(() =>
+    placeholders.filter(p => p.categoria_id === selectedCatId),
+    [placeholders, selectedCatId]
+  );
 
-  const handleDragEnd = async (event: any) => {
-    const { active, over } = event;
-    setActiveDragId(null);
-    
-    if (!over) return;
-
-    const placeholderId = active.id;
-    const novaCategoriaId = over.id;
-
-    const placeholder = placeholders.find(p => p.id === placeholderId);
-    const catDestino = categorias.find(c => c.id === novaCategoriaId);
-    
-    if (placeholder && catDestino && placeholder.categoria_id !== novaCategoriaId) {
-      // Optimistic update
-      setPlaceholders(prev => prev.map(p => p.id === placeholderId ? { ...p, categoria_id: novaCategoriaId } : p));
-      
-      const res = await window.ipcAPI.placeholder.update(placeholderId, { categoria_id: novaCategoriaId });
-      if (!res.success) {
-        // Rollback on fail
-        await carregarDados();
-        alert('Erro ao mover placeholder: ' + res.error);
-      }
-    }
-  };
-
-  const activePlaceholder = activeDragId ? placeholders.find(p => p.id === activeDragId) : null;
-  const activeCategoria = activePlaceholder ? categorias.find(c => c.id === activePlaceholder.categoria_id) : undefined;
+  const filtrados = useMemo(() => {
+    if (!searchTerm) return placeholdersDaCategoria;
+    const q = searchTerm.toLowerCase();
+    return placeholdersDaCategoria.filter(p =>
+      p.chave.toLowerCase().includes(q) ||
+      (p.valor || '').toLowerCase().includes(q) ||
+      (p.descricao || '').toLowerCase().includes(q)
+    );
+  }, [placeholdersDaCategoria, searchTerm]);
 
   /* ── Colunas da DataTable ── */
   const columnDefs = useMemo<ColumnDef<Placeholder>[]>(() => [
@@ -471,7 +284,7 @@ export const PlaceholdersPage: React.FC = () => {
       accessorKey: 'categoria_id',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Categoria" />,
       cell: ({ row }) => {
-        const cat = categorias.find(c => c.id === row.getValue('categoria_id')) || categorias.find(c => c.id === 'cat-sem-categoria');
+        const cat = findCat(categorias, row.getValue('categoria_id') as string);
         if (!cat) return null;
         const Icon = (LucideIcons as any)[cat.icone] || LucideIcons.Tag;
         const p = row.original;
@@ -552,164 +365,297 @@ export const PlaceholdersPage: React.FC = () => {
     },
   ], [categorias]);
 
+  /* ── Nodes para a árvore ── */
+  const arvoreNodes = categorias
+    .filter(c => c.id !== 'cat-sem-categoria')
+    .map(toTreeNode);
+
+  /* ── Flat list para o modal ── */
+  const categoriasFlat: CategoriaPlaceholderRow[] = flattenTree(categorias);
+
+  /* ── Opções de pai para o form de edição ── */
+  const parentOptions = useMemo(() => {
+    if (!selectedCatId) return [];
+    return buildParentOptions(categorias, selectedCatId);
+  }, [categorias, selectedCatId]);
+
+  /* ── Loading / Error ── */
+  if (loading) return (
+    <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin" /></div>
+  );
+
+  if (error) return (
+    <div className="container p-6">
+      <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>
+      <Button variant="outline" onClick={carregarDados} className="mt-4">Tentar novamente</Button>
+    </div>
+  );
+
   return (
     <TooltipProvider>
-    <div className="container mx-auto p-6 space-y-6 flex flex-col h-[calc(100vh-2rem)] overflow-hidden">
-      {/* ── Cabeçalho ── */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Placeholders</h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie os campos dinâmicos dos laudos
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setManageCategoriesOpen(true)} className="flex items-center gap-2">
-            <Settings size={16} /> Categorias
-          </Button>
-
-          <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
-            <Button
-              variant={viewMode === 'cards' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('cards')}
-              className="h-8 px-2.5" title="Cards"
-            ><LayoutGrid size={14} /></Button>
-            <Button
-              variant={viewMode === 'table' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('table')}
-              className="h-8 px-2.5" title="Lista"
-            ><List size={14} /></Button>
+      <div className="container mx-auto h-full flex flex-col p-4 md:p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between shrink-0">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Placeholders</h1>
+            <p className="text-muted-foreground mt-1">Gerencie os campos dinâmicos dos laudos</p>
           </div>
-          <Button onClick={handleNovo} className="flex items-center gap-2 shrink-0">
-            <Plus size={16} /> Novo Placeholder
+          <Button variant="outline" onClick={() => setManageCategoriesOpen(true)}>
+            <Settings size={16} /> Gerenciar Categorias
           </Button>
         </div>
-      </div>
 
-      {/* ── Busca ── */}
-      <div className="flex items-center gap-4 shrink-0">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por chave, valor, descrição..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
+        {/* Grid 2-painéis */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
 
-      {/* ── Área principal ── */}
-      <div className="flex-1 overflow-hidden">
-        {loadError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription className="flex items-center justify-between gap-2">
-              <span>{loadError}</span>
-              <Button variant="outline" size="sm" onClick={() => carregarDados()}>Tentar novamente</Button>
-            </AlertDescription>
-          </Alert>
-        )}
-        {loading ? (
-          <div className="h-full flex items-center justify-center"><p className="animate-pulse">Carregando...</p></div>
-        ) : viewMode === 'table' ? (
-          <div className="h-full overflow-y-auto pr-2">
-             <DataTable
-               columns={columnDefs}
-               data={filtradosPorBusca}
-               searchColumn="chave"
-               searchPlaceholder="Filtrar tabela..."
-               hideSearch
-             />
-          </div>
-        ) : (
-          <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} collisionDetection={closestCorners}>
-            <div className="flex gap-2 h-full overflow-x-auto pb-4 items-start">
-              {categorias.map(cat => (
-                <DroppableColumn 
-                  key={cat.id} 
-                  categoria={cat} 
-                  placeholders={filtradosPorBusca.filter(p => p.categoria_id === cat.id)} 
-                  onEdit={handleEditar}
-                  onDelete={handleExcluir}
-                  open={expandedCategories.includes(cat.id)}
-                  onToggle={() => toggleExpand(cat.id)}
-                />
-              ))}
-            </div>
-            <DragOverlay>
-              {activePlaceholder ? <DraggableCard p={activePlaceholder} categoria={activeCategoria} isOverlay /> : null}
-            </DragOverlay>
-          </DndContext>
-        )}
-      </div>
-
-      {/* ── Modal de Gerenciamento de Categorias ── */}
-      <ManageCategoriesModal 
-        open={manageCategoriesOpen} 
-        onOpenChange={setManageCategoriesOpen} 
-        categorias={categorias} 
-        onCategoriasChange={carregarDados} 
-      />
-
-      {/* ── Dialog de criação/edição Placeholder ── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{editingPlaceholder ? 'Editar Placeholder' : 'Novo Placeholder'}</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-            {success && <Alert className="bg-green-50"><AlertDescription className="text-green-800">{success}</AlertDescription></Alert>}
-
-            <div className="space-y-2">
-              <Label htmlFor="chave">Chave *</Label>
-              <Input
-                id="chave" value={formData.chave}
-                onChange={e => setFormData({ ...formData, chave: e.target.value })}
-                disabled={!!editingPlaceholder && PLACEHOLDERS_SISTEMA_CHAVES.includes(editingPlaceholder.chave)}
+          {/* Painel Esquerdo — Árvore */}
+          <Card className="lg:col-span-1 flex flex-col min-h-0">
+            <CardHeader className="pb-2 shrink-0">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderTree size={18} /> Categorias
+              </CardTitle>
+              <CardDescription>
+                Arraste para aninhar. Clique para filtrar placeholders.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 overflow-y-auto">
+              <SortableCategoryTree
+                arvore={arvoreNodes}
+                selectedId={selectedCatId}
+                onSelect={handleSelect}
+                onAdd={handleTreeAdd}
+                onMove={handleMove}
+                onOutdent={handleOutdent}
               />
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="space-y-2">
-              <Label htmlFor="categoria">Categoria</Label>
-              <Select value={formData.categoria_id} onValueChange={v => setFormData({ ...formData, categoria_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione a categoria..." /></SelectTrigger>
-                <SelectContent>
-                  {categorias.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.label} {cat.is_sistema === 1 && '(Sistema)'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Painel Direito — Placeholders */}
+          <Card className="lg:col-span-2 flex flex-col min-h-0">
+            <CardHeader className="pb-2 shrink-0">
+              <CardTitle className="text-base">
+                {selectedCat
+                  ? `Placeholders — ${selectedCat.label} (${placeholdersDaCategoria.length})`
+                  : 'Selecione uma categoria'}
+              </CardTitle>
+              <CardDescription>
+                {selectedCat
+                  ? selectedCat.is_sistema === 1
+                    ? 'Categoria do sistema — placeholders fixos não podem ser excluídos.'
+                    : 'Gerencie os placeholders desta categoria.'
+                  : 'Clique em uma categoria na árvore para ver seus placeholders.'}
+              </CardDescription>
+              {selectedCat && (
+                <div className="flex gap-2 mt-2">
+                  <Button variant="outline" size="sm" onClick={handleEditCategory}>
+                    <Edit size={14} className="mr-1" /> Editar Categoria
+                  </Button>
+                  {selectedCat.is_sistema !== 1 && (
+                    <Button variant="destructive" size="sm" onClick={handleDeleteCategory}>
+                      <Trash2 size={14} className="mr-1" /> Excluir
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4 flex-1 min-h-0 overflow-y-auto">
+              {/* Form inline de edição de categoria */}
+              {editingCategory && selectedCat && (
+                <div className="border rounded-lg p-4 space-y-3 mb-4 bg-muted/5">
+                  <p className="text-sm font-medium">Editar Categoria</p>
+                  {catFormError && <Alert variant="destructive"><AlertDescription>{catFormError}</AlertDescription></Alert>}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Nome</Label>
+                      <Input value={catFormData.label} onChange={e => setCatFormData({ ...catFormData, label: e.target.value })}
+                        disabled={selectedCat.is_sistema === 1} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Descrição</Label>
+                      <Input value={catFormData.descricao} onChange={e => setCatFormData({ ...catFormData, descricao: e.target.value })} />
+                    </div>
+                  </div>
+                  {/* Categoria pai */}
+                  <div className="space-y-2">
+                    <Label>Categoria pai</Label>
+                    <Select value={catFormData.parent_id} onValueChange={v => setCatFormData({ ...catFormData, parent_id: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {parentOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Cor */}
+                  <div className="space-y-2">
+                    <Label>Cor</Label>
+                    <div className="flex flex-wrap gap-2 py-1">
+                      {ALLOWED_COLORS.map(color => (
+                        <button key={color} type="button"
+                          onClick={() => setCatFormData({ ...catFormData, cor: color })}
+                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all bg-${color}-500 hover:scale-110 ${catFormData.cor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
+                          title={color}>
+                          {catFormData.cor === color && <Check size={14} className="text-white" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Ícone */}
+                  <div className="space-y-2">
+                    <Label>Ícone</Label>
+                    <div className="border rounded-lg p-3 h-40 resize-y min-h-[120px] max-h-[400px] overflow-y-auto bg-muted/10">
+                      {ICON_CATEGORIES.map(cat => (
+                        <div key={cat.label} className="mb-3 last:mb-0">
+                          <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">{cat.label}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {cat.icons.map(iconName => {
+                              const IconComp = (LucideIcons as any)[iconName];
+                              if (!IconComp) return null;
+                              return (
+                                <button key={iconName} type="button"
+                                  onClick={() => setCatFormData({ ...catFormData, icone: iconName })}
+                                  className={`p-1.5 rounded-md flex justify-center items-center hover:bg-muted transition-colors ${catFormData.icone === iconName ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground'}`}
+                                  title={iconName}>
+                                  <IconComp size={18} />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button onClick={handleSaveCategory} disabled={savingCategory} className="flex-1">
+                      {savingCategory && <Loader2 size={16} className="mr-2 animate-spin" />} Salvar
+                    </Button>
+                    <Button variant="outline" onClick={() => setEditingCategory(false)}>Cancelar</Button>
+                  </div>
+                </div>
+              )}
 
-            {!PLACEHOLDERS_SISTEMA_CHAVES.includes(formData.chave) && (
+              {/* Placeholders — busca + DataTable */}
+              {selectedCat ? (
+                <>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="Buscar por chave ou valor..." value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)} className="pl-8" />
+                    </div>
+                    <Button onClick={handleNovo} size="sm" className="flex items-center gap-1 shrink-0">
+                      <Plus size={14} /> Novo
+                    </Button>
+                  </div>
+                  {placeholdersDaCategoria.length === 0 ? (
+                    <div className="flex flex-col items-center py-12 text-muted-foreground gap-2">
+                      <FolderTree size={40} className="opacity-30" />
+                      <p className="text-sm">Nenhum placeholder nesta categoria</p>
+                    </div>
+                  ) : (
+                    <DataTable columns={columnDefs} data={filtrados} searchColumn="chave" searchPlaceholder="Buscar placeholder..." hideSearch />
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                  <FolderTree size={40} className="opacity-30" />
+                  <p className="text-sm">Selecione uma categoria na árvore para ver seus placeholders.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Diálogo de confirmação de exclusão de categoria */}
+        {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <Card className="w-full max-w-md mx-4 shadow-xl">
+              <CardHeader>
+                <CardTitle>Excluir Categoria</CardTitle>
+                <CardDescription>
+                  Tem certeza que deseja excluir "{deleteTarget.label}"?
+                  Placeholders serão movidos para "Sem categoria".
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+                  <Button variant="destructive" onClick={confirmDeleteCategory}>Excluir</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Modal de gerenciamento de categorias */}
+        <ManageCategoriesModal
+          open={manageCategoriesOpen}
+          onOpenChange={setManageCategoriesOpen}
+          categorias={categoriasFlat}
+          onCategoriasChange={carregarDados}
+        />
+
+        {/* Dialog criar/editar placeholder */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{editingPlaceholder ? 'Editar Placeholder' : 'Novo Placeholder'}</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {formError && <Alert variant="destructive"><AlertDescription>{formError}</AlertDescription></Alert>}
+              {formSuccess && <Alert className="bg-green-50"><AlertDescription className="text-green-800">{formSuccess}</AlertDescription></Alert>}
+
               <div className="space-y-2">
-                <Label htmlFor="valor">Valor padrão</Label>
+                <Label htmlFor="chave">Chave *</Label>
                 <Input
-                  id="valor" value={formData.valor}
-                  onChange={e => setFormData({ ...formData, valor: e.target.value })}
+                  id="chave" value={formData.chave}
+                  onChange={e => setFormData({ ...formData, chave: e.target.value })}
+                  disabled={!!editingPlaceholder && PLACEHOLDERS_SISTEMA_CHAVES.includes(editingPlaceholder.chave)}
                 />
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="descricao">Descrição</Label>
-              <Textarea
-                id="descricao" value={formData.descricao}
-                onChange={e => setFormData({ ...formData, descricao: e.target.value })}
-                rows={2}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="categoria">Categoria</Label>
+                <Select value={formData.categoria_id} onValueChange={v => setFormData({ ...formData, categoria_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a categoria..." /></SelectTrigger>
+                  <SelectContent>
+                    {categoriasFlat.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.label} {cat.is_sistema === 1 && '(Sistema)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {!PLACEHOLDERS_SISTEMA_CHAVES.includes(formData.chave) && (
+                <div className="space-y-2">
+                  <Label htmlFor="valor">Valor padrão</Label>
+                  <Input
+                    id="valor" value={formData.valor}
+                    onChange={e => setFormData({ ...formData, valor: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="descricao">Descrição</Label>
+                <Input
+                  id="descricao" value={formData.descricao}
+                  onChange={e => setFormData({ ...formData, descricao: e.target.value })}
+                />
+              </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSalvar} disabled={!formData.chave.trim()}>Salvar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleSalvar} disabled={!formData.chave.trim()}>Salvar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </TooltipProvider>
   );
 };

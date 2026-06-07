@@ -17,7 +17,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 21;
+const CURRENT_SCHEMA_VERSION = 22;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -189,12 +189,18 @@ const createDatabaseSchema = async (): Promise<void> => {
         descricao TEXT,
         cor TEXT,
         icone TEXT,
+        parent_id TEXT,
         is_sistema INTEGER NOT NULL DEFAULT 0,
         ordem INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_id) REFERENCES categorias_placeholders(id) ON DELETE SET NULL
       )
     `);
+
+    await executeNonQuery(
+      'CREATE INDEX IF NOT EXISTS idx_categorias_placeholders_parent ON categorias_placeholders(parent_id)'
+    );
 
     // Seed categorias de sistema
     await executeNonQuery(`
@@ -1542,6 +1548,31 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.info('Migration v21: Concluída (Categorização de Peças)');
     } catch (error) {
       log.error('Erro ao aplicar migration versão 21', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 22: Adicionar suporte a subcategorias na tabela categorias_placeholders
+  if (fromVersion < 22) {
+    try {
+      const cols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(categorias_placeholders)'
+      );
+      const hasParentId = cols.some(c => c.name === 'parent_id');
+
+      if (!hasParentId) {
+        await executeNonQuery(
+          'ALTER TABLE categorias_placeholders ADD COLUMN parent_id TEXT REFERENCES categorias_placeholders(id) ON DELETE SET NULL'
+        );
+        await executeNonQuery(
+          'CREATE INDEX IF NOT EXISTS idx_categorias_placeholders_parent ON categorias_placeholders(parent_id)'
+        );
+        log.info('Migration v22: Coluna parent_id adicionada à tabela categorias_placeholders');
+      } else {
+        log.info('Migration v22: Coluna parent_id já existe');
+      }
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 22', error);
       throw error;
     }
   }

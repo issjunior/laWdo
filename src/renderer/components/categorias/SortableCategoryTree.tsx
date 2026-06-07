@@ -6,6 +6,7 @@ import {
 import * as LucideIcons from 'lucide-react';
 import {
   ChevronRight, GripVertical, Lock, FolderTree,
+  ArrowUpFromLine,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -126,6 +127,17 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         >
           <ChevronRight size={14} className={cn('transition-transform text-muted-foreground', expanded && 'rotate-90')} />
         </button>
+
+        {/* Outdent — promote to root (visible on hover for non-system non-root nodes) */}
+        {!isSys && depth > 0 && onOutdent && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onOutdent(node.id); }}
+            className="p-0.5 hover:bg-muted rounded shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+            title="Mover para raiz (desaninhar)"
+          >
+            <ArrowUpFromLine size={13} />
+          </button>
+        )}
 
         {/* Icon */}
         <div className={cn(
