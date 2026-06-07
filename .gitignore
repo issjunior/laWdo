@@ -33,8 +33,10 @@ lerna-debug.log*
 # --- OPENCODE ---
 .opencode
 
-# --- GRAPHIFY ---
+# --- SKILLS ---
+.agents
 graphify-out
+skills-lock.json
 
 # --- SISTEMA OPERACIONAL ---
 .DS_Store
