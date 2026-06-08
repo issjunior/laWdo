@@ -1,7 +1,27 @@
 # Placeholders não substituídos no PDF — Diagnóstico e Correção
 
 **Data:** 10/05/2026  
-**Status:** ✅ RESOLVIDO
+**Status:** ✅ RESOLVIDO  
+**Última atualização:** 2026-06-08
+
+---
+
+## Nota de Evolução (2026-06-08)
+
+Após a correção documentada abaixo, as 19 chaves com prefixo `rep_` foram posteriormente **renomeadas** para formas mais curtas via migração `RENOMEACOES` em `src/main/services/placeholder.service.ts:19-47`. Exemplos:
+
+| Antiga (documento original) | Nova (pós-migração) |
+|---|---|
+| `rep_numero` | `numero_rep` |
+| `rep_autoridade_solicitante` | `autoridade_solicitante_rep` |
+| `rep_nome_envolvido` | `nome_envolvido` |
+| `rep_local_fato` | `local_fato` |
+| `rep_latitude` | `latitude` |
+| `rep_longitude` | `longitude` |
+
+O `aplicarPlaceholders()` em `LaudosPage.tsx:134-180` mantém compatibilidade com ambos os formatos. As 5 chaves `rep_*` que não aparecem no mapping atual (`rep_autoridade_solicitante`, `rep_nome_envolvido`, `rep_local_fato`, `rep_latitude`, `rep_longitude`) foram intencionalmente removidas do fallback — apenas suas formas renomeadas são suportadas.
+
+A solução com **DOMParser** + `querySelectorAll` (seção Solução, item 1) permanece ativa e é o mecanismo principal de substituição de placeholders no preview PDF.
 
 ---
 
@@ -119,9 +139,10 @@ if (repData.tipo_exame_id) {
 
 ---
 
-## Arquivos alterados
+## Arquivos alterados (na época da correção)
 
-- `src/renderer/pages/LaudosPage.tsx` — funções `aplicarPlaceholders` (reescrita) e `handlePreview` (adição de lookups)
+- `src/renderer/pages/LaudosPage.tsx` — funções `aplicarPlaceholders` (reescrita com DOMParser, linha 214-266) e `handlePreview` (adição de lookups)
+- `src/main/services/placeholder.service.ts` — migração `RENOMEACOES` (linha 19-47) aplicada posteriormente para renomear chaves `rep_*` → formas curtas
 
 ---
 

@@ -64,4 +64,46 @@ A partir de um aprofundamento nos requisitos técnicos e na UX do sistema, defin
 ## Status da Execução
 
 - [x] **Fase 1 (Backend):** Migration V15 criada (tabela `categorias_placeholders`), schema de `placeholders` atualizado com `categoria_id`, serviços e handlers IPC implementados e tipados no `preload`.
-- [x] **Fase 2 (Frontend):** Atualização das páginas `PlaceholdersPage` (Modal, Drag-and-Drop) e `LaudosPage` (Context Menu dinâmico).
+  - Service: `src/main/services/categoria-placeholder.service.ts` — CRUD com whitelist para categorias de sistema, delete atômico com transação, tree methods
+  - Handlers: `src/main/ipc/handlers/categoria-placeholder.handlers.ts`
+  - Migration v22 posterior adicionou `parent_id` para suporte a hierarquia (ver `novo_layout.md`)
+- [x] **Fase 2 (Frontend):** `LaudosPage` — Context Menu dinâmico via componente `PlaceholderContextMenu` (`src/renderer/components/editor/PlaceholderContextMenu.tsx`) com suporte a single e multi-seção.
+  - `PlaceholdersPage` — o layout Kanban (Drag-and-Drop de cards entre colunas) foi substituído pelo layout hierárquico 2-painéis documentado em `novo_layout.md`. O gerenciamento de categorias (Modal com ColorPicker + IconPicker) permanece via `ManageCategoriesModal`.
+
+## Divergências da Implementação Final
+
+| Aspecto | Planejado | Implementado |
+|---------|-----------|--------------|
+| Layout da PlaceholdersPage | Kanban com colunas `Droppable` e cards `Draggable` (dnd-kit) | Layout 2-painéis: `SortableCategoryTree` (árvore com drag para aninhar) + DataTable (ver `novo_layout.md`) |
+| Drag-and-Drop | Movimentar placeholders entre colunas | Movimentar categorias na árvore (aninhamento hierárquico). Placeholders são atribuídos via select de categoria no formulário. |
+| electron-store | Cache de categorias | Não implementado. Categorias são carregadas via `findArvore()` a cada inicialização da página. |
+
+## Estrutura de Arquivos Resultante
+
+```
+src/
+├── main/
+│   ├── database/index.ts                  # Migrations v15 + v22 (parent_id)
+│   ├── services/
+│   │   ├── categoria-placeholder.service.ts  # CRUD + tree methods
+│   │   └── placeholder.service.ts           # CRUD + seed sistema + seed exam-specific
+│   └── ipc/handlers/
+│       ├── categoria-placeholder.handlers.ts
+│       └── placeholder.handlers.ts
+├── preload/index.ts                       # IPC bridge (categoria.findArvore, placeholder.*)
+└── renderer/
+    ├── components/
+    │   ├── editor/
+    │   │   ├── TinyMceEditor.tsx           # insertPlaceholder cmd + conversão local
+    │   │   └── PlaceholderContextMenu.tsx   # Menu de contexto reutilizável
+    │   ├── placeholders/
+    │   │   └── ManageCategoriesModal.tsx
+    │   └── rep/exam-fields/
+    │       └── placeholders.ts             # Manifest de placeholders de exame
+    ├── lib/
+    │   ├── utils.ts                        # converterPlaceholdersTextuais
+    │   └── category-constants.ts           # ALLOWED_COLORS + ICON_CATEGORIES
+    └── pages/
+        ├── PlaceholdersPage.tsx            # Layout 2-painéis (SortableCategoryTree + DataTable)
+        └── LaudosPage.tsx                  # aplicarPlaceholders (DOMParser) + PlaceholderContextMenu
+```

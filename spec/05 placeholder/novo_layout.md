@@ -1,5 +1,8 @@
 # Migração — PlaceholdersPage para Layout Hierárquico (2 painéis)
 
+**Status:** ✅ IMPLEMENTADO
+**Última atualização:** 2026-06-08
+
 ## Objetivo
 
 Substituir o layout Kanban atual da `PlaceholdersPage.tsx` pelo mesmo layout 2-painéis do `CategoriasPecasPage.tsx`, com suporte a hierarquia (árvore) nas categorias de placeholder.
@@ -582,3 +585,28 @@ Alternativamente, podem ser duplicadas inline em `PlaceholdersPage.tsx` (menos e
 3. **Handlers** — findArvore handler, parent_id no create/update
 4. **Preload** — IPC bridge
 5. **Frontend** — reescrita da PlaceholdersPage
+
+---
+
+## Divergências da Implementação
+
+| Aspecto | Planejado | Implementado |
+|---------|-----------|--------------|
+| Constantes `ALLOWED_COLORS` e `ICON_CATEGORIES` | Extrair para módulo compartilhado `src/renderer/lib/category-constants.ts` **ou** duplicar inline | Extraídas para `src/renderer/lib/category-constants.ts` — importadas por `CategoriasPecasPage` e `PlaceholdersPage` |
+| Schema version | v21 → v22 | `CURRENT_SCHEMA_VERSION = 22` em `src/main/database/index.ts:20` |
+| Cor `amber` | Suficiente para I-801 | `ALLOWED_COLORS` expandido para 19 cores (slate, gray, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose) |
+| Ícone I-801 | `Hash` (conforme `ciclo_placeholder.md`) | Implementado como `Car` no seed (`placeholder.service.ts:50`) |
+
+## Estrutura de Arquivos Resultante (pós-implementação)
+
+```
+src/
+├── main/
+│   ├── database/index.ts                         # CURRENT_SCHEMA_VERSION = 22, migration v22 (parent_id)
+│   ├── services/categoria-placeholder.service.ts # + findArvore, findSubcategorias, findWithDescendants, delete com parent_id=NULL
+│   ├── ipc/handlers/categoria-placeholder.handlers.ts  # + handler 'categoria:findArvore', parent_id no create/update
+├── preload/index.ts                              # + findArvore IPC bridge, ALLOWED_CHANNELS
+└── renderer/
+    ├── lib/category-constants.ts                 # NOVO — ALLOWED_COLORS + ICON_CATEGORIES
+    └── pages/PlaceholdersPage.tsx                # REESCRITO — layout 2-painéis, SortableCategoryTree + DataTable
+```

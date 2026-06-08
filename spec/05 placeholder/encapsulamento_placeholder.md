@@ -1,5 +1,8 @@
 # Encapsulamento de Placeholders (`contenteditable=false`)
 
+**Status:** ✅ IMPLEMENTADO — 2026-05-25
+**Arquivos alterados:** `TinyMceEditor.tsx` (2 pontos), `src/renderer/lib/utils.ts` (1 ponto)
+
 ## Problema
 
 Após inserir um placeholder (via menu de contexto com `insertPlaceholder` **ou** digitando `{{chave}}` manualmente), as palavras digitadas em seguida pelo usuário herdavam a formatação do `<span class="placeholder-tag">`, como se fizessem parte do placeholder. Exemplo visual do que acontecia:
@@ -113,3 +116,8 @@ Por ser não-editável caractere a caractere, o usuário precisa selecionar o sp
 ## Data da Implementação
 
 2026-05-25
+
+**Locais verificados (2026-06-08):**
+- `src/renderer/components/editor/TinyMceEditor.tsx:284` — `insertPlaceholder` com `contenteditable="false"`
+- `src/renderer/components/editor/TinyMceEditor.tsx:456` — `converterPlaceholderLocal` com `setAttribute('contenteditable', 'false')`
+- `src/renderer/lib/utils.ts:55` — `converterPlaceholdersTextuais` com `setAttribute('contenteditable', 'false')`

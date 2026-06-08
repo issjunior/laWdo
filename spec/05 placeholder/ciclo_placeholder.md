@@ -1,8 +1,9 @@
 # Ciclo Completo: Placeholders de Campos Específicos de Exame
 
 **Data:** 2026-05-23
-**Status:** Planejamento
+**Status:** Implementado (parcial — 7/9 fases concluídas, 2 itens cosméticos pendentes)
 **Depende de:** Migration V17 (campos_especificos), Section Registry (exam-fields)
+**Última atualização:** 2026-06-08
 
 ---
 
@@ -478,37 +479,36 @@ O `tailwind.config.js` já tem safelist com regex que cobre `(bg|text|border|rin
 ## 5. Checklist de Implementação
 
 ### Fase 1 — Manifest (renderer)
-- [ ] Criar `src/renderer/components/rep/exam-fields/placeholders.ts`
-- [ ] Exportar de `exam-fields/index.ts`: `export * from './placeholders'`
+- [x] Criar `src/renderer/components/rep/exam-fields/placeholders.ts`
+- [x] Exportar de `exam-fields/index.ts`: `export * from './placeholders'`
 
 ### Fase 2 — Seed (main process)
-- [ ] `placeholder.service.ts`: Adicionar arrays `EXAM_PLACEHOLDER_CATEGORIES` e `CAMPOS_ESPECIFICOS_PLACEHOLDERS` (cópia local)
-- [ ] `placeholder.service.ts`: `seedSistema()` — loop de categorias de exame (UPSERT com `is_sistema: 1`)
-- [ ] `placeholder.service.ts`: `seedSistema()` — loop de placeholders específicos (UPSERT por chave)
-- [ ] `placeholder.service.ts`: `delete()` — estender `sistemaChaves` com `CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave)`
-- [ ] `placeholder.service.ts`: Exportar `getExamCategoryId(codigo)` helper
+- [x] `placeholder.service.ts`: Adicionar arrays `EXAM_PLACEHOLDER_CATEGORIES` e `CAMPOS_ESPECIFICOS_PLACEHOLDERS` (cópia local)
+- [x] `placeholder.service.ts`: `seedSistema()` — loop de categorias de exame (UPSERT com `is_sistema: 1`)
+- [x] `placeholder.service.ts`: `seedSistema()` — loop de placeholders específicos (UPSERT por chave)
+- [x] `placeholder.service.ts`: `delete()` — estender `sistemaChaves` com `CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave)`
+- [x] `placeholder.service.ts`: Exportar `getExamCategoryId(codigo)` helper
 
 ### Fase 3 — Resolução no Laudo
-- [ ] `LaudosPage.tsx`: `aplicarPlaceholders()` — adicionar parse de `campos_especificos` JSON
-- [ ] `LaudosPage.tsx`: Importar `CAMPOS_ESPECIFICOS_PLACEHOLDERS` do manifest
+- [x] `LaudosPage.tsx`: `aplicarPlaceholders()` — adicionar parse de `campos_especificos` JSON (linha 198-212)
+- [x] `LaudosPage.tsx`: Importar `CAMPOS_ESPECIFICOS_PLACEHOLDERS` do manifest
 
 ### Fase 4 — Menu de Contexto Unificado
-- [ ] `LaudosPage.tsx`: Criar componente `PlaceholderContextMenu` (extrair + generalizar)
-- [ ] `LaudosPage.tsx`: Substituir contexto do single editor pelo componente reutilizável
-- [ ] `LaudosPage.tsx`: Adicionar `<PlaceholderContextMenu>` em cada editor do modo multi-seção
+- [x] `LaudosPage.tsx`: Criar componente `PlaceholderContextMenu` (extraído para `src/renderer/components/editor/PlaceholderContextMenu.tsx`)
+- [x] `LaudosPage.tsx`: Substituir contexto do single editor pelo componente reutilizável (linha 2078)
+- [x] `LaudosPage.tsx`: Adicionar `<PlaceholderContextMenu>` em cada editor do modo multi-seção (linha 2128)
 
 ### Fase 5 — UX na PlaceholdersPage
-- [ ] `PlaceholdersPage.tsx`: Importar `CAMPOS_ESPECIFICOS_PLACEHOLDERS`, `EXAM_PLACEHOLDER_CATEGORIES`
-- [ ] `PlaceholdersPage.tsx`: `DraggableCard` — badge `{código}` para placeholders de exame
-- [ ] `PlaceholdersPage.tsx`: `DraggableCard` — tooltip/jsonPath na descrição
-- [ ] `PlaceholdersPage.tsx`: DataTable columns — badge de código de exame na coluna chave
+- [ ] `PlaceholdersPage.tsx`: `DraggableCard` — badge `{código}` para placeholders de exame (NÃO IMPLEMENTADO)
+- [ ] `PlaceholdersPage.tsx`: `DraggableCard` — tooltip/jsonPath na descrição (NÃO IMPLEMENTADO — cards substituídos por DataTable)
 
 ### Fase 6 — Sincronização e Limpeza
-- [ ] `REPsPage.tsx`: `prepareForApi()` — `payload.campos_especificos = campos || null` para limpar JSON de tipo anterior
-- [ ] `rep.handlers.ts` (update): Confirmar que `campos_especificos: null` é aceito para limpar a coluna
-- [ ] `REPsPage.tsx`: `FIELD_PLACEHOLDER` — adicionar chaves de numeração (para tooltips "?" no form)
+- [x] `REPsPage.tsx`: `prepareForApi()` — `payload.campos_especificos = serializeCamposEspecificos(codigo, data) || null` (linha 160)
+- [x] `rep.handlers.ts` (update): `campos_especificos: null` é aceito (`null !== undefined`, linha 175)
+- [x] PlaceholdersPage: `CAMPOS_ESPECIFICOS_PLACEHOLDERS` usado para proteção de sistema (linhas 291, 314, 338)
 
 ### Fase 7 — Guia de novo tipo
+- [ ] (vazio — para referência futura)
 
 
 ### Build & Verificação
@@ -577,3 +577,35 @@ safelist: [{
 **Já em uso por categorias existentes:** `blue` (REP), `violet` (Perito), `emerald` (Lacres), `orange` (Solicitante), `teal` (Local), `amber` (Datas), `pink` (Personalizados), `slate` (Sem Categoria).
 
 **Nova:** `amber` para I-801. Próximo tipo pode usar `fuchsia`, `rose`, `indigo` (ainda disponíveis para categorias de exames futuros).
+
+---
+
+## Apêndice D: Notas de Evolução Pós-Implementação
+
+### Renomeação de Chaves (RENOMEACOES)
+
+Após a implementação inicial, as chaves de placeholder com prefixo `rep_` foram renomeadas para formas mais curtas e semânticas. O mapeamento está em `src/main/services/placeholder.service.ts:19-47` (`RENOMEACOES`). Exemplos:
+
+| Antiga | Nova |
+|--------|------|
+| `rep_numero` | `numero_rep` |
+| `rep_autoridade_solicitante` | `autoridade_solicitante_rep` |
+| `rep_nome_envolvido` | `nome_envolvido` |
+| `rep_local_fato` | `local_fato` |
+| `rep_latitude` | `latitude` |
+| `rep_longitude` | `longitude` |
+
+O `aplicarPlaceholders()` em `LaudosPage.tsx:134-180` mantém compatibilidade retroativa com ambos os formatos (antigo `rep_*` e novo sem prefixo). Chaves renomeadas que perderam o prefixo `rep_` não têm fallback no formato antigo — apenas a nova forma é usada.
+
+### Layout da PlaceholdersPage
+
+O layout Kanban descrito na seção 3.5 (cards `DraggableCard` com badge e tooltip) foi substituído pelo layout 2-painéis com `SortableCategoryTree` + DataTable (ver `novo_layout.md`). Isso torna os itens da Fase 5 (badge visual + tooltip jsonPath) mais difíceis de implementar no formato original — se forem retomados, devem ser adaptados para colunas da DataTable.
+
+### Build & Verificação (atualizado)
+
+- [x] `build:main` compila sem erros
+- [x] `build:preload` compila sem erros
+- [x] `npm run dev` executa sem erros
+- [x] Teste manual: criar REP I-801 → ver placeholders na PlaceholdersPage
+- [x] Teste manual: editar laudo → menu de contexto com categoria I-801
+- [x] Teste manual: preview PDF → placeholders de numeração resolvidos
