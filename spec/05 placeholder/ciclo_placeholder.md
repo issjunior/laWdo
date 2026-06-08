@@ -554,7 +554,7 @@ src/
 │   └── services/
 │       └── placeholder.service.ts        # MODIFICADO — seed exam cats + placeholders
 └── spec/
-    └── placeholder/
+    └── 05 placeholder/
         ├── categoria_placeholder.md      # HISTÓRICO (concluído)
         ├── placeholder-pdf-bug.md        # HISTÓRICO (resolvido)
         └── ciclo_placeholder.md          # NOVO — este documento

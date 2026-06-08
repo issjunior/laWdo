@@ -16,9 +16,8 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, Lock, Zap, ClipboardPen, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, ClipboardPen, Clock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { type REP } from '@/lib/validators';
 import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -41,6 +40,8 @@ import {
 import type { REPFormData } from '@/components/rep/exam-fields';
 import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteFormFields';
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
+import { useRepStepper } from '@/components/rep/useRepStepper';
+import { Stepper } from '@/components/ui/stepper';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import type { CreateTipoExameInput } from '@/lib/validators';
 
@@ -296,12 +297,6 @@ export const REPsPage: React.FC = () => {
   const [timelineRep, setTimelineRep] = useState<REP | null>(null);
   const [deleteDialogRep, setDeleteDialogRep] = useState<REP | null>(null);
 
-  // Estado de desbloqueio dos campos específicos (Nível 3)
-  const [camposEspecificosDesbloqueados, setCamposEspecificosDesbloqueados] = useState(false);
-
-  // Controle do accordion (expande N3 automaticamente ao desbloquear)
-  const [accordionValue, setAccordionValue] = useState<string[]>(["dados-solicitacao", "documentos"]);
-
   // Quick-create dialog states
   const [solicitanteQCOpen, setSolicitanteQCOpen] = useState(false);
   const [solicitanteQCFormData, setSolicitanteQCFormData] = useState<CreateSolicitanteInput>({ nome: '', tipo: '', endereco: '', telefone: '', email: '' });
@@ -386,33 +381,13 @@ export const REPsPage: React.FC = () => {
     return getSectionsForExame(tipoExameSelecionado.codigo);
   }, [tipoExameSelecionado, tiposExame]);
 
-  const groupedSections = examSections.filter(s => s.group);
-  const standaloneSections = examSections.filter(s => !s.group);
-
-  // Desbloqueio do Nível 3
-  const [numero, data_requisicao, tipo_solicitacao, numero_documento] = form.watch(['numero', 'data_requisicao', 'tipo_solicitacao', 'numero_documento']);
-  const canUnlockSpecificFields = !!(numero && data_requisicao && tipo_solicitacao && numero_documento && tipoExameId);
-
-  useEffect(() => {
-    if (canUnlockSpecificFields && !camposEspecificosDesbloqueados) {
-      setCamposEspecificosDesbloqueados(true);
-    }
-  }, [canUnlockSpecificFields, camposEspecificosDesbloqueados]);
-
-  // Expande N3 automaticamente ao desbloquear
-  useEffect(() => {
-    if (camposEspecificosDesbloqueados) {
-      setAccordionValue(["dados-solicitacao", "documentos", "campos-especificos"]);
-    }
-  }, [camposEspecificosDesbloqueados]);
+  const stepper = useRepStepper({ form, tipoExameId, tipoExameSelecionado });
 
   const handleNovo = () => {
     setEditingRep(null);
     setError(null);
     setSuccess(null);
     setTemplatesVinculados([]);
-    setCamposEspecificosDesbloqueados(false);
-    setAccordionValue(["dados-solicitacao", "documentos"]);
     form.reset(emptyForm());
     setSubmitting(false);
     setShowForm(true);
@@ -422,8 +397,6 @@ export const REPsPage: React.FC = () => {
   const handleCancelar = () => {
     setShowForm(false);
     setEditingRep(null);
-    setCamposEspecificosDesbloqueados(false);
-    setAccordionValue(["dados-solicitacao", "documentos"]);
     form.reset(emptyForm());
     setTemplatesVinculados([]);
     setError(null);
@@ -462,12 +435,9 @@ export const REPsPage: React.FC = () => {
       setTemplatesVinculados([]);
     }
 
-    // Se a REP já tem tipo de exame com campos específicos, desbloqueia o Nível 3
-    const tipo = tiposExame.find(t => t.id === rep.tipo_exame_id);
-    const hasSpecificSections = tipo ? getSectionsForExame(tipo.codigo).length > 0 : false;
-    setCamposEspecificosDesbloqueados(hasSpecificSections);
-
     // Parse campos_especificos via service registry
+
+    const tipo = tiposExame.find(t => t.id === rep.tipo_exame_id);
     const especificos = deserializeCamposEspecificos(tipo?.codigo ?? '', rep.campos_especificos);
 
     form.reset({
@@ -944,440 +914,412 @@ export const REPsPage: React.FC = () => {
       </div>
 
       {showForm && (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-start gap-4">
-              <div className="space-y-1">
-                <CardTitle>{editingRep ? 'Editar REP' : 'Nova Requisição de Exame Pericial'}</CardTitle>
-                <CardDescription>
-                  Campos marcados com <span className="font-semibold">*</span> são obrigatórios.
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={mostrarPlaceholders ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setMostrarPlaceholders(!mostrarPlaceholders)}
-                  className="flex items-center gap-1"
-                >
-                  <Eye size={14} />
-                  Placeholders
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleCancelar} aria-label="Fechar formulário">
-                  <X size={18} />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form
-                className="space-y-5"
-                onSubmit={handleSalvar}
-              >
-              {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-              {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
-
-              <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="space-y-4">
-
-                {/* ============================================ */}
-                {/* NÍVEL 1: Dados da Solicitação */}
-                {/* ============================================ */}
-                <AccordionItem value="dados-solicitacao">
-                  <AccordionTrigger className="text-base font-semibold">
-                    <span className="inline-flex items-center gap-2">
-                      <FileText size={14} />
-                      Dados da Solicitação
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-4">Informações principais da requisição.</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <FormField
-                      control={form.control}
-                      name="numero"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="numero" mostrar={mostrarPlaceholders}>Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></LabelWithPlaceholder>
-                          <FormControl>
-                            <Input
-                              placeholder="000.000-2026"
-                              value={field.value}
-                              onChange={e => field.onChange(formatarNumeroREP(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="data_requisicao"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="data_requisicao" mostrar={mostrarPlaceholders}>Data de recebimento *</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+        <div className="flex gap-6 max-w-[1600px] mx-auto items-start">
+          <div className="sticky top-[calc(var(--spacing-header,0px)+1rem)] self-start shrink-0">
+            <Stepper
+              steps={stepper.steps}
+              activeStep={stepper.activeStep}
+              completedSteps={stepper.completedSteps}
+              onStepClick={stepper.onStepClick}
+              collapsed={stepper.collapsed}
+              onToggle={() => stepper.setCollapsed(!stepper.collapsed)}
+            />
+          </div>
+          <Card className="flex-1 min-w-0">
+            <CardHeader>
+              <div className="flex justify-between items-start gap-4">
+                <div className="space-y-1">
+                  <CardTitle>{editingRep ? 'Editar REP' : 'Nova Requisição de Exame Pericial'}</CardTitle>
+                  <CardDescription>
+                    Campos marcados com <span className="font-semibold">*</span> são obrigatórios.
+                  </CardDescription>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="solicitante_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="solicitante_id" mostrar={mostrarPlaceholders}>Solicitante <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setSolicitanteQCOpen(true); }} /></LabelWithPlaceholder>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Selecione o órgão..." /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {solicitantes.map(s => (
-                                <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel>Responsável/Contato</FormLabel>
-                    <Input value={form.watch('solicitante_id') ? (solicitantes.find(s => s.id === form.watch('solicitante_id'))?.tipo || '—') : '—'} readOnly className="bg-muted text-muted-foreground cursor-default" />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="tipo_exame_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="tipo_exame_id" mostrar={mostrarPlaceholders}>Tipo de Exame <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTipoExameQCOpen(true); }} /></LabelWithPlaceholder>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {tiposExame.map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.codigo} - {t.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="template_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Template<HelpIcon text="Selecione 'Não definido' para não criar o laudo automaticamente." /></FormLabel>
-                          <Select
-                            disabled={!tipoExameId || templatesVinculados.length === 0}
-                            value={field.value || undefined}
-                            onValueChange={field.onChange}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={
-                                  !tipoExameId
-                                    ? 'Selecione um tipo de exame'
-                                    : 'Selecione um template'
-                                } />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {templatesVinculados.map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="tipo_solicitacao"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="tipo_solicitacao" mostrar={mostrarPlaceholders}>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></LabelWithPlaceholder>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="BOU">BOU</SelectItem>
-                              <SelectItem value="BO PM">BO PM</SelectItem>
-                              <SelectItem value="BO PC">BO PC</SelectItem>
-                              <SelectItem value="Ofício">Ofício</SelectItem>
-                              <SelectItem value="CECOMP">CECOMP</SelectItem>
-                              <SelectItem value="Outros">Outros</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="numero_documento"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="numero_documento" mostrar={mostrarPlaceholders}>Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></LabelWithPlaceholder>
-                          <FormControl>
-                            <Input placeholder="Requisição nº" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="data_documento"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="data_documento" mostrar={mostrarPlaceholders}>Data do Documento</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="autoridade_solicitante"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="autoridade_solicitante" mostrar={mostrarPlaceholders}>Autoridade Solicitante</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input placeholder="Nome da autoridade" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="nome_envolvido"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="nome_envolvido" mostrar={mostrarPlaceholders}>Nome do Envolvido</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input placeholder="Nome dos envolvidos" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                {/* ============================================ */}
-                {/* NÍVEL 2: Documentos Associados */}
-                {/* ============================================ */}
-                <AccordionItem value="documentos">
-                  <AccordionTrigger className="text-base font-semibold">
-                    <span className="inline-flex items-center gap-2">
-                      <Link2 size={14} />
-                      Documentos Associados
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-4">Vínculos e observações importantes da REP.</p>
-                {(!form.watch('numero_bo') && !form.watch('numero_ip')) && (
-                  <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
-                    <CardHeader className="pt-2 pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2 text-amber-800 dark:text-amber-400">
-                        <AlertTriangle className="h-4 w-4" />
-                        Requisito GDL
-                      </CardTitle>
-                      <CardDescription className="text-amber-700 dark:text-amber-400/80">
-                        O GDL só aceitará o envio de laudos com o nº do BO ou nº do IP preenchidos.
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="numero_bo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input placeholder="2026/123456" value={field.value} onChange={e => field.onChange(formatarNumeroBO(e.target.value))} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="numero_ip"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="numero_ip" mostrar={mostrarPlaceholders}>Nº do IP</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input placeholder="Inquérito Policial" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="lacre_entrada"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="lacre_entrada" mostrar={mostrarPlaceholders}>Lacre de Entrada</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input placeholder="Nº do lacre" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <FormField
-                      control={form.control}
-                      name="lacre_saida"
-                      render={({ field }) => (
-                        <FormItem>
-                          <LabelWithPlaceholder field="lacre_saida" mostrar={mostrarPlaceholders}>Lacre de Saída</LabelWithPlaceholder>
-                          <FormControl>
-                            <Input placeholder="Nº do lacre" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <FormField
-                    control={form.control}
-                    name="observacoes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <LabelWithPlaceholder field="observacoes" mostrar={mostrarPlaceholders}>Observações</LabelWithPlaceholder>
-                        <FormControl>
-                          <Textarea placeholder="Observações gerais..." rows={3} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                {/* ============================================ */}
-                {/* NÍVEL 3: Campos Específicos (bloqueado/desbloqueado) */}
-                {/* ============================================ */}
-                {examSections.length > 0 && (
-                  <AccordionItem
-                    value="campos-especificos"
-                    className={!camposEspecificosDesbloqueados ? 'opacity-60' : ''}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={mostrarPlaceholders ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMostrarPlaceholders(!mostrarPlaceholders)}
+                    className="flex items-center gap-1"
                   >
-                    <AccordionTrigger className="text-base font-semibold">
-                      {camposEspecificosDesbloqueados
-                        ? (
-                          <span className="inline-flex items-center gap-2">
-                            <Zap size={14} />
-                            Campos Específicos — {tipoExameSelecionado?.nome}
-                          </span>
-                        )
-                        : (
-                          <span className="inline-flex items-center gap-2">
-                            <Lock size={14} />
-                            Preencha os campos obrigatórios acima para desbloquear
-                          </span>
-                        )
-                      }
-                    </AccordionTrigger>
-                    <AccordionContent className="space-y-5 bg-muted/30 rounded-lg p-4">
-                      {camposEspecificosDesbloqueados ? (
-                        <>
-                          {groupedSections.length > 0 && (
-                            <div className="space-y-4">
-                              <h4 className="font-medium text-sm">Envolvido e Local</h4>
-                              {groupedSections.map(s => (
-                                <s.component key={s.id} form={form} mostrarPlaceholders={mostrarPlaceholders} />
-                              ))}
-                            </div>
-                          )}
-
-                          {standaloneSections.map(s => (
-                            <div key={s.id} className="space-y-3">
-                              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                <s.icon size={14} />
-                                <span>{s.label}</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">{s.description}</p>
-                              <s.component form={form} mostrarPlaceholders={mostrarPlaceholders} />
-                            </div>
-                          ))}
-                        </>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-3">
-                          <Lock size={28} className="opacity-30" />
-                          <p className="text-sm text-center max-w-md">Selecione o tipo de exame e preencha os campos obrigatórios (Nº REP, Data de Recebimento, Tipo de Solicitação, Nº da Solicitação) para desbloquear os campos específicos.</p>
-                        </div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                )}
-              </Accordion>
-
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
-                <Button variant="outline" type="button" onClick={handleCancelar}>Cancelar</Button>
-                <Button type="submit" disabled={submitting || !form.formState.isValid} className="flex items-center gap-2">
-                  <Plus size={16} /> {submitting ? 'Salvando...' : editingRep ? 'Atualizar' : 'Criar'} REP
-                </Button>
+                    <Eye size={14} />
+                    Placeholders
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleCancelar} aria-label="Fechar formulário">
+                    <X size={18} />
+                  </Button>
+                </div>
               </div>
-            </form>
-            </Form>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form
+                  onSubmit={handleSalvar}
+                >
+                  {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+                  {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
+
+                  <div className="space-y-8">
+                    {/* ============================================ */}
+                    {/* SEÇÃO 1: Dados da Solicitação */}
+                    {/* ============================================ */}
+                    <div
+                      id="step-dados-solicitacao"
+                      data-step="dados-solicitacao"
+                      className={`rounded-lg p-4 transition-all ${stepper.activeStep === 'dados-solicitacao' ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText size={16} className="text-primary" />
+                        <h3 className="text-base font-semibold">Dados da Solicitação</h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-4">Informações principais da requisição.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-2">
+                          <FormField
+                            control={form.control}
+                            name="numero"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="numero" mostrar={mostrarPlaceholders}>Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input
+                                    placeholder="000.000-2026"
+                                    value={field.value}
+                                    onChange={e => field.onChange(formatarNumeroREP(e.target.value))}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="data_requisicao"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="data_requisicao" mostrar={mostrarPlaceholders}>Data de recebimento *</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input type="date" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mt-4">
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="solicitante_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="solicitante_id" mostrar={mostrarPlaceholders}>Solicitante <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setSolicitanteQCOpen(true); }} /></LabelWithPlaceholder>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Selecione o órgão..." /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {solicitantes.map(s => (
+                                      <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <FormLabel>Responsável/Contato</FormLabel>
+                          <Input value={form.watch('solicitante_id') ? (solicitantes.find(s => s.id === form.watch('solicitante_id'))?.tipo || '—') : '—'} readOnly className="bg-muted text-muted-foreground cursor-default" />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="tipo_exame_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="tipo_exame_id" mostrar={mostrarPlaceholders}>Tipo de Exame <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTipoExameQCOpen(true); }} /></LabelWithPlaceholder>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {tiposExame.map(t => (
+                                      <SelectItem key={t.id} value={t.id}>{t.codigo} - {t.nome}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="template_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Template<HelpIcon text="Selecione 'Não definido' para não criar o laudo automaticamente." /></FormLabel>
+                                <Select
+                                  disabled={!tipoExameId || templatesVinculados.length === 0}
+                                  value={field.value || undefined}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={
+                                        !tipoExameId
+                                          ? 'Selecione um tipo de exame'
+                                          : 'Selecione um template'
+                                      } />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {templatesVinculados.map(t => (
+                                      <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="tipo_solicitacao"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="tipo_solicitacao" mostrar={mostrarPlaceholders}>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></LabelWithPlaceholder>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="BOU">BOU</SelectItem>
+                                    <SelectItem value="BO PM">BO PM</SelectItem>
+                                    <SelectItem value="BO PC">BO PC</SelectItem>
+                                    <SelectItem value="Ofício">Ofício</SelectItem>
+                                    <SelectItem value="CECOMP">CECOMP</SelectItem>
+                                    <SelectItem value="Outros">Outros</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="numero_documento"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="numero_documento" mostrar={mostrarPlaceholders}>Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input placeholder="Requisição nº" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="data_documento"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="data_documento" mostrar={mostrarPlaceholders}>Data do Documento</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input type="date" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="autoridade_solicitante"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="autoridade_solicitante" mostrar={mostrarPlaceholders}>Autoridade Solicitante</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input placeholder="Nome da autoridade" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="nome_envolvido"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="nome_envolvido" mostrar={mostrarPlaceholders}>Nome do Envolvido</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input placeholder="Nome dos envolvidos" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ============================================ */}
+                    {/* SEÇÃO 2: Documentos Associados */}
+                    {/* ============================================ */}
+                    <div
+                      id="step-documentos"
+                      data-step="documentos"
+                      className={`rounded-lg p-4 transition-all ${stepper.activeStep === 'documentos' ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Link2 size={16} className="text-primary" />
+                        <h3 className="text-base font-semibold">Documentos Associados</h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-4">Vínculos e observações importantes da REP.</p>
+                      {(!form.watch('numero_bo') && !form.watch('numero_ip')) && (
+                        <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
+                          <CardHeader className="pt-2 pb-3">
+                            <CardTitle className="text-sm flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                              <AlertTriangle className="h-4 w-4" />
+                              Requisito GDL
+                            </CardTitle>
+                            <CardDescription className="text-amber-700 dark:text-amber-400/80">
+                              O GDL só aceitará o envio de laudos com o nº do BO ou nº do IP preenchidos.
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="numero_bo"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO<HelpIcon text="Formato: AAAA/NNNNNN. Ex: 2026/123456. O ano DEVE ter os 4 dígitos seguido de / e mais até 6 dígitos do BO." /></LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input value={field.value} onChange={e => field.onChange(formatarNumeroBO(e.target.value))} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="numero_ip"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="numero_ip" mostrar={mostrarPlaceholders}>Nº do IP</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input placeholder="Inquérito Policial" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="lacre_entrada"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="lacre_entrada" mostrar={mostrarPlaceholders}>Lacre de Entrada</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input placeholder="Nº do lacre" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="lacre_saida"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="lacre_saida" mostrar={mostrarPlaceholders}>Lacre de Saída</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input placeholder="Nº do lacre" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <FormField
+                          control={form.control}
+                          name="observacoes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <LabelWithPlaceholder field="observacoes" mostrar={mostrarPlaceholders}>Observações</LabelWithPlaceholder>
+                              <FormControl>
+                                <Textarea placeholder="Observações gerais..." rows={3} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    {/* ============================================ */}
+                    {/* SEÇÕES DINÂMICAS: Campos Específicos */}
+                    {/* ============================================ */}
+                    {examSections.map(s => (
+                      <div
+                        key={s.id}
+                        id={`step-section-${s.id}`}
+                        data-step={`section-${s.id}`}
+                        className={`rounded-lg p-4 transition-all ${stepper.activeStep === `section-${s.id}` ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <s.icon size={16} className="text-primary" />
+                          <h3 className="text-base font-semibold">{s.label}</h3>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-4">{s.description}</p>
+                        <s.component form={form} mostrarPlaceholders={mostrarPlaceholders} />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6 mt-4">
+                    <Button variant="outline" type="button" onClick={handleCancelar}>Cancelar</Button>
+                    <Button type="submit" disabled={submitting || !form.formState.isValid} className="flex items-center gap-2">
+                      <Plus size={16} /> {submitting ? 'Salvando...' : editingRep ? 'Atualizar' : 'Criar'} REP
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
 

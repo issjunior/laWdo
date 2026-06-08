@@ -18,6 +18,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     description: 'Coordenadas geográficas e descrição do local periciado',
     component: LocalFatoFields,
     group: 'envolvido-local',
+    requiredFields: ['local_fato'],
   },
   acionamento: {
     id: 'acionamento',
@@ -26,6 +27,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     description: 'Registro de acionamento, chegada e saída do local',
     component: AcionamentoFields,
     group: null,
+    requiredFields: [],
   },
   numeracao: {
     id: 'numeracao',
@@ -34,6 +36,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     description: 'Dados específicos para exame de numeração (I-801)',
     component: NumeracaoFields,
     group: null,
+    requiredFields: ['numeracao_veiculo'],
   },
 };
 

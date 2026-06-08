@@ -45,4 +45,5 @@ export interface ExamSection {
   description: string;
   component: React.FC<ExamSectionProps>;
   group?: string;
+  requiredFields: string[];
 }

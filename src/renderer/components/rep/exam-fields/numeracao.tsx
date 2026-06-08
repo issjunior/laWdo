@@ -15,6 +15,23 @@ const CORES = [
   'Laranja', 'Marrom', 'Preto', 'Prata', 'Rosa', 'Roxo', 'Verde', 'Vermelho',
 ] as const;
 
+const COR_MAP: Record<string, string> = {
+  Amarelo: '#facc15',
+  Azul: '#3b82f6',
+  Bege: '#d4c5a9',
+  Branco: '#ffffff',
+  Cinza: '#9ca3af',
+  Dourado: '#d4a843',
+  Laranja: '#f97316',
+  Marrom: '#78350f',
+  Preto: '#1c1917',
+  Prata: '#c0c0c0',
+  Rosa: '#f472b6',
+  Roxo: '#7c3aed',
+  Verde: '#22c55e',
+  Vermelho: '#ef4444',
+};
+
 const CONSERVACOES = ['péssimo', 'ruim', 'regular', 'bom'] as const;
 
 const Label = ({ children }: { children: React.ReactNode }) => (
@@ -96,7 +113,15 @@ export const NumeracaoFields: React.FC<ExamSectionProps> = ({ form }) => (
               </FormControl>
               <SelectContent>
                 {CORES.map(c => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                  <SelectItem key={c} value={c}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="inline-block w-3 h-3 rounded-full border border-border shrink-0"
+                        style={{ backgroundColor: COR_MAP[c] }}
+                      />
+                      {c}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
