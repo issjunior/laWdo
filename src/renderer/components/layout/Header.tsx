@@ -8,6 +8,7 @@ import {
   Github,
   Mail,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -122,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                   <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Canais de Contato</h4>
                   <div className="grid grid-cols-1 gap-2">
                     <a
-                      href="https://github.com/issjunior/LaudoPericial"
+                      href="https://github.com/issjunior/laWdo"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors group"
@@ -132,12 +133,15 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                       </div>
                       <div className="flex flex-col">
                         <span className="text-xs font-medium">Repositório GitHub</span>
-                        <span className="text-[10px] text-muted-foreground">issjunior/LaudoPericial</span>
+                        <span className="text-[10px] text-muted-foreground">issjunior/laWdo</span>
                       </div>
                     </a>
-                    <a
-                      href="mailto:izaias.santos@policiacientifica.pr.gov.br"
-                      className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors group"
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText('izaias.santos@policiacientifica.pr.gov.br');
+                        toast.success('Email copiado!');
+                      }}
+                      className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors group cursor-pointer w-full text-left"
                     >
                       <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20">
                         <Mail className="h-4 w-4 text-primary" />
@@ -146,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                         <span className="text-xs font-medium">Dúvidas e sugestões</span>
                         <span className="text-[10px] text-muted-foreground">izaias.santos@policiacientifica.pr.gov.br</span>
                       </div>
-                    </a>
+                    </button>
                   </div>
                 </div>
 
