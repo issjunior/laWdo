@@ -509,7 +509,7 @@ O `tailwind.config.js` já tem safelist com regex que cobre `(bg|text|border|rin
 - [ ] `REPsPage.tsx`: `FIELD_PLACEHOLDER` — adicionar chaves de numeração (para tooltips "?" no form)
 
 ### Fase 7 — Guia de novo tipo
-- [ ] Atualizar `migracao/criar_rep/criar_input.md` — adicionar Passo 4: Registrar placeholders no manifest
+
 
 ### Build & Verificação
 - [ ] `build:main` compila sem erros
@@ -525,8 +525,8 @@ O `tailwind.config.js` já tem safelist com regex que cobre `(bg|text|border|rin
 
 | Documento | Status | Ação |
 |-----------|--------|------|
-| `migracao/placeholder/categoria_placeholder.md` | Implementado — V15/V16 | Manter como referência |
-| `migracao/placeholder/placeholder-pdf-bug.md` | Resolvido — 2026-05-10 | Manter como lição aprendida |
+| `categoria_placeholder.md` | Implementado — V15/V16 | Manter como referência |
+| `placeholder-pdf-bug.md` | Resolvido — 2026-05-10 | Manter como lição aprendida |
 
 Ambos descrevem funcionalidades já concluídas. São mantidos no diretório para rastreabilidade histórica, mas não representam trabalho pendente.
 
@@ -553,9 +553,7 @@ src/
 ├── main/
 │   └── services/
 │       └── placeholder.service.ts        # MODIFICADO — seed exam cats + placeholders
-└── migracao/
-    ├── criar_rep/
-    │   └── criar_input.md                # MODIFICADO — passo extra de placeholder
+└── spec/
     └── placeholder/
         ├── categoria_placeholder.md      # HISTÓRICO (concluído)
         ├── placeholder-pdf-bug.md        # HISTÓRICO (resolvido)

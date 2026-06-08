@@ -2,7 +2,7 @@
 
 ## Contexto
 
-O projeto já possui integração com IA via Groq (implementada conforme `migracao/ia/integracao_groq.md`). O PRD prevê FR7: Assistente IA com revisão gramatical, adequação de tom formal técnico e descrição de imagens.
+O projeto já possui integração com IA via Groq (implementada conforme `integracao_groq.md`). O PRD prevê FR7: Assistente IA com revisão gramatical, adequação de tom formal técnico e descrição de imagens.
 
 Agora será adicionado o **Google Gemini** como provedor alternativo, permitindo que o usuário escolha entre Groq e Gemini na página de configuração.
 

@@ -3056,7 +3056,7 @@ Ao deletar um laudo `Concluído` ou `Entregue`, o outro laudo (se estiver `Bloqu
 
 | Arquivo | Fase |
 |---|---|
-| `migracao/wizard_pecas.md` | Este documento |
+| `wizard_pecas.md` | Este documento |
 | `src/main/services/wizard.service.ts` | Fase 2 |
 | `src/main/services/peca.service.ts` | Fase 2 |
 | `src/main/services/regra-wizard.service.ts` | Fase 2 |

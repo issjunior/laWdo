@@ -2,7 +2,7 @@
 
  Contexto
 
- O projeto já possui editor de laudos multi-seção com TinyMCE, placeholders e preview PDF. O PRD (migracao/PRD.md) prevê a funcionalidade FR7:
+ O projeto já possui editor de laudos multi-seção com TinyMCE, placeholders e preview PDF. O PRD (`../PRD.md`) prevê a funcionalidade FR7:
  Assistente IA com revisão gramatical, adequação de tom formal técnico e descrição de imagens. A integração será feita primeiro com a API Groq
  (rápida, compatível com OpenAI, suporta modelos de visão).
 

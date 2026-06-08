@@ -112,7 +112,7 @@ projeto/
 - 8 módulos de handlers IPC implementados
 - Integração completa entre frontend e backend
 - Build pipeline funcional e testado
-- Ver relatório completo em `relatorio_sprint_1.md`
+
 
 ### Sprint 2: Perfil e Cadastros de Apoio ✅ **COMPLETADA**
 
@@ -135,7 +135,7 @@ projeto/
 - 4 páginas base implementadas (Dashboard, Perfil, Solicitantes, TiposExame)
 - Componentes Shadcn/ui configurados
 - Múltiplos handlers IPC implementados
-- Ver relatório completo em `relatorio_sprint_2.md`
+
 
 ### Sprint 3: Gestão de Requisições (REP) ✅ **COMPLETADA**
 
@@ -155,7 +155,7 @@ projeto/
 **📊 DETALHES:**
 - Página com tabela e formulário inline
 - Campos condicionais baseados no tipo de solicitante
-- Ver relatório completo em `relatorio_sprint_3.md`
+
 
 ### Sprint 4: Núcleo - Edição de Laudos 🔄 **PARCIAL**
 

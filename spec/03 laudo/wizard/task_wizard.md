@@ -1,6 +1,6 @@
 # Task Tracking: Wizards e Banco de Peças
 
-> **Referência:** `migracao/wizard/wizard_pecas.md`
+> **Referência:** `wizard_pecas.md`
 > **Schema alvo:** v20
 > **Status:** Implementação concluída (Fases 1-9)
 > **Data:** 2026-06-05
