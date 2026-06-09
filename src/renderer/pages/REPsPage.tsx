@@ -1083,63 +1083,6 @@ export const REPsPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="tipo_exame_id"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="tipo_exame_id" mostrar={mostrarPlaceholders}>Tipo de Exame <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTipoExameQCOpen(true); }} /></LabelWithPlaceholder>
-                                <Select value={field.value} onValueChange={field.onChange}>
-                                  <FormControl>
-                                    <SelectTrigger><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {tiposExame.map(t => (
-                                      <SelectItem key={t.id} value={t.id}>{t.codigo} - {t.nome}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="template_id"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Template<HelpIcon text="Selecione 'Não definido' para não criar o laudo automaticamente." /></FormLabel>
-                                <Select
-                                  disabled={!tipoExameId || templatesVinculados.length === 0}
-                                  value={field.value || undefined}
-                                  onValueChange={field.onChange}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder={
-                                        !tipoExameId
-                                          ? 'Selecione um tipo de exame'
-                                          : 'Selecione um template'
-                                      } />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {templatesVinculados.map(t => (
-                                      <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                         <div>
                           <FormField
@@ -1212,6 +1155,63 @@ export const REPsPage: React.FC = () => {
                                 <FormControl>
                                   <Input type="date" {...field} />
                                 </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="tipo_exame_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="tipo_exame_id" mostrar={mostrarPlaceholders}>Tipo de Exame <ClipboardPen size={14} className="inline cursor-pointer text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTipoExameQCOpen(true); }} /></LabelWithPlaceholder>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Selecione o exame..." /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {tiposExame.map(t => (
+                                      <SelectItem key={t.id} value={t.id}>{t.codigo} - {t.nome}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="template_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Template<HelpIcon text="Selecione 'Não definido' para não criar o laudo automaticamente." /></FormLabel>
+                                <Select
+                                  disabled={!tipoExameId || templatesVinculados.length === 0}
+                                  value={field.value || undefined}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={
+                                        !tipoExameId
+                                          ? 'Selecione um tipo de exame'
+                                          : 'Selecione um template'
+                                      } />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {templatesVinculados.map(t => (
+                                      <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                                 <FormMessage />
                               </FormItem>
                             )}
