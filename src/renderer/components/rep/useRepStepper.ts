@@ -6,7 +6,6 @@ import type { Step } from '@/components/ui/stepper';
 import {
   STEP_REGISTRY,
   getDynamicSteps,
-  getMissingUnlockFields,
 } from './step-registry';
 
 interface UseRepStepperOptions {
@@ -18,11 +17,11 @@ interface UseRepStepperOptions {
 interface UseRepStepperReturn {
   steps: Step[];
   activeStep: string;
+  setActiveStep: (id: string) => void;
   completedSteps: Set<string>;
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
   onStepClick: (id: string) => void;
-  canUnlockDynamic: boolean;
 }
 
 export function useRepStepper({
@@ -33,16 +32,6 @@ export function useRepStepper({
   const [activeStep, setActiveStep] = useState('dados-solicitacao');
   const [collapsed, setCollapsed] = useState(false);
   const formValues = form.watch();
-
-  const canUnlockDynamic = useMemo(() => {
-    return !!(
-      formValues.numero &&
-      formValues.data_requisicao &&
-      formValues.tipo_solicitacao &&
-      formValues.numero_documento &&
-      tipoExameId
-    );
-  }, [formValues.numero, formValues.data_requisicao, formValues.tipo_solicitacao, formValues.numero_documento, tipoExameId]);
 
   const steps: Step[] = useMemo(() => {
     const base: Step[] = STEP_REGISTRY.map((s) => ({
@@ -55,31 +44,10 @@ export function useRepStepper({
     if (!codigo) return base;
 
     const dynamic = getDynamicSteps(codigo);
-    const missingFields = !canUnlockDynamic
-      ? getMissingUnlockFields({
-          numero: formValues.numero,
-          data_requisicao: formValues.data_requisicao,
-          tipo_solicitacao: formValues.tipo_solicitacao,
-          numero_documento: formValues.numero_documento,
-          tipo_exame_id: tipoExameId,
-        })
-      : [];
-
-    const blockedTooltip =
-      missingFields.length > 0
-        ? `Preencha: ${missingFields.join(', ')}`
-        : undefined;
-
-    base.push(
-      ...dynamic.map((s) => ({
-        ...s,
-        blocked: !canUnlockDynamic,
-        blockedTooltip,
-      })),
-    );
+    base.push(...dynamic);
 
     return base;
-  }, [tipoExameSelecionado?.codigo, formValues, tipoExameId, canUnlockDynamic]);
+  }, [tipoExameSelecionado?.codigo]);
 
   const completedSteps = useMemo(() => {
     const completed = new Set<string>();
@@ -98,7 +66,7 @@ export function useRepStepper({
     }
 
     const codigo = tipoExameSelecionado?.codigo;
-    if (codigo && canUnlockDynamic) {
+    if (codigo) {
       const dynamicSteps = getDynamicSteps(codigo);
       for (const step of dynamicSteps) {
         const sectionId = step.id.replace('section-', '');
@@ -109,14 +77,17 @@ export function useRepStepper({
     }
 
     return completed;
-  }, [formValues, tipoExameSelecionado?.codigo, canUnlockDynamic]);
+  }, [formValues, tipoExameSelecionado?.codigo]);
 
   const onStepClick = useCallback(
     (id: string) => {
       setActiveStep(id);
       const el = document.getElementById(`step-${id}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const main = document.querySelector('main');
+      if (el && main) {
+        const elTop = el.getBoundingClientRect().top;
+        const mainTop = main.getBoundingClientRect().top;
+        main.scrollTo({ top: Math.max(0, main.scrollTop + elTop - mainTop - 16), behavior: 'smooth' });
       }
     },
     [],
@@ -125,10 +96,10 @@ export function useRepStepper({
   return {
     steps,
     activeStep,
+    setActiveStep,
     completedSteps,
     collapsed,
     setCollapsed,
     onStepClick,
-    canUnlockDynamic,
   };
 }

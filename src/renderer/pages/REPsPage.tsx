@@ -417,6 +417,53 @@ export const REPsPage: React.FC = () => {
 
   const stepper = useRepStepper({ form, tipoExameId, tipoExameSelecionado });
 
+  const observerPausedRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  const handleStepClick = useCallback((id: string) => {
+    observerPausedRef.current = true;
+    stepper.onStepClick(id);
+    setTimeout(() => { observerPausedRef.current = false; }, 600);
+  }, [stepper]);
+
+  useEffect(() => {
+    if (!showForm) {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      const elements = document.querySelectorAll('[data-step]');
+      if (elements.length === 0) return;
+
+      const ratios = new Map<string, number>();
+      const observer = new IntersectionObserver((entries) => {
+        if (observerPausedRef.current) return;
+        for (const entry of entries) {
+          ratios.set(entry.target.getAttribute('data-step')!, entry.intersectionRatio);
+        }
+        let bestId: string | null = null;
+        let bestRatio = 0;
+        ratios.forEach((ratio, id) => {
+          if (ratio > bestRatio) { bestRatio = ratio; bestId = id; }
+        });
+        if (bestId) {
+          stepper.setActiveStep(bestId);
+        }
+      }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
+
+      elements.forEach(el => observer.observe(el));
+      observerRef.current = observer;
+    }, 100);
+
+    return () => {
+      clearTimeout(timeout);
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, [showForm, stepper.steps.length, stepper]);
+
   const handleNovo = () => {
     setEditingRep(null);
     setError(null);
@@ -950,7 +997,7 @@ export const REPsPage: React.FC = () => {
               steps={stepper.steps}
               activeStep={stepper.activeStep}
               completedSteps={stepper.completedSteps}
-              onStepClick={stepper.onStepClick}
+              onStepClick={handleStepClick}
               collapsed={stepper.collapsed}
               onToggle={() => stepper.setCollapsed(!stepper.collapsed)}
             />

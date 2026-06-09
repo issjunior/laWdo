@@ -19,27 +19,6 @@ export const STEP_REGISTRY: StepEntry[] = [
   },
 ];
 
-const STEP1_REQUIRED = new Set(['numero', 'data_requisicao', 'tipo_solicitacao', 'numero_documento', 'tipo_exame_id']);
-
-export function getMissingUnlockFields(formValues: Record<string, unknown>): string[] {
-  const labelMap: Record<string, string> = {
-    numero: 'Nº da REP',
-    data_requisicao: 'Data de recebimento',
-    tipo_solicitacao: 'Tipo de Solicitação',
-    numero_documento: 'Nº da Solicitação',
-    tipo_exame_id: 'Tipo de Exame',
-  };
-
-  const missing: string[] = [];
-  for (const field of STEP1_REQUIRED) {
-    const value = formValues[field];
-    if (!value || (typeof value === 'string' && !value.trim())) {
-      missing.push(labelMap[field] || field);
-    }
-  }
-  return missing;
-}
-
 export function getDynamicSteps(codigo: string): Step[] {
   const sectionIds = EXAM_FIELD_MAP[codigo] || [];
   return sectionIds
