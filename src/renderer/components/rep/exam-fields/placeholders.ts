@@ -22,6 +22,13 @@ export const EXAM_PLACEHOLDER_CATEGORIES: ExamPlaceholderCategory[] = [
     cor: 'amber',
     icone: 'Car',
   },
+  {
+    id: 'cat-exam-B-602',
+    codigo: 'B-602',
+    label: 'B-602 - Eficiência e Prestabilidade',
+    cor: 'red',
+    icone: 'Crosshair',
+  },
 ];
 
 export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
@@ -34,6 +41,12 @@ export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   { chave: 'chassi_revelado',            label: 'Chassi Revelado',    descricao: 'Chassi após revelação química',                      jsonPath: 'numeracao.chassi_revelado',  categoria_exam_codigo: 'I-801' },
   { chave: 'motor',                      label: 'Motor',              descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     jsonPath: 'numeracao.motor',            categoria_exam_codigo: 'I-801' },
   { chave: 'motor_revelado',             label: 'Motor Revelado',     descricao: 'Motor após revelação química',                       jsonPath: 'numeracao.motor_revelado',   categoria_exam_codigo: 'I-801' },
+  { chave: 'b602_envolvidos',           label: 'Envolvidos (B-602)',            descricao: 'Lista de nomes dos envolvidos',                     jsonPath: 'b602.envolvidos',            categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_data_ocorrencia',      label: 'Data Ocorrência (B-602)',       descricao: 'Data da ocorrência',                                jsonPath: 'b602.data_ocorrencia',       categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_local',                label: 'Local (B-602)',                  descricao: 'Local da ocorrência',                               jsonPath: 'b602.local',                 categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_numero_bo',            label: 'Nº BO (B-602)',                  descricao: 'Número do Boletim de Ocorrência',                  jsonPath: 'b602.numero_bo',             categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_numero_ip',            label: 'Nº IP (B-602)',                  descricao: 'Número do Inquérito Policial',                     jsonPath: 'b602.numero_ip',             categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_solicitante_nome',     label: 'Solicitante (B-602)',            descricao: 'Nome do solicitante que consta no documento',      jsonPath: 'b602.solicitante_nome',      categoria_exam_codigo: 'B-602' },
 ];
 
 export function getExamCategoryId(codigo: string): string {

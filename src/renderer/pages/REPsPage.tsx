@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, Link2, AlertTriangle, Eye, ClipboardPen, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type REP } from '@/lib/validators';
 import { z } from 'zod';
@@ -48,13 +48,20 @@ import type { CreateTipoExameInput } from '@/lib/validators';
 const emptyForm = (): REPFormData => ({
   numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0],
   tipo_solicitacao: 'Ofício', numero_documento: '', data_documento: '',
-  autoridade_solicitante: '', nome_envolvido: '', data_acionamento: '',
+  autoridade_solicitante: '', data_acionamento: '',
   data_chegada: '', data_saida: '', local_fato: '', latitude: '', longitude: '',
-  lacre_entrada: '', lacre_saida: '', numero_bo: '', numero_ip: '', observacoes: '',
+  observacoes: '',
   numeracao_veiculo: '', numeracao_placa: '', numeracao_fabricacao: '',
   numeracao_cor: '', numeracao_conservacao: 'regular',
   numeracao_chassi: '', numeracao_chassi_revelado: '',
   numeracao_motor: '', numeracao_motor_revelado: '',
+  b602_envolvidos_0: '', b602_envolvidos_1: '', b602_envolvidos_2: '',
+  b602_envolvidos_3: '', b602_envolvidos_4: '', b602_envolvidos_5: '',
+  b602_envolvidos_6: '', b602_envolvidos_7: '', b602_envolvidos_8: '',
+  b602_envolvidos_9: '',
+  b602_data_ocorrencia: '', b602_local: '',
+  b602_numero_bo: '', b602_numero_ip: '', b602_solicitante_nome: '',
+  b602_material_enc_toggle: 'off', b602_cartuchos_toggle: 'off', b602_estojos_toggle: 'off',
 });
 
 const FIELD_PLACEHOLDER: Record<string, string> = {
@@ -66,17 +73,12 @@ const FIELD_PLACEHOLDER: Record<string, string> = {
   numero_documento: 'numero_solicitacao_rep',
   data_documento: 'data_solicitacao_rep',
   autoridade_solicitante: 'autoridade_solicitante_rep',
-  nome_envolvido: 'nome_envolvido',
   local_fato: 'local_fato',
   latitude: 'latitude',
   longitude: 'longitude',
   data_acionamento: 'data_acionamento_local',
   data_chegada: 'data_chegada_local',
   data_saida: 'data_saida_local',
-  numero_bo: 'numero_bo',
-  numero_ip: 'numero_ip',
-  lacre_entrada: 'lacre_entrada',
-  lacre_saida: 'lacre_saida',
   observacoes: 'observacoes_rep',
   numeracao_veiculo: 'veiculo',
   numeracao_placa: 'placa',
@@ -87,6 +89,12 @@ const FIELD_PLACEHOLDER: Record<string, string> = {
   numeracao_chassi_revelado: 'chassi_revelado',
   numeracao_motor: 'motor',
   numeracao_motor_revelado: 'motor_revelado',
+  b602_envolvidos_0: 'b602_envolvidos',
+  b602_data_ocorrencia: 'b602_data_ocorrencia',
+  b602_local: 'b602_local',
+  b602_numero_bo: 'b602_numero_bo',
+  b602_numero_ip: 'b602_numero_ip',
+  b602_solicitante_nome: 'b602_solicitante_nome',
 };
 
 function formatarNumeroBO(raw: string): string {
@@ -143,17 +151,12 @@ function prepareForApi(data: REPFormData, codigo: string | undefined) {
   }
   if (data.data_documento) payload.data_documento = data.data_documento;
   if (data.autoridade_solicitante) payload.autoridade_solicitante = data.autoridade_solicitante;
-  if (data.nome_envolvido) payload.nome_envolvido = data.nome_envolvido;
   if (data.data_acionamento) payload.data_acionamento = data.data_acionamento;
   if (data.data_chegada) payload.data_chegada = data.data_chegada;
   if (data.data_saida) payload.data_saida = data.data_saida;
   if (data.local_fato) payload.local_fato = data.local_fato;
   if (data.latitude) payload.latitude = parseFloat(data.latitude);
   if (data.longitude) payload.longitude = parseFloat(data.longitude);
-  if (data.lacre_entrada) payload.lacre_entrada = data.lacre_entrada;
-  if (data.lacre_saida) payload.lacre_saida = data.lacre_saida;
-  if (data.numero_bo) payload.numero_bo = data.numero_bo;
-  if (data.numero_ip) payload.numero_ip = data.numero_ip;
   if (data.observacoes) payload.observacoes = data.observacoes;
 
   if (codigo) {
@@ -237,17 +240,12 @@ export const REPsPage: React.FC = () => {
     numero_documento: z.string().min(1, 'Nº da solicitação é obrigatório').max(30, 'Nº do documento deve ter no máximo 30 caracteres'),
     data_documento: z.string().optional(),
     autoridade_solicitante: z.string().max(200, 'Autoridade deve ter no máximo 200 caracteres').optional(),
-    nome_envolvido: z.string().max(200, 'Nome do envolvido deve ter no máximo 200 caracteres').optional(),
     data_acionamento: z.string().optional(),
     data_chegada: z.string().optional(),
     data_saida: z.string().optional(),
     local_fato: z.string().max(500, 'Local do fato deve ter no máximo 500 caracteres').optional(),
     latitude: z.string().optional(),
     longitude: z.string().optional(),
-    lacre_entrada: z.string().max(50, 'Lacre de entrada deve ter no máximo 50 caracteres').optional(),
-    lacre_saida: z.string().max(50, 'Lacre de saída deve ter no máximo 50 caracteres').optional(),
-    numero_bo: z.string().max(30, 'Nº do BO deve ter no máximo 30 caracteres').optional(),
-    numero_ip: z.string().max(30, 'Nº do IP deve ter no máximo 30 caracteres').optional(),
     observacoes: z.string().max(1000, 'Observações devem ter no máximo 1000 caracteres').optional(),
     numeracao_veiculo: z.string().max(25, 'Máximo 25 caracteres').optional(),
     numeracao_placa: z.string().regex(/^[A-Za-z]{3}-?(\d{4}|\d[A-Za-z]\d{2})$/, 'Formato inválido. Use ABC1234, ABC-1234, ABC1B23 ou ABC-1B23').optional().or(z.literal('')),
@@ -258,6 +256,24 @@ export const REPsPage: React.FC = () => {
     numeracao_chassi_revelado: z.string().regex(/^[A-Za-z0-9]{0,17}$/, 'Apenas caracteres alfanuméricos, até 17').optional(),
     numeracao_motor: z.string().regex(/^[A-Za-z0-9]{0,15}$/, 'Apenas caracteres alfanuméricos, até 15').optional(),
     numeracao_motor_revelado: z.string().regex(/^[A-Za-z0-9]{0,15}$/, 'Apenas caracteres alfanuméricos, até 15').optional(),
+    b602_envolvidos_0: z.string().optional(),
+    b602_envolvidos_1: z.string().optional(),
+    b602_envolvidos_2: z.string().optional(),
+    b602_envolvidos_3: z.string().optional(),
+    b602_envolvidos_4: z.string().optional(),
+    b602_envolvidos_5: z.string().optional(),
+    b602_envolvidos_6: z.string().optional(),
+    b602_envolvidos_7: z.string().optional(),
+    b602_envolvidos_8: z.string().optional(),
+    b602_envolvidos_9: z.string().optional(),
+    b602_data_ocorrencia: z.string().optional(),
+    b602_local: z.string().optional(),
+    b602_numero_bo: z.string().max(30, 'Nº do BO deve ter no máximo 30 caracteres').optional(),
+    b602_numero_ip: z.string().max(30, 'Nº do IP deve ter no máximo 30 caracteres').optional(),
+    b602_solicitante_nome: z.string().optional(),
+    b602_material_enc_toggle: z.string().optional(),
+    b602_cartuchos_toggle: z.string().optional(),
+    b602_estojos_toggle: z.string().optional(),
   }).superRefine((data, ctx) => {
     if (!data.tipo_exame_id) return;
     const tipos = tiposExameRef.current;
@@ -270,6 +286,23 @@ export const REPsPage: React.FC = () => {
     }
     if (sections.includes('numeracao') && !data.numeracao_veiculo?.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Veículo é obrigatório', path: ['numeracao_veiculo'] });
+    }
+    if (sections.includes('dados_investigacao')) {
+      if (!data.b602_envolvidos_0?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Pelo menos um envolvido é obrigatório para B-602', path: ['b602_envolvidos_0'] });
+      }
+      if (!data.b602_data_ocorrencia?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Data da ocorrência é obrigatória para B-602', path: ['b602_data_ocorrencia'] });
+      }
+      if (!data.b602_local?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Local é obrigatório para B-602', path: ['b602_local'] });
+      }
+      if (!data.b602_solicitante_nome?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Nome do solicitante é obrigatório para B-602', path: ['b602_solicitante_nome'] });
+      }
+      if (!data.b602_numero_bo?.trim() && !data.b602_numero_ip?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Preencha o Nº do BO ou Nº do IP (B-602 exige ao menos um)', path: ['b602_numero_bo'] });
+      }
     }
   }), []);
 
@@ -368,6 +401,7 @@ export const REPsPage: React.FC = () => {
   useEffect(() => {
     if (tipoExameId) {
       form.trigger(['local_fato', 'numeracao_veiculo', 'numeracao_placa', 'numeracao_fabricacao', 'numeracao_chassi', 'numeracao_chassi_revelado', 'numeracao_motor', 'numeracao_motor_revelado']);
+      form.trigger(['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local', 'b602_solicitante_nome', 'b602_numero_bo', 'b602_numero_ip']);
     }
   }, [tipoExameId]);
 
@@ -441,6 +475,7 @@ export const REPsPage: React.FC = () => {
     const especificos = deserializeCamposEspecificos(tipo?.codigo ?? '', rep.campos_especificos);
 
     form.reset({
+      ...emptyForm(),
       numero: rep.numero,
       solicitante_id: rep.solicitante_id || '',
       tipo_exame_id: rep.tipo_exame_id || '',
@@ -450,17 +485,12 @@ export const REPsPage: React.FC = () => {
       numero_documento: rep.numero_documento || '',
       data_documento: rep.data_documento?.split('T')[0] || '',
       autoridade_solicitante: rep.autoridade_solicitante || '',
-      nome_envolvido: rep.nome_envolvido || '',
       data_acionamento: rep.data_acionamento || '',
       data_chegada: rep.data_chegada || '',
       data_saida: rep.data_saida || '',
       local_fato: rep.local_fato || '',
       latitude: rep.latitude != null ? String(rep.latitude) : '',
       longitude: rep.longitude != null ? String(rep.longitude) : '',
-      lacre_entrada: rep.lacre_entrada || '',
-      lacre_saida: rep.lacre_saida || '',
-      numero_bo: rep.numero_bo || '',
-      numero_ip: rep.numero_ip || '',
       observacoes: rep.observacoes || '',
       numeracao_veiculo: especificos.numeracao_veiculo || '',
       numeracao_placa: especificos.numeracao_placa || '',
@@ -1009,7 +1039,7 @@ export const REPsPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                         <div>
                           <FormField
                             control={form.control}
@@ -1036,6 +1066,24 @@ export const REPsPage: React.FC = () => {
                           <FormLabel>Responsável/Contato</FormLabel>
                           <Input value={form.watch('solicitante_id') ? (solicitantes.find(s => s.id === form.watch('solicitante_id'))?.tipo || '—') : '—'} readOnly className="bg-muted text-muted-foreground cursor-default" />
                         </div>
+                        <div>
+                          <FormField
+                            control={form.control}
+                            name="autoridade_solicitante"
+                            render={({ field }) => (
+                              <FormItem>
+                                <LabelWithPlaceholder field="autoridade_solicitante" mostrar={mostrarPlaceholders}>Autoridade Solicitante</LabelWithPlaceholder>
+                                <FormControl>
+                                  <Input placeholder="Nome da autoridade" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div>
                           <FormField
                             control={form.control}
@@ -1090,34 +1138,55 @@ export const REPsPage: React.FC = () => {
                             )}
                           />
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                         <div>
                           <FormField
                             control={form.control}
                             name="tipo_solicitacao"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="tipo_solicitacao" mostrar={mostrarPlaceholders}>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></LabelWithPlaceholder>
-                                <Select value={field.value} onValueChange={field.onChange}>
-                                  <FormControl>
-                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="BOU">BOU</SelectItem>
-                                    <SelectItem value="BO PM">BO PM</SelectItem>
-                                    <SelectItem value="BO PC">BO PC</SelectItem>
-                                    <SelectItem value="Ofício">Ofício</SelectItem>
-                                    <SelectItem value="CECOMP">CECOMP</SelectItem>
-                                    <SelectItem value="Outros">Outros</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
+                            render={({ field }) => {
+                              const isOutros = field.value && !['BOU', 'BO PM', 'BO PC', 'Ofício', 'CECOMP'].includes(field.value) && field.value !== '';
+                              return (
+                                <FormItem>
+                                  <LabelWithPlaceholder field="tipo_solicitacao" mostrar={mostrarPlaceholders}>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></LabelWithPlaceholder>
+                                  <Select
+                                    value={isOutros ? 'Outros' : field.value}
+                                    onValueChange={(v) => {
+                                      if (v === 'Outros') {
+                                        field.onChange('');
+                                      } else {
+                                        field.onChange(v);
+                                      }
+                                    }}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="BOU">BOU</SelectItem>
+                                      <SelectItem value="BO PM">BO PM</SelectItem>
+                                      <SelectItem value="BO PC">BO PC</SelectItem>
+                                      <SelectItem value="Ofício">Ofício</SelectItem>
+                                      <SelectItem value="CECOMP">CECOMP</SelectItem>
+                                      <SelectItem value="Outros">Outros</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {(isOutros || field.value === '') && (
+                                    <Input
+                                      className="mt-2"
+                                      placeholder="Especifique o tipo..."
+                                      value={isOutros ? field.value : ''}
+                                      onChange={(e) => field.onChange(e.target.value)}
+                                      maxLength={50}
+                                    />
+                                  )}
+                                  <FormMessage />
+                                </FormItem>
+                              );
+                            }}
                           />
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                         <div>
                           <FormField
                             control={form.control}
@@ -1148,130 +1217,8 @@ export const REPsPage: React.FC = () => {
                             )}
                           />
                         </div>
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="autoridade_solicitante"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="autoridade_solicitante" mostrar={mostrarPlaceholders}>Autoridade Solicitante</LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input placeholder="Nome da autoridade" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="nome_envolvido"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="nome_envolvido" mostrar={mostrarPlaceholders}>Nome do Envolvido</LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input placeholder="Nome dos envolvidos" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
                       </div>
-                    </div>
 
-                    {/* ============================================ */}
-                    {/* SEÇÃO 2: Documentos Associados */}
-                    {/* ============================================ */}
-                    <div
-                      id="step-documentos"
-                      data-step="documentos"
-                      className={`rounded-lg p-4 transition-all ${stepper.activeStep === 'documentos' ? 'ring-2 ring-primary bg-primary/5' : ''}`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Link2 size={16} className="text-primary" />
-                        <h3 className="text-base font-semibold">Documentos Associados</h3>
-                      </div>
-                      <p className="text-xs text-muted-foreground mb-4">Vínculos e observações importantes da REP.</p>
-                      {(!form.watch('numero_bo') && !form.watch('numero_ip')) && (
-                        <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
-                          <CardHeader className="pt-2 pb-3">
-                            <CardTitle className="text-sm flex items-center gap-2 text-amber-800 dark:text-amber-400">
-                              <AlertTriangle className="h-4 w-4" />
-                              Requisito GDL
-                            </CardTitle>
-                            <CardDescription className="text-amber-700 dark:text-amber-400/80">
-                              O GDL só aceitará o envio de laudos com o nº do BO ou nº do IP preenchidos.
-                            </CardDescription>
-                          </CardHeader>
-                        </Card>
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="numero_bo"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="numero_bo" mostrar={mostrarPlaceholders}>Nº do BO<HelpIcon text="Formato: AAAA/NNNNNN. Ex: 2026/123456. O ano DEVE ter os 4 dígitos seguido de / e mais até 6 dígitos do BO." /></LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input value={field.value} onChange={e => field.onChange(formatarNumeroBO(e.target.value))} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="numero_ip"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="numero_ip" mostrar={mostrarPlaceholders}>Nº do IP</LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input placeholder="Inquérito Policial" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="lacre_entrada"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="lacre_entrada" mostrar={mostrarPlaceholders}>Lacre de Entrada</LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input placeholder="Nº do lacre" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div>
-                          <FormField
-                            control={form.control}
-                            name="lacre_saida"
-                            render={({ field }) => (
-                              <FormItem>
-                                <LabelWithPlaceholder field="lacre_saida" mostrar={mostrarPlaceholders}>Lacre de Saída</LabelWithPlaceholder>
-                                <FormControl>
-                                  <Input placeholder="Nº do lacre" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
                       <div className="mt-4">
                         <FormField
                           control={form.control}

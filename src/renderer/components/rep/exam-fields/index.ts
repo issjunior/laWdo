@@ -1,8 +1,10 @@
-import { MapPin, Clock, Hash } from 'lucide-react';
+import { MapPin, Clock, Hash, Search, Package, CircleDot, Cylinder } from 'lucide-react';
 import { LocalFatoFields } from './local-fato';
 import { AcionamentoFields } from './acionamento';
 import { NumeracaoFields } from './numeracao';
+import { DadosInvestigacaoFields, MaterialEncFields, CartuchosFields, EstojosFields } from './b602';
 import { numeracaoService } from './services/numeracao.service';
+import { b602Service } from './services/b602.service';
 import type { ExamSection } from './types';
 import type { ExamService } from './services/types';
 
@@ -38,15 +40,53 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     group: null,
     requiredFields: ['numeracao_veiculo'],
   },
+  dados_investigacao: {
+    id: 'dados_investigacao',
+    label: 'Dados da Investigação',
+    icon: Search,
+    description: 'Envolvidos, data, local, BO, IP e solicitante',
+    component: DadosInvestigacaoFields,
+    group: null,
+    requiredFields: ['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local', 'b602_solicitante_nome'],
+  },
+  material_enc: {
+    id: 'material_enc',
+    label: 'Material Encaminhado',
+    icon: Package,
+    description: 'Armas, munições e acessórios encaminhados para exame',
+    component: MaterialEncFields,
+    group: null,
+    requiredFields: [],
+  },
+  cartuchos: {
+    id: 'cartuchos',
+    label: 'Cartuchos',
+    icon: CircleDot,
+    description: 'Especificações de cartuchos para exame balístico',
+    component: CartuchosFields,
+    group: null,
+    requiredFields: [],
+  },
+  estojos: {
+    id: 'estojos',
+    label: 'Estojos',
+    icon: Cylinder,
+    description: 'Especificações de estojos para exame balístico',
+    component: EstojosFields,
+    group: null,
+    requiredFields: [],
+  },
 };
 
 export const EXAM_FIELD_MAP: Record<string, string[]> = {
   'LOC':   ['local_fato', 'acionamento'],
   'I-801': ['numeracao'],
+  'B-602': ['dados_investigacao', 'material_enc', 'cartuchos', 'estojos'],
 };
 
 export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
   'I-801': numeracaoService,
+  'B-602': b602Service,
 };
 
 export function getSectionsForExame(codigo: string): ExamSection[] {

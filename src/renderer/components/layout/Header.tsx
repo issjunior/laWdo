@@ -57,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   };
 
   return (
-    <header className="header flex items-center px-4 h-16 shrink-0 border-b border-border">
+    <header className="header flex items-center px-3 h-12 shrink-0 border-b border-border">
       <div className="header-content justify-between w-full flex items-center">
         <SidebarTrigger className="-ml-1" />
         

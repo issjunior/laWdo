@@ -1,4 +1,4 @@
-import { FileText, ScrollText } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SECTION_REGISTRY, EXAM_FIELD_MAP } from '@/components/rep/exam-fields';
 import type { Step } from '@/components/ui/stepper';
@@ -16,12 +16,6 @@ export const STEP_REGISTRY: StepEntry[] = [
     label: 'Dados da Solicitação',
     icon: FileText,
     requiredFields: ['numero', 'data_requisicao', 'tipo_solicitacao', 'numero_documento'],
-  },
-  {
-    id: 'documentos',
-    label: 'Documentos Associados',
-    icon: ScrollText,
-    requiredFields: [],
   },
 ];
 

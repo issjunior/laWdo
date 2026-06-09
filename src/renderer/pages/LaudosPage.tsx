@@ -121,15 +121,10 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     // Prefixados com rep. (compatibilidade com placeholders antigos)
     'rep.numero': repData.numero || '',
     'rep.documento': repData.numero_documento || '',
-    'rep.envolvido': repData.nome_envolvido || '',
     'rep.local': repData.local_fato || '',
-    'rep.bo': repData.numero_bo || '',
-    'rep.ip': repData.numero_ip || '',
     'rep.data': formatarData(repData.data_requisicao),
     'rep.autoridade': repData.autoridade_solicitante || '',
     'rep.requisicao': repData.numero_documento || '',
-    'rep.lacre_entrada': repData.lacre_entrada || '',
-    'rep.lacre_saida': repData.lacre_saida || '',
 
     // Prefixados com rep_ (notação do banco de dados — seed do sistema)
     'rep_numero': repData.numero || '',
@@ -141,10 +136,6 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     'rep_data_acionamento': formatarDataHora(repData.data_acionamento),
     'rep_data_chegada': formatarDataHora(repData.data_chegada),
     'rep_data_saida': formatarDataHora(repData.data_saida),
-    'rep_numero_bo': repData.numero_bo || '',
-    'rep_numero_ip': repData.numero_ip || '',
-    'rep_lacre_entrada': repData.lacre_entrada || '',
-    'rep_lacre_saida': repData.lacre_saida || '',
     'rep_observacoes': repData.observacoes || '',
 
     // Relacionamentos (preenchidos via extraContext em handlePreview)
@@ -155,14 +146,8 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     // Sem prefixo (compatibilidade)
     'NUMERO_REP': repData.numero || '',
     'NUMERO': repData.numero || '',
-    'NOME_ENVOLVIDO': repData.nome_envolvido || '',
-    'ENVOLVIDO': repData.nome_envolvido || '',
     'LOCAL_FATO': repData.local_fato || '',
-    'BO': repData.numero_bo || '',
-    'IP': repData.numero_ip || '',
     'AUTORIDADE': repData.autoridade_solicitante || '',
-    'LACRE_ENTRADA': repData.lacre_entrada || '',
-    'LACRE_SAIDA': repData.lacre_saida || '',
 
     // Sem prefixo (notação recomendada após migração)
     'numero_rep': repData.numero || '',
@@ -173,10 +158,6 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     'data_acionamento_local': formatarDataHora(repData.data_acionamento),
     'data_chegada_local': formatarDataHora(repData.data_chegada),
     'data_saida_local': formatarDataHora(repData.data_saida),
-    'numero_bo': repData.numero_bo || '',
-    'numero_ip': repData.numero_ip || '',
-    'lacre_entrada': repData.lacre_entrada || '',
-    'lacre_saida': repData.lacre_saida || '',
     'observacoes_rep': repData.observacoes || '',
 
     // Perito (notação com ponto — compatibilidade retroativa)
@@ -206,6 +187,102 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
         }
         if (valor !== undefined && valor !== null && valor !== '') {
           mapping[placeholder.chave] = String(valor);
+        }
+      }
+
+      const b602 = especificos.b602 as Record<string, unknown> | undefined;
+      if (b602) {
+        const envolvidos = b602.envolvidos as string[] | undefined;
+        if (envolvidos && envolvidos.length > 0) {
+          mapping['b602_envolvidos'] = envolvidos.filter(Boolean).join(', ');
+          envolvidos.forEach((nome, i) => {
+            mapping[`b602_envolvido_${i + 1}`] = nome;
+          });
+        }
+
+        const buildTable = (headers: string[], rows: string[][]): string => {
+          if (rows.length === 0) return '<p><em>(sem dados)</em></p>';
+          const thead = `<tr>${headers.map(h => `<th style="border:1px solid #ccc;padding:4px 8px;text-align:left;font-weight:600;background:#f5f5f5">${h}</th>`).join('')}</tr>`;
+          const tbody = rows.map(row => `<tr>${row.map(cell => `<td style="border:1px solid #ccc;padding:4px 8px">${cell}</td>`).join('')}</tr>`).join('');
+          return `<table style="border-collapse:collapse;width:100%;margin:8px 0"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+        };
+
+        const diRows: string[][] = [];
+        if (envolvidos && envolvidos.length > 0) {
+          diRows.push(['Envolvido(s)', envolvidos.filter(Boolean).join(', ')]);
+        }
+        if (b602.data_ocorrencia) diRows.push(['Data da Ocorrência', String(b602.data_ocorrencia)]);
+        if (b602.local) diRows.push(['Local', String(b602.local)]);
+        if (b602.numero_bo) diRows.push(['Nº do BO', String(b602.numero_bo)]);
+        if (b602.numero_ip) diRows.push(['Nº do IP', String(b602.numero_ip)]);
+        if (b602.solicitante_nome) diRows.push(['Solicitante', String(b602.solicitante_nome)]);
+        mapping['b602_tabela_dados_investigacao'] = buildTable(['Campo', 'Valor'], diRows);
+
+        const material = b602.material_enc as Record<string, string>[] | undefined;
+        if (material && material.length > 0) {
+          mapping['b602_tabela_material_enc'] = buildTable(
+            ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
+            material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || ''])
+          );
+          material.forEach((m, i) => {
+            mapping[`b602_material_enc_${i + 1}_natureza`] = m.natureza || '';
+            mapping[`b602_material_enc_${i + 1}_quantidade`] = m.quantidade || '';
+            mapping[`b602_material_enc_${i + 1}_tipo`] = m.tipo || '';
+            mapping[`b602_material_enc_${i + 1}_dito_oficio`] = m.dito_oficio || '';
+            mapping[`b602_material_enc_${i + 1}_numero_lacre`] = m.numero_lacre || '';
+          });
+        }
+
+        const cartuchos = b602.cartuchos as Record<string, unknown>[] | undefined;
+        if (cartuchos && cartuchos.length > 0) {
+          mapping['b602_tabela_cartuchos'] = buildTable(
+            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Projétil', 'Observação'],
+            cartuchos.map(c => [
+              String(c.quantidade || ''),
+              String(c.calibre || ''),
+              String(c.marca || ''),
+              String(c.origem || ''),
+              String(c.espoleta || ''),
+              String(c.estojo || ''),
+              String(c.projetil || ''),
+              Array.isArray(c.observacao) ? (c.observacao as string[]).join(', ') : String(c.observacao || ''),
+            ])
+          );
+          cartuchos.forEach((c, i) => {
+            mapping[`b602_cartucho_${i + 1}_quantidade`] = String(c.quantidade || '');
+            mapping[`b602_cartucho_${i + 1}_calibre`] = String(c.calibre || '');
+            mapping[`b602_cartucho_${i + 1}_marca`] = String(c.marca || '');
+            mapping[`b602_cartucho_${i + 1}_origem`] = String(c.origem || '');
+            mapping[`b602_cartucho_${i + 1}_espoleta`] = String(c.espoleta || '');
+            mapping[`b602_cartucho_${i + 1}_estojo`] = String(c.estojo || '');
+            mapping[`b602_cartucho_${i + 1}_projetil`] = String(c.projetil || '');
+            mapping[`b602_cartucho_${i + 1}_observacao`] = Array.isArray(c.observacao) ? (c.observacao as string[]).join(', ') : '';
+          });
+        }
+
+        const estojos = b602.estojos as Record<string, unknown>[] | undefined;
+        if (estojos && estojos.length > 0) {
+          mapping['b602_tabela_estojos'] = buildTable(
+            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Observação'],
+            estojos.map(e => [
+              String(e.quantidade || ''),
+              String(e.calibre || ''),
+              String(e.marca || ''),
+              String(e.origem || ''),
+              String(e.espoleta || ''),
+              String(e.estojo || ''),
+              Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : String(e.observacao || ''),
+            ])
+          );
+          estojos.forEach((e, i) => {
+            mapping[`b602_estojo_${i + 1}_quantidade`] = String(e.quantidade || '');
+            mapping[`b602_estojo_${i + 1}_calibre`] = String(e.calibre || '');
+            mapping[`b602_estojo_${i + 1}_marca`] = String(e.marca || '');
+            mapping[`b602_estojo_${i + 1}_origem`] = String(e.origem || '');
+            mapping[`b602_estojo_${i + 1}_espoleta`] = String(e.espoleta || '');
+            mapping[`b602_estojo_${i + 1}_estojo`] = String(e.estojo || '');
+            mapping[`b602_estojo_${i + 1}_observacao`] = Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : '';
+          });
         }
       }
     } catch { /* mantém mapping atual */ }

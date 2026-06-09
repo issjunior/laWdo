@@ -10,17 +10,12 @@ export interface REPFormData {
   numero_documento: string;
   data_documento: string;
   autoridade_solicitante: string;
-  nome_envolvido: string;
   data_acionamento: string;
   data_chegada: string;
   data_saida: string;
   local_fato: string;
   latitude: string;
   longitude: string;
-  lacre_entrada: string;
-  lacre_saida: string;
-  numero_bo: string;
-  numero_ip: string;
   observacoes: string;
   numeracao_veiculo: string;
   numeracao_placa: string;
@@ -31,6 +26,24 @@ export interface REPFormData {
   numeracao_chassi_revelado: string;
   numeracao_motor: string;
   numeracao_motor_revelado: string;
+  b602_envolvidos_0: string;
+  b602_envolvidos_1: string;
+  b602_envolvidos_2: string;
+  b602_envolvidos_3: string;
+  b602_envolvidos_4: string;
+  b602_envolvidos_5: string;
+  b602_envolvidos_6: string;
+  b602_envolvidos_7: string;
+  b602_envolvidos_8: string;
+  b602_envolvidos_9: string;
+  b602_data_ocorrencia: string;
+  b602_local: string;
+  b602_numero_bo: string;
+  b602_numero_ip: string;
+  b602_solicitante_nome: string;
+  b602_material_enc_toggle: string;
+  b602_cartuchos_toggle: string;
+  b602_estojos_toggle: string;
 }
 
 export interface ExamSectionProps {

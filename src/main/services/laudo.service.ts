@@ -102,7 +102,6 @@ export class LaudoService extends BaseService<LaudoRow> {
         template_nome: string;
         status_rep: string;
         tipo_exame_nome?: string;
-        nome_envolvido?: string;
         data_requisicao?: string;
         tipo_solicitacao?: string;
         numero_documento?: string;
@@ -115,7 +114,6 @@ export class LaudoService extends BaseService<LaudoRow> {
           l.*,
           r.numero AS rep_numero,
           r.status AS status_rep,
-          r.nome_envolvido,
           r.data_requisicao,
           r.tipo_solicitacao,
           r.numero_documento,

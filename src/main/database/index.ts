@@ -17,7 +17,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 22;
+const CURRENT_SCHEMA_VERSION = 23;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -138,7 +138,6 @@ const createDatabaseSchema = async (): Promise<void> => {
         numero_documento TEXT,
         data_documento DATETIME,
         autoridade_solicitante TEXT,
-        nome_envolvido TEXT,
         data_acionamento DATETIME,
         data_chegada DATETIME,
         data_saida DATETIME,
@@ -687,7 +686,6 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         await addColumnIfMissing('numero_documento', 'TEXT');
         await addColumnIfMissing('data_documento', 'DATETIME');
         await addColumnIfMissing('autoridade_solicitante', 'TEXT');
-        await addColumnIfMissing('nome_envolvido', 'TEXT');
         await addColumnIfMissing('data_acionamento', 'DATETIME');
         await addColumnIfMissing('data_chegada', 'DATETIME');
         await addColumnIfMissing('data_saida', 'DATETIME');
@@ -718,7 +716,7 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         // Colunas que devem aceitar NULL
         const opcionais = [
           'solicitante_id', 'tipo_exame_id', 'tipo_solicitacao', 'numero_documento',
-          'data_documento', 'autoridade_solicitante', 'nome_envolvido', 'data_acionamento',
+          'data_documento', 'autoridade_solicitante', 'data_acionamento',
           'data_chegada', 'data_saida', 'local_fato', 'latitude', 'longitude',
           'lacre_entrada', 'lacre_saida', 'usuario_id', 'numero_bo', 'numero_ip',
           'observacoes', 'prazo',
@@ -749,7 +747,6 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
               numero_documento TEXT,
               data_documento DATETIME,
               autoridade_solicitante TEXT,
-              nome_envolvido TEXT,
               data_acionamento DATETIME,
               data_chegada DATETIME,
               data_saida DATETIME,
@@ -1573,6 +1570,25 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       log.error('Erro ao aplicar migration versão 22', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 23: Remover colunas nativas da tabela reps que viraram campos_especificos
+  if (fromVersion < 23) {
+    try {
+      const cols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(reps)'
+      );
+      const colunasARemover = ['nome_envolvido', 'numero_bo', 'numero_ip', 'lacre_entrada', 'lacre_saida'];
+      for (const col of colunasARemover) {
+        if (cols.some(c => c.name === col)) {
+          await executeNonQuery(`ALTER TABLE reps DROP COLUMN ${col}`);
+          log.info(`Migration v23: Coluna '${col}' removida da tabela reps`);
+        }
+      }
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 23', error);
       throw error;
     }
   }
