@@ -461,7 +461,7 @@ export const LaudosPage: React.FC = () => {
   const [senhaExclusao, setSenhaExclusao] = useState('');
   const [senhaExclusaoErro, setSenhaExclusaoErro] = useState('');
   const [verificandoSenhaExclusao, setVerificandoSenhaExclusao] = useState(false);
-  const [passoExclusao, setPassoExclusao] = useState<'confirmar' | 'senha' | 'confirmado'>('confirmar');
+  const [passoExclusao, setPassoExclusao] = useState<'confirmar' | 'senha'>('confirmar');
   const [iluminacoesPanelOpen, setIlustracoesPanelOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
@@ -1658,26 +1658,26 @@ export const LaudosPage: React.FC = () => {
     setSenhaExclusao('');
     setSenhaExclusaoErro('');
     setVerificandoSenhaExclusao(false);
-    setPassoExclusao(precisaSenhaParaExcluir(laudo.status) ? 'senha' : 'confirmado');
+    setPassoExclusao(precisaSenhaParaExcluir(laudo.status) ? 'senha' : 'confirmar');
     setDeleteDialogOpen(true);
   };
 
-  const handleVerificarSenhaExclusao = async () => {
+  const handleConfirmarExclusao = async () => {
     if (!senhaExclusao) {
       setSenhaExclusaoErro('Digite sua senha para continuar.');
       return;
     }
-    const userId = getCurrentUserId();
-    if (!userId) {
-      setSenhaExclusaoErro('Sessão não encontrada. Faça login novamente.');
-      return;
-    }
     setVerificandoSenhaExclusao(true);
     try {
+      const userId = getCurrentUserId();
+      if (!userId) {
+        setSenhaExclusaoErro('Sessão não encontrada. Faça login novamente.');
+        return;
+      }
       const r = await window.ipcAPI.verifyPassword(userId, senhaExclusao);
       if (r.valid) {
         setSenhaExclusaoErro('');
-        setPassoExclusao('confirmado');
+        await handleExcluir();
       } else {
         setSenhaExclusaoErro(r.error || 'Senha incorreta.');
       }
@@ -2408,7 +2408,7 @@ export const LaudosPage: React.FC = () => {
                     placeholder="••••••••"
                     value={senhaExclusao}
                     onChange={e => { setSenhaExclusao(e.target.value); setSenhaExclusaoErro(''); }}
-                    onKeyDown={e => { if (e.key === 'Enter') handleVerificarSenhaExclusao(); }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleConfirmarExclusao(); }}
                     disabled={verificandoSenhaExclusao}
                     autoFocus
                   />
@@ -2423,41 +2423,24 @@ export const LaudosPage: React.FC = () => {
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={handleVerificarSenhaExclusao}
+                  onClick={handleConfirmarExclusao}
                   disabled={verificandoSenhaExclusao || !senhaExclusao}
                 >
-                  {verificandoSenhaExclusao ? 'Verificando...' : 'Verificar Senha'}
+                  {verificandoSenhaExclusao ? 'Excluindo...' : 'Confirmar Exclusão'}
                 </Button>
               </div>
             </>
           ) : (
             <>
               <div className="space-y-3">
-                {precisaSenhaParaExcluir(laudoParaExcluir?.status ?? '') ? (
-                  <Alert variant="destructive">
-                    <AlertDescription>
-                      Confirmação final: o laudo <strong>{laudoParaExcluir?.status}</strong> da REP nº{' '}
-                      <strong>{laudoParaExcluir?.rep_numero}</strong> será permanentemente excluído.
-                      A REP vinculada voltará para o status <strong>Pendente</strong>.
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <>
-                    <p>Tem certeza que deseja excluir o laudo da REP nº <strong>{laudoParaExcluir?.rep_numero}</strong>?</p>
-                    <Alert variant="destructive">
-                      <AlertDescription>
-                        A REP vinculada voltará para o status <strong>Pendente</strong>.
-                      </AlertDescription>
-                    </Alert>
-                  </>
-                )}
+                <p>Tem certeza que deseja excluir o laudo da REP nº <strong>{laudoParaExcluir?.rep_numero}</strong>?</p>
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    A REP vinculada voltará para o status <strong>Pendente</strong>.
+                  </AlertDescription>
+                </Alert>
               </div>
               <div className="flex justify-end gap-2 mt-4">
-                {passoExclusao === 'confirmado' ? (
-                  <Button variant="ghost" size="sm" onClick={() => { setPassoExclusao('senha'); setSenhaExclusao(''); }}>
-                    Voltar
-                  </Button>
-                ) : null}
                 <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
                 <Button variant="destructive" onClick={handleExcluir}>Excluir Laudo</Button>
               </div>
