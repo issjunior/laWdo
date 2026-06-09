@@ -423,6 +423,18 @@ Os passos dinâmicos 3-6 são gerados automaticamente por `getDynamicSteps('B-60
 - `aplicarPlaceholders()` — suporte a `b602_envolvido_N` (acessa array por índice)
 - Placeholders B-602 resolvidos automaticamente via `CAMPOS_ESPECIFICOS_PLACEHOLDERS` no loop `jsonPath.split('.')` já existente
 
+#### ✅ Correção: Renderização de tabelas no preview (2026-06-09)
+
+**Bug:** Placeholders de tabela (`b602_tabela_*`) eram exibidos como texto escapado (`&lt;table&gt;...`) no preview/PDF em vez de renderizar como tabela HTML.
+
+**Causa:** `aplicarPlaceholders()` linha 309 usava `span.replaceWith(valor)` — o método `ChildNode.replaceWith(string)` trata o argumento como texto puro, não como HTML. O HTML da tabela era injetado como nó de texto e escapado na serialização.
+
+**Correção:** `LaudosPage.tsx:308` — trocado `span.replaceWith(valor)` por:
+```ts
+span.replaceWith(doc.createRange().createContextualFragment(valor));
+```
+`createContextualFragment` faz parse do HTML e cria nós DOM reais. Funciona universalmente para qualquer valor de placeholder (texto puro ou HTML), cobrindo tabelas do B-602 e futuros tipos de exame com valores HTML.
+
 ---
 
 ## 8. Checklist de Implementação
@@ -469,7 +481,7 @@ Os passos dinâmicos 3-6 são gerados automaticamente por `getDynamicSteps('B-60
 - [ ] Integrar toggles com stepper (filtrar dynamic steps)
 
 ### Fase 6 — Resolução no Laudo
-- [ ] `aplicarPlaceholders()` — suporte a placeholders de tabela (`b602_tabela_*`)
+- [x] `aplicarPlaceholders()` — suporte a placeholders de tabela (`b602_tabela_*`) — **corrigido 2026-06-09**: `createContextualFragment` no lugar de `replaceWith(string)`
 - [ ] `aplicarPlaceholders()` — suporte a `b602_envolvido_N` (array index)
 
 ### Fase 7 — Build & Verificação

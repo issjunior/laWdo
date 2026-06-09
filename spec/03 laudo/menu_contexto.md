@@ -326,6 +326,7 @@ Mudanças:
 - [ ] REP com 0 cartuchos → submenu Cartuchos vazio ou oculto
 - [ ] Clicar em placeholder de célula → insere `{{b602_cartucho_1_calibre}}` no editor
 - [ ] Preview PDF resolve todos os placeholders
+  - ✅ **Tabelas renderizam corretamente (2026-06-09):** `aplicarPlaceholders()` corrigido — `span.replaceWith(string)` trocado por `span.replaceWith(createContextualFragment(valor))` para que valores HTML (tabelas `b602_tabela_*`, etc.) sejam parseados como nós DOM em vez de texto escapado. Ver `criar_input_personalizado_b602.md` Passo 10.
 - [ ] Placeholders de célula digitados manualmente (`{{b602_cartucho_7_calibre}}`) funcionam mesmo sem estar no menu
 
 ---

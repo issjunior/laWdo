@@ -597,6 +597,12 @@ Alternativamente, podem ser duplicadas inline em `PlaceholdersPage.tsx` (menos e
 | Cor `amber` | Suficiente para I-801 | `ALLOWED_COLORS` expandido para 19 cores (slate, gray, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose) |
 | Ícone I-801 | `Hash` (conforme `ciclo_placeholder.md`) | Implementado como `Car` no seed (`placeholder.service.ts:50`) |
 
+## Correção relacionada: Renderização de placeholders com valor HTML (2026-06-09)
+
+**Bug:** `aplicarPlaceholders()` em `LaudosPage.tsx:309` usava `span.replaceWith(valor)` para substituir placeholders. `ChildNode.replaceWith(string)` trata o argumento como texto, não HTML — placeholders cujo valor contém HTML (ex: `b602_tabela_dados_investigacao` → `<table>...</table>`) eram escapados no preview (`&lt;table&gt;`).
+
+**Correção:** Trocado para `span.replaceWith(doc.createRange().createContextualFragment(valor))`, que faz parse adequado de strings HTML em nós DOM. Afeta apenas `LaudosPage.tsx`, sem impacto na PlaceholdersPage.
+
 ## Estrutura de Arquivos Resultante (pós-implementação)
 
 ```

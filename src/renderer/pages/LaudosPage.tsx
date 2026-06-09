@@ -305,8 +305,7 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
         const chave = chaveMatch[1];
         const valor = mapping[chave];
         if (valor !== undefined) {
-          // Substitui o span inteiro pelo valor (texto puro)
-          span.replaceWith(valor);
+          span.replaceWith(doc.createRange().createContextualFragment(valor));
         }
       }
     });
