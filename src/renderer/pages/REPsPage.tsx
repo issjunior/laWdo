@@ -277,7 +277,7 @@ export const REPsPage: React.FC = () => {
     b602_material_enc_toggle: z.string().optional(),
     b602_cartuchos_toggle: z.string().optional(),
     b602_estojos_toggle: z.string().optional(),
-  }).superRefine((data, ctx) => {
+  }).passthrough().superRefine((data, ctx) => {
     if (!data.tipo_exame_id) return;
     const tipos = tiposExameRef.current;
     const tipo = tipos.find(t => t.id === data.tipo_exame_id);
@@ -532,6 +532,7 @@ export const REPsPage: React.FC = () => {
 
     form.reset({
       ...emptyForm(),
+      ...especificos,
       numero: rep.numero,
       solicitante_id: rep.solicitante_id || '',
       tipo_exame_id: rep.tipo_exame_id || '',
@@ -548,15 +549,6 @@ export const REPsPage: React.FC = () => {
       latitude: rep.latitude != null ? String(rep.latitude) : '',
       longitude: rep.longitude != null ? String(rep.longitude) : '',
       observacoes: rep.observacoes || '',
-      numeracao_veiculo: especificos.numeracao_veiculo || '',
-      numeracao_placa: especificos.numeracao_placa || '',
-      numeracao_fabricacao: especificos.numeracao_fabricacao || '',
-      numeracao_cor: especificos.numeracao_cor || '',
-      numeracao_conservacao: especificos.numeracao_conservacao || 'regular',
-      numeracao_chassi: especificos.numeracao_chassi || '',
-      numeracao_chassi_revelado: especificos.numeracao_chassi_revelado || '',
-      numeracao_motor: especificos.numeracao_motor || '',
-      numeracao_motor_revelado: especificos.numeracao_motor_revelado || '',
     });
     setShowForm(true);
   };

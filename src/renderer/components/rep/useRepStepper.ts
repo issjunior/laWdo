@@ -53,7 +53,7 @@ export function useRepStepper({
     const completed = new Set<string>();
 
     const checkStep = (requiredFields: string[], stepId: string) => {
-      if (requiredFields.length === 0) return;
+      if (requiredFields.length === 0) { completed.add(stepId); return; }
       const allFilled = requiredFields.every((f) => {
         const v = formValues[f as keyof REPFormData];
         return v && (typeof v === 'string' ? v.trim().length > 0 : true);
