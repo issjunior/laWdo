@@ -226,6 +226,9 @@ export const REPsPage: React.FC = () => {
   const tiposExameRef = useRef<any[]>([]);
   useEffect(() => { tiposExameRef.current = tiposExame; }, [tiposExame]);
 
+  // Ref para evitar que o template_id seja limpo ao carregar uma edição
+  const editLoadRef = useRef(false);
+
   // Schema com validação condicional via superRefine
   const repFormSchema = useMemo(() => z.object({
     numero: z
@@ -381,7 +384,11 @@ export const REPsPage: React.FC = () => {
 
   // Quando o tipo de exame muda, busca os templates vinculados e limpa template_id
   useEffect(() => {
-    form.setValue('template_id', '', { shouldValidate: false });
+    if (editLoadRef.current) {
+      editLoadRef.current = false;
+    } else {
+      form.setValue('template_id', '', { shouldValidate: false });
+    }
     if (!showForm || !tipoExameId) {
       setTemplatesVinculados([]);
       return;
@@ -520,6 +527,8 @@ export const REPsPage: React.FC = () => {
 
     const tipo = tiposExame.find(t => t.id === rep.tipo_exame_id);
     const especificos = deserializeCamposEspecificos(tipo?.codigo ?? '', rep.campos_especificos);
+
+    editLoadRef.current = true;
 
     form.reset({
       ...emptyForm(),

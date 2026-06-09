@@ -102,6 +102,7 @@ export class LaudoService extends BaseService<LaudoRow> {
         template_nome: string;
         status_rep: string;
         tipo_exame_nome?: string;
+        tipo_exame_codigo?: string;
         data_requisicao?: string;
         tipo_solicitacao?: string;
         numero_documento?: string;
@@ -118,7 +119,8 @@ export class LaudoService extends BaseService<LaudoRow> {
           r.tipo_solicitacao,
           r.numero_documento,
           t.nome AS template_nome,
-          te.nome AS tipo_exame_nome
+          te.nome AS tipo_exame_nome,
+          te.codigo AS tipo_exame_codigo
         FROM laudos l
         JOIN reps r ON r.id = l.rep_id
         LEFT JOIN templates t ON t.id = l.template_id

@@ -26,6 +26,8 @@ import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/Ilustraco
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
+import { EXAM_MENU_REGISTRY } from '@/components/rep/exam-fields';
+import type { MenuSection } from '@/components/rep/exam-fields';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -357,6 +359,7 @@ interface LaudoItem {
   template_nome: string;
   status_rep: string;
   tipo_exame_nome?: string;
+  tipo_exame_codigo?: string;
   nome_envolvido?: string;
   data_requisicao?: string;
   tipo_solicitacao?: string;
@@ -468,6 +471,10 @@ export const LaudosPage: React.FC = () => {
 
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineLaudo, setTimelineLaudo] = useState<LaudoItem | null>(null);
+
+  const [exameMenuStructure, setExameMenuStructure] = useState<MenuSection[] | undefined>(undefined);
+  const [exameCamposEspecificos, setExameCamposEspecificos] = useState<Record<string, unknown> | undefined>(undefined);
+  const [categoriaExameId, setCategoriaExameId] = useState<string>('');
 
   const togglePanel = useCallback(() => {
     setPanelCollapsed(prev => !prev);
@@ -1302,7 +1309,7 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleEditar = (laudo: LaudoItem) => {
+  const handleEditar = async (laudo: LaudoItem) => {
     if (laudo.tipo_criacao === 'wizard') {
       navigate(`/laudos/${laudo.id}/wizard`);
       return;
@@ -1315,6 +1322,27 @@ export const LaudosPage: React.FC = () => {
     setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
+
+    const codigo = laudo.tipo_exame_codigo;
+    if (codigo) {
+      setCategoriaExameId(`cat-exam-${codigo}`);
+      setExameMenuStructure(EXAM_MENU_REGISTRY[codigo]);
+      try {
+        const rRep = await window.ipcAPI.rep.findById(laudo.rep_id);
+        if (rRep.success && rRep.data && rRep.data.campos_especificos) {
+          const parsed = JSON.parse(rRep.data.campos_especificos);
+          setExameCamposEspecificos(parsed.b602 || parsed);
+        } else {
+          setExameCamposEspecificos(undefined);
+        }
+      } catch {
+        setExameCamposEspecificos(undefined);
+      }
+    } else {
+      setCategoriaExameId('');
+      setExameMenuStructure(undefined);
+      setExameCamposEspecificos(undefined);
+    }
   };
 
   const handleVoltar = () => {
@@ -1328,6 +1356,9 @@ export const LaudosPage: React.FC = () => {
     setSecoesColapsadas({});
     setError(null);
     setSuccess(null);
+    setExameMenuStructure(undefined);
+    setExameCamposEspecificos(undefined);
+    setCategoriaExameId('');
     if (previewBlobUrl) {
       URL.revokeObjectURL(previewBlobUrl);
       setPreviewBlobUrl('');
@@ -2152,7 +2183,7 @@ export const LaudosPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                    <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder}>
+                    <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                       <TinyMceEditor
                         editorId="laudo-single-editor"
                         initialValue={singleEditorHtml}
@@ -2202,7 +2233,7 @@ export const LaudosPage: React.FC = () => {
                             onPerguntar={handlePerguntar}
                             onOpenSheet={handleOpenSheet}
                           />
-                          <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder}>
+                          <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                             <div className={isIlustracoes ? 'relative' : ''}>
                               <TinyMceEditor
                                 editorId={`secao-${idx}`}

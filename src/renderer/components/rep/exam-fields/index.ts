@@ -7,6 +7,7 @@ import { numeracaoService } from './services/numeracao.service';
 import { b602Service } from './services/b602.service';
 import type { ExamSection } from './types';
 import type { ExamService } from './services/types';
+import { B602_MENU_STRUCTURE, type MenuSection } from './b602-menu';
 
 export type { ExamSection, ExamSectionProps, REPFormData } from './types';
 export type { ExamService } from './services/types';
@@ -87,6 +88,13 @@ export const EXAM_FIELD_MAP: Record<string, string[]> = {
 export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
   'I-801': numeracaoService,
   'B-602': b602Service,
+};
+
+export { B602_MENU_STRUCTURE };
+export type { MenuSection, MenuSectionItem, MenuEntry, MenuGroup, MenuField } from './b602-menu';
+
+export const EXAM_MENU_REGISTRY: Record<string, MenuSection[]> = {
+  'B-602': B602_MENU_STRUCTURE,
 };
 
 export function getSectionsForExame(codigo: string): ExamSection[] {
