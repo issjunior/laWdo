@@ -435,6 +435,99 @@ span.replaceWith(doc.createRange().createContextualFragment(valor));
 ```
 `createContextualFragment` faz parse do HTML e cria nós DOM reais. Funciona universalmente para qualquer valor de placeholder (texto puro ou HTML), cobrindo tabelas do B-602 e futuros tipos de exame com valores HTML.
 
+#### ✅ Layout das Tabelas B-602 (2026-06-09)
+
+As 4 tabelas do B-602 foram redesenhadas com layout profissional formal e coluna `Item` auto-incremental.
+
+**Arquivo:** `src/renderer/pages/LaudosPage.tsx`
+
+**Funções implementadas:**
+
+| Função | Escopo | Descrição |
+|--------|--------|-----------|
+| `TABLE_STYLES` | Módulo | Objeto com estilos `table`, `title`, `th`, `td`, `item` |
+| `style(obj)` | Módulo | Converte objeto camelCase → string CSS inline |
+| `buildNumberedTable(titulo, headers, rows)` | Módulo | Gera tabelas 2–4 com título + cabeçalho + Item sequencial |
+| `buildDadosInvestigacaoTable(b602)` | Módulo | Gera TABELA 1 com layout customizado de 5 linhas e colspan |
+
+**Estilos unificados:**
+
+| Elemento | Fundo | Texto | Borda |
+|----------|-------|-------|-------|
+| Título da tabela | `#d9d9d9` | `#000` negrito, centralizado | `1px solid #000` |
+| Cabeçalho (`<th>`) | `#e8e8e8` | `#000`, `font-weight:600`, centralizado | `1px solid #000` |
+| Células (`<td>`) | transparente | `#000`, `font-size:12px` | `1px solid #000` |
+| Coluna Item | idem `<td>` | centralizado, `width:50px` | `1px solid #000` |
+
+**Layout de cada tabela:**
+
+**TABELA 1 – DADOS DA INVESTIGAÇÃO** (`buildDadosInvestigacaoTable`):
+```
+┌──────────────────────────────────────────────────────────┐
+│              TABELA 1 – DADOS DA INVESTIGAÇÃO             │  ← colspan=4, #d9d9d9
+├──────────────┬───────────────────────────────────────────┤
+│ Envolvido(s):│ valor (colspan=3)                         │  ← label 25%, negrito
+├──────────────┬────────────────┬──────────────┬───────────┤
+│ Data da Oco: │ valor (25%)    │ Local:       │ valor     │  ← 4 col iguais
+├──────────────┼────────────────┼──────────────┼───────────┤
+│ Boletim de   │ valor (25%)    │ Nº do IP:    │ valor     │
+│ Ocorrência:  │                │              │           │
+├──────────────┴────────────────┬───────────────────────────────┤
+│ Unidade Policial: (colspan=1) │ valor (colspan=3)             │  ← 25%/75%
+└───────────────────────────────┴───────────────────────────────┘
+```
+- 5 linhas fixas, layout com colspan variável por linha
+- Labels em `<td>` com `font-weight:600`, sem `<thead>`
+- Células vazias → `-`
+- Linha 1: título centralizado
+
+**TABELA 2 – MATERIAL ENCAMINHADO** (`buildNumberedTable`):
+```
+┌────┬──────────┬─────┬──────┬─────────────────┬───────────┐
+│               TABELA 2 – MATERIAL ENCAMINHADO             │  ← #d9d9d9
+├────┼──────────┼─────┼──────┼─────────────────┼───────────┤
+│Item│Natureza  │ Qtd │ Tipo │ Dito do Ofício  │Nº do Lacre│  ← #e8e8e8
+├────┼──────────┼─────┼──────┼─────────────────┼───────────┤
+│  1 │ Arma     │ 01  │Pistola│"texto"          │ ABC123    │
+├────┼──────────┼─────┼──────┼─────────────────┼───────────┤
+│  N │ ...      │ ... │ ...  │ ...             │ ...       │  ← dinâmico
+└────┴──────────┴─────┴──────┴─────────────────┴───────────┘
+```
+
+**TABELA 3 – CARTUCHOS** (`buildNumberedTable`):
+```
+┌────┬─────┬─────────┬───────┬────────┬──────────┬───────┬──────────────────┬───────────┐
+│                                  TABELA 3 – CARTUCHOS                                    │
+├────┼─────┼─────────┼───────┼────────┼──────────┼───────┼──────────────────┼───────────┤
+│Item│ Qtd │ Calibre │ Marca │ Origem │ Espoleta │Estojo │ Projétil         │ Observação│
+├────┼─────┼─────────┼───────┼────────┼──────────┼───────┼──────────────────┼───────────┤
+│  1 │ 10  │ 9 mm L  │ CBC   │ Brasil │ Latonada │Laton. │ ETOG – Encamisa..│ Intacto   │
+└────┴─────┴─────────┴───────┴────────┴──────────┴───────┴──────────────────┴───────────┘
+```
+
+**TABELA 4 – ESTOJOS** (`buildNumberedTable`):
+```
+┌────┬─────┬─────────┬───────┬────────┬──────────┬───────┬───────────┐
+│                         TABELA 4 – ESTOJOS                              │
+├────┼─────┼─────────┼───────┼────────┼──────────┼───────┼───────────┤
+│Item│ Qtd │ Calibre │ Marca │ Origem │ Espoleta │Estojo │ Observação│
+├────┼─────┼─────────┼───────┼────────┼──────────┼───────┼───────────┤
+│  1 │ 5   │ .38 SPL │Aguila │Argentina│Niquelada│Niquel.│ Percutido │
+└────┴─────┴─────────┴───────┴────────┴──────────┴───────┴───────────┘
+```
+
+**Correção de ordem `<thead>` (2026-06-09):** O título das TABELAS 2–4 estava fora do `<thead>`, fazendo o navegador renderizá-lo após o cabeçalho. Movido para dentro do `<thead>` como primeira `<tr>`, garantindo a ordem correta: título → cabeçalho → dados.
+
+**Comportamento:**
+- Toggle desligado → array vazio → `buildNumberedTable` retorna `''` → placeholder some do preview
+- Células vazias → `-` (travessão)
+- Coluna Item: numeração sequencial automática (`1`, `2`, `3`...), largura fixa `50px`, centralizada
+- Título e cabeçalho no `<thead>` → repetem no topo se a tabela quebrar entre páginas do PDF
+
+**Ajustes de alinhamento (2026-06-09):**
+- Cabeçalho das TABELAS 2–4: `textAlign: center` — todas as colunas (`Item`, `Natureza`, `Qtd`, etc.) centralizadas
+- TABELA 1, linha 5: `Unidade Policial:` reduzido para 25% de largura (`colspan=1`), nome do solicitante ocupa 75% (`colspan=3`)
+
 ---
 
 ## 8. Checklist de Implementação

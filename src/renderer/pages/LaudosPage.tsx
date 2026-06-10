@@ -59,6 +59,72 @@ function buildFiguresHtml(imagens: Array<{ url: string; id: string; legenda: str
   return imagens.map(img => buildFigureHtml(img.url, img.id, img.legenda)).join('');
 }
 
+const TABLE_STYLES = {
+  table:  { borderCollapse: 'collapse', width: '100%', margin: '8px 0' },
+  title:  { background: '#d9d9d9', color: '#000', fontWeight: 'bold', textAlign: 'center' as const },
+  th:     { border: '1px solid #000', padding: '6px 10px', textAlign: 'center' as const, fontWeight: '600', background: '#e8e8e8', color: '#000', fontSize: '12px' },
+  td:     { border: '1px solid #000', padding: '6px 10px', fontSize: '12px', color: '#000' },
+  item:   { width: '50px', textAlign: 'center' as const },
+} as const;
+
+function style(obj: Record<string, string>): string {
+  return Object.entries(obj).map(([k, v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';');
+}
+
+function buildNumberedTable(titulo: string, headers: string[], rows: string[][]): string {
+  if (rows.length === 0) return '';
+
+  const allHeaders = ['Item', ...headers];
+  const colCount = allHeaders.length;
+  const theadRow = `<tr>${allHeaders.map(h => `<th style="${style(TABLE_STYLES.th)}">${h}</th>`).join('')}</tr>`;
+
+  const tbodyRows = rows.map((row, i) => {
+    const cells = [
+      `<td style="${style({ ...TABLE_STYLES.td, ...TABLE_STYLES.item })};">${i + 1}</td>`,
+      ...row.map(cell => {
+        const val = (cell ?? '').trim() === '' ? '-' : cell;
+        return `<td style="${style(TABLE_STYLES.td)}">${val}</td>`;
+      }),
+    ].join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  const titleRow = `<tr><td colspan="${colCount}" style="${style({ ...TABLE_STYLES.th, ...TABLE_STYLES.title })};border:1px solid #000;padding:6px 10px">${titulo}</td></tr>`;
+
+  return `<table style="${style(TABLE_STYLES.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
+}
+
+function buildDadosInvestigacaoTable(b602: Record<string, unknown>): string {
+  const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean) ?? [];
+  const dataOcorrencia = String(b602.data_ocorrencia || '-');
+  const local = String(b602.local || '-');
+  const numeroBo = String(b602.numero_bo || '-');
+  const numeroIp = String(b602.numero_ip || '-');
+  const solicitanteNome = String(b602.solicitante_nome || '-');
+
+  const s = TABLE_STYLES;
+
+  const titleRow = `<tr><td colspan="4" style="${style({ ...s.th, ...s.title })};border:1px solid #000;padding:6px 10px">TABELA 1 – DADOS DA INVESTIGAÇÃO</td></tr>`;
+
+  const cell = (val: string, w?: string, extra?: string) =>
+    `<td style="${style(s.td)}${w ? ';width:' + w : ''}${extra ? ';' + extra : ''}">${val}</td>`;
+
+  const labelCell = (val: string, w?: string) =>
+    `<td style="${style({ ...s.td, fontWeight: '600' })}${w ? ';width:' + w : ''}">${val}</td>`;
+
+  const envolvidosVal = envolvidos.length > 0 ? envolvidos.join(', ') : '-';
+
+  const rows = [
+    titleRow,
+    `<tr>${labelCell('Envolvido(s):', '25%')}<td colspan="3" style="${style(s.td)}">${envolvidosVal}</td></tr>`,
+    `<tr>${labelCell('Data da Ocorrência:', '25%')}${cell(dataOcorrencia, '25%')}${labelCell('Local:', '25%')}${cell(local, '25%')}</tr>`,
+    `<tr>${labelCell('Boletim de Ocorrência:', '25%')}${cell(numeroBo, '25%')}${labelCell('Nº do IP:', '25%')}${cell(numeroIp, '25%')}</tr>`,
+    `<tr><td colspan="1" style="${style({ ...s.td, fontWeight: '600' })};width:25%">Unidade Policial:</td><td colspan="3" style="${style(s.td)};width:75%">${solicitanteNome}</td></tr>`,
+  ];
+
+  return `<table style="${style(s.table)}">${rows.join('')}</table>`;
+}
+
 interface Placeholder {
   id: string;
   chave: string;
@@ -202,27 +268,12 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
           });
         }
 
-        const buildTable = (headers: string[], rows: string[][]): string => {
-          if (rows.length === 0) return '<p><em>(sem dados)</em></p>';
-          const thead = `<tr>${headers.map(h => `<th style="border:1px solid #ccc;padding:4px 8px;text-align:left;font-weight:600;background:#f5f5f5">${h}</th>`).join('')}</tr>`;
-          const tbody = rows.map(row => `<tr>${row.map(cell => `<td style="border:1px solid #ccc;padding:4px 8px">${cell}</td>`).join('')}</tr>`).join('');
-          return `<table style="border-collapse:collapse;width:100%;margin:8px 0"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
-        };
-
-        const diRows: string[][] = [];
-        if (envolvidos && envolvidos.length > 0) {
-          diRows.push(['Envolvido(s)', envolvidos.filter(Boolean).join(', ')]);
-        }
-        if (b602.data_ocorrencia) diRows.push(['Data da Ocorrência', String(b602.data_ocorrencia)]);
-        if (b602.local) diRows.push(['Local', String(b602.local)]);
-        if (b602.numero_bo) diRows.push(['Nº do BO', String(b602.numero_bo)]);
-        if (b602.numero_ip) diRows.push(['Nº do IP', String(b602.numero_ip)]);
-        if (b602.solicitante_nome) diRows.push(['Solicitante', String(b602.solicitante_nome)]);
-        mapping['b602_tabela_dados_investigacao'] = buildTable(['Campo', 'Valor'], diRows);
+        mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602);
 
         const material = b602.material_enc as Record<string, string>[] | undefined;
         if (material && material.length > 0) {
-          mapping['b602_tabela_material_enc'] = buildTable(
+          mapping['b602_tabela_material_enc'] = buildNumberedTable(
+            'TABELA 2 – MATERIAL ENCAMINHADO',
             ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
             material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || ''])
           );
@@ -237,7 +288,8 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
 
         const cartuchos = b602.cartuchos as Record<string, unknown>[] | undefined;
         if (cartuchos && cartuchos.length > 0) {
-          mapping['b602_tabela_cartuchos'] = buildTable(
+          mapping['b602_tabela_cartuchos'] = buildNumberedTable(
+            'TABELA 3 – CARTUCHOS',
             ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Projétil', 'Observação'],
             cartuchos.map(c => [
               String(c.quantidade || ''),
@@ -264,7 +316,8 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
 
         const estojos = b602.estojos as Record<string, unknown>[] | undefined;
         if (estojos && estojos.length > 0) {
-          mapping['b602_tabela_estojos'] = buildTable(
+          mapping['b602_tabela_estojos'] = buildNumberedTable(
+            'TABELA 4 – ESTOJOS',
             ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Observação'],
             estojos.map(e => [
               String(e.quantidade || ''),
