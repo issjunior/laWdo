@@ -379,6 +379,7 @@ para permitir compartilhamento entre painel inline e IPC do pop-out.
 | **onReorder** | `buildFiguresHtml` + `buildSingleHtmlFromSecoes` + `editor.setContent` | `sincronizarOrdemEditor` → `aplicarFigurasNoEditor('reorder', ..., true)` |
 | **onRefreshHtml** | `scanAndWrapImages` + state sync | Itera todos `secao-{idx}`, `scanAndWrapImages` cada + `setSecoes` |
 | **onInsertAll** | Igual `onInsertImage` mas em lote com `buildFiguresHtml` | `aplicarFigurasNoEditor('insertAll', ...)` |
+| **onReplaceImage** | `replaceLaudoImage` via `execCommand` + `getContent()` + state sync | Itera `secao-{idx}`, busca `data-image-id`, `execCommand` + `atualizarConteudoSecao` |
 | **onSyncToggle** | `setSyncEnabled(enabled)` | (idêntico) |
 | **onScrollToFigure** | Busca `.laudo-figure[data-image-id="..."]` no `laudo-single-editor` | Itera `secao-{idx}` até encontrar |
 | **syncCurrentState** | Envia `extrairFigurasDoEditor()` + `syncEnabled` + `figuraAtivaId` + `tema` via IPC | (idêntico) |
@@ -781,7 +782,7 @@ Clique na miniatura → `onScrollToFigure` → `figure.scrollIntoView({ behavior
 | `processarImagensPuras` | `(raiz: Node) → number` | Varre fragmento, converte `<img>` órfãos. Usada em `paste_postprocess` |
 | `scanEditorForRawImages` | `(editor: any) → number` | Varre `getBody()`, converte via `undoManager.transact`. Usada em `scanAndWrapImages` |
 
-### 11.2 Comandos TinyMCE registrados no `setup` (`TinyMceEditor.tsx:282-329`)
+### 11.2 Comandos TinyMCE registrados no `setup` (`TinyMceEditor.tsx:282-343`)
 
 | Comando | Ação |
 |---|---|
@@ -789,13 +790,64 @@ Clique na miniatura → `onScrollToFigure` → `figure.scrollIntoView({ behavior
 | `insertLaudoImage` | Insere `buildFigureHtml` via `insertContent` |
 | `reindexFiguras` | Renumera `Figura XX` → `Figura 01`, `02`... |
 | `removeLaudoImage` | Remove `<figure>` por `data-image-id` + trailing `<br>` |
-| `scanAndWrapImages` | **Novo** — `scanEditorForRawImages` + `reindexFiguras` |
+| `replaceLaudoImage` | Substitui `src` de figura dummy por imagem real via `editor.dom.setAttrib()` + `undoManager.transact()` |
+| `insertLaudoImageDummy` | Insere placeholder SVG (retângulo escuro + ícone câmera) com `data-dummy="true"` |
+| `scanAndWrapImages` | `scanEditorForRawImages` + `reindexFiguras` |
 
 ### 11.3 `reindexarFiguras` (`src/renderer/lib/figuras.ts`)
 
 Função pura que opera sobre string HTML (não DOM vivo). Usada no save e
 preview. Itera `.laudo-figure` com `DOMParser`, atualiza `figcaption` e
 `img.alt`.
+
+### 11.4 Substituição de imagem dummy — `data-mce-src`
+
+**Problema corrigido (2026-06-10):** O TinyMCE armazena internamente a URL
+da imagem no atributo `data-mce-src`. O comando `replaceLaudoImage` original
+fazia `img.src = novaUrl` (propriedade JS), que **não atualiza** o
+`data-mce-src`. Na serialização (`getContent()`), o TinyMCE usa
+`data-mce-src` como fonte canônica, devolvendo o SVG dummy original mesmo
+após a substituição visual.
+
+**Correção** (`TinyMceEditor.tsx:330`):
+
+```ts
+// Antes (❌ não atualiza data-mce-src):
+(img as HTMLImageElement).src = data.newUrl;
+
+// Depois (✅ atualiza src + data-mce-src via API do TinyMCE):
+editor.dom.setAttrib(img, 'src', data.newUrl);
+```
+
+Adicionalmente, o corpo do comando foi envolvido em
+`editor.undoManager.transact()` para registrar a mudança no histórico de undo
+do editor.
+
+### 11.5 Substituição via painel destacado — user gesture
+
+**Problema corrigido (2026-06-10):** No painel pop-out, `handleReplaceImage`
+enviava apenas `imageId` via IPC para a janela principal, que então chamava
+`input.click()` para abrir o file picker. O Chromium bloqueia abertura
+programática de diálogo de arquivo sem "user gesture" na janela alvo (o
+clique do usuário foi na janela do painel, não na principal).
+
+**Correção** (`IlustracoesPanelWindow.tsx:79` e `LaudosPage.tsx:1180,1253`):
+
+```
+Antes:
+  Painel pop-out  ──IPC──►  sendAction('replaceImage', imageId)
+  LaudosPage                 input.click() → file picker (❌ bloqueado)
+
+Depois:
+  Painel pop-out  input.click() → file picker local (✅ user gesture)
+                  reader.onload → sendAction('replaceImage', imageId, dataUri)
+  LaudosPage      onReplaceImage(imageId, dataUri) → usa dataUri direto
+```
+
+- `onReplaceImage` aceita parâmetro opcional `dataUri?: string`
+- Se `dataUri` fornecido → aplica direto no editor (sem file picker)
+- Se não → comportamento original com file picker (painel inline)
+- IPC handler: `case 'replaceImage': cbs.onReplaceImage(args[0], args[1])`
 
 ## 12. Configurações de init do TinyMCE
 
@@ -891,6 +943,22 @@ plugin `paste`. O `paste_postprocess` pode não ser chamado para imagens
 binárias da clipboard. Por isso o `images_upload_handler` + MutationObserver
 são a combinação mais robusta.
 
+### 14.5 `data-mce-src` — TinyMCE ignora `img.src` direto
+
+TinyMCE mantém um atributo interno `data-mce-src` como fonte canônica da URL
+da imagem. Atribuir `img.src = novaUrl` (propriedade JS) **não** atualiza
+`data-mce-src`. Na serialização (`getContent()` / `setContent()`), o TinyMCE
+usa `data-mce-src`, ignorando o `src`. Solução: usar sempre
+`editor.dom.setAttrib(img, 'src', novaUrl)`, que atualiza ambos.
+
+### 14.6 User gesture e file picker em janelas Electron separadas
+
+O Chromium bloqueia abertura programática de `<input type="file">` via
+`.click()` em janelas que não possuem "transient user activation" (clique,
+tecla, etc.). Se o usuário clicou na janela A, a janela B não pode abrir um
+file picker. Solução: abrir o file picker sempre na janela onde o clique
+ocorreu e transmitir o `dataUri` resultante via IPC para a janela de destino.
+
 ## 15. Checklist de troubleshooting
 
 | Sintoma | Causa provável | Verificar |
@@ -903,5 +971,8 @@ são a combinação mais robusta.
 | Figura inserida mas não visível | Seção ILUSTRAÇÕES colapsada | `secoesColapsadas[idxIlus]` é true? |
 | Pop-out: painel vazio após abrir janela | `syncCurrentState` não chegou | Timeouts de 0/300/700ms em `handlePopOut` |
 | Pop-out: ação (insert/delete) sem efeito | Listener IPC não registrado | `onPanelAction` useEffect com `[panelPoppedOut]` |
+| Pop-out: substituir dummy não funciona | File picker bloqueado por user gesture em janela diferente | `IlustracoesPanelWindow.tsx` deve abrir file picker localmente e enviar `dataUri` via IPC |
+| Dummy substituído mas volta após save/reopen | `img.src =` não atualiza `data-mce-src` do TinyMCE | `replaceLaudoImage` usa `editor.dom.setAttrib(img, 'src', ...)`? |
+| HTML source mostra SVG dummy mesmo após substituição visual | `getContent()` usa `data-mce-src` canônico | DevTools: `<img>` tem `data-mce-src` com SVG antigo? |
 | Legenda editada não persiste | Debounce 600ms interrompido | Digitou e mudou de foco antes do timer? |
 | Scroll-sync não funciona | IntersectionObserver não inicializado | `syncEnabled` é true? Editor está visível? |

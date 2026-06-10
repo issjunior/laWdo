@@ -317,20 +317,22 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
             });
 
             editor.addCommand('replaceLaudoImage', (_ui: any, data: { imageId?: string; figureElement?: HTMLElement; newUrl: string }) => {
-              const body = editor.getBody();
-              let figure: HTMLElement | null = null;
-              if (data.figureElement) {
-                figure = data.figureElement;
-              } else if (data.imageId) {
-                figure = body.querySelector(`.laudo-figure[data-image-id="${data.imageId}"]`);
-              }
-              if (!figure) return;
-              const img = figure.querySelector('img');
-              if (img) {
-                (img as HTMLImageElement).src = data.newUrl;
-              }
-              figure.removeAttribute('data-dummy');
-              figure.style.cursor = '';
+              editor.undoManager.transact(() => {
+                const body = editor.getBody();
+                let figure: HTMLElement | null = null;
+                if (data.figureElement) {
+                  figure = data.figureElement;
+                } else if (data.imageId) {
+                  figure = body.querySelector(`.laudo-figure[data-image-id="${data.imageId}"]`);
+                }
+                if (!figure) return;
+                const img = figure.querySelector('img');
+                if (img) {
+                  editor.dom.setAttrib(img, 'src', data.newUrl);
+                }
+                figure.removeAttribute('data-dummy');
+                figure.style.cursor = '';
+              });
             });
 
             editor.addCommand('insertLaudoImageDummy', () => {

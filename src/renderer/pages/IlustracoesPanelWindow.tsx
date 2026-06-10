@@ -77,8 +77,20 @@ const IlustracoesPanelWindow: React.FC = () => {
   }, [sendAction]);
 
   const handleReplaceImage = useCallback((imageId: string) => {
-    sendAction('replaceImage', imageId);
-    toast.success('Substituição enviada ao editor');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        sendAction('replaceImage', imageId, reader.result as string);
+        toast.success('Imagem placeholder substituída');
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
   }, [sendAction]);
 
   const handleVoltarAoEditor = () => {

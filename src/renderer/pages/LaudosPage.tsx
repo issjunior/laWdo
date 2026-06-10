@@ -912,7 +912,7 @@ export const LaudosPage: React.FC = () => {
     onInsertAll: (imagens: ImagemLaudo[]) => void;
     onSyncToggle: (enabled: boolean) => void;
     onScrollToFigure: (imageId: string) => void;
-    onReplaceImage: (imageId: string) => void;
+    onReplaceImage: (imageId: string, dataUri?: string) => void;
     syncCurrentState: () => void;
   }>({
     onInsertImage: () => {},
@@ -1177,7 +1177,37 @@ export const LaudosPage: React.FC = () => {
     },
     onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
     onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
-    onReplaceImage: (imageId) => {
+    onReplaceImage: (imageId, dataUri?) => {
+      const executarReplace = (dataUrl: string) => {
+        if (editorMode === 'single') {
+          const editor = (window as any).tinymce?.get('laudo-single-editor');
+          if (editor) {
+            editor.execCommand('replaceLaudoImage', false, { imageId, newUrl: dataUrl });
+            const novoHtml = editor.getContent();
+            setSingleEditorHtml(novoHtml);
+            setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
+          }
+        } else {
+          for (let idx = 0; idx < secoes.length; idx++) {
+            const editor = (window as any).tinymce?.get(`secao-${idx}`);
+            if (editor) {
+              const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
+              if (figure) {
+                editor.execCommand('replaceLaudoImage', false, { imageId, newUrl: dataUrl });
+                atualizarConteudoSecao(idx, editor.getContent());
+                break;
+              }
+            }
+          }
+        }
+        toast.success('Imagem placeholder substituída');
+      };
+
+      if (dataUri) {
+        executarReplace(dataUri);
+        return;
+      }
+
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
@@ -1185,31 +1215,7 @@ export const LaudosPage: React.FC = () => {
         const file = input.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => {
-          const dataUri = reader.result as string;
-          if (editorMode === 'single') {
-            const editor = (window as any).tinymce?.get('laudo-single-editor');
-            if (editor) {
-              editor.execCommand('replaceLaudoImage', false, { imageId, newUrl: dataUri });
-              const novoHtml = editor.getContent();
-              setSingleEditorHtml(novoHtml);
-              setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
-            }
-          } else {
-            for (let idx = 0; idx < secoes.length; idx++) {
-              const editor = (window as any).tinymce?.get(`secao-${idx}`);
-              if (editor) {
-                const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
-                if (figure) {
-                  editor.execCommand('replaceLaudoImage', false, { imageId, newUrl: dataUri });
-                  atualizarConteudoSecao(idx, editor.getContent());
-                  break;
-                }
-              }
-            }
-          }
-          toast.success('Imagem placeholder substituída');
-        };
+        reader.onload = () => executarReplace(reader.result as string);
         reader.readAsDataURL(file);
       };
       input.click();
@@ -1250,7 +1256,7 @@ export const LaudosPage: React.FC = () => {
         case 'insertAll': cbs.onInsertAll(args[0]); break;
         case 'syncToggle': cbs.onSyncToggle(args[0]); break;
         case 'scrollToFigure': cbs.onScrollToFigure(args[0]); break;
-        case 'replaceImage': cbs.onReplaceImage(args[0]); break;
+        case 'replaceImage': cbs.onReplaceImage(args[0], args[1]); break;
         case 'ready': cbs.syncCurrentState(); break;
         case 'popIn':
           setPanelPoppedOut(false);
