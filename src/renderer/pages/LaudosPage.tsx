@@ -499,6 +499,9 @@ export const LaudosPage: React.FC = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [carregandoPreview, setCarregandoPreview] = useState(false);
+  const [listaPreviewOpen, setListaPreviewOpen] = useState(false);
+  const [listaPreviewBlobUrl, setListaPreviewBlobUrl] = useState('');
+  const [listaPreviewLoading, setListaPreviewLoading] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
 
@@ -1409,6 +1412,70 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
+  const handleListaPreview = async (laudo: LaudoItem) => {
+    try {
+      setListaPreviewLoading(true);
+      setError(null);
+
+      const rRep = await window.ipcAPI.rep.findById(laudo.rep_id);
+      if (!rRep.success || !rRep.data) {
+        setError('Erro ao carregar dados da REP para o preview');
+        return;
+      }
+      const repData = rRep.data;
+
+      let solicitanteNome = '';
+      let tipoExameNome = '';
+      let tipoExameCodigo = '';
+      if (repData.solicitante_id) {
+        try {
+          const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
+          if (rSol.success && rSol.data) solicitanteNome = rSol.data.nome || '';
+        } catch {}
+      }
+      if (repData.tipo_exame_id) {
+        try {
+          const rTipo = await window.ipcAPI.tipoExame.findById(repData.tipo_exame_id);
+          if (rTipo.success && rTipo.data) {
+            tipoExameNome = rTipo.data.nome || '';
+            tipoExameCodigo = rTipo.data.codigo || '';
+          }
+        } catch {}
+      }
+
+      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+        numeroRepFallback: repData.numero || '',
+      });
+
+      let html = laudo.conteudo || '<p>&nbsp;</p>';
+      if (cabecalhoPrimeiraPagina) {
+        html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
+      }
+      html = reindexarFiguras(html);
+      html = aplicarPlaceholders(html, repData, { solicitanteNome, tipoExameNome, tipoExameCodigo });
+
+      const margins = await getMargens();
+      const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined);
+
+      if (result.success && result.data) {
+        const byteChars = atob(result.data);
+        const byteNums = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+        if (listaPreviewBlobUrl) URL.revokeObjectURL(listaPreviewBlobUrl);
+        const url = URL.createObjectURL(blob);
+        setListaPreviewBlobUrl(url);
+        setListaPreviewOpen(true);
+      } else {
+        setError(result.error || 'Erro ao gerar PDF do laudo');
+      }
+    } catch (e: any) {
+      setError('Erro ao gerar preview: ' + e.message);
+    } finally {
+      setListaPreviewLoading(false);
+    }
+  };
+
   const handleEditar = async (laudo: LaudoItem) => {
     if (laudo.tipo_criacao === 'wizard') {
       navigate(`/laudos/${laudo.id}/wizard`);
@@ -1854,11 +1921,11 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const botoesAcaoStatus = useMemo(() => [
-    { label: 'Entregar',  value: 'Entregue',     icon: Send,        enabled: (s: string) => s === 'Concluído',      disabledHint: 'Disponível apenas para laudos Concluídos' },
-    { label: 'Concluir',  value: 'Concluído',    icon: CheckCircle, enabled: (s: string) => s === 'Em andamento',   disabledHint: 'Disponível apenas para laudos Em andamento' },
-    { label: 'Preencher', value: 'Em andamento', icon: null, enabled: () => true },
-  ], []);
+  const getProximoStatus = (status: string): { label: string; value: string; icon: typeof CheckCircle } | null => {
+    if (status === 'Em andamento') return { label: 'Concluir', value: 'Concluído', icon: CheckCircle };
+    if (status === 'Concluído') return { label: 'Entregar', value: 'Entregue', icon: Send };
+    return null;
+  };
 
   const laudoColumns = useMemo<ColumnDef<LaudoItem>[]>(() => [
     {
@@ -1943,60 +2010,61 @@ export const LaudosPage: React.FC = () => {
       cell: ({ row }) => {
         const laudo = row.original;
         const isReadonly = laudo.status === 'Concluído' || laudo.status === 'Entregue';
+        const statusBtn = getProximoStatus(laudo.status);
         return (
           <div className="flex justify-end gap-1">
-            {/* Preencher via Wizard — disponível para qualquer laudo */}
+            {/* Abrir editor */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm"
-                  onClick={() => navigate(`/laudos/${laudo.id}/wizard`)}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    if (isReadonly) {
+                      await handleUpdateStatus(laudo, 'Em andamento');
+                      return;
+                    }
+                    handleEditar(laudo);
+                  }}
                 >
-                  <Wand2 size={14} className="text-violet-500" />
+                  {isReadonly ? <RotateCcw size={14} /> : <Edit size={14} />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Preencher via Wizard</TooltipContent>
+              <TooltipContent>{isReadonly ? 'Reabrir para edição' : 'Abrir editor'}</TooltipContent>
             </Tooltip>
 
-            {botoesAcaoStatus.map(op => {
-              const isPreencher = op.value === 'Em andamento';
-              const habilitado = isPreencher || op.enabled(laudo.status);
+            {/* Próximo status (contextual) */}
+            {statusBtn && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleUpdateStatus(laudo, statusBtn.value)}
+                  >
+                    <statusBtn.icon size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{statusBtn.label}</TooltipContent>
+              </Tooltip>
+            )}
 
-              let icon;
-              let tooltip;
-              let onClick;
-              if (isPreencher) {
-                icon = isReadonly ? <RotateCcw size={14} /> : <Edit size={14} />;
-                tooltip = isReadonly
-                  ? 'Reabrir para edição — status voltará para Em andamento'
-                  : 'Abrir editor';
-                onClick = async () => {
-                  if (isReadonly) await handleUpdateStatus(laudo, 'Em andamento');
-                  handleEditar(laudo);
-                };
-              } else {
-                const IconComponent = op.icon!;
-                icon = <IconComponent size={14} />;
-                tooltip = habilitado ? op.label : op.disabledHint;
-                onClick = () => handleUpdateStatus(laudo, op.value!);
-              }
+            {/* Visualizar PDF */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleListaPreview(laudo)}
+                  disabled={listaPreviewLoading}
+                >
+                  <Eye size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Visualizar PDF</TooltipContent>
+            </Tooltip>
 
-              return (
-                <Tooltip key={op.label}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={!habilitado}
-                      onClick={onClick}
-                      className={!habilitado ? 'opacity-30' : ''}
-                    >
-                      {icon}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{tooltip}</TooltipContent>
-                </Tooltip>
-              );
-            })}
+            {/* Histórico */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -2009,6 +2077,22 @@ export const LaudosPage: React.FC = () => {
               </TooltipTrigger>
               <TooltipContent>Histórico</TooltipContent>
             </Tooltip>
+
+            {/* Wizard */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(`/laudos/${laudo.id}/wizard`)}
+                >
+                  <Wand2 size={14} className="text-violet-500" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Preencher via Wizard</TooltipContent>
+            </Tooltip>
+
+            {/* Excluir */}
             <Button
               variant="ghost"
               size="sm"
@@ -2022,7 +2106,7 @@ export const LaudosPage: React.FC = () => {
         );
       },
     },
-  ], [handleEditar, handleUpdateStatus, botoesAcaoStatus]);
+  ], [handleEditar, handleUpdateStatus, handleListaPreview, listaPreviewLoading]);
 
   // Modo editor com múltiplas seções
   if (editando) {
@@ -2589,6 +2673,40 @@ export const LaudosPage: React.FC = () => {
           repNumero={timelineLaudo.rep_numero}
         />
       )}
+
+      {/* Preview PDF da lista */}
+      <Dialog open={listaPreviewOpen} onOpenChange={(open) => {
+        if (!open && listaPreviewBlobUrl) {
+          URL.revokeObjectURL(listaPreviewBlobUrl);
+          setListaPreviewBlobUrl('');
+        }
+        setListaPreviewOpen(open);
+      }}>
+        <DialogContent className="max-w-[90vw] w-[1000px] h-[95vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Pré-visualização do Laudo (PDF)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 bg-slate-100 dark:bg-slate-800">
+            {listaPreviewLoading ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Gerando PDF...
+              </div>
+            ) : (
+              <iframe
+                src={listaPreviewBlobUrl}
+                className="w-full h-full border-0"
+                title="Preview PDF"
+              />
+            )}
+          </div>
+          <div className="p-4 border-t flex justify-end gap-2 bg-background">
+            <Button variant="outline" onClick={() => setListaPreviewOpen(false)}>Fechar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

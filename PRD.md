@@ -45,8 +45,10 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 ### FR5: Gestão de Ilustrações
 
 - **Inserção de Imagens:** Upload de fotos locais para o diretório do laudo.
+- **Placeholders de Imagem:** Inserção de figuras dummy (SVG placeholder) substituíveis por imagens reais via clique direto no editor ou via painel de ilustrações.
 - **Legendas Automáticas:** Sistema de numeração sequencial (Figura 1:, Figura 2:) com legendas.
 - **Seção de Ilustrações:** Geração automática de uma seção Ilustração se caso o usuario optar pelo uso de inserçao automática de figuras no laudo.
+- **Painel de Ilustrações:** Modo híbrido inline/pop-out — o painel pode ser usado embutido no editor ou destacado em janela separada (ideal para 2+ monitores) com sincronização de estado via IPC do Electron.
 
 ### FR6: Sistema de Placeholders
 
@@ -114,7 +116,8 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Autenticação e Perfil:** Login local com senha criptografada, setup de primeiro acesso (Nome, Matrícula, Lotação), gerenciamento de perfil com avatar.
 - **Cadastros Estruturais:** CRUD completo de Solicitantes, Tipos de Exame e Templates de Laudo com formulários reutilizáveis em quick-create dialogs na tela de REPs.
 - **Placeholders:** Layout 2-painéis com árvore hierárquica de categorias (parent_id, drag-and-drop, cores e ícones) e DataTable de placeholders. Placeholders de sistema fixos no cabeçalho do laudo. Resolução automática antes do envio à IA.
-- **Editor de Laudos:** TinyMCE independente por seção com menu de contexto para inserção de placeholders. Upload de imagens locais com protocolo `laudo-img://` e numeração automática de figuras. Snapshot das últimas 3 versões salvas.
+- **Editor de Laudos:** TinyMCE independente por seção com menu de contexto para inserção de placeholders. Upload de imagens locais com protocolo `laudo-img://` e numeração automática de figuras. Substituição de figuras dummy por imagens reais com atualização correta de `data-mce-src` via API do TinyMCE. Snapshot das últimas 3 versões salvas.
+- **Painel de Ilustrações:** Modo híbrido inline/pop-out com sincronização bidirecional via IPC. Substituição de imagens com file picker local na janela pop-out e transmissão de data URI. Scroll-sync com IntersectionObserver, reordenação drag-and-drop, edição de legendas e lightbox.
 - **Wizard de Peças:** Modo alternativo de criação de laudos via árvore de perguntas em cascata. Editor visual de wizard (WizardEditorPage), banco de peças com categorias hierárquicas (PecasPage, CategoriasPecasPage), motor de regras condicionais, WizardLaudoPage com stepper e preview em tempo real.
 - **Assistente IA:** Suporte a Groq e Google Gemini como provedores com seleção na ModelosIAPage. Revisão gramatical, adequação de tom técnico, descrição de imagens (Vision via Llama 4 Scout e Gemini 2.5 Flash/Pro) com conversão Base64 no backend, chat IA e inserção no cursor. Chaves criptografadas no SQLite (nunca expostas ao renderer).
 - **Timeline Dual-Track:** Linha do tempo de trilha dupla (REP + Laudo) com eixo cronológico, conexões direcionais, trilha fantasma e acesso via tabelas de REPs/Laudos e aba dedicada nos Logs.
@@ -122,4 +125,4 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Backup/Restauração:** Exportação/importação ZIP com banco + imagens, exclusão automática de auditoria e chaves de IA dos backups, agendamento de backup automático com periodicidade configurável.
 - **Configuração de Impressão:** Páginas de Cabeçalho PDF (texto, imagem brasão/logo, alinhamento) e Margens (superior, inferior, esquerda, direita).
 - **Dashboard:** Indicadores de REPs pendentes/em andamento/concluídas, produtividade e tabelas com colunas fixas (sticky) para referência.
-- **Em desenvolvimento:** Geração de PDF final persistente, exportação DOCX/ODT, apêndice automático de figuras.
+- **Em desenvolvimento:** Geração de PDF final persistente, exportação DOCX/ODT, apêndice automático de figuras, sincronização com Google Drive.

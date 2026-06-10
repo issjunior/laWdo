@@ -44,6 +44,158 @@ import { useRepStepper } from '@/components/rep/useRepStepper';
 import { Stepper } from '@/components/ui/stepper';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import type { CreateTipoExameInput } from '@/lib/validators';
+import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { getMargens } from '@/lib/margens';
+import { toast } from 'sonner';
+
+/* ─── HELPERS para PDF da REP ─── */
+
+const REP_TABLE_STYLES = {
+  table:  'border-collapse:collapse;width:100%;margin:12px 0',
+  title:  'background:#d9d9d9;color:#000;font-weight:bold;text-align:center',
+  th:     'border:1px solid #000;padding:6px 10px;text-align:center;font-weight:600;background:#e8e8e8;color:#000;font-size:12px',
+  td:     'border:1px solid #000;padding:6px 10px;font-size:12px;color:#000',
+  label:  'border:1px solid #000;padding:6px 10px;font-weight:600;font-size:12px',
+};
+
+function buildRepLabelValue(label: string, value: string, labelW?: string): string {
+  const lw = labelW ? `;width:${labelW}` : '';
+  return `<tr><td style="${REP_TABLE_STYLES.label}${lw}">${label}</td><td style="${REP_TABLE_STYLES.td}">${value}</td></tr>`;
+}
+
+function buildRepTwoCol(a: string, b: string, c: string, d: string): string {
+  return `<tr><td style="${REP_TABLE_STYLES.label};width:25%">${a}</td><td style="${REP_TABLE_STYLES.td};width:25%">${b}</td><td style="${REP_TABLE_STYLES.label};width:25%">${c}</td><td style="${REP_TABLE_STYLES.td};width:25%">${d}</td></tr>`;
+}
+
+function buildRepTableTitle(title: string, colspan: number): string {
+  return `<tr><td colspan="${colspan}" style="${REP_TABLE_STYLES.title};border:1px solid #000;padding:6px 10px">${title}</td></tr>`;
+}
+
+function buildRepNumberedTable(titulo: string, headers: string[], rows: string[][]): string {
+  if (rows.length === 0) return '';
+  const allHeaders = ['Item', ...headers];
+  const thead = `<tr>${allHeaders.map(h => `<th style="${REP_TABLE_STYLES.th}">${h}</th>`).join('')}</tr>`;
+  const tbody = rows.map((row, i) => {
+    const cells = [`<td style="${REP_TABLE_STYLES.td};width:50px;text-align:center">${i + 1}</td>`,
+      ...row.map(c => `<td style="${REP_TABLE_STYLES.td}">${(c ?? '').trim() || '-'}</td>`)].join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+  const titleRow = buildRepTableTitle(titulo, allHeaders.length);
+  return `<table style="${REP_TABLE_STYLES.table}"><thead>${titleRow}${thead}</thead><tbody>${tbody}</tbody></table>`;
+}
+
+function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string): string {
+  const s = (v: any): string => (v != null && v !== '') ? String(v) : '-';
+  const statusMap: Record<string, string> = { 'Pendente': 'Pendente', 'Em Andamento': 'Em Andamento', 'Concluído': 'Concluído' };
+  const statusLabel = statusMap[rep.status] || rep.status || 'Pendente';
+
+  let html = `<h2 style="font-size:18px;margin-bottom:16px">REQUISIÇÃO DE EXAME PERICIAL — REP Nº ${s(rep.numero)}</h2>`;
+
+  // TABELA 1 — DADOS DA SOLICITAÇÃO
+  html += `<table style="${REP_TABLE_STYLES.table}">`;
+  html += buildRepTableTitle('DADOS DA SOLICITAÇÃO', 4);
+  html += buildRepTwoCol('Nº REP', s(rep.numero), 'Data de Recebimento', formatarDataBR(rep.data_requisicao));
+  html += buildRepTwoCol('Solicitante', solicitanteNome || s(rep.solicitante_id), 'Tipo de Solicitação', s(rep.tipo_solicitacao));
+  html += buildRepTwoCol('Nº da Solicitação', s(rep.numero_documento), 'Data do Documento', formatarDataBR(rep.data_documento));
+  html += buildRepTwoCol('Autoridade Solicitante', s(rep.autoridade_solicitante), 'Tipo de Exame', tipoExameNome || s(rep.tipo_exame_id));
+  html += buildRepTwoCol('Local do Fato', s(rep.local_fato), 'Status', statusLabel);
+  html += `</table>`;
+
+  // TABELA 2 — TRAMITAÇÃO (se tiver alguma data)
+  if (rep.data_acionamento || rep.data_chegada || rep.data_saida) {
+    html += `<table style="${REP_TABLE_STYLES.table}">`;
+    html += buildRepTableTitle('TRAMITAÇÃO', 4);
+    html += buildRepTwoCol('Acionamento', formatarDataHora(rep.data_acionamento), 'Chegada', formatarDataHora(rep.data_chegada));
+    html += buildRepTwoCol('Saída', formatarDataHora(rep.data_saida), '', '');
+    html += `</table>`;
+  }
+
+  // CAMPOS ESPECÍFICOS
+  if (rep.campos_especificos) {
+    try {
+      const ce = JSON.parse(rep.campos_especificos);
+
+      // Veículo
+      const veic = ce.numeracao ?? ce;
+      const temVeic = veic.veiculo || veic.placa || veic.chassi || veic.motor;
+      if (temVeic) {
+        html += `<table style="${REP_TABLE_STYLES.table}">`;
+        html += buildRepTableTitle('DADOS DO VEÍCULO', 4);
+        html += buildRepTwoCol('Veículo', s(veic.veiculo), 'Placa', s(veic.placa));
+        html += buildRepTwoCol('Fabricação/Modelo', s(veic.fabricacao_modelo), 'Cor', s(veic.cor));
+        html += buildRepTwoCol('Conservação', s(veic.conservacao), '', '');
+        html += buildRepTwoCol('Chassi', s(veic.chassi), 'Chassi Revelado', s(veic.chassi_revelado));
+        html += buildRepTwoCol('Motor', s(veic.motor), 'Motor Revelado', s(veic.motor_revelado));
+        html += `</table>`;
+      }
+
+      // B-602
+      const b602 = ce.b602;
+      if (b602) {
+        const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean);
+        if (envolvidos?.length) {
+          let envolvidosHtml = `<table style="${REP_TABLE_STYLES.table}">`;
+          envolvidosHtml += buildRepTableTitle('ENVOLVIDOS', 2);
+          envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Envolvido(s)</td><td style="${REP_TABLE_STYLES.td}">${envolvidos.join(', ')}</td></tr>`;
+          if (b602.data_ocorrencia || b602.local || b602.numero_bo || b602.numero_ip || b602.solicitante_nome) {
+            envolvidosHtml += buildRepTwoCol('Data Ocorrência', s(b602.data_ocorrencia), 'Local', s(b602.local));
+            envolvidosHtml += buildRepTwoCol('Nº BO', s(b602.numero_bo), 'Nº IP', s(b602.numero_ip));
+            envolvidosHtml += buildRepLabelValue('Unidade Policial', s(b602.solicitante_nome), '25%');
+          }
+          envolvidosHtml += `</table>`;
+          html += envolvidosHtml;
+        }
+
+        const material = b602.material_enc as Record<string, string>[] | undefined;
+        if (material?.length) {
+          html += buildRepNumberedTable('MATERIAL ENCAMINHADO',
+            ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
+            material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || '']));
+        }
+
+        const cartuchos = b602.cartuchos as Record<string, unknown>[] | undefined;
+        if (cartuchos?.length) {
+          html += buildRepNumberedTable('CARTUCHOS',
+            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Projétil', 'Observação'],
+            cartuchos.map(c => [String(c.quantidade || ''), String(c.calibre || ''), String(c.marca || ''),
+              String(c.origem || ''), String(c.espoleta || ''), String(c.estojo || ''),
+              String(c.projetil || ''), Array.isArray(c.observacao) ? (c.observacao as string[]).join(', ') : String(c.observacao || '')]));
+        }
+
+        const estojos = b602.estojos as Record<string, unknown>[] | undefined;
+        if (estojos?.length) {
+          html += buildRepNumberedTable('ESTOJOS',
+            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Observação'],
+            estojos.map(e => [String(e.quantidade || ''), String(e.calibre || ''), String(e.marca || ''),
+              String(e.origem || ''), String(e.espoleta || ''), String(e.estojo || ''),
+              Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : String(e.observacao || '')]));
+        }
+      }
+
+      // Local do fato detalhado
+      if (ce.local_fato && ce.local_fato !== rep.local_fato) {
+        html += `<table style="${REP_TABLE_STYLES.table}">`;
+        html += buildRepTableTitle('LOCAL DO FATO', 2);
+        html += buildRepLabelValue('Descrição', s(ce.local_fato));
+        if (ce.latitude != null || ce.longitude != null) {
+          html += buildRepTwoCol('Latitude', s(ce.latitude), 'Longitude', s(ce.longitude));
+        }
+        html += `</table>`;
+      }
+    } catch {}
+  }
+
+  // OBSERVAÇÕES
+  if (rep.observacoes) {
+    html += `<table style="${REP_TABLE_STYLES.table}">`;
+    html += buildRepTableTitle('OBSERVAÇÕES', 1);
+    html += `<tr><td style="${REP_TABLE_STYLES.td}">${rep.observacoes}</td></tr>`;
+    html += `</table>`;
+  }
+
+  html += `<p style="text-align:right;font-size:11px;color:#888;margin-top:24px">Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>`;
+  return html;
+}
 
 const emptyForm = (): REPFormData => ({
   numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0],
@@ -209,6 +361,17 @@ function formatarDataBR(iso: string | undefined): string {
   }
 }
 
+function formatarDataHora(iso: string | undefined): string {
+  if (!iso) return '-';
+  try {
+    const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
+    if (isNaN(data.getTime())) return iso;
+    return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
 export const REPsPage: React.FC = () => {
   const [reps, setReps] = useState<REP[]>([]);
   const [loading, setLoading] = useState(true);
@@ -332,6 +495,11 @@ export const REPsPage: React.FC = () => {
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineRep, setTimelineRep] = useState<REP | null>(null);
   const [deleteDialogRep, setDeleteDialogRep] = useState<REP | null>(null);
+
+  // Estados para Preview PDF da REP
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Quick-create dialog states
   const [solicitanteQCOpen, setSolicitanteQCOpen] = useState(false);
@@ -574,6 +742,60 @@ export const REPsPage: React.FC = () => {
     } catch (e: any) {
       setError('Erro ao excluir REP');
       setDeleteDialogOpen(false);
+    }
+  };
+
+  const handlePreviewRep = async (rep: REP) => {
+    try {
+      setPreviewLoading(true);
+      setError(null);
+
+      const rRep = await window.ipcAPI.rep.findById(rep.id);
+      if (!rRep.success || !rRep.data) {
+        setError('Erro ao carregar dados da REP');
+        return;
+      }
+      const repData = rRep.data;
+
+      let solicitanteNome = '';
+      let tipoExameNome = '';
+      if (repData.solicitante_id) {
+        const s = solicitantes.find(s => s.id === repData.solicitante_id);
+        if (s) solicitanteNome = s.nome;
+      }
+      if (repData.tipo_exame_id) {
+        const t = tiposExame.find(t => t.id === repData.tipo_exame_id);
+        if (t) tipoExameNome = t.nome;
+      }
+
+      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+        numeroRepFallback: repData.numero || '',
+      });
+
+      let html = buildRepHtml(repData, solicitanteNome, tipoExameNome);
+      if (cabecalhoPrimeiraPagina) {
+        html = `<div style="padding-bottom:16px;margin-bottom:32px">${cabecalhoPrimeiraPagina}</div>${html}`;
+      }
+
+      const margins = await getMargens();
+      const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined);
+
+      if (result.success && result.data) {
+        const byteChars = atob(result.data);
+        const byteNums = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+        if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+        const url = URL.createObjectURL(blob);
+        setPreviewBlobUrl(url);
+        setPreviewOpen(true);
+      } else {
+        setError(result.error || 'Erro ao gerar PDF da REP');
+      }
+    } catch (e: any) {
+      setError('Erro ao gerar preview: ' + e.message);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -823,6 +1045,14 @@ export const REPsPage: React.FC = () => {
                 <FileText size={14} />
               </Button>
             )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => handlePreviewRep(rep)} disabled={previewLoading} title="Visualizar PDF">
+                  <Eye size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Visualizar PDF</TooltipContent>
+            </Tooltip>
             <Button variant="ghost" size="sm" onClick={() => { setTimelineRep(rep); setTimelineOpen(true); }} title="Histórico">
               <Clock size={14} />
             </Button>
@@ -836,7 +1066,7 @@ export const REPsPage: React.FC = () => {
         );
       },
     },
-  ], [handleEditar, handleDelete, repsComLaudo, handleCriarLaudo]);
+  ], [handleEditar, handleDelete, repsComLaudo, handleCriarLaudo, handlePreviewRep, previewLoading]);
 
   // Tabela sem form
   if (!showForm) {
@@ -974,6 +1204,40 @@ export const REPsPage: React.FC = () => {
           repNumero={timelineRep.numero}
         />
       )}
+
+      {/* Preview PDF da REP */}
+      <Dialog open={previewOpen} onOpenChange={(open) => {
+        if (!open && previewBlobUrl) {
+          URL.revokeObjectURL(previewBlobUrl);
+          setPreviewBlobUrl('');
+        }
+        setPreviewOpen(open);
+      }}>
+        <DialogContent className="max-w-[90vw] w-[1000px] h-[95vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Pré-visualização da REP (PDF)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 bg-slate-100 dark:bg-slate-800">
+            {previewLoading ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Gerando PDF...
+              </div>
+            ) : (
+              <iframe
+                src={previewBlobUrl}
+                className="w-full h-full border-0"
+                title="Preview PDF"
+              />
+            )}
+          </div>
+          <div className="p-4 border-t flex justify-end gap-2 bg-background">
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>Fechar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       </div>
       </TooltipProvider>
     );
