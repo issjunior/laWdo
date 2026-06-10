@@ -21,6 +21,8 @@ import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
+import { EXAM_MENU_REGISTRY } from '@/components/rep/exam-fields';
+import type { MenuSection } from '@/components/rep/exam-fields';
 
 interface TemplateItem {
   id: string;
@@ -99,7 +101,7 @@ export const TemplatesPage: React.FC = () => {
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
   const [secoesDb, setSecoesDb] = useState<SecaoItem[]>([]);
-  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('multi');
+  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
@@ -158,6 +160,18 @@ export const TemplatesPage: React.FC = () => {
   }, []);
 
   useEffect(() => { carregarTemplates(); carregarTiposExame(); carregarPlaceholders(); }, []);
+
+  const categoriaExameId = useMemo(() => {
+    if (!templateForm.tipo_exame_id) return '';
+    const codigo = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.codigo;
+    return codigo ? `cat-exam-${codigo}` : '';
+  }, [templateForm.tipo_exame_id, tiposExame]);
+
+  const exameMenuStructure = useMemo(() => {
+    if (!categoriaExameId) return undefined;
+    const codigo = categoriaExameId.replace('cat-exam-', '');
+    return EXAM_MENU_REGISTRY[codigo];
+  }, [categoriaExameId]);
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoForm[]) => {
     if (secoesFonte.length === 0) {
@@ -255,7 +269,7 @@ export const TemplatesPage: React.FC = () => {
     setTemplateForm(emptyTemplateForm());
     setSecoes([emptySecaoForm()]);
     setSecoesDb([]);
-    setEditorMode('multi');
+    setEditorMode('single');
     setSingleEditorHtml('');
     setErrors({});
     setEditMode(true);
@@ -282,7 +296,7 @@ export const TemplatesPage: React.FC = () => {
       setSecoes([emptySecaoForm()]);
       setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
     }
-    setEditorMode('multi');
+    setEditorMode('single');
     setEditMode(true);
   };
 
@@ -352,7 +366,7 @@ export const TemplatesPage: React.FC = () => {
         setSecoes([emptySecaoForm()]);
         setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
       }
-      setEditorMode('multi');
+      setEditorMode('single');
       setEditMode(true);
     } catch (e: any) {
       toast.error('Erro ao clonar template');
@@ -750,7 +764,10 @@ export const TemplatesPage: React.FC = () => {
               onClick={() => setShowImportDialog(true)}
               className="flex items-center gap-2"
             >
-              <Upload size={16} /> Importar Documento
+              <Upload size={16} /> Importar Template
+            </Button>
+            <Button variant="outline" onClick={handleNovo} className="flex items-center gap-2">
+              <Plus size={16} /> Novo Template
             </Button>
           </div>
         </div>
@@ -1049,15 +1066,14 @@ export const TemplatesPage: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           {editorMode === 'single' ? (
-            <>
-              <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-                Estrutura por seções preservada automaticamente. Para adicionar/remover seções, volte ao modo multi-editor.
-              </div>
-              <PlaceholderContextMenu
+            <PlaceholderContextMenu
                 editorId="template-single-editor"
                 categorias={categorias}
                 placeholders={placeholders}
                 onInsertPlaceholder={inserirPlaceholder}
+                exameMenuStructure={exameMenuStructure}
+                exameCamposEspecificos={undefined}
+                categoriaExameId={categoriaExameId}
               >
                   <TinyMceEditor
                     editorId="template-single-editor"
@@ -1069,7 +1085,6 @@ export const TemplatesPage: React.FC = () => {
                     theme={editorTheme}
                   />
               </PlaceholderContextMenu>
-            </>
           ) : secoes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhuma seção. Clique em "Adicionar Seção" para começar.
@@ -1101,6 +1116,9 @@ export const TemplatesPage: React.FC = () => {
                   categorias={categorias}
                   placeholders={placeholders}
                   onInsertPlaceholder={inserirPlaceholder}
+                  exameMenuStructure={exameMenuStructure}
+                  exameCamposEspecificos={undefined}
+                  categoriaExameId={categoriaExameId}
                 >
                     <TinyMceEditor
                       editorId={`template-secao-${index}`}
