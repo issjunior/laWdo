@@ -212,16 +212,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
           ],
           toolbar:
             'undo redo | ' +
-            'styles fontsize fontfamily lineheight | ' +
-            'bold italic underline strikethrough | ' +
-            'forecolor backcolor | ' +
-            'alignleft aligncenter alignright alignjustify | ' +
-            'bullist numlist outdent indent | ' +
-            'blockquote hr table | ' +
-            'link image media | ' +
-            'searchreplace | ' +
-            'fullscreen preview | ' +
-            'removeformat code | ' +
+            'bold italic underline strikethrough | forecolor backcolor removeformat | ' +
+            'fontfamily fontsize lineheight styles | subscript superscript | ' +
+            'charmap | link image table | blockquote hr | ' +
+            'alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | ' +
+            'searchreplace visualblocks nonbreaking code | fullscreen preview | ' +
             'help',
           content_style: `
             body {
