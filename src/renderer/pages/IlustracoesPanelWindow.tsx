@@ -76,6 +76,11 @@ const IlustracoesPanelWindow: React.FC = () => {
     sendAction('scrollToFigure', imageId);
   }, [sendAction]);
 
+  const handleReplaceImage = useCallback((imageId: string) => {
+    sendAction('replaceImage', imageId);
+    toast.success('Substituição enviada ao editor');
+  }, [sendAction]);
+
   const handleVoltarAoEditor = () => {
     window.ipcAPI.ilustracoes.sendAction('popIn');
     window.ipcAPI.ilustracoes.closePanel();
@@ -117,6 +122,7 @@ const IlustracoesPanelWindow: React.FC = () => {
             onRefreshHtml={handleRefreshHtml}
             onSyncToggle={handleSyncToggle}
             onScrollToFigure={handleScrollToFigure}
+            onReplaceImage={handleReplaceImage}
             figurasNoEditor={figurasNoEditor}
             syncEnabled={syncEnabled}
             figuraAtivaId={figuraAtivaId}

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import {
   Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
   FileText, GripVertical, Layers, Eye, LayoutGrid, List, Upload, Sun, Moon, SunMoon,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -86,6 +87,29 @@ const templateFormSchema = z.object({
 import { ImportTemplateDialog } from '@/components/template/ImportTemplateDialog';
 import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+
+function gerarSvgPlaceholderBase64(): string {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'>
+    <rect width='600' height='400' fill='#3a3a3a' rx='8'/>
+    <rect x='235' y='115' width='130' height='100' rx='8' fill='none' stroke='#888' stroke-width='2.5'/>
+    <circle cx='265' cy='145' r='11' fill='none' stroke='#888' stroke-width='2.5'/>
+    <polyline points='235,195 275,162 325,195' fill='none' stroke='#888' stroke-width='2.5'/>
+    <text x='300' y='260' text-anchor='middle' fill='#aaa' font-size='20' font-family='sans-serif' font-weight='500'>INSERIR IMAGEM</text>
+    <text x='300' y='290' text-anchor='middle' fill='#777' font-size='13' font-family='sans-serif'>Clique para substituir</text>
+  </svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
+function buildDummyFigureHtml(): string {
+  const id = crypto.randomUUID();
+  const src = gerarSvgPlaceholderBase64();
+  return (
+    `<figure class="laudo-figure" data-image-id="${id}" data-dummy="true" style="text-align:center;margin:12px auto;max-width:100%;cursor:pointer">` +
+    `<img src="${src}" alt="Figura XX" style="max-width:100%;height:auto;border:1px solid #444;border-radius:4px;padding:4px"/>` +
+    `<figcaption style="font-size:13px;color:#666;font-weight:bold;margin-top:4px">Figura XX</figcaption>` +
+    `</figure><br>`
+  );
+}
 
 export const TemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
@@ -250,6 +274,24 @@ export const TemplatesPage: React.FC = () => {
     const editor = (window as any).tinymce?.get(editorId);
     if (editor) {
       editor.execCommand('insertPlaceholder', false, { chave });
+    }
+  };
+
+  const inserirDummyNoEditor = () => {
+    const activeEditor = (window as any).tinymce?.activeEditor;
+    if (!activeEditor) {
+      toast.error('Selecione o editor primeiro');
+      return;
+    }
+    const editorId = activeEditor.id;
+    if (!editorId || (!editorId.startsWith('template-single-editor') && !editorId.startsWith('template-secao-'))) {
+      toast.error('Editor não encontrado');
+      return;
+    }
+    if (editorMode === 'single') {
+      activeEditor.insertContent(buildDummyFigureHtml());
+    } else {
+      activeEditor.execCommand('insertLaudoImageDummy', false, {});
     }
   };
 
@@ -1056,6 +1098,19 @@ export const TemplatesPage: React.FC = () => {
                   </TooltipContent>
                 </Tooltip>
               </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={inserirDummyNoEditor}
+                    className="h-8 px-2.5"
+                  >
+                    <ImageIcon size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">Inserir Espaço para Ilustração</TooltipContent>
+              </Tooltip>
               {editorMode === 'multi' && (
                 <Button variant="outline" size="sm" onClick={handleAddSecao} className="flex items-center gap-1">
                   <Plus size={14} /> Adicionar Seção

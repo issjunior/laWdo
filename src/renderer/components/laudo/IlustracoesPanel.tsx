@@ -26,7 +26,8 @@ import {
   Plus,
   Image as ImageIcon,
   ListChecks,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -79,6 +80,7 @@ export interface ImagemLaudo {
   numero_figura: number;
   sequencia: number;
   created_at: string;
+  dummy?: boolean;
 }
 
 interface IlustracoesPanelProps {
@@ -97,6 +99,7 @@ interface IlustracoesPanelProps {
   onSyncToggle?: (enabled: boolean) => void;
   onScrollToFigure?: (imageId: string) => void;
   onPopOut?: () => void;
+  onReplaceImage?: (imageId: string) => void;
 }
 
 interface SortableItemProps {
@@ -231,6 +234,7 @@ interface FiguraEditorItemProps {
   onUpdateLegenda: (id: string, legenda: string) => void;
   onPreview: () => void;
   onScrollToFigure?: (id: string) => void;
+  onReplaceImage?: (id: string) => void;
 }
 
 const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
@@ -241,6 +245,7 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   onUpdateLegenda,
   onPreview,
   onScrollToFigure,
+  onReplaceImage,
 }) => {
   const [legenda, setLegenda] = useState(imagem.legenda);
   const onUpdateLegendaRef = useRef(onUpdateLegenda);
@@ -280,8 +285,8 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
-        <Badge className="absolute top-0 left-0 h-4 px-1 text-[9px] rounded-none rounded-br" variant="secondary">
-          Fig. {index + 1}
+        <Badge className="absolute top-0 left-0 h-4 px-1 text-[9px] rounded-none rounded-br" variant={imagem.dummy ? 'outline' : 'secondary'}>
+          {imagem.dummy ? 'Fig. Exemplo' : `Fig. ${index + 1}`}
         </Badge>
       </div>
       <div className="flex-1 min-w-0">
@@ -311,6 +316,17 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
       >
         <Maximize2 size={14} />
       </Button>
+      {imagem.dummy && onReplaceImage && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-primary hover:text-primary"
+          onClick={() => onReplaceImage(imagem.id)}
+          title="Substituir imagem placeholder"
+        >
+          <RefreshCw size={14} />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon"
@@ -341,6 +357,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onSyncToggle,
   onScrollToFigure,
   onPopOut,
+  onReplaceImage,
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -549,6 +566,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                 onUpdateLegenda={onUpdateLegendaInEditor || (() => {})}
                 onPreview={() => setLightboxEditorIndex(idx)}
                 onScrollToFigure={onScrollToFigure}
+                onReplaceImage={onReplaceImage}
               />
             ))}
           </div>

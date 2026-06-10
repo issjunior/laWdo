@@ -310,11 +310,35 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               if (figure) {
                 const nextSibling = figure.nextElementSibling;
                 figure.remove();
-                // Remove o <br> ou <p>&nbsp;</p> que segue a figura
                 if (nextSibling && (nextSibling.tagName === 'BR' || (nextSibling.tagName === 'P' && (nextSibling as HTMLElement).innerHTML === '&nbsp;'))) {
                   nextSibling.remove();
                 }
               }
+            });
+
+            editor.addCommand('replaceLaudoImage', (_ui: any, data: { imageId?: string; figureElement?: HTMLElement; newUrl: string }) => {
+              const body = editor.getBody();
+              let figure: HTMLElement | null = null;
+              if (data.figureElement) {
+                figure = data.figureElement;
+              } else if (data.imageId) {
+                figure = body.querySelector(`.laudo-figure[data-image-id="${data.imageId}"]`);
+              }
+              if (!figure) return;
+              const img = figure.querySelector('img');
+              if (img) {
+                (img as HTMLImageElement).src = data.newUrl;
+              }
+              figure.removeAttribute('data-dummy');
+              figure.style.cursor = '';
+            });
+
+            editor.addCommand('insertLaudoImageDummy', () => {
+              const id = crypto.randomUUID();
+              const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'><rect width='600' height='400' fill='%233a3a3a' rx='8'/><rect x='235' y='115' width='130' height='100' rx='8' fill='none' stroke='%23888' stroke-width='2.5'/><circle cx='265' cy='145' r='11' fill='none' stroke='%23888' stroke-width='2.5'/><polyline points='235,195 275,162 325,195' fill='none' stroke='%23888' stroke-width='2.5'/><text x='300' y='260' text-anchor='middle' fill='%23aaa' font-size='20' font-family='sans-serif' font-weight='500'>INSERIR IMAGEM</text><text x='300' y='290' text-anchor='middle' fill='%23777' font-size='13' font-family='sans-serif'>Clique para substituir</text></svg>`;
+              const src = `data:image/svg+xml;base64,${btoa(svg)}`;
+              const html = `<figure class="laudo-figure" data-image-id="${id}" data-dummy="true" style="text-align:center;margin:12px auto;max-width:100%;cursor:pointer"><img src="${src}" alt="Figura XX" style="max-width:100%;height:auto;border:1px solid #444;border-radius:4px;padding:4px"/><figcaption style="font-size:13px;color:#666;font-weight:bold;margin-top:4px">Figura XX</figcaption></figure><br>`;
+              editor.insertContent(html);
             });
 
             editor.addCommand('scanAndWrapImages', () => {
@@ -346,6 +370,35 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                 });
 
                 container.dispatchEvent(newEvent);
+              });
+
+              doc.addEventListener('click', (e: MouseEvent) => {
+                const target = e.target as HTMLElement;
+                if (target.tagName === 'IMG') {
+                  const figure = target.closest('.laudo-figure[data-dummy="true"]');
+                  if (figure) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = () => {
+                      const file = input.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const dataUri = reader.result as string;
+                        editor.execCommand('replaceLaudoImage', false, {
+                          figureElement: figure as HTMLElement,
+                          newUrl: dataUri,
+                        });
+                        onChange(editor.getContent());
+                      };
+                      reader.readAsDataURL(file);
+                    };
+                    input.click();
+                  }
+                }
               });
 
               // ─── Observer para imagens arrastadas/soltadas ─────
