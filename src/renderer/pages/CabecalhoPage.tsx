@@ -78,10 +78,7 @@ export const CabecalhoPage: React.FC = () => {
     try {
       const result = await window.ipcAPI.configuracao.obter(CHAVE_CONFIG_PAGINAS);
       if (result.success && result.data) {
-        console.log('[CabecalhoPage:load] cabecalho_paginas loaded from DB, length:', result.data.length);
         setConteudoPaginas(converterPlaceholdersTextuais(result.data, placeholderChaves));
-      } else {
-        console.log('[CabecalhoPage:load] cabecalho_paginas NOT found in DB, using default');
       }
     } catch (err: any) {
       console.error('Erro ao carregar cabeçalho de páginas:', err);
@@ -118,14 +115,7 @@ export const CabecalhoPage: React.FC = () => {
       setPreview(true);
       setError(null);
 
-      console.log('[CabecalhoPage:preview] conteudoPaginas length:', conteudoPaginas.length);
-      console.log('[CabecalhoPage:preview] conteudoPaginas (first 300):', conteudoPaginas?.substring(0, 300));
-
       const { html: headerTemplate } = buildHeaderTemplate(conteudoPaginas, { numero_rep: 'XXX.XXX-YYYY' });
-
-      console.log('[CabecalhoPage:preview] headerTemplate length:', headerTemplate.length);
-      console.log('[CabecalhoPage:preview] headerTemplate (first 300):', headerTemplate?.substring(0, 300));
-      console.log('[CabecalhoPage:preview] headerTemplate truthy:', !!headerTemplate);
 
       const primeiroHtml = conteudo || '';
       let bodyHtml = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${primeiroHtml}</div>`;

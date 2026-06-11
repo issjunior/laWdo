@@ -44,7 +44,7 @@ import { useRepStepper } from '@/components/rep/useRepStepper';
 import { Stepper } from '@/components/ui/stepper';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import type { CreateTipoExameInput } from '@/lib/validators';
-import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { buildHeaderTemplate } from '@/lib/pdf-header';
 import { getMargens } from '@/lib/margens';
 import { toast } from 'sonner';
 
@@ -89,7 +89,7 @@ function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string):
   const statusMap: Record<string, string> = { 'Pendente': 'Pendente', 'Em Andamento': 'Em Andamento', 'Concluído': 'Concluído' };
   const statusLabel = statusMap[rep.status] || rep.status || 'Pendente';
 
-  let html = `<h2 style="font-size:18px;margin-bottom:16px">REQUISIÇÃO DE EXAME PERICIAL — REP Nº ${s(rep.numero)}</h2>`;
+  let html = `<h2 style="font-size:18px;margin-bottom:16px">REP Nº ${s(rep.numero)}</h2>`;
 
   // TABELA 1 — DADOS DA SOLICITAÇÃO
   html += `<table style="${REP_TABLE_STYLES.table}">`;
@@ -135,12 +135,12 @@ function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string):
         const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean);
         if (envolvidos?.length) {
           let envolvidosHtml = `<table style="${REP_TABLE_STYLES.table}">`;
-          envolvidosHtml += buildRepTableTitle('ENVOLVIDOS', 2);
-          envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Envolvido(s)</td><td style="${REP_TABLE_STYLES.td}">${envolvidos.join(', ')}</td></tr>`;
+          envolvidosHtml += buildRepTableTitle('DADOS DA INVESTIGAÇÃO', 4);
+          envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Envolvido(s)</td><td colspan="3" style="${REP_TABLE_STYLES.td}">${envolvidos.join(', ')}</td></tr>`;
           if (b602.data_ocorrencia || b602.local || b602.numero_bo || b602.numero_ip || b602.solicitante_nome) {
             envolvidosHtml += buildRepTwoCol('Data Ocorrência', s(b602.data_ocorrencia), 'Local', s(b602.local));
             envolvidosHtml += buildRepTwoCol('Nº BO', s(b602.numero_bo), 'Nº IP', s(b602.numero_ip));
-            envolvidosHtml += buildRepLabelValue('Unidade Policial', s(b602.solicitante_nome), '25%');
+            envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Unidade Policial</td><td colspan="3" style="${REP_TABLE_STYLES.td}">${s(b602.solicitante_nome)}</td></tr>`;
           }
           envolvidosHtml += `</table>`;
           html += envolvidosHtml;
@@ -193,7 +193,6 @@ function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string):
     html += `</table>`;
   }
 
-  html += `<p style="text-align:right;font-size:11px;color:#888;margin-top:24px">Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>`;
   return html;
 }
 
@@ -759,23 +758,30 @@ export const REPsPage: React.FC = () => {
 
       let solicitanteNome = '';
       let tipoExameNome = '';
+      let tipoExameCodigo = '';
       if (repData.solicitante_id) {
         const s = solicitantes.find(s => s.id === repData.solicitante_id);
         if (s) solicitanteNome = s.nome;
       }
       if (repData.tipo_exame_id) {
         const t = tiposExame.find(t => t.id === repData.tipo_exame_id);
-        if (t) tipoExameNome = t.nome;
+        if (t) {
+          tipoExameNome = t.nome;
+          tipoExameCodigo = t.codigo;
+        }
       }
 
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
-        numeroRepFallback: repData.numero || '',
+      const tipoExameHeader = tipoExameCodigo
+        ? `${tipoExameCodigo} - ${tipoExameNome || ''}`
+        : tipoExameNome || '-';
+
+      const repHeaderTemplate = `<p style="text-align:right">{{data_atual}}</p>\n<p style="text-align:right">FLS. {{pagina}}/{{totalPaginas}}</p>`;
+      const { html: headerTemplate } = buildHeaderTemplate(repHeaderTemplate, {
+        data_atual: new Date().toLocaleDateString('pt-BR'),
       });
 
       let html = buildRepHtml(repData, solicitanteNome, tipoExameNome);
-      if (cabecalhoPrimeiraPagina) {
-        html = `<div style="padding-bottom:16px;margin-bottom:32px">${cabecalhoPrimeiraPagina}</div>${html}`;
-      }
+      html = html.replace('</h2>', `</h2>\n<p style="font-size:14px;color:#555;margin-top:0;margin-bottom:16px">Tipo de exame: ${tipoExameHeader}</p>`);
 
       const margins = await getMargens();
       const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined);
