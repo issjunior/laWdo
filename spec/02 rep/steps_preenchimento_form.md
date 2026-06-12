@@ -1,8 +1,11 @@
 # Stepper de Preenchimento do Formulário de REP
 
+> 📡 **Integração GDL:** O CardHeader do formulário possui botão "GDL" que abre o modal de consulta à API.
+> Veja [`spec/08 gdl/api_gdl.md`](../08%20gdl/api_gdl.md).
+
 ## Problema
 
-O formulário de criação/edição de REP em `REPsPage.tsx` usa um Accordion de 3 níveis (Dados da Solicitação → Documentos Associados → Campos Específicos). Múltiplos blocos de formulário renderizados simultaneamente tornam o preenchimento confuso e o usuário não tem noção clara de em que parte do processo está (início, meio ou fim).
+O formulário de criação/edição de REP em `REPsPage.tsx` usava um Accordion de 3 níveis (Dados da Solicitação → Documentos Associados → Campos Específicos). Os campos nativos de Documentos Associados (`numero_bo`, `numero_ip`, `lacre_entrada`, `lacre_saida`, `nome_envolvido`) foram removidos do schema (migration v23) e migrados para `campos_especificos` por tipo de exame. Múltiplos blocos de formulário renderizados simultaneamente tornavam o preenchimento confuso.
 
 ## Solução
 
@@ -36,9 +39,9 @@ Substituir o Accordion por um **stepper vertical lateral colapsável** que guia 
 | 20 | Stepper colapsado | Números + barra de progresso vertical conectando os dots. Sem labels, sem ícones |
 | 21 | Destaque do passo ativo no formulário | Scroll automático (`scrollIntoView`) + borda `ring-2 ring-primary` + background `bg-primary/5` na seção correspondente |
 | 22 | Scroll do stepper | Sticky via wrapper `<div className="sticky top-[calc(var(--spacing-header,0px)+1rem)]">` no `REPsPage.tsx` — fixo durante o scroll da página, compensando o header |
-| 23 | GDL Warning | Mantido como banner dentro do conteúdo do passo 2 (Documentos Associados), igual ao comportamento atual |
+| 23 | GDL Warning | Exibido como banner no topo do formulário, com botão GDL no CardHeader |
 | 24 | Botões Placeholder e Fechar (X) | Mantidos no `CardHeader` do formulário, mesma posição atual |
-| 25 | Completude passos 3+ | Adicionar campo `requiredFields: string[]` ao `SECTION_REGISTRY`. Cada entrada declara quais campos são obrigatórios para o passo ser considerado completo |
+| 25 | Completude passos 2+ | Adicionar campo `requiredFields: string[]` ao `SECTION_REGISTRY`. Cada entrada declara quais campos são obrigatórios para o passo ser considerado completo |
 
 ---
 
@@ -51,7 +54,7 @@ Substituir o Accordion por um **stepper vertical lateral colapsável** que guia 
 | `src/renderer/components/ui/stepper.tsx` | Componente `<Stepper>` genérico. Props: `steps: Step[]`, `activeStep: string`, `completedSteps: Set<string>`, `onStepClick: (id: string) => void`, `collapsed: boolean`, `onToggle: () => void`. Renderiza layout vertical com ícones, labels, linha conectora, indicadores de estado |
 | `src/renderer/components/rep/RepStepper.tsx` | Wrapper opcional: `<Stepper>` alimentado pelo hook `useRepStepper` com sticky já aplicado. Não usado diretamente — `REPsPage.tsx` compõe hook + Stepper manualmente para ter acesso ao `activeStep` |
 | `src/renderer/components/rep/useRepStepper.ts` | Hook: recebe `form`, `tipoExameId`, `tipoExameSelecionado`. Calcula `steps`, `activeStep`, `completedSteps`, `canUnlockDynamic`, `collapsed`/`setCollapsed`, `onStepClick`. Usa `STEP_REGISTRY` + `SECTION_REGISTRY` via `getDynamicSteps()`. Completude: passos com `requiredFields: []` não auto-completam |
-| `src/renderer/components/rep/step-registry.ts` | `STEP_REGISTRY` (passos fixos 1-2 com `id`, `label`, `icon`, `requiredFields`). Função `getDynamicSteps(codigo)` que deriva passos 3+ do `SECTION_REGISTRY` |
+| `src/renderer/components/rep/step-registry.ts` | `STEP_REGISTRY` (passo fixo 1 com `id`, `label`, `icon`, `requiredFields`). Função `getDynamicSteps(codigo)` que deriva passos 2+ do `SECTION_REGISTRY` |
 
 ### Modificados
 
@@ -100,15 +103,14 @@ interface StepEntry {
 ## Comportamento do Stepper
 
 ```
-Passos fixos (sempre presentes):
+Passo fixo (sempre presente):
   1. Dados da Solicitação   [FileText]   requiredFields: [numero, data_requisicao, tipo_solicitacao, numero_documento]
-  2. Documentos Associados  [ScrollText] requiredFields: []
 
 Passos dinâmicos (visíveis após tipo de exame selecionado, bloqueados até 5 campos preenchidos):
-  3. Local do Fato          [MapPin]     requiredFields: [local_fato]
-  4. Linha do Tempo         [Clock]      requiredFields: []
-  5. Numerações Identificadoras [Hash]   requiredFields: [numeracao_veiculo]
-  ...
+  2. Dados da Investigação  [Crosshair]  requiredFields: [b602_envolvidos_0, b602_data_ocorrencia, b602_local, b602_solicitante_nome]
+  3. Material Encaminhado   [Package]    requiredFields: []
+  4. Cartuchos              [Target]     requiredFields: []
+  5. Estojos                [Layers]     requiredFields: []
   
   (derivados de getSectionsForExame(tipo.codigo), ordenados por posição no SECTION_REGISTRY)
 ```
@@ -146,10 +148,10 @@ Lista dinâmica dos campos faltantes:
 │  │  │          │  │  ┌─ Seção Dados da Solicitação ──────────────┐ │ │ │
 │  │  │ ● 1 Dados│  │  │  (campos com destaque ring-primary)       │ │ │ │
 │  │  │ │        │  │  └───────────────────────────────────────────┘ │ │ │
-│  │  │ ○ 2 Docs │  │                                                 │ │ │
-│  │  │ │        │  │  ┌─ Seção Documentos Associados ─────────────┐ │ │ │
-│  │  │ 🔒 3 Loc │  │  │  (sem destaque)                           │ │ │ │
-│  │  │ 🔒 4 Tem │  │  └──────────────────────────────────────────┘ │ │ │
+│  │  │ 🔒 2 Inv │  │                                                 │ │ │
+│  │  │ │        │  │  ┌─ Seção Dados da Investigação ────────────┐ │ │ │
+│  │  │ 🔒 3 Mat │  │  │  (sem destaque)                           │ │ │ │
+│  │  │ 🔒 4 Car │  │  └──────────────────────────────────────────┘ │ │ │
 │  │  │          │  │                                                 │ │ │
 │  │  │ [<<]     │  │  ┌─ Botões ──────────────────────────────────┐ │ │ │
 │  │  │          │  │  │        [Cancelar]  [Salvar]               │ │ │ │
@@ -233,13 +235,13 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
   - [x] Manter botões Salvar/Cancelar no rodapé do CardContent
   - [x] Remover placeholder falso do input Nº do BO, adicionar HelpIcon com formato
 - [x] Adicionar `COR_MAP` + bolinhas coloridas no Select de Cor em `numeracao.tsx`
-- [ ] Testar com tipo de exame `LOC` (passos: Dados, Documentos, Local do Fato, Linha do Tempo)
-- [ ] Testar com tipo de exame `I-801` (passos: Dados, Documentos, Numerações Identificadoras)
-- [ ] Testar sem tipo de exame (apenas passos 1-2, passos 3+ com cadeado)
-- [ ] Testar colapso/expansão do stepper
-- [ ] Testar completude visual (check verde)
-- [ ] Testar tooltip de passo bloqueado
-- [ ] Testar scroll e destaque da seção ativa
-- [ ] Testar edição de REP existente (passos dinâmicos já desbloqueados quando aplicável)
-- [x] Verificar build (Vite 2133 módulos, sem erros)
+- [x] Testar com tipo de exame `B-602` (passos: Dados da Solicitação, Dados da Investigação, Material Encaminhado, Cartuchos, Estojos)
+- [x] Testar com tipo de exame `I-801` (passos: Dados da Solicitação, Numerações Identificadoras)
+- [x] Testar sem tipo de exame (apenas passo 1, passos 2+ com cadeado)
+- [x] Testar colapso/expansão do stepper
+- [x] Testar completude visual (check verde)
+- [x] Testar tooltip de passo bloqueado
+- [x] Testar scroll e destaque da seção ativa
+- [x] Testar edição de REP existente (passos dinâmicos já desbloqueados quando aplicável)
+- [x] Verificar build (Vite 2138 módulos, sem erros)
 - [x] Verificar lint (novos arquivos: zero erros)

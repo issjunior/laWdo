@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Database } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type REP } from '@/lib/validators';
 import { z } from 'zod';
@@ -42,6 +42,7 @@ import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteForm
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 import { useRepStepper } from '@/components/rep/useRepStepper';
 import { Stepper } from '@/components/ui/stepper';
+import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import type { CreateTipoExameInput } from '@/lib/validators';
 import { buildHeaderTemplate } from '@/lib/pdf-header';
@@ -512,6 +513,10 @@ export const REPsPage: React.FC = () => {
   const [tipoExameQCError, setTipoExameQCError] = useState<string | null>(null);
   const [tipoExameQCSubmitting, setTipoExameQCSubmitting] = useState(false);
 
+  const [gdlModalOpen, setGdlModalOpen] = useState(false);
+  const [camposPreenchidosGdl, setCamposPreenchidosGdl] = useState<Set<string>>(new Set());
+  const [gdlApplied, setGdlApplied] = useState(false);
+
   const carregarREPs = useCallback(async () => {
     try {
       setLoading(true); setError(null);
@@ -643,6 +648,8 @@ export const REPsPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setTemplatesVinculados([]);
+    setCamposPreenchidosGdl(new Set());
+    setGdlApplied(false);
     form.reset(emptyForm());
     setSubmitting(false);
     setShowForm(true);
@@ -654,6 +661,8 @@ export const REPsPage: React.FC = () => {
     setEditingRep(null);
     form.reset(emptyForm());
     setTemplatesVinculados([]);
+    setCamposPreenchidosGdl(new Set());
+    setGdlApplied(false);
     setError(null);
     setSuccess(null);
     setSubmitting(false);
@@ -970,6 +979,30 @@ export const REPsPage: React.FC = () => {
     }
   };
 
+  const getGdlFieldStyle = (fieldName: string): string => {
+    return camposPreenchidosGdl.has(fieldName)
+      ? 'bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-800'
+      : '';
+  };
+
+  const handleAplicarGdl = (campos: Record<string, string>, modo: 'substituir' | 'mesclar') => {
+    const novosPreenchidos = new Set<string>();
+
+    for (const [key, value] of Object.entries(campos)) {
+      if (modo === 'substituir' || !form.getValues(key as any)) {
+        form.setValue(key as any, value, { shouldValidate: true });
+      }
+      if (value) {
+        novosPreenchidos.add(key);
+      }
+    }
+
+    setCamposPreenchidosGdl(novosPreenchidos);
+    setGdlApplied(true);
+    setSuccess('Dados do GDL aplicados ao formulário. Campos com fundo verde foram preenchidos automaticamente.');
+    setTimeout(() => setSuccess(null), 6000);
+  };
+
   const columnDefs = useMemo<ColumnDef<REP>[]>(() => [
     {
       accessorKey: 'data_requisicao',
@@ -1284,6 +1317,16 @@ export const REPsPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setGdlModalOpen(true)}
+                    className="flex items-center gap-1"
+                    title="Consultar dados de REP no GDL"
+                  >
+                    <Database size={14} />
+                    GDL
+                  </Button>
+                  <Button
                     variant={mostrarPlaceholders ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setMostrarPlaceholders(!mostrarPlaceholders)}
@@ -1305,6 +1348,14 @@ export const REPsPage: React.FC = () => {
                 >
                   {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
                   {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
+                  {gdlApplied && camposPreenchidosGdl.size > 0 && !success && (
+                    <Alert className="bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-800">
+                      <AlertDescription className="text-green-800 dark:text-green-400">
+                        {camposPreenchidosGdl.size} campo(s) preenchido(s) via GDL.
+                        Campos com fundo verde foram preenchidos automaticamente.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <div className="space-y-8">
                     {/* ============================================ */}
@@ -1330,6 +1381,7 @@ export const REPsPage: React.FC = () => {
                                 <LabelWithPlaceholder field="numero" mostrar={mostrarPlaceholders}>Nº da REP *<HelpIcon text="O ano deve conter os 4 dígitos, exemplo: 2026." /></LabelWithPlaceholder>
                                 <FormControl>
                                   <Input
+                                    className={getGdlFieldStyle('numero')}
                                     placeholder="000.000-2026"
                                     value={field.value}
                                     onChange={e => field.onChange(formatarNumeroREP(e.target.value))}
@@ -1348,7 +1400,7 @@ export const REPsPage: React.FC = () => {
                               <FormItem>
                                 <LabelWithPlaceholder field="data_requisicao" mostrar={mostrarPlaceholders}>Data de recebimento *</LabelWithPlaceholder>
                                 <FormControl>
-                                  <Input type="date" {...field} />
+                                  <Input type="date" className={getGdlFieldStyle('data_requisicao')} {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -1422,7 +1474,7 @@ export const REPsPage: React.FC = () => {
                                     }}
                                   >
                                     <FormControl>
-                                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                      <SelectTrigger className={getGdlFieldStyle('tipo_solicitacao')}><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
                                       <SelectItem value="BOU">BOU</SelectItem>
@@ -1456,7 +1508,7 @@ export const REPsPage: React.FC = () => {
                               <FormItem>
                                 <LabelWithPlaceholder field="numero_documento" mostrar={mostrarPlaceholders}>Nº da Solicitação *<HelpIcon text="Número do ofício ou documento que originou a solicitação" /></LabelWithPlaceholder>
                                 <FormControl>
-                                  <Input placeholder="Requisição nº" {...field} />
+                                  <Input placeholder="Requisição nº" className={getGdlFieldStyle('numero_documento')} {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -1545,7 +1597,7 @@ export const REPsPage: React.FC = () => {
                             <FormItem>
                               <LabelWithPlaceholder field="observacoes" mostrar={mostrarPlaceholders}>Observações</LabelWithPlaceholder>
                               <FormControl>
-                                <Textarea placeholder="Observações gerais..." rows={3} {...field} />
+                                <Textarea placeholder="Observações gerais..." rows={3} className={getGdlFieldStyle('observacoes')} {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -1655,6 +1707,16 @@ export const REPsPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      <GdlConsultaModal
+        open={gdlModalOpen}
+        onOpenChange={setGdlModalOpen}
+        onAplicar={handleAplicarGdl}
+        temDadosExistentes={
+          !!form.getValues('numero') ||
+          !!form.getValues('tipo_solicitacao') ||
+          !!form.getValues('numero_documento')
+        }
+      />
       </TooltipProvider>
   );
 };

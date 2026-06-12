@@ -113,6 +113,12 @@ export interface IpcAPI {
     salvar: (chave: string, valor: string, tipo?: string, descricao?: string) => Promise<UserResponse>;
   };
 
+  // GDL
+  gdl: {
+    testarConexao: (ambiente?: string) => Promise<UserResponse>;
+    consultarRep: (numero: string, ano: string) => Promise<UserResponse>;
+  };
+
   // Placeholder para outras APIs que serão implementadas
 
   // Placeholders
@@ -305,6 +311,10 @@ const ALLOWED_CHANNELS = new Set([
   'tipo-exame:findAllSemFiltroStatus',
   'configuracao:obter',
   'configuracao:salvar',
+
+  // GDL
+  'gdl:testar-conexao',
+  'gdl:consultar-rep',
   'rep:create',
   'rep:findAll',
   'rep:findById',
@@ -728,6 +738,19 @@ contextBridge.exposeInMainWorld('ipcAPI', {
         throw new Error('Chave inválida');
       }
       return ipcRenderer.invoke('configuracao:salvar', chave.trim(), valor, tipo, descricao);
+    },
+  },
+
+  gdl: {
+    testarConexao: (ambiente?: string) => ipcRenderer.invoke('gdl:testar-conexao', ambiente),
+    consultarRep: (numero: string, ano: string) => {
+      if (typeof numero !== 'string' || !numero.trim()) {
+        throw new Error('Número da REP é obrigatório');
+      }
+      if (typeof ano !== 'string' || !ano.trim()) {
+        throw new Error('Ano da REP é obrigatório');
+      }
+      return ipcRenderer.invoke('gdl:consultar-rep', numero.trim(), ano.trim());
     },
   },
 

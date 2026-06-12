@@ -55,8 +55,8 @@ modeloGemini: string
 - Botões "Testar Conexão" e "Salvar Configurações"
 - Testar conexão testa o provedor **selecionado no momento**
 
-**Card de Instruções Gemini (condicional):**
-- Exibido apenas quando provedor = Gemini
+**Card de Instruções (sempre visível):**
+- Accordion com instruções para ambos os provedores (Groq e Gemini), sempre visível independente do provedor selecionado
 - Orienta criar conta no Google AI Studio com email `@policiacientifica.pr.gov.br`
 - Explica que o uso com email institucional impede uso dos dados para treinamento
 - Link para `https://aistudio.google.com/apikey`
@@ -115,7 +115,7 @@ const CHAVES_IA_EXCLUIDAS = ['api_key_groq', 'api_key_gemini', 'modelo_ia_padrao
 ## O que NÃO muda
 
 - **Preload** (`src/preload/index.ts`): mesma interface `window.ipcAPI.ia.*`, mesmos canais `ia:revisarOrtografia` etc.
-- **AISheet.tsx** e **AISectionToolbar.tsx**: não referenciam provedor diretamente, apenas chamam a API
+- **AISheet.tsx** e **AISectionToolbar.tsx**: referenciam provedor para exibição (badge "Modelo Ativo: Gemini · gemini-2.5-flash") mas não para lógica de chamada
 - **Menu lateral** (`AppSidebar.tsx`) e **rotas** (`App.tsx`): já apontam para `/modelos-ia`
 - **LaudosPage.tsx**: integração com toolbar e sheet permanece idêntica
 

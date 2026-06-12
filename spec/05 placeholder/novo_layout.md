@@ -54,7 +54,7 @@ Quando o botão "Editar Categoria" é clicado, um formulário inline aparece aci
 
 ### 1. `src/main/database/index.ts` — Migration v22
 
-**Linha 20:** `CURRENT_SCHEMA_VERSION` de `21` → `22`.
+**Linha 20:** `CURRENT_SCHEMA_VERSION` de `21` → `22` (atualmente 24 após migrations posteriores).
 
 **Adicionar migration v22** (~35 linhas, após o bloco da v21):
 

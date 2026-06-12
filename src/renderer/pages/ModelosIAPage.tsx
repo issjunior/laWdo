@@ -146,8 +146,8 @@ export const ModelosIAPage: React.FC = () => {
 
       const resultados = await Promise.all([
         window.ipcAPI.configuracao.salvar('provedor_ia', data.provedor, 'texto', 'Provedor de IA selecionado'),
-        window.ipcAPI.configuracao.salvar('api_key_groq', data.apiKeyGroq || '', 'texto', 'Chave de API Groq'),
-        window.ipcAPI.configuracao.salvar('api_key_gemini', data.apiKeyGemini || '', 'texto', 'Chave de API Gemini'),
+        window.ipcAPI.configuracao.salvar('api_key_groq', data.apiKeyGroq || '', 'api_key', 'Chave de API Groq'),
+        window.ipcAPI.configuracao.salvar('api_key_gemini', data.apiKeyGemini || '', 'api_key', 'Chave de API Gemini'),
         window.ipcAPI.configuracao.salvar('modelo_ia_padrao', data.modeloGroq, 'texto', 'Modelo padrão Groq'),
         window.ipcAPI.configuracao.salvar('modelo_gemini_padrao', data.modeloGemini, 'texto', 'Modelo padrão Gemini'),
       ]);

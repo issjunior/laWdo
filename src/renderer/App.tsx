@@ -14,6 +14,7 @@ const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default:
 const ModelosIAPage = lazy(() => import('@/pages/ModelosIAPage').then(m => ({ default: m.ModelosIAPage })));
 const BackupPage = lazy(() => import('@/pages/BackupPage').then(m => ({ default: m.BackupPage })));
 const LogsPage = lazy(() => import('@/pages/LogsPage').then(m => ({ default: m.LogsPage })));
+const GdlConfigPage = lazy(() => import('@/pages/GdlConfigPage').then(m => ({ default: m.GdlConfigPage })));
 const MargensPage = lazy(() => import('@/pages/MargensPage').then(m => ({ default: m.MargensPage })));
 const IlustracoesPanelWindow = lazy(() => import('@/pages/IlustracoesPanelWindow'));
 const PecasPage = lazy(() => import('@/pages/PecasPage'));
@@ -130,6 +131,7 @@ const App = () => {
                     <Route path="/modelos-ia" element={<ModelosIAPage />} />
                     <Route path="/backup" element={<BackupPage />} />
                     <Route path="/logs" element={<LogsPage />} />
+                    <Route path="/gdl-config" element={<GdlConfigPage />} />
                     <Route path="/margens" element={<MargensPage />} />
                     <Route path="/pecas" element={<PecasPage />} />
                     <Route path="/categorias-pecas" element={<CategoriasPecasPage />} />

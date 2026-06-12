@@ -63,6 +63,7 @@ const MODULOS = [
   { value: 'backup', label: 'Backup' },
   { value: 'configuracao', label: 'Configuração' },
   { value: 'ia', label: 'IA' },
+  { value: 'gdl', label: 'API GDL' },
   { value: 'ilustracao', label: 'Ilustração' },
   { value: 'renderer', label: 'Renderer' },
 ];

@@ -3,6 +3,9 @@
 > Arquitetura: **A — Section Registry** (componentes separados por tipo de exame, mapeados via `EXAM_FIELD_MAP`)
 > Persistência: **JSON column** (`campos_especificos TEXT`) na tabela `reps` para campos de tipos que não são colunas nativas
 > Validação: **Zod `superRefine` condicional** — campos do Nível 3 são required apenas quando o tipo correspondente está selecionado
+>
+> 📡 **Integração GDL:** A REPsPage possui botão "Consultar GDL" que permite preencher o formulário automaticamente
+> via API REST do GDL. Veja especificação completa em [`spec/08 gdl/api_gdl.md`](../08%20gdl/api_gdl.md).
 
 ---
 
@@ -12,31 +15,31 @@ O formulário da REP adota **progressive disclosure** em 3 níveis:
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  NÍVEL 1 — Dados da Solicitação                  │
+│  Dados da Solicitação                             │
 │  (sempre visível, campos obrigatórios primeiro)   │
 │  Nº REP* | Data Recebimento* | Solicitante       │
 │  Tipo Exame | Template | Tipo Solicitação*        │
 │  Nº Solicitação* | Data Doc | Autoridade          │
-│  Nome do Envolvido                                │
 ├──────────────────────────────────────────────────┤
-│  NÍVEL 2 — Documentos Associados                  │
-│  (sempre visível)                                 │
-│  Nº BO | Nº IP | Lacre Entrada | Lacre Saída      │
-├──────────────────────────────────────────────────┤
-│  NÍVEL 3 — Campos Específicos do Exame    🔒/🔓   │
+│  Campos Específicos do Exame              🔒/🔓   │
 │  (desbloqueado ao selecionar tipo + preencher     │
-│   campos obrigatórios dos níveis 1 e 2)           │
+│   campos obrigatórios)                            │
 │                                                    │
 │  Conteúdo DINÂMICO via Section Registry:           │
-│  • Local (LOC): Local Fato, Lat/Lon, Acionamento  │
+│  • B-602: Dados Investigação, Material,           │
+│           Cartuchos, Estojos                      │
 │  • Numeração (I-801): Campos de numeração         │
-│  • Outros tipos: respectivas seções               │
+│  • Local (LOC): Local Fato, Lat/Lon, Acionamento  │
 └──────────────────────────────────────────────────┘
 ```
 
-### Regra de desbloqueio do Nível 3
+> **Nota:** Os campos anteriormente em "Documentos Associados" (Nº BO, Nº IP, Lacre Entrada/Saída, Envolvido) foram removidos do schema principal (migration v23) e agora fazem parte dos `campos_especificos` por tipo de exame (ex: B-602 — Dados da Investigação).
 
-O accordion de campos específicos fica **visível mas bloqueado** (collapsed, com cadeado e texto guia) até que:
+> **Layout atual:** O formulário usa um **Stepper vertical** em vez de Accordion. Veja [`steps_preenchimento_form.md`](steps_preenchimento_form.md) para detalhes do layout atual.
+
+### Regra de desbloqueio das seções específicas
+
+O stepper de campos específicos mostra passos **visíveis mas bloqueados** (com cadeado e tooltip) até que:
 
 1. `tipo_exame_id` esteja selecionado **E**
 2. Os campos obrigatórios (`numero`, `data_requisicao`, `tipo_solicitacao`, `numero_documento`) estejam preenchidos e válidos
@@ -350,88 +353,11 @@ useEffect(() => {
 }, [canUnlockSpecificFields]);
 ```
 
-### 4b. Estrutura do Accordion
+### 4b. Estrutura do Formulário (Stepper)
 
-```tsx
-<Accordion type="multiple" defaultValue={["dados-solicitacao", "documentos"]}>
-  
-  {/* ============================================ */}
-  {/* NÍVEL 1: Dados da Solicitação (sempre aberto) */}
-  {/* ============================================ */}
-  <AccordionItem value="dados-solicitacao">
-    <AccordionTrigger>
-      <FileText /> Dados da Solicitação
-    </AccordionTrigger>
-    <AccordionContent>
-      {/* Nº REP + Data Recebimento (row 1) */}
-      {/* Solicitante | Responsável | Tipo Exame | Template | Tipo Solicitação (row 2) */}
-      {/* Nº Solicitação | Data Doc | Autoridade | Envolvido (row 3) */}
-    </AccordionContent>
-  </AccordionItem>
+> **O Accordion foi substituído pelo Stepper.** Veja [`steps_preenchimento_form.md`](steps_preenchimento_form.md) para a especificação completa do layout com stepper vertical, passos dinâmicos, completude visual e scroll automático.
 
-  {/* ============================================ */}
-  {/* NÍVEL 2: Documentos Associados (sempre aberto) */}
-  {/* ============================================ */}
-  <AccordionItem value="documentos">
-    <AccordionTrigger>
-      <Link2 /> Documentos Associados
-    </AccordionTrigger>
-    <AccordionContent>
-      {/* Nº BO | Nº IP | Lacre Entrada | Lacre Saída */}
-      {/* Observações */}
-    </AccordionContent>
-  </AccordionItem>
-
-  {/* ============================================ */}
-  {/* NÍVEL 3: Campos Específicos (bloqueado/desbloqueado) */}
-  {/* ============================================ */}
-  {examSections.length > 0 && (
-    <AccordionItem 
-      value="campos-especificos" 
-      className={!camposEspecificosDesbloqueados ? 'opacity-60' : ''}
-    >
-      <AccordionTrigger>
-        {camposEspecificosDesbloqueados 
-          ? <><Zap size={14} /> Campos Específicos — {tipoExameSelecionado?.nome}</>
-          : <><Lock size={14} /> Preencha os campos obrigatórios acima para desbloquear</>
-        }
-      </AccordionTrigger>
-      <AccordionContent>
-        {camposEspecificosDesbloqueados ? (
-          <>
-            {/* Seções agrupadas (ex: local_fato vai dentro de "Envolvido e Local") */}
-            {groupedSections.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="font-medium text-sm">Envolvido e Local</h4>
-                {groupedSections.map(s => (
-                  <s.component key={s.id} form={form} mostrarPlaceholders={mostrarPlaceholders} />
-                ))}
-              </div>
-            )}
-            
-            {/* Seções independentes (ex: Acionamento, Numerações) */}
-            {standaloneSections.map(s => (
-              <div key={s.id} className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <s.icon size={14} />
-                  <span>{s.label}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{s.description}</p>
-                <s.component form={form} mostrarPlaceholders={mostrarPlaceholders} />
-              </div>
-            ))}
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-3">
-            <Lock size={28} className="opacity-30" />
-            <p className="text-sm">Selecione o tipo de exame e preencha os campos obrigatórios (Nº REP, Data de Recebimento, Tipo de Solicitação, Nº da Solicitação) para desbloquear os campos específicos.</p>
-          </div>
-        )}
-      </AccordionContent>
-    </AccordionItem>
-  )}
-</Accordion>
-```
+O formulário atual renderiza seções flat com `data-step` attributes, controladas pelo hook `useRepStepper`. A seção ativa recebe destaque visual (`ring-2 ring-primary bg-primary/5`).
 
 ---
 
@@ -439,23 +365,21 @@ useEffect(() => {
 
 ```
 Estado inicial:
-┌─────────────────────┐
-│ Nível 1: visível    │ ← preenchendo...
-│ Nível 2: visível    │ ← preenchendo...
-│ Nível 3: BLOQUEADO  │ ← cadeado, opacidade 60%
-└─────────────────────┘
+┌──────────────────────────────────────┐
+│ Passo 1 (Dados Solicitação): visível │ ← preenchendo...
+│ Passos 2+: BLOQUEADOS                │ ← cadeado, opacidade 60%
+└──────────────────────────────────────┘
         │
         │ tipo_exame_id selecionado
         │ + numero, data_requisicao, tipo_solicitacao, numero_documento válidos
         ▼
-┌─────────────────────┐
-│ Nível 1: visível    │
-│ Nível 2: visível    │
-│ Nível 3: DESBLOQ.   │ ← seções específicas aparecem
-└─────────────────────┘
+┌──────────────────────────────────────┐
+│ Passo 1: visível                     │
+│ Passos 2+: DESBLOQUEADOS             │ ← seções específicas aparecem
+└──────────────────────────────────────┘
 ```
 
-**Comportamento:** se o usuário limpar o campo `numero` após desbloquear, o Nível 3 **continua desbloqueado** (não some — isso seria ruim para UX). Uma vez desbloqueado, permanece.
+**Comportamento:** se o usuário limpar o campo `numero` após desbloquear, os passos específicos **continuam desbloqueados** (não somem — isso seria ruim para UX). Uma vez desbloqueado, permanece.
 
 ---
 

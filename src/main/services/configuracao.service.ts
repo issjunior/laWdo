@@ -1,6 +1,10 @@
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
-import { getLogger } from '../utils/logger.js'
+import { getLogger } from '../utils/logger.js';
+import { safeStorageService } from './safe-storage.service.js';
+
 const log = getLogger('configuracao');
+
+const TIPOS_CRIPTOGRAFADOS = new Set(['senha', 'api_key']);
 
 export interface ConfiguracaoRow {
   chave: string
@@ -13,7 +17,8 @@ export interface ConfiguracaoRow {
 
 class ConfiguracaoService {
   /**
-   * Obter valor de uma configuração pela chave
+   * Obter valor de uma configuração pela chave.
+   * Descriptografa automaticamente se o tipo for 'senha' ou 'api_key'.
    */
   async obter(chave: string): Promise<string | null> {
     try {
@@ -21,7 +26,14 @@ class ConfiguracaoService {
         'SELECT * FROM configuracoes WHERE chave = ?',
         [chave]
       );
-      return rows.length > 0 ? rows[0].valor : null;
+      if (rows.length === 0) return null;
+
+      const { valor, tipo } = rows[0];
+      if (valor == null) return null;
+      if (TIPOS_CRIPTOGRAFADOS.has(tipo)) {
+        return safeStorageService.decrypt(valor);
+      }
+      return valor;
     } catch (error) {
       log.error('Erro ao obter configuração', { chave, error });
       throw error;
@@ -29,10 +41,16 @@ class ConfiguracaoService {
   }
 
   /**
-   * Salvar/atualizar uma configuração
+   * Salvar/atualizar uma configuração.
+   * Criptografa automaticamente se o tipo for 'senha' ou 'api_key'.
    */
   async salvar(chave: string, valor: string, tipo: string = 'html', descricao: string = ''): Promise<void> {
     try {
+      let valorArmazenado = valor;
+      if (TIPOS_CRIPTOGRAFADOS.has(tipo)) {
+        valorArmazenado = safeStorageService.encrypt(valor);
+      }
+
       const existing = await executeQuery<ConfiguracaoRow>(
         'SELECT chave FROM configuracoes WHERE chave = ?',
         [chave]
@@ -41,13 +59,13 @@ class ConfiguracaoService {
       if (existing.length > 0) {
         await executeNonQuery(
           'UPDATE configuracoes SET valor = ?, tipo = ?, descricao = ?, updated_at = CURRENT_TIMESTAMP WHERE chave = ?',
-          [valor, tipo, descricao, chave]
+          [valorArmazenado, tipo, descricao, chave]
         );
         log.info('Configuração atualizada', { chave });
       } else {
         await executeNonQuery(
           'INSERT INTO configuracoes (chave, valor, tipo, descricao) VALUES (?, ?, ?, ?)',
-          [chave, valor, tipo, descricao]
+          [chave, valorArmazenado, tipo, descricao]
         );
         log.info('Configuração criada', { chave });
       }

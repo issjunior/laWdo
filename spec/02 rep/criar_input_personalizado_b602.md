@@ -1,7 +1,7 @@
 # Plano: Campos Personalizados B-602 (Eficiência e Prestabilidade)
 
-> **Status:** Planejamento concluído — aguardando implementação
-> **Baseado em:** `criar_input_personalizados_exame.md` (guia de 4 passos), `cicar_placeholder.md` (ciclo completo de placeholder)
+> **Status:** Implementado (2026-06-11)
+> **Baseado em:** `criar_input_personalizados_exame.md` (guia de 4 passos), `ciclo_placeholder.md` (ciclo completo de placeholder)
 > **Tipo de exame:** B-602 (já cadastrado no banco via TiposExamePage)
 
 ---
@@ -532,55 +532,55 @@ As 4 tabelas do B-602 foram redesenhadas com layout profissional formal e coluna
 
 ## 8. Checklist de Implementação
 
-### Fase 1 — Database Migration
-- [ ] Nova migration removendo `nome_envolvido`, `numero_bo`, `numero_ip`, `lacre_entrada`, `lacre_saida` da tabela `reps`
-- [ ] Atualizar `CURRENT_SCHEMA_VERSION`
-- [ ] Atualizar `REPRow` em `database.ts`
-- [ ] Atualizar `rep.handlers.ts` (create/update)
-- [ ] Atualizar `rep.schema.ts` (remover campos)
+### Fase 1 — Database Migration ✅
+- [x] Nova migration (v23) removendo `nome_envolvido`, `numero_bo`, `numero_ip`, `lacre_entrada`, `lacre_saida` da tabela `reps`
+- [x] Atualizar `CURRENT_SCHEMA_VERSION`
+- [x] Atualizar `REPRow` em `database.ts`
+- [x] Atualizar `rep.handlers.ts` (create/update)
+- [x] Atualizar `rep.schema.ts` (remover campos)
 
-### Fase 2 — Remoção de campos nativos do frontend
-- [ ] Remover `nome_envolvido`, `numero_bo`, `numero_ip`, `lacre_entrada`, `lacre_saida` do `REPFormData` em `types.ts`
-- [ ] Remover campos do JSX (Dados da Solicitação e Documentos Associados) em `REPsPage.tsx`
-- [ ] Remover do `emptyForm()`, `FIELD_PLACEHOLDER`, `repFormSchema`, `prepareForApi()`, `handleEditar().form.reset()`
-- [ ] Remover referências no `mapping` do `aplicarPlaceholders()` em `LaudosPage.tsx`
+### Fase 2 — Remoção de campos nativos do frontend ✅
+- [x] Remover `nome_envolvido`, `numero_bo`, `numero_ip`, `lacre_entrada`, `lacre_saida` do `REPFormData` em `types.ts`
+- [x] Remover campos do JSX em `REPsPage.tsx` (substituído Accordion por Stepper)
+- [x] Remover do `emptyForm()`, `FIELD_PLACEHOLDER`, `repFormSchema`, `prepareForApi()`, `handleEditar().form.reset()`
+- [x] Remover referências no `mapping` do `aplicarPlaceholders()` em `LaudosPage.tsx`
 
-### Fase 3 — Componente B-602 + Service
-- [ ] Criar `src/renderer/components/rep/exam-fields/b602.tsx`
-  - [ ] `DadosInvestigacaoFields` com envolvidos dinâmicos (1-10)
-  - [ ] `MaterialEncFields` com toggle + linhas + Item auto-incremental
-  - [ ] `CartuchosFields` com toggle + linhas
-  - [ ] `EstojosFields` com toggle + linhas (sem projetil)
-- [ ] Criar `src/renderer/components/rep/exam-fields/services/b602.service.ts`
-  - [ ] `serialize()` com exclusão condicional de toggles desligados
-  - [ ] `deserialize()` populando arrays de linhas e estado dos toggles
-  - [ ] `fieldDefaults` e `fieldMasks`
+### Fase 3 — Componente B-602 + Service ✅
+- [x] Criar `src/renderer/components/rep/exam-fields/b602.tsx`
+  - [x] `DadosInvestigacaoFields` com envolvidos dinâmicos (1-10)
+  - [x] `MaterialEncFields` com toggle + linhas + Item auto-incremental
+  - [x] `CartuchosFields` com toggle + linhas
+  - [x] `EstojosFields` com toggle + linhas (sem projetil)
+- [x] Criar `src/renderer/components/rep/exam-fields/services/b602.service.ts`
+  - [x] `serialize()` com exclusão condicional de toggles desligados
+  - [x] `deserialize()` populando arrays de linhas e estado dos toggles
+  - [x] `fieldDefaults` e `fieldMasks`
 
-### Fase 4 — Registry + Tipos + Placeholders
-- [ ] Adicionar 4 entradas ao `SECTION_REGISTRY` em `exam-fields/index.ts`
-- [ ] Mapear `'B-602': [...]` no `EXAM_FIELD_MAP`
-- [ ] Registrar `b602Service` no `EXAM_SERVICE_REGISTRY`
-- [ ] Adicionar campos B-602 ao `REPFormData` em `exam-fields/types.ts`
-- [ ] Adicionar `cat-exam-B-602` ao `EXAM_PLACEHOLDER_CATEGORIES`
-- [ ] Adicionar placeholders B-602 ao `CAMPOS_ESPECIFICOS_PLACEHOLDERS`
-- [ ] Atualizar seed no `placeholder.service.ts` (remover nativos, adicionar B-602)
+### Fase 4 — Registry + Tipos + Placeholders ✅
+- [x] Adicionar 4 entradas ao `SECTION_REGISTRY` em `exam-fields/index.ts`
+- [x] Mapear `'B-602': [...]` no `EXAM_FIELD_MAP`
+- [x] Registrar `b602Service` no `EXAM_SERVICE_REGISTRY`
+- [x] Adicionar campos B-602 ao `REPFormData` em `exam-fields/types.ts`
+- [x] Adicionar `cat-exam-B-602` ao `EXAM_PLACEHOLDER_CATEGORIES`
+- [x] Adicionar placeholders B-602 ao `CAMPOS_ESPECIFICOS_PLACEHOLDERS`
+- [x] Atualizar seed no `placeholder.service.ts` (com B-602)
 
-### Fase 5 — REPsPage.tsx — Adições B-602
-- [ ] `emptyForm()` — adicionar defaults B-602
-- [ ] `FIELD_PLACEHOLDER` — adicionar entradas B-602
-- [ ] `repFormSchema` — campos B-602 opcionais + superRefine condicional (BO ou IP, envolvidos, etc.)
-- [ ] `form.trigger()` — paths B-602
-- [ ] `handleEditar()` — campos B-602 no `form.reset()`
-- [ ] Integrar toggles com stepper (filtrar dynamic steps)
+### Fase 5 — REPsPage.tsx — Adições B-602 ✅
+- [x] `emptyForm()` — adicionar defaults B-602
+- [x] `FIELD_PLACEHOLDER` — adicionar entradas B-602
+- [x] `repFormSchema` — campos B-602 opcionais + superRefine condicional (BO ou IP, envolvidos, etc.)
+- [x] `form.trigger()` — paths B-602
+- [x] `handleEditar()` — campos B-602 no `form.reset()` (via `...especificos`)
+- [x] Integrar com stepper (dynamic steps baseados no tipo de exame)
 
-### Fase 6 — Resolução no Laudo
+### Fase 6 — Resolução no Laudo ✅
 - [x] `aplicarPlaceholders()` — suporte a placeholders de tabela (`b602_tabela_*`) — **corrigido 2026-06-09**: `createContextualFragment` no lugar de `replaceWith(string)`
-- [ ] `aplicarPlaceholders()` — suporte a `b602_envolvido_N` (array index)
+- [x] `aplicarPlaceholders()` — suporte a `b602_envolvido_N` (array index)
 
-### Fase 7 — Build & Verificação
-- [ ] `npm run build` compila sem erros
-- [ ] `npm run lint` sem novos erros
-- [ ] Testar: nova REP com B-602, preencher campos, salvar, editar
-- [ ] Testar: toggles liga/desliga, linhas múltiplas, validação condicional
-- [ ] Testar: placeholders na PlaceholdersPage
-- [ ] Testar: preview PDF com placeholders B-602 resolvidos
+### Fase 7 — Build & Verificação ✅
+- [x] `npm run build` compila sem erros (2138 módulos)
+- [x] `npm run lint` sem novos erros
+- [x] Testar: nova REP com B-602, preencher campos, salvar, editar
+- [x] Testar: toggles liga/desliga, linhas múltiplas, validação condicional
+- [x] Testar: placeholders na PlaceholdersPage
+- [x] Testar: preview PDF com placeholders B-602 resolvidos

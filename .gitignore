@@ -29,6 +29,7 @@ lerna-debug.log*
 *.db-wal
 *.sqlite
 *.sqlite3
+docs
 
 # --- OPENCODE ---
 .opencode

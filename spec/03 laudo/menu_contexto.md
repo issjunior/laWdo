@@ -1,6 +1,6 @@
 # Plano: Menu de Contexto — Placeholders Dinâmicos por Tipo de Exame
 
-> **Status:** Planejamento concluído — aguardando implementação
+> **Status:** Implementado (2026-06-11)
 > **Baseado em:** `criar_input_personalizado_b602.md`, `criar_input_personalizados_exame.md`
 > **Objetivo:** Fazer o menu de contexto do editor de laudo mostrar placeholders organizados por submenus, filtrando apenas categorias relevantes ao tipo de exame do laudo atual, com entradas geradas dinamicamente a partir dos dados reais da REP.
 

@@ -97,6 +97,7 @@ const menuItems = [
     items: [
       { title: 'Modelos IA', path: '/modelos-ia', icon: Brain },
       { title: 'Margens do PDF', path: '/margens', icon: Ruler },
+      { title: 'API GDL', path: '/gdl-config', icon: Database },
       { title: 'Backup', path: '/backup', icon: Database },
       { title: 'Logs', path: '/logs', icon: FileText },
     ],

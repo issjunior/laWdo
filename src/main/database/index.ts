@@ -17,7 +17,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 23;
+const CURRENT_SCHEMA_VERSION = 24;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -1590,6 +1590,43 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
     } catch (error) {
       log.error('Erro ao aplicar migration versão 23', error);
       throw error;
+    }
+  }
+
+  // Migration versão 24: Migrar API keys IA para safeStorage (criptografia)
+  if (fromVersion < 24) {
+    try {
+      const { safeStorageService } = await import('../services/safe-storage.service.js');
+      if (safeStorageService.isAvailable()) {
+        const chavesIA = [
+          'api_key_groq',
+          'api_key_gemini',
+        ];
+        let migradas = 0;
+        for (const chave of chavesIA) {
+          const rows = await executeQuery<{ valor: string | null; tipo: string }>(
+            'SELECT valor, tipo FROM configuracoes WHERE chave = ?',
+            [chave]
+          );
+          if (rows.length === 0) continue;
+          const { valor, tipo } = rows[0];
+          if (valor && tipo !== 'api_key') {
+            const encrypted = safeStorageService.encrypt(valor);
+            await executeNonQuery(
+              'UPDATE configuracoes SET valor = ?, tipo = ? WHERE chave = ?',
+              [encrypted, 'api_key', chave]
+            );
+            migradas++;
+          }
+        }
+        if (migradas > 0) {
+          log.info(`Migration v24: ${migradas} chave(s) IA migrada(s) para safeStorage`);
+        }
+      } else {
+        log.warn('Migration v24: safeStorage indisponível, chaves IA mantidas sem criptografia');
+      }
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 24', error);
     }
   }
 

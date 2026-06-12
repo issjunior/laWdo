@@ -27,7 +27,7 @@
 └──────────────────────────┬───────────────────────────────────┘
                            │
 ┌──────────────────────────▼───────────────────────────────────┐
-│  src/main/utils/log-core.ts  —  Motor central               │
+│  src/main/utils/logger.ts   —  Motor central (reescrito)     │
 │  • Winston JSON: {timestamp, level, module, message, ...}    │
 │  • Transport: File assíncrono + buffer de escrita            │
 │  • Lazy eval: só serializa se level >= threshold do módulo   │
@@ -191,9 +191,9 @@ CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidad
 
 | # | Fase | Arquivos | Descrição |
 |---|---|---|---|
-| A1 | Tipos compartilhados | `src/shared/types/logger.ts` (novo) | Interfaces `LogModule`, `LogLevel`, `ILogger`, `AuditEntry`, `LogEntry` |
+| A1 | Tipos compartilhados | `src/shared/types/logger.ts` (novo) | Interfaces `LogModule`, `LogLevel`, `ILogger`, `AuditEntry`, `LogEntry`. **Nota:** O `LOG_MODULES` em `shared/types/logger.ts` não inclui `'gdl'` — o tipo `LogModule` em `logger.ts` é a fonte autoritativa. |
 | A2 | Migração `logs_auditoria` v19 | `src/main/database/index.ts` | Adicionar 6 colunas + índices |
-| A3 | Motor central JSON | `src/main/utils/log-core.ts` (novo) | Substitui `logger.ts` — Winston JSON, buffer assíncrono, lazy eval, níveis por módulo |
+│ A3 | Motor central JSON | `src/main/utils/logger.ts` (reescrito) | Substitui `logger.ts` antigo — Winston JSON, buffer assíncrono, lazy eval, níveis por módulo |
 | A4 | Logger factory | `src/main/utils/log-factory.ts` (novo) | `getLogger(module): ILogger` com cache singleton |
 | A5 | Audit log service | `src/main/services/audit-log.service.ts` (novo) | `auditLogin`, `auditDelete`, `auditExport`, `auditBackup`, `auditCicloVida`, `auditLimpezaLogs` |
 | A6 | Wire auditoria — handlers existentes | 8 handlers | Login, delete (solicitante, tipo_exame, rep, laudo, template, placeholder), backup, export |
@@ -225,10 +225,10 @@ CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidad
 | `user:verifyPassword` | renderer → main | `(userId, senha) → { valid: boolean }` | A |
 | `log:listar` | renderer → main | `(filtros?) → { data: LogEntry[] }` — JSON parseado | A |
 | `log:listar-auditoria` | renderer → main | `(filtros?) → { data: AuditEntry[] }` | A |
-| `log:limpar` | renderer → main | `(userId) → { success }` — limpa arquivos Winston | A |
+| `log:limpar` | renderer → main | `() → { success }` — limpa arquivos Winston | A |
 | `log:limpar-auditoria` | renderer → main | `(userId) → { success, registrosAfetados }` | A |
 | `log:contar` | renderer → main | `() → { sistema: number, auditoria: number }` | A |
-| `laudo:updateStatus` | renderer → main | `(laudoId, status, userId) → LaudoRow` | A |
+| `laudo:updateStatus` | renderer → main | `(laudoId, status, userId) → LaudoRow` | B |
 
 ---
 
@@ -238,7 +238,7 @@ CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidad
 |---|---|---|---|---|
 | 2025-05-29 | — | — | Plano criado | — |
 | 2025-05-29 | A1 | Tipos | `src/shared/types/logger.ts` criado com `LogModule`, `LogLevel`, `TipoAcao`, `ILogger`, `SystemLogEntry`, `AuditEntry`, `LogFilters`, etc. | Tipos puros, sem dependências |
-| 2025-05-29 | A2 | Migração v19 | 6 colunas adicionadas à `logs_auditoria`: `tipo_acao`, `modulo`, `nivel`, `mensagem`, `dados_anteriores`, `dados_novos`. Índices criados: `idx_logs_auditoria_modulo`, `idx_logs_auditoria_tipo`, `idx_logs_auditoria_entidade`. `CURRENT_SCHEMA_VERSION` = 19. | `database/index.ts`, `shared/types/database.ts` |
+| 2025-05-29 | A2 | Migração v19 | 6 colunas adicionadas à `logs_auditoria`: `tipo_acao`, `modulo`, `nivel`, `mensagem`, `dados_anteriores`, `dados_novos`. Índices criados: `idx_logs_auditoria_modulo`, `idx_logs_auditoria_tipo`, `idx_logs_auditoria_entidade`. `CURRENT_SCHEMA_VERSION` = 19 (atualmente 24). | `database/index.ts`, `shared/types/database.ts` |
 | 2025-05-29 | A3 | Motor JSON | `logger.ts` reescrito: Winston formato JSON para arquivos, texto colorido para console dev. Filtro por módulo (`shouldLog`), lazy eval em `debug()`, `getLogger(module)` com cache singleton. Níveis por módulo: database=info, renderer=warn, ilustracao=warn, ia=debug. | Motor central, maior refatoração |
 | 2025-05-29 | A4 | Factory | `log-factory.ts` — wrapper `createLogger(module)` que usa o cache do `getLogger`. | Thin wrapper |
 | 2025-05-29 | A5 | Audit service | `audit-log.service.ts`: `auditLogin`, `auditLogout`, `auditDelete`, `auditExport`, `auditBackup`, `auditCicloVida`, `auditLimpezaLogs`, `listAuditLogs`, `clearAuditLogs`, `countAuditLogs`. Fire-and-forget (INSERT não bloqueia). | `src/main/services/audit-log.service.ts` |

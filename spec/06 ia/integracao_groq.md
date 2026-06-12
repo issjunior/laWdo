@@ -64,7 +64,9 @@
  - src/renderer/pages/LaudosPage.tsx — Integrar AISectionToolbar em cada seção Collapsible
  - src/main/ipc/index.ts — Registrar registerIAHandlers()
  - src/preload/index.ts — Adicionar ia ao IpcAPI (com canais no ALLOWED_CHANNELS)
- - package.json — Adicionar dependência groq (SDK) ou usar fetch nativo
+  - package.json — Adicionar dependência groq (SDK) ou usar fetch nativo
+    > **Implementado:** O código usa `fetch` nativo. A dependência `groq` no `package.json` não é importada em nenhum arquivo.
+  - Toggle para habilitar/desabilitar IA: **não implementado** — a funcionalidade está sempre disponível se a chave estiver configurada.
 
  Reutilização existente
 
@@ -124,13 +126,18 @@
 
  src/renderer/components/ai/AISectionToolbar.tsx (novo)
 
- Props:
- interface Props {
-   editorId: string;        // ex: "secao-0"
-   secaoIndex: number;      // índice da seção
-   laudoId: string;
-   onApplyText: (texto: string) => void;  // callback para substituir conteúdo no editor
- }
+Props:
+interface Props {
+  editorId: string;        // ex: "secao-0"
+  secaoIndex: number;      // índice da seção
+  secaoTitulo: string;     // título da seção
+  htmlContent: string;     // conteúdo HTML atual da seção
+  onRevisarOrtografia: () => void;
+  onAdequarEscrita: () => void;
+  onDescreverImagem: () => void;
+  onPerguntar: () => void;
+  onOpenSheet: () => void;
+}
 
  UI: Barra horizontal com 4 elementos:
  1. Botão "Ortografia" (ícone SpellCheck do lucide) — chama ia:revisarOrtografia com conteúdo atual
@@ -146,14 +153,21 @@
 
  src/renderer/components/ai/AISheet.tsx (novo)
 
- Props:
- interface Props {
-   open: boolean;
-   onOpenChange: (open: boolean) => void;
-   secaoTitulo: string;
-   editorId: string;
-   onApplyResponse: (texto: string) => void;
- }
+Props:
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  secaoTitulo: string;
+  editorId: string;
+  messages: ChatMessage[];
+  onSendMessage: (texto: string) => void;
+  loading: boolean;
+  error: string | null;
+  onApplyResponse: (texto: string) => void;
+}
+
+> **Nota:** O estado de mensagens é gerenciado pelo componente pai (`LaudosPage.tsx`).
+> O `AISheet` é um componente apresentacional que recebe `messages`, `loading`, `error` como props.
 
  UI — Sheet lateral (lado direito, side="right", w-[420px]):
  - Header: Título "Assistente IA — {secaoTitulo}" + Badge indicando status (conectando/online/erro)

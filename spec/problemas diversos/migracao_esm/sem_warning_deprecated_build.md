@@ -1,3 +1,6 @@
+> **Status: ✅ IMPLEMENTADO / ARQUIVADO** — Todas as 3 categorias de mudanças foram aplicadas (2026-06-11).
+> O `package.json` tem `"type": "module"`, `tsconfig.json` usa `moduleResolution: "NodeNext"`, `src/main/index.ts` usa ESM `import`, e `scripts/fix-imports.mjs` existe com `postbuild`.
+
 Plano de Implementação: Migração para ESM (Otimizado)
 Migrar o projeto Electron para ESM eliminando avisos de depreciação do Vite com mínimos passos necessários.
 

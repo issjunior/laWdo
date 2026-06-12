@@ -90,9 +90,9 @@
 
 ### `laudo.service.ts` — Alterações nos métodos existentes
 
-- [x] `criarLaudoInicial()` — adicionar validação de unicidade + bloqueio
-- [x] `updateStatus()` — adicionar status `Bloqueado` + bloqueio/desbloqueio automático
-- [x] `deletar()` — desbloquear laudo irmão + limpar imagens + resetar status REP
+- [x] `criarLaudoInicial()` — adicionar validação de unicidade (feito) + bloqueio (não implementado)
+- [ ] `updateStatus()` — adicionar status `Bloqueado` + bloqueio/desbloqueio automático
+- [x] `deletar()` — resetar status REP (feito) + desbloquear laudo irmão (não implementado) + limpar imagens (feito)
 - [x] `deletarPorRepId()` — atualizado para múltiplos laudos
 
 ### Helpers internos
@@ -113,9 +113,9 @@
 ### Alterações em handlers existentes
 
 - [x] `laudo.handlers.ts` — `laudo:findAllByRepId`, `laudo:createWizardRascunho`, `laudo:gerarWizard`, `laudo:salvarProgressoWizard`, `laudo:getRespostasWizard`
-- [x] `laudo.handlers.ts` — array `statusValidos` incluir `'Bloqueado'`
-- [x] `rep.handlers.ts` — `rep:create`/`rep:update`: suporte a `modo_criacao='wizard'` + `wizard_id`
-- [x] `rep.handlers.ts` — chamar `criarLaudoWizardRascunho()` automaticamente, retornar `warning` se falhar
+- [ ] `laudo.handlers.ts` — array `statusValidos` incluir `'Bloqueado'`
+- [ ] `rep.handlers.ts` — `rep:create`/`rep:update`: suporte a `modo_criacao='wizard'` + `wizard_id`
+- [ ] `rep.handlers.ts` — chamar `criarLaudoWizardRascunho()` automaticamente, retornar `warning` se falhar
 
 ### Registrar handlers
 
@@ -198,7 +198,7 @@
 - [x] Botão "Salvar Progresso" → `laudo:salvarProgressoWizard`
 - [x] Botão "Gerar Laudo Wizard" → `laudo:gerarWizard`
 - [x] Validação de etapas obrigatórias antes de gerar
-- [x] Alerta de bloqueio (Lock + Alert) com inputs e botões desabilitados
+- [x] Alerta de bloqueio (Lock + Alert) — UI preparada, lógica de bloqueio pendente
 - [x] Retroatividade: reabrir laudo existente → carregar respostas da tabela `respostas_wizard`
 - [x] Redirecionar para LaudosPage após gerar com toast
 
@@ -213,10 +213,10 @@
 ### `LaudosPage.tsx`
 
 - [x] Adicionar `tipo_criacao` e `wizard_id` ao `LaudoItem`
-- [x] Badge `Bloqueado` (slate) no status
+- [x] Badge `Bloqueado` (slate) no status — UI preparada
 - [x] Roteamento condicional no `handleEditar`: wizard → `/reps/:repId/wizard`, template → TinyMCE
 - [x] Ícone `Zap` para laudos wizard
-- [x] Ações desabilitadas para laudos `Bloqueado`
+- [ ] Ações desabilitadas para laudos `Bloqueado` (status `Bloqueado` não implementado)
 - [x] Import `useNavigate` e `Zap`
 
 ### Sidebar
@@ -256,11 +256,16 @@
 
 ### Bloqueio entre laudos
 
-- [x] Concluir laudo template → wizard vira `Bloqueado` (implementado)
-- [x] Concluir laudo wizard → template vira `Bloqueado` (implementado)
-- [x] Reabrir laudo (`Em andamento`) → outro laudo desbloqueia (implementado)
-- [x] Deletar laudo `Concluído`/`Entregue` → outro laudo desbloqueia (implementado)
-- [x] Laudo `Bloqueado`: ações desabilitadas na UI (implementado)
+> **Status: Não implementado.** O status `Bloqueado` e a lógica de bloqueio/desbloqueio automático não foram implementados. Apenas os 3 status existentes (`Em andamento`, `Concluído`, `Entregue`) são suportados.
+
+- [ ] Concluir laudo template → wizard vira `Bloqueado`
+- [ ] Concluir laudo wizard → template vira `Bloqueado`
+- [ ] Reabrir laudo (`Em andamento`) → outro laudo desbloqueia
+- [ ] Deletar laudo `Concluído`/`Entregue` → outro laudo desbloqueia
+- [ ] Laudo `Bloqueado`: ações desabilitadas na UI
+- [ ] `criarLaudoInicial()` — validação de bloqueio (rejeitar template se wizard Concluído/Entregue)
+- [ ] `criarLaudoWizardRascunho()` — criação automática ao criar/atualizar REP com wizard
+- [ ] `laudo:createWizardRascunho` — IPC handler para rascunho automático
 
 ---
 
@@ -285,12 +290,12 @@
 
 | Arquivo | Mudanças |
 |---|---|
-| `src/main/database/index.ts` | Migrations v20a/v20b/v20c, CURRENT_SCHEMA_VERSION=20 |
+| `src/main/database/index.ts` | Migrations v20a/v20b/v20c, CURRENT_SCHEMA_VERSION=20 (atualmente v24) |
 | `src/main/types/database.ts` | 7 novas interfaces, LaudoRow atualizado, EntityRow atualizado |
-| `src/main/services/laudo.service.ts` | 6 novos métodos, bloqueio, reaplicação, hash |
+| `src/main/services/laudo.service.ts` | 4 novos métodos (gerarWizard, salvarProgressoWizard, getRespostasWizard, _hashContent, _reaplicarBlocosPeca). Bloqueio pendente. |
 | `src/main/ipc/index.ts` | Registrar 3 novos handlers |
 | `src/main/ipc/handlers/laudo.handlers.ts` | 5 novos handlers, status atualizado |
-| `src/main/ipc/handlers/rep.handlers.ts` | Suporte a modo_criacao='wizard' |
+| `src/main/ipc/handlers/rep.handlers.ts` | Suporte a modo_criacao='wizard' pendente |
 | `src/main/utils/logger.ts` | 3 novos LogModule |
 | `src/shared/types/logger.ts` | 3 novos módulos |
 | `src/preload/index.ts` | APIs wizard/peca/regraWizard, laudo atualizado |
