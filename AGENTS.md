@@ -70,6 +70,23 @@ main/
 
 React 18 + React Router 7 (HashRouter — obrigatório para Electron com `file://`) + Tailwind CSS + shadcn/ui (New York style). Páginas com lazy loading via `React.lazy`.
 
+### Organização de módulos (features)
+
+Cada feature deve ter responsabilidade única e clara, com seus próprios serviços, handlers, componentes e páginas — nomeados consistentemente (ex: `rep.service.ts`, `rep.handlers.ts`, `RepStepper`, `REPsPage.tsx`).
+
+**Comunicação entre features**:
+- **Main ↔ Renderer**: sempre via IPC + preload. Nunca importar módulos do main no renderer.
+- **Dentro do mesmo processo** (ex: entre feature folders do renderer): imports cruzados são aceitáveis apenas para:
+  - **Páginas compondo features** — uma página pode importar componentes de múltiplas feature folders.
+  - **Tipos compartilhados** — extraia para `src/shared/types/` se duas features precisam do mesmo tipo.
+  - **Componentes genéricos reutilizáveis** — extraia para `src/renderer/components/ui/`.
+
+**Evitar**:
+- Importar hooks/utilitários internos de outra feature folder.
+- Acoplamento circular entre features.
+
+**Quando modularizar**: quando uma feature cresce e ganha múltiplas páginas, componentes, handlers IPC e serviços próprios. Evite modularizar demais (overhead de comunicação IPC, arquivos minúsculos) ou de menos (feature monolítica que dificulta manutenção).
+
 ---
 
 ## IPC e segurança do Electron
