@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Database } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Network } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type REP } from '@/lib/validators';
 import { z } from 'zod';
@@ -1323,7 +1323,7 @@ export const REPsPage: React.FC = () => {
                     className="flex items-center gap-1"
                     title="Consultar dados de REP no GDL"
                   >
-                    <Database size={14} />
+                    <Network size={14} />
                     GDL
                   </Button>
                   <Button
