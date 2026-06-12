@@ -203,7 +203,8 @@ export const registerTemplateHandlers = (): void => {
   img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
   .laudo-figure { text-align: center; margin: 12px auto; page-break-inside: avoid; }
   figcaption { font-size: 12px; color: #444; font-weight: bold; margin-top: 4px; }
-  .placeholder-tag { color: #1a73e8; font-family: monospace; }
+  .placeholder-tag { background-color: #e8f0fe; color: #1a73e8; border-radius: 4px; padding: 2px 6px; font-weight: 500; }
+  .campo-reservado { background-color: rgba(255,193,7,0.2); color: #b45309; border-bottom: 2px dotted #f59e0b; border-radius: 4px; padding: 2px 6px; font-weight: 500; }
 </style>
 </head>
 <body>${html}</body>

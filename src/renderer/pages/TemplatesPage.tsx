@@ -12,6 +12,7 @@ import {
   Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
   FileText, GripVertical, Layers, Eye, LayoutGrid, List, Upload, Sun, Moon, SunMoon,
   Image as ImageIcon,
+  Baseline,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -295,6 +296,20 @@ export const TemplatesPage: React.FC = () => {
     }
   };
 
+  const inserirReservadoNoEditor = () => {
+    const activeEditor = (window as any).tinymce?.activeEditor;
+    if (!activeEditor) {
+      toast.error('Selecione o editor primeiro');
+      return;
+    }
+    const editorId = activeEditor.id;
+    if (!editorId || (!editorId.startsWith('template-single-editor') && !editorId.startsWith('template-secao-'))) {
+      toast.error('Editor não encontrado');
+      return;
+    }
+    activeEditor.insertContent('<span class="campo-reservado" data-reservado="true">XXX</span>&nbsp;');
+  };
+
   const filteredByTipo = templates.filter(t => {
     if (t.id === 'tpl-nao-definido') return false;
     return !filtroTipoExame || filtroTipoExame === 'todos' || t.tipo_exame_id === filtroTipoExame;
@@ -331,8 +346,8 @@ export const TemplatesPage: React.FC = () => {
     if (r.success && r.data) {
       const s: SecaoItem[] = r.data;
       setSecoesDb(s);
-      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' })));
-      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' }))));
+      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' })));
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' }))));
     } else {
       setSecoesDb([]);
       setSecoes([emptySecaoForm()]);
@@ -401,8 +416,8 @@ export const TemplatesPage: React.FC = () => {
       if (r.success && r.data) {
         const s: SecaoItem[] = r.data;
         setSecoesDb(s);
-        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' })));
-        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves) : '' }))));
+        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' })));
+        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' }))));
       } else {
         setSecoesDb([]);
         setSecoes([emptySecaoForm()]);
@@ -541,7 +556,7 @@ export const TemplatesPage: React.FC = () => {
         const r = await window.ipcAPI.template.findSecoes(templateId);
         if (r.success) {
           setSecoesDb(r.data);
-          const nextSecoes = r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves) : '' }));
+          const nextSecoes = r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true) : '' }));
           setSecoes(nextSecoes);
           setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
         }
@@ -662,7 +677,10 @@ export const TemplatesPage: React.FC = () => {
 
       const secResult = await window.ipcAPI.template.findSecoes(template.id);
       const loadedSecoes: { nome: string; conteudo?: string }[] =
-        secResult.success && secResult.data ? secResult.data : [];
+        (secResult.success && secResult.data ? secResult.data : []).map((s: any) => ({
+          nome: s.nome,
+          conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true) : '',
+        }));
 
       const { fullHtml, headerTemplate } = await montarHtmlPreview(
         loadedSecoes,
@@ -1098,10 +1116,11 @@ export const TemplatesPage: React.FC = () => {
                   </TooltipContent>
                 </Tooltip>
               </div>
+              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={inserirDummyNoEditor}
                     className="h-8 px-2.5"
@@ -1111,6 +1130,20 @@ export const TemplatesPage: React.FC = () => {
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">Inserir Espaço para Ilustração</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={inserirReservadoNoEditor}
+                    className="h-8 px-2.5"
+                  >
+                    <Baseline size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">Inserir Campo Reservado (XXX)</TooltipContent>
+              </Tooltip>
+              </div>
               {editorMode === 'multi' && (
                 <Button variant="outline" size="sm" onClick={handleAddSecao} className="flex items-center gap-1">
                   <Plus size={14} /> Adicionar Seção
@@ -1138,6 +1171,7 @@ export const TemplatesPage: React.FC = () => {
                     placeholder="Edite o laudo completo..."
                     placeholderChaves={placeholderChaves}
                     theme={editorTheme}
+                    autoConverterReservados={true}
                   />
               </PlaceholderContextMenu>
           ) : secoes.length === 0 ? (
@@ -1183,6 +1217,7 @@ export const TemplatesPage: React.FC = () => {
                       placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
                       placeholderChaves={placeholderChaves}
                       theme={editorTheme}
+                      autoConverterReservados={true}
                     />
                 </PlaceholderContextMenu>
               </div>

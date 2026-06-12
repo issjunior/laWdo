@@ -94,6 +94,8 @@ interface TinyMceEditorProps {
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
   onEditorInit?: (editor: any) => void;
+  /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
+  autoConverterReservados?: boolean;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<HTMLDivElement>> = ({
@@ -108,6 +110,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   theme = 'light',
   placeholderChaves,
   onEditorInit,
+  autoConverterReservados = false,
   ...rest
 }) => {
   const editorRef = useRef<any>(null);
@@ -233,6 +236,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               font-weight: 500;
               user-select: all;
               cursor: default;
+            }
+            .campo-reservado {
+              background-color: rgba(255,193,7,0.2);
+              color: #b45309;
+              border-radius: 4px;
+              padding: 2px 6px;
+              border-bottom: 2px dotted #f59e0b;
+              font-weight: 500;
             }
             img {
               max-width: 100%;
@@ -525,6 +536,66 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
 
               editor.on('remove', () => {
                 if (placeholderTimer) clearTimeout(placeholderTimer);
+              });
+            }
+
+            // ─── Auto-converter XXX digitado manualmente em span estilizado ─────
+            if (autoConverterReservados) {
+              let reservadoTimer: ReturnType<typeof setTimeout> | null = null;
+
+              const converterReservadoLocal = () => {
+                const rng = editor.selection.getRng();
+                if (!rng || !rng.startContainer) return;
+
+                const textNode = rng.startContainer;
+                if (textNode.nodeType !== 3) return;
+
+                const parent = textNode.parentElement;
+                if (parent?.classList?.contains('campo-reservado')) return;
+                if (parent?.getAttribute?.('data-reservado')) return;
+
+                const text = textNode.textContent || '';
+                const regex = /XXX/gi;
+                const substituicoes: { pos: number; fim: number; padrao: string }[] = [];
+                let match: RegExpExecArray | null;
+
+                while ((match = regex.exec(text)) !== null) {
+                  substituicoes.push({ pos: match.index, fim: match.index + match[0].length, padrao: match[0] });
+                }
+
+                if (substituicoes.length === 0) return;
+
+                const bookmark = editor.selection.getBookmark(2, true);
+
+                const fragment = document.createDocumentFragment();
+                let cursor = 0;
+                for (const s of substituicoes) {
+                  if (s.pos > cursor) {
+                    fragment.appendChild(document.createTextNode(text.substring(cursor, s.pos)));
+                  }
+                  const span = document.createElement('span');
+                  span.className = 'campo-reservado';
+                  span.setAttribute('data-reservado', 'true');
+                  span.textContent = s.padrao;
+                  fragment.appendChild(span);
+                  cursor = s.fim;
+                }
+                if (cursor < text.length) {
+                  fragment.appendChild(document.createTextNode(text.substring(cursor)));
+                }
+
+                textNode.parentNode?.replaceChild(fragment, textNode);
+
+                editor.selection.moveToBookmark(bookmark);
+              };
+
+              editor.on('input', () => {
+                if (reservadoTimer) clearTimeout(reservadoTimer);
+                reservadoTimer = setTimeout(converterReservadoLocal, 600);
+              });
+
+              editor.on('remove', () => {
+                if (reservadoTimer) clearTimeout(reservadoTimer);
               });
             }
           },
