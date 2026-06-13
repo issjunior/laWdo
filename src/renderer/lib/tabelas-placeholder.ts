@@ -33,13 +33,13 @@ export function buildNumberedTable(titulo: string, headers: string[], rows: stri
   return `<table style="${style(TABLE_STYLES.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
 }
 
-export function buildDadosInvestigacaoTable(b602: Record<string, unknown>): string {
+export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solicitanteNome?: string): string {
   const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean) ?? [];
   const dataOcorrencia = String(b602.data_ocorrencia || '-');
   const local = String(b602.local || '-');
   const numeroBo = String(b602.numero_bo || '-');
   const numeroIp = String(b602.numero_ip || '-');
-  const solicitanteNome = String(b602.solicitante_nome || '-');
+  const unidadePolicial = solicitanteNome || String(b602.solicitante_nome || '-');
 
   const s = TABLE_STYLES;
 
@@ -58,7 +58,7 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>): stri
     `<tr>${labelCell('Envolvido(s):', '25%')}<td colspan="3" style="${style(s.td)}">${envolvidosVal}</td></tr>`,
     `<tr>${labelCell('Data da Ocorrência:', '25%')}${cell(dataOcorrencia, '25%')}${labelCell('Local:', '25%')}${cell(local, '25%')}</tr>`,
     `<tr>${labelCell('Boletim de Ocorrência:', '25%')}${cell(numeroBo, '25%')}${labelCell('Nº do IP:', '25%')}${cell(numeroIp, '25%')}</tr>`,
-    `<tr><td colspan="1" style="${style({ ...s.td, fontWeight: '600' })};width:25%">Unidade Policial:</td><td colspan="3" style="${style(s.td)};width:75%">${solicitanteNome}</td></tr>`,
+    `<tr><td colspan="1" style="${style({ ...s.td, fontWeight: '600' })};width:25%">Unidade Policial:</td><td colspan="3" style="${style(s.td)};width:75%">${unidadePolicial}</td></tr>`,
   ];
 
   return `<table style="${style(s.table)}">${rows.join('')}</table>`;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FormField, FormItem, FormControl, FormMessage } from '@/components/forms/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Plus, X } from 'lucide-react';
 import type { ExamSectionProps, MenuSection } from './types';
 
@@ -64,17 +69,50 @@ function formatarLocal(raw: string): string {
 }
 
 export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) => {
-  const [numEnvolvidos, setNumEnvolvidos] = useState(1);
+  const [numEnvolvidos, setNumEnvolvidos] = useState(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const valor = form.getValues(`b602_envolvidos_${i}` as any);
+      if (valor && typeof valor === 'string' && valor.trim() !== '') {
+        maxIndex = i;
+      }
+    }
+    return Math.max(1, maxIndex + 1);
+  });
+
+  const envolvidosValores = form.watch([
+    'b602_envolvidos_0', 'b602_envolvidos_1', 'b602_envolvidos_2',
+    'b602_envolvidos_3', 'b602_envolvidos_4', 'b602_envolvidos_5',
+    'b602_envolvidos_6', 'b602_envolvidos_7', 'b602_envolvidos_8',
+    'b602_envolvidos_9'
+  ] as any);
+
+  useEffect(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const valor = form.getValues(`b602_envolvidos_${i}` as any);
+      if (valor && typeof valor === 'string' && valor.trim() !== '') {
+        maxIndex = i;
+      }
+    }
+    const count = maxIndex + 1;
+    if (count > numEnvolvidos) {
+      setNumEnvolvidos(count);
+    }
+  }, [envolvidosValores, form, numEnvolvidos]);
 
   const envolvidos = Array.from({ length: numEnvolvidos }, (_, i) => i);
 
   return (
-    <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
-      <span className="text-xs font-semibold text-muted-foreground">Dados da Investigação</span>
+    <div className="border rounded-lg p-4 bg-muted/30 space-y-4 overflow-hidden">
+      <span className="text-xs font-semibold text-muted-foreground block mb-2">Dados da Investigação</span>
 
-      <div className="grid grid-cols-[25%_75%] gap-2 items-start">
-        <span className="text-sm font-medium leading-none pt-2">Envolvido(s) *</span>
-        <div className="space-y-2">
+      {/* Envolvidos */}
+      <div className="flex flex-col md:flex-row gap-2 items-start">
+        <label className="text-sm font-medium shrink-0 md:w-[150px] md:pt-2.5">
+          Envolvido(s) *
+        </label>
+        <div className="flex-1 space-y-2 min-w-0 w-full">
           {envolvidos.map((i) => {
             const isLast = i === envolvidos.length - 1;
             return (
@@ -84,7 +122,7 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
                   control={form.control}
                   name={`b602_envolvidos_${i}`}
                   render={({ field }) => (
-                    <FormItem className="flex-1 space-y-0">
+                    <FormItem className="flex-1 space-y-0 min-w-0">
                       <FormControl>
                         <Input placeholder="Nome do envolvido" {...field} />
                       </FormControl>
@@ -110,11 +148,11 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    className="shrink-0"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
                     onClick={() => setNumEnvolvidos((n) => n + 1)}
                   >
-                    <Plus size={14} className="mr-1" /> Adicionar
+                    <Plus size={14} />
                   </Button>
                 )}
               </div>
@@ -123,86 +161,135 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
         </div>
       </div>
 
-      <div className="grid grid-cols-[25%_25%_25%_25%] gap-2 items-start">
-        <span className="text-sm font-medium leading-none pt-2">Data da Ocorrência *</span>
-        <FormField
-          control={form.control}
-          name="b602_data_ocorrencia"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Input type="date" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <span className="text-sm font-medium leading-none pt-2">Local *</span>
-        <FormField
-          control={form.control}
-          name="b602_local"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Input
-                  placeholder="bairro / cidade / PR"
-                  value={field.value || ''}
-                  onChange={(e) => field.onChange(formatarLocal(e.target.value))}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      {/* Data e Local */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <label className="text-sm font-medium shrink-0 md:w-[150px]">
+            Data da Ocorrência *
+          </label>
+          <div className="flex-1 min-w-0 w-full">
+            <FormField
+              control={form.control}
+              name="b602_data_ocorrencia"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <label className="text-sm font-medium shrink-0 md:w-[60px]">
+            Local *
+          </label>
+          <div className="flex-1 min-w-0 w-full">
+            <FormField
+              control={form.control}
+              name="b602_local"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input
+                      placeholder="bairro / cidade / PR"
+                      value={field.value || ''}
+                      onChange={(e) => field.onChange(formatarLocal(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-[25%_25%_25%_25%] gap-2 items-start">
-        <span className="text-sm font-medium leading-none pt-2">Boletim de Ocorrência</span>
-        <FormField
-          control={form.control}
-          name="b602_numero_bo"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Input
-                  placeholder="2026/123456"
-                  value={field.value || ''}
-                  onChange={(e) => field.onChange(formatarNumeroBO(e.target.value))}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <span className="text-sm font-medium leading-none pt-2">Nº do IP</span>
-        <FormField
-          control={form.control}
-          name="b602_numero_ip"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Input placeholder="Inquérito Policial" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      {/* BO e IP */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <label className="text-sm font-medium shrink-0 md:w-[150px]">
+            Boletim de Ocorrência
+          </label>
+          <div className="flex-1 min-w-0 w-full">
+            <FormField
+              control={form.control}
+              name="b602_numero_bo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input
+                      placeholder="2026/123456"
+                      value={field.value || ''}
+                      onChange={(e) => field.onChange(formatarNumeroBO(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <label className="text-sm font-medium shrink-0 md:w-[60px]">
+            Nº do IP
+          </label>
+          <div className="flex-1 min-w-0 w-full">
+            <FormField
+              control={form.control}
+              name="b602_numero_ip"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input placeholder="Inquérito Policial" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-[25%_75%] gap-2 items-start">
-        <span className="text-sm font-medium leading-none pt-2">Unidade Policial *</span>
-        <FormField
-          control={form.control}
-          name="b602_solicitante_nome"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Input placeholder="Nome que consta no documento" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      {/* Unidade Policial */}
+      <div className="flex flex-col md:flex-row md:items-center gap-2">
+        <div className="shrink-0 md:w-[150px]">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <label className="text-sm font-medium cursor-help">
+                Unidade Policial
+              </label>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="max-w-[250px] text-xs">
+                Preenchido automaticamente com o nome do Solicitante selecionado acima.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="flex-1 min-w-0 w-full">
+          <FormField
+            control={form.control}
+            name="b602_solicitante_nome"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <Input
+                    {...field}
+                    disabled
+                    placeholder="Preenchido automaticamente"
+                    className="bg-muted cursor-not-allowed"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
       </div>
     </div>
   );
@@ -245,7 +332,48 @@ function ToggleSection({
 }
 
 export const MaterialEncFields: React.FC<ExamSectionProps> = ({ form }) => {
-  const [numLinhas, setNumLinhas] = useState(1);
+  const [numLinhas, setNumLinhas] = useState(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_material_enc_${i}_`;
+      const natureza = form.getValues(`${prefix}natureza` as any);
+      const quantidade = form.getValues(`${prefix}quantidade` as any);
+      const tipo = form.getValues(`${prefix}tipo` as any);
+      const dito = form.getValues(`${prefix}dito_oficio` as any);
+      const lacre = form.getValues(`${prefix}numero_lacre` as any);
+      if (natureza || quantidade || tipo || dito || lacre) {
+        maxIndex = i;
+      }
+    }
+    return Math.max(1, maxIndex + 1);
+  });
+
+  const materialValores = form.watch([
+    'b602_material_enc_0_natureza', 'b602_material_enc_1_natureza',
+    'b602_material_enc_2_natureza', 'b602_material_enc_3_natureza',
+    'b602_material_enc_4_natureza', 'b602_material_enc_5_natureza',
+    'b602_material_enc_6_natureza', 'b602_material_enc_7_natureza',
+    'b602_material_enc_8_natureza', 'b602_material_enc_9_natureza'
+  ] as any);
+
+  useEffect(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_material_enc_${i}_`;
+      const natureza = form.getValues(`${prefix}natureza` as any);
+      const quantidade = form.getValues(`${prefix}quantidade` as any);
+      const tipo = form.getValues(`${prefix}tipo` as any);
+      const dito = form.getValues(`${prefix}dito_oficio` as any);
+      const lacre = form.getValues(`${prefix}numero_lacre` as any);
+      if (natureza || quantidade || tipo || dito || lacre) {
+        maxIndex = i;
+      }
+    }
+    const count = maxIndex + 1;
+    if (count > numLinhas) {
+      setNumLinhas(count);
+    }
+  }, [materialValores, form, numLinhas]);
 
   const toggleValue = form.watch('b602_material_enc_toggle' as any) as string | undefined;
   const active = toggleValue === 'on';
@@ -574,7 +702,54 @@ function LinhaTabelaBalistica({
 }
 
 export const CartuchosFields: React.FC<ExamSectionProps> = ({ form }) => {
-  const [numLinhas, setNumLinhas] = useState(1);
+  const [numLinhas, setNumLinhas] = useState(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_cartuchos_${i}_`;
+      const qtd = form.getValues(`${prefix}quantidade` as any);
+      const calibre = form.getValues(`${prefix}calibre` as any);
+      const marca = form.getValues(`${prefix}marca` as any);
+      const origem = form.getValues(`${prefix}origem` as any);
+      const espoleta = form.getValues(`${prefix}espoleta` as any);
+      const estojo = form.getValues(`${prefix}estojo` as any);
+      const projetil = form.getValues(`${prefix}projetil` as any);
+      const obs = form.getValues(`${prefix}observacao` as any);
+      if (qtd || calibre || marca || origem || espoleta || estojo || projetil || obs) {
+        maxIndex = i;
+      }
+    }
+    return Math.max(1, maxIndex + 1);
+  });
+
+  const cartuchosValores = form.watch([
+    'b602_cartuchos_0_quantidade', 'b602_cartuchos_1_quantidade',
+    'b602_cartuchos_2_quantidade', 'b602_cartuchos_3_quantidade',
+    'b602_cartuchos_4_quantidade', 'b602_cartuchos_5_quantidade',
+    'b602_cartuchos_6_quantidade', 'b602_cartuchos_7_quantidade',
+    'b602_cartuchos_8_quantidade', 'b602_cartuchos_9_quantidade'
+  ] as any);
+
+  useEffect(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_cartuchos_${i}_`;
+      const qtd = form.getValues(`${prefix}quantidade` as any);
+      const calibre = form.getValues(`${prefix}calibre` as any);
+      const marca = form.getValues(`${prefix}marca` as any);
+      const origem = form.getValues(`${prefix}origem` as any);
+      const espoleta = form.getValues(`${prefix}espoleta` as any);
+      const estojo = form.getValues(`${prefix}estojo` as any);
+      const projetil = form.getValues(`${prefix}projetil` as any);
+      const obs = form.getValues(`${prefix}observacao` as any);
+      if (qtd || calibre || marca || origem || espoleta || estojo || projetil || obs) {
+        maxIndex = i;
+      }
+    }
+    const count = maxIndex + 1;
+    if (count > numLinhas) {
+      setNumLinhas(count);
+    }
+  }, [cartuchosValores, form, numLinhas]);
 
   const toggleValue = form.watch('b602_cartuchos_toggle' as any) as string | undefined;
   const active = toggleValue === 'on';
@@ -623,7 +798,52 @@ export const CartuchosFields: React.FC<ExamSectionProps> = ({ form }) => {
 };
 
 export const EstojosFields: React.FC<ExamSectionProps> = ({ form }) => {
-  const [numLinhas, setNumLinhas] = useState(1);
+  const [numLinhas, setNumLinhas] = useState(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_estojos_${i}_`;
+      const qtd = form.getValues(`${prefix}quantidade` as any);
+      const calibre = form.getValues(`${prefix}calibre` as any);
+      const marca = form.getValues(`${prefix}marca` as any);
+      const origem = form.getValues(`${prefix}origem` as any);
+      const espoleta = form.getValues(`${prefix}espoleta` as any);
+      const estojo = form.getValues(`${prefix}estojo` as any);
+      const obs = form.getValues(`${prefix}observacao` as any);
+      if (qtd || calibre || marca || origem || espoleta || estojo || obs) {
+        maxIndex = i;
+      }
+    }
+    return Math.max(1, maxIndex + 1);
+  });
+
+  const estojosValores = form.watch([
+    'b602_estojos_0_quantidade', 'b602_estojos_1_quantidade',
+    'b602_estojos_2_quantidade', 'b602_estojos_3_quantidade',
+    'b602_estojos_4_quantidade', 'b602_estojos_5_quantidade',
+    'b602_estojos_6_quantidade', 'b602_estojos_7_quantidade',
+    'b602_estojos_8_quantidade', 'b602_estojos_9_quantidade'
+  ] as any);
+
+  useEffect(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_estojos_${i}_`;
+      const qtd = form.getValues(`${prefix}quantidade` as any);
+      const calibre = form.getValues(`${prefix}calibre` as any);
+      const marca = form.getValues(`${prefix}marca` as any);
+      const origem = form.getValues(`${prefix}origem` as any);
+      const espoleta = form.getValues(`${prefix}espoleta` as any);
+      const estojo = form.getValues(`${prefix}estojo` as any);
+      const obs = form.getValues(`${prefix}observacao` as any);
+      if (qtd || calibre || marca || origem || espoleta || estojo || obs) {
+        maxIndex = i;
+      }
+    }
+    const count = maxIndex + 1;
+    if (count > numLinhas) {
+      setNumLinhas(count);
+    }
+  }, [estojosValores, form, numLinhas]);
 
   const toggleValue = form.watch('b602_estojos_toggle' as any) as string | undefined;
   const active = toggleValue === 'on';

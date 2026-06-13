@@ -61,7 +61,6 @@ const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
   { chave: 'b602_local',                valor: '', descricao: 'Local da ocorrência (B-602)',                          categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_numero_bo',            valor: '', descricao: 'Número do Boletim de Ocorrência (B-602)',              categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_numero_ip',            valor: '', descricao: 'Número do Inquérito Policial (B-602)',                 categoria_id: 'cat-exam-B-602' },
-  { chave: 'b602_solicitante_nome',     valor: '', descricao: 'Nome do solicitante no documento (B-602)',             categoria_id: 'cat-exam-B-602' },
 ];
 
 function getExamCategoryId(codigo: string): string {

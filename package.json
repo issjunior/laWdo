@@ -27,7 +27,7 @@
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder"
   },

@@ -141,7 +141,7 @@ function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string):
           if (b602.data_ocorrencia || b602.local || b602.numero_bo || b602.numero_ip || b602.solicitante_nome) {
             envolvidosHtml += buildRepTwoCol('Data Ocorrência', s(b602.data_ocorrencia), 'Local', s(b602.local));
             envolvidosHtml += buildRepTwoCol('Nº BO', s(b602.numero_bo), 'Nº IP', s(b602.numero_ip));
-            envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Unidade Policial</td><td colspan="3" style="${REP_TABLE_STYLES.td}">${s(b602.solicitante_nome)}</td></tr>`;
+            envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Unidade Policial</td><td colspan="3" style="${REP_TABLE_STYLES.td}">${solicitanteNome || s(b602.solicitante_nome)}</td></tr>`;
           }
           envolvidosHtml += `</table>`;
           html += envolvidosHtml;
@@ -463,9 +463,6 @@ export const REPsPage: React.FC = () => {
       if (!data.b602_local?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Local é obrigatório para B-602', path: ['b602_local'] });
       }
-      if (!data.b602_solicitante_nome?.trim()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Nome do solicitante é obrigatório para B-602', path: ['b602_solicitante_nome'] });
-      }
       if (!data.b602_numero_bo?.trim() && !data.b602_numero_ip?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Preencha o Nº do BO ou Nº do IP (B-602 exige ao menos um)', path: ['b602_numero_bo'] });
       }
@@ -587,6 +584,16 @@ export const REPsPage: React.FC = () => {
     if (!tipoExameSelecionado) return [];
     return getSectionsForExame(tipoExameSelecionado.codigo);
   }, [tipoExameSelecionado, tiposExame]);
+
+  const solicitanteId = form.watch('solicitante_id');
+  useEffect(() => {
+    if (solicitanteId) {
+      const solicitante = solicitantes.find(s => s.id === solicitanteId);
+      if (solicitante) {
+        form.setValue('b602_solicitante_nome', solicitante.nome, { shouldValidate: false });
+      }
+    }
+  }, [solicitanteId, solicitantes]);
 
   const stepper = useRepStepper({ form, tipoExameId, tipoExameSelecionado });
 

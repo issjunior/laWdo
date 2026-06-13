@@ -46,7 +46,6 @@ export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   { chave: 'b602_local',                label: 'Local (B-602)',                  descricao: 'Local da ocorrência',                               jsonPath: 'b602.local',                 categoria_exam_codigo: 'B-602' },
   { chave: 'b602_numero_bo',            label: 'Nº BO (B-602)',                  descricao: 'Número do Boletim de Ocorrência',                  jsonPath: 'b602.numero_bo',             categoria_exam_codigo: 'B-602' },
   { chave: 'b602_numero_ip',            label: 'Nº IP (B-602)',                  descricao: 'Número do Inquérito Policial',                     jsonPath: 'b602.numero_ip',             categoria_exam_codigo: 'B-602' },
-  { chave: 'b602_solicitante_nome',     label: 'Solicitante (B-602)',            descricao: 'Nome do solicitante que consta no documento',      jsonPath: 'b602.solicitante_nome',      categoria_exam_codigo: 'B-602' },
 ];
 
 export function getExamCategoryId(codigo: string): string {

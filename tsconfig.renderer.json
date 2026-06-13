@@ -1,24 +1,32 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "strict": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "./out",
-    "rootDir": "./src",
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
+      "@/*": ["src/renderer/*"],
       "@shared/*": ["src/shared/*"],
       "@main/*": ["src/main/*"],
       "@preload/*": ["src/preload/*"]
-    }
+    },
+    "types": ["vitest/globals"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "out", "src/renderer", "src/__tests__", "src/test-setup.ts"]
+  "include": [
+    "src/renderer/**/*",
+    "src/shared/**/*",
+    "src/__tests__/**/*",
+    "src/test-setup.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

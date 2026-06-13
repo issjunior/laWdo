@@ -118,6 +118,10 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
         }
       }
 
+      if (!mapping['b602_solicitante_nome']) {
+        mapping['b602_solicitante_nome'] = ctx.solicitanteNome || '';
+      }
+
       const b602 = especificos.b602 as Record<string, unknown> | undefined;
       if (b602) {
         const envolvidos = b602.envolvidos as string[] | undefined;
@@ -130,7 +134,7 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
         mapping['b602_numero_ip'] = String(b602.numero_ip || '');
         mapping['b602_solicitante_nome'] = String(b602.solicitante_nome || '');
 
-        mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602);
+        mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602, ctx.solicitanteNome);
 
         const material = b602.material_enc as Record<string, string>[] | undefined;
         if (material && material.length > 0) {

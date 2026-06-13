@@ -30,7 +30,7 @@ export const b602Service: ExamService = {
     result.local = (data as Record<string, string>)['b602_local'] || '';
     result.numero_bo = (data as Record<string, string>)['b602_numero_bo'] || '';
     result.numero_ip = (data as Record<string, string>)['b602_numero_ip'] || '';
-    result.solicitante_nome = (data as Record<string, string>)['b602_solicitante_nome'] || '';
+
 
     const materialToggle = (data as Record<string, string>)['b602_material_enc_toggle'];
     if (materialToggle === 'on') {
@@ -112,7 +112,7 @@ export const b602Service: ExamService = {
     if (data.local) result['b602_local'] = String(data.local);
     if (data.numero_bo) result['b602_numero_bo'] = String(data.numero_bo);
     if (data.numero_ip) result['b602_numero_ip'] = String(data.numero_ip);
-    if (data.solicitante_nome) result['b602_solicitante_nome'] = String(data.solicitante_nome);
+
 
     const material = data.material_enc as Record<string, string>[] | undefined;
     if (material && material.length > 0) {
