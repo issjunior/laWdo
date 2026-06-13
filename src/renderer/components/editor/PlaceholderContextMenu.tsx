@@ -12,7 +12,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import type { MenuSection, MenuSectionItem, MenuEntry, MenuGroup } from '@/components/rep/exam-fields';
-import { getGroupCount } from '@/components/rep/exam-fields/b602-menu';
+import { getGroupCount } from '@/components/rep/exam-fields/services/b602.service';
 
 export interface PlaceholderItem {
   id: string;

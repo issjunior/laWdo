@@ -475,7 +475,7 @@ export const REPsPage: React.FC = () => {
   const form = useForm<REPFormData>({
     resolver: zodResolver(repFormSchema),
     defaultValues: emptyForm(),
-    mode: 'onChange',
+    mode: 'onSubmit',
   });
 
   // Estados para o Dialog "Criar Laudo" (REPs órfãs)
@@ -576,13 +576,7 @@ export const REPsPage: React.FC = () => {
     })();
   }, [tipoExameId, showForm]);
 
-  // Revalidar campos condicionais quando o tipo de exame muda
-  useEffect(() => {
-    if (tipoExameId) {
-      form.trigger(['local_fato', 'numeracao_veiculo', 'numeracao_placa', 'numeracao_fabricacao', 'numeracao_chassi', 'numeracao_chassi_revelado', 'numeracao_motor', 'numeracao_motor_revelado']);
-      form.trigger(['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local', 'b602_solicitante_nome', 'b602_numero_bo', 'b602_numero_ip']);
-    }
-  }, [tipoExameId]);
+
 
   const tipoExameSelecionado = tipoExameId
     ? tiposExame.find(t => t.id === tipoExameId)

@@ -173,3 +173,24 @@ export const b602Service: ExamService = {
     b602_numero_bo: formatarNumeroBO,
   },
 };
+
+export function getGroupCount(prefix: string, b602Data: Record<string, unknown> | undefined): number {
+  if (!b602Data) return 0;
+  if (prefix === 'b602_envolvido_') {
+    const arr = b602Data.envolvidos as unknown[] | undefined;
+    return Array.isArray(arr) ? arr.filter(Boolean).length : 0;
+  }
+  if (prefix === 'b602_material_enc_') {
+    const arr = b602Data.material_enc as unknown[] | undefined;
+    return Array.isArray(arr) ? arr.length : 0;
+  }
+  if (prefix === 'b602_cartucho_') {
+    const arr = b602Data.cartuchos as unknown[] | undefined;
+    return Array.isArray(arr) ? arr.length : 0;
+  }
+  if (prefix === 'b602_estojo_') {
+    const arr = b602Data.estojos as unknown[] | undefined;
+    return Array.isArray(arr) ? arr.length : 0;
+  }
+  return 0;
+}

@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, X } from 'lucide-react';
-import type { ExamSectionProps } from './types';
+import type { ExamSectionProps, MenuSection } from './types';
 
 const Label = ({ children }: { children: React.ReactNode }) => (
   <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -53,96 +53,116 @@ function formatarNumeroBO(raw: string): string {
   return `${year}/${num}`;
 }
 
+function formatarLocal(raw: string): string {
+  let result = raw.replace(/\s*\/\s*/g, ' / ');
+  result = result.trim();
+  const parts = result.split(' / ').filter(Boolean);
+  if (parts.length > 3) {
+    result = parts.slice(0, 3).join(' / ');
+  }
+  return result;
+}
+
 export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) => {
   const [numEnvolvidos, setNumEnvolvidos] = useState(1);
 
   const envolvidos = Array.from({ length: numEnvolvidos }, (_, i) => i);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <Label>Envolvido(s) *</Label>
-        <div className="space-y-2 mt-1">
-          {envolvidos.map((i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-5 shrink-0">{i + 1}.</span>
-              <FormField
-                control={form.control}
-                name={`b602_envolvidos_${i}`}
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormControl>
-                      <Input placeholder="Nome do envolvido" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+    <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+      <span className="text-xs font-semibold text-muted-foreground">Dados da Investigação</span>
+
+      <div className="grid grid-cols-[25%_75%] gap-2 items-start">
+        <span className="text-sm font-medium leading-none pt-2">Envolvido(s) *</span>
+        <div className="space-y-2">
+          {envolvidos.map((i) => {
+            const isLast = i === envolvidos.length - 1;
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-5 shrink-0">{i + 1}.</span>
+                <FormField
+                  control={form.control}
+                  name={`b602_envolvidos_${i}`}
+                  render={({ field }) => (
+                    <FormItem className="flex-1 space-y-0">
+                      <FormControl>
+                        <Input placeholder="Nome do envolvido" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {envolvidos.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => {
+                      form.setValue(`b602_envolvidos_${i}`, '');
+                      setNumEnvolvidos((n) => Math.max(1, n - 1));
+                    }}
+                  >
+                    <X size={14} />
+                  </Button>
                 )}
-              />
-              {envolvidos.length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => {
-                    form.setValue(`b602_envolvidos_${i}`, '');
-                    setNumEnvolvidos((n) => Math.max(1, n - 1));
-                  }}
-                >
-                  <X size={14} />
-                </Button>
-              )}
-            </div>
-          ))}
+                {isLast && numEnvolvidos < 10 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => setNumEnvolvidos((n) => n + 1)}
+                  >
+                    <Plus size={14} className="mr-1" /> Adicionar
+                  </Button>
+                )}
+              </div>
+            );
+          })}
         </div>
-        {numEnvolvidos < 10 && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-2"
-            onClick={() => setNumEnvolvidos((n) => n + 1)}
-          >
-            <Plus size={14} className="mr-1" /> Adicionar envolvido
-          </Button>
-        )}
       </div>
 
-      <FormField
-        control={form.control}
-        name="b602_data_ocorrencia"
-        render={({ field }) => (
-          <FormItem>
-            <Label>Data da Ocorrência *</Label>
-            <FormControl>
-              <Input type="date" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      <div className="grid grid-cols-[25%_25%_25%_25%] gap-2 items-start">
+        <span className="text-sm font-medium leading-none pt-2">Data da Ocorrência *</span>
+        <FormField
+          control={form.control}
+          name="b602_data_ocorrencia"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Input type="date" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <span className="text-sm font-medium leading-none pt-2">Local *</span>
+        <FormField
+          control={form.control}
+          name="b602_local"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Input
+                  placeholder="bairro / cidade / PR"
+                  value={field.value || ''}
+                  onChange={(e) => field.onChange(formatarLocal(e.target.value))}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
 
-      <FormField
-        control={form.control}
-        name="b602_local"
-        render={({ field }) => (
-          <FormItem>
-            <Label>Local *</Label>
-            <FormControl>
-              <Input placeholder="bairro / cidade / PR" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-[25%_25%_25%_25%] gap-2 items-start">
+        <span className="text-sm font-medium leading-none pt-2">Boletim de Ocorrência</span>
         <FormField
           control={form.control}
           name="b602_numero_bo"
           render={({ field }) => (
             <FormItem>
-              <Label>Nº do BO</Label>
               <FormControl>
                 <Input
                   placeholder="2026/123456"
@@ -154,12 +174,12 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
             </FormItem>
           )}
         />
+        <span className="text-sm font-medium leading-none pt-2">Nº do IP</span>
         <FormField
           control={form.control}
           name="b602_numero_ip"
           render={({ field }) => (
             <FormItem>
-              <Label>Nº do IP</Label>
               <FormControl>
                 <Input placeholder="Inquérito Policial" {...field} />
               </FormControl>
@@ -169,19 +189,21 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
         />
       </div>
 
-      <FormField
-        control={form.control}
-        name="b602_solicitante_nome"
-        render={({ field }) => (
-          <FormItem>
-            <Label>Solicitante *</Label>
-            <FormControl>
-              <Input placeholder="Nome que consta no documento" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      <div className="grid grid-cols-[25%_75%] gap-2 items-start">
+        <span className="text-sm font-medium leading-none pt-2">Unidade Policial *</span>
+        <FormField
+          control={form.control}
+          name="b602_solicitante_nome"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Input placeholder="Nome que consta no documento" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
     </div>
   );
 };
@@ -648,3 +670,87 @@ export const EstojosFields: React.FC<ExamSectionProps> = ({ form }) => {
     </ToggleSection>
   );
 };
+
+export const B602_MENU_STRUCTURE: MenuSection[] = [
+  {
+    id: 'dados_investigacao',
+    label: 'Dados da Investigação',
+    items: [
+      { type: 'field', name: 'b602_tabela_dados_investigacao', label: 'Tabela completa' },
+      { type: 'field', name: 'b602_envolvidos', label: 'Envolvidos (todos)' },
+      {
+        type: 'group',
+        label: 'Envolvidos',
+        prefix: 'b602_envolvido_',
+        fields: [{ name: '', label: 'Nome do envolvido' }],
+      },
+      { type: 'field', name: 'b602_data_ocorrencia', label: 'Data da Ocorrência' },
+      { type: 'field', name: 'b602_local', label: 'Local' },
+      { type: 'field', name: 'b602_numero_bo', label: 'Nº do BO' },
+      { type: 'field', name: 'b602_numero_ip', label: 'Nº do IP' },
+      { type: 'field', name: 'b602_solicitante_nome', label: 'Unidade Policial' },
+    ],
+  },
+  {
+    id: 'material_enc',
+    label: 'Material Encaminhado',
+    items: [
+      { type: 'field', name: 'b602_tabela_material_enc', label: 'Tabela completa' },
+      {
+        type: 'group',
+        label: 'Item',
+        prefix: 'b602_material_enc_',
+        fields: [
+          { name: 'natureza', label: 'Natureza' },
+          { name: 'quantidade', label: 'Quantidade' },
+          { name: 'tipo', label: 'Tipo' },
+          { name: 'dito_oficio', label: 'Dito do Ofício' },
+          { name: 'numero_lacre', label: 'Nº do Lacre' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'cartuchos',
+    label: 'Cartuchos',
+    items: [
+      { type: 'field', name: 'b602_tabela_cartuchos', label: 'Tabela completa' },
+      {
+        type: 'group',
+        label: 'Cartucho',
+        prefix: 'b602_cartucho_',
+        fields: [
+          { name: 'quantidade', label: 'Quantidade' },
+          { name: 'calibre', label: 'Calibre' },
+          { name: 'marca', label: 'Marca' },
+          { name: 'origem', label: 'Origem' },
+          { name: 'espoleta', label: 'Espoleta' },
+          { name: 'estojo', label: 'Estojo' },
+          { name: 'projetil', label: 'Projétil' },
+          { name: 'observacao', label: 'Observação' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'estojos',
+    label: 'Estojos',
+    items: [
+      { type: 'field', name: 'b602_tabela_estojos', label: 'Tabela completa' },
+      {
+        type: 'group',
+        label: 'Estojo',
+        prefix: 'b602_estojo_',
+        fields: [
+          { name: 'quantidade', label: 'Quantidade' },
+          { name: 'calibre', label: 'Calibre' },
+          { name: 'marca', label: 'Marca' },
+          { name: 'origem', label: 'Origem' },
+          { name: 'espoleta', label: 'Espoleta' },
+          { name: 'estojo', label: 'Estojo' },
+          { name: 'observacao', label: 'Observação' },
+        ],
+      },
+    ],
+  },
+];

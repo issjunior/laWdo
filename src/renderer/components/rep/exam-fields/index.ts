@@ -2,12 +2,11 @@ import { MapPin, Clock, Hash, Search, Package, CircleDot, Cylinder } from 'lucid
 import { LocalFatoFields } from './local-fato';
 import { AcionamentoFields } from './acionamento';
 import { NumeracaoFields } from './numeracao';
-import { DadosInvestigacaoFields, MaterialEncFields, CartuchosFields, EstojosFields } from './b602';
+import { DadosInvestigacaoFields, MaterialEncFields, CartuchosFields, EstojosFields, B602_MENU_STRUCTURE } from './b602';
 import { numeracaoService } from './services/numeracao.service';
 import { b602Service } from './services/b602.service';
-import type { ExamSection } from './types';
+import type { ExamSection, MenuSection } from './types';
 import type { ExamService } from './services/types';
-import { B602_MENU_STRUCTURE, type MenuSection } from './b602-menu';
 
 export type { ExamSection, ExamSectionProps, REPFormData } from './types';
 export type { ExamService } from './services/types';
@@ -91,7 +90,7 @@ export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
 };
 
 export { B602_MENU_STRUCTURE };
-export type { MenuSection, MenuSectionItem, MenuEntry, MenuGroup, MenuField } from './b602-menu';
+export type { MenuSection, MenuSectionItem, MenuEntry, MenuGroup, MenuField } from './types';
 
 export const EXAM_MENU_REGISTRY: Record<string, MenuSection[]> = {
   'B-602': B602_MENU_STRUCTURE,

@@ -60,3 +60,29 @@ export interface ExamSection {
   group?: string;
   requiredFields: string[];
 }
+
+export interface MenuField {
+  name: string;
+  label: string;
+}
+
+export interface MenuGroup {
+  type: 'group';
+  label: string;
+  prefix: string;
+  fields: MenuField[];
+}
+
+export interface MenuEntry {
+  type: 'field';
+  name: string;
+  label: string;
+}
+
+export type MenuSectionItem = MenuEntry | MenuGroup;
+
+export interface MenuSection {
+  id: string;
+  label: string;
+  items: MenuSectionItem[];
+}
