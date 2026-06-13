@@ -1,4 +1,5 @@
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
+import { buildDadosInvestigacaoTable, buildNumberedTable } from '@/lib/tabelas-placeholder';
 
 function formatarData(iso: string | undefined): string {
   if (!iso) return '-';
@@ -128,6 +129,52 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
         mapping['b602_numero_bo'] = String(b602.numero_bo || '');
         mapping['b602_numero_ip'] = String(b602.numero_ip || '');
         mapping['b602_solicitante_nome'] = String(b602.solicitante_nome || '');
+
+        mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602);
+
+        const material = b602.material_enc as Record<string, string>[] | undefined;
+        if (material && material.length > 0) {
+          mapping['b602_tabela_material_enc'] = buildNumberedTable(
+            'TABELA 2 – MATERIAL ENCAMINHADO',
+            ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
+            material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || ''])
+          );
+        }
+
+        const cartuchos = b602.cartuchos as Record<string, unknown>[] | undefined;
+        if (cartuchos && cartuchos.length > 0) {
+          mapping['b602_tabela_cartuchos'] = buildNumberedTable(
+            'TABELA 3 – CARTUCHOS',
+            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Projétil', 'Observação'],
+            cartuchos.map(c => [
+              String(c.quantidade || ''),
+              String(c.calibre || ''),
+              String(c.marca || ''),
+              String(c.origem || ''),
+              String(c.espoleta || ''),
+              String(c.estojo || ''),
+              String(c.projetil || ''),
+              Array.isArray(c.observacao) ? (c.observacao as string[]).join(', ') : String(c.observacao || ''),
+            ])
+          );
+        }
+
+        const estojos = b602.estojos as Record<string, unknown>[] | undefined;
+        if (estojos && estojos.length > 0) {
+          mapping['b602_tabela_estojos'] = buildNumberedTable(
+            'TABELA 4 – ESTOJOS',
+            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Observação'],
+            estojos.map(e => [
+              String(e.quantidade || ''),
+              String(e.calibre || ''),
+              String(e.marca || ''),
+              String(e.origem || ''),
+              String(e.espoleta || ''),
+              String(e.estojo || ''),
+              Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : String(e.observacao || ''),
+            ])
+          );
+        }
       }
 
       const i801 = especificos.i801 as Record<string, unknown> | undefined;

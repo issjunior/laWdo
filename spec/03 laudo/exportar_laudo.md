@@ -44,6 +44,9 @@ const [libreOfficeDisponivel, setLibreOfficeDisponivel] = useState<boolean | nul
 - `libreOfficeDisponivel`: verificado via `window.ipcAPI.laudo.verificarLibreOffice()` no `useEffect` de inicialização. `null` = carregando, `true` = disponível, `false`/`null` = desabilita opção ODT.
 - ODT desabilitado mostra texto `"Requer LibreOffice"` no item do dropdown.
 - Botões `Exportar` e `Salvar` são desabilitados enquanto `exportando === true`.
+- Durante exportação, o botão mostra spinner `<Loader2 className="animate-spin" />` com label "Exportando...".
+- Um `toast.loading("Exportando laudo como {formato}...")` é exibido via sonner e transiciona para `toast.success` / `toast.error` ao finalizar, usando o mesmo `toastId` (sem flash entre toasts).
+- Se o usuário cancela o `showSaveDialog`, o toast é despachado com `toast.dismiss(toastId)`.
 
 ---
 
@@ -74,7 +77,7 @@ const [libreOfficeDisponivel, setLibreOfficeDisponivel] = useState<boolean | nul
 5. Gera buffer por formato:
    - `pdf` → `gerarPDF(html, margens, headerTemplate)`
    - `docx` → `gerarDOCX(estrutura, cabecalho, margens)`
-   - `odt` → `gerarODT(html)`
+   - `odt` → `gerarODT(html, estrutura, margens)`
 6. `fs.writeFileSync(filePath, buffer)`
 7. Retorna `{ success: true, path: filePath }`
 
@@ -118,7 +121,7 @@ interface ExportarParams {
   laudoId: string;
   formato: 'pdf' | 'docx' | 'odt';
   html: string;                                                   // HTML resolvido
-  estrutura?: any;                                                // LaudoEstrutura (só docx)
+  estrutura?: any;                                                // LaudoEstrutura (docx + odt: fontFamily/fontSize)
   cabecalho?: { logoBase64?: string; texto?: string; alinhamento?: string };
   margens?: { top: number; right: number; bottom: number; left: number };
   nomeArquivo?: string;                                           // não usado (gerado no main)
@@ -136,6 +139,7 @@ Função `resolverPlaceholdersExportacao(html, ctx)`:
 - Usa `DOMParser` para encontrar `<span data-placeholder="{{chave}}">` e substituir pelo valor real
 - Fallback: regex `\{\{chave\}\}` para placeholders textuais
 - Mapeamento inclui: campos da REP (18), relacionamentos (3), perito (4), datas (2), campos específicos de exame (I-801, B-602)
+- **Placeholders de tabela B-602**: `b602_tabela_dados_investigacao`, `b602_tabela_material_enc`, `b602_tabela_cartuchos`, `b602_tabela_estojos` — resolvem para HTML completo de tabela (com bordas, cabeçalhos, dados) usando funções de `@/lib/tabelas-placeholder` (`buildDadosInvestigacaoTable`, `buildNumberedTable`)
 - Campos reservados `XXX` permanecem como texto, sem estilo
 
 ```typescript
@@ -263,41 +267,66 @@ Lógica idêntica ao preview existente (`template.handlers.ts:168-287`):
 
 ## 10. ODT — libreoffice-convert
 
-**Arquivo:** `src/main/services/exportacao.service.ts`, função `gerarODT(html)`
+**Arquivo:** `src/main/services/exportacao.service.ts`, função `gerarODT(html, estrutura?, margens?)`
 
-```typescript
-async function gerarODT(html: string): Promise<Buffer> {
-  const { promisify } = await import('util');
-  const libre = await import('libreoffice-convert');
-  const convertAsync = promisify(libre.convert);
+### Pré-processamento do HTML
 
-  // 1. Extrai data: URIs → arquivos temp
-  const dataUriRegex = /<img[^>]+src="(data:image\/[^"]+)"[^>]*>/gi;
-  html = html.replace(dataUriRegex, (full, dataUri) => {
-    const parsed = dataUriToBuffer(dataUri);
-    if (!parsed) return full;
-    const tempPath = path.join(os.tmpdir(), `laudo-img-${Date.now()}-${idx++}.${ext}`);
-    fs.writeFileSync(tempPath, parsed.buffer);
-    return full.replace(dataUri, `file:///${tempPath.replace(/\\/g, '/')}`);
-  });
+Antes da conversão, o HTML bruto do editor passa por 3 etapas de limpeza:
 
-  // 2. Escreve HTML temporário
-  fs.writeFileSync(tmpHtmlPath, html, 'utf-8');
+1. **Remoção de backgrounds indesejados**: regex remove `background:...` do style inline de `<div data-laudo-secao-header>` — evita que os cabeçalhos de seção do editor (`background:rgba(128,128,128,0.08)`) apareçam no ODT com fundo cinza.
 
-  // 3. Converte via LibreOffice headless
-  const htmlBuffer = fs.readFileSync(tmpHtmlPath);
-  const odtBuffer = await convertAsync(htmlBuffer, 'odt', undefined);
+2. **Injeção de largura nas tabelas**: regex adiciona `width="100%"` como atributo HTML em todas as `<table>` que não possuam atributo `width=`. O LibreOffice reconhece o atributo HTML `width` mas ignora `!important` em CSS — por isso o atributo é o método confiável para garantir ocupação total horizontal.
 
-  // 4. Limpa arquivos temporários
-  return odtBuffer;
+3. **Substituição de data: URIs**: imagens inline do TinyMCE são extraídas para arquivos temporários e referenciadas como `file:///`.
+
+### Wrapper CSS
+
+O HTML é então envolvido em um documento completo com `<style>`:
+
+```css
+@page {
+  margin-top: Xcm; margin-right: Xcm; margin-bottom: Xcm; margin-left: Xcm;
 }
+body {
+  font-family: 'Calibri', sans-serif;
+  font-size: 12pt;
+  line-height: 1.7;
+  color: #000;
+}
+table { width: 100%; table-layout: fixed; }
+[data-laudo-secao-header] { background: transparent !important; }
+td, th { background: transparent !important; }
 ```
 
-- `dataUriToBuffer(dataUri)`: regex extrai formato (jpeg/png) e conteúdo base64, retorna `{ buffer: Buffer, formato: string }`
-- Fallback: se regex falhar, a tag `<img>` original é mantida
-- Limpeza de temp files no bloco `finally`
+- **Margens**: lidas de `params.margens` (cm), com fallback 2.5/2.0/2.5/3.0 (padrão ABNT)
+- **Fonte**: `estrutura.fontFamily` e `estrutura.fontSize` do `parseHtmlParaEstrutura()`, fallback `Calibri 12pt`
+- **Reset de backgrounds**: cobre tanto os cabeçalhos de seção quanto células de tabela (evita fundos `#d9d9d9`/`#e8e8e8` das tabelas de placeholder no ODT)
+- **Largura de tabela**: `table-layout: fixed` como reforço ao atributo HTML `width="100%"`
 
-### Verificação de disponibilidade
+### Conversão
+
+O arquivo HTML temporário é convertido via `libreoffice-convert`:
+```typescript
+const odtBuffer = await convertAsync(htmlBuffer, 'odt', undefined);
+```
+
+Limpeza de arquivos temporários (HTML + imagens) no bloco `finally`.
+
+### Payload — ODT
+
+Diferentemente da versão inicial, o renderer agora envia `estrutura` e `margens` também para ODT:
+
+```typescript
+// LaudosPage.tsx handleExportar('odt')
+const estrutura = parseHtmlParaEstrutura(htmlResolvido);
+const result = await window.ipcAPI.laudo.exportar({
+  laudoId: editando.id,
+  formato: 'odt',
+  html: htmlResolvido,
+  estrutura,
+  margens: await getMargens() || undefined,
+});
+```
 
 **Arquivo:** `src/main/services/exportacao.service.ts`, função `verificarLibreOffice()`
 
@@ -317,15 +346,15 @@ Chamada no handler `laudo:verificarLibreOffice` → exposta no preload como `win
 
 ---
 
-## 11. Tratamento de Erros
+## 11. Tratamento de Erros e Feedback
 
 | Cenário | Comportamento |
 |---------|--------------|
 | LibreOffice ausente | Opção ODT desabilitada, texto "Requer LibreOffice" no item |
-| Falha na conversão DOCX | `setError(error.message)` exibido no Alert do editor |
-| Falha no `printToPDF` | `setError(error.message)` |
-| Falha no `libreoffice-convert` | `setError(error.message)` |
-| Usuário cancela `showSaveDialog` | Retorna `{ success: false, error: 'Operação cancelada pelo usuário' }` — tratado silenciosamente |
+| Início da exportação | `toast.loading("Exportando laudo como {formato}...")` — mesmo `toastId` reutilizado para transição suave |
+| Sucesso na exportação | `toast.success("Documento {formato} exportado com sucesso", { id: toastId })` |
+| Falha na conversão | `toast.error(error.message, { id: toastId })` — erro também registrado em `setError` para exibição no Alert do editor |
+| Usuário cancela `showSaveDialog` | Retorna `{ success: false, error: 'Operação cancelada pelo usuário' }` → `toast.dismiss(toastId)` |
 | Placeholder não resolvido | Mantém `{{chave}}` literal no HTML |
 | Data URI inválida | Imagem ignorada, documento gerado sem ela |
 
@@ -348,8 +377,9 @@ Chamada no handler `laudo:verificarLibreOffice` → exposta no preload como `win
 
 | Arquivo | Tipo | Descrição |
 |---------|------|-----------|
-| `src/renderer/lib/exportacao-placeholders.ts` | Novo | Resolução de placeholders (renderer) |
-| `src/renderer/lib/exportacao-parser.ts` | Novo | Parse DOM → `LaudoEstrutura` para DOCX |
+| `src/renderer/lib/exportacao-placeholders.ts` | Novo | Resolução de placeholders (renderer), inclui tabelas B-602 |
+| `src/renderer/lib/exportacao-parser.ts` | Novo | Parse DOM → `LaudoEstrutura` para DOCX e ODT |
+| `src/renderer/lib/tabelas-placeholder.ts` | Novo | Construtores de tabela HTML (`buildDadosInvestigacaoTable`, `buildNumberedTable`) — compartilhado entre `aplicarPlaceholders` (preview) e `resolverPlaceholdersExportacao` (export) |
 | `src/main/services/exportacao.service.ts` | Novo | Geração PDF/DOCX/ODT, salvamento, verificação LibreOffice |
 | `src/main/ipc/handlers/laudo.handlers.ts` | Editado | Handlers `laudo:exportar` + `laudo:verificarLibreOffice` |
 | `src/preload/index.ts` | Editado | Canais + API `laudo.exportar()` / `laudo.verificarLibreOffice()` |

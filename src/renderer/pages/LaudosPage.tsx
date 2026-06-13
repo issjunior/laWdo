@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2, Download, FileDown } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -47,6 +47,7 @@ import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
 import { resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
+import { buildNumberedTable, buildDadosInvestigacaoTable } from '@/lib/tabelas-placeholder';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -60,72 +61,6 @@ function buildFigureHtml(url: string, id: string, legenda: string): string {
 
 function buildFiguresHtml(imagens: Array<{ url: string; id: string; legenda: string }>): string {
   return imagens.map(img => buildFigureHtml(img.url, img.id, img.legenda)).join('');
-}
-
-const TABLE_STYLES = {
-  table:  { borderCollapse: 'collapse', width: '100%', margin: '8px 0' },
-  title:  { background: '#d9d9d9', color: '#000', fontWeight: 'bold', textAlign: 'center' as const },
-  th:     { border: '1px solid #000', padding: '6px 10px', textAlign: 'center' as const, fontWeight: '600', background: '#e8e8e8', color: '#000', fontSize: '12px' },
-  td:     { border: '1px solid #000', padding: '6px 10px', fontSize: '12px', color: '#000' },
-  item:   { width: '50px', textAlign: 'center' as const },
-} as const;
-
-function style(obj: Record<string, string>): string {
-  return Object.entries(obj).map(([k, v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';');
-}
-
-function buildNumberedTable(titulo: string, headers: string[], rows: string[][]): string {
-  if (rows.length === 0) return '';
-
-  const allHeaders = ['Item', ...headers];
-  const colCount = allHeaders.length;
-  const theadRow = `<tr>${allHeaders.map(h => `<th style="${style(TABLE_STYLES.th)}">${h}</th>`).join('')}</tr>`;
-
-  const tbodyRows = rows.map((row, i) => {
-    const cells = [
-      `<td style="${style({ ...TABLE_STYLES.td, ...TABLE_STYLES.item })};">${i + 1}</td>`,
-      ...row.map(cell => {
-        const val = (cell ?? '').trim() === '' ? '-' : cell;
-        return `<td style="${style(TABLE_STYLES.td)}">${val}</td>`;
-      }),
-    ].join('');
-    return `<tr>${cells}</tr>`;
-  }).join('');
-
-  const titleRow = `<tr><td colspan="${colCount}" style="${style({ ...TABLE_STYLES.th, ...TABLE_STYLES.title })};border:1px solid #000;padding:6px 10px">${titulo}</td></tr>`;
-
-  return `<table style="${style(TABLE_STYLES.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
-}
-
-function buildDadosInvestigacaoTable(b602: Record<string, unknown>): string {
-  const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean) ?? [];
-  const dataOcorrencia = String(b602.data_ocorrencia || '-');
-  const local = String(b602.local || '-');
-  const numeroBo = String(b602.numero_bo || '-');
-  const numeroIp = String(b602.numero_ip || '-');
-  const solicitanteNome = String(b602.solicitante_nome || '-');
-
-  const s = TABLE_STYLES;
-
-  const titleRow = `<tr><td colspan="4" style="${style({ ...s.th, ...s.title })};border:1px solid #000;padding:6px 10px">TABELA 1 – DADOS DA INVESTIGAÇÃO</td></tr>`;
-
-  const cell = (val: string, w?: string, extra?: string) =>
-    `<td style="${style(s.td)}${w ? ';width:' + w : ''}${extra ? ';' + extra : ''}">${val}</td>`;
-
-  const labelCell = (val: string, w?: string) =>
-    `<td style="${style({ ...s.td, fontWeight: '600' })}${w ? ';width:' + w : ''}">${val}</td>`;
-
-  const envolvidosVal = envolvidos.length > 0 ? envolvidos.join(', ') : '-';
-
-  const rows = [
-    titleRow,
-    `<tr>${labelCell('Envolvido(s):', '25%')}<td colspan="3" style="${style(s.td)}">${envolvidosVal}</td></tr>`,
-    `<tr>${labelCell('Data da Ocorrência:', '25%')}${cell(dataOcorrencia, '25%')}${labelCell('Local:', '25%')}${cell(local, '25%')}</tr>`,
-    `<tr>${labelCell('Boletim de Ocorrência:', '25%')}${cell(numeroBo, '25%')}${labelCell('Nº do IP:', '25%')}${cell(numeroIp, '25%')}</tr>`,
-    `<tr><td colspan="1" style="${style({ ...s.td, fontWeight: '600' })};width:25%">Unidade Policial:</td><td colspan="3" style="${style(s.td)};width:75%">${solicitanteNome}</td></tr>`,
-  ];
-
-  return `<table style="${style(s.table)}">${rows.join('')}</table>`;
 }
 
 interface Placeholder {
@@ -1490,6 +1425,9 @@ export const LaudosPage: React.FC = () => {
       setExportando(true);
       setError(null);
 
+      const labelFormato = formato === 'pdf' ? 'PDF' : formato === 'docx' ? 'Word (.docx)' : 'ODT (.odt)';
+      const toastId = toast.loading(`Exportando laudo como ${labelFormato}...`);
+
       const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
       if (!rRep.success || !rRep.data) {
         setError('Erro ao carregar dados da REP para exportação');
@@ -1552,8 +1490,12 @@ export const LaudosPage: React.FC = () => {
           html: htmlResolvido,
           margens: await getMargens() || undefined,
         });
-        if (!result.success && result.error !== 'Operação cancelada pelo usuário') {
-          setError(result.error || 'Erro ao exportar PDF');
+        if (result.success) {
+          toast.success('Documento PDF exportado com sucesso', { id: toastId });
+        } else if (result.error !== 'Operação cancelada pelo usuário') {
+          toast.error(result.error || 'Erro ao exportar PDF', { id: toastId });
+        } else {
+          toast.dismiss(toastId);
         }
       } else if (formato === 'docx') {
         const estrutura = parseHtmlParaEstrutura(htmlResolvido);
@@ -1580,25 +1522,33 @@ export const LaudosPage: React.FC = () => {
         });
 
         if (result.success) {
-          toast.success('Documento Word exportado com sucesso');
+          toast.success('Documento Word exportado com sucesso', { id: toastId });
         } else if (result.error !== 'Operação cancelada pelo usuário') {
-          setError(result.error || 'Erro ao exportar DOCX');
+          toast.error(result.error || 'Erro ao exportar DOCX', { id: toastId });
+        } else {
+          toast.dismiss(toastId);
         }
       } else if (formato === 'odt') {
+        const estrutura = parseHtmlParaEstrutura(htmlResolvido);
+
         const result = await window.ipcAPI.laudo.exportar({
           laudoId: editando.id,
           formato: 'odt',
           html: htmlResolvido,
+          estrutura,
+          margens: await getMargens() || undefined,
         });
 
         if (result.success) {
-          toast.success('Documento ODT exportado com sucesso');
+          toast.success('Documento ODT exportado com sucesso', { id: toastId });
         } else if (result.error !== 'Operação cancelada pelo usuário') {
-          setError(result.error || 'Erro ao exportar ODT');
+          toast.error(result.error || 'Erro ao exportar ODT', { id: toastId });
+        } else {
+          toast.dismiss(toastId);
         }
       }
     } catch (e: any) {
-      setError('Erro ao exportar: ' + e.message);
+      toast.error('Erro ao exportar: ' + e.message, { id: toastId });
     } finally {
       setExportando(false);
     }
@@ -2287,7 +2237,7 @@ export const LaudosPage: React.FC = () => {
                   </DropdownMenu>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom">
+              <TooltipContent side="top">
                 {panelPoppedOut ? 'Painel em janela separada (clique para retornar)' : 'Abrir painel de ilustrações'}
               </TooltipContent>
             </Tooltip>
@@ -2302,7 +2252,7 @@ export const LaudosPage: React.FC = () => {
                   <RefreshCw size={15} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Atualizar figuras (numeração e legendas)</TooltipContent>
+              <TooltipContent side="top">Atualizar figuras (numeração e legendas)</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -2310,7 +2260,7 @@ export const LaudosPage: React.FC = () => {
                   <ArrowLeft size={16} /> Voltar
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Voltar para a lista de laudos</TooltipContent>
+              <TooltipContent side="top">Voltar para a lista de laudos</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -2321,7 +2271,13 @@ export const LaudosPage: React.FC = () => {
                     disabled={carregandoPreview || salvando || exportando}
                     className="flex items-center gap-2 rounded-r-none border-r-0"
                   >
-                    <Eye size={16} /> {carregandoPreview ? 'Gerando...' : 'Exportar'}
+                    {exportando ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : carregandoPreview ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Eye size={16} />
+                    )} {carregandoPreview ? 'Gerando...' : exportando ? 'Exportando...' : 'Exportar'}
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2368,7 +2324,7 @@ export const LaudosPage: React.FC = () => {
                   </DropdownMenu>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Exportar ou pré-visualizar o laudo</TooltipContent>
+              <TooltipContent side="top">Exportar ou pré-visualizar o laudo</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -2376,7 +2332,7 @@ export const LaudosPage: React.FC = () => {
                   <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar'}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Salvar o conteúdo do laudo</TooltipContent>
+              <TooltipContent side="top">Salvar o conteúdo do laudo</TooltipContent>
             </Tooltip>
           </div>
         </div>
@@ -2413,7 +2369,7 @@ export const LaudosPage: React.FC = () => {
                       <Layers size={14} />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">Editor com múltiplas seções separadas</TooltipContent>
+                  <TooltipContent side="top" className="text-xs">Editor com múltiplas seções separadas</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2426,7 +2382,7 @@ export const LaudosPage: React.FC = () => {
                       <List size={14} />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">Editor único com laudo inteiro</TooltipContent>
+                  <TooltipContent side="top" className="text-xs">Editor único com laudo inteiro</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2439,7 +2395,7 @@ export const LaudosPage: React.FC = () => {
                       <ThemeIcon size={14} />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">
+                  <TooltipContent side="top" className="text-xs">
                     Tema do editor: {themeLabel} {editorTheme === 'auto' ? '(segue o tema do sistema)' : ''}
                   </TooltipContent>
                 </Tooltip>

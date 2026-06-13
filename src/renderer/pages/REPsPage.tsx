@@ -1084,7 +1084,7 @@ export const REPsPage: React.FC = () => {
                   <Eye size={14} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Visualizar PDF</TooltipContent>
+              <TooltipContent side="top">Visualizar PDF</TooltipContent>
             </Tooltip>
             <Button variant="ghost" size="sm" onClick={() => { setTimelineRep(rep); setTimelineOpen(true); }} title="Histórico">
               <Clock size={14} />

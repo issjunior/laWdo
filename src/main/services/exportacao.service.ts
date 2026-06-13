@@ -367,7 +367,7 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
   return await Packer.toBuffer(doc);
 }
 
-async function gerarODT(html: string): Promise<Buffer> {
+async function gerarODT(html: string, estrutura?: any, margens?: ExportarParams['margens']): Promise<Buffer> {
   const { promisify } = await import('util');
   const libre = await import('libreoffice-convert');
   const convertAsync = promisify(libre.convert);
@@ -375,7 +375,38 @@ async function gerarODT(html: string): Promise<Buffer> {
   const tmpDir = os.tmpdir();
   const tmpHtmlPath = path.join(tmpDir, `laudo-odt-${Date.now()}.html`);
 
-  let htmlProcessado = html;
+  const fontFamily = estrutura?.fontFamily || 'Calibri';
+  const fontSize = estrutura?.fontSize || '12pt';
+
+  const mt = margens?.top ?? 2.5;
+  const mr = margens?.right ?? 2.0;
+  const mb = margens?.bottom ?? 2.5;
+  const ml = margens?.left ?? 3.0;
+
+  const wrapperCss = `@page { margin-top: ${mt}cm; margin-right: ${mr}cm; margin-bottom: ${mb}cm; margin-left: ${ml}cm; }
+body { font-family: '${fontFamily}', sans-serif; font-size: ${fontSize}; line-height: 1.7; color: #000; }
+table { width: 100%; table-layout: fixed; }
+[data-laudo-secao-header] { background: transparent !important; }
+td, th { background: transparent !important; }`;
+
+  html = html.replace(
+    /(<div[^>]*data-laudo-secao-header[^>]*style=")([^"]*)("[^>]*>)/gi,
+    (_match: string, prefix: string, styles: string, suffix: string) => {
+      const cleaned = styles.replace(/background:[^;]+;?/gi, '');
+      return prefix + cleaned + suffix;
+    }
+  );
+
+  html = html.replace(/<table(?!\s[^>]*\bwidth=)/gi, '<table width="100%" ');
+
+  let htmlProcessado = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>${wrapperCss}</style>
+</head>
+<body>${html}</body>
+</html>`;
 
   const dataUriRegex = /<img[^>]+src="(data:image\/[^"]+)"[^>]*>/gi;
   const tempImages: string[] = [];
@@ -456,7 +487,7 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
         break;
 
       case 'odt':
-        buffer = await gerarODT(params.html);
+        buffer = await gerarODT(params.html, params.estrutura, params.margens);
         break;
 
       default:
