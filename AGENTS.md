@@ -162,6 +162,34 @@ Padrão em português snake_case: `add_*` (features), `ajuste_*` (ajustes), `cor
 
 ---
 
+## Especificações (spec/)
+
+O diretório `spec/` documenta o **estado atual** do sistema — não é changelog nem histórico. Cada arquivo reflete como a funcionalidade **realmente funciona agora**.
+
+| Subdiretório | Cobre |
+|---|---|
+| `01 planejamento/` | Planejamento |
+| `02 rep/` | forms e inputs comuns e personalizados |
+| `03 laudo/` | Laudo (ciclo de vida, editor, menu contexto (placeholder), wizard) |
+| `04 layout/` | Temas e estilos visuais |
+| `05 placeholder/` | Sistema de placeholders |
+| `06 ia/` | Integrações com IA (Gemini, Groq) |
+| `07 logs/` | Sistema de logs |
+| `08 gdl/` | API GDL |
+| `problemas diversos/` | Problemas e edge cases pontuais |
+
+**Quando o código muda** de forma relevante (alterações que podem confundir a IA em manutenções futuras):
+1. A IA **sugere** atualizar o(s) arquivo(s) de spec correspondente(s).
+2. O **usuário decide** se a atualização/criação do spec procede.
+
+**Regras**:
+- **Prefira editar** um arquivo existente que já cobre a funcionalidade.
+- **Sugira criar** arquivo novo apenas se a mudança não se encaixa em nenhum spec existente — nesse caso, coloque no subdiretório mais apropriado.
+- **Conteúdo mínimo**: apenas o necessário para a IA entender o funcionamento atual e embasar decisões de implementação/manutenção.
+- Arquivos muito grandes ou desatualizados perdem valor — mantenha enxuto.
+
+---
+
 ## Referências
 
 - `PRD.md` — requisitos do produto e contexto de negócio.

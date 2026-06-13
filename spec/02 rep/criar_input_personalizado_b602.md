@@ -584,3 +584,53 @@ As 4 tabelas do B-602 foram redesenhadas com layout profissional formal e coluna
 - [x] Testar: toggles liga/desliga, linhas múltiplas, validação condicional
 - [x] Testar: placeholders na PlaceholdersPage
 - [x] Testar: preview PDF com placeholders B-602 resolvidos
+
+---
+
+## 9. Ajustes de Layout e Arquitetura (2026-06-12)
+
+### 9.1 Layout: inline-grid com card
+
+`DadosInvestigacaoFields` refatorado de layout vertical (label acima do input) para
+inline-grid dentro de card (`border rounded-lg p-4 bg-muted/30`). Labels ao lado
+dos inputs em grid proporcional: 25%/75% para rows de 2 campos, 25%/25%/25%/25%
+para rows de 4 campos. Labels obrigatorios mantem `*` mas erros de validacao so
+aparecem ao tentar salvar (ver 9.3).
+
+Nova ordem: Envolvidos | Data Ocorrencia + Local | BO + IP | Unidade Policial.
+
+Botao "Adicionar" inline ao lado do ultimo input de envolvido (`shrink-0`).
+
+### 9.2 Mascara Local
+
+Input `b602_local` ganhou mascara ativa `formatarLocal()`: ao digitar `/`,
+normaliza para ` / `. Maximo 3 segmentos (bairro opcional / cidade / UF).
+
+### 9.3 Validacao: onChange → onSubmit
+
+`useForm` em `REPsPage.tsx` alterado de `mode: 'onChange'` para `mode: 'onSubmit'`.
+Erros de validacao Zod so aparecem apos tentativa de salvar. Apos o primeiro
+submit, react-hook-form re-ativa `onChange` para campos corrigidos.
+
+`useEffect` com `form.trigger()` removido (linhas 580-585), pois com `onSubmit`
+dispararia erros imediatamente.
+
+### 9.4 Uniao `b602-menu.ts` → `b602.tsx`
+
+Arquivo `b602-menu.ts` (130 linhas) eliminado por modularizacao excessiva:
+
+| Conteudo | Destino |
+|----------|---------|
+| `B602_MENU_STRUCTURE` | `b602.tsx` (export) |
+| Tipos `MenuSection`, `MenuEntry`, `MenuGroup`, `MenuField`, `MenuSectionItem` | `types.ts` |
+| `getGroupCount()` | `services/b602.service.ts` (export) |
+
+Ajustes:
+- `index.ts`: importa `B602_MENU_STRUCTURE` de `./b602`, tipos de `./types`
+- `PlaceholderContextMenu.tsx`: importa `getGroupCount` de `services/b602.service`
+
+### 9.5 Label: Solicitante → Unidade Policial
+
+Label do campo `b602_solicitante_nome` alterado para "Unidade Policial"
+no form (`b602.tsx`) e no menu de contexto (mesmo arquivo apos uniao).
+Nome do campo no banco e tipos mantidos inalterados.
