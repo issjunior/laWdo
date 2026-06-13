@@ -62,12 +62,12 @@
 
 | name (no form) | Label | Tipo | Obrigatório | Detalhes |
 |---|---|---|---|---|
-| `b602_envolvidos` | Envolvido(s) | Array de text inputs (1-10) | Sim | Botão "+" adiciona, "X" remove. Mín 1, máx 10. Placeholder "Nome do envolvido" |
+| `b602_envolvidos_0`...`b602_envolvidos_9` | Envolvido(s) | Array de text inputs (1-10) | Sim | Botao "+" adiciona, "X" remove. Min 1, max 10. Placeholder "Nome do envolvido". Ao editar REP com dados salvos, linhas expandem automaticamente via lazy initializer no `useState`. |
 | `b602_data_ocorrencia` | Data da Ocorrência | date | Sim | |
 | `b602_local` | Local | text | Sim | Placeholder "bairro / cidade / PR" |
 | `b602_numero_bo` | Nº do BO | text (máscara) | BO ou IP* | Máscara `AAAA/NNNNNN` (reutilizar `formatarNumeroBO`) |
 | `b602_numero_ip` | Nº do IP | text | BO ou IP* | |
-| `b602_solicitante_nome` | Solicitante | text | Sim | Nome que consta no documento (não é FK, é texto livre) |
+| `b602_solicitante_nome` | Unidade Policial | text (disabled) | Não | Auto-preenchido via `useEffect` que observa `solicitante_id`. Campo `disabled` com tooltip "Preenchido automaticamente com o nome do Solicitante selecionado acima." |
 
 > \* **Regra BO ou IP:** pelo menos um dos dois (`b602_numero_bo` ou `b602_numero_ip`) deve estar preenchido para B-602.
 
@@ -589,17 +589,23 @@ As 4 tabelas do B-602 foram redesenhadas com layout profissional formal e coluna
 
 ## 9. Ajustes de Layout e Arquitetura (2026-06-12)
 
-### 9.1 Layout: inline-grid com card
+### 9.1 Layout: card com flexbox responsivo
 
-`DadosInvestigacaoFields` refatorado de layout vertical (label acima do input) para
-inline-grid dentro de card (`border rounded-lg p-4 bg-muted/30`). Labels ao lado
-dos inputs em grid proporcional: 25%/75% para rows de 2 campos, 25%/25%/25%/25%
-para rows de 4 campos. Labels obrigatorios mantem `*` mas erros de validacao so
-aparecem ao tentar salvar (ver 9.3).
+`DadosInvestigacaoFields` usa card (`border rounded-lg p-4 bg-muted/30 space-y-4 overflow-hidden`).
+
+**Linhas individuais** (envolvidos, data+local, BO+IP, unidade):
+flexbox responsivo (`flex flex-col md:flex-row gap-2 items-start`), com labels
+`shrink-0 md:w-[150px] md:pt-2.5` (ou `md:w-[60px]` para labels curtos) e inputs
+em `flex-1 min-w-0 w-full`.
+
+**Grids de 2 colunas** (Data+Local, BO+IP): `grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0`.
+
+Labels obrigatorios mantem `*` mas erros de validacao so aparecem ao tentar salvar (ver 9.3).
 
 Nova ordem: Envolvidos | Data Ocorrencia + Local | BO + IP | Unidade Policial.
 
-Botao "Adicionar" inline ao lado do ultimo input de envolvido (`shrink-0`).
+Botao "+" (`h-8 w-8`, apenas icon `Plus`) inline ao lado do ultimo input de envolvido.
+Botao "X" (`h-8 w-8`, apenas icon `X`) visivel quando `envolvidos.length > 1`.
 
 ### 9.2 Mascara Local
 
@@ -634,3 +640,53 @@ Ajustes:
 Label do campo `b602_solicitante_nome` alterado para "Unidade Policial"
 no form (`b602.tsx`) e no menu de contexto (mesmo arquivo apos uniao).
 Nome do campo no banco e tipos mantidos inalterados.
+
+### 9.6 Auto-expansao de linhas na edicao (2026-06-13)
+
+Ao editar uma REP B-602 com dados ja salvos, as linhas de envolvidos, material encaminhado,
+cartuchos e estojos **expandem automaticamente** na primeira renderizacao, sem flash visual.
+Isso resolve o problema de abrir o form de edicao mostrando apenas 1 linha quando ha
+multiplos itens salvos.
+
+**Mecanismo:** lazy initializer no `useState` que le `form.getValues()` durante a
+inicializacao do componente, ja que `form.reset()` ocorre antes de `setShowForm(true)`
+em `handleEditar`.
+
+```tsx
+// DadosInvestigacaoFields (b602.tsx)
+const [numEnvolvidos, setNumEnvolvidos] = useState(() => {
+  let maxIndex = 0;
+  for (let i = 0; i < 10; i++) {
+    const valor = form.getValues(`b602_envolvidos_${i}` as any);
+    if (valor && typeof valor === 'string' && valor.trim() !== '') {
+      maxIndex = i;
+    }
+  }
+  return Math.max(1, maxIndex + 1);
+});
+```
+
+Mesmo padrao aplicado nos 4 componentes: `DadosInvestigacaoFields`, `MaterialEncFields`,
+`CartuchosFields`, `EstojosFields`.
+
+**useEffect complementar:** adicionado `useEffect` com `form.watch` nos mesmos componentes
+para lidar com expansao/retracao durante edicao manual (botoes +/-). O `useEffect` observa
+os campos via `watch` e ajusta `numLinhas`/`numEnvolvidos` se necessario.
+
+### 9.7 Layout responsivo e Unidade Policial (2026-06-13)
+
+**Layout responsivo** nos campos de `DadosInvestigacaoFields`:
+- Grid `flex flex-col md:flex-row` com labels `shrink-0 md:w-[150px]`
+- Inputs em `flex-1 min-w-0 w-full` para evitar overflow
+- Container com `overflow-hidden` e `space-y-4`
+
+**Unidade Policial** (`b602_solicitante_nome`):
+- Campo `disabled` com `className="bg-muted cursor-not-allowed"` e placeholder "Preenchido automaticamente"
+- Tooltip via `Tooltip`/`TooltipTrigger`/`TooltipContent` explicando: "Preenchido automaticamente com o nome do Solicitante selecionado acima."
+- Auto-preenchimento via `useEffect` em `REPsPage.tsx` que observa `form.watch('solicitante_id')` → `form.setValue('b602_solicitante_nome', solicitante.nome)`
+- Validacao Zod removida (`b602_solicitante_nome` nao e mais obrigatorio para B-602)
+- Preview HTML (`buildRepHtml`) usa fallback: `solicitanteNome || s(b602.solicitante_nome)`
+
+**Botoes Adicionar/Remover:**
+- Botao "+" alterado de `variant="outline" size="sm"` com texto "Adicionar" para `variant="outline" size="icon" className="h-8 w-8"` apenas com icone `Plus`
+- Botao "X" mantido como `variant="ghost" size="icon" className="h-8 w-8"` apenas com icone `X`
