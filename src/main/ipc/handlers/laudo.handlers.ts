@@ -3,6 +3,7 @@ import { logError, logInfo } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
+import { exportarLaudo, verificarLibreOffice } from '../../services/exportacao.service.js';
 
 /**
  * Registra handlers IPC para operações de Laudo
@@ -233,6 +234,41 @@ export const registerLaudoHandlers = (): void => {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
       };
+    }
+  });
+
+  /**
+   * Exportar laudo (PDF, DOCX ou ODT)
+   */
+  ipcMain.handle('laudo:exportar', async (_event, params: {
+    laudoId: string;
+    formato: 'pdf' | 'docx' | 'odt';
+    html: string;
+    estrutura?: any;
+    cabecalho?: { logoBase64?: string; texto?: string; alinhamento?: string };
+    margens?: { top: number; right: number; bottom: number; left: number };
+  }) => {
+    try {
+      if (!params.laudoId || !params.formato) {
+        return { success: false, error: 'Parâmetros inválidos' };
+      }
+      const result = await exportarLaudo(params);
+      return result;
+    } catch (error) {
+      logError('Erro ao exportar laudo', { laudoId: params.laudoId, formato: params.formato, error });
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
+  });
+
+  /**
+   * Verificar se LibreOffice está disponível (para habilitar opção ODT)
+   */
+  ipcMain.handle('laudo:verificarLibreOffice', async () => {
+    try {
+      const disponivel = await verificarLibreOffice();
+      return { success: true, data: disponivel };
+    } catch (error) {
+      return { success: true, data: false };
     }
   });
 };

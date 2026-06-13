@@ -170,6 +170,8 @@ export interface IpcAPI {
     gerarWizard: (params: any) => Promise<UserResponse>;
     salvarProgressoWizard: (laudoId: string, respostas: any) => Promise<UserResponse>;
     getRespostasWizard: (laudoId: string) => Promise<UserResponse>;
+    exportar: (params: { laudoId: string; formato: 'pdf' | 'docx' | 'odt'; html: string; estrutura?: any; cabecalho?: any; margens?: any }) => Promise<UserResponse>;
+    verificarLibreOffice: () => Promise<UserResponse>;
   };
 
   // Wizard
@@ -366,6 +368,8 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:gerarWizard',
   'laudo:salvarProgressoWizard',
   'laudo:getRespostasWizard',
+  'laudo:exportar',
+  'laudo:verificarLibreOffice',
 
   // Wizards
   'wizard:findAll',
@@ -810,6 +814,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     gerarWizard: (params: any) => ipcRenderer.invoke('laudo:gerarWizard', params),
     salvarProgressoWizard: (laudoId: string, respostas: any) => ipcRenderer.invoke('laudo:salvarProgressoWizard', laudoId, respostas),
     getRespostasWizard: (laudoId: string) => ipcRenderer.invoke('laudo:getRespostasWizard', laudoId),
+    exportar: (params: any) => ipcRenderer.invoke('laudo:exportar', params),
+    verificarLibreOffice: () => ipcRenderer.invoke('laudo:verificarLibreOffice'),
   },
 
   wizard: {

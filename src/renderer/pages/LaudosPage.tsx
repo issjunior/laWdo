@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2 } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2, Download, FileDown } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -33,6 +33,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   Select,
@@ -44,6 +45,8 @@ import {
 import { reindexarFiguras } from '@/lib/figuras';
 import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders';
+import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -499,6 +502,8 @@ export const LaudosPage: React.FC = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [carregandoPreview, setCarregandoPreview] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [libreOfficeDisponivel, setLibreOfficeDisponivel] = useState<boolean | null>(null);
   const [listaPreviewOpen, setListaPreviewOpen] = useState(false);
   const [listaPreviewBlobUrl, setListaPreviewBlobUrl] = useState('');
   const [listaPreviewLoading, setListaPreviewLoading] = useState(false);
@@ -660,6 +665,9 @@ export const LaudosPage: React.FC = () => {
   useEffect(() => {
     carregarLaudos();
     carregarPlaceholders();
+    window.ipcAPI.laudo.verificarLibreOffice().then(r => {
+      setLibreOfficeDisponivel(r.success && r.data === true);
+    });
   }, [carregarLaudos, carregarPlaceholders]);
 
   useEffect(() => {
@@ -1476,6 +1484,126 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
+  const handleExportar = async (formato: 'pdf' | 'docx' | 'odt') => {
+    if (!editando) return;
+    try {
+      setExportando(true);
+      setError(null);
+
+      const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
+      if (!rRep.success || !rRep.data) {
+        setError('Erro ao carregar dados da REP para exportação');
+        return;
+      }
+      const repData = rRep.data;
+
+      let solicitanteNome = '';
+      let tipoExameNome = '';
+      let tipoExameCodigo = '';
+      if (repData.solicitante_id) {
+        try {
+          const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
+          if (rSol.success && rSol.data) solicitanteNome = rSol.data.nome || '';
+        } catch {}
+      }
+      if (repData.tipo_exame_id) {
+        try {
+          const rTipo = await window.ipcAPI.tipoExame.findById(repData.tipo_exame_id);
+          if (rTipo.success && rTipo.data) {
+            tipoExameNome = rTipo.data.nome || '';
+            tipoExameCodigo = rTipo.data.codigo || '';
+          }
+        } catch {}
+      }
+
+      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+        numeroRepFallback: repData.numero || '',
+      });
+
+      let html: string;
+      if (editorMode === 'single') {
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        html = editor ? editor.getContent() : singleEditorHtml;
+      } else {
+        html = secoes.map((s, i) => {
+          const editor = (window as any).tinymce?.get(`secao-${i}`);
+          const conteudo = editor ? editor.getContent() : s.conteudo;
+          const titulo = s.titulo?.trim() || '';
+          return `<h2>${titulo}</h2>${conteudo}`;
+        }).join('\n');
+      }
+
+      if (cabecalhoPrimeiraPagina) {
+        html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
+      }
+      html = reindexarFiguras(html);
+
+      const htmlResolvido = resolverPlaceholdersExportacao(html, {
+        repData,
+        solicitanteNome,
+        tipoExameNome,
+        tipoExameCodigo,
+      });
+
+      if (formato === 'pdf') {
+        const result = await window.ipcAPI.laudo.exportar({
+          laudoId: editando.id,
+          formato: 'pdf',
+          html: htmlResolvido,
+          margens: await getMargens() || undefined,
+        });
+        if (!result.success && result.error !== 'Operação cancelada pelo usuário') {
+          setError(result.error || 'Erro ao exportar PDF');
+        }
+      } else if (formato === 'docx') {
+        const estrutura = parseHtmlParaEstrutura(htmlResolvido);
+
+        let logoBase64: string | undefined;
+        if (cabecalhoPrimeiraPagina) {
+          const match = cabecalhoPrimeiraPagina.match(/<img[^>]+src="(data:image\/[^"]+)"[^>]*>/i);
+          if (match) logoBase64 = match[1].replace(/^data:image\/\w+;base64,/, '');
+        }
+
+        const result = await window.ipcAPI.laudo.exportar({
+          laudoId: editando.id,
+          formato: 'docx',
+          html: htmlResolvido,
+          estrutura,
+          cabecalho: cabecalhoPrimeiraPagina ? {
+            logoBase64,
+            texto: cabecalhoPrimeiraPagina.replace(/<[^>]*>/g, '').trim(),
+            alinhamento: /text-align:\s*(center|right|left)/i.test(cabecalhoPrimeiraPagina)
+              ? cabecalhoPrimeiraPagina.match(/text-align:\s*(center|right|left)/i)![1]
+              : 'left',
+          } : undefined,
+          margens: await getMargens() || undefined,
+        });
+
+        if (result.success) {
+          toast.success('Documento Word exportado com sucesso');
+        } else if (result.error !== 'Operação cancelada pelo usuário') {
+          setError(result.error || 'Erro ao exportar DOCX');
+        }
+      } else if (formato === 'odt') {
+        const result = await window.ipcAPI.laudo.exportar({
+          laudoId: editando.id,
+          formato: 'odt',
+          html: htmlResolvido,
+        });
+
+        if (result.success) {
+          toast.success('Documento ODT exportado com sucesso');
+        } else if (result.error !== 'Operação cancelada pelo usuário') {
+          setError(result.error || 'Erro ao exportar ODT');
+        }
+      }
+    } catch (e: any) {
+      setError('Erro ao exportar: ' + e.message);
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const handleEditar = async (laudo: LaudoItem) => {
     if (laudo.tipo_criacao === 'wizard') {
       navigate(`/laudos/${laudo.id}/wizard`);
@@ -2186,15 +2314,65 @@ export const LaudosPage: React.FC = () => {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="secondary" onClick={handlePreview} disabled={carregandoPreview || salvando} className="flex items-center gap-2">
-                  <Eye size={16} /> {carregandoPreview ? 'Gerando PDF...' : 'Visualizar'}
-                </Button>
+                <div className="flex items-center">
+                  <Button
+                    variant="secondary"
+                    onClick={handlePreview}
+                    disabled={carregandoPreview || salvando || exportando}
+                    className="flex items-center gap-2 rounded-r-none border-r-0"
+                  >
+                    <Eye size={16} /> {carregandoPreview ? 'Gerando...' : 'Exportar'}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        disabled={carregandoPreview || salvando || exportando}
+                        className="rounded-l-none h-9 w-7"
+                      >
+                        <ChevronDown size={14} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={handlePreview}>
+                        <Eye size={14} className="mr-2" />
+                        Visualizar PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleExportar('pdf')}>
+                        <FileDown size={14} className="mr-2" />
+                        Baixar PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExportar('docx')}>
+                        <FileText size={14} className="mr-2" />
+                        Baixar Word (.docx)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleExportar('odt')}
+                        disabled={libreOfficeDisponivel !== true}
+                      >
+                        {libreOfficeDisponivel === true ? (
+                          <FileText size={14} className="mr-2" />
+                        ) : (
+                          <Download size={14} className="mr-2" />
+                        )}
+                        Baixar ODT (.odt)
+                        {libreOfficeDisponivel !== true && (
+                          <span className="ml-auto text-[10px] text-muted-foreground">
+                            {libreOfficeDisponivel === null ? 'Verificando...' : 'Requer LibreOffice'}
+                          </span>
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Pré-visualizar o laudo em PDF</TooltipContent>
+              <TooltipContent side="bottom">Exportar ou pré-visualizar o laudo</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={handleSalvar} disabled={salvando || carregandoPreview} className="flex items-center gap-2">
+                <Button onClick={handleSalvar} disabled={salvando || carregandoPreview || exportando} className="flex items-center gap-2">
                   <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar'}
                 </Button>
               </TooltipTrigger>
