@@ -54,7 +54,7 @@ export const registerRepHandlers = (): void => {
       const rep = await repService.create(sanitizedData);
       logInfo('REP criada', { numero: data.numero, id: rep.id });
 
-      auditCicloVida('', 'rep', rep.id, 'criacao', `REP ${data.numero} criada`, null, {
+      auditCicloVida('', 'rep', rep.id, 'criacao',         `Requisição ${data.numero} registrada`, null, {
         numero: data.numero, status: 'Pendente',
         solicitante_id: data.solicitante_id, tipo_exame_id: data.tipo_exame_id,
       });
@@ -69,7 +69,7 @@ export const registerRepHandlers = (): void => {
           });
           logInfo('Laudo criado automaticamente para REP', { repId: rep.id });
           auditCicloVida('', 'laudo', rep.id, 'criacao',
-            `Laudo criado automaticamente para REP ${data.numero}`,
+            `Laudo da Requisição ${data.numero} iniciado automaticamente`,
             null,
             { rep_id: rep.id, perito_id: data.perito_id, template_id: data.template_id },
           );
@@ -80,7 +80,7 @@ export const registerRepHandlers = (): void => {
 
       return { success: true, data: rep };
     } catch (error) {
-      logError('Erro ao criar REP', { data, error });
+      logError('Erro ao criar REP', { numero: data.numero, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -141,6 +141,7 @@ export const registerRepHandlers = (): void => {
    * Atualizar REP
    */
   ipcMain.handle('rep:update', async (_event, id: string, data: Partial<REPRow> & { template_id?: string; perito_id?: string }) => {
+    let repAntes: REPRow | null = null;
     try {
       if (!id) return { success: false, error: 'ID inválido' };
 
@@ -164,13 +165,13 @@ export const registerRepHandlers = (): void => {
       if (data.prazo !== undefined) sanitizedData.prazo = data.prazo;
       if (data.campos_especificos !== undefined) sanitizedData.campos_especificos = data.campos_especificos;
 
-      const repAntes = await repService.findById(id);
+      repAntes = await repService.findById(id);
       const statusAnterior = repAntes?.status;
       const updated = await repService.update(id, sanitizedData);
 
       if (sanitizedData.status && sanitizedData.status !== statusAnterior) {
         auditCicloVida('', 'rep', id, 'transicao_status',
-          `REP ${repAntes?.numero ?? id}: ${statusAnterior ?? '?'} → ${sanitizedData.status}`,
+          `Requisição ${repAntes?.numero ?? id}: ${statusAnterior ?? '?'} → ${sanitizedData.status}`,
           { status: statusAnterior },
           { status: sanitizedData.status },
         );
@@ -188,7 +189,7 @@ export const registerRepHandlers = (): void => {
                 });
                 logInfo('Laudo criado automaticamente na atualização da REP', { repId: id });
                 auditCicloVida('', 'laudo', id, 'criacao',
-                  `Laudo criado automaticamente na atualização da REP ${id}`,
+                  `Laudo da Requisição ${repAntes?.numero ?? id} iniciado automaticamente`,
                   null,
                   { rep_id: id, perito_id: data.perito_id, template_id: data.template_id },
                 );
@@ -208,7 +209,7 @@ export const registerRepHandlers = (): void => {
 
       return { success: true, data: updated };
     } catch (error) {
-      logError('Erro ao atualizar REP', { id, error });
+      logError('Erro ao atualizar REP', { id, numero: repAntes?.numero, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -220,19 +221,20 @@ export const registerRepHandlers = (): void => {
    * Excluir REP (remove o laudo vinculado antes para evitar erro de FK)
    */
   ipcMain.handle('rep:delete', async (_event, id: string) => {
+    let rep: REPRow | null = null;
     try {
       if (!id) return { success: false, error: 'ID inválido' };
 
-      const rep = await repService.findById(id);
+      rep = await repService.findById(id);
 
       await laudoService.deletarPorRepId(id);
 
       await repService.delete(id);
       logInfo('REP excluída', { id });
-      auditDelete('', 'reps', id, `REP ${rep?.numero ?? id} excluída`);
+      auditDelete('', 'reps', id, `Requisição ${rep?.numero ?? id} removida`);
       return { success: true, message: 'REP excluída com sucesso!' };
     } catch (error) {
-      logError('Erro ao excluir REP', { id, error });
+      logError('Erro ao excluir REP', { id, numero: rep?.numero, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -244,25 +246,26 @@ export const registerRepHandlers = (): void => {
    * Atualizar status da REP
    */
   ipcMain.handle('rep:updateStatus', async (_event, id: string, status: string) => {
+    let repAntes: REPRow | null = null;
     try {
       if (!id) return { success: false, error: 'ID inválido' };
       const validStatuses = ['Pendente', 'Em Andamento', 'Concluído'];
       if (!validStatuses.includes(status)) {
         return { success: false, error: 'Status inválido' };
       }
-      const repAntes = await repService.findById(id);
+      repAntes = await repService.findById(id);
       const statusAnterior = repAntes?.status;
       const updated = await repService.updateStatus(id, status);
 
       auditCicloVida('', 'rep', id, 'transicao_status',
-        `REP ${repAntes?.numero ?? id}: ${statusAnterior ?? '?'} → ${status}`,
+        `Requisição ${repAntes?.numero ?? id}: ${statusAnterior ?? '?'} → ${status}`,
         statusAnterior ? { status: statusAnterior } : null,
         { status },
       );
 
       return { success: true, data: updated, message: `Status atualizado para "${status}"` };
     } catch (error) {
-      logError('Erro ao atualizar status da REP', { id, status, error });
+      logError('Erro ao atualizar status da REP', { id, numero: repAntes?.numero, status, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
