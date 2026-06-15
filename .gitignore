@@ -38,6 +38,7 @@ docs
 .agents
 graphify-out
 skills-lock.json
+opencode.json
 
 # --- SISTEMA OPERACIONAL ---
 .DS_Store
