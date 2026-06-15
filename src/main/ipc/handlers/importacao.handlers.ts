@@ -1,5 +1,5 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
-import { logInfo, logError } from '../../utils/logger.js';
+import { logDebug, logError } from '../../utils/logger.js';
 import { importarDocumento } from '../../services/importacao.service.js';
 import path from 'path';
 
@@ -33,7 +33,7 @@ export const registerImportacaoHandlers = (): void => {
         return { success: false, error: 'Tipo de arquivo não suportado. Use PDF ou DOCX.' };
       }
 
-      logInfo(`Iniciando importação de arquivo: ${filePath}`);
+      logDebug(`Iniciando importação de arquivo: ${filePath}`);
       const data = await importarDocumento(filePath);
 
       return { success: true, data };

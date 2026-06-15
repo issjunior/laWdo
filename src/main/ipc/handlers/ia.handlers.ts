@@ -1,7 +1,7 @@
 import { ipcMain, app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { logError, logInfo } from '../../utils/logger.js';
+import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -162,7 +162,7 @@ export const registerIAHandlers = (): void => {
         return { success: false, error: 'Texto vazio após extrair do HTML' };
       }
 
-      logInfo('IA: Revisando ortografia', { textoLength: texto.length });
+      logDebug('IA: Revisando ortografia', { textoLength: texto.length });
 
       const prompt = `Você é um revisor de textos jurídico-periciais. Revisa APENAS a ortografia, gramática e pontuação do texto abaixo. NÃO altere o conteúdo técnico, nomes próprios, números de documentos, placeholders {{...}} nem a estrutura do texto. Retorne APENAS o texto revisado, sem comentários adicionais, sem explicações.
 
@@ -177,6 +177,7 @@ ${texto}`;
       return { success: true, data: resposta };
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : 'Erro ao revisar ortografia';
+      logError('Erro ao revisar ortografia', { error: errMsg });
       return { success: false, error: errMsg };
     }
   });
@@ -195,7 +196,7 @@ ${texto}`;
         return { success: false, error: 'Texto vazio após extrair do HTML' };
       }
 
-      logInfo('IA: Adequando escrita', { textoLength: texto.length });
+      logDebug('IA: Adequando escrita', { textoLength: texto.length });
 
       const prompt = `Você é um perito criminal forense com 20 anos de experiência. Reescreva o texto abaixo em linguagem técnica, formal e objetiva, adequada a um laudo pericial oficial da Polícia Científica. Mantenha todos os placeholders {{...}} intactos. Retorne APENAS o texto reescrito, sem comentários.
 
@@ -226,7 +227,7 @@ ${texto}`;
         return { success: false, error: 'Nenhuma imagem fornecida' };
       }
 
-      logInfo('IA: Descrevendo imagens', { count: imagens.length });
+      logDebug('IA: Descrevendo imagens', { count: imagens.length });
 
       // Construir mensagem com imagens
       const content: { type: string; text?: string; image_url?: { url: string } }[] = [
@@ -280,7 +281,7 @@ ${texto}`;
         return { success: false, error: 'Pergunta inválida' };
       }
 
-      logInfo('IA: Pergunta livre', { perguntaLength: pergunta.length });
+      logDebug('IA: Pergunta livre', { perguntaLength: pergunta.length });
 
       const messages: Array<{ role: string; content: string }> = [
         {

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { logInfo, logError } from '../../utils/logger.js'
+import { logDebug, logError } from '../../utils/logger.js'
 import { auditDelete } from '../../services/audit-log.service.js'
 import { tipoExameService } from '../../services/tipo-exame.service.js'
 import { sanitizeInput } from '../../security/index.js'
@@ -8,14 +8,14 @@ import { sanitizeInput } from '../../security/index.js'
  * Registra handlers IPC para operações de tipo de exame
  */
 export const registerTipoExameHandlers = (): void => {
-  logInfo('Registrando handlers de tipo de exame...')
+  logDebug('Registrando handlers de tipo de exame...')
 
   /**
    * Buscar todos os tipos de exame
    */
   ipcMain.handle('tipo-exame:findAll', async () => {
     try {
-      logInfo('Buscando todos os tipos de exame')
+      logDebug('Buscando todos os tipos de exame')
       const tiposExame = await tipoExameService.findAllOrdered()
       return {
         success: true,
@@ -43,7 +43,7 @@ export const registerTipoExameHandlers = (): void => {
         }
       }
 
-      logInfo('Buscando tipo de exame por ID', { id })
+      logDebug('Buscando tipo de exame por ID', { id })
       const tipoExame = await tipoExameService.findById(id)
 
       if (!tipoExame) {
@@ -78,7 +78,7 @@ export const registerTipoExameHandlers = (): void => {
         descricao: tipoExameData.descricao ? sanitizeInput(tipoExameData.descricao) : null
       }
 
-      logInfo('Criando novo tipo de exame', { nome: sanitizedData.nome })
+      logDebug('Criando novo tipo de exame', { nome: sanitizedData.nome })
       const tipoExame = await tipoExameService.create(sanitizedData)
 
       return {
@@ -113,7 +113,7 @@ export const registerTipoExameHandlers = (): void => {
       if (updateData.nome) sanitizedData.nome = sanitizeInput(updateData.nome)
       if (updateData.descricao !== undefined) sanitizedData.descricao = sanitizeInput(updateData.descricao)
 
-      logInfo('Atualizando tipo de exame', { id })
+      logDebug('Atualizando tipo de exame', { id })
       const updatedTipoExame = await tipoExameService.update(id, sanitizedData)
 
       if (!updatedTipoExame) {
@@ -149,7 +149,7 @@ export const registerTipoExameHandlers = (): void => {
         }
       }
 
-      logInfo('Excluindo tipo de exame', { id })
+      logDebug('Excluindo tipo de exame', { id })
       const deleted = await tipoExameService.delete(id)
       auditDelete('', 'tipos_exame', id, `Tipo de exame ${id} excluído`)
 
@@ -214,7 +214,7 @@ export const registerTipoExameHandlers = (): void => {
    */
   ipcMain.handle('tipo-exame:findAllSemFiltroStatus', async () => {
     try {
-      logInfo('Buscando todos os tipos de exame (sem filtro de status)')
+      logDebug('Buscando todos os tipos de exame (sem filtro de status)')
       const tiposExame = await tipoExameService.findAllSemFiltroStatus()
       return {
         success: true,
@@ -235,7 +235,7 @@ export const registerTipoExameHandlers = (): void => {
    */
   ipcMain.handle('tipo-exame:findComTemplate', async () => {
     try {
-      logInfo('Buscando tipos de exame com template padrão')
+      logDebug('Buscando tipos de exame com template padrão')
       const tiposExame = await tipoExameService.findComTemplate()
 
       return {
@@ -265,7 +265,7 @@ export const registerTipoExameHandlers = (): void => {
       }
 
       const sanitizedTemplate = sanitizeInput(template)
-      logInfo('Atualizando template padrão', { id })
+      logDebug('Atualizando template padrão', { id })
       const updated = await tipoExameService.atualizarTemplate(id, sanitizedTemplate)
 
       if (!updated) {
@@ -301,7 +301,7 @@ export const registerTipoExameHandlers = (): void => {
         }
       }
 
-      logInfo('Obtendo template padrão', { id })
+      logDebug('Obtendo template padrão', { id })
       const template = await tipoExameService.obterTemplate(id)
 
       return {
@@ -318,5 +318,5 @@ export const registerTipoExameHandlers = (): void => {
     }
   })
 
-  logInfo('Handlers de tipo de exame registrados com sucesso')
+  logDebug('Handlers de tipo de exame registrados com sucesso')
 }

@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import path from 'path';
-import { logInfo, logError } from '../../utils/logger.js';
+import { logDebug, logError } from '../../utils/logger.js';
 
 interface IlustracoesHandlerOptions {
   preloadPath: string;
@@ -57,7 +57,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         }
       });
 
-      logInfo('Painel de ilustrações aberto em janela separada');
+      logDebug('Painel de ilustrações aberto em janela separada');
     } catch (error) {
       logError('Erro ao abrir painel de ilustrações', error);
     }
@@ -67,7 +67,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     if (panelWindow && !panelWindow.isDestroyed()) {
       panelWindow.close();
       panelWindow = null;
-      logInfo('Painel de ilustrações fechado via IPC');
+      logDebug('Painel de ilustrações fechado via IPC');
     }
   });
 

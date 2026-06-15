@@ -1,5 +1,5 @@
 ﻿import { ipcMain, app } from 'electron'
-import { logInfo, logError } from '../../utils/logger.js'
+import { logDebug, logError } from '../../utils/logger.js'
 import { userService } from '../../services/user.service.js'
 import { sanitizeInput } from '../../security/index.js'
 import bcrypt from 'bcrypt'
@@ -10,14 +10,14 @@ import path from 'path'
  * Registra handlers IPC para operações de usuário
  */
 export const registerUserHandlers = (): void => {
-  logInfo('Registrando handlers de usuário...')
+  logDebug('Registrando handlers de usuário...')
 
   /**
    * Buscar todos os usuários com paginação
    */
   ipcMain.handle('user:findAll', async (event, filters = {}, options = {}) => {
     try {
-      logInfo('Buscando todos os usuários', { filters, options })
+      logDebug('Buscando todos os usuários', { filters, options })
       const users = await userService.findAll(filters, options)
       return {
         success: true,
@@ -45,7 +45,7 @@ export const registerUserHandlers = (): void => {
         }
       }
 
-      logInfo('Buscando usuário por ID', { id })
+      logDebug('Buscando usuário por ID', { id })
       const user = await userService.findById(id)
 
       if (!user) {
@@ -97,7 +97,7 @@ export const registerUserHandlers = (): void => {
         ativo: 1
       }
 
-      logInfo('Criando novo usuário', { email: sanitizedData.email })
+      logDebug('Criando novo usuário', { email: sanitizedData.email })
       const user = await userService.create(sanitizedData)
 
       return {
@@ -134,7 +134,7 @@ export const registerUserHandlers = (): void => {
       if (updateData.cargo) sanitizedData.cargo = sanitizeInput(updateData.cargo)
       if (updateData.lotacao) sanitizedData.lotacao = sanitizeInput(updateData.lotacao)
 
-      logInfo('Atualizando usuário', { id })
+      logDebug('Atualizando usuário', { id })
       const updatedUser = await userService.update(id, sanitizedData)
 
       if (!updatedUser) {
@@ -170,7 +170,7 @@ export const registerUserHandlers = (): void => {
         }
       }
 
-      logInfo('Excluindo usuário', { id })
+      logDebug('Excluindo usuário', { id })
       const deleted = await userService.delete(id)
 
       if (!deleted) {
@@ -206,7 +206,7 @@ export const registerUserHandlers = (): void => {
       }
 
       const sanitizedEmail = sanitizeInput(email)
-      logInfo('Buscando usuário por email', { email: sanitizedEmail })
+      logDebug('Buscando usuário por email', { email: sanitizedEmail })
       const user = await userService.findByEmail(sanitizedEmail)
 
       if (!user) {
@@ -234,7 +234,7 @@ export const registerUserHandlers = (): void => {
    */
   ipcMain.handle('user:findActivePeritos', async () => {
     try {
-      logInfo('Buscando peritos ativos')
+      logDebug('Buscando peritos ativos')
       const peritos = await userService.findActivePeritos()
 
       return {
@@ -275,7 +275,7 @@ export const registerUserHandlers = (): void => {
         sanitizedData.senha_hash = await bcrypt.hash(profileData.senha, 10)
       }
 
-      logInfo('Atualizando perfil de usuário', { userId })
+      logDebug('Atualizando perfil de usuário', { userId })
       const updatedProfile = await userService.updateProfile(userId, sanitizedData)
 
       if (!updatedProfile) {
@@ -325,7 +325,7 @@ export const registerUserHandlers = (): void => {
 
       await userService.update(userId, { foto_url: filePath } as any)
 
-      logInfo('Avatar salvo com sucesso', { userId })
+      logDebug('Avatar salvo com sucesso', { userId })
       return { success: true, data: { foto_url: filePath }, message: 'Avatar atualizado com sucesso' }
     } catch (error) {
       logError('Erro ao fazer upload de avatar', { userId, error })
@@ -363,7 +363,7 @@ export const registerUserHandlers = (): void => {
     }
   })
 
-  logInfo('Handlers de usuário registrados com sucesso')
+  logDebug('Handlers de usuário registrados com sucesso')
 }
 
 const verifyAttempts = new Map<string, { count: number; lastAttempt: number }>();

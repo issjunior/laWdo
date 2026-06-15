@@ -125,7 +125,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
     }
 
     const buffer = Buffer.from(await win.webContents.printToPDF(printOptions));
-    log.info('PDF exportado com sucesso');
+    log.debug('PDF exportado com sucesso');
     return buffer;
   } finally {
     if (win) { try { win.close(); } catch { /* ignora */ } }
@@ -429,7 +429,7 @@ td, th { background: transparent !important; }`;
     const htmlBuffer = fs.readFileSync(tmpHtmlPath);
     const odtBuffer: Buffer = await convertAsync(htmlBuffer, 'odt', undefined) as Buffer;
 
-    log.info('ODT gerado com sucesso via LibreOffice');
+    log.debug('ODT gerado com sucesso via LibreOffice');
     return odtBuffer;
   } finally {
     try { fs.unlinkSync(tmpHtmlPath); } catch { /* ignora */ }
@@ -495,7 +495,7 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
     }
 
     fs.writeFileSync(filePath, buffer);
-    log.info(`Laudo exportado: ${filePath}`);
+    log.debug(`Laudo exportado: ${filePath}`);
 
     return { success: true, path: filePath };
   } catch (error: any) {

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { logInfo, logError } from '../../utils/logger.js'
+import { logDebug, logError } from '../../utils/logger.js'
 import { auditDelete } from '../../services/audit-log.service.js'
 import { solicitanteService } from '../../services/solicitante.service.js'
 import { sanitizeInput } from '../../security/index.js'
@@ -8,14 +8,14 @@ import { sanitizeInput } from '../../security/index.js'
  * Registra handlers IPC para operações de solicitante
  */
 export const registerSolicitanteHandlers = (): void => {
-  logInfo('Registrando handlers de solicitante...')
+  logDebug('Registrando handlers de solicitante...')
 
   /**
    * Buscar todos os solicitantes com paginação
    */
   ipcMain.handle('solicitante:findAll', async (event, filters = {}, options = {}) => {
     try {
-      logInfo('Buscando todos os solicitantes', { filters, options })
+      logDebug('Buscando todos os solicitantes', { filters, options })
       const solicitantes = await solicitanteService.findAll(filters, options)
       return {
         success: true,
@@ -43,7 +43,7 @@ export const registerSolicitanteHandlers = (): void => {
         }
       }
 
-      logInfo('Buscando solicitante por ID', { id })
+      logDebug('Buscando solicitante por ID', { id })
       const solicitante = await solicitanteService.findById(id)
 
       if (!solicitante) {
@@ -80,7 +80,7 @@ export const registerSolicitanteHandlers = (): void => {
         email: solicitanteData.email ? sanitizeInput(solicitanteData.email) : null
       }
 
-      logInfo('Criando novo solicitante', { nome: sanitizedData.nome })
+      logDebug('Criando novo solicitante', { nome: sanitizedData.nome })
       const solicitante = await solicitanteService.createSolicitante(sanitizedData)
 
       return {
@@ -118,7 +118,7 @@ export const registerSolicitanteHandlers = (): void => {
       if (updateData.email !== undefined) sanitizedData.email = sanitizeInput(updateData.email ?? '')
       if (updateData.ativo !== undefined) sanitizedData.ativo = updateData.ativo ? 1 : 0
 
-      logInfo('Atualizando solicitante', { id })
+      logDebug('Atualizando solicitante', { id })
       const updatedSolicitante = await solicitanteService.updateSolicitante(id, sanitizedData)
 
       if (!updatedSolicitante) {
@@ -169,7 +169,7 @@ export const registerSolicitanteHandlers = (): void => {
         ativo: novoStatus
       }
 
-      logInfo(`Trocando status do solicitante ${id} para ${novoStatus ? 'ativo' : 'inativo'}`)
+      logDebug(`Trocando status do solicitante ${id} para ${novoStatus ? 'ativo' : 'inativo'}`)
       const updated = await solicitanteService.updateSolicitante(id, sanitizedData)
 
       return {
@@ -191,7 +191,7 @@ export const registerSolicitanteHandlers = (): void => {
    */
   ipcMain.handle('solicitante:findAllSemFiltroStatus', async (event, filters = {}, options = {}) => {
     try {
-      logInfo('Buscando todos os solicitantes (sem filtro de status)', { filters, options })
+      logDebug('Buscando todos os solicitantes (sem filtro de status)', { filters, options })
       const solicitantes = await solicitanteService.findAllSemFiltroStatus(
         { tipo: filters.tipo },
         { limit: options.limit, offset: options.offset }
@@ -222,7 +222,7 @@ export const registerSolicitanteHandlers = (): void => {
         }
       }
 
-      logInfo('Desativando solicitante (soft delete)', { id })
+      logDebug('Desativando solicitante (soft delete)', { id })
       await solicitanteService.desativarSolicitante(id)
       auditDelete('', 'solicitantes', id, `Solicitante ${id} desativado`)
 
@@ -251,7 +251,7 @@ export const registerSolicitanteHandlers = (): void => {
         }
       }
 
-      logInfo('Excluindo permanentemente o solicitante (hard delete)', { id })
+      logDebug('Excluindo permanentemente o solicitante (hard delete)', { id })
       const result = await solicitanteService.delete(id)
 
       if (!result) {
@@ -287,7 +287,7 @@ export const registerSolicitanteHandlers = (): void => {
       }
 
       const sanitizedTipo = sanitizeInput(tipo)
-      logInfo('Buscando solicitantes por tipo', { tipo: sanitizedTipo })
+      logDebug('Buscando solicitantes por tipo', { tipo: sanitizedTipo })
       const solicitantes = await solicitanteService.findByTipo(sanitizedTipo)
 
       return {
@@ -309,7 +309,7 @@ export const registerSolicitanteHandlers = (): void => {
    */
   ipcMain.handle('solicitante:findTipos', async () => {
     try {
-      logInfo('Buscando tipos de solicitantes')
+      logDebug('Buscando tipos de solicitantes')
       const tipos = await solicitanteService.findTipos()
 
       return {
@@ -331,7 +331,7 @@ export const registerSolicitanteHandlers = (): void => {
    */
   ipcMain.handle('solicitante:findAtivos', async (event, filters = {}, options = {}) => {
     try {
-      logInfo('Buscando solicitantes ativos', { filters, options })
+      logDebug('Buscando solicitantes ativos', { filters, options })
       const solicitantes = await solicitanteService.findAtivos(filters, options)
 
       return {
@@ -348,5 +348,5 @@ export const registerSolicitanteHandlers = (): void => {
     }
   })
 
-  logInfo('Handlers de solicitante registrados com sucesso')
+  logDebug('Handlers de solicitante registrados com sucesso')
 }

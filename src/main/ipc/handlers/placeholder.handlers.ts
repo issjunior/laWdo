@@ -1,11 +1,11 @@
 import { ipcMain } from 'electron';
-import { logInfo, logError } from '../../utils/logger.js';
+import { logDebug, logError } from '../../utils/logger.js';
 import { auditDelete } from '../../services/audit-log.service.js';
 import { placeholderService } from '../../services/placeholder.service.js';
 import { sanitizeInput } from '../../security/index.js';
 
 export const registerPlaceholderHandlers = (): void => {
-  logInfo('Registrando handlers de placeholder...');
+  logDebug('Registrando handlers de placeholder...');
 
   ipcMain.handle('placeholder:findAll', async () => {
     try {
@@ -98,5 +98,5 @@ export const registerPlaceholderHandlers = (): void => {
     }
   });
 
-  logInfo('Handlers de placeholder registrados com sucesso');
+  logDebug('Handlers de placeholder registrados com sucesso');
 };

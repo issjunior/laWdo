@@ -1,5 +1,5 @@
 import { ipcMain, dialog, BrowserWindow, nativeImage, app } from 'electron';
-import { logInfo, logError } from '../../utils/logger.js';
+import { logDebug, logError } from '../../utils/logger.js';
 import { auditDelete, auditExport } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
@@ -57,7 +57,7 @@ export const registerTemplateHandlers = (): void => {
         tipo_exame_id: data.tipo_exame_id,
         descricao: data.descricao ? sanitizeInput(data.descricao) : undefined,
       });
-      logInfo(`Template criado: ${template.nome}`);
+      logDebug(`Template criado: ${template.nome}`);
       return { success: true, data: template, message: 'Template criado com sucesso' };
     } catch (error: any) {
       logError('Erro ao criar template', error);
@@ -74,7 +74,7 @@ export const registerTemplateHandlers = (): void => {
       if (data.descricao !== undefined) updateData.descricao = data.descricao ? sanitizeInput(data.descricao) : null;
 
       const template = await templateService.update(id, updateData);
-      logInfo(`Template atualizado: ${id}`);
+      logDebug(`Template atualizado: ${id}`);
       return { success: true, data: template, message: 'Template atualizado com sucesso' };
     } catch (error: any) {
       logError('Erro ao atualizar template', error);
@@ -86,7 +86,7 @@ export const registerTemplateHandlers = (): void => {
   ipcMain.handle('template:delete', async (_event, id: string) => {
     try {
       await templateService.delete(id);
-      logInfo(`Template excluído: ${id}`);
+      logDebug(`Template excluído: ${id}`);
       auditDelete('', 'templates', id, `Template ${id} excluído`);
       return { success: true, message: 'Template excluído com sucesso' };
     } catch (error: any) {
@@ -276,7 +276,7 @@ export const registerTemplateHandlers = (): void => {
       try { fs.unlinkSync(tmpPath); } catch { /* ignora */ }
 
       const base64PDF = buffer.toString('base64');
-      logInfo('PDF de preview gerado com sucesso (imagens otimizadas)');
+      logDebug('PDF de preview gerado com sucesso (imagens otimizadas)');
       return { success: true, data: base64PDF };
     } catch (error: any) {
       logError('Erro ao gerar PDF de preview', error);
