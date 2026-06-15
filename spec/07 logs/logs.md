@@ -1,20 +1,20 @@
 # Módulo de Logs — LaudoPericial
 
-> **Status**: Implementado (2025-05-29)  
-> **Escopo**: Sistema de logs modular, JSON estruturado, auditoria de ações sensíveis, exclusão de logs dos backups
+> **Status**: Reformulado (2025-06-15) — thresholds `warn`, timestamps brasileiros, mensagens amigáveis, erros enriquecidos, backup com auditoria REP/Laudo
 
 ---
 
 ## Diagnóstico
 
-| Problema | Impacto | Local |
+| Problema | Impacto | Status |
 |---|---|---|
-| `logDebug` em **toda query SQL** | Em dev, cada SELECT/INSERT/UPDATE escreve arquivo síncrono | `sqlite.ts:78,103,131` |
-| 63 `console.*` diretos sem categoria | Logs perdidos em produção, sem filtro, sem módulo | 48 renderer + 15 main |
-| 448 chamadas Winston sem módulo | Impossível filtrar por área do sistema | Todos os serviços/handlers |
-| `logs_auditoria` nunca populada | Sem rastreabilidade de ações de usuário | Tabela existe, schema definido, 0 INSERTs |
-| Backup ZIP inclui `logs_auditoria` | Dados de auditoria vazam em backups | `backup.service.ts` — DB inteiro é copiado |
-| `fs.readFileSync/writeFileSync` em operações de log | Bloqueia event loop | `logger.ts:137,191,209` |
+| `logDebug` em **toda query SQL** | Em dev, cada SELECT/INSERT/UPDATE escreve arquivo síncrono | Corrigido — thresholds `warn`+ |
+| ~100+ `log.info` poluentes | Arquivos de log enormes, sem valor de diagnóstico | Corrigido — removidos ou viram `debug` |
+| `logs_auditoria` nunca populada | Sem rastreabilidade de ações de usuário | Implementado (2025-05-29) |
+| Backup ZIP excluía `logs_auditoria` | Auditoria perdida ao restaurar backup | Corrigido — filtra só não-REP/Laudo |
+| Mensagens de erro sem contexto | "Falha no teste de conexão GDL" sem dizer qual ambiente | Corrigido — erros enriquecidos com entidade/ambiente |
+| Mensagens de auditoria com UUIDs | "Laudo abc123-def: Em andamento → Concluído" ilegível | Corrigido — mensagens amigáveis com nº da Requisição |
+| Timestamps ISO em arquivos | Dificulta leitura por usuários brasileiros | Corrigido — `DD/MM/AA HH:mm:ss` |
 
 ---
 
@@ -48,8 +48,8 @@
 
 | Tipo | Destino | Retenção | Backup? |
 |---|---|---|---|
-| **Sistema** (erros, warns, info) | `userData/logs/*.log` — JSON rotativo | 30 dias | **Nunca** |
-| **Auditoria** (ações sensíveis + ciclo de vida) | Tabela `logs_auditoria` — SQLite | Indefinido | **Nunca** (excluído do ZIP) |
+| **Sistema** (erros, warns) | `userData/logs/*.log` — JSON rotativo | 30 dias | **Nunca** |
+| **Auditoria** (ações sensíveis + ciclo de vida) | Tabela `logs_auditoria` — SQLite | Indefinido | **REP/Laudo** (filtrado: `modulo IN ('rep','laudo')`)
 
 ### Princípios de performance
 
@@ -114,46 +114,59 @@ CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidad
 
 ### REP
 
-| Evento | `tipo_acao` | `dados_anteriores` | `dados_novos` | Handler |
-|---|---|---|---|---|
-| REP criada | `criacao` | `null` | `{numero, status:"Pendente", solicitante_id, tipo_exame_id}` | `rep:create` |
-| Status alterado | `transicao_status` | `{status}` | `{status}` | `rep:updateStatus` |
-| Dados atualizados | `atualizacao` | Diff dos campos alterados | Novos valores | `rep:update` |
-| REP excluída | `exclusao` | `{numero, status}` | `null` | `rep:delete` |
-| REP resetada (laudo excluído) | `transicao_status` | `{status}` | `{status:"Pendente"}` | `laudo:delete` |
+| Evento | `tipo_acao` | Mensagem exemplo | Handler |
+|---|---|---|---|
+| REP criada | `criacao` | `Requisição 045-2026 registrada` | `rep:create` |
+| Status alterado | `transicao_status` | `Requisição 045-2026: Pendente → Em andamento` | `rep:update` / `rep:updateStatus` |
+| REP excluída | `exclusao` | `Requisição 045-2026 removida` | `rep:delete` |
+| REP resetada (laudo excluído) | `transicao_status` | `Requisição 045-2026 voltou a Pendente` | `laudo:delete` |
 
 ### Laudo
 
-| Evento | `tipo_acao` | `dados_anteriores` | `dados_novos` | Handler |
-|---|---|---|---|---|
-| Laudo criado | `criacao` | `null` | `{rep_id, perito_id, template_id, status:"Em andamento", versao:1}` | `laudo:create`, `rep:create`, `rep:update` |
-| Conteúdo salvo | `atualizacao` | `{versao}` | `{versao}` | `laudo:updateConteudo` |
-| Status → Concluído | `transicao_status` | `{status}` | `{status:"Concluído", data_conclusao}` | `laudo:updateStatus` *(Onda B)* |
-| Status → Entregue | `transicao_status` | `{status}` | `{status:"Entregue", data_entrega}` | `laudo:updateStatus` *(Onda B)* |
-| Laudo excluído | `exclusao` | `{rep_id, versao, status}` | `null` | `laudo:delete` |
+| Evento | `tipo_acao` | Mensagem exemplo | Handler |
+|---|---|---|---|
+| Laudo criado | `criacao` | `Laudo da Requisição 045-2026 iniciado` | `laudo:create` / `rep:create` |
+| Laudo criado automático | `criacao` | `Laudo da Requisição 045-2026 iniciado automaticamente` | `rep:create` / `rep:update` |
+| Conteúdo salvo | `atualizacao` | `Laudo da Requisição 045-2026 salvo (versão 2)` | `laudo:updateConteudo` |
+| Status → Concluído | `transicao_status` | `Laudo da Requisição 045-2026: Em andamento → Concluído` | `laudo:updateStatus` |
+| Status → Entregue | `transicao_status` | `Laudo da Requisição 045-2026: Concluído → Entregue` | `laudo:updateStatus` |
+| Laudo excluído | `exclusao` | `Laudo da Requisição 045-2026 excluído. Requisição voltou a Pendente` | `laudo:delete` |
+
+**Regra**: mensagens NUNCA expõem UUIDs. Sempre usam o número da Requisição. Símbolo `→` usado para transições de status.
 
 ---
 
 ## Níveis de Log por Módulo (Defaults)
 
+Todos os módulos em `warn`, exceto `ia` em `debug`, `ilustracao` e `renderer` em `warn`.
+
 ```json
 {
-  "database": "info",
-  "auth": "info",
+  "database": "warn",
+  "auth": "warn",
   "renderer": "warn",
   "ilustracao": "warn",
   "ia": "debug",
-  "sistema": "info",
-  "rep": "info",
-  "laudo": "info",
-  "template": "info",
-  "solicitante": "info",
-  "tipo_exame": "info",
-  "placeholder": "info",
-  "backup": "info",
-  "configuracao": "info"
+  "sistema": "warn",
+  "rep": "warn",
+  "laudo": "warn",
+  "template": "warn",
+  "solicitante": "warn",
+  "tipo_exame": "warn",
+  "placeholder": "warn",
+  "backup": "warn",
+  "configuracao": "warn",
+  "ipc": "warn",
+  "security": "warn",
+  "wizard": "warn",
+  "peca": "warn",
+  "regra-wizard": "warn",
+  "gdl": "warn",
+  "exportacao": "warn"
 }
 ```
+
+Fallback `shouldLog` default: `'warn'` (qualquer módulo novo herda warn).
 
 ---
 
@@ -264,20 +277,21 @@ CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidad
 
 ### Arquivos de log
 
-- **Formato**: JSON (uma linha = um objeto). O parser em `logger.ts:getAllLogs()` lê tanto JSON quanto o formato legado `[timestamp] LEVEL: message`.
+- **Formato**: JSON (uma linha = um objeto). Timestamps em formato brasileiro: `DD/MM/AA HH:mm:ss`. O parser em `logger.ts:getAllLogs()` lê tanto JSON quanto o formato legado `[timestamp] LEVEL: message`.
 - **Localização**: `%APPDATA%/laWdo/logs/combined.log` e `error.log`
 - **Rotação**: 5 MB por arquivo, máximo 5 arquivos
 - **Retenção**: `cleanupOldLogs()` remove arquivos com mais de 30 dias
+- **Threshold em disco**: `warn`+ (só erros e avisos vão para arquivo). Console dev mantém todos os níveis.
 
 ### Níveis por módulo
 
-Definidos em `moduleLogLevels` no `logger.ts`. Alterações em runtime via `setModuleLogLevel(module, level)`.
+Definidos em `moduleLogLevels` no `logger.ts`. Todos em `warn`, exceto `ia` (`debug`). Alterações em runtime via `setModuleLogLevel(module, level)`. O fallback do `shouldLog` é `'warn'`.
 
 ### Logs de auditoria
 
 - Tabela `logs_auditoria` no SQLite, migration v19 adicionou 6 colunas
 - Inserção é **fire-and-forget**: não bloqueia a operação principal
-- Excluída automaticamente de backups ZIP (`backup.service.ts` copia DB → DELETE FROM logs_auditoria → ZIP)
+- No backup ZIP, apenas registros de REP e Laudo são preservados (`WHERE modulo IN ('rep','laudo')`). Demais são excluídos da cópia de backup
 - Limpeza manual via LogsPage exige senha e registra `limpeza_logs`
 
 ### `user:verifyPassword`
@@ -286,6 +300,19 @@ Definidos em `moduleLogLevels` no `logger.ts`. Alterações em runtime via `setM
 - Usado para limpeza de logs e exclusão de laudos finalizados
 - Não retorna dados do usuário, apenas `{ valid: boolean }`
 
-### Console.* residuais
+### Mensagens de erro enriquecidas
 
-~50 chamadas de `console.log/error/warn/info` ainda existem em páginas renderer. As funções `logInfo/Error/Warn` standalone ainda são exportadas de `logger.ts` para compatibilidade — logam com `module: 'sistema'`. O caminho recomendado é `import { getLogger } from '../utils/logger.js'` seguido de `const log = getLogger('modulo')`.
+Toda chamada `log.error()` segue o padrão: **o que falhou + contexto + entidade**.
+
+Exemplos:
+- `log.error('Falha no teste de conexão GDL em ambiente Produção', { erro, endpoint })`
+- `log.error('Falha ao consultar REP 045-2026 no GDL (Homologação)', { erro, numero, ano })`
+- `log.error('Erro ao criar Requisição', { numero, error })`
+
+### BaseService
+
+Operações CRUD (`create`, `update`, `delete`) não geram mais `log.info` no `base.service.ts`. A rastreabilidade é coberta pelos logs de auditoria na tabela `logs_auditoria`. Apenas erros são logados.
+
+### Logs operacionais em debug
+
+Mensagens de migration, conexão com banco, registro de handlers IPC, passos de backup e outros logs operacionais estão em nível `debug` — visíveis apenas no console dev, nunca em disco.
