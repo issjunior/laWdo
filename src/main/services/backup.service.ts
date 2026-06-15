@@ -27,15 +27,15 @@ export const criarBackup = async (destino: string): Promise<{ success: boolean; 
 
     const tempDbPath = path.join(DB_DIR, `_backup_temp_${Date.now()}.db`);
     fs.copyFileSync(DB_PATH, tempDbPath);
-    log.info('Cópia temporária do banco criada para limpeza de auditoria');
+    log.debug('Cópia temporária do banco criada para limpeza de auditoria');
 
     const tempDb = new sqlite3.Database(tempDbPath);
     await new Promise<void>((resolve, reject) => {
-      tempDb.run('DELETE FROM logs_auditoria', (err) => {
+      tempDb.run('DELETE FROM logs_auditoria WHERE modulo NOT IN (\'rep\', \'laudo\')', (err) => {
         if (err) { reject(err); } else { resolve(); }
       });
     });
-    log.info('Registros de auditoria removidos da cópia de backup');
+    log.debug('Registros de auditoria (exceto REPs e Laudos) removidos da cópia de backup');
 
     await new Promise<void>((resolve, reject) => {
       tempDb.run('VACUUM', (err) => {
@@ -45,14 +45,14 @@ export const criarBackup = async (destino: string): Promise<{ success: boolean; 
     tempDb.close();
 
     zip.addLocalFile(tempDbPath, '', 'laudopericial.db');
-    log.info('Banco de dados (sem auditoria) adicionado ao ZIP de backup');
+    log.debug('Banco de dados (sem auditoria) adicionado ao ZIP de backup');
 
     // Adicionar pasta de imagens ao ZIP (recursivamente)
     if (fs.existsSync(IMAGES_DIR)) {
       zip.addLocalFolder(IMAGES_DIR, 'imagens');
-      log.info('Pasta de imagens adicionada ao ZIP de backup', { imagesDir: IMAGES_DIR });
+      log.debug('Pasta de imagens adicionada ao ZIP de backup', { imagesDir: IMAGES_DIR });
     } else {
-      log.info('Pasta de imagens não existe; backup conterá apenas o banco de dados');
+      log.debug('Pasta de imagens não existe; backup conterá apenas o banco de dados');
     }
 
     // Gravar arquivo ZIP
@@ -62,7 +62,7 @@ export const criarBackup = async (destino: string): Promise<{ success: boolean; 
       fs.unlinkSync(tempDbPath);
     }
 
-    log.info('Backup ZIP criado com sucesso', { destino });
+    log.debug('Backup ZIP criado com sucesso', { destino });
     return { success: true, path: destino };
   } catch (error) {
     log.error('Erro ao criar backup ZIP', error);
@@ -97,23 +97,23 @@ export const restaurarBackup = async (origem: string): Promise<{ success: boolea
     // Criar pré-backup do estado atual antes de sobrescrever
     const preRestorePath = path.join(DB_DIR, `pre_restore_${Date.now()}.zip`);
     await criarBackup(preRestorePath);
-    log.info('Pré-backup do estado atual criado antes da restauração', { preRestorePath });
+    log.debug('Pré-backup do estado atual criado antes da restauração', { preRestorePath });
 
     // Fechar conexão com o banco de dados
     await closeDatabase();
-    log.info('Conexão com banco de dados fechada para restauração');
+    log.debug('Conexão com banco de dados fechada para restauração');
 
     // Extrair ZIP para diretório temporário
     const tempExtractDir = path.join(DB_DIR, `restore_${Date.now()}`);
     fs.mkdirSync(tempExtractDir, { recursive: true });
     zip.extractAllTo(tempExtractDir, true);
-    log.info('Backup extraído para diretório temporário', { tempExtractDir });
+    log.debug('Backup extraído para diretório temporário', { tempExtractDir });
 
     // Substituir banco de dados
     const extractedDbPath = path.join(tempExtractDir, 'laudopericial.db');
     if (fs.existsSync(extractedDbPath)) {
       fs.copyFileSync(extractedDbPath, DB_PATH);
-      log.info('Banco de dados substituído');
+      log.debug('Banco de dados substituído');
     }
 
     // Substituir pasta de imagens
@@ -124,15 +124,15 @@ export const restaurarBackup = async (origem: string): Promise<{ success: boolea
       }
       fs.mkdirSync(path.dirname(IMAGES_DIR), { recursive: true });
       fs.renameSync(extractedImagesPath, IMAGES_DIR);
-      log.info('Pasta de imagens substituída');
+      log.debug('Pasta de imagens substituída');
     }
 
     // Limpar diretório temporário
     fs.rmSync(tempExtractDir, { recursive: true, force: true });
-    log.info('Diretório temporário de restauração removido');
+    log.debug('Diretório temporário de restauração removido');
 
     // Reiniciar aplicação
-    log.info('Restauração concluída. Reiniciando aplicação...');
+    log.debug('Restauração concluída. Reiniciando aplicação...');
     app.relaunch();
     app.exit(0);
 
