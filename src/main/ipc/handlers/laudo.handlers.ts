@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { logError, logInfo } from '../../utils/logger.js';
+import { logDebug, logError, logInfo } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
@@ -82,8 +82,11 @@ export const registerLaudoHandlers = (): void => {
       if (typeof conteudo !== 'string') return { success: false, error: 'Conteúdo inválido' };
       const laudo = await laudoService.updateConteudo(laudoId, conteudo);
 
+      const rep = await repService.findById(laudo.rep_id);
+      const repNumero = rep?.numero ?? laudo.rep_id;
+
       auditCicloVida('', 'laudo', laudoId, 'atualizacao',
-        `Conteúdo do laudo ${laudoId} atualizado (versão ${laudo?.versao ?? '?'})`,
+        `Laudo da Requisição ${repNumero} salvo (versão ${laudo?.versao ?? '?'})`,
         null,
         { versao: laudo?.versao },
       );
@@ -113,15 +116,18 @@ export const registerLaudoHandlers = (): void => {
         template_id: data.template_id,
       });
 
+      const rep = await repService.findById(data.rep_id);
+      const repNumero = rep?.numero ?? data.rep_id;
+
       auditCicloVida('', 'laudo', laudo.id, 'criacao',
-        `Laudo criado para REP ${data.rep_id}`,
+        `Laudo da Requisição ${repNumero} iniciado`,
         null,
         { rep_id: data.rep_id, perito_id: data.perito_id, template_id: data.template_id, status: 'Em andamento', versao: 1 },
       );
 
       return { success: true, data: laudo };
     } catch (error) {
-      logError('Erro ao criar laudo', { data, error });
+      logError('Erro ao criar laudo para Requisição', { rep_id: data.rep_id, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
@@ -137,7 +143,7 @@ export const registerLaudoHandlers = (): void => {
       const laudo = await laudoService.gerarLaudoWizard(params);
       return { success: true, data: laudo };
     } catch (error) {
-      logError('Erro ao gerar laudo wizard', { params, error });
+      logError('Erro ao gerar laudo pelo assistente', { laudo_id: params.laudo_id, error });
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
     }
   });
@@ -150,7 +156,7 @@ export const registerLaudoHandlers = (): void => {
       await laudoService.salvarProgressoWizard(laudoId, respostas);
       return { success: true, message: 'Progresso salvo' };
     } catch (error) {
-      logError('Erro ao salvar progresso do wizard', { laudoId, error });
+      logError('Erro ao salvar progresso do assistente', { laudoId, error });
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
     }
   });
@@ -184,13 +190,16 @@ export const registerLaudoHandlers = (): void => {
       const { rep_id } = await laudoService.deletar(laudoId);
       await repService.updateStatus(rep_id, 'Pendente');
 
+      const rep = await repService.findById(rep_id);
+      const repNumero = rep?.numero ?? rep_id;
+
       const uid = userId || '';
-      logInfo('Laudo excluído e REP resetada para Pendente', { laudoId, repId: rep_id, status: statusAnterior });
+      logDebug('Laudo excluído e REP resetada para Pendente', { laudoId, repId: rep_id, status: statusAnterior });
       auditDelete(uid, 'laudos', laudoId,
-        `Laudo ${laudoId} excluído (status: ${statusAnterior})`,
+        `Laudo da Requisição ${repNumero} excluído. Requisição ${repNumero} voltou a Pendente`,
         `REP ${rep_id} resetada para Pendente`);
       auditCicloVida(uid, 'rep', rep_id, 'transicao_status',
-        `REP ${rep_id} resetada para Pendente (laudo excluído)`,
+        `Requisição ${repNumero} voltou a Pendente`,
         { status: statusAnterior },
         { status: 'Pendente', motivo: 'laudo_excluido' },
       );
@@ -221,8 +230,11 @@ export const registerLaudoHandlers = (): void => {
       const statusAnterior = laudoAntes.status;
       const laudo = await laudoService.updateStatus(laudoId, novoStatus);
 
+      const rep = await repService.findById(laudoAntes.rep_id);
+      const repNumero = rep?.numero ?? laudoAntes.rep_id;
+
       auditCicloVida('', 'laudo', laudoId, 'transicao_status',
-        `Laudo ${laudoId}: ${statusAnterior ?? '?'} → ${novoStatus}`,
+        `Laudo da Requisição ${repNumero}: ${statusAnterior ?? '?'} → ${novoStatus}`,
         { status: statusAnterior, data_conclusao: laudoAntes.data_conclusao, data_entrega: laudoAntes.data_entrega },
         { status: novoStatus, data_conclusao: laudo.data_conclusao, data_entrega: laudo.data_entrega },
       );
