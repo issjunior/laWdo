@@ -129,6 +129,17 @@ const NivelBadge = ({ level }: { level: string }) => {
 
 const formatarTimestamp = (ts: string): string => {
   if (!ts) return '';
+
+  if (ts.includes('T')) {
+    const [dataPart, timePart] = ts.split('T');
+    const partes = dataPart.split('-');
+    if (partes.length === 3) {
+      const [ano, mes, dia] = partes;
+      const hora = timePart ? timePart.slice(0, 8) : '';
+      return `${dia}/${mes}/${ano.slice(-2)} ${hora}`;
+    }
+  }
+
   const [dataPart, horaPart] = ts.split(' ');
   if (!dataPart) return ts;
   const partes = dataPart.split('-');
@@ -358,12 +369,12 @@ export function LogsPage() {
       const linhas = (dados as SystemLog[]).map(l =>
         `"${formatarTimestamp(l.timestamp)}","${l.level.toUpperCase()}","${l.module}","${(l.message || '').replace(/"/g, '""')}"`,
       );
-      csv = '\uFEFFTimestamp,Nível,Módulo,Mensagem\n' + linhas.join('\n');
+      csv = '\uFEFFData/Hora,Nível,Módulo,Mensagem\n' + linhas.join('\n');
     } else {
       const linhas = (dados as AuditLog[]).map(l =>
         `"${formatarTimestamp(l.created_at)}","${l.tipo_acao}","${l.modulo}","${l.nivel}","${(l.acao || '').replace(/"/g, '""')}"`,
       );
-      csv = '\uFEFFTimestamp,Ação,Módulo,Nível,Descrição\n' + linhas.join('\n');
+      csv = '\uFEFFData/Hora,Ação,Módulo,Nível,Descrição\n' + linhas.join('\n');
     }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -381,7 +392,7 @@ export function LogsPage() {
   const columnsSistema = useMemo<ColumnDef<SystemLog>[]>(() => [
     {
       accessorKey: 'timestamp',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Timestamp" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Data/Hora" />,
       cell: ({ row }) => (
         <span className="text-sm whitespace-nowrap font-mono">{formatarTimestamp(row.getValue('timestamp'))}</span>
       ),
@@ -412,7 +423,7 @@ export function LogsPage() {
   const columnsAuditoria = useMemo<ColumnDef<AuditLog>[]>(() => [
     {
       accessorKey: 'created_at',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Timestamp" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Data/Hora" />,
       cell: ({ row }) => (
         <span className="text-sm whitespace-nowrap font-mono">{formatarTimestamp(row.getValue('created_at'))}</span>
       ),
