@@ -132,9 +132,18 @@ const formatarTimestamp = (ts: string): string => {
   const [dataPart, horaPart] = ts.split(' ');
   if (!dataPart) return ts;
   const partes = dataPart.split('-');
-  if (partes.length !== 3) return ts;
+  if (partes.length !== 3) {
+    const partesBR = dataPart.split('/');
+    if (partesBR.length === 3) {
+      const [dia, mes, ano] = partesBR;
+      const anoCurto = (ano ?? '').slice(-2);
+      const hora = horaPart ? ` ${horaPart}` : '';
+      return `${dia}/${mes}/${anoCurto}${hora}`;
+    }
+    return ts;
+  }
   const [ano, mes, dia] = partes;
-  const anoCurto = ano?.slice(-2) ?? '';
+  const anoCurto = (ano ?? '').slice(-2);
   const hora = horaPart ? ` ${horaPart}` : '';
   return `${dia}/${mes}/${anoCurto}${hora}`;
 };
