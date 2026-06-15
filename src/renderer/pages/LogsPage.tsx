@@ -420,8 +420,8 @@ export function LogsPage() {
         const msg = (row.getValue('message') as string) || '';
         const expandido = linhaExpandida === row.id;
         return (
-          <div className="flex items-start gap-1">
-            <div className={expandido ? 'text-sm whitespace-pre-wrap' : 'max-w-lg line-clamp-3 text-sm'} title={expandido ? undefined : msg}>
+          <div className="flex items-start gap-1 min-w-0">
+            <div className={expandido ? 'text-sm whitespace-pre-wrap min-w-0' : 'max-w-lg line-clamp-3 text-sm min-w-0'} title={expandido ? undefined : msg}>
               {msg}
             </div>
             {msg.length > 100 && (
@@ -479,8 +479,8 @@ export function LogsPage() {
         const msg = (row.getValue('acao') as string) || '';
         const expandido = linhaExpandida === row.id;
         return (
-          <div className="flex items-start gap-1">
-            <div className={expandido ? 'text-sm whitespace-pre-wrap' : 'max-w-lg line-clamp-3 text-sm'} title={expandido ? undefined : msg}>
+          <div className="flex items-start gap-1 min-w-0">
+            <div className={expandido ? 'text-sm whitespace-pre-wrap min-w-0' : 'max-w-lg line-clamp-3 text-sm min-w-0'} title={expandido ? undefined : msg}>
               {msg}
             </div>
             {msg.length > 100 && (
