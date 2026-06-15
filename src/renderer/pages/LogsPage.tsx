@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   HardDrive,
   Clock,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 import { DataTable } from '@/components/data-table/data-table';
@@ -170,6 +172,7 @@ export function LogsPage() {
   const [senhaErro, setSenhaErro] = useState('');
   const [verificandoSenha, setVerificandoSenha] = useState(false);
   const [passoConfirmacao, setPassoConfirmacao] = useState(0);
+  const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
 
   const [filtroNivel, setFiltroNivel] = useState('todos');
   const [filtroModulo, setFiltroModulo] = useState('todos');
@@ -415,10 +418,22 @@ export function LogsPage() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Mensagem" />,
       cell: ({ row }) => {
         const msg = (row.getValue('message') as string) || '';
-        return <div className="max-w-md truncate text-sm" title={msg}>{msg}</div>;
+        const expandido = linhaExpandida === row.id;
+        return (
+          <div className="flex items-start gap-1">
+            <div className={expandido ? 'text-sm whitespace-pre-wrap' : 'max-w-lg line-clamp-3 text-sm'} title={expandido ? undefined : msg}>
+              {msg}
+            </div>
+            {msg.length > 100 && (
+              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 mt-0.5" onClick={() => setLinhaExpandida(expandido ? null : row.id)}>
+                {expandido ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </Button>
+            )}
+          </div>
+        );
       },
     },
-  ], []);
+  ], [linhaExpandida]);
 
   const columnsAuditoria = useMemo<ColumnDef<AuditLog>[]>(() => [
     {
@@ -462,10 +477,22 @@ export function LogsPage() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descrição" />,
       cell: ({ row }) => {
         const msg = (row.getValue('acao') as string) || '';
-        return <div className="max-w-xs truncate text-sm" title={msg}>{msg}</div>;
+        const expandido = linhaExpandida === row.id;
+        return (
+          <div className="flex items-start gap-1">
+            <div className={expandido ? 'text-sm whitespace-pre-wrap' : 'max-w-lg line-clamp-3 text-sm'} title={expandido ? undefined : msg}>
+              {msg}
+            </div>
+            {msg.length > 100 && (
+              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 mt-0.5" onClick={() => setLinhaExpandida(expandido ? null : row.id)}>
+                {expandido ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </Button>
+            )}
+          </div>
+        );
       },
     },
-  ], []);
+  ], [linhaExpandida]);
 
   return (
     <div className="space-y-6">
@@ -592,7 +619,7 @@ export function LogsPage() {
         )}
       </div>
 
-      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria' | 'timeline')}>
+      <Tabs value={aba} onValueChange={v => { setAba(v as 'sistema' | 'auditoria' | 'timeline'); setLinhaExpandida(null); }}>
         <TabsList>
           <TabsTrigger value="sistema" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
