@@ -31,10 +31,27 @@ const LEVEL_RANK: Record<LogLevel, number> = {
 };
 
 const DEFAULT_LEVELS: Partial<Record<LogModule, LogLevel>> = {
-  database: 'info',
+  database: 'warn',
+  auth: 'warn',
   renderer: 'warn',
   ilustracao: 'warn',
   ia: 'debug',
+  sistema: 'warn',
+  rep: 'warn',
+  laudo: 'warn',
+  template: 'warn',
+  solicitante: 'warn',
+  tipo_exame: 'warn',
+  placeholder: 'warn',
+  backup: 'warn',
+  configuracao: 'warn',
+  ipc: 'warn',
+  security: 'warn',
+  wizard: 'warn',
+  peca: 'warn',
+  'regra-wizard': 'warn',
+  gdl: 'warn',
+  exportacao: 'warn',
 };
 
 const moduleLogLevels: Partial<Record<LogModule, LogLevel>> = { ...DEFAULT_LEVELS };
@@ -45,13 +62,13 @@ function shouldLog(module: LogModule, level: LogLevel): boolean {
 }
 
 const fileFormat = winston.format.combine(
-  winston.format.timestamp(),
+  winston.format.timestamp({ format: 'DD/MM/YY HH:mm:ss' }),
   winston.format.errors({ stack: true }),
   winston.format.json(),
 );
 
 const consoleFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.timestamp({ format: 'DD/MM/YY HH:mm:ss' }),
   winston.format.colorize(),
   winston.format.printf(({ timestamp, level, module, message, duration, ...rest }) => {
     const parts: string[] = [`[${timestamp}]`, level];
@@ -178,7 +195,7 @@ export const logDebug = (message: string, meta?: any) => {
 };
 
 export const setupLogging = () => {
-  logInfo('Sistema de logs inicializado', {
+  logDebug('Sistema de logs inicializado', {
     logsDir: LOGS_DIR,
     nodeEnv: process.env.NODE_ENV,
     appVersion: app.getVersion(),
@@ -274,7 +291,7 @@ export const clearAllLogs = (): { success: boolean; error?: string } => {
     for (const file of files) {
       fs.writeFileSync(path.join(LOGS_DIR, file), '', 'utf-8');
     }
-    logInfo('Logs do sistema limpos pelo usuário');
+    logDebug('Logs do sistema limpos pelo usuário');
     return { success: true };
   } catch (err) {
     logError('Erro ao limpar logs do sistema', err);
@@ -305,7 +322,7 @@ export const cleanupOldLogs = () => {
       const stats = fs.statSync(filePath);
       if (stats.mtimeMs < thirtyDaysAgo) {
         fs.unlinkSync(filePath);
-        logInfo(`Log antigo removido: ${file}`);
+        logDebug(`Log antigo removido: ${file}`);
       }
     }
   } catch (error) {
