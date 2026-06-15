@@ -22,6 +22,7 @@ import { registerPecaHandlers } from './handlers/peca.handlers.js';
 import { registerCategoriaPecaHandlers } from './handlers/categoria-peca.handlers.js';
 import { registerRegraWizardHandlers } from './handlers/regra-wizard.handlers.js';
 import { registerGdlHandlers } from './handlers/gdl.handlers.js';
+import { getSchemaVersion } from '../database/index.js';
 import { userService } from '../services/user.service.js';
 
 /**
@@ -96,6 +97,8 @@ const registerUtilityHandlers = (): void => {
     const os = await import('os');
     const totalMemoryGB = Math.round(os.totalmem() / (1024 * 1024 * 1024));
 
+    const dbVersion = await getSchemaVersion();
+
     return {
       version: '0.1.0',
       name: 'laWdo',
@@ -106,6 +109,7 @@ const registerUtilityHandlers = (): void => {
       osVersion: os.version(),
       arch: process.arch === 'x64' ? '64-bit' : process.arch,
       memory: `${totalMemoryGB} GB`,
+      dbVersion,
     };
   });
 };

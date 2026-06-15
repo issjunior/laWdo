@@ -257,6 +257,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               border-bottom-color: rgba(128,128,128,0.2) !important;
               color: inherit !important;
             }
+            [data-template-secao] {
+              border-color: rgba(128,128,128,0.2) !important;
+            }
+            [data-template-secao-header] {
+              background: rgba(128,128,128,0.08) !important;
+              border-bottom-color: rgba(128,128,128,0.2) !important;
+              color: inherit !important;
+            }
           `,
 
           // ─── Upload de imagens ───────────────────────────

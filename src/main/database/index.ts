@@ -309,7 +309,7 @@ const setSchemaVersion = async (version: number): Promise<void> => {
 /**
  * Obtém a versão atual do schema
  */
-const getSchemaVersion = async (): Promise<number> => {
+export const getSchemaVersion = async (): Promise<number> => {
   try {
     const result = await executeQuery<{ max_version: number }>(
       'SELECT MAX(version) as max_version FROM schema_version'

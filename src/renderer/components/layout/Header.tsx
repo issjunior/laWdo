@@ -23,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     osVersion: string;
     arch: string;
     memory: string;
+    dbVersion: number;
   } | null>(null);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -95,12 +96,16 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                       <span className="text-sm font-bold">laWdo</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Versão Atual</span>
+                      <span className="text-sm font-medium text-muted-foreground">Versão Sistema</span>
                       <Badge variant="default" className="bg-green-500 hover:bg-green-600">v{appInfo.version}</Badge>
                     </div>
                     <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Versão Banco de Dados</span>
+                      <Badge variant="default" className="bg-green-500 hover:bg-green-600">v{appInfo.dbVersion}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-muted-foreground">Ambiente</span>
-                      <Badge variant={import.meta.env.DEV ? "warning" : "success"} className="capitalize">
+                      <Badge variant="default" className="bg-green-500 hover:bg-green-600 capitalize">
                         {import.meta.env.DEV ? 'Desenvolvimento' : 'Produção'}
                       </Badge>
                     </div>
@@ -110,7 +115,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Memória RAM</span>
-                      <span className="text-xs font-mono">{appInfo.memory}</span>
+                      <span className="text-xs font-semibold">{appInfo.memory}</span>
                     </div>
                   </div>
                 ) : (

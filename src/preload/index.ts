@@ -34,6 +34,7 @@ export interface IpcAPI {
     osVersion: string;
     arch: string;
     memory: string;
+    dbVersion: number;
   }>;
 
   // Logs
