@@ -21,7 +21,7 @@ export class RepService extends BaseService<REPRow> {
       const rows = await this.executeCustomQuery<REPRow>(sql)
       return rows
     } catch (error) {
-      log.error('Erro ao buscar REPs ordenadas', error)
+      log.error('Erro ao buscar Requisições ordenadas', error)
       throw error
     }
   }
@@ -35,7 +35,7 @@ export class RepService extends BaseService<REPRow> {
       const rows = await this.executeCustomQuery<REPRow>(sql, [status])
       return rows
     } catch (error) {
-      log.error('Erro ao buscar REPs por status', { status, error })
+      log.error('Erro ao buscar Requisições por status', { status, error })
       throw error
     }
   }
@@ -49,7 +49,7 @@ export class RepService extends BaseService<REPRow> {
       const rows = await this.executeCustomQuery<REPRow>(sql, [numero])
       return rows.length > 0 ? rows[0] : null
     } catch (error) {
-      log.error('Erro ao buscar REP por número', { numero, error })
+      log.error('Erro ao buscar Requisição por número', { numero, error })
       throw error
     }
   }
@@ -63,7 +63,7 @@ export class RepService extends BaseService<REPRow> {
       await this.executeCustomQuery(sql, [status, id])
       return await this.findById(id)
     } catch (error) {
-      log.error('Erro ao atualizar status da REP', { id, status, error })
+      log.error('Erro ao atualizar status da Requisição', { id, status, error })
       throw error
     }
   }

@@ -65,7 +65,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       const [laudo] = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [id]);
       return laudo;
     } catch (error) {
-      log.error('Erro ao criar laudo inicial', error);
+      log.error('Erro ao criar laudo para Requisição', error);
       throw error;
     }
   }
@@ -78,7 +78,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       );
       return rows[0] || null;
     } catch (error) {
-      log.error('Erro ao buscar laudo por REP', error);
+      log.error('Erro ao buscar laudo da Requisição', error);
       throw error;
     }
   }
@@ -90,7 +90,7 @@ export class LaudoService extends BaseService<LaudoRow> {
         [repId],
       );
     } catch (error) {
-      log.error('Erro ao buscar laudos por REP', error);
+      log.error('Erro ao buscar laudos da Requisição', error);
       throw error;
     }
   }
@@ -145,7 +145,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       const rows = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [id]);
       return rows[0];
     } catch (error) {
-      log.error('Erro ao atualizar conteúdo do laudo', error);
+      log.error('Erro ao salvar conteúdo do laudo', error);
       throw error;
     }
   }
@@ -194,7 +194,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       }
       await executeNonQuery('DELETE FROM laudos WHERE rep_id = ?', [repId]);
     } catch (error) {
-      log.error('Erro ao deletar laudo por rep_id', { repId, error });
+      log.error('Erro ao excluir laudos da Requisição', { repId, error });
       throw error;
     }
   }
@@ -216,7 +216,7 @@ export class LaudoService extends BaseService<LaudoRow> {
       log.info('Laudo excluído', { laudoId, repId: laudo.rep_id });
       return { rep_id: laudo.rep_id };
     } catch (error) {
-      log.error('Erro ao deletar laudo', { laudoId, error });
+      log.error('Erro ao excluir laudo', { laudoId, error });
       throw error;
     }
   }
