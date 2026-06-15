@@ -25,10 +25,10 @@ export const getDatabase = async (): Promise<any> => {
     // Garantir que o diretório existe
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
-      log.info(`Diretório de dados criado: ${DB_DIR}`);
+      log.debug(`Diretório de dados criado: ${DB_DIR}`);
     }
 
-    log.info(`Conectando ao banco de dados: ${DB_PATH}`);
+    log.debug(`Conectando ao banco de dados: ${DB_PATH}`);
 
     // Criar nova conexão
     dbInstance = new sqlite3.Database(DB_PATH, (err: any) => {
@@ -45,7 +45,7 @@ export const getDatabase = async (): Promise<any> => {
       dbInstance.run('PRAGMA synchronous = NORMAL;');
     });
 
-    log.info(`Conexão com SQLite estabelecida com sucesso: ${DB_PATH}`);
+    log.debug(`Conexão com SQLite estabelecida com sucesso: ${DB_PATH}`);
 
     return dbInstance;
   } catch (error) {
@@ -62,7 +62,7 @@ export const closeDatabase = async (): Promise<void> => {
     try {
       await dbInstance.close();
       dbInstance = null;
-      log.info('Conexão com banco de dados fechada');
+      log.debug('Conexão com banco de dados fechada');
     } catch (error) {
       log.error('Erro ao fechar conexão com banco de dados', error);
     }
@@ -238,7 +238,7 @@ export const backupDatabase = async (backupPath?: string): Promise<string> => {
             log.error('Erro ao criar backup do banco de dados', err);
             reject(err);
           } else {
-            log.info(`Backup criado: ${backupFilePath}`);
+            log.debug(`Backup criado: ${backupFilePath}`);
             resolve(backupFilePath);
           }
         });

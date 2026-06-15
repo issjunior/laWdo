@@ -40,7 +40,7 @@ export const registerIpcHandlers = (options: {
   rendererHtmlPath: string;
   isDev: boolean;
 }): void => {
-  log.info('Registrando handlers IPC...');
+  log.debug('Registrando handlers IPC...');
 
   // Utilitários
   registerUtilityHandlers();
@@ -79,7 +79,7 @@ export const registerIpcHandlers = (options: {
   registerRegraWizardHandlers();
   registerGdlHandlers();
 
-  log.info('Handlers IPC registrados com sucesso');
+  log.debug('Handlers IPC registrados com sucesso');
 };
 
 /**
@@ -164,7 +164,7 @@ const registerLogHandlers = (): void => {
 const registerSystemHandlers = (): void => {
   // Reiniciar aplicativo
   ipcMain.handle('restart-app', async () => {
-    log.info('Reiniciando aplicativo...');
+    log.debug('Reiniciando aplicativo...');
     setTimeout(() => {
       app.relaunch();
       app.exit(0);
@@ -177,13 +177,13 @@ const registerSystemHandlers = (): void => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (window) {
       window.webContents.openDevTools({ mode: 'detach' });
-      log.info('DevTools abertos');
+      log.debug('DevTools abertos');
     }
   });
 
   // Fechar aplicativo
   ipcMain.handle('close-app', async () => {
-    log.info('Fechando aplicativo...');
+    log.debug('Fechando aplicativo...');
     app.quit();
     return { success: true };
   });

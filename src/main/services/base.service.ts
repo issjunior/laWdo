@@ -114,7 +114,6 @@ export abstract class BaseService<T extends Record<string, any>> {
         throw new Error(`Falha ao recuperar ${this.tableName} criado`)
       }
 
-      log.info(`${this.tableName} criado`, { id })
       return created
     } catch (error) {
       log.error(`Erro ao criar ${this.tableName}`, { data, error })
@@ -150,7 +149,6 @@ export abstract class BaseService<T extends Record<string, any>> {
       await executeNonQuery(sql, [...values, updatedAt, id])
 
       const updated = await this.findById(id)
-      log.info(`${this.tableName} atualizado`, { id })
       return updated
     } catch (error) {
       log.error(`Erro ao atualizar ${this.tableName}`, { id, data, error })
@@ -171,7 +169,6 @@ export abstract class BaseService<T extends Record<string, any>> {
       const sql = `DELETE FROM ${this.tableName} WHERE ${this.primaryKey} = ?`
       await executeNonQuery(sql, [id])
 
-      log.info(`${this.tableName} excluído`, { id })
       return true
     } catch (error) {
       log.error(`Erro ao excluir ${this.tableName}`, { id, error })
