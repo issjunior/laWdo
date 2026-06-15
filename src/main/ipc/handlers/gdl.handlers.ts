@@ -9,7 +9,9 @@ export const registerGdlHandlers = (): void => {
       const resultado = await gdlService.testarConexao(ambiente || 'homologacao');
       return { success: true, data: resultado };
     } catch (error) {
-      logError('Erro no handler gdl:testar-conexao', error);
+      const amb = ambiente || 'homologacao';
+      const ambLabel = amb === 'producao' ? 'Produção' : 'Homologação';
+      logError(`Falha ao testar conexão GDL em ambiente ${ambLabel}`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido ao testar conexão GDL',
@@ -30,7 +32,7 @@ export const registerGdlHandlers = (): void => {
 
       return { success: true, data: resultado.dados };
     } catch (error) {
-      logError('Erro no handler gdl:consultar-rep', error);
+      logError(`Falha ao consultar REP ${sanitizeInput(numero)}/${sanitizeInput(ano)} no GDL`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido ao consultar REP',

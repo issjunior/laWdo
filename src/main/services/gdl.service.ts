@@ -125,9 +125,10 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
   const inicio = Date.now();
   const amb = ambiente || 'homologacao';
   const ambienteLabel = amb === 'producao' ? 'Produção' : 'Homologação';
+  let endpointTeste = '';
   try {
     const creds = await carregarCredenciais(amb);
-    const endpointTeste = `${creds.baseUrl}/unidadesMedida`;
+    endpointTeste = `${creds.baseUrl}/unidadesMedida`;
 
     if (!creds.login || !creds.senha) {
       log.warn('Teste de conexão GDL: credenciais não configuradas');
@@ -157,7 +158,7 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
     const autenticado = statusCode !== 401 && statusCode !== 403;
 
     if (statusCode >= 200 && statusCode < 400) {
-      log.info('Teste de conexão GDL bem-sucedido', { latencia, statusCode, ambiente: ambienteLabel });
+      log.debug('Teste de conexão GDL bem-sucedido', { latencia, statusCode, ambiente: ambienteLabel });
       return { sucesso: true, latencia, statusCode, autenticado, ambiente: ambienteLabel, endpointTestado: endpointTeste };
     }
 
@@ -173,22 +174,23 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
   } catch (err) {
     const latencia = Date.now() - inicio;
     const mensagem = err instanceof Error ? err.message : String(err);
-    log.error('Falha no teste de conexão GDL', { erro: mensagem, latencia });
+    log.error(`Falha no teste de conexão GDL em ambiente ${ambienteLabel}`, { erro: mensagem, latencia, endpoint: endpointTeste });
     return {
       sucesso: false,
       latencia,
       statusCode: 0,
       autenticado: false,
-      ambiente: '',
-      endpointTestado: '',
+      ambiente: ambienteLabel,
+      endpointTestado: endpointTeste,
       erro: mensagem,
     };
   }
 }
 
 export async function consultarRep(numero: string, ano: string): Promise<GdlConsultaResultado> {
+  let ambiente = 'homologacao';
   try {
-    const ambiente = (await configuracaoService.obter('gdl_ambiente')) || 'homologacao';
+    ambiente = (await configuracaoService.obter('gdl_ambiente')) || 'homologacao';
     const creds = await carregarCredenciais(ambiente);
     if (!creds.login || !creds.senha) {
       return { sucesso: false, dados: null, erro: 'Credenciais não configuradas.' };
@@ -203,13 +205,13 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
     }
 
     const url = `${creds.baseUrl}/rep/obter?numero=${encodeURIComponent(numero)}&ano=${encodeURIComponent(ano)}`;
-    log.info('Consultando REP no GDL', { numero, ano });
+    log.debug('Consultando REP no GDL', { numero, ano });
 
     const { statusCode, data } = await httpsRequest(url, 'GET', headers, undefined, 15000);
 
     if (statusCode === 200) {
       const parsed = JSON.parse(data) as GdlRepData;
-      log.info('REP consultada no GDL com sucesso', {
+      log.debug('REP consultada no GDL com sucesso', {
         numero,
         ano,
         codRep: parsed.codRep,
@@ -218,20 +220,21 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
     }
 
     if (statusCode === 404) {
-      log.info('REP não encontrada no GDL', { numero, ano });
+      log.debug('REP não encontrada no GDL', { numero, ano });
       return { sucesso: false, dados: null, erro: `REP ${numero}/${ano} não encontrada no GDL.` };
     }
 
     if (statusCode === 401 || statusCode === 403) {
-      log.error('Autenticação GDL rejeitada', { statusCode, numero, ano });
+      log.error('Autenticação GDL rejeitada', { statusCode, numero, ano, ambiente });
       return { sucesso: false, dados: null, erro: 'Autenticação rejeitada pelo GDL. Verifique login e senha.' };
     }
 
-    log.error('Erro ao consultar REP no GDL', { statusCode, numero, ano });
+    log.error('Erro ao consultar REP no GDL', { statusCode, numero, ano, ambiente });
     return { sucesso: false, dados: null, erro: `Erro do servidor GDL (HTTP ${statusCode}).` };
   } catch (err) {
     const mensagem = err instanceof Error ? err.message : String(err);
-    log.error('Erro ao consultar REP no GDL', { erro: mensagem, numero, ano });
+    const ambLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
+    log.error(`Falha ao consultar REP ${numero}/${ano} no GDL (${ambLabel})`, { erro: mensagem, numero, ano });
     return { sucesso: false, dados: null, erro: mensagem };
   }
 }
