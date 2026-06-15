@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, Sun, Moon, SunMoon, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -490,22 +490,6 @@ export const LaudosPage: React.FC = () => {
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
 
-  const [editorTheme, setEditorTheme] = useState<'light' | 'dark' | 'auto'>(() => {
-    try { return (localStorage.getItem('laudo_editor_theme') as 'light' | 'dark' | 'auto') || 'auto'; }
-    catch { return 'auto'; }
-  });
-
-  const toggleEditorTheme = useCallback(() => {
-    setEditorTheme(prev => {
-      const next = prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light';
-      try { localStorage.setItem('laudo_editor_theme', next); } catch {}
-      return next;
-    });
-  }, []);
-
-  const themeLabel = editorTheme === 'light' ? 'Claro' : editorTheme === 'dark' ? 'Escuro' : 'Auto';
-  const ThemeIcon = editorTheme === 'light' ? Sun : editorTheme === 'dark' ? Moon : SunMoon;
-
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
     if (secoesFonte.length === 0) return '';
     return secoesFonte
@@ -888,7 +872,7 @@ export const LaudosPage: React.FC = () => {
         }
         const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
         let idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-        let secoesComIlus = [...secoesAtualizadas];
+        const secoesComIlus = [...secoesAtualizadas];
         if (idxIlus < 0) {
           const titulos = secoesAtualizadas.map(s => s.titulo.trim().toUpperCase());
           const idxRef = titulos.indexOf('CONSIDERAÇÕES FINAIS');
@@ -1091,7 +1075,7 @@ export const LaudosPage: React.FC = () => {
         if (editor) {
           const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
           let idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-          let secoesComIlus = [...secoesAtualizadas];
+          const secoesComIlus = [...secoesAtualizadas];
           if (idxIlus < 0) {
             const titulos = secoesAtualizadas.map(s => s.titulo.trim().toUpperCase());
             const idxRef = titulos.indexOf('CONSIDERAÇÕES FINAIS');
@@ -2388,21 +2372,6 @@ export const LaudosPage: React.FC = () => {
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">Editor único com laudo inteiro</TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={toggleEditorTheme}
-                      className="h-8 px-2.5"
-                    >
-                      <ThemeIcon size={14} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    Tema do editor: {themeLabel} {editorTheme === 'auto' ? '(segue o tema do sistema)' : ''}
-                  </TooltipContent>
-                </Tooltip>
               </div>
             </div>
           </CardHeader>
@@ -2513,7 +2482,6 @@ export const LaudosPage: React.FC = () => {
                         height={560}
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
-                        theme={editorTheme}
                         placeholderChaves={placeholderChaves}
                       />
                     </PlaceholderContextMenu>
@@ -2563,7 +2531,6 @@ export const LaudosPage: React.FC = () => {
                                 onChange={(txt) => atualizarConteudoSecao(idx, txt)}
                                 height={400}
                                 laudoId={editando.id}
-                                theme={editorTheme}
                                 placeholderChaves={placeholderChaves}
                                 onEditorInit={isIlustracoes ? handleIlustracoesEditorInit : undefined}
                               />

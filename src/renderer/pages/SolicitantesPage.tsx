@@ -354,14 +354,14 @@ export const SolicitantesPage: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => handleToggleStatus(solicitante)}
-                  aria-label={!!solicitante.ativo ? 'Desativar' : 'Ativar'}
-                  className={!!solicitante.ativo ? 'text-orange-500' : 'text-green-600'}
+                  aria-label={solicitante.ativo ? 'Desativar' : 'Ativar'}
+                  className={solicitante.ativo ? 'text-orange-500' : 'text-green-600'}
                 >
-                  {!!solicitante.ativo ? <X size={14} /> : <Plus size={14} />}
+                  {solicitante.ativo ? <X size={14} /> : <Plus size={14} />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p className="text-xs">{!!solicitante.ativo ? 'Desativar' : 'Ativar'}</p>
+                <p className="text-xs">{solicitante.ativo ? 'Desativar' : 'Ativar'}</p>
               </TooltipContent>
             </Tooltip>
             <Tooltip>

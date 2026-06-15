@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Save, Eye, Sun, Moon, SunMoon } from 'lucide-react';
+import { Save, Eye } from 'lucide-react';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { removerFormatacaoPlaceholders, converterPlaceholdersTextuais } from '@/lib/utils';
 import { PlaceholderContextMenu, type CategoriaItem } from '@/components/editor/PlaceholderContextMenu';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogContent,
@@ -40,22 +40,6 @@ export const CabecalhoPage: React.FC = () => {
   const [categorias, setCategorias] = useState<CategoriaItem[]>([]);
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
-
-  const [editorTheme, setEditorTheme] = useState<'light' | 'dark' | 'auto'>(() => {
-    try { return (localStorage.getItem('laudo_editor_theme') as 'light' | 'dark' | 'auto') || 'auto'; }
-    catch { return 'auto'; }
-  });
-
-  const toggleEditorTheme = useCallback(() => {
-    setEditorTheme(prev => {
-      const next = prev === 'light' ? 'dark' : prev === 'dark' ? 'auto' : 'light';
-      try { localStorage.setItem('laudo_editor_theme', next); } catch {}
-      return next;
-    });
-  }, []);
-
-  const themeLabel = editorTheme === 'light' ? 'Claro' : editorTheme === 'dark' ? 'Escuro' : 'Auto';
-  const ThemeIcon = editorTheme === 'light' ? Sun : editorTheme === 'dark' ? Moon : SunMoon;
 
   const CHAVE_CONFIG = 'cabecalho_laudo';
   const CHAVE_CONFIG_PAGINAS = 'cabecalho_paginas';
@@ -252,21 +236,6 @@ export const CabecalhoPage: React.FC = () => {
             {generatingPdf ? 'Gerando PDF...' : 'Visualizar'}
           </Button>
           <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleEditorTheme}
-                  className="h-8 px-2.5"
-                >
-                  <ThemeIcon size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">
-                Tema do editor: {themeLabel} {editorTheme === 'auto' ? '(segue o tema do sistema)' : ''}
-              </TooltipContent>
-            </Tooltip>
           </div>
         </div>
       </div>
@@ -312,7 +281,6 @@ export const CabecalhoPage: React.FC = () => {
                 height={300}
                 placeholder="FLS. {{pagina}}/{{totalPaginas}}&#10;LAUDO nº {{numero_rep}}"
                 placeholderChaves={extraPlaceholderChaves}
-                theme={editorTheme}
               />
             </PlaceholderContextMenu>
           )}
@@ -354,7 +322,6 @@ export const CabecalhoPage: React.FC = () => {
                   height={300}
                   placeholder="Digite o cabeçalho da primeira página..."
                   placeholderChaves={placeholderChaves}
-                  theme={editorTheme}
                 />
             </PlaceholderContextMenu>
           )}

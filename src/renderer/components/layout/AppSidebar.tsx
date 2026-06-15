@@ -134,7 +134,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
   const loadAvatar = useCallback(async () => {
     if (!userId) return;
     const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    let user = raw ? JSON.parse(raw) : null;
+    const user = raw ? JSON.parse(raw) : null;
 
     if (user?.foto_url) {
       try {

@@ -366,7 +366,7 @@ export const registerUserHandlers = (): void => {
   logInfo('Handlers de usuário registrados com sucesso')
 }
 
-let verifyAttempts = new Map<string, { count: number; lastAttempt: number }>();
+const verifyAttempts = new Map<string, { count: number; lastAttempt: number }>();
 
 export const registerVerifyPasswordHandler = (): void => {
   ipcMain.handle('user:verifyPassword', async (_event, userId: string, senha: string) => {

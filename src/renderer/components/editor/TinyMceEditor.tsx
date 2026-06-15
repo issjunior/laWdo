@@ -74,6 +74,32 @@ function scanEditorForRawImages(editor: any): number {
   return rawImages.length;
 }
 
+// ─── Injeção dinâmica de skin dark para o chrome do editor ───
+function ensureDarkSkin() {
+  if (document.getElementById('tinymce-dark-skin')) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = './tinymce/skins/ui/oxide-dark/skin.css';
+  link.id = 'tinymce-dark-skin';
+  document.head.appendChild(link);
+}
+
+function removeDarkSkin() {
+  document.getElementById('tinymce-dark-skin')?.remove();
+}
+
+function aplicarTemaEditor(editor: any, dark: boolean) {
+  const body = editor.getBody();
+  if (!body) return;
+  if (dark) {
+    ensureDarkSkin();
+    editor.dom.addClass(body, 'dark-content');
+  } else {
+    removeDarkSkin();
+    editor.dom.removeClass(body, 'dark-content');
+  }
+}
+
 interface TinyMceEditorProps {
   /** Modo controlado: conteúdo sincronizado com estado React. Pode causar salto de cursor com HTML complexo. Use initialValue para evitar. */
   value?: string;
@@ -88,8 +114,6 @@ interface TinyMceEditorProps {
   editorId?: string;
   /** Callback disparado quando uma imagem é inserida via botão de imagem do editor */
   onImageInserted?: () => void;
-  /** Tema do editor: 'light' (padrão), 'dark' ou 'auto' (segue preferência do sistema) */
-  theme?: 'light' | 'dark' | 'auto';
   /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
@@ -107,7 +131,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   laudoId,
   editorId,
   onImageInserted,
-  theme = 'light',
   placeholderChaves,
   onEditorInit,
   autoConverterReservados = false,
@@ -119,14 +142,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   const [stableInitialValue] = useState(initialValue);
   const isUncontrolled = initialValue !== undefined;
 
-  const resolveTheme = () => {
-    if (theme === 'auto') {
-      return document.body.classList.contains('dark') ? 'dark' : 'light';
-    }
-    return theme;
-  };
-  const resolved = resolveTheme();
-
   useEffect(() => {
     if (editorRef.current && placeholderChaves) {
       (editorRef.current as any)._placeholderChaves = new Set(placeholderChaves);
@@ -136,7 +151,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   return (
     <div className={ready ? '' : 'opacity-0'} {...rest}>
       <Editor
-        key={resolved}
         id={editorId}
         tinymceScriptSrc="./tinymce/tinymce.min.js"
         onInit={(_evt, editor) => {
@@ -159,8 +173,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
           statusbar: true,
           resize: 'vertical',
           contextmenu: false,
-          skin_url: resolved === 'dark' ? './tinymce/skins/ui/oxide-dark' : './tinymce/skins/ui/oxide',
-          content_css: resolved === 'dark' ? './tinymce/skins/content/dark/content.css' : './tinymce/skins/content/default/content.css',
+          skin_url: './tinymce/skins/ui/oxide',
+          content_css: './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
           toolbar_mode: 'wrap',
           line_height_formats: '1 1.1 1.2 1.3 1.4 1.5 2',
@@ -228,14 +242,32 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               line-height: 1.6;
               padding: 12px;
             }
+            body.dark-content {
+              background-color: #222f3e;
+              color: #fff;
+            }
+            body.dark-content a { color: #4099ff; }
+            body.dark-content table[border]:not([border="0"]):not([style*="border-color"]) th,
+            body.dark-content table[border]:not([border="0"]):not([style*="border-color"]) td {
+              border-color: #6d737b;
+            }
+            body.dark-content figure figcaption { color: #8a8f97; }
+            body.dark-content hr { border-color: #6d737b; }
+            body.dark-content code { background-color: #6d737b; }
+            body.dark-content .mce-content-body:not([dir=rtl]) blockquote { border-color: #6d737b; }
+            body.dark-content .mce-content-body[dir=rtl] blockquote { border-color: #6d737b; }
             .placeholder-tag {
-              background-color: ${resolved === 'dark' ? 'rgba(138,180,248,0.15)' : '#e8f0fe'};
-              color: ${resolved === 'dark' ? '#8ab4f8' : '#1a73e8'};
+              background-color: #e8f0fe;
+              color: #1a73e8;
               border-radius: 4px;
               padding: 2px 6px;
               font-weight: 500;
               user-select: all;
               cursor: default;
+            }
+            body.dark-content .placeholder-tag {
+              background-color: rgba(138,180,248,0.15);
+              color: #8ab4f8;
             }
             .campo-reservado {
               background-color: rgba(255,193,7,0.2);
@@ -244,6 +276,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               padding: 2px 6px;
               border-bottom: 2px dotted #f59e0b;
               font-weight: 500;
+            }
+            body.dark-content .campo-reservado {
+              background-color: rgba(255,193,7,0.15);
+              color: #fbbf24;
+              border-bottom-color: #f59e0b;
             }
             img {
               max-width: 100%;
@@ -477,6 +514,18 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
 
                 editor.on('remove', () => figuraObserver.disconnect());
               }
+
+              // ─── Observador de tema global (Header toggle) ─────
+              const isDark = document.body.classList.contains('dark');
+              aplicarTemaEditor(editor, isDark);
+
+              const temaObserver = new MutationObserver(() => {
+                const nowDark = document.body.classList.contains('dark');
+                aplicarTemaEditor(editor, nowDark);
+              });
+              temaObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+              editor.on('remove', () => temaObserver.disconnect());
             });
 
             // ─── Auto-converter {{chave}} digitado manualmente em span estilizado ─────

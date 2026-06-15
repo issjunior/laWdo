@@ -51,3 +51,48 @@ Isso corrige o botão "Apenas Ativos" (`variant="outline"`) que herdava `#181f2e
 
 ### Build
 - ✅ Compilou sem erros (46.10 kB CSS)
+
+## Tema do TinyMCE Editor — Sincronização com Header
+
+O tema do editor TinyMCE segue **exclusivamente** o toggle do Header (`body.dark`). Não há mais toggle independente de tema nas páginas com editor.
+
+### Mecanismo (MutationObserver)
+
+**Arquivo:** `src/renderer/components/editor/TinyMceEditor.tsx`
+
+1. **Inicialização fixa**: skin `oxide` (light) e `content_css` `content/default/content.css` — sem condicional.
+2. **No `editor.on('init')`**: verifica `body.dark` atual e aplica imediatamente via `aplicarTemaEditor()`.
+3. **`MutationObserver`** no `document.body` (atributo `class`): ao detectar toggle de `.dark`, chama `aplicarTemaEditor()`.
+4. **Sem `key={resolved}`**: o editor nunca remonta — cursor, conteúdo e undo history preservados.
+
+### Funções auxiliares (module-level)
+
+| Função | Ação |
+|--------|------|
+| `ensureDarkSkin()` | Injeta `<link id="tinymce-dark-skin">` com `oxide-dark/skin.css` no `<head>` (se ainda não existe) |
+| `removeDarkSkin()` | Remove o `<link id="tinymce-dark-skin">` do `<head>` |
+| `aplicarTemaEditor(editor, dark)` | Se dark: `ensureDarkSkin()` + `editor.dom.addClass(body, 'dark-content')`; se light: `removeDarkSkin()` + `editor.dom.removeClass(body, 'dark-content')` |
+
+### Estilos condicionais via classe CSS
+
+O `content_style` usa seletores `body.dark-content` em vez de template literals com ternários:
+
+```css
+/* Sempre presente (light default) */
+.placeholder-tag { background-color: #e8f0fe; color: #1a73e8; }
+.campo-reservado { background-color: rgba(255,193,7,0.2); color: #b45309; }
+
+/* Overrides dark */
+body.dark-content { background-color: #222f3e; color: #fff; }
+body.dark-content .placeholder-tag { background-color: rgba(138,180,248,0.15); color: #8ab4f8; }
+body.dark-content .campo-reservado { background-color: rgba(255,193,7,0.15); color: #fbbf24; }
+/* + tabelas, figcaption, hr, code, blockquote */
+```
+
+### Páginas afetadas
+
+`TemplatesPage.tsx`, `CabecalhoPage.tsx`, `LaudosPage.tsx` — removido:
+- Estado `editorTheme` + `localStorage('laudo_editor_theme')`
+- Callback `toggleEditorTheme`
+- Botão de alternância de tema na toolbar do editor (ícone Sun/Moon/SunMoon)
+- Prop `theme={editorTheme}` dos `<TinyMceEditor>`
