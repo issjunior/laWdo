@@ -166,21 +166,42 @@ Padrão em português snake_case: `add_*` (features), `ajuste_*` (ajustes), `cor
 
 O diretório `spec/` documenta o **estado atual** do sistema — não é changelog nem histórico. Cada arquivo reflete como a funcionalidade **realmente funciona agora**.
 
-| Subdiretório | Cobre |
-|---|---|
-| `01 planejamento/` | Planejamento |
-| `02 rep/` | forms e inputs comuns e personalizados |
-| `03 laudo/` | Laudo (ciclo de vida, editor, menu contexto (placeholder), wizard) |
-| `04 layout/` | Temas e estilos visuais |
-| `05 placeholder/` | Sistema de placeholders |
-| `06 ia/` | Integrações com IA (Gemini, Groq) |
-| `07 logs/` | Sistema de logs |
-| `08 gdl/` | API GDL |
-| `problemas diversos/` | Problemas e edge cases pontuais |
+| Subdiretório | Cobre | Padrões de código |
+|---|---|---|
+| `01 planejamento/` | Planejamento | `PRD.md`, `package.json`, `tsconfig*.json`, `vite.*`, `electron-builder.yml`, `scripts/**` |
+| `02 rep/` | forms e inputs comuns e personalizados | `**/rep/**`, `**/reps/**`, `**/solicitante/**`, `**/tipo*exame/**`, `**/forms/**`, `**/exam-fields/**` |
+| `03 laudo/` | Laudo (ciclo de vida, editor, menu contexto, wizard) | `**/laudo/**`, `**/laudos/**`, `**/editor/**`, `**/wizard/**`, `**/peca/**`, `**/pecas/**`, `**/template/**`, `**/exportacao/**`, `**/importacao/**`, `**/ilustracao/**` |
+| `04 layout/` | Temas e estilos visuais | `**/layout/**`, `**/styles/**`, `**/globals.css`, `**/tailwind.config*`, `**/components/ui/**` |
+| `05 placeholder/` | Sistema de placeholders | `**/placeholder/**`, `**/categoria-placeholder/**` |
+| `06 ia/` | Integrações com IA (Gemini, Groq) | `**/ia/**`, `**/ai/**`, `**/modelos*ia*/**` |
+| `07 logs/` | Sistema de logs | `**/logs/**`, `**/log*/**`, `**/audit*/**`, `**/logger*` |
+| `08 gdl/` | API GDL | `**/gdl/**`,  `**/api/**`|
+| `problemas diversos/` | Problemas e edge cases pontuais | (sem padrão — análise de conteúdo) |
 
 **Quando o código muda** de forma relevante (alterações que podem confundir a IA em manutenções futuras):
 1. A IA **sugere** atualizar o(s) arquivo(s) de spec correspondente(s).
 2. O **usuário decide** se a atualização/criação do spec procede.
+
+**Formato do relatório:**
+
+```
+## /spec — Relatório
+
+**Modo:** <padrão (git diff) | auditoria total | focado: <subdir>>
+**Modelo IA:** <nome curto do modelo — extraia de "You are powered by the model named..." no system prompt>
+**Base:** <arquivos analisados>
+
+### Specs que precisam de atualização
+...
+
+### Specs sem alterações necessárias
+...
+
+### Sugestão de novo spec
+...
+```
+
+Se nenhuma alteração for necessária, informar em uma linha.
 
 **Regras**:
 - **Prefira editar** um arquivo existente que já cobre a funcionalidade.
