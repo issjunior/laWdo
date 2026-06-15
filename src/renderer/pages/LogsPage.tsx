@@ -17,8 +17,7 @@ import {
   ShieldCheck,
   HardDrive,
   Clock,
-  ChevronDown,
-  ChevronUp,
+  Maximize2,
 } from 'lucide-react';
 
 import { DataTable } from '@/components/data-table/data-table';
@@ -172,7 +171,7 @@ export function LogsPage() {
   const [senhaErro, setSenhaErro] = useState('');
   const [verificandoSenha, setVerificandoSenha] = useState(false);
   const [passoConfirmacao, setPassoConfirmacao] = useState(0);
-  const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
+  const [dialogMsg, setDialogMsg] = useState<string | null>(null);
 
   const [filtroNivel, setFiltroNivel] = useState('todos');
   const [filtroModulo, setFiltroModulo] = useState('todos');
@@ -418,22 +417,19 @@ export function LogsPage() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Mensagem" />,
       cell: ({ row }) => {
         const msg = (row.getValue('message') as string) || '';
-        const expandido = linhaExpandida === row.id;
         return (
-          <div className="flex items-start gap-1 min-w-0">
-            <div className={expandido ? 'text-sm whitespace-pre-wrap min-w-0' : 'max-w-lg line-clamp-3 text-sm min-w-0'} title={expandido ? undefined : msg}>
-              {msg}
-            </div>
-            {msg.length > 100 && (
-              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 mt-0.5" onClick={() => setLinhaExpandida(expandido ? null : row.id)}>
-                {expandido ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          <div className="flex items-center gap-1">
+            <span className="truncate text-sm" title={msg.length > 80 ? msg : undefined}>{msg}</span>
+            {msg.length > 80 && (
+              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => setDialogMsg(msg)}>
+                <Maximize2 size={12} />
               </Button>
             )}
           </div>
         );
       },
     },
-  ], [linhaExpandida]);
+  ], []);
 
   const columnsAuditoria = useMemo<ColumnDef<AuditLog>[]>(() => [
     {
@@ -477,22 +473,19 @@ export function LogsPage() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descrição" />,
       cell: ({ row }) => {
         const msg = (row.getValue('acao') as string) || '';
-        const expandido = linhaExpandida === row.id;
         return (
-          <div className="flex items-start gap-1 min-w-0">
-            <div className={expandido ? 'text-sm whitespace-pre-wrap min-w-0' : 'max-w-lg line-clamp-3 text-sm min-w-0'} title={expandido ? undefined : msg}>
-              {msg}
-            </div>
-            {msg.length > 100 && (
-              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 mt-0.5" onClick={() => setLinhaExpandida(expandido ? null : row.id)}>
-                {expandido ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          <div className="flex items-center gap-1">
+            <span className="truncate text-sm" title={msg.length > 80 ? msg : undefined}>{msg}</span>
+            {msg.length > 80 && (
+              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => setDialogMsg(msg)}>
+                <Maximize2 size={12} />
               </Button>
             )}
           </div>
         );
       },
     },
-  ], [linhaExpandida]);
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -619,7 +612,7 @@ export function LogsPage() {
         )}
       </div>
 
-      <Tabs value={aba} onValueChange={v => { setAba(v as 'sistema' | 'auditoria' | 'timeline'); setLinhaExpandida(null); }}>
+      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria' | 'timeline')}>
         <TabsList>
           <TabsTrigger value="sistema" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -928,6 +921,15 @@ export function LogsPage() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!dialogMsg} onOpenChange={(open) => { if (!open) setDialogMsg(null); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalhes do registro</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm whitespace-pre-wrap break-words">{dialogMsg}</div>
         </DialogContent>
       </Dialog>
     </div>
