@@ -57,7 +57,7 @@ const DEFAULT_LEVELS: Partial<Record<LogModule, LogLevel>> = {
 const moduleLogLevels: Partial<Record<LogModule, LogLevel>> = { ...DEFAULT_LEVELS };
 
 function shouldLog(module: LogModule, level: LogLevel): boolean {
-  const configured = moduleLogLevels[module] ?? 'info';
+  const configured = moduleLogLevels[module] ?? 'warn';
   return LEVEL_RANK[level] >= LEVEL_RANK[configured];
 }
 
