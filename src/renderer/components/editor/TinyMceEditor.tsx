@@ -427,7 +427,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               ];
               const found = allToggles.find(t => t.id === toggleId);
               const label = found ? found.label : toggleId;
-              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><p style="color:#92400e;font-size:12px;margin:0 0 4px" data-cond-label="true">[Condicional: ${label}]</p><p>&nbsp;</p></div>`;
+              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><h3>${label}</h3><p>&nbsp;</p></div>`;
               editor.insertContent(html);
             });
 
