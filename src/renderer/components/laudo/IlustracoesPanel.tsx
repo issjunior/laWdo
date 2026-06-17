@@ -28,6 +28,9 @@ import {
   ListChecks,
   ExternalLink,
   RefreshCw,
+  Minus,
+  Search,
+  SearchX,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,10 +43,15 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from '@/components/ui/tooltip';
-import Lightbox from "yet-another-react-lightbox";
+import Lightbox, { stopNavigationEventsPropagation } from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import Captions from "yet-another-react-lightbox/plugins/captions";
+import Counter from "yet-another-react-lightbox/plugins/counter";
 import "yet-another-react-lightbox/styles.css";
+import "yet-another-react-lightbox/plugins/captions.css";
+import "yet-another-react-lightbox/plugins/counter.css";
 import { toast } from 'sonner';
+import { Lens } from '@/components/ui/lens';
 
 function readFileAsDataUri(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -365,6 +373,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [lightboxEditorIndex, setLightboxEditorIndex] = useState(-1);
 
+  const [lensZoom, setLensZoom] = useState(2);
+  const [lensSize, setLensSize] = useState(250);
+  const [lensOn, setLensOn] = useState(true);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -586,8 +598,85 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           open={lightboxEditorIndex >= 0}
           index={lightboxEditorIndex}
           close={() => setLightboxEditorIndex(-1)}
-          slides={figurasNoEditor.map(img => ({ src: img.url, title: img.legenda }))}
-          plugins={[Zoom]}
+          slides={figurasNoEditor.map(img => {
+            const num = img.numero_figura.toString().padStart(2, '0')
+            return { src: img.url, description: img.legenda ? `Figura ${num}: ${img.legenda}` : `Figura ${num}` }
+          })}
+          plugins={[Captions, Counter]}
+          captions={{ descriptionTextAlign: "center" }}
+          render={{
+            slide: ({ slide, offset, rect }) => {
+              if (offset !== 0) return undefined
+              const imgEl = (
+                <img src={slide.src} alt=""
+                  style={{ maxWidth: rect.width, maxHeight: rect.height }}
+                  className="object-contain" />
+              )
+              return (
+                <div style={{ width: rect.width, height: rect.height }}
+                  className="flex items-center justify-center">
+                  {lensOn ? (
+                    <Lens zoomFactor={lensZoom} lensSize={lensSize}>{imgEl}</Lens>
+                  ) : (
+                    imgEl
+                  )}
+                </div>
+              )
+            },
+            controls: () => {
+              const stopNav = stopNavigationEventsPropagation()
+              return (
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-50"
+                {...stopNav}>
+                <div className="flex items-center gap-3 bg-black/85 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 shadow-2xl">
+                  <button onClick={() => setLensOn(o => !o)}
+                    className={`p-1 rounded-lg transition-colors ${lensOn ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'text-white/30 hover:text-white/50 hover:bg-white/5'}`}>
+                    {lensOn ? <Search size={16} /> : <SearchX size={16} />}
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <span className="text-white/40 text-[10px] uppercase tracking-wider w-7">Zoom</span>
+                    <button onClick={() => setLensZoom(z => Math.max(1.5, z - 0.5))}
+                      disabled={!lensOn}
+                      className="text-white/70 hover:text-white p-0.5 disabled:opacity-20">
+                      <Minus size={14} />
+                    </button>
+                    <input type="range" min="1.5" max="5" step="0.5"
+                      value={lensZoom}
+                      disabled={!lensOn}
+                      onChange={e => setLensZoom(Number(e.target.value))}
+                      className="w-20 h-1 accent-primary cursor-pointer disabled:opacity-20" />
+                    <button onClick={() => setLensZoom(z => Math.min(5, z + 0.5))}
+                      disabled={!lensOn}
+                      className="text-white/70 hover:text-white p-0.5 disabled:opacity-20">
+                      <Plus size={14} />
+                    </button>
+                    <span className={`text-xs min-w-[2.5rem] text-center tabular-nums ${lensOn ? 'text-white/80' : 'text-white/20'}`}>{lensOn ? `${lensZoom}x` : 'off'}</span>
+                  </div>
+                  <div className="w-px h-5 bg-white/10" />
+                  <div className="flex items-center gap-1">
+                    <span className="text-white/40 text-[10px] uppercase tracking-wider">Tam</span>
+                    <button onClick={() => setLensSize(z => Math.max(100, z - 25))}
+                      disabled={!lensOn}
+                      className="text-white/70 hover:text-white p-0.5 disabled:opacity-20">
+                      <Minus size={14} />
+                    </button>
+                    <input type="range" min="100" max="400" step="25"
+                      value={lensSize}
+                      disabled={!lensOn}
+                      onChange={e => setLensSize(Number(e.target.value))}
+                      className="w-20 h-1 accent-primary cursor-pointer disabled:opacity-20" />
+                    <button onClick={() => setLensSize(z => Math.min(400, z + 25))}
+                      disabled={!lensOn}
+                      className="text-white/70 hover:text-white p-0.5 disabled:opacity-20">
+                      <Plus size={14} />
+                    </button>
+                    <span className={`text-xs min-w-[2.5rem] text-center tabular-nums ${lensOn ? 'text-white/80' : 'text-white/20'}`}>{lensOn ? `${lensSize}px` : 'off'}</span>
+                  </div>
+                </div>
+              </div>
+              )
+            },
+          }}
         />
       )}
     </div>

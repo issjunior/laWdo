@@ -770,9 +770,55 @@ correspondente na lista "Figuras no Laudo".
 
 Clique na miniatura → `onScrollToFigure` → `figure.scrollIntoView({ behavior: 'smooth', block: 'center' })`.
 
-## 11. Funções utilitárias e comandos
+## 11. Lightbox — Visualização ampliada com legenda
 
-### 11.1 Funções em `TinyMceEditor.tsx` (linhas 6-75)
+`IlustracoesPanel.tsx:586-597`: Ao clicar no ícone `Maximize2` (Ampliar) em um
+item da aba "Figuras no Laudo", abre um Lightbox (`yet-another-react-lightbox`)
+com a imagem em tela cheia e a legenda formatada abaixo.
+
+### Plugins
+
+| Plugin | Import | Função |
+|--------|--------|--------|
+| `Zoom` | `yet-another-react-lightbox/plugins/zoom` | Zoom in/out com scroll e gestos |
+| `Captions` | `yet-another-react-lightbox/plugins/captions` | Renderiza `description` como legenda abaixo da imagem |
+
+CSS adicional: `yet-another-react-lightbox/plugins/captions.css`.
+
+### Formato da legenda
+
+```tsx
+slides={figurasNoEditor.map(img => {
+  const num = img.numero_figura.toString().padStart(2, '0')
+  return {
+    src: img.url,
+    description: img.legenda
+      ? `Figura ${num}: ${img.legenda}`
+      : `Figura ${num}`
+  }
+})}
+```
+
+Regras:
+- `numero_figura` com 2 dígitos (`padStart(2, '0')`) → `Figura 01`, `Figura 02`...
+- Se `legenda` preenchida: `Figura 01: descrição`
+- Se `legenda` vazia: `Figura 01`
+- Legenda centralizada via `captions={{ descriptionTextAlign: "center" }}`
+
+### Por que `description` e não `title`
+
+O CSS do plugin `Captions` posiciona `title` no topo e `description` na base
+do slide. Usar `title` faria a legenda aparecer no canto superior direito.
+
+### Apenas figuras inseridas no editor
+
+O Lightbox das imagens carregadas (aba "Imagens Carregadas", ainda não
+inseridas no laudo) **não** inclui o plugin `Captions` nem a formatação
+`Figura XX:`. Mantém apenas `title: img.legenda` (comportamento original).
+
+## 12. Funções utilitárias e comandos
+
+### 12.1 Funções em `TinyMceEditor.tsx` (linhas 6-75)
 
 | Função | Assinatura | Propósito |
 |---|---|---|
@@ -782,7 +828,7 @@ Clique na miniatura → `onScrollToFigure` → `figure.scrollIntoView({ behavior
 | `processarImagensPuras` | `(raiz: Node) → number` | Varre fragmento, converte `<img>` órfãos. Usada em `paste_postprocess` |
 | `scanEditorForRawImages` | `(editor: any) → number` | Varre `getBody()`, converte via `undoManager.transact`. Usada em `scanAndWrapImages` |
 
-### 11.2 Comandos TinyMCE registrados no `setup` (`TinyMceEditor.tsx:282-343`)
+### 12.2 Comandos TinyMCE registrados no `setup` (`TinyMceEditor.tsx:282-343`)
 
 | Comando | Ação |
 |---|---|
@@ -794,13 +840,13 @@ Clique na miniatura → `onScrollToFigure` → `figure.scrollIntoView({ behavior
 | `insertLaudoImageDummy` | Insere placeholder SVG (retângulo escuro + ícone câmera) com `data-dummy="true"` |
 | `scanAndWrapImages` | `scanEditorForRawImages` + `reindexFiguras` |
 
-### 11.3 `reindexarFiguras` (`src/renderer/lib/figuras.ts`)
+### 12.3 `reindexarFiguras` (`src/renderer/lib/figuras.ts`)
 
 Função pura que opera sobre string HTML (não DOM vivo). Usada no save e
 preview. Itera `.laudo-figure` com `DOMParser`, atualiza `figcaption` e
 `img.alt`.
 
-### 11.4 Substituição de imagem dummy — `data-mce-src`
+### 12.4 Substituição de imagem dummy — `data-mce-src`
 
 **Problema corrigido (2026-06-10):** O TinyMCE armazena internamente a URL
 da imagem no atributo `data-mce-src`. O comando `replaceLaudoImage` original
@@ -823,7 +869,7 @@ Adicionalmente, o corpo do comando foi envolvido em
 `editor.undoManager.transact()` para registrar a mudança no histórico de undo
 do editor.
 
-### 11.5 Substituição via painel destacado — user gesture
+### 12.5 Substituição via painel destacado — user gesture
 
 **Problema corrigido (2026-06-10):** No painel pop-out, `handleReplaceImage`
 enviava apenas `imageId` via IPC para a janela principal, que então chamava
@@ -849,7 +895,7 @@ Depois:
 - Se não → comportamento original com file picker (painel inline)
 - IPC handler: `case 'replaceImage': cbs.onReplaceImage(args[0], args[1])`
 
-## 12. Configurações de init do TinyMCE
+## 13. Configurações de init do TinyMCE
 
 | Config | Linha | Valor | Efeito |
 |---|---|---|---|
@@ -861,7 +907,7 @@ Depois:
 | `file_picker_callback` | 248 | input type=file → FileReader → `buildFigureHtml` | Toolbar "Inserir Imagem" |
 | plugins (lista) | 157 | inclui `'paste'`, `'image'`, `'media'` | Paste e image plugins ativos |
 
-## 13. MutationObserver — detalhes de implementação
+## 14. MutationObserver — detalhes de implementação
 
 `TinyMceEditor.tsx:356-410`, dentro de `editor.on('init')`:
 
@@ -902,7 +948,7 @@ A chamada explícita força `setSingleEditorHtml(html)` ou
 `atualizarConteudoSecao(idx, html)`, fazendo `extrairFigurasDoEditor()`
 recalcular com o conteúdo atualizado.
 
-## 14. Lições aprendidas
+## 15. Lições aprendidas
 
 ### 14.1 Filtro de blob URLs — causa do bug #1
 
@@ -959,7 +1005,7 @@ tecla, etc.). Se o usuário clicou na janela A, a janela B não pode abrir um
 file picker. Solução: abrir o file picker sempre na janela onde o clique
 ocorreu e transmitir o `dataUri` resultante via IPC para a janela de destino.
 
-## 15. Checklist de troubleshooting
+## 16. Checklist de troubleshooting
 
 | Sintoma | Causa provável | Verificar |
 |---|---|---|
