@@ -227,7 +227,10 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
 }
 
 export function limparIndicadoresCondicionais(html: string): string {
-  let result = html.replace(/<p[^>]*data-cond-label="true"[^>]*>[\s\S]*?<\/p>/gi, '');
+  let result = html.replace(
+    /<p[^>]*data-cond-label="true"[^>]*>\[Condicional:\s*([^\]]+)\]<\/p>/gi,
+    '<h3>$1</h3>'
+  );
   result = result.replace(
     /<div[^>]*\bdata-cond-bloco="[^"]*"[^>]*>/gi,
     (match) => match.replace(/\s*style="[^"]*"/gi, '')

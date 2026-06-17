@@ -339,8 +339,8 @@ export const TemplatesPage: React.FC = () => {
     if (r.success && r.data) {
       const s: SecaoItem[] = r.data;
       setSecoesDb(s);
-      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' })));
-      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' }))));
+      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' })));
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' }))));
     } else {
       setSecoesDb([]);
       setSecoes([emptySecaoForm()]);
@@ -409,8 +409,8 @@ export const TemplatesPage: React.FC = () => {
       if (r.success && r.data) {
         const s: SecaoItem[] = r.data;
         setSecoesDb(s);
-        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' })));
-        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true) : '' }))));
+        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' })));
+        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' }))));
       } else {
         setSecoesDb([]);
         setSecoes([emptySecaoForm()]);
@@ -551,7 +551,7 @@ export const TemplatesPage: React.FC = () => {
         const r = await window.ipcAPI.template.findSecoes(templateId);
         if (r.success) {
           setSecoesDb(r.data);
-          const nextSecoes = r.data.map((s: SecaoItem & { condicao?: string }) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true) : '', condicao: s.condicao }));
+          const nextSecoes = r.data.map((s: SecaoItem & { condicao?: string }) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true)) : '', condicao: s.condicao }));
           setSecoes(nextSecoes);
           setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
         }

@@ -1547,7 +1547,7 @@ export const LaudosPage: React.FC = () => {
       navigate(`/laudos/${laudo.id}/wizard`);
       return;
     }
-    const parsedSecoes = parseConteudoEmSecoes(converterPlaceholdersTextuais(laudo.conteudo || '', placeholderChaves));
+    const parsedSecoes = parseConteudoEmSecoes(limparIndicadoresCondicionais(converterPlaceholdersTextuais(laudo.conteudo || '', placeholderChaves)));
     setEditando(laudo);
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
