@@ -12,6 +12,19 @@ function formatarNumeroBO(raw: string): string {
 const MAX_MATERIAL_ENC = 20;
 const MAX_CARTUCHOS = 20;
 const MAX_ESTOJOS = 20;
+const MAX_ARMAS = 20;
+
+const ARMA_CAMPOS = [
+  'tipo', 'marca', 'calibre', 'numeracao_serie', 'numeracao_cano',
+  'capacidade_carregador', 'comprimento_cano', 'acabamento',
+  'funcionamento', 'estado_conservacao', 'quantidade', 'dito_oficio', 'numero_lacre',
+];
+
+const ARMA_CAMPOS_MATERIAL = [
+  'marca', 'calibre', 'numeracao_serie', 'numeracao_cano',
+  'capacidade_carregador', 'comprimento_cano', 'acabamento',
+  'funcionamento', 'estado_conservacao',
+];
 
 export const b602Service: ExamService = {
   codigo: 'B-602',
@@ -32,22 +45,24 @@ export const b602Service: ExamService = {
     result.numero_ip = (data as Record<string, string>)['b602_numero_ip'] || '';
 
 
-    const materialToggle = (data as Record<string, string>)['b602_material_enc_toggle'];
-    if (materialToggle === 'on') {
-      const items: Record<string, string>[] = [];
-      for (let i = 0; i < MAX_MATERIAL_ENC; i++) {
-        const natureza = (data as Record<string, string>)[`b602_material_enc_${i}_natureza`];
-        if (!natureza && i > 0) continue;
-        items.push({
-          natureza: natureza || 'Arma',
-          quantidade: (data as Record<string, string>)[`b602_material_enc_${i}_quantidade`] || '01',
-          tipo: (data as Record<string, string>)[`b602_material_enc_${i}_tipo`] || 'Pistola',
-          dito_oficio: (data as Record<string, string>)[`b602_material_enc_${i}_dito_oficio`] || '""',
-          numero_lacre: (data as Record<string, string>)[`b602_material_enc_${i}_numero_lacre`] || '',
-        });
+    const items: Record<string, string>[] = [];
+    for (let i = 0; i < MAX_MATERIAL_ENC; i++) {
+      const natureza = (data as Record<string, string>)[`b602_material_enc_${i}_natureza`];
+      if (!natureza && i > 0) continue;
+      const item: Record<string, string> = {
+        natureza: natureza || 'Arma',
+        quantidade: (data as Record<string, string>)[`b602_material_enc_${i}_quantidade`] || '01',
+        tipo: (data as Record<string, string>)[`b602_material_enc_${i}_tipo`] || 'Pistola',
+        dito_oficio: (data as Record<string, string>)[`b602_material_enc_${i}_dito_oficio`] || '""',
+        numero_lacre: (data as Record<string, string>)[`b602_material_enc_${i}_numero_lacre`] || '',
+      };
+      for (const campo of ARMA_CAMPOS_MATERIAL) {
+        const val = (data as Record<string, string>)[`b602_material_enc_${i}_arma_${campo}`];
+        if (val) item[`arma_${campo}`] = val;
       }
-      if (items.length > 0) result.material_enc = items;
+      items.push(item);
     }
+    result.material_enc = items;
 
     const cartuchosToggle = (data as Record<string, string>)['b602_cartuchos_toggle'];
     if (cartuchosToggle === 'on') {
@@ -90,6 +105,25 @@ export const b602Service: ExamService = {
       if (items.length > 0) result.estojos = items;
     }
 
+    const armasToggle = (data as Record<string, string>)['b602_armas_toggle'];
+    result.armas_toggle = armasToggle === 'on' ? 'on' : 'off';
+    if (armasToggle === 'on') {
+      const items: Record<string, unknown>[] = [];
+      for (let i = 0; i < MAX_ARMAS; i++) {
+        const tipo = (data as Record<string, string>)[`b602_armas_${i}_tipo`];
+        if (!tipo && i > 0) continue;
+        const item: Record<string, unknown> = {};
+        for (const campo of ARMA_CAMPOS) {
+          const val = (data as Record<string, string>)[`b602_armas_${i}_${campo}`];
+          if (val) item[campo] = val;
+        }
+        if (Object.keys(item).length > 0) items.push(item);
+      }
+      if (items.length > 0) result.armas = items;
+    }
+    result.armas_funcionamento_toggle = (data as Record<string, string>)['b602_armas_funcionamento_toggle'] || 'off';
+    result.armas_coleta_toggle = (data as Record<string, string>)['b602_armas_coleta_toggle'] || 'off';
+
     return { b602: result };
   },
 
@@ -116,13 +150,16 @@ export const b602Service: ExamService = {
 
     const material = data.material_enc as Record<string, string>[] | undefined;
     if (material && material.length > 0) {
-      result['b602_material_enc_toggle'] = 'on';
       material.forEach((item, i) => {
         result[`b602_material_enc_${i}_natureza`] = item.natureza || 'Arma';
         result[`b602_material_enc_${i}_quantidade`] = item.quantidade || '01';
         result[`b602_material_enc_${i}_tipo`] = item.tipo || 'Pistola';
         result[`b602_material_enc_${i}_dito_oficio`] = item.dito_oficio || '""';
         result[`b602_material_enc_${i}_numero_lacre`] = item.numero_lacre || '';
+        for (const campo of ARMA_CAMPOS_MATERIAL) {
+          const val = item[`arma_${campo}`];
+          if (val) result[`b602_material_enc_${i}_arma_${campo}`] = String(val);
+        }
       });
     }
 
@@ -154,6 +191,19 @@ export const b602Service: ExamService = {
         result[`b602_estojos_${i}_observacao`] = Array.isArray(item.observacao) ? (item.observacao as string[]).join(',') : '';
       });
     }
+
+    const armas = data.armas as Record<string, unknown>[] | undefined;
+    if (armas && armas.length > 0) {
+      result['b602_armas_toggle'] = 'on';
+      armas.forEach((item, i) => {
+        for (const campo of ARMA_CAMPOS) {
+          const val = item[campo];
+          if (val !== undefined) result[`b602_armas_${i}_${campo}`] = String(val);
+        }
+      });
+    }
+    if (data.armas_funcionamento_toggle) result['b602_armas_funcionamento_toggle'] = String(data.armas_funcionamento_toggle);
+    if (data.armas_coleta_toggle) result['b602_armas_coleta_toggle'] = String(data.armas_coleta_toggle);
 
     return result as Partial<REPFormData>;
   },
@@ -190,6 +240,10 @@ export function getGroupCount(prefix: string, b602Data: Record<string, unknown> 
   }
   if (prefix === 'b602_estojo_') {
     const arr = b602Data.estojos as unknown[] | undefined;
+    return Array.isArray(arr) ? arr.length : 0;
+  }
+  if (prefix === 'b602_arma_') {
+    const arr = b602Data.armas as unknown[] | undefined;
     return Array.isArray(arr) ? arr.length : 0;
   }
   return 0;

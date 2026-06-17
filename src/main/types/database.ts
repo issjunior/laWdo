@@ -132,6 +132,7 @@ export interface SecaoTemplateRow extends DatabaseRow {
   nome: string
   ordem: number
   conteudo?: string
+  condicao?: string | null
   created_at: string
   updated_at: string
 }

@@ -120,6 +120,8 @@ interface TinyMceEditorProps {
   onEditorInit?: (editor: any) => void;
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
   autoConverterReservados?: boolean;
+  /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
+  condToggles?: Array<{ id: string; label: string; subToggles?: Array<{ id: string; label: string }> }>;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<HTMLDivElement>> = ({
@@ -134,6 +136,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   placeholderChaves,
   onEditorInit,
   autoConverterReservados = false,
+  condToggles,
   ...rest
 }) => {
   const editorRef = useRef<any>(null);
@@ -234,6 +237,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
             'charmap | link image table | blockquote hr | ' +
             'alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | ' +
             'searchreplace visualblocks nonbreaking code | fullscreen preview | ' +
+            (condToggles && condToggles.length > 0 ? 'condbloco | ' : '') +
             'help',
           content_style: `
             body {
@@ -404,6 +408,53 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               editor.execCommand('reindexFiguras');
               return count;
             });
+
+            // Comando: Inserir bloco condicional
+            editor.addCommand('insertCondBloco', (_ui: any, toggleId: string) => {
+              if (!toggleId || typeof toggleId !== 'string') return;
+              const toggles = (condToggles || []);
+              const allToggles = [
+                ...toggles.map(t => ({ id: t.id, label: t.label })),
+                ...toggles.flatMap(t => (t.subToggles || []).map(st => ({ id: st.id, label: st.label }))),
+              ];
+              const found = allToggles.find(t => t.id === toggleId);
+              const label = found ? found.label : toggleId;
+              const html = `<div data-cond-bloco="${toggleId}" style="border:1px dashed #f59e0b;padding:8px;border-radius:6px;margin:8px 0"><p style="color:#92400e;font-size:12px;margin:0 0 4px" data-cond-label="true">[Condicional: ${label}]</p><p>&nbsp;</p></div>`;
+              editor.insertContent(html);
+            });
+
+            // Registrar botão "Bloco Condicional" na toolbar
+            if (condToggles && condToggles.length > 0) {
+              const menuItems: Array<{ type: string; text: string; onAction: () => void }> = [];
+              for (const toggle of condToggles) {
+                menuItems.push({
+                  type: 'menuitem',
+                  text: toggle.label,
+                  onAction: () => editor.execCommand('insertCondBloco', false, toggle.id),
+                });
+                if (toggle.subToggles) {
+                  for (const sub of toggle.subToggles) {
+                    menuItems.push({
+                      type: 'menuitem',
+                      text: `  ${sub.label}`,
+                      onAction: () => editor.execCommand('insertCondBloco', false, sub.id),
+                    });
+                  }
+                }
+              }
+              editor.ui.registry.addMenuButton('condbloco', {
+                text: 'Bloco Cond.',
+                tooltip: 'Inserir bloco condicional',
+                fetch: (callback: (items: any[]) => void) => callback(menuItems),
+              });
+            } else {
+              editor.ui.registry.addButton('condbloco', {
+                text: 'Bloco Cond.',
+                tooltip: 'Bloco Condicional (sem toggles configurados)',
+                onAction: () => {},
+                disabled: true,
+              });
+            }
 
             // Repassar evento de clique direito para o componente pai (Shadcn ContextMenu)
             // Usamos init + listener nativo porque contextmenu:false desabilita o plugin

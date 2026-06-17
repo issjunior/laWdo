@@ -109,7 +109,7 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Criar seção */
-  ipcMain.handle('template:createSecao', async (_event, data: { template_id: string; nome: string; ordem: number; conteudo?: string }) => {
+  ipcMain.handle('template:createSecao', async (_event, data: { template_id: string; nome: string; ordem: number; conteudo?: string; condicao?: string | null }) => {
     try {
       if (!data.nome || !data.nome.trim()) {
         return { success: false, error: 'Nome da seção é obrigatório' };
@@ -119,6 +119,7 @@ export const registerTemplateHandlers = (): void => {
         nome: sanitizeInput(data.nome.trim()),
         ordem: data.ordem ?? 0,
         conteudo: data.conteudo || undefined,
+        condicao: data.condicao || undefined,
       });
       return { success: true, data: secao, message: 'Seção criada com sucesso' };
     } catch (error: any) {
@@ -128,12 +129,13 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Atualizar seção */
-  ipcMain.handle('template:updateSecao', async (_event, id: string, data: { nome?: string; ordem?: number; conteudo?: string }) => {
+  ipcMain.handle('template:updateSecao', async (_event, id: string, data: { nome?: string; ordem?: number; conteudo?: string; condicao?: string | null }) => {
     try {
       const updateData: Record<string, unknown> = {};
       if (data.nome !== undefined) updateData.nome = sanitizeInput(data.nome);
       if (data.ordem !== undefined) updateData.ordem = data.ordem;
       if (data.conteudo !== undefined) updateData.conteudo = data.conteudo;
+      if (data.condicao !== undefined) updateData.condicao = data.condicao;
 
       const secao = await templateService.updateSecao(id, updateData);
       return { success: true, data: secao, message: 'Seção atualizada com sucesso' };

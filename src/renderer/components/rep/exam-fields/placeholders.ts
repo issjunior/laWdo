@@ -46,6 +46,11 @@ export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   { chave: 'b602_local',                label: 'Local (B-602)',                  descricao: 'Local da ocorrência',                               jsonPath: 'b602.local',                 categoria_exam_codigo: 'B-602' },
   { chave: 'b602_numero_bo',            label: 'Nº BO (B-602)',                  descricao: 'Número do Boletim de Ocorrência',                  jsonPath: 'b602.numero_bo',             categoria_exam_codigo: 'B-602' },
   { chave: 'b602_numero_ip',            label: 'Nº IP (B-602)',                  descricao: 'Número do Inquérito Policial',                     jsonPath: 'b602.numero_ip',             categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_total_material_enc',   label: 'Total Material Enc (B-602)',    descricao: 'Total de itens do Material Encaminhado',          jsonPath: 'b602.total_material_enc',    categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_total_cartuchos',      label: 'Total Cartuchos (B-602)',       descricao: 'Total de cartuchos',                              jsonPath: 'b602.total_cartuchos',       categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_total_estojos',        label: 'Total Estojos (B-602)',         descricao: 'Total de estojos',                                jsonPath: 'b602.total_estojos',         categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_total_armas',          label: 'Total Armas (B-602)',           descricao: 'Total de armas',                                  jsonPath: 'b602.total_armas',           categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_tabela_armas',         label: 'Tabela Armas (B-602)',          descricao: 'Tabela HTML das armas periciadas',                jsonPath: 'b602.tabela_armas',          categoria_exam_codigo: 'B-602' },
 ];
 
 export function getExamCategoryId(codigo: string): string {

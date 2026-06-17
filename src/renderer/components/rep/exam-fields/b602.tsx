@@ -24,7 +24,7 @@ const Label = ({ children }: { children: React.ReactNode }) => (
   </label>
 );
 
-const NATUREZA_OPTS = ['Arma', 'Munição', 'Acessório'] as const;
+const NATUREZA_OPTS = ['Arma', 'Munição', 'Acessório', 'Cartucho', 'Estojo'] as const;
 const TIPO_OPTS = ['Artesanal', 'Carabina', 'Cartucho', 'Espingarda', 'Garrucha', 'Pistola', 'Revólver'] as const;
 const CALIBRE_OPTS = ['.380 AUTO', '9 mm Luger', '.38 SPL'] as const;
 const MARCA_OPTS = ['Aguila', 'Blazer', 'CBC', 'R-P (Remington)', 'Speer'] as const;
@@ -375,141 +375,173 @@ export const MaterialEncFields: React.FC<ExamSectionProps> = ({ form }) => {
     }
   }, [materialValores, form, numLinhas]);
 
-  const toggleValue = form.watch('b602_material_enc_toggle' as any) as string | undefined;
-  const active = toggleValue === 'on';
+  const ARMA_CAMPOS = [
+    { key: 'arma_marca', label: 'Marca', placeholder: 'Marca' },
+    { key: 'arma_calibre', label: 'Calibre', placeholder: 'Calibre' },
+    { key: 'arma_numeracao_serie', label: 'Nº Série', placeholder: 'Nº Série' },
+    { key: 'arma_numeracao_cano', label: 'Nº Cano', placeholder: 'Nº Cano' },
+    { key: 'arma_capacidade_carregador', label: 'Capacid. Carreg.', placeholder: 'Capacidade' },
+    { key: 'arma_comprimento_cano', label: 'Compr. Cano', placeholder: 'Compr. Cano' },
+    { key: 'arma_acabamento', label: 'Acabamento', placeholder: 'Acabamento' },
+    { key: 'arma_funcionamento', label: 'Funcionamento', placeholder: 'Funcionamento' },
+    { key: 'arma_estado_conservacao', label: 'Est. Conservação', placeholder: 'Conservação' },
+  ];
 
   return (
-    <ToggleSection form={form} toggleName="b602_material_enc_toggle" label="Possui Material Encaminhado?">
-      {(active) =>
-        active ? (
-          <div className="space-y-3">
-            {Array.from({ length: numLinhas }, (_, i) => (
-              <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-muted-foreground">Item {i + 1}</span>
-                  {numLinhas > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        const prefix = `b602_material_enc_${i}_`;
-                        ['natureza', 'quantidade', 'tipo', 'dito_oficio', 'numero_lacre'].forEach((f) =>
-                          form.setValue(`${prefix}${f}` as any, '')
-                        );
-                        setNumLinhas((n) => Math.max(1, n - 1));
-                      }}
-                    >
-                      <X size={12} />
-                    </Button>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+    <div className="space-y-3">
+      {Array.from({ length: numLinhas }, (_, i) => {
+        const prefix = `b602_material_enc_${i}_`;
+        const natureza = form.watch(`${prefix}natureza` as any) as string | undefined;
+        const isArma = natureza === 'Arma';
+        return (
+          <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">Item {i + 1}</span>
+              {numLinhas > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                  onClick={() => {
+                    const pf = `b602_material_enc_${i}_`;
+                    ['natureza', 'quantidade', 'tipo', 'dito_oficio', 'numero_lacre',
+                     'arma_marca', 'arma_calibre', 'arma_numeracao_serie', 'arma_numeracao_cano',
+                     'arma_capacidade_carregador', 'arma_comprimento_cano', 'arma_acabamento',
+                     'arma_funcionamento', 'arma_estado_conservacao'].forEach((f) =>
+                      form.setValue(`${pf}${f}` as any, '')
+                    );
+                    setNumLinhas((n) => Math.max(1, n - 1));
+                  }}
+                >
+                  <X size={12} />
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+              <FormField
+                control={form.control}
+                name={`${prefix}natureza`}
+                render={({ field }) => (
+                  <FormItem>
+                    <Label>Natureza *</Label>
+                    <Select value={field.value || 'Arma'} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {NATUREZA_OPTS.map((o) => (
+                          <SelectItem key={o} value={o}>{o}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name={`${prefix}quantidade`}
+                render={({ field }) => (
+                  <FormItem>
+                    <Label>Qtd *</Label>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={99}
+                        placeholder="01"
+                        {...field}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 2);
+                          field.onChange(v);
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name={`${prefix}tipo`}
+                render={({ field }) => (
+                  <FormItem>
+                    <Label>Tipo *</Label>
+                    <Select value={field.value || 'Pistola'} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {TIPO_OPTS.map((o) => (
+                          <SelectItem key={o} value={o}>{o}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name={`${prefix}dito_oficio`}
+                render={({ field }) => (
+                  <FormItem>
+                    <Label>Dito do Ofício *</Label>
+                    <FormControl>
+                      <Input placeholder='"texto texto"' {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name={`${prefix}numero_lacre`}
+                render={({ field }) => (
+                  <FormItem>
+                    <Label>Nº do Lacre *</Label>
+                    <FormControl>
+                      <Input placeholder="Nº do lacre" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            {isArma && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 pt-2 border-t border-dashed border-muted-foreground/20">
+                <span className="col-span-full text-xs text-muted-foreground font-medium">Especificações da Arma</span>
+                {ARMA_CAMPOS.map((campo) => (
                   <FormField
+                    key={campo.key}
                     control={form.control}
-                    name={`b602_material_enc_${i}_natureza`}
+                    name={`${prefix}${campo.key}`}
                     render={({ field }) => (
                       <FormItem>
-                        <Label>Natureza *</Label>
-                        <Select value={field.value || 'Arma'} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {NATUREZA_OPTS.map((o) => (
-                              <SelectItem key={o} value={o}>{o}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`b602_material_enc_${i}_quantidade`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label>Qtd *</Label>
+                        <Label>{campo.label}</Label>
                         <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={99}
-                            placeholder="01"
-                            {...field}
-                            onChange={(e) => {
-                              const v = e.target.value.replace(/\D/g, '').slice(0, 2);
-                              field.onChange(v);
-                            }}
-                          />
+                          <Input placeholder={campo.placeholder} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name={`b602_material_enc_${i}_tipo`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label>Tipo *</Label>
-                        <Select value={field.value || 'Pistola'} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {TIPO_OPTS.map((o) => (
-                              <SelectItem key={o} value={o}>{o}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`b602_material_enc_${i}_dito_oficio`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label>Dito do Ofício *</Label>
-                        <FormControl>
-                          <Input placeholder='"texto texto"' {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`b602_material_enc_${i}_numero_lacre`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label>Nº do Lacre *</Label>
-                        <FormControl>
-                          <Input placeholder="Nº do lacre" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                ))}
               </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setNumLinhas((n) => n + 1)}
-            >
-              <Plus size={14} className="mr-1" /> Adicionar item
-            </Button>
+            )}
           </div>
-        ) : null
-      }
-    </ToggleSection>
+        );
+      })}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setNumLinhas((n) => n + 1)}
+      >
+        <Plus size={14} className="mr-1" /> Adicionar item
+      </Button>
+    </div>
   );
 };
 
@@ -891,6 +923,218 @@ export const EstojosFields: React.FC<ExamSectionProps> = ({ form }) => {
   );
 };
 
+export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
+  const toggleValue = form.watch('b602_armas_toggle' as any) as string | undefined;
+  const active = toggleValue === 'on';
+
+  const [numLinhas, setNumLinhas] = useState(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_armas_${i}_`;
+      const tipo = form.getValues(`${prefix}tipo` as any);
+      const marca = form.getValues(`${prefix}marca` as any);
+      if (tipo || marca) { maxIndex = i; }
+    }
+    return Math.max(1, maxIndex + 1);
+  });
+
+  const armasValores = form.watch([
+    'b602_armas_0_tipo', 'b602_armas_0_marca',
+    'b602_armas_1_tipo', 'b602_armas_1_marca',
+    'b602_armas_2_tipo', 'b602_armas_2_marca',
+    'b602_armas_3_tipo', 'b602_armas_3_marca',
+    'b602_armas_4_tipo', 'b602_armas_4_marca',
+    'b602_armas_5_tipo', 'b602_armas_5_marca',
+    'b602_armas_6_tipo', 'b602_armas_6_marca',
+    'b602_armas_7_tipo', 'b602_armas_7_marca',
+    'b602_armas_8_tipo', 'b602_armas_8_marca',
+    'b602_armas_9_tipo', 'b602_armas_9_marca',
+  ] as any);
+
+  useEffect(() => {
+    let maxIndex = 0;
+    for (let i = 0; i < 10; i++) {
+      const prefix = `b602_armas_${i}_`;
+      const tipo = form.getValues(`${prefix}tipo` as any);
+      const marca = form.getValues(`${prefix}marca` as any);
+      if (tipo || marca) { maxIndex = i; }
+    }
+    const count = maxIndex + 1;
+    if (count > numLinhas) setNumLinhas(count);
+  }, [armasValores, form, numLinhas]);
+
+  const funcToggle = form.watch('b602_armas_funcionamento_toggle' as any) as string | undefined;
+  const coletaToggle = form.watch('b602_armas_coleta_toggle' as any) as string | undefined;
+
+  const ARMA_CAMPOS = [
+    { key: 'tipo', label: 'Tipo *', type: 'select', opts: TIPO_OPTS },
+    { key: 'marca', label: 'Marca *', type: 'input' },
+    { key: 'calibre', label: 'Calibre *', type: 'input' },
+    { key: 'numeracao_serie', label: 'Nº Série', type: 'input' },
+    { key: 'numeracao_cano', label: 'Nº Cano', type: 'input' },
+    { key: 'capacidade_carregador', label: 'Cap. Carreg.', type: 'input' },
+    { key: 'comprimento_cano', label: 'Compr. Cano', type: 'input' },
+    { key: 'acabamento', label: 'Acabamento', type: 'input' },
+    { key: 'funcionamento', label: 'Funcionamento *', type: 'input' },
+    { key: 'estado_conservacao', label: 'Est. Conservação *', type: 'input' },
+    { key: 'quantidade', label: 'Qtd *', type: 'qtd' },
+    { key: 'dito_oficio', label: 'Dito Ofício *', type: 'input' },
+    { key: 'numero_lacre', label: 'Nº Lacre *', type: 'input' },
+  ];
+
+  return (
+    <ToggleSection form={form} toggleName="b602_armas_toggle" label="Possui Arma(s)?">
+      {(active) =>
+        active ? (
+          <div className="space-y-4">
+            {Array.from({ length: numLinhas }, (_, i) => {
+              const prefix = `b602_armas_${i}_`;
+              return (
+                <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground">Arma {i + 1}</span>
+                    {numLinhas > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          ARMA_CAMPOS.forEach((c) =>
+                            form.setValue(`${prefix}${c.key}` as any, '')
+                          );
+                          setNumLinhas((n) => Math.max(1, n - 1));
+                        }}
+                      >
+                        <X size={12} />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {ARMA_CAMPOS.map((campo) => {
+                      if (campo.type === 'select') {
+                        return (
+                          <FormField
+                            key={campo.key}
+                            control={form.control}
+                            name={`${prefix}${campo.key}`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <Label>{campo.label}</Label>
+                                <Select value={field.value || undefined} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {campo.opts!.map((o: string) => (
+                                      <SelectItem key={o} value={o}>{o}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        );
+                      }
+                      if (campo.type === 'qtd') {
+                        return (
+                          <FormField
+                            key={campo.key}
+                            control={form.control}
+                            name={`${prefix}${campo.key}`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <Label>{campo.label}</Label>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={99}
+                                    placeholder="01"
+                                    {...field}
+                                    onChange={(e) => {
+                                      const v = e.target.value.replace(/\D/g, '').slice(0, 2);
+                                      field.onChange(v);
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        );
+                      }
+                      return (
+                        <FormField
+                          key={campo.key}
+                          control={form.control}
+                          name={`${prefix}${campo.key}`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <Label>{campo.label}</Label>
+                              <FormControl>
+                                <Input placeholder="" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setNumLinhas((n) => n + 1)}
+            >
+              <Plus size={14} className="mr-1" /> Adicionar arma
+            </Button>
+
+            {/* Sub-toggles */}
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="b602_armas_funcionamento_toggle"
+                  checked={funcToggle === 'on'}
+                  onCheckedChange={(checked) => {
+                    form.setValue('b602_armas_funcionamento_toggle' as any, checked ? 'on' : 'off', {
+                      shouldValidate: false,
+                      shouldDirty: true,
+                    });
+                  }}
+                />
+                <label htmlFor="b602_armas_funcionamento_toggle" className="text-sm font-medium leading-none cursor-pointer">
+                  Funcionamento e Eficiência
+                </label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="b602_armas_coleta_toggle"
+                  checked={coletaToggle === 'on'}
+                  onCheckedChange={(checked) => {
+                    form.setValue('b602_armas_coleta_toggle' as any, checked ? 'on' : 'off', {
+                      shouldValidate: false,
+                      shouldDirty: true,
+                    });
+                  }}
+                />
+                <label htmlFor="b602_armas_coleta_toggle" className="text-sm font-medium leading-none cursor-pointer">
+                  Coleta de Padrões Balísticos
+                </label>
+              </div>
+            </div>
+          </div>
+        ) : null
+      }
+    </ToggleSection>
+  );
+};
+
 export const B602_MENU_STRUCTURE: MenuSection[] = [
   {
     id: 'dados_investigacao',
@@ -971,6 +1215,37 @@ export const B602_MENU_STRUCTURE: MenuSection[] = [
           { name: 'observacao', label: 'Observação' },
         ],
       },
+    ],
+  },
+  {
+    id: 'armas',
+    label: 'Armas',
+    items: [
+      { type: 'field', name: 'b602_tabela_armas', label: 'Tabela completa' },
+      {
+        type: 'group',
+        label: 'Arma',
+        prefix: 'b602_arma_',
+        fields: [
+          { name: 'tipo', label: 'Tipo' },
+          { name: 'marca', label: 'Marca' },
+          { name: 'calibre', label: 'Calibre' },
+          { name: 'numeracao_serie', label: 'Nº Série' },
+          { name: 'numeracao_cano', label: 'Nº Cano' },
+          { name: 'capacidade_carregador', label: 'Cap. Carregador' },
+          { name: 'comprimento_cano', label: 'Compr. Cano' },
+          { name: 'acabamento', label: 'Acabamento' },
+          { name: 'funcionamento', label: 'Funcionamento' },
+          { name: 'estado_conservacao', label: 'Est. Conservação' },
+          { name: 'quantidade', label: 'Quantidade' },
+          { name: 'dito_oficio', label: 'Dito Ofício' },
+          { name: 'numero_lacre', label: 'Nº Lacre' },
+        ],
+      },
+      { type: 'field', name: 'b602_total_material_enc', label: 'Total Material Enc.' },
+      { type: 'field', name: 'b602_total_cartuchos', label: 'Total Cartuchos' },
+      { type: 'field', name: 'b602_total_estojos', label: 'Total Estojos' },
+      { type: 'field', name: 'b602_total_armas', label: 'Total Armas' },
     ],
   },
 ];

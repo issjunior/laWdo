@@ -23,8 +23,8 @@ import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { EXAM_MENU_REGISTRY } from '@/components/rep/exam-fields';
-import type { MenuSection } from '@/components/rep/exam-fields';
+import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields';
+import type { MenuSection, ExamToggle } from '@/components/rep/exam-fields';
 
 interface TemplateItem {
   id: string;
@@ -55,6 +55,7 @@ interface SecaoForm {
   id?: string;
   nome: string;
   conteudo: string;
+  condicao?: string;
 }
 
 const emptyTemplateForm = (): TemplateForm => ({
@@ -181,6 +182,13 @@ export const TemplatesPage: React.FC = () => {
     const codigo = categoriaExameId.replace('cat-exam-', '');
     return EXAM_MENU_REGISTRY[codigo];
   }, [categoriaExameId]);
+
+  const exameToggles = useMemo(() => {
+    if (!templateForm.tipo_exame_id) return undefined;
+    const tipo = tiposExame.find(t => t.id === templateForm.tipo_exame_id);
+    if (!tipo?.codigo) return undefined;
+    return EXAM_TOGGLES[tipo.codigo];
+  }, [templateForm.tipo_exame_id, tiposExame]);
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoForm[]) => {
     if (secoesFonte.length === 0) {
@@ -509,6 +517,7 @@ export const TemplatesPage: React.FC = () => {
               nome: sec.nome.trim(),
               conteudo: sec.conteudo,
               ordem: i,
+              condicao: sec.condicao || null,
             });
             idsOrdenados.push(sec.id);
           } else {
@@ -517,6 +526,7 @@ export const TemplatesPage: React.FC = () => {
               nome: sec.nome.trim(),
               ordem: i,
               conteudo: sec.conteudo,
+              condicao: sec.condicao || null,
             });
             if (r.success) idsOrdenados.push(r.data.id);
           }
@@ -540,7 +550,7 @@ export const TemplatesPage: React.FC = () => {
         const r = await window.ipcAPI.template.findSecoes(templateId);
         if (r.success) {
           setSecoesDb(r.data);
-          const nextSecoes = r.data.map((s: SecaoItem) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true) : '' }));
+          const nextSecoes = r.data.map((s: SecaoItem & { condicao?: string }) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true) : '', condicao: s.condicao }));
           setSecoes(nextSecoes);
           setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
         }
@@ -1140,6 +1150,7 @@ export const TemplatesPage: React.FC = () => {
                     placeholder="Edite o laudo completo..."
                     placeholderChaves={placeholderChaves}
                     autoConverterReservados={true}
+                    condToggles={exameToggles}
                   />
               </PlaceholderContextMenu>
           ) : secoes.length === 0 ? (
@@ -1158,6 +1169,22 @@ export const TemplatesPage: React.FC = () => {
                     placeholder="Nome da seção (ex: Introdução, Metodologia...)"
                     className="flex-1 h-8 text-sm"
                   />
+                  {exameToggles && exameToggles.length > 0 && (
+                    <Select
+                      value={secao.condicao || ''}
+                      onValueChange={(v) => updateSecao(index, 'condicao', v)}
+                    >
+                      <SelectTrigger className="w-[180px] h-8 text-xs">
+                        <SelectValue placeholder="Mostrar apenas se..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Sempre visível</SelectItem>
+                        {exameToggles.map((t) => (
+                          <SelectItem key={t.id} value={JSON.stringify({ campo: t.id, valor: 'on' })}>{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'up')} disabled={index === 0} aria-label="Mover para cima">
                     <ArrowUp size={14} />
                   </Button>
@@ -1185,6 +1212,7 @@ export const TemplatesPage: React.FC = () => {
                       placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
                       placeholderChaves={placeholderChaves}
                       autoConverterReservados={true}
+                      condToggles={exameToggles}
                     />
                 </PlaceholderContextMenu>
               </div>

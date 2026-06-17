@@ -1,5 +1,5 @@
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
-import { buildDadosInvestigacaoTable, buildNumberedTable } from '@/lib/tabelas-placeholder';
+import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
 
 function formatarData(iso: string | undefined): string {
   if (!iso) return '-';
@@ -177,6 +177,33 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
               String(e.estojo || ''),
               Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : String(e.observacao || ''),
             ])
+          );
+        }
+
+        // Tabela de armas
+        mapping['b602_tabela_armas'] = buildArmasTabela(b602);
+
+        // Totais
+        const materialEnc = b602.material_enc as Record<string, string>[] | undefined;
+        if (materialEnc) {
+          mapping['b602_total_material_enc'] = String(
+            materialEnc.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
+          );
+        }
+        if (cartuchos) {
+          mapping['b602_total_cartuchos'] = String(
+            cartuchos.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
+          );
+        }
+        if (estojos) {
+          mapping['b602_total_estojos'] = String(
+            estojos.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
+          );
+        }
+        const armas = b602.armas as Record<string, string>[] | undefined;
+        if (armas) {
+          mapping['b602_total_armas'] = String(
+            armas.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
           );
         }
       }

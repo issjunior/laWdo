@@ -63,3 +63,45 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solic
 
   return `<table style="${style(s.table)}">${rows.join('')}</table>`;
 }
+
+export function buildArmasTabela(b602: Record<string, unknown>, solicitanteNome?: string): string {
+  const armas = (b602.armas as Record<string, unknown>[] | undefined) ?? [];
+  if (armas.length === 0) return '';
+
+  const s = TABLE_STYLES;
+
+  const titleRow = `<tr><td colspan="14" style="${style({ ...s.th, ...s.title })};border:1px solid #000;padding:6px 10px">TABELA 5 – ARMAS</td></tr>`;
+
+  const headers = ['Item', 'Tipo', 'Marca', 'Calibre', 'Nº Série', 'Nº Cano',
+    'Cap. Carreg.', 'Compr. Cano', 'Acabamento', 'Funcionamento',
+    'Est. Conservação', 'Qtd', 'Dito Ofício', 'Nº Lacre'];
+
+  const celula = (val: string, extra?: string) =>
+    `<td style="${style(s.td)}${extra ? ';' + extra : ''}">${val || '-'}</td>`;
+
+  const theadRow = `<tr>${headers.map((h, i) =>
+    `<th style="${style(s.th)}">${h}</th>`
+  ).join('')}</tr>`;
+
+  const tbodyRows = armas.map((arma, i) => {
+    const cells = [
+      celula(String(i + 1), 'text-align:center;width:40px'),
+      celula(String(arma.tipo || '-')),
+      celula(String(arma.marca || '-')),
+      celula(String(arma.calibre || '-')),
+      celula(String(arma.numeracao_serie || '-')),
+      celula(String(arma.numeracao_cano || '-')),
+      celula(String(arma.capacidade_carregador || '-')),
+      celula(String(arma.comprimento_cano || '-')),
+      celula(String(arma.acabamento || '-')),
+      celula(String(arma.funcionamento || '-')),
+      celula(String(arma.estado_conservacao || '-')),
+      celula(String(arma.quantidade || '-')),
+      celula(String(arma.dito_oficio || '-')),
+      celula(String(arma.numero_lacre || '-')),
+    ].join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  return `<table style="${style(s.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
+}

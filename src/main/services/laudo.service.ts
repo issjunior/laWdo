@@ -338,6 +338,159 @@ export class LaudoService extends BaseService<LaudoRow> {
     return respostas;
   }
 
+  // ==================== SEÇÕES CONDICIONAIS ====================
+
+  async sincronizarSecoesCondicionais(laudoId: string): Promise<void> {
+    try {
+      const laudo = await this.findById(laudoId);
+      if (!laudo) return;
+
+      // Buscar seções do template com condição
+      const secoes = await executeQuery<{ id: string; nome: string; conteudo?: string; condicao?: string; ordem: number }>(
+        'SELECT id, nome, conteudo, condicao, ordem FROM secoes_template WHERE template_id = ? ORDER BY ordem ASC',
+        [laudo.template_id]
+      );
+
+      // Buscar campos específicos da REP
+      const [rep] = await executeQuery<{ campos_especificos?: string | null }>(
+        'SELECT campos_especificos FROM reps WHERE id = ?', [laudo.rep_id]
+      );
+      const especificos = rep?.campos_especificos ? JSON.parse(rep.campos_especificos) : {};
+      const toggles = especificos?.b602 || {};
+
+      // Determinar quais seções devem aparecer
+      const secoesAtivas = new Set<string>();
+      for (const secao of secoes) {
+        if (!secao.condicao) {
+          secoesAtivas.add(secao.id);
+          continue;
+        }
+        try {
+          const cond = JSON.parse(secao.condicao);
+          const toggleVal = toggles[cond.campo];
+          if (toggleVal === 'on') {
+            secoesAtivas.add(secao.id);
+          }
+        } catch {
+          secoesAtivas.add(secao.id);
+        }
+      }
+
+      // Reconstruir HTML
+      const conteudoAtual = laudo.conteudo;
+      const H2_REGEX = /<h2[^>]*>([\s\S]*?)<\/h2>/gi;
+
+      // Parsear seções atuais do HTML
+      interface SecaoPosicao {
+        nome: string;
+        inicio: number;
+        fim: number;
+        h2: string;
+      }
+      const secoesAtuais: SecaoPosicao[] = [];
+      let m;
+      while ((m = H2_REGEX.exec(conteudoAtual)) !== null) {
+        secoesAtuais.push({ nome: m[0], inicio: m.index, fim: 0, h2: m[0] });
+      }
+      for (let i = 0; i < secoesAtuais.length; i++) {
+        secoesAtuais[i].fim = i + 1 < secoesAtuais.length ? secoesAtuais[i + 1].inicio : conteudoAtual.length;
+      }
+
+      // Normalizar nome de seção (remove n. prefix)
+      const normalize = (nome: string) =>
+        nome.replace(/<\/?h2[^>]*>/gi, '').replace(/^\d+\.\s*/, '').trim().toLowerCase();
+
+      // Mapa: id seção template -> nome normalizado
+      const secoesMap = new Map(secoes.map(s => [s.id, { nome: s.nome, conteudo: s.conteudo, ordem: s.ordem }]));
+
+      // Construir novo HTML
+      const partes: string[] = [];
+
+      // Guardar conteúdo antes do primeiro H2
+      if (secoesAtuais.length > 0 && secoesAtuais[0].inicio > 0) {
+        partes.push(conteudoAtual.substring(0, secoesAtuais[0].inicio));
+      }
+
+      const secoesUsadas = new Set<string>();
+
+      // Processar na ordem do template
+      let contadorSecao = 1;
+      for (const secao of secoes) {
+        if (!secoesAtivas.has(secao.id)) continue;
+
+        const nomeTemplate = secao.nome;
+        const nomeNormalizado = normalize(nomeTemplate);
+        secoesUsadas.add(nomeNormalizado);
+
+        // Encontrar seção correspondente no HTML atual
+        const existente = secoesAtuais.find(s => normalize(s.nome) === nomeNormalizado);
+
+        if (existente) {
+          let secaoHtml = conteudoAtual.substring(existente.inicio, existente.fim);
+          // Atualizar número do H2
+          secaoHtml = secaoHtml.replace(/<h2[^>]*>[\s\S]*?<\/h2>/i,
+            existente.h2.replace(/(<h2[^>]*>)\d+\./, `$1${contadorSecao}.`)
+          );
+          // Processar blocos condicionais dentro da seção
+          secaoHtml = this._processarBlocosCondicionais(secaoHtml, toggles);
+          partes.push(secaoHtml);
+        } else {
+          // Nova seção: criar do template
+          const h2 = `<h2>${contadorSecao}. ${secao.nome}</h2>`;
+          let conteudoFresco = secao.conteudo || '<p>&nbsp;</p>';
+          conteudoFresco = this._processarBlocosCondicionais(conteudoFresco, toggles);
+          partes.push(`${h2}\n${conteudoFresco}`);
+        }
+        contadorSecao++;
+      }
+
+      // Adicionar seções do HTML atual que não estão no template (mantidas)
+      for (const existente of secoesAtuais) {
+        const nomeNorm = normalize(existente.nome);
+        if (!secoesUsadas.has(nomeNorm)) {
+          let secaoHtml = conteudoAtual.substring(existente.inicio, existente.fim);
+          secaoHtml = this._processarBlocosCondicionais(secaoHtml, toggles);
+          partes.push(secaoHtml);
+        }
+      }
+
+      // Guardar conteúdo após o último H2 (se não coberto pelas seções)
+      if (secoesAtuais.length > 0) {
+        const ultima = secoesAtuais[secoesAtuais.length - 1];
+        const resto = conteudoAtual.substring(ultima.fim);
+        if (resto.trim() && !partes.some(p => p.includes(resto.trim()))) {
+          partes.push(resto);
+        }
+      }
+
+      const novoConteudo = partes.join('\n');
+
+      if (novoConteudo !== conteudoAtual) {
+        await executeNonQuery(
+          'UPDATE laudos SET conteudo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [novoConteudo, laudoId]
+        );
+        log.info('Seções condicionais sincronizadas', { laudoId });
+      }
+    } catch (error) {
+      log.error('Erro ao sincronizar seções condicionais', { laudoId, error });
+      throw error;
+    }
+  }
+
+  private _processarBlocosCondicionais(html: string, toggles: Record<string, unknown>): string {
+    const COND_REGEX = /<div\s+data-cond-bloco="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi;
+    let result = html;
+    let m;
+    while ((m = COND_REGEX.exec(html)) !== null) {
+      const toggleId = m[1];
+      if (toggles[toggleId] !== 'on') {
+        result = result.replace(m[0], '');
+      }
+    }
+    return result;
+  }
+
   // ==================== HELPERS ====================
 
   private _hashContent(content: string): string {

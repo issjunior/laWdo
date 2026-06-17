@@ -1,8 +1,8 @@
-import { MapPin, Clock, Hash, Search, Package, CircleDot, Cylinder } from 'lucide-react';
+import { MapPin, Clock, Hash, Search, Package, CircleDot, Cylinder, Crosshair } from 'lucide-react';
 import { LocalFatoFields } from './local-fato';
 import { AcionamentoFields } from './acionamento';
 import { NumeracaoFields } from './numeracao';
-import { DadosInvestigacaoFields, MaterialEncFields, CartuchosFields, EstojosFields, B602_MENU_STRUCTURE } from './b602';
+import { DadosInvestigacaoFields, MaterialEncFields, CartuchosFields, EstojosFields, ArmasFields, B602_MENU_STRUCTURE } from './b602';
 import { numeracaoService } from './services/numeracao.service';
 import { b602Service } from './services/b602.service';
 import type { ExamSection, MenuSection } from './types';
@@ -11,6 +11,27 @@ import type { ExamService } from './services/types';
 export type { ExamSection, ExamSectionProps, REPFormData } from './types';
 export type { ExamService } from './services/types';
 export * from './placeholders';
+
+export interface ExamToggle {
+  id: string;
+  label: string;
+  sectionId?: string;
+  subToggles?: ExamToggle[];
+}
+
+export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
+  'B-602': [
+    { id: 'b602_cartuchos_toggle', label: 'Cartuchos', sectionId: 'cartuchos' },
+    { id: 'b602_estojos_toggle', label: 'Estojos', sectionId: 'estojos' },
+    {
+      id: 'b602_armas_toggle', label: 'Arma', sectionId: 'armas',
+      subToggles: [
+        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência' },
+        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos' },
+      ],
+    },
+  ],
+};
 
 export const SECTION_REGISTRY: Record<string, ExamSection> = {
   local_fato: {
@@ -76,12 +97,21 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     group: null,
     requiredFields: [],
   },
+  armas: {
+    id: 'armas',
+    label: 'Arma',
+    icon: Crosshair,
+    description: 'Especificações das armas periciadas',
+    component: ArmasFields,
+    group: null,
+    requiredFields: [],
+  },
 };
 
 export const EXAM_FIELD_MAP: Record<string, string[]> = {
   'LOC':   ['local_fato', 'acionamento'],
   'I-801': ['numeracao'],
-  'B-602': ['dados_investigacao', 'material_enc', 'cartuchos', 'estojos'],
+  'B-602': ['dados_investigacao', 'material_enc', 'cartuchos', 'estojos', 'armas'],
 };
 
 export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {

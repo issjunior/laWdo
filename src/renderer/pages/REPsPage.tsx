@@ -214,6 +214,7 @@ const emptyForm = (): REPFormData => ({
   b602_data_ocorrencia: '', b602_local: '',
   b602_numero_bo: '', b602_numero_ip: '', b602_solicitante_nome: '',
   b602_material_enc_toggle: 'off', b602_cartuchos_toggle: 'off', b602_estojos_toggle: 'off',
+  b602_armas_toggle: 'off', b602_armas_funcionamento_toggle: 'off', b602_armas_coleta_toggle: 'off',
 });
 
 const FIELD_PLACEHOLDER: Record<string, string> = {
@@ -391,6 +392,11 @@ export const REPsPage: React.FC = () => {
 
   // Ref para evitar que o template_id seja limpo ao carregar uma edição
   const editLoadRef = useRef(false);
+  const togglesOriginaisRef = useRef<Record<string, string>>({});
+  const [dialogoToggleAberto, setDialogoToggleAberto] = useState(false);
+  const [togglesDesmarcados, setTogglesDesmarcados] = useState<string[]>([]);
+  const dadosPendentesRef = useRef<any>(null);
+  const codigoPendenteRef = useRef<string | undefined>(undefined);
 
   // Schema com validação condicional via superRefine
   const repFormSchema = useMemo(() => z.object({
@@ -440,6 +446,9 @@ export const REPsPage: React.FC = () => {
     b602_material_enc_toggle: z.string().optional(),
     b602_cartuchos_toggle: z.string().optional(),
     b602_estojos_toggle: z.string().optional(),
+    b602_armas_toggle: z.string().optional(),
+    b602_armas_funcionamento_toggle: z.string().optional(),
+    b602_armas_coleta_toggle: z.string().optional(),
   }).passthrough().superRefine((data, ctx) => {
     if (!data.tipo_exame_id) return;
     const tipos = tiposExameRef.current;
@@ -727,6 +736,13 @@ export const REPsPage: React.FC = () => {
       longitude: rep.longitude != null ? String(rep.longitude) : '',
       observacoes: rep.observacoes || '',
     });
+    // Armazenar toggles originais para aviso ao desmarcar
+    const toggleKeys = ['b602_cartuchos_toggle', 'b602_estojos_toggle', 'b602_armas_toggle'];
+    const origToggles: Record<string, string> = {};
+    for (const key of toggleKeys) {
+      origToggles[key] = especificos?.[key as keyof typeof especificos] as string || 'off';
+    }
+    togglesOriginaisRef.current = origToggles;
     setShowForm(true);
   };
 
@@ -883,8 +899,42 @@ export const REPsPage: React.FC = () => {
   };
 
   const handleSalvar = form.handleSubmit(async (data) => {
+    // Verificar toggles desmarcados
+    if (editingRep) {
+      const toggleKeys = ['b602_cartuchos_toggle', 'b602_estojos_toggle', 'b602_armas_toggle'];
+      const toggleLabels: Record<string, string> = {
+        'b602_cartuchos_toggle': 'Cartuchos',
+        'b602_estojos_toggle': 'Estojos',
+        'b602_armas_toggle': 'Armas',
+      };
+      const desmarcados: string[] = [];
+      for (const key of toggleKeys) {
+        const original = togglesOriginaisRef.current[key] || 'off';
+        const atual = (data as Record<string, string>)[key] || 'off';
+        if (original === 'on' && atual === 'off') {
+          desmarcados.push(key);
+        }
+      }
+      if (desmarcados.length > 0) {
+        // Verificar se existe laudo vinculado
+        try {
+          const r = await window.ipcAPI.laudo.findByRepId(editingRep.id);
+          if (r.success && r.data) {
+            setTogglesDesmarcados(desmarcados);
+            dadosPendentesRef.current = data;
+            setDialogoToggleAberto(true);
+            setSubmitting(false);
+            return;
+          }
+        } catch { /* prosseguir se não conseguir verificar */ }
+      }
+    }
+
+    await executarSalvar(data);
+  });
+
+  const executarSalvar = async (data: any) => {
     try {
-      setError(null);
       setSuccess(null);
       setSubmitting(true);
 
@@ -915,7 +965,15 @@ export const REPsPage: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  });
+  };
+
+  const handleConfirmarDesmarcar = async () => {
+    setDialogoToggleAberto(false);
+    const data = dadosPendentesRef.current;
+    if (data) {
+      await executarSalvar(data);
+    }
+  };
 
   const handleSalvarSolicitanteQC = async () => {
     setSolicitanteQCError(null);
@@ -1205,6 +1263,43 @@ export const REPsPage: React.FC = () => {
               >
                 <Plus size={16} />
                 {criarLaudoSubmitting ? 'Criando...' : 'Criar Laudo'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo de aviso ao desmarcar toggles */}
+        <Dialog open={dialogoToggleAberto} onOpenChange={setDialogoToggleAberto}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Atenção: seção será removida do laudo</DialogTitle>
+              <DialogDescription asChild>
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    Desmarcar{' '}
+                    {togglesDesmarcados.map((t, i) => {
+                      const labels: Record<string, string> = {
+                        'b602_cartuchos_toggle': '"Possui Cartuchos?"',
+                        'b602_estojos_toggle': '"Possui Estojos?"',
+                        'b602_armas_toggle': '"Possui Arma(s)?"',
+                      };
+                      return <strong key={t}>{labels[t] || t}</strong>;
+                    }).reduce((acc, el, i) => {
+                      if (i === 0) return [el as React.ReactNode];
+                      if (i < togglesDesmarcados.length - 1) return [...(acc as React.ReactNode[]), ', ' as React.ReactNode, el as React.ReactNode];
+                      return [...(acc as React.ReactNode[]), ' e ' as React.ReactNode, el as React.ReactNode];
+                    }, [] as React.ReactNode[])}
+                    {' '}removerá a seção/bloco correspondente do laudo. Edições manuais nessa seção serão perdidas.
+                  </p>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setDialogoToggleAberto(false)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmarDesmarcar}>
+                Continuar
               </Button>
             </div>
           </DialogContent>

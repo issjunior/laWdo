@@ -17,7 +17,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 24;
+const CURRENT_SCHEMA_VERSION = 25;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -1627,6 +1627,28 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     } catch (error) {
       log.error('Erro ao aplicar migration versão 24', error);
+    }
+  }
+
+  // Migration versão 25: Adicionar coluna condicao na tabela secoes_template
+  if (fromVersion < 25) {
+    try {
+      const cols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(secoes_template)'
+      );
+      const hasCondicao = cols.some(c => c.name === 'condicao');
+
+      if (!hasCondicao) {
+        await executeNonQuery(
+          'ALTER TABLE secoes_template ADD COLUMN condicao TEXT'
+        );
+        log.debug('Migration v25: Coluna condicao adicionada à tabela secoes_template');
+      } else {
+        log.debug('Migration v25: Coluna condicao já existe');
+      }
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 25', error);
+      throw error;
     }
   }
 

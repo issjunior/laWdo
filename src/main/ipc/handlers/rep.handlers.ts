@@ -204,6 +204,12 @@ export const registerRepHandlers = (): void => {
           } catch (laudoError) {
             logError('Erro ao atualizar template do laudo', laudoError);
           }
+        } else {
+          try {
+            await laudoService.sincronizarSecoesCondicionais(laudoExistente.id);
+          } catch (syncError) {
+            logError('Erro ao sincronizar seções condicionais', syncError);
+          }
         }
       }
 
