@@ -55,6 +55,10 @@ Thumbs.db
 # --- TINYMCE (assets copiados via prebuild) ---
 src/renderer/public/tinymce/
 
+# --- WORKTREES ---
+.worktrees/
+worktrees/
+
 # --- TEMPORÁRIOS ---
 tmp/
 temp/
