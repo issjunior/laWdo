@@ -18,10 +18,11 @@
 | 4 | Material Encaminhado | Toggle | Sim — "Possui Material Encaminhado?" |
 | 5 | Cartuchos | Toggle | Sim — "Possui Cartuchos?" |
 | 6 | Estojos | Toggle | Sim — "Possui Estojos?" |
+| 7 | Arma | Toggle + sub-toggles | Sim — "Possui Arma?" com sub-seções "Funcionamento e Eficiência" e "Coleta de Padrões Balísticos" |
 
 ### Comportamento dos Toggles
 
-- **Padrão inicial:** todos **desligados** (seções 4-6 ocultas do stepper)
+- **Padrão inicial:** todos **desligados** (seções 4-7 ocultas do stepper)
 - **Ao ligar:** seção aparece no stepper com 1 linha pré-renderizada
 - **Ao desligar:** seção some do stepper, dados preenchidos **persistem** no form mas não são serializados
 - **Ao religar:** dados anteriores reaparecem intactos
@@ -114,6 +115,61 @@
 | `estojo` | Estojo | dropdown | Latonada, Niquelada |
 | `observacao` | Observação | checkbox múltiplo (não obrigatório) | Intacto, NTA, Picotado, Percutido, Não deflagrado |
 
+### 2.5 Seção: Arma (toggle + sub-toggles)
+
+**Toggle pai:** `b602_armas_toggle` — "Possui Arma?"
+
+**Sub-toggles** (controlam sub-tabelas dentro da seção Arma):
+
+| Toggle | `id` | `subtitulo` (usado no `<h3>` do bloco condicional) |
+|---|---|---|
+| Funcionamento e Eficiência | `b602_armas_funcionamento_toggle` | `FUNCIONAMENTO E EFICIÊNCIA` |
+| Coleta de Padrões Balísticos | `b602_armas_coleta_toggle` | `COLETA DE PADRÕES BALÍSTICOS` |
+
+O campo `subtitulo` é usado pelo editor de laudo como texto do `<h3 data-cond-bloco>` quando o condicional é inserido.
+
+**Campos por linha da tabela `armas` (todos obrigatórios exceto observação):**
+
+| name (sufixo `_{n}`) | Label | Tipo | Opções / Padrão |
+|---|---|---|---|
+| `num_lacre` | Nº do Lacre | text | — |
+| `marca` | Marca | text | — |
+| `calibre` | Calibre | dropdown | .380 AUTO, 9 mm Luger, .38 SPL |
+| `capacidade` | Capacidade | text | — |
+| `tipo` | Tipo | dropdown | Artesanal, Carabina, Espingarda, Garrucha, Pistola, Revólver |
+| `funcionamento` | Funcionamento | dropdown | Automático, Semiautomático, Repetição, Ação por alavanca, Ação por bombeamento |
+| `observacao` | Observação | checkbox múltiplo (não obrigatório) | Intacto, NTA, Picotado, Percutido, Não deflagrado |
+
+### 2.6 `ExamToggle` — interface completa
+
+```ts
+export interface ExamToggle {
+  id: string;             // identificador único do toggle
+  label: string;          // label visível no formulário
+  subtitulo?: string;     // texto do <h3> no bloco condicional do editor
+  sectionId?: string;     // id da seção no SECTION_REGISTRY (se houver)
+  subToggles?: ExamToggle[]; // sub-toggles aninhados (ex: Funcionamento, Coleta)
+}
+```
+
+### 2.7 `EXAM_TOGGLES` — registro
+
+```ts
+export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
+  'B-602': [
+    { id: 'b602_cartuchos_toggle', label: 'Cartuchos', subtitulo: 'DOS CARTUCHOS', sectionId: 'cartuchos' },
+    { id: 'b602_estojos_toggle', label: 'Estojos', subtitulo: 'DOS ESTOJOS', sectionId: 'estojos' },
+    {
+      id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas',
+      subToggles: [
+        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
+        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
+      ],
+    },
+  ],
+};
+```
+
 ---
 
 ## 3. Estrutura JSON (`campos_especificos`)
@@ -165,12 +221,37 @@
         "estojo": "Niquelada",
         "observacao": ["Percutido"]
       }
+    ],
+    "armas": [
+      {
+        "num_lacre": "XYZ789",
+        "marca": "Taurus",
+        "calibre": "9 mm Luger",
+        "capacidade": "17",
+        "tipo": "Pistola",
+        "funcionamento": "Semiautomático",
+        "observacao": ["Intacto"]
+      }
+    ],
+    "armas_funcionamento": [
+      {
+        "num_lacre": "XYZ789",
+        "resultado": "Eficiente",
+        "observacao": "Disparo de prova realizado"
+      }
+    ],
+    "armas_coleta": [
+      {
+        "num_lacre": "XYZ789",
+        "padrao": "Microcomparação",
+        "observacao": "Projétil e estojo coletados"
+      }
     ]
   }
 }
 ```
 
-**Serialização condicional:** Arrays `material_enc`, `cartuchos`, `estojos` só são incluídos no JSON se o toggle correspondente estiver ligado **e** houver dados preenchidos.
+**Serialização condicional:** Arrays `material_enc`, `cartuchos`, `estojos`, `armas`, `armas_funcionamento`, `armas_coleta` só são incluídos no JSON se o toggle correspondente estiver ligado **e** houver dados preenchidos.
 
 ---
 
@@ -193,6 +274,7 @@
 | `b602_tabela_material_enc` | Tabela HTML Material Encaminhado |
 | `b602_tabela_cartuchos` | Tabela HTML Cartuchos |
 | `b602_tabela_estojos` | Tabela HTML Estojos |
+| `b602_tabela_armas` | Tabela HTML Armas (inclui funcionamento e coleta se ativos) |
 
 ### 4.2 Dados da Investigação (singletons)
 
@@ -241,6 +323,18 @@
 | `b602_estojo_{N}_estojo` | Estojo |
 | `b602_estojo_{N}_observacao` | Observação |
 
+### 4.6 Armas (células por linha)
+
+| Chave | Valor |
+|---|---|
+| `b602_arma_{N}_num_lacre` | Nº do Lacre |
+| `b602_arma_{N}_marca` | Marca |
+| `b602_arma_{N}_calibre` | Calibre |
+| `b602_arma_{N}_capacidade` | Capacidade |
+| `b602_arma_{N}_tipo` | Tipo |
+| `b602_arma_{N}_funcionamento` | Funcionamento |
+| `b602_arma_{N}_observacao` | Observação |
+
 ---
 
 ## 5. Menu de Contexto no Editor de Laudo
@@ -263,10 +357,41 @@
    ├── 📊 Cartuchos
    │   ├── {{b602_tabela_cartuchos}}
    │   └── ...
-   └── 📊 Estojos
-       ├── {{b602_tabela_estojos}}
-       └── ...
+   ├── 📊 Estojos
+   │   ├── {{b602_tabela_estojos}}
+   │   └── ...
+   └── 📊 Armas
+       ├── {{b602_tabela_armas}}
+       ├── Arma 1 ──┐
+       │   ├── {{b602_arma_1_num_lacre}}
+       │   ├── {{b602_arma_1_marca}}
+       │   ├── {{b602_arma_1_calibre}}
+       │   ├── {{b602_arma_1_capacidade}}
+       │   ├── {{b602_arma_1_tipo}}
+       │   ├── {{b602_arma_1_funcionamento}}
+       │   └── {{b602_arma_1_observacao}}
+       └── Arma N ── (dinâmico)
 ```
+
+### `B602_MENU_STRUCTURE` — localização
+
+A constante `B602_MENU_STRUCTURE` e seus tipos auxiliares (`MenuSection`, `MenuEntry`, `MenuGroup`, `MenuField`, `MenuSectionItem`) estão em:
+
+- **Estrutura do menu:** `src/renderer/components/rep/exam-fields/b602.tsx` (export)
+- **Tipos:** `src/renderer/components/rep/exam-fields/types.ts`
+- **Registro:** `src/renderer/components/rep/exam-fields/index.ts` → `EXAM_MENU_REGISTRY['B-602']`
+
+> **Nota:** O arquivo `b602-menu.ts` foi eliminado por modularização excessiva. Seu conteúdo foi incorporado ao `b602.tsx` e `types.ts`.
+
+### Seções do menu B-602
+
+A estrutura cobre 5 seções:
+
+1. `dados_investigacao` — field `b602_tabela_dados_investigacao`, group `Envolvidos` (prefix `b602_envolvido_`) + singletons
+2. `material_enc` — field `b602_tabela_material_enc`, group `Item` (prefix `b602_material_enc_`)
+3. `cartuchos` — field `b602_tabela_cartuchos`, group `Cartucho` (prefix `b602_cartucho_`)
+4. `estojos` — field `b602_tabela_estojos`, group `Estojo` (prefix `b602_estojo_`)
+5. `armas` — field `b602_tabela_armas`, group `Arma` (prefix `b602_arma_`)
 
 ---
 

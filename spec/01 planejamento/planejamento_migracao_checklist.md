@@ -2,7 +2,7 @@
 
 Este documento detalha o roadmap de migração para a nova arquitetura desktop e o estado atual de cada funcionalidade.
 
-> **Última atualização:** 13/06/2026 — Schema v24, 37 placeholders de sistema, GDL, Wizards, Timeline, Gemini IA.
+> **Última atualização:** 17/06/2026 — Schema v25, 37 placeholders de sistema, GDL, Wizards, Timeline, Gemini IA, Seções Condicionais B-602.
 
 ---
 
@@ -11,7 +11,7 @@ Este documento detalha o roadmap de migração para a nova arquitetura desktop e
 - **Framework Desktop:** Electron + Vite + TypeScript
 - **Frontend:** React com TypeScript
 - **Backend:** Node.js (Electron Main Process)
-- **Banco de Dados:** SQLite (`app.getPath('userData')`, schema v24)
+- **Banco de Dados:** SQLite (`app.getPath('userData')`, schema v25)
 - **Editor de Texto:** TinyMCE (Rich Text Editor)
 - **Exportação:** Preview PDF via `webContents.printToPDF()` (Electron nativo), importação DOCX/PDF (mammoth + unpdf)
 - **Segurança:** Criptografia via `safeStorage` do Electron (chaves IA), bcrypt + PBKDF2 (senhas), validação de entrada, prepared statements
@@ -93,6 +93,7 @@ projeto/
 - [x] Página de **Tratamento de Erros e Recuperação** (ErrorBoundary React).
 - [x] Banco de dados SQLite com schema inicial (8 tabelas; expandido para **24 migrations** até v24).
 - [x] Sistema de logs com rotação automática (5MB).
+- [x] Seções condicionais no editor (condToggles, subtitulo, toolbar condbloco, `<h3>` com numeração automática).
 - [x] Arquitetura IPC segura e tipada.
 - [x] Configuração de segurança Electron (CSP, headers, sanitização).
 
@@ -319,7 +320,7 @@ projeto/
 - [x] Wizards e peças com motor de matching condicional.
 - [x] Timeline dual-track REP + Laudo com conexões direcionais.
 
-## Resumo do Schema (v24)
+## Resumo do Schema (v25)
 
 | Versão | Descrição |
 |--------|-----------|
@@ -339,4 +340,5 @@ projeto/
 | v22 | `parent_id` em `categorias_placeholders` (subcategorias) |
 | v23 | Remover colunas nativas redundantes de `reps` |
 | v24 | Migrar API keys IA para `safeStorage` |
+| v25 | Coluna `condicao` em `secoes_template` (seções condicionais B-602) |
 

@@ -42,7 +42,7 @@ Adicionar `contenteditable="false"` aos `<span>` de placeholder, tornando-os **e
 
 ### 1. Comando `insertPlaceholder` — Menu de Contexto
 
-**Arquivo:** `src/renderer/components/editor/TinyMceEditor.tsx:192`
+**Arquivo:** `src/renderer/components/editor/TinyMceEditor.tsx:~340` (comando `insertPlaceholder` no `setup()`)
 
 ```tsx
 // Antes:
@@ -54,7 +54,7 @@ const html = `<span contenteditable="false" class="placeholder-tag" data-placeho
 
 ### 2. Auto-converter `converterPlaceholderLocal` — Digitação Manual
 
-**Arquivo:** `src/renderer/components/editor/TinyMceEditor.tsx:312`
+**Arquivo:** `src/renderer/components/editor/TinyMceEditor.tsx:677`
 
 ```tsx
 // Antes:
@@ -69,7 +69,7 @@ span.setAttribute('data-placeholder', `{{${s.chave}}}`);
 
 ### 3. `converterPlaceholdersTextuais` — Carga de Laudo Salvo
 
-**Arquivo:** `src/renderer/lib/utils.ts:55`
+**Arquivo:** `src/renderer/lib/utils.ts:56`
 
 ```tsx
 // Antes:
@@ -117,7 +117,7 @@ Por ser não-editável caractere a caractere, o usuário precisa selecionar o sp
 
 2026-05-25
 
-**Locais verificados (2026-06-08):**
-- `src/renderer/components/editor/TinyMceEditor.tsx:284` — `insertPlaceholder` com `contenteditable="false"`
-- `src/renderer/components/editor/TinyMceEditor.tsx:456` — `converterPlaceholderLocal` com `setAttribute('contenteditable', 'false')`
-- `src/renderer/lib/utils.ts:55` — `converterPlaceholdersTextuais` com `setAttribute('contenteditable', 'false')`
+**Locais verificados (2026-06-17, refs atualizadas pós-adição seções condicionais):**
+- `src/renderer/components/editor/TinyMceEditor.tsx:350` — `insertPlaceholder` com `contenteditable="false"`
+- `src/renderer/components/editor/TinyMceEditor.tsx:677` — `converterPlaceholderLocal` com `setAttribute('contenteditable', 'false')`
+- `src/renderer/lib/utils.ts:56` — `converterPlaceholdersTextuais` com `setAttribute('contenteditable', 'false')`

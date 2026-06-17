@@ -25,59 +25,71 @@
 ### 2.1 Visual final (ex: laudo B-602 com 2 cartuchos cadastrados)
 
 ```
-┌─ Inserir Placeholder ─────────────────────┐
-│ ───────────────────────────────────────── │
-│ 📄 REP/Laudo                              │
-│   ├── {{numero_rep}}                      │
-│   ├── {{data_recebimento_rep}}            │
-│   └── ...                                 │
-│ 👤 Perito                                 │
-│   ├── {{perito_nome}}                     │
-│   └── ...                                 │
-│ 📅 Datas                                  │
-│ 📍 Local                                  │
-│ 🏢 Solicitante                            │
-│ ✏️ Personalizados                         │
-│ 🎯 B-602 - Eficiência e Prestabilidade    │  ← só aparece se laudo for B-602
-│   ├── 📊 Dados da Investigação            │
-│   │   ├── {{b602_tabela_dados_investigacao}}│
-│   │   ├── {{b602_envolvidos}}             │
-│   │   ├── Envolvidos ──┐                  │
-│   │   │   ├── {{b602_envolvido_1}}  ← dinâmico
-│   │   │   └── {{b602_envolvido_2}}  ← dinâmico
-│   │   ├── {{b602_data_ocorrencia}}         │
-│   │   ├── {{b602_local}}                   │
-│   │   ├── {{b602_numero_bo}}               │
-│   │   ├── {{b602_numero_ip}}               │
-│   │   └── {{b602_solicitante_nome}}        │
-│   ├── 📦 Material Encaminhado              │
-│   │   ├── {{b602_tabela_material_enc}}     │
-│   │   ├── Item 1 ──┐                       │
-│   │   │   ├── {{b602_material_enc_1_natureza}}│
-│   │   │   ├── {{b602_material_enc_1_quantidade}}│
-│   │   │   └── ...                          │
-│   │   └── Item 2 ── (dinâmico)            │
-│   ├── 🔵 Cartuchos                         │
-│   │   ├── {{b602_tabela_cartuchos}}        │
-│   │   ├── Cartucho 1 ──┐                   │
-│   │   │   ├── {{b602_cartucho_1_quantidade}}│
-│   │   │   ├── {{b602_cartucho_1_calibre}}  │
-│   │   │   └── ...                          │
-│   │   └── Cartucho 2 ── (dinâmico)        │
-│   └── 🔴 Estojos                           │
-│       ├── {{b602_tabela_estojos}}          │
-│       ├── Estojo 1 ──┐                     │
-│       │   └── ...                          │
-│       └── Estojo 2 ── (dinâmico)          │
-└────────────────────────────────────────────┘
+┌─ Inserir Placeholder ────────────────────────────┐
+│ ──────────────────────────────────────────────── │
+│ 📄 REP/Laudo                                     │
+│   ├── {{numero_rep}}                             │
+│   ├── {{data_recebimento_rep}}                   │
+│   └── ...                                        │
+│ 👤 Perito                                        │
+│   ├── {{perito_nome}}                            │
+│   └── ...                                        │
+│ 📅 Datas                                         │
+│ 📍 Local                                         │
+│ 🏢 Solicitante                                   │
+│ ✏️ Personalizados                                │
+│ 🎯 B-602 - Eficiência e Prestabilidade           │  ← só aparece se laudo for B-602
+│   ├── 📊 Dados da Investigação                   │
+│   │   ├── {{b602_tabela_dados_investigacao}}     │
+│   │   ├── {{b602_envolvidos}}                    │
+│   │   ├── Envolvidos ──┐                         │
+│   │   │   ├── {{b602_envolvido_1}}  ← dinâmico   │
+│   │   │   └── {{b602_envolvido_2}}  ← dinâmico   │
+│   │   ├── {{b602_data_ocorrencia}}                │
+│   │   ├── {{b602_local}}                          │
+│   │   ├── {{b602_numero_bo}}                      │
+│   │   ├── {{b602_numero_ip}}                      │
+│   │   └── {{b602_solicitante_nome}}               │
+│   ├── 📦 Material Encaminhado                     │
+│   │   ├── {{b602_tabela_material_enc}}            │
+│   │   ├── Item 1 ──┐                              │
+│   │   │   ├── {{b602_material_enc_1_natureza}}    │
+│   │   │   ├── {{b602_material_enc_1_quantidade}}  │
+│   │   │   └── ...                                 │
+│   │   └── Item 2 ── (dinâmico)                   │
+│   ├── 🔵 Cartuchos                                │
+│   │   ├── {{b602_tabela_cartuchos}}               │
+│   │   ├── Cartucho 1 ──┐                          │
+│   │   │   ├── {{b602_cartucho_1_quantidade}}      │
+│   │   │   ├── {{b602_cartucho_1_calibre}}         │
+│   │   │   └── ...                                 │
+│   │   └── Cartucho 2 ── (dinâmico)               │
+│   ├── 🔴 Estojos                                  │
+│   │   ├── {{b602_tabela_estojos}}                 │
+│   │   ├── Estojo 1 ──┐                            │
+│   │   │   └── ...                                 │
+│   │   └── Estojo 2 ── (dinâmico)                 │
+│   └── 🎯 Armas                                    │
+│       ├── {{b602_tabela_armas}}                   │
+│       ├── Arma 1 ──┐                              │
+│       │   ├── {{b602_arma_1_num_lacre}}           │
+│       │   ├── {{b602_arma_1_marca}}               │
+│       │   ├── {{b602_arma_1_calibre}}             │
+│       │   ├── {{b602_arma_1_capacidade}}          │
+│       │   ├── {{b602_arma_1_tipo}}                │
+│       │   ├── {{b602_arma_1_funcionamento}}       │
+│       │   └── {{b602_arma_1_observacao}}          │
+│       └── Arma N ── (dinâmico)                   │
+└───────────────────────────────────────────────────┘
 ```
 
 > **Nota:** As categorias I-801, B-700 (futuro) etc. **não aparecem** — só a que corresponde ao tipo de exame do laudo em edição.
 
-### 2.2 Estrutura da constante `B602_MENU_STRUCTURE`
+### 2.2 Estrutura das constantes
+
+#### Interfaces (`src/renderer/components/rep/exam-fields/types.ts`)
 
 ```ts
-// src/renderer/components/rep/exam-fields/b602-menu.ts
 export interface MenuField {
   name: string;       // sufixo do campo (ex: 'quantidade', 'calibre')
   label: string;      // label em português
@@ -103,7 +115,13 @@ export interface MenuSection {
   label: string;      // ex: 'Dados da Investigação'
   items: MenuSectionItem[];
 }
+```
 
+#### `B602_MENU_STRUCTURE` (`src/renderer/components/rep/exam-fields/b602.tsx`)
+
+> **Nota:** O arquivo `b602-menu.ts` foi eliminado por modularização excessiva. A constante `B602_MENU_STRUCTURE` reside em `b602.tsx`, e os tipos foram movidos para `types.ts`.
+
+```ts
 export const B602_MENU_STRUCTURE: MenuSection[] = [
   {
     id: 'dados_investigacao',
@@ -186,6 +204,27 @@ export const B602_MENU_STRUCTURE: MenuSection[] = [
       },
     ],
   },
+  {
+    id: 'armas',
+    label: 'Armas',
+    items: [
+      { type: 'field', name: 'b602_tabela_armas', label: 'Tabela completa' },
+      {
+        type: 'group',
+        label: 'Arma',
+        prefix: 'b602_arma_',
+        fields: [
+          { name: 'num_lacre', label: 'Nº do Lacre' },
+          { name: 'marca', label: 'Marca' },
+          { name: 'calibre', label: 'Calibre' },
+          { name: 'capacidade', label: 'Capacidade' },
+          { name: 'tipo', label: 'Tipo' },
+          { name: 'funcionamento', label: 'Funcionamento' },
+          { name: 'observacao', label: 'Observação' },
+        ],
+      },
+    ],
+  },
 ];
 ```
 
@@ -206,7 +245,42 @@ Cada linha vira um submenu numerado: `Cartucho 1`, `Cartucho 2`, etc.
 
 Placeholders de célula (`b602_cartucho_1_calibre`) **não precisam existir no banco** — são gerados na hora. Apenas os placeholders escalares (`b602_local`, `b602_data_ocorrencia`, etc.) e os de tabela (`b602_tabela_*`) precisam de seed para aparecer como "atalhos fixos" no menu, mas com a abordagem dinâmica, até isso pode ser repensado.
 
-### 2.4 Placeholders fixos por tipo de exame (seed mínimo)
+### 2.4 `EXAM_TOGGLES` — toggles condicionais no editor
+
+Além dos placeholders, cada tipo de exame pode registrar **toggles condicionais** que controlam blocos no editor de laudo. O menu de contexto não renderiza os toggles, mas eles coexistem no mesmo módulo `exam-fields/index.ts`.
+
+```ts
+export interface ExamToggle {
+  id: string;                 // identificador do toggle (também nome do campo no form)
+  label: string;              // label no formulário
+  subtitulo?: string;         // texto do <h3> no bloco condicional do editor
+  sectionId?: string;         // id da seção no SECTION_REGISTRY
+  subToggles?: ExamToggle[];  // sub-toggles aninhados
+}
+
+export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
+  'B-602': [
+    { id: 'b602_cartuchos_toggle', label: 'Cartuchos', subtitulo: 'DOS CARTUCHOS', sectionId: 'cartuchos' },
+    { id: 'b602_estojos_toggle', label: 'Estojos', subtitulo: 'DOS ESTOJOS', sectionId: 'estojos' },
+    {
+      id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas',
+      subToggles: [
+        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
+        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
+      ],
+    },
+  ],
+};
+```
+
+Os `subtitulo`s são usados como texto dos `<h3 data-cond-bloco>` quando o comando `insertCondBloco` insere um bloco condicional no editor (ver `bloco_condicional.md`).
+
+Os `EXAM_TOGGLES` são passados como prop `condToggles` ao `<TinyMceEditor>`, que:
+1. Registra o botão `condbloco` na toolbar
+2. Renderiza um dropdown com os toggles B-602 disponíveis
+3. Ao clicar em um toggle, executa `insertCondBloco` que insere `<h3 data-cond-bloco="N">DOS CARTUCHOS</h3>` com numeração automática
+
+### 2.5 Placeholders fixos por tipo de exame (seed mínimo)
 
 Para cada tipo de exame, apenas os **placeholders agregados** são semeados no banco:
 
@@ -241,11 +315,11 @@ Os placeholders de tabela e célula (`b602_tabela_*`, `b602_cartucho_1_calibre`,
 
 ### Passo 2 — Criar constante de estrutura do menu B-602
 
-**Novo arquivo:** `src/renderer/components/rep/exam-fields/b602-menu.ts`
+**Arquivo:** `src/renderer/components/rep/exam-fields/b602.tsx`
 
 - Exportar `B602_MENU_STRUCTURE: MenuSection[]`
-- Exportar interfaces: `MenuSection`, `MenuSectionItem`, `MenuEntry`, `MenuGroup`, `MenuField`
-- Exportar helper `getGroupCount(prefix, b602Data)` para contar linhas dinâmicas
+- As interfaces (`MenuSection`, `MenuSectionItem`, `MenuEntry`, `MenuGroup`, `MenuField`) estão em `types.ts`
+- O helper `getGroupCount(prefix, b602Data)` ficou em `services/b602.service.ts`
 
 **Arquivo:** `src/renderer/components/rep/exam-fields/index.ts`
 
@@ -255,6 +329,8 @@ Os placeholders de tabela e célula (`b602_tabela_*`, `b602_cartucho_1_calibre`,
     'B-602': B602_MENU_STRUCTURE,
   };
   ```
+
+> **Nota:** O arquivo `b602-menu.ts` foi eliminado durante a implementação (considerado modularização excessiva). A `B602_MENU_STRUCTURE` foi incorporada ao `b602.tsx`, os tipos para `types.ts` e o `getGroupCount` para `services/b602.service.ts`.
 
 ### Passo 3 — Refatorar `PlaceholderContextMenu` com suporte a submenus dinâmicos
 
@@ -334,36 +410,36 @@ Mudanças:
 ## 4. Checklist Resumida
 
 ### Fase 1 — Backend
-- [ ] `laudo.handlers.ts`: JOIN para retornar `tipo_exame_codigo`
-- [ ] `LaudosPage.tsx`: adicionar `tipo_exame_codigo` ao `LaudoItem`
-- [ ] Tipagem no `database.ts` se necessário
+- [x] `laudo.handlers.ts`: JOIN para retornar `tipo_exame_codigo`
+- [x] `LaudosPage.tsx`: adicionar `tipo_exame_codigo` ao `LaudoItem`
+- [x] Tipagem no `database.ts` se necessário
 
 ### Fase 2 — Constante de menu B-602
-- [ ] Criar `src/renderer/components/rep/exam-fields/b602-menu.ts`
-- [ ] Exportar `B602_MENU_STRUCTURE` e interfaces
-- [ ] Registrar em `EXAM_MENU_REGISTRY` no `exam-fields/index.ts`
+- [x] Criar `B602_MENU_STRUCTURE` em `src/renderer/components/rep/exam-fields/b602.tsx` (não `b602-menu.ts` — arquivo eliminado por modularização excessiva)
+- [x] Exportar `B602_MENU_STRUCTURE` e interfaces (`types.ts`)
+- [x] Registrar em `EXAM_MENU_REGISTRY` no `exam-fields/index.ts`
 
 ### Fase 3 — PlaceholderContextMenu
-- [ ] Novas props: `exameMenuStructure`, `exameCamposEspecificos`, `categoriaExameId`
-- [ ] Filtro de categorias (fixas vs exame)
-- [ ] Renderização de seções dinâmicas com submenus aninhados
-- [ ] Grupos expandem conforme número de linhas nos dados da REP
+- [x] Novas props: `exameMenuStructure`, `exameCamposEspecificos`, `categoriaExameId`
+- [x] Filtro de categorias (fixas vs exame)
+- [x] Renderização de seções dinâmicas com submenus aninhados
+- [x] Grupos expandem conforme número de linhas nos dados da REP
 
 ### Fase 4 — LaudosPage
-- [ ] Buscar `campos_especificos` da REP ao editar
-- [ ] Derivar `categoriaExameId` e `exameMenuStructure`
-- [ ] Passar novas props ao `PlaceholderContextMenu`
+- [x] Buscar `campos_especificos` da REP ao editar
+- [x] Derivar `categoriaExameId` e `exameMenuStructure`
+- [x] Passar novas props ao `PlaceholderContextMenu`
 
 ### Fase 5 — Seed e cleanup
-- [ ] `placeholder.service.ts`: revisar seed B-602 (manter escalares)
-- [ ] `placeholders.ts`: garantir exports corretos
+- [x] `placeholder.service.ts`: revisar seed B-602 (manter escalares)
+- [x] `placeholders.ts`: garantir exports corretos
 
 ### Fase 6 — Verificação
-- [ ] Build limpo
-- [ ] Menu filtra por tipo de exame
-- [ ] Linhas dinâmicas refletem dados reais
-- [ ] Preview PDF funcional
-- [ ] Placeholders manuais funcionam
+- [x] Build limpo
+- [x] Menu filtra por tipo de exame
+- [x] Linhas dinâmicas refletem dados reais
+- [x] Preview PDF funcional
+- [x] Placeholders manuais funcionam
 
 ---
 

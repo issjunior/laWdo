@@ -816,6 +816,16 @@ O Lightbox das imagens carregadas (aba "Imagens Carregadas", ainda não
 inseridas no laudo) **não** inclui o plugin `Captions` nem a formatação
 `Figura XX:`. Mantém apenas `title: img.legenda` (comportamento original).
 
+### Lupa nas miniaturas — componente `Lens`
+
+Além do lightbox, as miniaturas das figuras no painel (`SortableItem` / `FiguraEditorItem`)
+usam o componente `Lens` (`src/renderer/components/ui/lens.tsx`) para efeito de lupa:
+
+- Envolve o `<img>` da miniatura com `<Lens zoomFactor={1.3} lensSize={170}>`
+- `isStatic={false}` — segue o mouse com máscara radial gradient
+- `AnimatePresence` anima entrada/saída da lente (duração `0.1s`)
+- Requer `"use client"` e usa `motion` de `framer-motion` (`motion/react`)
+
 ## 12. Funções utilitárias e comandos
 
 ### 12.1 Funções em `TinyMceEditor.tsx` (linhas 6-75)

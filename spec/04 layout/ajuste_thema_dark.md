@@ -96,3 +96,66 @@ body.dark-content .campo-reservado { background-color: rgba(255,193,7,0.15); col
 - Callback `toggleEditorTheme`
 - Botão de alternância de tema na toolbar do editor (ícone Sun/Moon/SunMoon)
 - Prop `theme={editorTheme}` dos `<TinyMceEditor>`
+
+---
+
+## Novos Componentes Visuais (2026-06)
+
+### `FlickeringGrid` (`src/renderer/components/ui/flickering-grid.tsx`)
+
+Componente canvas que renderiza um grid de quadrados piscantes animados. Usado como fundo decorativo nas páginas de autenticação.
+
+| Prop | Tipo | Padrão | Descrição |
+|------|------|--------|-----------|
+| `squareSize` | `number` | `4` | Tamanho do quadrado em px |
+| `gridGap` | `number` | `6` | Espaçamento entre quadrados |
+| `flickerChance` | `number` | `0.3` | Probabilidade de cada quadrado piscar por frame |
+| `color` | `string` | `"rgb(0,0,0)"` | Cor dos quadrados |
+| `maxOpacity` | `number` | `0.3` | Opacidade máxima |
+
+**Mecanismo:** `requestAnimationFrame` loop com `CanvasRenderingContext2D`, `IntersectionObserver` para pausar quando fora da viewport, `ResizeObserver` para redimensionar.
+
+**Páginas que o utilizam:**
+- `AuthPage.tsx` — fundo atrás do card de login/cadastro
+- `LoginForm.tsx` e `FirstUserSetupForm.tsx` — herdado via AuthPage
+- `DashboardPage.tsx` — fundo decorativo
+
+### `Lens` (`src/renderer/components/ui/lens.tsx`)
+
+Componente `motion` (framer-motion) que aplica uma máscara radial gradient de ampliação (`zoomFactor`) ao redor do cursor, criando um efeito de lupa. Usado no `IlustracoesPanel` para ampliar miniaturas de imagens.
+
+| Prop | Tipo | Padrão | Descrição |
+|------|------|--------|-----------|
+| `children` | `ReactNode` | — | Conteúdo a ser ampliado |
+| `zoomFactor` | `number` | `1.3` | Fator de zoom |
+| `lensSize` | `number` | `170` | Tamanho da lente em px |
+| `isStatic` | `boolean` | `false` | Se verdadeiro, usa posição fixa sem follow mouse |
+| `lensColor` | `string` | `"black"` | Cor de fundo da lente |
+
+**Mecanismo:** `motion.div` com `maskImage` radial gradient e `WebKitMaskImage`, coordenadas do mouse trackeadas via `onMouseMove`.
+
+---
+
+## Ajustes de Layout (2026-06)
+
+### Logo
+
+- `logo.jpg` (11.6 KB) substituído por `logo.png` (96.5 KB) — formato PNG com fundo transparente
+- `AppSidebar.tsx` — logo ajustado para usar `logo.png` com classe `object-contain`
+
+### AuthPage
+
+- Layout reformulado: fundo com `FlickeringGrid`, card centralizado com sombra e vidro fosco
+- `LoginForm.tsx` e `FirstUserSetupForm.tsx` — ajustes de padding, alinhamento e responsive breakpoints
+
+### AppSidebar
+
+- Logo com fundo transparente e altura fixa
+- Sidebar gradient ajustado para melhor contraste com o novo logo
+- Avatar do usuário com `AvatarUploadDialog` para troca de foto
+
+### Header
+
+- Botão dark mode inline (não mais em dropdown)
+- Sidebar trigger reposicionado
+- Ícone de informações do app em dialog
