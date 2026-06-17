@@ -45,7 +45,7 @@ import {
 import { reindexarFiguras } from '@/lib/figuras';
 import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
-import { resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders';
+import { resolverPlaceholdersExportacao, limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { buildNumberedTable, buildDadosInvestigacaoTable } from '@/lib/tabelas-placeholder';
 import { toast } from 'sonner';
@@ -325,7 +325,7 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
       }
     });
 
-    return resultado;
+    return limparIndicadoresCondicionais(resultado);
   } catch {
     // Fallback: se DOMParser falhar (muito raro), tentar só regex textual
     let resultado = html;
@@ -335,7 +335,7 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
       const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
       resultado = resultado.replace(tagRegex, displayValue);
     });
-    return resultado;
+    return limparIndicadoresCondicionais(resultado);
   }
 };
 

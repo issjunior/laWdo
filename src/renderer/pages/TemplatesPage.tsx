@@ -89,6 +89,7 @@ const templateFormSchema = z.object({
 import { ImportTemplateDialog } from '@/components/template/ImportTemplateDialog';
 import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
 
 function gerarSvgPlaceholderBase64(): string {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'>
@@ -639,6 +640,8 @@ export const TemplatesPage: React.FC = () => {
       const oldFormat = `{${placeholder.slice(2, -2)}}`;
       fullHtml = fullHtml.split(oldFormat).join(value);
     }
+
+    fullHtml = limparIndicadoresCondicionais(fullHtml);
 
     return { fullHtml, headerTemplate };
   };
