@@ -227,7 +227,12 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
 }
 
 export function limparIndicadoresCondicionais(html: string): string {
-  return html.replace(/<p[^>]*data-cond-label="true"[^>]*>[\s\S]*?<\/p>/gi, '');
+  let result = html.replace(/<p[^>]*data-cond-label="true"[^>]*>[\s\S]*?<\/p>/gi, '');
+  result = result.replace(
+    /<div[^>]*\bdata-cond-bloco="[^"]*"[^>]*>/gi,
+    (match) => match.replace(/\s*style="[^"]*"/gi, '')
+  );
+  return result;
 }
 
 export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoContext): string {
