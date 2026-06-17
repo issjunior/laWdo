@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import {
   Info,
   LogOut,
   Github,
   Mail,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,14 +67,19 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
         
         <div className="flex items-center gap-6 ml-auto">
           {/* Escolha de Tema */}
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={toggleDarkMode}
-            className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
+            className="transition-transform duration-300"
             title={isDarkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
           >
-            {isDarkMode ? '☀️' : '🌙'}
-            <span className="hidden md:inline text-muted-foreground font-medium">Tema</span>
-          </button>
+            {isDarkMode ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+          </Button>
 
           {/* Informação (Dialog) */}
           <Dialog>

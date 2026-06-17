@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { FirstUserSetupForm, type FirstUserSetupInput } from '@/components/auth/FirstUserSetupForm'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { FlickeringGrid } from '@/components/ui/flickering-grid'
@@ -54,6 +55,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
       if (!result?.success || !result?.user) {
         throw new Error(result?.error || 'Credenciais inválidas')
       }
+      localStorage.setItem('lastUsername', data.username)
       onAuthenticated(result.user)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
@@ -98,16 +100,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
 
   if (hasUsers === null) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+      <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-200 via-indigo-50 to-blue-100 dark:from-slate-950 dark:via-indigo-950 dark:to-blue-950">
         <FlickeringGrid
           className="absolute inset-0 z-0 [mask-image:radial-gradient(ellipse_at_center,white,transparent_70%)]"
           squareSize={4}
           gridGap={6}
           color={isDarkMode ? '#4B5563' : '#6B7280'}
-          maxOpacity={0.3}
-          flickerChance={0.1}
+          maxOpacity={0.25}
+          flickerChance={0.4}
         />
-        <p className="relative z-10 text-muted-foreground">Verificando usuários cadastrados...</p>
+        <div className="relative z-10 flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Verificando usuários cadastrados...</span>
+        </div>
       </div>
     )
   }
