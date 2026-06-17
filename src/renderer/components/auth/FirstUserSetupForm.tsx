@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import logo from '@/assets/logo.jpg'
+import logo from '@/assets/logo.png'
 
 const firstUserSchema = z
   .object({

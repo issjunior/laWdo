@@ -178,16 +178,13 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         <SidebarHeader className="flex items-center justify-between px-4 py-6">
           <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <span className="text-xl font-bold">🔍</span>
-            </div>
             <div className="flex flex-col">
               <span className="text-lg font-bold tracking-tight text-sidebar-foreground">laWdo</span>
               <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Pericial</span>
             </div>
           </div>
-          <div className="hidden group-data-[collapsible=icon]:flex h-8 w-8 items-center justify-start rounded-lg bg-primary text-primary-foreground p-1">
-            <span className="text-lg font-bold ml-1">L</span>
+          <div className="hidden group-data-[collapsible=icon]:flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground p-1">
+            <span className="text-lg font-bold">W</span>
           </div>
         </SidebarHeader>
 

@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { loginSchema, type LoginInput } from '@/lib/validators/user.schema'
-import logo from '@/assets/logo.jpg'
+import logo from '@/assets/logo.png'
 
 interface LoginFormProps {
   loading: boolean
@@ -61,7 +61,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         maxOpacity={0.25}
         flickerChance={0.4}
       />
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-lg">
         <Card className="animate-fade-in border-0 bg-card/70 shadow-[0_8px_32px_rgba(26,85,224,0.12)] backdrop-blur-xl ring-1 ring-primary/20 dark:bg-card/60 dark:shadow-[0_8px_32px_rgba(106,176,255,0.08)]">
           <div className="flex justify-end px-7 pt-5">
             <Button
@@ -83,7 +83,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
             <img
               src={logo}
               alt="laWdo"
-              className="mb-4 h-auto w-40 max-w-[60%] object-contain"
+              className="mb-4 h-auto w-80 max-w-full object-contain px-2"
             />
           </CardHeader>
 

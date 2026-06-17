@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo.png';
 
 interface DashboardPageProps {
   onNavigate?: (page: string) => void;
