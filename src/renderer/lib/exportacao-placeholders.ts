@@ -226,6 +226,15 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
   return mapping;
 }
 
+function limparIndicadoresCondicionais(html: string): string {
+  let result = html.replace(/<p[^>]*data-cond-label="true"[^>]*>[\s\S]*?<\/p>/gi, '');
+  result = result.replace(
+    /(<div\s+data-cond-bloco="[^"]*")\s+style="[^"]*"/gi,
+    '$1'
+  );
+  return result;
+}
+
 export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoContext): string {
   const mapping = buildPlaceholderMapping(ctx);
 
@@ -255,7 +264,7 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
       resultado = resultado.replace(tagRegex, displayValue);
     });
 
-    return resultado;
+    return limparIndicadoresCondicionais(resultado);
   } catch {
     let resultado = html;
     Object.entries(mapping).forEach(([chave, valor]) => {
@@ -264,6 +273,6 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
       const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
       resultado = resultado.replace(tagRegex, displayValue);
     });
-    return resultado;
+    return limparIndicadoresCondicionais(resultado);
   }
 }
