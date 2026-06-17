@@ -286,6 +286,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               color: #fbbf24;
               border-bottom-color: #f59e0b;
             }
+            .cond-bloco {
+              border-left: 3px solid #f59e0b;
+              padding-left: 12px;
+              margin: 8px 0;
+            }
+            body.dark-content .cond-bloco {
+              border-left-color: #d97706;
+            }
             img {
               max-width: 100%;
               height: auto;
@@ -419,7 +427,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               ];
               const found = allToggles.find(t => t.id === toggleId);
               const label = found ? found.label : toggleId;
-              const html = `<div data-cond-bloco="${toggleId}" style="border:1px dashed #f59e0b;padding:8px;border-radius:6px;margin:8px 0"><p style="color:#92400e;font-size:12px;margin:0 0 4px" data-cond-label="true">[Condicional: ${label}]</p><p>&nbsp;</p></div>`;
+              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><p style="color:#92400e;font-size:12px;margin:0 0 4px" data-cond-label="true">[Condicional: ${label}]</p><p>&nbsp;</p></div>`;
               editor.insertContent(html);
             });
 
