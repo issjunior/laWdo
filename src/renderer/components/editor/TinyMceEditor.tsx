@@ -437,6 +437,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
               let secNum = sectionNumber ? String(sectionNumber) : '';
               if (!secNum) {
                 const node = editor.selection.getNode();
+                const body = editor.getBody();
                 const h2s = editor.dom.select('h2');
                 if (h2s.length === 1) {
                   const match = (h2s[0].textContent || '').match(/^(\d+)\./);
@@ -444,13 +445,25 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                 } else if (h2s.length > 1) {
                   let cursorH2: HTMLElement | null = null;
                   let el: Node | null = node;
-                  while (el && el !== editor.getBody()) {
+                  while (el && el !== body) {
                     if ((el as HTMLElement).tagName === 'H2') { cursorH2 = el as HTMLElement; break; }
                     el = el.parentNode;
                   }
                   if (cursorH2) {
                     const match = (cursorH2.textContent || '').match(/^(\d+)\./);
                     if (match) secNum = match[1];
+                  }
+                }
+                // Fallback: single-editor com wrappers <section data-template-secao>
+                if (!secNum) {
+                  let el: Node | null = node;
+                  while (el && el !== body) {
+                    const section = (el as HTMLElement).closest?.('section[data-template-secao="true"]') as HTMLElement | null;
+                    if (section) {
+                      const idx = section.getAttribute('data-secao-index');
+                      if (idx !== null) { secNum = String(Number(idx) + 1); break; }
+                    }
+                    el = el.parentNode;
                   }
                 }
               }
