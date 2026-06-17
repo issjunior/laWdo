@@ -1,8 +1,8 @@
 # Task Tracking: Wizards e Banco de Peças
 
 > **Referência:** `wizard_pecas.md`
-> **Schema alvo:** v20
-> **Status:** Implementação concluída (Fases 1-9)
+> **Schema alvo:** v20 | **Schema atual:** 25
+> **Status:** Implementação concluída (Fases 1-9). Itens de bloqueio (Fase 10) pendentes — status `Bloqueado` NÃO implementado.
 > **Data:** 2026-06-05
 
 ---

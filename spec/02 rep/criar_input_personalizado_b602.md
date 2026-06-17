@@ -488,7 +488,7 @@ estojos: { id, label: 'Estojos', icon: Cylinder, description: '...', component: 
 
 Atualizar `EXAM_FIELD_MAP`:
 ```ts
-'B-602': ['dados_investigacao', 'material_enc', 'cartuchos', 'estojos'],
+'B-602': ['dados_investigacao', 'material_enc', 'cartuchos', 'estojos', 'armas'],
 ```
 
 Atualizar `EXAM_SERVICE_REGISTRY`:

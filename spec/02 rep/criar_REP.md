@@ -325,33 +325,24 @@ REPsPage.tsx                              exam-fields/
 
 ### 4a. Estrutura do estado
 
-```tsx
-// Estado de desbloqueio dos campos específicos
-const [camposEspecificosDesbloqueados, setCamposEspecificosDesbloqueados] = useState(false);
+> **O Accordion foi substituído pelo Stepper.** O estado `camposEspecificosDesbloqueados` e o `Accordion` foram removidos de `REPsPage.tsx`. O formulário atual usa o hook `useRepStepper` que gerencia `steps`, `activeStep`, `completedSteps`, `collapsed`/`setCollapsed` e `onStepClick`. Veja [`steps_preenchimento_form.md`](steps_preenchimento_form.md) para a especificação completa do stepper.
 
-// Deriva seções do tipo de exame
-const examSections = useMemo(() => {
-  const tipo = tiposExame.find(t => t.id === tipoExameId);
-  if (!tipo) return [];
-  return getSectionsForExame(tipo.codigo);
-}, [tipoExameId, tiposExame]);
+**Principais estados do stepper (via `useRepStepper`):**
 
-// Seções agrupadas vs independentes
-const groupedSections = examSections.filter(s => s.group);
-const standaloneSections = examSections.filter(s => !s.group);
-
-// Verifica se campos obrigatórios estão preenchidos
-const { numero, data_requisicao, tipo_solicitacao, numero_documento } = form.watch();
-const commonFieldsValid = !!(numero && data_requisicao && tipo_solicitacao && numero_documento && tipoExameId);
-const canUnlockSpecificFields = commonFieldsValid;
-
-// Efeito: desbloqueia automaticamente quando condições são atendidas
-useEffect(() => {
-  if (canUnlockSpecificFields && !camposEspecificosDesbloqueados) {
-    setCamposEspecificosDesbloqueados(true);
-  }
-}, [canUnlockSpecificFields]);
+```ts
+const stepper = useRepStepper({
+  form,
+  tipoExameId,
+  tipoExameSelecionado: tiposExame.find(t => t.id === tipoExameId) ?? null,
+});
+// stepper.steps: Step[]        — passos fixos + dinâmicos
+// stepper.activeStep: string   — id do passo ativo
+// stepper.completedSteps: Set  — ids dos passos concluídos (check verde)
+// stepper.collapsed: boolean   — stepper recolhido/expandido
+// stepper.onStepClick(id)      — navegação livre entre passos desbloqueados
 ```
+
+**Desbloqueio de passos dinâmicos:** passos 2+ ficam bloqueados (cadeado) até que `tipo_exame_id` esteja selecionado E os campos `numero`, `data_requisicao`, `tipo_solicitacao`, `numero_documento` estejam preenchidos. Uma vez desbloqueados, permanecem desbloqueados (não somem se o usuário limpar um campo).
 
 ### 4b. Estrutura do Formulário (Stepper)
 

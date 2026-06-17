@@ -1,7 +1,8 @@
 # Plano de Implementação: Wizards e Banco de Peças
 
 > **Status:** Parcialmente implementado — seções 4.5.1 (bloqueio), 4.5.2a (criarLaudoWizardRascunho), 4.5.3 (status Bloqueado), 4.5.4 (desbloquear irmão), e 5.4b (REP auto-rascunho) pendentes de implementação.
-> **Versão do schema atual:** 24 (alvo original: 20)
+> **Versão do schema atual:** 25 (alvo original: 20)
+> **Status `Bloqueado`:** NÃO implementado. A UI de bloqueio e as transições automáticas documentadas nas seções 4.5.3 e 4.7 existem apenas como plano. O código atual (`laudo.handlers.ts:222`) suporta apenas 3 status: `Em andamento`, `Concluído`, `Entregue`.
 > **Data:** 2026-06-02
 
 ---

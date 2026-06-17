@@ -2,6 +2,7 @@
 
 > **Status**: Implementado (2025-05-29)  
 > **Escopo**: Transições de status, exclusão com senha, UI de ações, auditoria do ciclo de vida
+> **Status válidos:** `Em andamento`, `Concluído`, `Entregue` — somente estes 3. O status `Bloqueado` documentado em `wizard_pecas.md` **não foi implementado** no código atual (`src/main/ipc/handlers/laudo.handlers.ts:222`).
 
 ---
 

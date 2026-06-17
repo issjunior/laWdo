@@ -30,8 +30,9 @@ lerna-debug.log*
 *.sqlite
 *.sqlite3
 
-# --- OPENCODE ---
+# --- AGENTS ---
 .opencode
+.claude
 
 # --- SKILLS ---
 .agents

@@ -2,12 +2,15 @@
 
 > **Arquivo de referência para implementação de formulários no projeto.**
 > Criado em: 2026-05-11 | Plano: padronização UX REPsPage + LaudosPage
+> **Nota:** O formulário de REP (`REPsPage.tsx`) usa **Stepper vertical** (não Accordion). Veja [`steps_preenchimento_form.md`](steps_preenchimento_form.md). O Accordion documentado abaixo permanece válido para formulários menores ou diálogos.
 
 ---
 
 ## 1. Componentes shadcn/ui para Formulários
 
 ### Accordion (seções de formulário)
+
+> **O formulário principal (REPsPage) usa Stepper, não Accordion.** O Accordion é adequado para formulários com poucas seções ou diálogos de configuração.
 
 **Arquivo:** `src/renderer/components/ui/accordion.tsx`
 **Instalação:** `npx shadcn@latest add accordion`
