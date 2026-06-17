@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { Eye, EyeOff, Loader2, UserPlus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { FlickeringGrid } from '@/components/ui/flickering-grid'
 import { Input } from '@/components/ui/input'
 import {
   Form,
@@ -95,8 +96,16 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 px-4 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      <div className="w-full max-w-xl">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-100 px-4 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+      <FlickeringGrid
+        className="absolute inset-0 z-0 [mask-image:radial-gradient(ellipse_at_center,white,transparent_70%)]"
+        squareSize={4}
+        gridGap={6}
+        color={isDarkMode ? '#4B5563' : '#6B7280'}
+        maxOpacity={0.3}
+        flickerChance={0.1}
+      />
+      <div className="relative z-10 w-full max-w-xl">
         <Card className="shadow-xl backdrop-blur">
           <div className="flex justify-end px-7 pt-5">
             <Button
