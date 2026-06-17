@@ -121,7 +121,9 @@ interface TinyMceEditorProps {
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
-  condToggles?: Array<{ id: string; label: string; subToggles?: Array<{ id: string; label: string }> }>;
+  condToggles?: Array<{ id: string; label: string; subtitulo?: string; subToggles?: Array<{ id: string; label: string; subtitulo?: string }> }>;
+  /** Número da seção (1-indexed) para numeração automática do h3 condicional */
+  sectionNumber?: number;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<HTMLDivElement>> = ({
@@ -137,6 +139,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   onEditorInit,
   autoConverterReservados = false,
   condToggles,
+  sectionNumber,
   ...rest
 }) => {
   const editorRef = useRef<any>(null);
@@ -418,16 +421,44 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
             });
 
             // Comando: Inserir bloco condicional
-            editor.addCommand('insertCondBloco', (_ui: any, toggleId: string) => {
+            editor.addCommand('insertCondBloco', (_ui: any, toggleId: string, subIndex?: number) => {
               if (!toggleId || typeof toggleId !== 'string') return;
               const toggles = (condToggles || []);
+
               const allToggles = [
-                ...toggles.map(t => ({ id: t.id, label: t.label })),
-                ...toggles.flatMap(t => (t.subToggles || []).map(st => ({ id: st.id, label: st.label }))),
+                ...toggles.map(t => ({ id: t.id, label: t.label, subtitulo: t.subtitulo })),
+                ...toggles.flatMap(t => (t.subToggles || []).map((st, i) => ({
+                  id: st.id, label: st.label, subtitulo: st.subtitulo, subIndex: i,
+                }))),
               ];
               const found = allToggles.find(t => t.id === toggleId);
-              const label = found ? found.label : toggleId;
-              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><h3>${label}</h3><p>&nbsp;</p></div>`;
+
+              // Detectar número da seção
+              let secNum = sectionNumber ? String(sectionNumber) : '';
+              if (!secNum) {
+                const node = editor.selection.getNode();
+                const h2s = editor.dom.select('h2');
+                if (h2s.length === 1) {
+                  const match = (h2s[0].textContent || '').match(/^(\d+)\./);
+                  if (match) secNum = match[1];
+                } else if (h2s.length > 1) {
+                  let cursorH2: HTMLElement | null = null;
+                  let el: Node | null = node;
+                  while (el && el !== editor.getBody()) {
+                    if ((el as HTMLElement).tagName === 'H2') { cursorH2 = el as HTMLElement; break; }
+                    el = el.parentNode;
+                  }
+                  if (cursorH2) {
+                    const match = (cursorH2.textContent || '').match(/^(\d+)\./);
+                    if (match) secNum = match[1];
+                  }
+                }
+              }
+
+              const numPrefix = secNum ? secNum + (subIndex !== undefined ? `.${subIndex + 1}` : '') : 'X';
+              const titulo = found?.subtitulo || found?.label || toggleId;
+
+              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><h3>${numPrefix}. ${titulo}</h3><p>&nbsp;</p></div>`;
               editor.insertContent(html);
             });
 
@@ -441,13 +472,13 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                   onAction: () => editor.execCommand('insertCondBloco', false, toggle.id),
                 });
                 if (toggle.subToggles) {
-                  for (const sub of toggle.subToggles) {
+                  toggle.subToggles.forEach((sub, i) => {
                     menuItems.push({
                       type: 'menuitem',
                       text: `  ${sub.label}`,
-                      onAction: () => editor.execCommand('insertCondBloco', false, sub.id),
+                      onAction: () => editor.execCommand('insertCondBloco', false, sub.id, i),
                     });
-                  }
+                  });
                 }
               }
               editor.ui.registry.addMenuButton('condbloco', {

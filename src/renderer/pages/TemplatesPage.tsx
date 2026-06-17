@@ -1216,6 +1216,7 @@ export const TemplatesPage: React.FC = () => {
                       placeholderChaves={placeholderChaves}
                       autoConverterReservados={true}
                       condToggles={exameToggles}
+                      sectionNumber={index + 1}
                     />
                 </PlaceholderContextMenu>
               </div>

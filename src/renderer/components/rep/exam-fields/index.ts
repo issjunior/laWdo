@@ -15,19 +15,20 @@ export * from './placeholders';
 export interface ExamToggle {
   id: string;
   label: string;
+  subtitulo?: string;
   sectionId?: string;
   subToggles?: ExamToggle[];
 }
 
 export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
   'B-602': [
-    { id: 'b602_cartuchos_toggle', label: 'Cartuchos', sectionId: 'cartuchos' },
-    { id: 'b602_estojos_toggle', label: 'Estojos', sectionId: 'estojos' },
+    { id: 'b602_cartuchos_toggle', label: 'Cartuchos', subtitulo: 'DOS CARTUCHOS', sectionId: 'cartuchos' },
+    { id: 'b602_estojos_toggle', label: 'Estojos', subtitulo: 'DOS ESTOJOS', sectionId: 'estojos' },
     {
-      id: 'b602_armas_toggle', label: 'Arma', sectionId: 'armas',
+      id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas',
       subToggles: [
-        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência' },
-        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos' },
+        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
+        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
       ],
     },
   ],
