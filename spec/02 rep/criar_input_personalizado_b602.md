@@ -351,7 +351,10 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
    │   ├── {{b602_envolvidos}}
    │   ├── {{b602_envolvido_1}} ... {{b602_envolvido_10}}
    │   ├── {{b602_data_ocorrencia}}
-   │   ├── {{b602_local}}
+   │   ├── {{b602_local}} (completo)
+   │   ├── {{b602_local_bairro}}
+   │   ├── {{b602_local_cidade}}
+   │   ├── {{b602_local_uf}}
    │   ├── {{b602_numero_bo}}
    │   ├── {{b602_numero_ip}}
    │   └── {{b602_solicitante_nome}}
@@ -737,10 +740,23 @@ Nova ordem: Envolvidos | Data Ocorrencia + Local | BO + IP | Unidade Policial.
 Botao "+" (`h-8 w-8`, apenas icon `Plus`) inline ao lado do ultimo input de envolvido.
 Botao "X" (`h-8 w-8`, apenas icon `X`) visivel quando `envolvidos.length > 1`.
 
-### 9.2 Mascara Local
+### 9.2 Local: Bairro / Cidade / UF (2026-06-17)
 
-Input `b602_local` ganhou mascara ativa `formatarLocal()`: ao digitar `/`,
-normaliza para ` / `. Maximo 3 segmentos (bairro opcional / cidade / UF).
+**Substituído** o campo único `b602_local` (com máscara `formatarLocal()`) por 3 campos separados:
+
+| Campo | Tipo | Obrigatório | Detalhes |
+|---|---|---|---|
+| `b602_local_bairro` | text input | Não | Placeholder "Bairro" |
+| `b602_local_cidade` | text input | Sim | Placeholder "Cidade" |
+| `b602_local_uf` | Select dropdown | Sim | Opções: `UF_OPTS` (AC, AL, AP, AM, ... TO) |
+
+**Layout:** inputs de Bairro e Cidade com separador visual `/` entre eles, separador `/` entre Cidade e UF, UF com largura fixa de 72px (`w-[72px]`). Três inputs na mesma linha horizontal.
+
+**Serialização:** O service salva como objeto `{ bairro, cidade, uf }` no JSON. Mantém compatibilidade retroativa: ao desserializar um valor string antigo (`"bairro / cidade / UF"`), faz parse e distribui nos 3 campos.
+
+**Validação:** `b602_local_cidade` e `b602_local_uf` são obrigatórios (Zod superRefine). `b602_local_bairro` opcional.
+
+**Menu de contexto:** `b602_local` mantido (resolve para "bairro / cidade / UF" concatenado) + 3 entradas individuais `b602_local_bairro`, `b602_local_cidade`, `b602_local_uf`.
 
 ### 9.3 Validacao: onChange → onSubmit
 
@@ -820,3 +836,25 @@ os campos via `watch` e ajusta `numLinhas`/`numEnvolvidos` se necessario.
 **Botoes Adicionar/Remover:**
 - Botao "+" alterado de `variant="outline" size="sm"` com texto "Adicionar" para `variant="outline" size="icon" className="h-8 w-8"` apenas com icone `Plus`
 - Botao "X" mantido como `variant="ghost" size="icon" className="h-8 w-8"` apenas com icone `X`
+
+### 9.8 Refatoração do campo Local — 3 sub-campos (2026-06-17)
+
+O campo `b602_local` (string única com máscara `formatarLocal()`) foi substituído por 3 campos separados: `b602_local_bairro`, `b602_local_cidade`, `b602_local_uf`.
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---|---|
+| `b602.tsx` | Remove função `formatarLocal()`. Adiciona constante `UF_OPTS`. Substitui input único por 3 inputs (bairro texto, cidade texto, UF Select). Layout flex com separadores `/`. Menu de contexto: 3 entradas. |
+| `b602.service.ts` | `serialize()`: `local` como objeto `{ bairro, cidade, uf }`. `deserialize()`: fallback compatível com string antiga `"bairro / cidade / UF"`. |
+| `REPsPage.tsx` | `emptyForm()`: `b602_local_bairro: ''`, `b602_local_cidade: ''`, `b602_local_uf: ''`. `FIELD_PLACEHOLDER`: 3 entradas. Schema Zod: `b602_local_cidade` e `b602_local_uf` obrigatórios. |
+| `LaudosPage.tsx` | Fallback para formato antigo string no mapping de placeholders. |
+| `exportacao-placeholders.ts` | Fallback para formato antigo. `b602_local` resolve concatenando objeto `{bairro, cidade, uf}`. |
+| `tabelas-placeholder.ts` | `buildDadosInvestigacaoTable()`: trata `local` como objeto, concatena para exibição. |
+| `placeholder.service.ts` | Placeholder `b602_local` mantido (resolve concatenado) + novos `b602_local_bairro`, `b602_local_cidade`, `b602_local_uf`. |
+
+**Regras:**
+- `b602_local_cidade` e `b602_local_uf` obrigatórios na validação Zod
+- `b602_local_bairro` opcional
+- Placeholder `b602_local` resolve para `"bairro / cidade / UF"` (concatenação dos 3 campos)
+- Compatibilidade retroativa total: dados salvos no formato antigo (string) são parseados e distribuídos nos 3 campos ao editar
