@@ -65,7 +65,9 @@
 |---|---|---|---|---|
 | `b602_envolvidos_0`...`b602_envolvidos_9` | Envolvido(s) | Array de text inputs (1-10) | Sim | Botao "+" adiciona, "X" remove. Min 1, max 10. Placeholder "Nome do envolvido". Ao editar REP com dados salvos, linhas expandem automaticamente via lazy initializer no `useState`. |
 | `b602_data_ocorrencia` | Data da Ocorrência | date | Sim | |
-| `b602_local` | Local | text | Sim | Placeholder "bairro / cidade / PR" |
+| `b602_local_bairro` | Bairro | text | Não | Placeholder "Bairro" |
+| `b602_local_cidade` | Cidade | text | Sim | Placeholder "Cidade" |
+| `b602_local_uf` | UF | select (UF_OPTS) | Sim | Dropdown com 27 UFs (AC, AL, AP, ... TO) |
 | `b602_numero_bo` | Nº do BO | text (máscara) | BO ou IP* | Máscara `AAAA/NNNNNN` (reutilizar `formatarNumeroBO`) |
 | `b602_numero_ip` | Nº do IP | text | BO ou IP* | |
 | `b602_solicitante_nome` | Unidade Policial | text (disabled) | Não | Auto-preenchido via `useEffect` que observa `solicitante_id`. Campo `disabled` com tooltip "Preenchido automaticamente com o nome do Solicitante selecionado acima." |
@@ -179,7 +181,7 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
   "b602": {
     "envolvidos": ["João Silva", "Maria Souza"],
     "data_ocorrencia": "2026-03-15",
-    "local": "Centro / Curitiba / PR",
+    "local": { "bairro": "Centro", "cidade": "Curitiba", "uf": "PR" },
     "numero_bo": "2026/123456",
     "numero_ip": "",
     "solicitante_nome": "Delegacia de Furtos e Roubos",
@@ -283,7 +285,10 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
 | `b602_envolvidos` | Lista de envolvidos (texto) |
 | `b602_envolvido_1`...`b602_envolvido_10` | Envolvido individual |
 | `b602_data_ocorrencia` | Data formatada |
-| `b602_local` | Local |
+| `b602_local` | Local completo (bairro / cidade / UF) |
+| `b602_local_bairro` | Bairro do local da ocorrência |
+| `b602_local_cidade` | Cidade do local da ocorrência |
+| `b602_local_uf` | UF do local da ocorrência |
 | `b602_numero_bo` | Nº BO formatado |
 | `b602_numero_ip` | Nº IP |
 | `b602_solicitante_nome` | Solicitante |
