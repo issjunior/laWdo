@@ -1,6 +1,6 @@
 # laWdo
 
-Aplicação Electron desktop para elaboração de laudos periciais — Polícia Científica do Paraná.
+Aplicação Electron desktop para elaboração de laudos periciais.
 
 ---
 
@@ -217,3 +217,4 @@ Se nenhuma alteração for necessária, informar em uma linha.
 - `spec/` — especificações detalhadas por funcionalidade.
 
 Consulte sob demanda, apenas quando necessário para entender requisitos.
+Em caso de dúvida perguntar ao desenvolvedor, somente prosseguir quando souber o que fazer (ao menos 95% de certeza da implmentação). 

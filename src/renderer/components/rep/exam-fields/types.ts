@@ -37,7 +37,9 @@ export interface REPFormData {
   b602_envolvidos_8: string;
   b602_envolvidos_9: string;
   b602_data_ocorrencia: string;
-  b602_local: string;
+  b602_local_bairro: string;
+  b602_local_cidade: string;
+  b602_local_uf: string;
   b602_numero_bo: string;
   b602_numero_ip: string;
   b602_solicitante_nome: string;

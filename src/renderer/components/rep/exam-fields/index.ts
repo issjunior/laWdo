@@ -69,7 +69,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     description: 'Envolvidos, data, local, BO, IP e solicitante',
     component: DadosInvestigacaoFields,
     group: null,
-    requiredFields: ['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local'],
+    requiredFields: ['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local_cidade', 'b602_local_uf'],
   },
   material_enc: {
     id: 'material_enc',

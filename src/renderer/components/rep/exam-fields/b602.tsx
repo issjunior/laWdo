@@ -58,15 +58,11 @@ function formatarNumeroBO(raw: string): string {
   return `${year}/${num}`;
 }
 
-function formatarLocal(raw: string): string {
-  let result = raw.replace(/\s*\/\s*/g, ' / ');
-  result = result.trim();
-  const parts = result.split(' / ').filter(Boolean);
-  if (parts.length > 3) {
-    result = parts.slice(0, 3).join(' / ');
-  }
-  return result;
-}
+const UF_OPTS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
+  'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
+  'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+] as const;
 
 export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) => {
   const [numEnvolvidos, setNumEnvolvidos] = useState(() => {
@@ -187,19 +183,48 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
           <label className="text-sm font-medium shrink-0 md:w-[60px]">
             Local *
           </label>
-          <div className="flex-1 min-w-0 w-full">
+          <div className="flex-1 flex items-center gap-1 min-w-0">
             <FormField
               control={form.control}
-              name="b602_local"
+              name="b602_local_bairro"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="flex-1 min-w-0 space-y-0">
                   <FormControl>
-                    <Input
-                      placeholder="bairro / cidade / PR"
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(formatarLocal(e.target.value))}
-                    />
+                    <Input placeholder="Bairro" className="flex-1 min-w-0" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <span className="text-muted-foreground shrink-0 text-sm">/</span>
+            <FormField
+              control={form.control}
+              name="b602_local_cidade"
+              render={({ field }) => (
+                <FormItem className="flex-1 min-w-0 space-y-0">
+                  <FormControl>
+                    <Input placeholder="Cidade" className="flex-1 min-w-0" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <span className="text-muted-foreground shrink-0 text-sm">/</span>
+            <FormField
+              control={form.control}
+              name="b602_local_uf"
+              render={({ field }) => (
+                <FormItem className="w-[72px] shrink-0 space-y-0">
+                  <Select value={field.value || undefined} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {UF_OPTS.map((uf) => (
+                        <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1149,7 +1174,9 @@ export const B602_MENU_STRUCTURE: MenuSection[] = [
         fields: [{ name: '', label: 'Nome do envolvido' }],
       },
       { type: 'field', name: 'b602_data_ocorrencia', label: 'Data da Ocorrência' },
-      { type: 'field', name: 'b602_local', label: 'Local' },
+      { type: 'field', name: 'b602_local_bairro', label: 'Bairro' },
+      { type: 'field', name: 'b602_local_cidade', label: 'Cidade' },
+      { type: 'field', name: 'b602_local_uf', label: 'UF' },
       { type: 'field', name: 'b602_numero_bo', label: 'Nº do BO' },
       { type: 'field', name: 'b602_numero_ip', label: 'Nº do IP' },
       { type: 'field', name: 'b602_solicitante_nome', label: 'Unidade Policial' },

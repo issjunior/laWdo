@@ -36,7 +36,10 @@ export function buildNumberedTable(titulo: string, headers: string[], rows: stri
 export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solicitanteNome?: string): string {
   const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean) ?? [];
   const dataOcorrencia = String(b602.data_ocorrencia || '-');
-  const local = String(b602.local || '-');
+  const localObj = (b602.local && typeof b602.local === 'object' ? b602.local : null) as Record<string, string> | null;
+  const local = localObj
+    ? [localObj.bairro, localObj.cidade, localObj.uf].filter(Boolean).join(' / ') || '-'
+    : String(b602.local || '-');
   const numeroBo = String(b602.numero_bo || '-');
   const numeroIp = String(b602.numero_ip || '-');
   const unidadePolicial = solicitanteNome || String(b602.solicitante_nome || '-');

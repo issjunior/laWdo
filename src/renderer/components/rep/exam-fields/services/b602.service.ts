@@ -40,7 +40,10 @@ export const b602Service: ExamService = {
 
     result.envolvidos = envolvidos;
     result.data_ocorrencia = ((data as Record<string, string>)['b602_data_ocorrencia'] || '').split('T')[0];
-    result.local = (data as Record<string, string>)['b602_local'] || '';
+    const localBairro = ((data as Record<string, string>)['b602_local_bairro'] || '').trim();
+    const localCidade = ((data as Record<string, string>)['b602_local_cidade'] || '').trim();
+    const localUf = ((data as Record<string, string>)['b602_local_uf'] || '').trim();
+    result.local = { bairro: localBairro, cidade: localCidade, uf: localUf };
     result.numero_bo = (data as Record<string, string>)['b602_numero_bo'] || '';
     result.numero_ip = (data as Record<string, string>)['b602_numero_ip'] || '';
 
@@ -143,7 +146,25 @@ export const b602Service: ExamService = {
     }
 
     if (data.data_ocorrencia) result['b602_data_ocorrencia'] = String(data.data_ocorrencia);
-    if (data.local) result['b602_local'] = String(data.local);
+    if (data.local) {
+      if (typeof data.local === 'string') {
+        // Compatibilidade com formato antigo: "bairro / cidade / UF"
+        const partes = data.local.split('/').map(s => s.trim()).filter(Boolean);
+        if (partes.length === 3) {
+          result['b602_local_bairro'] = partes[0];
+          result['b602_local_cidade'] = partes[1];
+          result['b602_local_uf'] = partes[2];
+        } else if (partes.length === 2) {
+          result['b602_local_cidade'] = partes[0];
+          result['b602_local_uf'] = partes[1];
+        }
+      } else if (typeof data.local === 'object' && data.local !== null) {
+        const loc = data.local as Record<string, string>;
+        if (loc.bairro) result['b602_local_bairro'] = loc.bairro;
+        if (loc.cidade) result['b602_local_cidade'] = loc.cidade;
+        if (loc.uf) result['b602_local_uf'] = loc.uf;
+      }
+    }
     if (data.numero_bo) result['b602_numero_bo'] = String(data.numero_bo);
     if (data.numero_ip) result['b602_numero_ip'] = String(data.numero_ip);
 

@@ -138,8 +138,11 @@ function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string):
           let envolvidosHtml = `<table style="${REP_TABLE_STYLES.table}">`;
           envolvidosHtml += buildRepTableTitle('DADOS DA INVESTIGAÇÃO', 4);
           envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Envolvido(s)</td><td colspan="3" style="${REP_TABLE_STYLES.td}">${envolvidos.join(', ')}</td></tr>`;
+          const localStr = (typeof b602.local === 'object' && b602.local !== null)
+            ? [(b602.local as Record<string, string>).bairro, (b602.local as Record<string, string>).cidade, (b602.local as Record<string, string>).uf].filter(Boolean).join(' / ')
+            : String(b602.local || '');
           if (b602.data_ocorrencia || b602.local || b602.numero_bo || b602.numero_ip || b602.solicitante_nome) {
-            envolvidosHtml += buildRepTwoCol('Data Ocorrência', s(b602.data_ocorrencia), 'Local', s(b602.local));
+            envolvidosHtml += buildRepTwoCol('Data Ocorrência', s(b602.data_ocorrencia), 'Local', localStr || '-');
             envolvidosHtml += buildRepTwoCol('Nº BO', s(b602.numero_bo), 'Nº IP', s(b602.numero_ip));
             envolvidosHtml += `<tr><td style="${REP_TABLE_STYLES.label};width:25%">Unidade Policial</td><td colspan="3" style="${REP_TABLE_STYLES.td}">${solicitanteNome || s(b602.solicitante_nome)}</td></tr>`;
           }
@@ -211,7 +214,7 @@ const emptyForm = (): REPFormData => ({
   b602_envolvidos_3: '', b602_envolvidos_4: '', b602_envolvidos_5: '',
   b602_envolvidos_6: '', b602_envolvidos_7: '', b602_envolvidos_8: '',
   b602_envolvidos_9: '',
-  b602_data_ocorrencia: '', b602_local: '',
+  b602_data_ocorrencia: '', b602_local_bairro: '', b602_local_cidade: '', b602_local_uf: '',
   b602_numero_bo: '', b602_numero_ip: '', b602_solicitante_nome: '',
   b602_material_enc_toggle: 'off', b602_cartuchos_toggle: 'off', b602_estojos_toggle: 'off',
   b602_armas_toggle: 'off', b602_armas_funcionamento_toggle: 'off', b602_armas_coleta_toggle: 'off',
@@ -244,7 +247,9 @@ const FIELD_PLACEHOLDER: Record<string, string> = {
   numeracao_motor_revelado: 'motor_revelado',
   b602_envolvidos_0: 'b602_envolvidos',
   b602_data_ocorrencia: 'b602_data_ocorrencia',
-  b602_local: 'b602_local',
+  b602_local_bairro: 'b602_local_bairro',
+  b602_local_cidade: 'b602_local_cidade',
+  b602_local_uf: 'b602_local_uf',
   b602_numero_bo: 'b602_numero_bo',
   b602_numero_ip: 'b602_numero_ip',
   b602_solicitante_nome: 'b602_solicitante_nome',
@@ -439,7 +444,9 @@ export const REPsPage: React.FC = () => {
     b602_envolvidos_8: z.string().optional(),
     b602_envolvidos_9: z.string().optional(),
     b602_data_ocorrencia: z.string().optional(),
-    b602_local: z.string().optional(),
+    b602_local_bairro: z.string().optional(),
+    b602_local_cidade: z.string().optional(),
+    b602_local_uf: z.string().optional(),
     b602_numero_bo: z.string().max(30, 'Nº do BO deve ter no máximo 30 caracteres').optional(),
     b602_numero_ip: z.string().max(30, 'Nº do IP deve ter no máximo 30 caracteres').optional(),
     b602_solicitante_nome: z.string().optional(),
@@ -469,8 +476,11 @@ export const REPsPage: React.FC = () => {
       if (!data.b602_data_ocorrencia?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Data da ocorrência é obrigatória para B-602', path: ['b602_data_ocorrencia'] });
       }
-      if (!data.b602_local?.trim()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Local é obrigatório para B-602', path: ['b602_local'] });
+      if (!data.b602_local_cidade?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Cidade é obrigatória para B-602', path: ['b602_local_cidade'] });
+      }
+      if (!data.b602_local_uf?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'UF é obrigatória para B-602', path: ['b602_local_uf'] });
       }
       if (!data.b602_numero_bo?.trim() && !data.b602_numero_ip?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Preencha o Nº do BO ou Nº do IP (B-602 exige ao menos um)', path: ['b602_numero_bo'] });

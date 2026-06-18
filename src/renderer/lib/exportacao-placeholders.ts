@@ -118,6 +118,15 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
         }
       }
 
+      // Fallback: se local for string (formato antigo), extrair sub-campos
+      const b602Fallback = especificos.b602 as Record<string, unknown> | undefined;
+      if (b602Fallback && typeof b602Fallback.local === 'string') {
+        const partesLocal = (b602Fallback.local as string).split('/').map(s => s.trim()).filter(Boolean);
+        if (partesLocal.length >= 3 && !mapping['b602_local_bairro']) mapping['b602_local_bairro'] = partesLocal[0];
+        if (partesLocal.length >= 2 && !mapping['b602_local_cidade']) mapping['b602_local_cidade'] = partesLocal[partesLocal.length >= 3 ? 1 : 0];
+        if (partesLocal.length >= 2 && !mapping['b602_local_uf']) mapping['b602_local_uf'] = partesLocal[partesLocal.length - 1];
+      }
+
       if (!mapping['b602_solicitante_nome']) {
         mapping['b602_solicitante_nome'] = ctx.solicitanteNome || '';
       }
@@ -129,7 +138,13 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
           mapping['b602_envolvidos'] = envolvidos.filter(Boolean).join(', ');
         }
         mapping['b602_data_ocorrencia'] = String(b602.data_ocorrencia || '');
-        mapping['b602_local'] = String(b602.local || '');
+        const localVal = b602.local;
+        if (localVal && typeof localVal === 'object') {
+          const loc = localVal as Record<string, string>;
+          mapping['b602_local'] = [loc.bairro, loc.cidade, loc.uf].filter(Boolean).join(' / ');
+        } else {
+          mapping['b602_local'] = String(localVal || '');
+        }
         mapping['b602_numero_bo'] = String(b602.numero_bo || '');
         mapping['b602_numero_ip'] = String(b602.numero_ip || '');
         mapping['b602_solicitante_nome'] = String(b602.solicitante_nome || '');
