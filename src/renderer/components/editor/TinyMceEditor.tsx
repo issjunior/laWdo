@@ -122,8 +122,6 @@ interface TinyMceEditorProps {
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
   condToggles?: Array<{ id: string; label: string; subtitulo?: string; subToggles?: Array<{ id: string; label: string; subtitulo?: string }> }>;
-  /** Número da seção (1-indexed) para numeração automática do h3 condicional */
-  sectionNumber?: number;
 }
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<HTMLDivElement>> = ({
@@ -139,7 +137,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
   onEditorInit,
   autoConverterReservados = false,
   condToggles,
-  sectionNumber,
   ...rest
 }) => {
   const editorRef = useRef<any>(null);
@@ -432,46 +429,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & React.HTMLAttributes<H
                 }))),
               ];
               const found = allToggles.find(t => t.id === toggleId);
-
-              // Detectar número da seção
-              let secNum = sectionNumber ? String(sectionNumber) : '';
-              if (!secNum) {
-                const node = editor.selection.getNode();
-                const body = editor.getBody();
-                const h2s = editor.dom.select('h2');
-                if (h2s.length === 1) {
-                  const match = (h2s[0].textContent || '').match(/^(\d+)\./);
-                  if (match) secNum = match[1];
-                } else if (h2s.length > 1) {
-                  let cursorH2: HTMLElement | null = null;
-                  let el: Node | null = node;
-                  while (el && el !== body) {
-                    if ((el as HTMLElement).tagName === 'H2') { cursorH2 = el as HTMLElement; break; }
-                    el = el.parentNode;
-                  }
-                  if (cursorH2) {
-                    const match = (cursorH2.textContent || '').match(/^(\d+)\./);
-                    if (match) secNum = match[1];
-                  }
-                }
-                // Fallback: single-editor com wrappers <section data-template-secao>
-                if (!secNum) {
-                  let el: Node | null = node;
-                  while (el && el !== body) {
-                    const section = (el as HTMLElement).closest?.('section[data-template-secao="true"]') as HTMLElement | null;
-                    if (section) {
-                      const idx = section.getAttribute('data-secao-index');
-                      if (idx !== null) { secNum = String(Number(idx) + 1); break; }
-                    }
-                    el = el.parentNode;
-                  }
-                }
-              }
-
-              const numPrefix = secNum ? secNum + (subIndex !== undefined ? `.${subIndex + 1}` : '') : 'X';
               const titulo = found?.subtitulo || found?.label || toggleId;
 
-              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><h3>${numPrefix}. ${titulo}</h3><p>&nbsp;</p></div>`;
+              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><h3>${titulo}</h3><p>&nbsp;</p></div>`;
               editor.insertContent(html);
             });
 

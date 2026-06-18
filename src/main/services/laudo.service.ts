@@ -479,16 +479,15 @@ export class LaudoService extends BaseService<LaudoRow> {
   }
 
   private _processarBlocosCondicionais(html: string, toggles: Record<string, unknown>): string {
-    const COND_REGEX = /<div\s+data-cond-bloco="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi;
-    let result = html;
-    let m;
-    while ((m = COND_REGEX.exec(html)) !== null) {
-      const toggleId = m[1];
-      if (toggles[toggleId] !== 'on') {
-        result = result.replace(m[0], '');
-      }
-    }
-    return result;
+    const BLOCK_REGEX = /<div\s+data-cond-bloco="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi;
+
+    // Remove blocks whose toggles are off.
+    // Usa callback no replace para garantir que cada match é processado
+    // na posição correta, evitando o bug de String.replace(string, '')
+    // que substitui apenas a primeira ocorrência.
+    return html.replace(BLOCK_REGEX, (match, toggleId) => {
+      return toggles[toggleId] === 'on' ? match : '';
+    });
   }
 
   // ==================== HELPERS ====================

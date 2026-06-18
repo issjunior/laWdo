@@ -238,6 +238,13 @@ export function limparIndicadoresCondicionais(html: string): string {
   return result;
 }
 
+/** REMOVIDO: A numeração sequencial automática dos blocos condicionais
+ *  foi descontinuada. A função é mantida como no-op para
+ *  compatibilidade com código existente. */
+export function resolverNumeracaoBlocosCondicionais(html: string): string {
+  return html;
+}
+
 export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoContext): string {
   const mapping = buildPlaceholderMapping(ctx);
 

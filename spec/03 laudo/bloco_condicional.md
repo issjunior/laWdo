@@ -1,14 +1,17 @@
 # Blocos Condicionais no Editor de Laudo
 
 > **Status:** Implementado (2026-06-17)
+> **Última revisão:** 2026-06-17
 > **Esquema:** Migration v25 — coluna `condicao TEXT` em `secoes_template`
-> **Arquivos principais:** `TinyMceEditor.tsx`, `exam-fields/index.ts`, `exportacao-placeholders.ts`, `laudo.service.ts`
+> **Arquivos principais:** `TinyMceEditor.tsx`, `exam-fields/index.ts`, `exportacao-placeholders.ts`, `laudo.service.ts`, `LaudosPage.tsx`
 
 ---
 
 ## 1. Visão Geral
 
 Os blocos condicionais permitem que o perito insira **seções opcionais** no laudo que só aparecem se determinados toggles estiverem ativos na REP. Exemplo: se a REP B-602 tem o toggle "Cartuchos" ligado, o editor insere um `<h3>DOS CARTUCHOS</h3>`; se desligado, o bloco some na exportação.
+
+O menu "Bloco Cond." da toolbar **só exibe os toggles marcados na REP**, evitando que o perito insira blocos cujo toggle está desligado.
 
 ```
 REP B-602
@@ -30,7 +33,7 @@ REP B-602
 export interface ExamToggle {
   id: string;                 // identificador único (ex: 'b602_cartuchos_toggle')
   label: string;              // label no formulário da REP
-  subtitulo?: string;         // texto do <h3> no bloco condicional
+  subtitulo?: string;         // texto do <h3> no bloco condicional (ex: 'DOS CARTUCHOS')
   sectionId?: string;         // id da seção no SECTION_REGISTRY (se houver)
   subToggles?: ExamToggle[];  // sub-toggles aninhados
 }
@@ -67,9 +70,10 @@ interface TinyMceEditorProps {
     subtitulo?: string;
     subToggles?: Array<{ id: string; label: string; subtitulo?: string }>
   }>;
-  sectionNumber?: number;  // número da seção atual (para numeração automática)
 }
 ```
+
+> **Nota:** A prop `sectionNumber` e toda a lógica de numeração automática foram **removidas** (2026-06-17). Blocos condicionais são inseridos sem prefixo numérico.
 
 ---
 
@@ -84,52 +88,59 @@ Se `condToggles` tem itens, o editor registra o botão `condbloco`:
   ├── Cartuchos          → insertCondBloco('b602_cartuchos_toggle')
   ├── Estojos            → insertCondBloco('b602_estojos_toggle')
   ├── Arma               → insertCondBloco('b602_armas_toggle')
-  │   ├── Funcionamento  → insertCondBloco('b602_armas_funcionamento_toggle', 0)
-  │   └── Coleta         → insertCondBloco('b602_armas_coleta_toggle', 1)
+  │   ├── Funcionamento  → insertCondBloco('b602_armas_funcionamento_toggle')
+  │   └── Coleta         → insertCondBloco('b602_armas_coleta_toggle')
   └── ...
 ```
 
 Sem toggles, o botão aparece desabilitado: `disabled: true`.
 
-### 3.2 Comando `insertCondBloco`
+### 3.2 Filtragem pelo estado da REP (`LaudosPage.tsx`)
 
-**Arquivo:** `TinyMceEditor.tsx:424`
+**Arquivo:** `LaudosPage.tsx:478`
+
+O `exameToggles` é filtrado com base no `exameCamposEspecificos` carregado da REP:
+
+```
+exameCamposEspecificos (extraído de parsed.b602)
+  ├── cartuchos[]?          → b602_cartuchos_toggle ON (implícito)
+  ├── estojos[]?            → b602_estojos_toggle ON (implícito)
+  ├── armas_toggle === 'on' → b602_armas_toggle ON (explícito)
+  ├── armas_funcionamento_toggle === 'on' → ON (explícito)
+  └── armas_coleta_toggle === 'on'       → ON (explícito)
+```
+
+**Regras:**
+- **Explícito**: `chave === 'on'` (ex: `armas_toggle`, `armas_funcionamento_toggle`)
+- **Implícito**: array de dados correspondente existe e tem itens (ex: `cartuchos[]` existe → `cartuchos_toggle` ativo)
+- **SubToggles**: mantidos apenas se o sub-toggle específico está 'on'; toggle pai aparece se ele próprio ou ao menos 1 sub está ativo
+- **Sem dados da REP**: mostra todos os toggles (evita flicker durante carregamento)
+
+### 3.3 Comando `insertCondBloco`
+
+**Arquivo:** `TinyMceEditor.tsx:421`
 
 ```
 insertCondBloco(toggleId: string, subIndex?: number)
 ```
 
 1. Busca o toggle em `condToggles` (incluindo sub-toggles)
-2. Detecta número da seção (ver seção 3.3)
-3. Gera HTML: `<div data-cond-bloco="toggleId" class="cond-bloco"><h3>N. Subtitulo</h3><p>&nbsp;</p></div>`
-4. Insere no editor via `editor.insertContent(html)`
+2. Gera HTML: `<div data-cond-bloco="toggleId" class="cond-bloco"><h3>Subtitulo</h3><p>&nbsp;</p></div>`
+3. Insere no editor via `editor.insertContent(html)`
 
-### 3.3 Numeração Automática
-
-Ordem de precedência para determinar o número da seção:
-
-| Prioridade | Fonte | Detecção |
-|---|---|---|
-| 1 | Prop `sectionNumber` | Passada diretamente pelo componente pai |
-| 2 | Único `<h2>` no editor | Regex `^(\d+)\.` no textContent do `<h2>` |
-| 3 | `<h2>` mais próximo do cursor | Sobe no DOM até encontrar `<h2>`, aplica regex |
-| 4 | `<section data-template-secao="true">` | Atributo `data-secao-index` + 1 |
-
-Para sub-toggles, o número final é `N.M` onde `N` é o número da seção e `M` é `subIndex + 1`.
-
-Se nenhum número for detectado, usa `X` como fallback.
+> **Nota:** O prefixo `X.X.` foi removido. O `<h3>` contém apenas o título do bloco (ex: "DOS CARTUCHOS") sem numeração.
 
 ### 3.4 Formato HTML gerado
 
 ```html
 <div data-cond-bloco="b602_cartuchos_toggle" class="cond-bloco">
-  <h3>5. DOS CARTUCHOS</h3>
+  <h3>DOS CARTUCHOS</h3>
   <p>&nbsp;</p>
 </div>
 ```
 
 - `<div data-cond-bloco>` — marcador para o backend processar
-- `<h3>` — título visível, com numeração automática
+- `<h3>` — título visível, **sem numeração automática**
 - `<p>&nbsp;</p>` — espaço para o perito digitar conteúdo
 
 ---
@@ -140,15 +151,15 @@ Se nenhum número for detectado, usa `X` como fallback.
 
 **Arquivo:** `src/main/services/laudo.service.ts:343`
 
-Chamado ao salvar o laudo (ou em processo separado). Fluxo:
+Chamado ao salvar/atualizar a REP (via handler `rep:update`). Fluxo:
 
 1. Busca o laudo e seu template
 2. Lê `secoes_template` com `condicao` não-nula
 3. Busca `campos_especificos` da REP associada
 4. Avalia cada condição: se `condicao.campo` === `'on'`, seção ativa
 5. Reconstrói o HTML concatenando seções na ordem do template
-6. Para seções já existentes: atualiza número do H2 e processa blocos condicionais
-7. Para seções novas: cria a partir do template
+6. Para seções existentes: atualiza número do H2 e processa blocos condicionais
+7. Para seções novas: cria a partir do template (com numeração H2)
 8. Para seções não-listadas no template: mantém como estão
 9. Salva se houve mudança
 
@@ -159,9 +170,17 @@ Chamado ao salvar o laudo (ou em processo separado). Fluxo:
 Remove `<div data-cond-bloco>` cujo toggle não está ativo (`!== 'on'`):
 
 ```ts
-const COND_REGEX = /<div\s+data-cond-bloco="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi;
-// Se toggles[toggleId] !== 'on', remove o bloco
+private _processarBlocosCondicionais(html: string, toggles: Record<string, unknown>): string {
+  const BLOCK_REGEX = /<div\s+data-cond-bloco="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi;
+  return html.replace(BLOCK_REGEX, (match, toggleId) => {
+    return toggles[toggleId] === 'on' ? match : '';
+  });
+}
 ```
+
+Usa callback no `String.replace` para garantir remoção posicional correta.
+
+> **Nota:** O parâmetro `numeroSecao` e a renumeração de `<h3>` foram removidos (2026-06-17). O método apenas remove blocos com toggle off.
 
 ### 4.3 Migration v25
 
@@ -192,11 +211,9 @@ html.replace(
 );
 ```
 
-Isso garante que laudos salvos no formato anterior (com `<p>` em vez de `<h3>`) ainda sejam renderizados corretamente.
-
 ### 5.2 Limpeza de estilos
 
-Remove atributos `style` de `<div data-cond-bloco>` que possam ter sido inseridos pelo editor:
+Remove atributos `style` de `<div data-cond-bloco>`:
 
 ```ts
 html.replace(
@@ -215,20 +232,22 @@ HTML com placeholders
   → HTML final para preview/PDF
 ```
 
+> **Nota:** A função `resolverNumeracaoBlocosCondicionais` foi descontinuada e convertida em no-op (2026-06-17). Não há mais numeração automática de blocos condicionais na exportação.
+
 ---
 
 ## 6. Arquivos Envolvidos
 
 | Arquivo | Papel |
 |---|---|
-| `src/renderer/components/editor/TinyMceEditor.tsx` | Prop `condToggles`, toolbar `condbloco`, comando `insertCondBloco`, numeração automática |
+| `src/renderer/components/editor/TinyMceEditor.tsx` | Prop `condToggles`, toolbar `condbloco`, comando `insertCondBloco` (sem numeração) |
 | `src/renderer/components/rep/exam-fields/index.ts` | Interface `ExamToggle`, constante `EXAM_TOGGLES`, export |
 | `src/renderer/components/rep/exam-fields/types.ts` | Tipos `REPFormData` com campos de toggle |
-| `src/renderer/lib/exportacao-placeholders.ts` | `limparIndicadoresCondicionais()` — compatibilidade retroativa e limpeza |
-| `src/main/services/laudo.service.ts` | `sincronizarSecoesCondicionais()`, `_processarBlocosCondicionais()` |
+| `src/renderer/lib/exportacao-placeholders.ts` | `limparIndicadoresCondicionais()` — compatibilidade retroativa e limpeza; `resolverNumeracaoBlocosCondicionais()` descontinuada (no-op) |
+| `src/main/services/laudo.service.ts` | `sincronizarSecoesCondicionais()`, `_processarBlocosCondicionais()` (sem renumeração) |
 | `src/main/database/index.ts` | Migration v25: `condicao TEXT` em `secoes_template` |
-| `src/renderer/pages/LaudosPage.tsx` | Passa `condToggles` e `sectionNumber` ao `<TinyMceEditor>` |
-| `src/renderer/pages/TemplatesPage.tsx` | Passa `condToggles` e `sectionNumber` ao `<TinyMceEditor>` |
+| `src/renderer/pages/LaudosPage.tsx` | Filtra `condToggles` com base no `exameCamposEspecificos` da REP; passa ao `<TinyMceEditor>` |
+| `src/renderer/pages/TemplatesPage.tsx` | Passa `condToggles` ao `<TinyMceEditor>` (todos os toggles, sem filtro — template não tem REP vinculada) |
 
 ---
 
@@ -236,32 +255,31 @@ HTML com placeholders
 
 ```
 Usuário preenche REP B-602
-  → liga toggle "Cartuchos"
-  → salva (campos_especificos.b602.b602_cartuchos_toggle = 'on')
+  → liga toggle "Cartuchos" (cartuchos[] com itens salvos)
+  → salva (campos_especificos.b602.cartuchos = [...itens...])
 
 Usuário abre editor de laudo vinculado à REP
   → LaudosPage busca campos_especificos da REP
-  → Monta condToggles a partir de EXAM_TOGGLES['B-602']
-  → Passa condToggles ao <TinyMceEditor>
+  → Faz parse de parsed.b602 → exameCamposEspecificos
+  → Filtra EXAM_TOGGLES['B-602']: só mantém toggles ON na REP
+  → Passa condToggles filtrados ao <TinyMceEditor>
 
 Usuário clica no botão "Bloco Cond." na toolbar
-  → Dropdown mostra: Cartuchos, Estojos, Arma...
+  → Dropdown mostra: Cartuchos (se ON), Estojos (se ON), Arma (se ON)...
   → Clica "Cartuchos"
   → insertCondBloco('b602_cartuchos_toggle')
-  → Detecta número da seção (ex: "5")
   → Insere: <div data-cond-bloco="b602_cartuchos_toggle" class="cond-bloco">
-             <h3>5. DOS CARTUCHOS</h3>
+             <h3>DOS CARTUCHOS</h3>
              <p>&nbsp;</p>
            </div>
 
-Usuário salva o laudo
-  → laudoService.sincronizarSecoesCondicionais(laudoId)
+Usuário salva a REP (atualização)
+  → rep.handlers.ts: rep:update → laudoService.sincronizarSecoesCondicionais(laudoId)
   → Avalia condicoes das secoes_template
-  → Processa blocos condicionais internos (remove desligados)
+  → _processarBlocosCondicionais: remove blocos com toggle off (callback replace)
 
 Usuário gera preview PDF
   → resolverPlaceholdersExportacao(html, ctx)
   → limparIndicadoresCondicionais(html)
-  → <div data-cond-bloco> viram <h3> no PDF
-  → Se toggle desligado: bloco removido → não aparece no PDF
+  → <div data-cond-bloco> estilos limpos; <p data-cond-label> convertido para <h3>
 ```

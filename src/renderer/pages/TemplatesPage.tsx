@@ -133,7 +133,7 @@ export const TemplatesPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
   const [showPreview, setShowPreview] = useState(false);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -928,7 +928,7 @@ export const TemplatesPage: React.FC = () => {
         <Dialog open={showPreview} onOpenChange={(open) => {
           if (!open && previewBlobUrl) {
             URL.revokeObjectURL(previewBlobUrl);
-            setPreviewBlobUrl('');
+            setPreviewBlobUrl(null);
           }
           setShowPreview(open);
         }}>
@@ -941,12 +941,16 @@ export const TemplatesPage: React.FC = () => {
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   Gerando PDF...
                 </div>
-              ) : (
+              ) : previewBlobUrl ? (
                 <iframe
                   src={previewBlobUrl}
                   className="w-full h-full min-h-[70vh] border-0"
                   title="Preview PDF"
                 />
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Erro ao gerar PDF
+                </div>
               )}
             </div>
           </DialogContent>
@@ -991,7 +995,7 @@ export const TemplatesPage: React.FC = () => {
       <Dialog open={showPreview} onOpenChange={(open) => {
         if (!open && previewBlobUrl) {
           URL.revokeObjectURL(previewBlobUrl);
-          setPreviewBlobUrl('');
+          setPreviewBlobUrl(null);
         }
         setShowPreview(open);
       }}>
@@ -1004,12 +1008,16 @@ export const TemplatesPage: React.FC = () => {
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 Gerando PDF...
               </div>
-            ) : (
+            ) : previewBlobUrl ? (
               <iframe
                 src={previewBlobUrl}
                 className="w-full h-full min-h-[70vh] border-0"
                 title="Preview PDF"
               />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Erro ao gerar PDF
+              </div>
             )}
           </div>
         </DialogContent>
@@ -1174,14 +1182,14 @@ export const TemplatesPage: React.FC = () => {
                   />
                   {exameToggles && exameToggles.length > 0 && (
                     <Select
-                      value={secao.condicao || ''}
-                      onValueChange={(v) => updateSecao(index, 'condicao', v)}
+                      value={secao.condicao || '__always__'}
+                      onValueChange={(v) => updateSecao(index, 'condicao', v === '__always__' ? '' : v)}
                     >
                       <SelectTrigger className="w-[180px] h-8 text-xs">
                         <SelectValue placeholder="Mostrar apenas se..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Sempre visível</SelectItem>
+                        <SelectItem value="__always__">Sempre visível</SelectItem>
                         {exameToggles.map((t) => (
                           <SelectItem key={t.id} value={JSON.stringify({ campo: t.id, valor: 'on' })}>{t.label}</SelectItem>
                         ))}
@@ -1216,7 +1224,6 @@ export const TemplatesPage: React.FC = () => {
                       placeholderChaves={placeholderChaves}
                       autoConverterReservados={true}
                       condToggles={exameToggles}
-                      sectionNumber={index + 1}
                     />
                 </PlaceholderContextMenu>
               </div>

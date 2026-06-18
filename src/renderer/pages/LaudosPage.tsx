@@ -26,8 +26,8 @@ import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/Ilustraco
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
-import { EXAM_MENU_REGISTRY } from '@/components/rep/exam-fields';
-import type { MenuSection } from '@/components/rep/exam-fields';
+import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields';
+import type { MenuSection, ExamToggle } from '@/components/rep/exam-fields';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -474,6 +474,51 @@ export const LaudosPage: React.FC = () => {
   const [exameMenuStructure, setExameMenuStructure] = useState<MenuSection[] | undefined>(undefined);
   const [exameCamposEspecificos, setExameCamposEspecificos] = useState<Record<string, unknown> | undefined>(undefined);
   const [categoriaExameId, setCategoriaExameId] = useState<string>('');
+
+  const exameToggles = useMemo<ExamToggle[] | undefined>(() => {
+    if (!editando?.tipo_exame_codigo) return undefined;
+    const allToggles = EXAM_TOGGLES[editando.tipo_exame_codigo];
+    if (!allToggles) return undefined;
+
+    // Sem dados da REP ainda, mostra todos (evita flicker enquanto carrega)
+    if (!exameCamposEspecificos) return allToggles;
+
+    // exameCamposEspecificos já é o objeto b602 (extraído em handleEditar via parsed.b602)
+    const b602 = exameCamposEspecificos as Record<string, unknown>;
+
+    /** Retorna true se o toggle está 'on' na REP (explícito ou implícito por array de dados) */
+    const isToggleOn = (toggleId: string): boolean => {
+      // Remove prefixo 'b602_' do ID para casar com a chave no JSON armazenado
+      // Ex: 'b602_armas_toggle' → 'armas_toggle'  /  'b602_cartuchos_toggle' → 'cartuchos_toggle'
+      const storedKey = toggleId.replace(/^b602_/, '');
+
+      // Toggle explícito: valor 'on'/'off' armazenado diretamente
+      if (b602[storedKey] === 'on') return true;
+
+      // Toggle implícito: array de dados correspondente existe e tem itens
+      // Ex: 'cartuchos_toggle' → 'cartuchos' (array com os itens cadastrados)
+      const arrayKey = storedKey.replace('_toggle', '');
+      const arr = b602[arrayKey];
+      return Array.isArray(arr) && arr.length > 0;
+    };
+
+    return allToggles
+      .filter(toggle => {
+        const selfOn = isToggleOn(toggle.id);
+        if (toggle.subToggles) {
+          const activeSubs = toggle.subToggles.filter(sub => isToggleOn(sub.id));
+          return selfOn || activeSubs.length > 0;
+        }
+        return selfOn;
+      })
+      .map(toggle => {
+        if (toggle.subToggles) {
+          const activeSubs = toggle.subToggles.filter(sub => isToggleOn(sub.id));
+          return { ...toggle, subToggles: activeSubs.length > 0 ? activeSubs : undefined };
+        }
+        return toggle;
+      });
+  }, [editando?.tipo_exame_codigo, exameCamposEspecificos]);
 
   const togglePanel = useCallback(() => {
     setPanelCollapsed(prev => !prev);
@@ -2483,6 +2528,7 @@ export const LaudosPage: React.FC = () => {
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
                         placeholderChaves={placeholderChaves}
+                        condToggles={exameToggles}
                       />
                     </PlaceholderContextMenu>
                   </div>
@@ -2533,6 +2579,7 @@ export const LaudosPage: React.FC = () => {
                                 laudoId={editando.id}
                                 placeholderChaves={placeholderChaves}
                                 onEditorInit={isIlustracoes ? handleIlustracoesEditorInit : undefined}
+                                condToggles={exameToggles}
                               />
 
                               {isIlustracoes && ilustracoesRemounting && (
