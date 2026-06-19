@@ -174,6 +174,25 @@ function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string):
               String(e.origem || ''), String(e.espoleta || ''), String(e.estojo || ''),
               Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : String(e.observacao || '')]));
         }
+
+        const armas = b602.armas as Record<string, unknown>[] | undefined;
+        if (armas?.length) {
+          html += `<table style="${REP_TABLE_STYLES.table}">`;
+          html += buildRepTableTitle('ARMAS', 1);
+          html += `<tr><td style="padding:4px 0 0 0;border:none">`;
+          html += buildRepNumberedTable('ARMAS - IDENTIFICAÇÃO',
+            ['Tipo', 'Marca', 'Calibre', 'Nº Série', 'Nº Cano', 'Qtd'],
+            armas.map(a => [String(a.tipo || ''), String(a.marca || ''), String(a.calibre || ''),
+              String(a.numeracao_serie || ''), String(a.numeracao_cano || ''),
+              String(a.quantidade || '')]));
+          html += buildRepNumberedTable('ARMAS - DADOS TÉCNICOS',
+            ['Cap. Carreg.', 'Compr. Cano', 'Acabamento', 'Funcionamento', 'Est. Conservação', 'Dito Ofício', 'Nº Lacre'],
+            armas.map(a => [String(a.capacidade_carregador || ''), String(a.comprimento_cano || ''),
+              String(a.acabamento || ''), String(a.funcionamento || ''),
+              String(a.estado_conservacao || ''), String(a.dito_oficio || ''),
+              String(a.numero_lacre || '')]));
+          html += `</td></tr></table>`;
+        }
       }
 
       // Local do fato detalhado

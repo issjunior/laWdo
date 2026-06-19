@@ -109,7 +109,62 @@ if (result.success && result.data) {
 | `src/main/ipc/handlers/template.handlers.ts` | Handler `template:previewPDF` — gera PDF via `printToPDF()` |
 | `src/main/security/index.ts` | CSP — `frame-src` e `object-src` com `blob:` |
 | `src/renderer/pages/TemplatesPage.tsx` | UI — botão, Dialog, conversão base64→Blob URL |
+| `src/renderer/pages/REPsPage.tsx` | `buildRepHtml()` — gera HTML das tabelas da REP (B-602, veículo, etc.) |
 | `src/preload/index.ts` | Ponte IPC `template.previewPDF` |
+
+---
+
+## Estrutura HTML do preview da REP (`buildRepHtml`)
+
+A função `buildRepHtml()` em `REPsPage.tsx` monta o HTML do preview PDF da REP a partir dos dados da requisição e dos `campos_especificos` (JSON). As seções seguem uma ordem fixa de tabelas com estilo consistente via `REP_TABLE_STYLES`.
+
+### Tabelas renderizadas (ordem)
+
+| # | Tabela | Condição | Colunas |
+|---|--------|----------|---------|
+| 1 | DADOS DA SOLICITAÇÃO | sempre | 4 (label-value 2-col) |
+| 2 | TRAMITAÇÃO | se houver datas | 4 (label-value 2-col) |
+| 3 | DADOS DO VEÍCULO | se `numeracao` tiver dados | 4 (label-value 2-col) |
+| 4 | DADOS DA INVESTIGAÇÃO | se `b602.envolvidos` tiver dados | 4 |
+| 5 | MATERIAL ENCAMINHADO | se `b602.material_enc` tiver dados | 6 (Natureza, Qtd, Tipo, Dito Ofício, Nº Lacre) |
+| 6 | CARTUCHOS | se `b602.cartuchos` tiver dados | 9 (Qtd, Calibre, Marca, Origem, Espoleta, Estojo, Projétil, Obs) |
+| 7 | ESTOJOS | se `b602.estojos` tiver dados | 8 (Qtd, Calibre, Marca, Origem, Espoleta, Estojo, Obs) |
+| 8 | ARMAS (wrapper) | se `b602.armas` tiver dados | wrapper + 2 sub-tabelas |
+| 9 | LOCAL DO FATO | se `ce.local_fato` ≠ `rep.local_fato` | 2 (label-value) |
+| 10 | OBSERVAÇÕES | se `rep.observacoes` | 1 |
+
+### Tabela wrapper — ARMAS
+
+A seção ARMAS possui 13 campos por arma (14 colunas com Item), o que não cabe em A4 retrato. A solução adotada é uma **tabela wrapper** com título "ARMAS" contendo duas sub-tabelas aninhadas:
+
+```
+┌─ ARMAS ───────────────────────────────┐  ← wrapper (título cinza, colspan=1)
+│                                        │  ← célula container (padding, sem borda)
+│  ┌─ ARMAS - IDENTIFICAÇÃO ──────────┐ │
+│  │ Item | Tipo | Marca | Calibre    │ │  ← 7 colunas
+│  │      | Nº Série | Nº Cano | Qtd  │ │
+│  └──────────────────────────────────┘ │
+│  ┌─ ARMAS - DADOS TÉCNICOS ─────────┐ │
+│  │ Item | Cap. Carreg. | Compr. Cano│ │  ← 8 colunas
+│  │      | Acabamento | Funcionamento │ │
+│  │      | Est. Conservação           │ │
+│  │      | Dito Ofício | Nº Lacre     │ │
+│  └──────────────────────────────────┘ │
+└───────────────────────────────────────┘
+```
+
+A wrapper usa `buildRepTableTitle('ARMAS', 1)` para o título externo. As sub-tabelas são geradas com `buildRepNumberedTable()` e ficam dentro de uma `<td style="padding:4px 0 0 0;border:none">`. Cada sub-tabela tem seu próprio `margin:12px 0` (do `REP_TABLE_STYLES.table`), garantindo separação visual entre elas.
+
+### Helpers de tabela
+
+| Helper | Uso |
+|--------|-----|
+| `buildRepTableTitle(titulo, colspan)` | Linha de título (fundo cinza, centralizado) |
+| `buildRepTwoCol(a,b,c,d)` | Linha 4 colunas (label 25% + valor 25% × 2) |
+| `buildRepLabelValue(label, valor, labelW?)` | Linha 2 colunas (label + valor) |
+| `buildRepNumberedTable(titulo, headers, rows)` | Tabela numerada com Item + colunas dinâmicas |
+
+`buildRepNumberedTable` é usada para as tabelas de Material Encaminhado, Cartuchos, Estojos e as sub-tabelas de Armas. Ela gera um `<table>` completo com linha de título, cabeçalho e corpo com numeração automática de itens.
 
 ## Lições aprendidas
 
