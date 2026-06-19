@@ -166,6 +166,62 @@ A wrapper usa `buildRepTableTitle('ARMAS', 1)` para o título externo. As sub-ta
 
 `buildRepNumberedTable` é usada para as tabelas de Material Encaminhado, Cartuchos, Estojos e as sub-tabelas de Armas. Ela gera um `<table>` completo com linha de título, cabeçalho e corpo com numeração automática de itens.
 
+---
+
+## Placeholder Resolution Pipeline
+
+Antes de gerar o PDF, o HTML do laudo passa por duas funções de resolução de placeholders, dependendo do fluxo:
+
+| Fluxo | Função | Arquivo |
+|-------|--------|---------|
+| Preview PDF (Visualizar) | `aplicarPlaceholders()` | `src/renderer/pages/LaudosPage.tsx:115` |
+| Exportação PDF/DOCX/ODT | `resolverPlaceholdersExportacao()` / `buildPlaceholderMapping()` | `src/renderer/lib/exportacao-placeholders.ts:44` |
+
+### Funcionamento
+
+1. **Mapeamento geral** — placeholders comuns (`rep_numero`, `perito_nome`, etc.) são mapeados diretamente a partir dos dados da REP e do perito logado.
+2. **Campos específicos (B-602)** — o JSON em `repData.campos_especificos` é parseado, e placeholders de cada grupo são resolvidos em laços individuais:
+   - `{{b602_envolvidos}}` / `{{b602_envolvido_N}}`
+   - `{{b602_material_enc_N_{campo}}}` — natureza, quantidade, tipo, dito_oficio, numero_lacre
+   - `{{b602_cartucho_N_{campo}}}` — quantidade, calibre, marca, origem, espoleta, estojo, projetil, observacao
+   - `{{b602_estojo_N_{campo}}}` — quantidade, calibre, marca, origem, espoleta, estojo, observacao
+   - **`{{b602_arma_N_{campo}}}`** — tipo, marca, calibre, numeracao_serie, numeracao_cano, capacidade_carregador, comprimento_cano, acabamento, funcionamento, estado_conservacao, quantidade, dito_oficio, numero_lacre
+3. **DOMParser** — spans com `data-placeholder="{{chave}}"` são substituídos pelos valores do mapping.
+4. **Regex residual** — `{{chave}}` remanescentes (digitados manualmente) são substituídos como fallback.
+
+### Manutenção futura
+
+Ao adicionar suporte a placeholders individuais de um novo grupo dentro do B-602 (ou de outro tipo de exame), o padrão é sempre o mesmo:
+
+1. O placeholder é inserido no editor via `PlaceholderContextMenu` (ver `spec/03 laudo/menu_contexto.md`)
+2. A chave segue o formato `{prefixo}_{N}_{campo}`, onde `N` é 1-based
+3. Ambos os arquivos abaixo **devem** ser atualizados com um `forEach` idêntico:
+
+```ts
+grupo.forEach((item, i) => {
+  const idx = i + 1;
+  mapping[`prefixo_${idx}_campo1`] = item.campo1 || '';
+  mapping[`prefixo_${idx}_campo2`] = item.campo2 || '';
+  // ...
+});
+```
+
+| Arquivo | Função a modificar |
+|---------|-------------------|
+| `src/renderer/pages/LaudosPage.tsx` | `aplicarPlaceholders` (bloco `if (b602)`) |
+| `src/renderer/lib/exportacao-placeholders.ts` | `buildPlaceholderMapping` (bloco `if (b602)`) |
+
+### Arquivos relevantes da pipeline
+
+| Arquivo | Papel |
+|---------|-------|
+| `src/renderer/pages/LaudosPage.tsx` | `aplicarPlaceholders()` — resolução para preview PDF |
+| `src/renderer/lib/exportacao-placeholders.ts` | `buildPlaceholderMapping()` + `resolverPlaceholdersExportacao()` — resolução para exportação |
+| `src/renderer/lib/tabelas-placeholder.ts` | Construtores de tabelas HTML (`buildArmasTabela`, `buildNumberedTable`, `buildDadosInvestigacaoTable`) |
+| `src/renderer/components/rep/exam-fields/placeholders.ts` | Manifest de placeholders de campos específicos (`CAMPOS_ESPECIFICOS_PLACEHOLDERS`) |
+| `src/renderer/components/rep/exam-fields/services/b602.service.ts` | `ARMA_CAMPOS` — lista de campos de arma usada tanto na serialização quanto no menu de contexto |
+| `spec/05 placeholder/ciclo_placeholder.md` | Ciclo completo de placeholders de campos específicos |
+
 ## Lições aprendidas
 
 1. **`data:` URI para PDF é bloqueado** em iframes no Electron/Chromium — usar Blob URL

@@ -220,6 +220,24 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
           mapping['b602_total_armas'] = String(
             armas.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
           );
+
+          // --- Placeholders individuais de armas ---
+          armas.forEach((arma, i) => {
+            const idx = i + 1;
+            mapping[`b602_arma_${idx}_tipo`] = arma.tipo || '';
+            mapping[`b602_arma_${idx}_marca`] = arma.marca || '';
+            mapping[`b602_arma_${idx}_calibre`] = arma.calibre || '';
+            mapping[`b602_arma_${idx}_numeracao_serie`] = arma.numeracao_serie || '';
+            mapping[`b602_arma_${idx}_numeracao_cano`] = arma.numeracao_cano || '';
+            mapping[`b602_arma_${idx}_capacidade_carregador`] = arma.capacidade_carregador || '';
+            mapping[`b602_arma_${idx}_comprimento_cano`] = arma.comprimento_cano || '';
+            mapping[`b602_arma_${idx}_acabamento`] = arma.acabamento || '';
+            mapping[`b602_arma_${idx}_funcionamento`] = arma.funcionamento || '';
+            mapping[`b602_arma_${idx}_estado_conservacao`] = arma.estado_conservacao || '';
+            mapping[`b602_arma_${idx}_quantidade`] = arma.quantidade || '';
+            mapping[`b602_arma_${idx}_dito_oficio`] = arma.dito_oficio || '';
+            mapping[`b602_arma_${idx}_numero_lacre`] = arma.numero_lacre || '';
+          });
         }
       }
 

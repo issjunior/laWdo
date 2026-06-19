@@ -3,7 +3,7 @@
 **Data:** 2026-05-23
 **Status:** Implementado (parcial — 7/9 fases concluídas, 2 itens cosméticos pendentes)
 **Depende de:** Migration V17 (campos_especificos), Section Registry (exam-fields)
-**Última atualização:** 2026-06-08
+**Última atualização:** 2026-06-19
 
 ---
 
@@ -251,6 +251,16 @@ if (data.campos_especificos !== undefined) {
   sanitizedData.campos_especificos = data.campos_especificos; // null é válido
 }
 ```
+
+---
+
+### 3.3b B-602 — Placeholders Individuais de Armas
+
+Em 2026-06-19, foi adicionada a resolução dos placeholders individuais de cada arma (`{{b602_arma_N_tipo}}`, `{{b602_arma_N_numero_lacre}}`, etc.). Até então, apenas a tabela completa `{{b602_tabela_armas}}` era resolvida.
+
+**Mudança:** Tanto `aplicarPlaceholders()` quanto `buildPlaceholderMapping()` agora iteram `b602.armas` e registram no mapping os 13 campos por arma (mesmo padrão já usado para `material_enc`, `cartuchos` e `estojos`).
+
+**Detalhes da implementação** em `spec/03 laudo/visualizar_pdf.md` (seção "Placeholder Resolution Pipeline").
 
 ---
 

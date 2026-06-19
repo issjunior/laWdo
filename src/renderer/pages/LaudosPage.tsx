@@ -295,6 +295,27 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
             mapping[`b602_estojo_${i + 1}_observacao`] = Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : '';
           });
         }
+
+        // --- Placeholders individuais de armas ---
+        const armasData = b602.armas as Record<string, string>[] | undefined;
+        if (armasData && armasData.length > 0) {
+          armasData.forEach((arma, i) => {
+            const idx = i + 1;
+            mapping[`b602_arma_${idx}_tipo`] = arma.tipo || '';
+            mapping[`b602_arma_${idx}_marca`] = arma.marca || '';
+            mapping[`b602_arma_${idx}_calibre`] = arma.calibre || '';
+            mapping[`b602_arma_${idx}_numeracao_serie`] = arma.numeracao_serie || '';
+            mapping[`b602_arma_${idx}_numeracao_cano`] = arma.numeracao_cano || '';
+            mapping[`b602_arma_${idx}_capacidade_carregador`] = arma.capacidade_carregador || '';
+            mapping[`b602_arma_${idx}_comprimento_cano`] = arma.comprimento_cano || '';
+            mapping[`b602_arma_${idx}_acabamento`] = arma.acabamento || '';
+            mapping[`b602_arma_${idx}_funcionamento`] = arma.funcionamento || '';
+            mapping[`b602_arma_${idx}_estado_conservacao`] = arma.estado_conservacao || '';
+            mapping[`b602_arma_${idx}_quantidade`] = arma.quantidade || '';
+            mapping[`b602_arma_${idx}_dito_oficio`] = arma.dito_oficio || '';
+            mapping[`b602_arma_${idx}_numero_lacre`] = arma.numero_lacre || '';
+          });
+        }
       }
     } catch { /* mantém mapping atual */ }
   }
