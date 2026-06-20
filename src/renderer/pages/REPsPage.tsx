@@ -40,8 +40,7 @@ import {
 import type { REPFormData } from '@/components/rep/exam-fields';
 import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteFormFields';
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
-import { useRepStepper } from '@/components/rep/useRepStepper';
-import { Stepper } from '@/components/ui/stepper';
+import { RepStepper, useRepStepperContext } from '@/components/rep/RepStepper';
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import type { CreateTipoExameInput } from '@/lib/validators';
@@ -397,6 +396,20 @@ function formatarDataHora(iso: string | undefined): string {
   }
 }
 
+/** Wrapper para seção do formulário que faz highlight quando é o passo ativo do stepper. */
+const RepStepSection: React.FC<{ stepId: string; children: React.ReactNode }> = ({ stepId, children }) => {
+  const activeStep = useRepStepperContext();
+  return (
+    <div
+      id={`step-${stepId}`}
+      data-step={stepId}
+      className={`rounded-lg p-4 transition-all ${activeStep === stepId ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+    >
+      {children}
+    </div>
+  );
+};
+
 export const REPsPage: React.FC = () => {
   const [reps, setReps] = useState<REP[]>([]);
   const [loading, setLoading] = useState(true);
@@ -632,55 +645,6 @@ export const REPsPage: React.FC = () => {
       }
     }
   }, [solicitanteId, solicitantes]);
-
-  const stepper = useRepStepper({ form, tipoExameId, tipoExameSelecionado });
-
-  const observerPausedRef = useRef(false);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-
-  const handleStepClick = useCallback((id: string) => {
-    observerPausedRef.current = true;
-    stepper.onStepClick(id);
-    setTimeout(() => { observerPausedRef.current = false; }, 600);
-  }, [stepper]);
-
-  useEffect(() => {
-    if (!showForm) {
-      observerRef.current?.disconnect();
-      observerRef.current = null;
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      const elements = document.querySelectorAll('[data-step]');
-      if (elements.length === 0) return;
-
-      const ratios = new Map<string, number>();
-      const observer = new IntersectionObserver((entries) => {
-        if (observerPausedRef.current) return;
-        for (const entry of entries) {
-          ratios.set(entry.target.getAttribute('data-step')!, entry.intersectionRatio);
-        }
-        let bestId: string | null = null;
-        let bestRatio = 0;
-        ratios.forEach((ratio, id) => {
-          if (ratio > bestRatio) { bestRatio = ratio; bestId = id; }
-        });
-        if (bestId) {
-          stepper.setActiveStep(bestId);
-        }
-      }, { threshold: [0, 0.25, 0.5, 0.75, 1] });
-
-      elements.forEach(el => observer.observe(el));
-      observerRef.current = observer;
-    }, 100);
-
-    return () => {
-      clearTimeout(timeout);
-      observerRef.current?.disconnect();
-      observerRef.current = null;
-    };
-  }, [showForm, stepper.steps.length, stepper]);
 
   const handleNovo = () => {
     setEditingRep(null);
@@ -1420,24 +1384,19 @@ export const REPsPage: React.FC = () => {
       </div>
 
       {showForm && (
-        <div className="flex gap-6 max-w-[1600px] mx-auto items-start">
-          <div className="sticky top-[calc(var(--spacing-header,0px)+1rem)] self-start shrink-0">
-            <Stepper
-              steps={stepper.steps}
-              activeStep={stepper.activeStep}
-              completedSteps={stepper.completedSteps}
-              onStepClick={handleStepClick}
-              collapsed={stepper.collapsed}
-              onToggle={() => stepper.setCollapsed(!stepper.collapsed)}
-              repNumero={form.watch('numero')}
-              repModo={editingRep ? 'editar' : 'nova'}
-              tipoExameNome={
-                tipoExameSelecionado
-                  ? `${tipoExameSelecionado.codigo} - ${tipoExameSelecionado.nome}`
-                  : undefined
-              }
-            />
-          </div>
+        <RepStepper
+          form={form}
+          tipoExameId={tipoExameId}
+          tipoExameSelecionado={tipoExameSelecionado}
+          repNumero={form.watch('numero')}
+          repModo={editingRep ? 'editar' : 'nova'}
+          tipoExameNome={
+            tipoExameSelecionado
+              ? `${tipoExameSelecionado.codigo} - ${tipoExameSelecionado.nome}`
+              : undefined
+          }
+          showForm={showForm}
+        >
           <Card className="flex-1 min-w-0">
             <CardHeader>
               <div className="flex justify-between items-start gap-4">
@@ -1497,11 +1456,7 @@ export const REPsPage: React.FC = () => {
                     {/* ============================================ */}
                     {/* SEÇÃO 1: Dados da Solicitação */}
                     {/* ============================================ */}
-                    <div
-                      id="step-dados-solicitacao"
-                      data-step="dados-solicitacao"
-                      className={`rounded-lg p-4 transition-all ${stepper.activeStep === 'dados-solicitacao' ? 'ring-2 ring-primary bg-primary/5' : ''}`}
-                    >
+                    <RepStepSection stepId="dados-solicitacao">
                       <div className="flex items-center gap-2 mb-2">
                         <FileText size={16} className="text-primary" />
                         <h3 className="text-base font-semibold">Dados da Solicitação</h3>
@@ -1740,25 +1695,20 @@ export const REPsPage: React.FC = () => {
                           )}
                         />
                       </div>
-                    </div>
+                    </RepStepSection>
 
                     {/* ============================================ */}
                     {/* SEÇÕES DINÂMICAS: Campos Específicos */}
                     {/* ============================================ */}
                     {examSections.map(s => (
-                      <div
-                        key={s.id}
-                        id={`step-section-${s.id}`}
-                        data-step={`section-${s.id}`}
-                        className={`rounded-lg p-4 transition-all ${stepper.activeStep === `section-${s.id}` ? 'ring-2 ring-primary bg-primary/5' : ''}`}
-                      >
+                      <RepStepSection key={s.id} stepId={`section-${s.id}`}>
                         <div className="flex items-center gap-2 mb-2">
                           <s.icon size={16} className="text-primary" />
                           <h3 className="text-base font-semibold">{s.label}</h3>
                         </div>
                         <p className="text-xs text-muted-foreground mb-4">{s.description}</p>
                         <s.component form={form} mostrarPlaceholders={mostrarPlaceholders} />
-                      </div>
+                      </RepStepSection>
                     ))}
                   </div>
 
@@ -1772,7 +1722,7 @@ export const REPsPage: React.FC = () => {
               </Form>
             </CardContent>
           </Card>
-        </div>
+        </RepStepper>
       )}
     </div>
 

@@ -29,7 +29,7 @@ Substituir o Accordion por um **stepper vertical lateral colapsável** que guia 
 | 10 | Passos dinâmicos | Deriva do `SECTION_REGISTRY` existente via `EXAM_FIELD_MAP[codigo]`. Cada entrada vira um passo numerado sequencialmente após os fixos |
 | 11 | Completude de passo | Definida por lista explícita de `requiredFields` no `STEP_REGISTRY` (passos fixos) e `SECTION_REGISTRY` (passos dinâmicos). Campo obrigatório preenchido = conta para completude. Passos com `requiredFields: []` (sem campos obrigatórios) são automaticamente marcados como concluídos (`completed.add(stepId)`) — sem campos para validar, o passo está completo por definição |
 | 12 | Agrupamento | Removido. O campo `group` do `SECTION_REGISTRY` é ignorado no stepper. Cada seção é um passo independente |
-| 13 | Reuso | Componente genérico `<Stepper>` em `ui/` + hook `useRepStepper` com lógica específica. `REPsPage.tsx` compõe `<Stepper>` + `useRepStepper` diretamente (acesso ao `activeStep` para destaque das seções). `RepStepper.tsx` existe como wrapper opcional com sticky já embutido |
+| 13 | Reuso | Componente genérico `<Stepper>` em `ui/` + hook `useRepStepper` com lógica específica. `RepStepper.tsx` compõe `<Stepper>` + `useRepStepper` + IntersectionObserver (scroll spy) + `RepStepperContext` para expor `activeStep` aos descendentes. `REPsPage.tsx` usa `<RepStepper>` diretamente, com `RepStepSection` (helper interno) consumindo `useRepStepperContext()` para highlight das seções |
 | 14 | Conteúdo do passo ativo | Todos os campos do formulário permanecem renderizados. A seção do passo ativo ganha destaque visual (borda `ring-2 ring-primary` + background) e scroll automático |
 | 15 | Passo bloqueado ao clicar | Tooltip explicativo listando quais campos faltam para desbloquear |
 | 16 | Accordion | Removido apenas do formulário em `REPsPage.tsx`. O componente `Accordion` de `ui/` permanece inalterado |
@@ -52,7 +52,7 @@ Substituir o Accordion por um **stepper vertical lateral colapsável** que guia 
 | Arquivo | Responsabilidade |
 |---|---|
 | `src/renderer/components/ui/stepper.tsx` | Componente `<Stepper>` genérico. Props: `steps: Step[]`, `activeStep: string`, `completedSteps: Set<string>`, `onStepClick: (id: string) => void`, `collapsed: boolean`, `onToggle: () => void`. Renderiza layout vertical com ícones, labels, linha conectora, indicadores de estado |
-| `src/renderer/components/rep/RepStepper.tsx` | Wrapper opcional: `<Stepper>` alimentado pelo hook `useRepStepper` com sticky já aplicado. Não usado diretamente — `REPsPage.tsx` compõe hook + Stepper manualmente para ter acesso ao `activeStep` |
+| `src/renderer/components/rep/RepStepper.tsx` | Componente principal: compõe `<Stepper>` + `useRepStepper` + IntersectionObserver (scroll spy) + sticky layout. Provê `RepStepperContext` com `activeStep`. Exporta hook `useRepStepperContext()` para consumo pelos descendentes (highlight de seções). Aceita `children` para o conteúdo do formulário |
 | `src/renderer/components/rep/useRepStepper.ts` | Hook: recebe `form`, `tipoExameId`, `tipoExameSelecionado`. Calcula `steps`, `activeStep`, `completedSteps`, `canUnlockDynamic`, `collapsed`/`setCollapsed`, `onStepClick`. Usa `STEP_REGISTRY` + `SECTION_REGISTRY` via `getDynamicSteps()`. Completude: passos com `requiredFields: []` não auto-completam |
 | `src/renderer/components/rep/step-registry.ts` | `STEP_REGISTRY` (passo fixo 1 com `id`, `label`, `icon`, `requiredFields`). Função `getDynamicSteps(codigo)` que deriva passos 2+ do `SECTION_REGISTRY` |
 
@@ -60,7 +60,7 @@ Substituir o Accordion por um **stepper vertical lateral colapsável** que guia 
 
 | Arquivo | Mudança |
 |---|---|
-| `src/renderer/pages/REPsPage.tsx` | Removidos imports `Accordion`/`AccordionItem`/`AccordionTrigger`/`AccordionContent`, ícones `Lock`/`Zap`, estados `camposEspecificosDesbloqueados`/`accordionValue` e useEffects associados. Adicionados imports `Stepper` + `useRepStepper`. Layout do formulário: `flex gap-6 max-w-[1600px]` com `<Stepper>` sticky à esquerda + `<Card className="flex-1">` à direita. Seções renderizadas flat com `id="step-*"`/`data-step` + destaque `ring-2 ring-primary bg-primary/5` na seção ativa via `stepper.activeStep`. Scroll automático (`scrollIntoView`) ao clicar no stepper. Botões Salvar/Cancelar fixos no rodapé. Input Nº do BO: removido placeholder falso, adicionado `HelpIcon` com formato |
+| `src/renderer/pages/REPsPage.tsx` | Removidos imports `Accordion`/`AccordionItem`/`AccordionTrigger`/`AccordionContent`, ícones `Lock`/`Zap`, estados `camposEspecificosDesbloqueados`/`accordionValue` e useEffects associados. Adicionados imports `RepStepper` + `useRepStepperContext`. Layout do formulário: `<RepStepper>` (com props `form`, `tipoExameId`, `tipoExameSelecionado`, `repNumero`, `repModo`, `tipoExameNome`, `showForm`) wrappeia o `<Card>`. Helper `RepStepSection` (usa `useRepStepperContext()`) substitui divs manuais com `data-step` + `stepper.activeStep`. Botões Salvar/Cancelar fixos no rodapé. Input Nº do BO: removido placeholder falso, adicionado `HelpIcon` com formato |
 | `src/renderer/components/rep/exam-fields/index.ts` | Adicionado `requiredFields: string[]` a cada entrada do `SECTION_REGISTRY`: `local_fato: ['local_fato']`, `numeracao: ['numeracao_veiculo']`, `acionamento: []` |
 | `src/renderer/components/rep/exam-fields/types.ts` | Adicionado campo `requiredFields: string[]` à interface `ExamSection` |
 | `src/renderer/components/rep/exam-fields/numeracao.tsx` | Adicionado `COR_MAP` (cores CSS) + bolinhas coloridas (`inline-block w-3 h-3 rounded-full`) ao lado de cada opção no Select de Cor |
@@ -218,13 +218,13 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
 - [x] Criar `src/renderer/components/ui/stepper.tsx` — componente genérico
 - [x] Criar `src/renderer/components/rep/step-registry.ts` — STEP_REGISTRY + getDynamicSteps + getMissingUnlockFields
 - [x] Criar `src/renderer/components/rep/useRepStepper.ts` — hook com toda lógica
-- [x] Criar `src/renderer/components/rep/RepStepper.tsx` — composição Stepper + hook (wrapper opcional)
+- [x] Criar `src/renderer/components/rep/RepStepper.tsx` — componente principal com contexto, IntersectionObserver, sticky layout e children
 - [x] Adicionar `requiredFields` ao `SECTION_REGISTRY` em `exam-fields/index.ts`
 - [x] Adicionar `requiredFields` à interface `ExamSection` em `exam-fields/types.ts`
 - [x] Modificar `REPsPage.tsx`:
   - [x] Remover imports: `Accordion`, `AccordionContent`, `AccordionItem`, `AccordionTrigger`, `Lock`, `Zap`
   - [x] Remover estados: `camposEspecificosDesbloqueados`, `accordionValue` e useEffects associados
-  - [x] Adicionar imports `Stepper` + `useRepStepper`
+  - [x] Adicionar imports `RepStepper` + `useRepStepperContext`
   - [x] Mudar layout do formulário para flex row (stepper sticky + card flex-1)
   - [x] Adicionar `id="step-*"` e `data-step` nas seções do formulário para scroll/destaque
   - [x] Implementar lógica de destaque visual da seção ativa (`ring-2 ring-primary bg-primary/5`)
