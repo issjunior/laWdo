@@ -17,8 +17,11 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm run test:watch` | Vitest em watch mode |
 | `npm run test:coverage` | Vitest com coverage (threshold 70%) |
 | `npm run package` | Empacotar com electron-builder |
+| `/graphify` | Consultar o knowledge graph do projeto (skill Claude Code) |
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`.
+
+O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções.
 
 ---
 
@@ -145,6 +148,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 3. **Sempre usar `HashRouter`** (não `BrowserRouter`) — `BrowserRouter` quebra em produção no Electron.
 4. **Sempre criar migration ao alterar schema** — incrementar `CURRENT_SCHEMA_VERSION` sem criar a função `migrateVXX()` correspondente corrompe upgrades do banco.
 5. O script `scripts/fix-imports.mjs` roda no postbuild para adicionar extensões `.js` nos imports relativos (TypeScript `module: NodeNext` exige, mas `tsc` não adiciona).
+6. **Em caso de dúvida** — perguntar, somente prosseguir quando souber ao menos 95% do que fazer.
 
 ---
 
@@ -215,6 +219,6 @@ Se nenhuma alteração for necessária, informar em uma linha.
 
 - `PRD.md` — requisitos do produto e contexto de negócio.
 - `spec/` — especificações detalhadas por funcionalidade.
+- `graphify-out/GRAPH_REPORT.md` — relações entre arquivos e funções.
 
 Consulte sob demanda, apenas quando necessário para entender requisitos.
-Em caso de dúvida perguntar ao desenvolvedor, somente prosseguir quando souber o que fazer (ao menos 95% de certeza da implmentação). 
