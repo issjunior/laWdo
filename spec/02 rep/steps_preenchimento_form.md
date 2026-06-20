@@ -25,7 +25,7 @@ Substituir o Accordion por um **stepper vertical lateral colapsável** que guia 
 | 6 | Passos 3+ sem tipo de exame | Bloqueados com ícone de cadeado e tooltip explicativo |
 | 7 | Desbloqueio | Mantido: passos 3+ só desbloqueiam quando os 5 campos estiverem preenchidos (`numero`, `data_requisicao`, `tipo_solicitacao`, `numero_documento`, `tipoExameId`). Cadeado visível no stepper com tooltip listando campos faltantes |
 | 8 | Layout | Flex row: `[Stepper ~220px] [Card formulário flex-1]` dentro do container `max-w-[1600px]` do REPsPage. Stepper com toggle de colapso |
-| 9 | Colapso | Toggle manual (botão seta), padrão é expandido. Colapsado: ~40-50px mostrando números + barra de progresso |
+| 9 | Colapso | Toggle manual (botão seta), padrão é expandido. Colapsado: ~44px mostrando números conectando os dots |
 | 10 | Passos dinâmicos | Deriva do `SECTION_REGISTRY` existente via `EXAM_FIELD_MAP[codigo]`. Cada entrada vira um passo numerado sequencialmente após os fixos |
 | 11 | Completude de passo | Definida por lista explícita de `requiredFields` no `STEP_REGISTRY` (passos fixos) e `SECTION_REGISTRY` (passos dinâmicos). Campo obrigatório preenchido = conta para completude. Passos com `requiredFields: []` (sem campos obrigatórios) são automaticamente marcados como concluídos (`completed.add(stepId)`) — sem campos para validar, o passo está completo por definição |
 | 12 | Agrupamento | Removido. O campo `group` do `SECTION_REGISTRY` é ignorado no stepper. Cada seção é um passo independente |
@@ -36,7 +36,7 @@ Substituir o Accordion por um **stepper vertical lateral colapsável** que guia 
 | 17 | Botões Salvar/Cancelar | Fixos no rodapé do `CardContent`, sempre visíveis. Salvar valida tudo via zod `superRefine` e submete |
 | 18 | Definição de requiredFields | Lista explícita no `STEP_REGISTRY` para passos 1-2 e no `SECTION_REGISTRY` para passos 3+. Ex: `requiredFields: ['numero', 'data_requisicao', 'tipo_solicitacao', 'numero_documento']` |
 | 19 | Auto-avançar | Não. Usuário decide quando navegar. O check verde é o feedback de "pronto" |
-| 20 | Stepper colapsado | Números + barra de progresso vertical conectando os dots. Sem labels, sem ícones |
+| 20 | Stepper colapsado | Apenas números sequenciais de cada etapa (ou cadeado de Lock se bloqueado) com conector sutil. Sem labels, barra de progresso removida |
 | 21 | Destaque do passo ativo no formulário | Scroll automático (`scrollIntoView`) + borda `ring-2 ring-primary` + background `bg-primary/5` na seção correspondente |
 | 22 | Scroll do stepper | Sticky via wrapper `<div className="sticky top-[calc(var(--spacing-header,0px)+1rem)]">` no `REPsPage.tsx` — fixo durante o scroll da página, compensando o header |
 | 23 | GDL Warning | Exibido como banner no topo do formulário, com botão GDL no CardHeader |
@@ -119,9 +119,9 @@ Passos dinâmicos (visíveis após tipo de exame selecionado, bloqueados até 5 
 
 | Estado | Aparência |
 |---|---|
-| `pending` | Círculo cinza vazio, texto normal |
-| `active` | Círculo preenchido cor primária, texto bold |
-| `complete` | Check verde (CheckCircle), texto normal |
+| `pending` | Círculo (borda sem preenchimento) contendo o número da etapa, texto normal |
+| `active` | Círculo preenchido na cor primária (azul) contendo o número da etapa, texto em negrito |
+| `complete` | Círculo preenchido na cor verde contendo o número da etapa, texto normal |
 | `blocked` | Ícone Lock, opacidade reduzida, cursor `not-allowed` |
 
 ### Tooltip ao clicar em passo bloqueado

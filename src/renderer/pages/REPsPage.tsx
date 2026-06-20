@@ -1429,13 +1429,24 @@ export const REPsPage: React.FC = () => {
               onStepClick={handleStepClick}
               collapsed={stepper.collapsed}
               onToggle={() => stepper.setCollapsed(!stepper.collapsed)}
+              repNumero={form.watch('numero')}
+              repModo={editingRep ? 'editar' : 'nova'}
+              tipoExameNome={
+                tipoExameSelecionado
+                  ? `${tipoExameSelecionado.codigo} - ${tipoExameSelecionado.nome}`
+                  : undefined
+              }
             />
           </div>
           <Card className="flex-1 min-w-0">
             <CardHeader>
               <div className="flex justify-between items-start gap-4">
                 <div className="space-y-1">
-                  <CardTitle>{editingRep ? 'Editar REP' : 'Nova Requisição de Exame Pericial'}</CardTitle>
+                  <CardTitle>
+                    {editingRep
+                      ? `Editar REP ${editingRep.numero}`
+                      : 'Nova Requisição de Exame Pericial'}
+                  </CardTitle>
                   <CardDescription>
                     Campos marcados com <span className="font-semibold">*</span> são obrigatórios.
                   </CardDescription>
