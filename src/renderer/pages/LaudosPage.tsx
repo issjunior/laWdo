@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -565,6 +566,69 @@ export const LaudosPage: React.FC = () => {
   const [ilustracoesRemounting, setIlustracoesRemounting] = useState(false);
   const remountScheduledRef = useRef(false);
   const scrollRestoreRef = useRef<number | null>(null);
+
+  // --- Filtro por abas ---
+  const [tabFiltro, setTabFiltro] = useState<string>('todos');
+
+  const contagem = useMemo(() => ({
+    todos: laudos.length,
+    em_andamento: laudos.filter(l => l.status === 'Em andamento').length,
+    concluidos: laudos.filter(l => l.status === 'Concluído').length,
+    entregues: laudos.filter(l => l.status === 'Entregue').length,
+  }), [laudos]);
+
+  const laudosFiltrados = useMemo(() => {
+    if (tabFiltro === 'todos') return laudos;
+    const statusMap: Record<string, string> = {
+      'em_andamento': 'Em andamento',
+      'concluidos': 'Concluído',
+      'entregues': 'Entregue',
+    };
+    return laudos.filter(l => l.status === statusMap[tabFiltro]);
+  }, [laudos, tabFiltro]);
+
+  const tituloTab: Record<string, string> = {
+    todos: 'Todos os Laudos',
+    em_andamento: 'Laudos em Andamento',
+    concluidos: 'Laudos Concluídos',
+    entregues: 'Laudos Entregues',
+  };
+
+  const pillVariant = (value: string) => {
+    const isActive = tabFiltro === value;
+    const base = 'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 h-auto';
+    if (!isActive) return cn(
+      base,
+      'bg-transparent border border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+      // Neutraliza o data-[state=active] do Radix/shadcn que daria bg-background num frame ínfimo
+      'data-[state=active]:bg-transparent data-[state=active]:border-border/60 data-[state=active]:text-muted-foreground data-[state=active]:shadow-none'
+    );
+    const colors: Record<string, string> = {
+      todos: 'bg-primary text-primary-foreground border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary',
+      em_andamento: 'bg-amber-500 text-white border-amber-500 data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:border-amber-500',
+      concluidos: 'bg-emerald-500 text-white border-emerald-500 data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:border-emerald-500',
+      entregues: 'bg-blue-500 text-white border-blue-500 data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:border-blue-500',
+    };
+    return cn(base, colors[value], 'shadow-sm data-[state=active]:shadow-sm');
+  };
+
+  const dotClasses = (value: string) => {
+    const isActive = tabFiltro === value;
+    const size = 'w-2.5 h-2.5 rounded-full shrink-0';
+    if (isActive) return cn(size, 'bg-white/90');
+    const colors: Record<string, string> = {
+      em_andamento: 'bg-amber-500',
+      concluidos: 'bg-emerald-500',
+      entregues: 'bg-blue-500',
+    };
+    return cn(size, colors[value] || 'bg-muted-foreground/40');
+  };
+
+  const badgePill = (value: string) => {
+    const isActive = tabFiltro === value;
+    if (isActive) return 'bg-white/20 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold tabular-nums leading-tight';
+    return 'bg-muted text-muted-foreground text-xs px-1.5 py-0.5 rounded-full font-semibold tabular-nums leading-tight';
+  };
 
   const SINGLE_CHAT_KEY = 'single-editor';
 
@@ -2258,7 +2322,7 @@ export const LaudosPage: React.FC = () => {
   if (editando) {
     return (
       <TooltipProvider>
-        <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="w-full px-4 md:px-8 py-4 md:py-6 space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Editor de Laudo</h1>
@@ -2742,7 +2806,7 @@ export const LaudosPage: React.FC = () => {
 
   // Modo lista
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6">
+    <div className="w-full px-4 md:px-8 py-4 md:py-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Laudos</h1>
@@ -2750,10 +2814,35 @@ export const LaudosPage: React.FC = () => {
         </div>
       </div>
 
+      <Tabs value={tabFiltro} onValueChange={setTabFiltro} className="w-full">
+        <TabsList className="w-full h-auto bg-transparent p-0 gap-3 flex mb-4">
+          <TabsTrigger value="todos" className={pillVariant('todos')}>
+            {tabFiltro !== 'todos' && <span className={dotClasses('todos')} />}
+            Todos
+            <span className={badgePill('todos')}>{contagem.todos}</span>
+          </TabsTrigger>
+          <TabsTrigger value="em_andamento" className={pillVariant('em_andamento')}>
+            <span className={dotClasses('em_andamento')} />
+            Em andamento
+            <span className={badgePill('em_andamento')}>{contagem.em_andamento}</span>
+          </TabsTrigger>
+          <TabsTrigger value="concluidos" className={pillVariant('concluidos')}>
+            <span className={dotClasses('concluidos')} />
+            Concluídos
+            <span className={badgePill('concluidos')}>{contagem.concluidos}</span>
+          </TabsTrigger>
+          <TabsTrigger value="entregues" className={pillVariant('entregues')}>
+            <span className={dotClasses('entregues')} />
+            Entregues
+            <span className={badgePill('entregues')}>{contagem.entregues}</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <Card>
         <CardHeader>
-          <CardTitle>Laudos em Andamento</CardTitle>
-          <CardDescription>{laudos.length} laudo(s)</CardDescription>
+          <CardTitle>{tituloTab[tabFiltro]}</CardTitle>
+          <CardDescription>{laudosFiltrados.length} laudo(s)</CardDescription>
         </CardHeader>
         <CardContent>
           {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
@@ -2764,7 +2853,7 @@ export const LaudosPage: React.FC = () => {
           ) : (
             <DataTable
               columns={laudoColumns}
-              data={laudos}
+              data={laudosFiltrados}
               enableRowPinning
               hideSearch
               defaultSorting={[{ id: "data_requisicao", desc: true }]}

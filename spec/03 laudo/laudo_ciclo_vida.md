@@ -129,9 +129,55 @@ O mesmo botão muda de comportamento conforme o status:
 | Concluído | Verde | `bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700` |
 | Entregue | Azul | `bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700` |
 
+### Filtro por Abas (Segmented Pill Bar)
+
+**Arquivo**: `src/renderer/pages/LaudosPage.tsx` (linhas ~2812-2835)
+
+A listagem de laudos possui 4 pílulas de filtro horizontal, uma para cada visão:
+
+| Pílula | Status filtrado | Cor (ativa) | Dot |
+|--------|----------------|-------------|-----|
+| **Todos** | Todos os status | `bg-primary` | Mostrado apenas quando inativo (dot neutro) |
+| **Em andamento** | `Em andamento` | `bg-amber-500` | âmbar |
+| **Concluídos** | `Concluído` | `bg-emerald-500` | verde |
+| **Entregues** | `Entregue` | `bg-blue-500` | azul |
+
+#### Design visual
+
+- **Pílulas horizontais** com `flex-1` (distribuição igualitária) e `gap-3` entre elas
+- **Ativa**: background + borda sólida na cor do status, texto branco, `shadow-sm`
+- **Inativa**: `bg-transparent`, `border-border/60`, `text-muted-foreground`, hover sutil
+- **Contagem**: badge arredondado à direita do label (semi-transparente no ativo, `bg-muted` no inativo)
+- **Dot colorido**: presente nas inativas, substituído por dot branco nas ativas
+- **Transições**: `transition-all duration-200` em todas as interações
+- **Full-width**: a página usa `w-full` em vez do antigo `container max-w-[1400px]`
+
+#### Lógica de filtro
+
+```typescript
+const [tabFiltro, setTabFiltro] = useState<string>('todos');
+
+const laudosFiltrados = useMemo(() => {
+  if (tabFiltro === 'todos') return laudos;
+  const statusMap: Record<string, string> = {
+    'em_andamento': 'Em andamento',
+    'concluidos': 'Concluído',
+    'entregues': 'Entregue',
+  };
+  return laudos.filter(l => l.status === statusMap[tabFiltro]);
+}, [laudos, tabFiltro]);
+```
+
+#### Tratamento de `data-[state=active]`
+
+O `<TabsTrigger>` do shadcn/ui aplica `data-[state=active]:bg-background` por padrão, o que sobrescreveria as cores das pílulas ativas. A solução foi explicitar `data-[state=active]` nos próprios `className` de cada variante via funções helper (`pillVariant`, `dotClasses`, `badgePill`), garantindo que as cores do status prevaleçam independente do momento em que o Radix aplica o atributo.
+
+#### Componentes shadcn/ui usados
+
+`Tabs`, `TabsList`, `TabsTrigger`, `Badge`
+
 ---
 
-## Diálogo de Exclusão com Senha
 
 ### Fluxo condicional
 
