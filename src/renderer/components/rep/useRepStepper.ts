@@ -83,11 +83,8 @@ export function useRepStepper({
     (id: string) => {
       setActiveStep(id);
       const el = document.getElementById(`step-${id}`);
-      const main = document.querySelector('main');
-      if (el && main) {
-        const elTop = el.getBoundingClientRect().top;
-        const mainTop = main.getBoundingClientRect().top;
-        main.scrollTo({ top: Math.max(0, main.scrollTop + elTop - mainTop - 16), behavior: 'smooth' });
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     },
     [],

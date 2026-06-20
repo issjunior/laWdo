@@ -45,7 +45,8 @@ export const RepStepper: React.FC<RepStepperProps> = ({
   showForm,
   children,
 }) => {
-  const stepper = useRepStepper({ form, tipoExameId, tipoExameSelecionado });
+  const { steps, activeStep, setActiveStep, completedSteps, collapsed, setCollapsed, onStepClick } =
+    useRepStepper({ form, tipoExameId, tipoExameSelecionado });
 
   /* ── Scroll spy via IntersectionObserver ── */
   const observerPausedRef = useRef(false);
@@ -54,12 +55,12 @@ export const RepStepper: React.FC<RepStepperProps> = ({
   const handleStepClick = useCallback(
     (id: string) => {
       observerPausedRef.current = true;
-      stepper.onStepClick(id);
+      onStepClick(id);
       setTimeout(() => {
         observerPausedRef.current = false;
       }, 600);
     },
-    [stepper],
+    [onStepClick],
   );
 
   useEffect(() => {
@@ -89,7 +90,7 @@ export const RepStepper: React.FC<RepStepperProps> = ({
             }
           });
           if (bestId) {
-            stepper.setActiveStep(bestId);
+            setActiveStep(bestId);
           }
         },
         { threshold: [0, 0.25, 0.5, 0.75, 1] },
@@ -104,19 +105,19 @@ export const RepStepper: React.FC<RepStepperProps> = ({
       observerRef.current?.disconnect();
       observerRef.current = null;
     };
-  }, [showForm, stepper.steps.length, stepper]);
+  }, [showForm, steps.length]);
 
   return (
-    <RepStepperContext.Provider value={stepper.activeStep}>
+    <RepStepperContext.Provider value={activeStep}>
       <div className="flex gap-6 max-w-[1600px] mx-auto items-start">
         <div className="sticky top-[calc(var(--spacing-header,0px)+1rem)] self-start shrink-0">
           <Stepper
-            steps={stepper.steps}
-            activeStep={stepper.activeStep}
-            completedSteps={stepper.completedSteps}
+            steps={steps}
+            activeStep={activeStep}
+            completedSteps={completedSteps}
             onStepClick={handleStepClick}
-            collapsed={stepper.collapsed}
-            onToggle={() => stepper.setCollapsed(!stepper.collapsed)}
+            collapsed={collapsed}
+            onToggle={() => setCollapsed(!collapsed)}
             repNumero={repNumero}
             repModo={repModo}
             tipoExameNome={tipoExameNome}

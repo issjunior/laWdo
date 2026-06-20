@@ -1041,6 +1041,11 @@ body.dark {
     radial-gradient(at 80% 90%, rgba(79, 130, 210, 0.06) 0px, transparent 50%);
 }
 
+/* ── Stepper: folga no topo ao fazer scroll até as seções do formulário ── */
+[data-step] {
+  scroll-margin-top: 16px;
+}
+
 .welcome-card {
   background: #ffffff;
   border-radius: 14px;
