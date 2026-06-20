@@ -17,7 +17,7 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm run test:watch` | Vitest em watch mode |
 | `npm run test:coverage` | Vitest com coverage (threshold 70%) |
 | `npm run package` | Empacotar com electron-builder |
-| `/graphify` | Consultar o knowledge graph do projeto (skill Claude Code) |
+| `/graphify` | Consultar o knowledge graph do projeto (skill) |
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`.
 
@@ -32,6 +32,7 @@ O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas se
 - **Aliases de import**: `@` → `src/renderer/`, `@shared` → `src/shared/`, `@main` → `src/main/`, `@preload` → `src/preload/`.
 - **Estilo**: minimalista. Sem comentários óbvios — adicione comentários apenas quando ajudarem a própria IA a entender o código em manutenções futuras. Sem emojis, sem explicações prolixas.
 - **CSS**: exclusivamente Tailwind utility classes + variáveis CSS definidas em `src/renderer/styles/globals.css`. Não criar arquivos CSS novos nem estilos inline.
+- **Assets estáticos**: `src/renderer/types/assets.d.ts` declara tipos para imports de `.jpg/.jpeg/.png/.svg`. Código vendor (ex: TinyMCE em `src/renderer/public/tinymce/`) é excluído do lint via `.eslintignore`.
 
 ---
 
@@ -149,12 +150,17 @@ Consultas usam SQL bruto (strings template), não há ORM.
 4. **Sempre criar migration ao alterar schema** — incrementar `CURRENT_SCHEMA_VERSION` sem criar a função `migrateVXX()` correspondente corrompe upgrades do banco.
 5. O script `scripts/fix-imports.mjs` roda no postbuild para adicionar extensões `.js` nos imports relativos (TypeScript `module: NodeNext` exige, mas `tsc` não adiciona).
 6. **Em caso de dúvida** — perguntar, somente prosseguir quando souber ao menos 95% do que fazer.
+7. **`Omit<'onChange'>` em componentes com `onChange` próprio** — se um componente define sua própria prop `onChange` e estende `React.HTMLAttributes<HTMLDivElement>`, os tipos colidem (`HTMLAttributes` também tem `onChange: FormEventHandler`). Use `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>` para evitar o conflito. Ex: `TinyMceEditor`.
+8. **Index signature quando Zod usa `.passthrough()`** — se o schema usa `.passthrough()` para aceitar campos dinâmicos, a interface TypeScript precisa de `[key: string]: string`. Sem isso, acesso indexado e casts com `as Record<string, string>` falham. Ex: `REPFormData` em `exam-fields/types.ts`.
+9. **Arrow function wrapper em handlers com parâmetro opcional** — funções como `async (silent?: boolean) => void` não são atribuíveis a `MouseEventHandler` diretamente. Sempre usar `onClick={() => handler()}` em vez de `onClick={handler}`.
 
 ---
 
 ## Validação
 
 Zod + react-hook-form com `@hookform/resolvers`. Schemas em `src/renderer/lib/validators/`.
+
+Quando o schema Zod usa `.passthrough()` para aceitar campos dinâmicos, a interface TypeScript correspondente deve ter `[key: string]: string` (ver gotcha #8).
 
 ## AI / LLM
 

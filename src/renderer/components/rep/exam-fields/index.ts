@@ -50,7 +50,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: Clock,
     description: 'Registro de acionamento, chegada e saída do local',
     component: AcionamentoFields,
-    group: null,
+    group: undefined,
     requiredFields: [],
   },
   numeracao: {
@@ -59,7 +59,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: Hash,
     description: 'Dados específicos para exame de numeração (I-801)',
     component: NumeracaoFields,
-    group: null,
+    group: undefined,
     requiredFields: ['numeracao_veiculo'],
   },
   dados_investigacao: {
@@ -68,7 +68,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: Search,
     description: 'Envolvidos, data, local, BO, IP e solicitante',
     component: DadosInvestigacaoFields,
-    group: null,
+    group: undefined,
     requiredFields: ['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local_cidade', 'b602_local_uf'],
   },
   material_enc: {
@@ -77,7 +77,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: Package,
     description: 'Armas, munições e acessórios encaminhados para exame',
     component: MaterialEncFields,
-    group: null,
+    group: undefined,
     requiredFields: [],
   },
   cartuchos: {
@@ -86,7 +86,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: CircleDot,
     description: 'Especificações de cartuchos para exame balístico',
     component: CartuchosFields,
-    group: null,
+    group: undefined,
     requiredFields: [],
   },
   estojos: {
@@ -95,7 +95,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: Cylinder,
     description: 'Especificações de estojos para exame balístico',
     component: EstojosFields,
-    group: null,
+    group: undefined,
     requiredFields: [],
   },
   armas: {
@@ -104,7 +104,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: Crosshair,
     description: 'Especificações das armas periciadas',
     component: ArmasFields,
-    group: null,
+    group: undefined,
     requiredFields: [],
   },
 };

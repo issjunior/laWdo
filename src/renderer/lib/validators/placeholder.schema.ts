@@ -32,6 +32,9 @@ export const updatePlaceholderSchema = z.object({
   categoria_id: z.string().optional().nullable(),
 });
 
+export const placeholderResponseSchema = placeholderSchema;
+
 export type Placeholder = z.infer<typeof placeholderSchema>;
+export type PlaceholderResponse = z.infer<typeof placeholderResponseSchema>;
 export type CreatePlaceholderInput = z.infer<typeof createPlaceholderSchema>;
 export type UpdatePlaceholderInput = z.infer<typeof updatePlaceholderSchema>;

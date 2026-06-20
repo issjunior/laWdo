@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -18,8 +17,6 @@ import {
   ArrowLeft, Plus, Trash2, GripVertical, Loader2, AlertCircle, Save, Link2, Search,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { DataTable } from '@/components/data-table/data-table';
-import type { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 
 interface EtapaWizard {
@@ -397,7 +394,7 @@ const WizardEditorPage: React.FC = () => {
                 <div className="space-y-1">{renderArvoreEtapas(arvore.etapas)}</div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>Nenhuma etapa. Clique em "+ Etapa" para começar.</p>
+                  <p>Nenhuma etapa. Clique em &quot;+ Etapa&quot; para começar.</p>
                 </div>
               )}
             </CardContent>

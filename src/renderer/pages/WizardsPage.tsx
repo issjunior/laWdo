@@ -309,7 +309,7 @@ const WizardsPage: React.FC = () => {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Excluir Wizard</DialogTitle>
-              <DialogDescription>Tem certeza que deseja excluir "{deletingItem?.nome}"?</DialogDescription>
+              <DialogDescription>Tem certeza que deseja excluir &quot;{deletingItem?.nome}&quot;?</DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>

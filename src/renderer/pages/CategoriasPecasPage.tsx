@@ -266,7 +266,7 @@ const CategoriasPecasPage: React.FC = () => {
   if (error) return (
     <div className="container p-6">
       <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>
-      <Button variant="outline" onClick={loadData} className="mt-4">Tentar novamente</Button>
+      <Button variant="outline" onClick={() => loadData()} className="mt-4">Tentar novamente</Button>
     </div>
   );
 
@@ -422,7 +422,7 @@ const CategoriasPecasPage: React.FC = () => {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button onClick={handleSave} disabled={saving} className="flex-1">
+                  <Button onClick={() => handleSave()} disabled={saving} className="flex-1">
                     {saving && <Loader2 size={16} className="mr-2 animate-spin" />}
                     {isCreating ? 'Criar' : 'Salvar'}
                   </Button>

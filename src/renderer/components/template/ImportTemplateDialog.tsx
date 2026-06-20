@@ -56,7 +56,7 @@ interface ImportTemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tiposExame: { id: string; codigo?: string | null; nome: string }[];
-  placeholders: { id: string; chave: string; nome: string }[];
+  placeholders: { id: string; chave: string; descricao: string; categoria_id: string }[];
   onImportSuccess: () => void;
 }
 
@@ -378,7 +378,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="imp-tipo">Tipo de Exame *</Label>
-                  <Select value={tipoExameId} onValueChange={setTipoExameId}>
+                  <Select value={tipoExameId} onValueChange={(value: string) => setTipoExameId(value)}>
                     <SelectTrigger id="imp-tipo">
                       <SelectValue placeholder="Selecione o tipo..." />
                     </SelectTrigger>

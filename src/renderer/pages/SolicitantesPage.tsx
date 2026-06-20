@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { createSolicitanteSchema, type Solicitante } from '@/lib/validators/solicitante.schema';
+import { createSolicitanteSchema, type Solicitante, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteFormFields';
 
 export const SolicitantesPage: React.FC = () => {
@@ -30,7 +30,7 @@ export const SolicitantesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSolicitante, setEditingSolicitante] = useState<Solicitante | null>(null);
-  const [formData, setFormData] = useState<SolicitanteCreateData>({
+  const [formData, setFormData] = useState<CreateSolicitanteInput>({
     nome: '',
     tipo: '',
     endereco: '',
@@ -196,7 +196,8 @@ export const SolicitantesPage: React.FC = () => {
     }
   };
 
-  // Desativar solicitante (soft delete)
+  // Desativar solicitante (soft delete) — não utilizado atualmente
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDesativar = async (id: string) => {
     if (!confirm('Tem certeza que deseja desativar este solicitante? Ele deixará de aparecer na lista de ativos, mas permanecerá no banco de dados para fins históricos.')) {
       return;

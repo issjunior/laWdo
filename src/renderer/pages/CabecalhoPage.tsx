@@ -277,7 +277,7 @@ export const CabecalhoPage: React.FC = () => {
               <TinyMceEditor
                 editorId="cabecalho-paginas-editor"
                 value={conteudoPaginas}
-                onChange={setConteudoPaginas}
+                onChange={(html: string) => setConteudoPaginas(html)}
                 height={300}
                 placeholder="FLS. {{pagina}}/{{totalPaginas}}&#10;LAUDO nº {{numero_rep}}"
                 placeholderChaves={extraPlaceholderChaves}
@@ -318,7 +318,7 @@ export const CabecalhoPage: React.FC = () => {
                 <TinyMceEditor
                   editorId="cabecalho-editor"
                   value={conteudo}
-                  onChange={setConteudo}
+                  onChange={(html: string) => setConteudo(html)}
                   height={300}
                   placeholder="Digite o cabeçalho da primeira página..."
                   placeholderChaves={placeholderChaves}

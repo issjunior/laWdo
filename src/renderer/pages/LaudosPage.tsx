@@ -67,6 +67,7 @@ function buildFiguresHtml(imagens: Array<{ url: string; id: string; legenda: str
 interface Placeholder {
   id: string;
   chave: string;
+  valor: string;
   descricao: string;
   categoria_id: string;
 }
@@ -1553,12 +1554,13 @@ export const LaudosPage: React.FC = () => {
 
   const handleExportar = async (formato: 'pdf' | 'docx' | 'odt') => {
     if (!editando) return;
+    let toastId: string | number | undefined;
     try {
       setExportando(true);
       setError(null);
 
       const labelFormato = formato === 'pdf' ? 'PDF' : formato === 'docx' ? 'Word (.docx)' : 'ODT (.odt)';
-      const toastId = toast.loading(`Exportando laudo como ${labelFormato}...`);
+      toastId = toast.loading(`Exportando laudo como ${labelFormato}...`);
 
       const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
       if (!rRep.success || !rRep.data) {
@@ -2622,7 +2624,7 @@ export const LaudosPage: React.FC = () => {
                       <TinyMceEditor
                         editorId="laudo-single-editor"
                         initialValue={singleEditorHtml}
-                        onChange={setSingleEditorHtml}
+                        onChange={(html: string) => setSingleEditorHtml(html)}
                         height={560}
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}

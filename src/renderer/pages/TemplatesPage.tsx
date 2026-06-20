@@ -18,13 +18,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
-import { removerFormatacaoPlaceholders, converterPlaceholdersTextuais } from '@/lib/utils';
+import { converterPlaceholdersTextuais } from '@/lib/utils';
 import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields';
-import type { MenuSection, ExamToggle } from '@/components/rep/exam-fields';
+import type { ExamToggle } from '@/components/rep/exam-fields';
 
 interface TemplateItem {
   id: string;
@@ -69,8 +69,8 @@ const emptySecaoForm = (): SecaoForm => ({
 interface Placeholder {
   id: string;
   chave: string;
-  descricao: string | null;
-  categoria_id: string | null;
+  descricao: string;
+  categoria_id: string;
 }
 
 interface Categoria {
@@ -166,7 +166,11 @@ export const TemplatesPage: React.FC = () => {
     }
     const r = await window.ipcAPI.placeholder.findAll();
     if (r.success && r.data) {
-      setPlaceholders(r.data);
+      setPlaceholders(r.data.map((p: any) => ({
+        ...p,
+        descricao: p.descricao || '',
+        categoria_id: p.categoria_id || '',
+      })));
     }
   }, []);
 
@@ -204,7 +208,7 @@ export const TemplatesPage: React.FC = () => {
       .map((sec, index) => {
         const nomeRaw = (sec.nome || '').trim();
         const nome = nomeRaw
-          ? (/^(?:se[cç]ão\b|\d+[\s\.\-\:]|[a-zA-Z][\.\-\:]\s|[IVXLCDM]+[\.\-\:]\s)/i.test(nomeRaw)
+          ? (/^(?:se[cç]ão\b|\d+[\s.\-:]|[a-zA-Z][.\-:]\s|[IVXLCDM]+[.\-:]\s)/i.test(nomeRaw)
             ? nomeRaw
             : `Seção ${index + 1}: ${nomeRaw}`)
           : `Seção ${index + 1}`;
@@ -1156,7 +1160,7 @@ export const TemplatesPage: React.FC = () => {
                   <TinyMceEditor
                     editorId="template-single-editor"
                     value={singleEditorHtml}
-                    onChange={setSingleEditorHtml}
+                    onChange={(html: string) => setSingleEditorHtml(html)}
                     height={520}
                     placeholder="Edite o laudo completo..."
                     placeholderChaves={placeholderChaves}
@@ -1166,7 +1170,7 @@ export const TemplatesPage: React.FC = () => {
               </PlaceholderContextMenu>
           ) : secoes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              Nenhuma seção. Clique em "Adicionar Seção" para começar.
+              Nenhuma seção. Clique em &quot;Adicionar Seção&quot; para começar.
             </div>
           ) : (
             secoes.map((secao, index) => (

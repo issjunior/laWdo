@@ -1,6 +1,7 @@
 import type { UseFormReturn } from 'react-hook-form';
 
 export interface REPFormData {
+  [key: string]: string;
   numero: string;
   solicitante_id: string;
   tipo_exame_id: string;
@@ -59,7 +60,7 @@ export interface ExamSectionProps {
 export interface ExamSection {
   id: string;
   label: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: React.ComponentType<{ size?: number | string }>;
   description: string;
   component: React.FC<ExamSectionProps>;
   group?: string;

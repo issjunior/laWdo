@@ -425,7 +425,6 @@ export const PlaceholdersPage: React.FC = () => {
                 onSelect={handleSelect}
                 onAdd={handleTreeAdd}
                 onMove={handleMove}
-                onOutdent={handleOutdent}
               />
             </CardContent>
           </Card>
