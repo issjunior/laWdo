@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, app } from 'electron';
 import { getLogger, type LogModule } from '../utils/logger.js'
 const log = getLogger('ipc');
 import { sanitizeInput, validateSqlQuery } from '../security/index.js';
-import { auditLogin, auditLogout } from '../services/audit-log.service.js';
+import { auditLogin } from '../services/audit-log.service.js';
 import { registerUserHandlers, registerVerifyPasswordHandler } from './handlers/user.handlers.js';
 import { registerSolicitanteHandlers } from './handlers/solicitante.handlers.js';
 import { registerTipoExameHandlers } from './handlers/tipo-exame.handlers.js';
