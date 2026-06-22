@@ -17,9 +17,13 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm run test:watch` | Vitest em watch mode |
 | `npm run test:coverage` | Vitest com coverage (threshold 70%) |
 | `npm run package` | Empacotar com electron-builder |
+| `npm run prune` | ts-prune (renderer) — exports não usados |
+| `npm run prune:all` | ts-prune nos 3 tsconfigs (renderer + main + preload) |
+| `npm run dead-code:check` | Aliás de `prune:all` |
 | `/graphify` | Consultar o knowledge graph do projeto (skill) |
+| `/check-dead-code` | Skill de auditoria de código morto |
 
-Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`.
+Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
 O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções.
 
@@ -123,7 +127,16 @@ shadcn/ui (New York, base Zinc, ícones Lucide) com Tailwind CSS e suporte a dar
 | `categorias/` | SortableCategoryTree |
 | `data-table/` | DataTable com paginação |
 | `layout/` | AppSidebar, Header, Footer |
-| `ui/` | 24 componentes shadcn/ui |
+| `ui/` | 26 componentes shadcn/ui |
+| `auth/` | Login, autenticação |
+| `avatar/` | Avatar/foto do periciando |
+| `forms/` | Formulários reutilizáveis |
+| `pecas/` | Peças processuais |
+| `placeholders/` | Lista e gerenciamento de placeholders |
+| `shared/` | Componentes compartilhados entre features |
+| `solicitantes/` | Gestão de solicitantes |
+| `template/` | Templates de laudo |
+| `tipos-exame/` | Tipos de exame |
 
 ---
 
@@ -153,6 +166,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 7. **`Omit<'onChange'>` em componentes com `onChange` próprio** — se um componente define sua própria prop `onChange` e estende `React.HTMLAttributes<HTMLDivElement>`, os tipos colidem (`HTMLAttributes` também tem `onChange: FormEventHandler`). Use `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>` para evitar o conflito. Ex: `TinyMceEditor`.
 8. **Index signature quando Zod usa `.passthrough()`** — se o schema usa `.passthrough()` para aceitar campos dinâmicos, a interface TypeScript precisa de `[key: string]: string`. Sem isso, acesso indexado e casts com `as Record<string, string>` falham. Ex: `REPFormData` em `exam-fields/types.ts`.
 9. **Arrow function wrapper em handlers com parâmetro opcional** — funções como `async (silent?: boolean) => void` não são atribuíveis a `MouseEventHandler` diretamente. Sempre usar `onClick={() => handler()}` em vez de `onClick={handler}`.
+10. **`DEAD_CODE_EXCEPTIONS.md`** — arquivos sinalizados como código morto por `ts-prune` mas que não devem ser removidos são registrados aqui. Ao adicionar uma exceção, justificar com motivo e data. Ver também: `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md`.
 
 ---
 
@@ -225,6 +239,8 @@ Se nenhuma alteração for necessária, informar em uma linha.
 
 - `PRD.md` — requisitos do produto e contexto de negócio.
 - `spec/` — especificações detalhadas por funcionalidade.
+- `DEAD_CODE_EXCEPTIONS.md` — exceções de código morto (não remover).
+- `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md` — painel de saúde do sistema (métricas de TS, lint, testes, código morto).
 - `graphify-out/GRAPH_REPORT.md` — relações entre arquivos e funções.
 
 Consulte sob demanda, apenas quando necessário para entender requisitos.
