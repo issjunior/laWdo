@@ -6,6 +6,68 @@
 
 ---
 
+## 🗺️ Visão Geral do Fluxo de Correção
+
+Este projeto tem **4 camadas de diagnóstico** que se complementam para identificar, decidir e remover código morto com segurança. A skill `check-dead-code` é o executor; os arquivos deste diretório são os insumos de contexto; e o Knip é o destino futuro para automação.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CAMADAS DE DIAGNÓSTICO                       │
+├───────────┬──────────────┬──────────────┬───────────────────────┤
+│   Painel  │  Abordagem   │    Grafo     │       Skill           │
+│  de Saúde │    Leve      │  (graphify)  │  check-dead-code      │
+│           │              │              │                       │
+│ (este arq)│ 01_...md     │ 03_...md     │ .claude/skills/       │
+│           │              │              │ check-dead-code/      │
+│ Métricas  │ Órfãos já    │ Impacto      │ Executa a auditoria   │
+│ atuais    │ removidos    │ estrutural   │ usando os 3 insumos   │
+└─────┬─────┴──────┬───────┴──────┬───────┴───────────┬───────────┘
+      │            │              │                   │
+      ▼            ▼              ▼                   ▼
+  "O QUE está   "O QUE já    "ONDE impacta   "COMO decidir
+   ruim?"       foi feito?"   no sistema?"    e remover?"
+                                              │
+                                              ▼
+                                      ┌───────────────┐
+                                      │     FUTURO     │
+                                      │    (Knip)      │
+                                      │                │
+                                      │ Automação no   │
+                                      │ CI/lint para   │
+                                      │ prevenir novos │
+                                      │ órfãos         │
+                                      └───────────────┘
+```
+
+### O papel de cada peça
+
+| Peça | O que é | Quando usar |
+|------|---------|-------------|
+| **`00_saude_do_sistema.md`** (este arquivo) | Painel com métricas atuais: build ✅, TS ~30 err, ESLint 540, testes 27/31, dead code ~310 | Consultar antes de auditar — mostra o panorama geral e categorias de falso positivo já mapeadas |
+| **`01_abordagem_leve_pre_knip.md`** | Plano concluído: lista de órfãos já removidos, imports limpos, scripts configurados | **Evitar retrabalho** — itens já tratados não são reanalisados |
+| **`02_plano_knip_futuro.md`** | Especificação do Knip: config, entry points, regras, pré-requisitos (testes ≥30%, CI) | **Futuro** — quando os pré-requisitos forem atingidos, Knip substitui ts-prune |
+| **`03_melhoria_graphify.md`** | Análise estrutural do grafo: god nodes, coesão de comunidades, bridges, impacto de remoção | **Decisão enriquecida** — saber se um nó morto é isolado ou parte de um hub crítico |
+| **Skill `check-dead-code`** (`.claude/skills/check-dead-code/`) | Orquestrador: lê os 4 insumos → roda ts-prune → cruza dados → decide → remove | **Agora** — auditoria sob demanda, invocada via `/check-dead-code` |
+| **Knip** (futuro) | Ferramenta AST que detecta arquivos órfãos + exports não usados + deps npm automaticamente | **Futuro** — integrado ao lint/CI, bloqueia código morto antes de entrar no repositório |
+
+### Resumo do ciclo
+
+```
+1. graphify update . --force        (gera grafo estrutural)
+       ↓
+2. LLM → 03_melhoria_graphify.md    (análise curada do grafo)
+       ↓
+3. npm run prune:all                (ts-prune detecta exports não usados)
+       ↓
+4. /check-dead-code                 (skill cruza ts-prune + 4 insumos + 7 critérios)
+       ↓
+5. ✅ Remove seguro | ⚠️ Manual | ❌ Falso positivo → DEAD_CODE_EXCEPTIONS.md
+       ↓
+6. [Futuro] Knip no CI             (previne novos órfãos automaticamente)
+```
+
+---
+
 ## 📊 Resumo Executivo
 
 | Métrica | Status | Quantidade | Meta | Tendência |
