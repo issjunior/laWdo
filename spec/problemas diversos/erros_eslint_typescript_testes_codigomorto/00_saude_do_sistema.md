@@ -143,5 +143,6 @@ A maioria são falsos positivos conhecidos:
 
 - [Abordagem leve anti-código morto (concluído)](01_abordagem_leve_pre_knip.md)
 - [Plano Knip futuro](02_plano_knip_futuro.md)
+- [Melhoria Graphify](03_melhoria_graphify.md) — visão estrutural baseada no grafo do graphify (god nodes, coesão de comunidades, bridges)
 - [Exceções de código morto](../../../DEAD_CODE_EXCEPTIONS.md)
 - Skill: `check-dead-code` em `.claude/skills/check-dead-code.md` (apenas local — não versionado)

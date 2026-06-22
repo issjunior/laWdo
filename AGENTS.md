@@ -25,7 +25,7 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
-O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções.
+O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções. Análises curadas (LLM) do grafo ficam em `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md`.
 
 ---
 
@@ -241,6 +241,7 @@ Se nenhuma alteração for necessária, informar em uma linha.
 - `spec/` — especificações detalhadas por funcionalidade.
 - `DEAD_CODE_EXCEPTIONS.md` — exceções de código morto (não remover).
 - `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md` — painel de saúde do sistema (métricas de TS, lint, testes, código morto).
-- `graphify-out/GRAPH_REPORT.md` — relações entre arquivos e funções.
+- `graphify-out/GRAPH_REPORT.md` — relações entre arquivos e funções (auto-gerado).
+- `spec/.../codigomorto/03_melhoria_graphify.md` — análise curada do grafo com recomendações de melhoria (gerado por LLM).
 
 Consulte sob demanda, apenas quando necessário para entender requisitos.
