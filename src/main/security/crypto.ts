@@ -139,45 +139,9 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
 };
 
 /**
- * Gera um hash seguro para identificadores únicos
- */
-export const generateSecureHash = (data: string): string => {
-  return crypto
-    .createHash('sha256')
-    .update(data + Date.now() + crypto.randomBytes(16).toString('hex'))
-    .digest('hex');
-};
-
-/**
  * Gera um token seguro aleatório
  */
 export const generateSecureToken = (length = 32): string => {
   return crypto.randomBytes(length).toString('hex');
 };
 
-/**
- * Verifica se um texto parece ser criptografado (formato válido)
- */
-export const isEncrypted = (text: string): boolean => {
-  try {
-    // Tentar decodificar base64
-    const data = Buffer.from(text, 'base64');
-
-    // Verificar tamanho mínimo
-    const minLength = SALT_LENGTH + IV_LENGTH + TAG_LENGTH + 1; // +1 para pelo menos 1 byte de texto criptografado
-    return data.length >= minLength;
-  } catch (error) {
-    return false;
-  }
-};
-
-// Exportar funções principais
-export const cryptoUtils = {
-  encrypt,
-  decrypt,
-  hashPassword,
-  verifyPassword,
-  generateSecureHash,
-  generateSecureToken,
-  isEncrypted,
-};

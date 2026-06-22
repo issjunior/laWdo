@@ -27,3 +27,10 @@ Arquivos que ferramentas de detecção sinalizam mas NÃO devem ser removidos.
 | Binário | Justificativa | Data |
 |---|---|---|
 | `electron-builder` | CLI via npm scripts | 22/06/2026 |
+
+## Código Removido (confirmado como morto)
+| Função/Objeto | Arquivo | Removido em | Evidência |
+|---|---|---|---|
+| `generateSecureHash()` | `src/main/security/crypto.ts` | 22/06/2026 | Nunca importada por nenhum arquivo |
+| `isEncrypted()` (exportada) | `src/main/security/crypto.ts` | 22/06/2026 | Nunca importada (serviço usa cópia local privada) |
+| `cryptoUtils` (objeto aggregator) | `src/main/security/crypto.ts` | 22/06/2026 | Nunca importado — consumidores importam funções individuais |

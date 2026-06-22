@@ -14,7 +14,7 @@
 | **TypeScript** (`npm run type-check`) | 🟡 ~30 erros | ~30 (era ~70 antes de 20/06) | 0 | 📉 melhora |
 | **ESLint** (`npm run lint`) | 🟠 540 erros | 540 err + 45 warn (era ~668 antes de 20/06) | 0 err | 📉 melhora |
 | **Testes** (`npm run test`) | 🟠 3 falhas | 27/31 pass (3 fail, 1 skip) | 31/31 | → |
-| **Código morto** (`npm run prune:all`) | 🔵 ~310 items | ~310 exports | — | → |
+| **Código morto** (`npm run prune:all`) | ✅ 0 real | ~310 total (falsos positivos: shadcn/ui, Zod, TinyMCE, props) | 0 real | → |
 
 **Build funcional ✅** — o sistema compila e roda. Os erros são de qualidade/estilo, não de runtime.
 
