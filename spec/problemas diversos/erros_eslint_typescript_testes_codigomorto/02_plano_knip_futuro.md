@@ -2,7 +2,7 @@
 
 > **Última atualização:** 22/06/2026
 >
-> **Status:** 🟡 **PLANO FUTURO** — implementação adiada até que pré-requisitos de maturidade do projeto sejam alcançados. Ver [Abordagem Leve (implementação imediata)](./antes_kip_abordagem_leve.md) para o plano em execução agora.
+> **Status:** 🟡 **PLANO FUTURO** — implementação adiada até que pré-requisitos de maturidade do projeto sejam alcançados. Ver [Abordagem Leve (implementação imediata)](./01_abordagem_leve_pre_knip.md) para o plano em execução agora.
 >
 > **Motivação:** O componente `RepStepper.tsx` foi descoberto como código morto (criado como wrapper opcional mas nunca importado) e posteriormente refatorado em componente principal com contexto, IntersectionObserver e children — transformando o órfão em peça central do stepper. Este documento propõe uma solução dupla — ferramenta automatizada + skill — para evitar que código morto se acumule. A implementação desta solução depende de pré-requisitos de maturidade do projeto (testes, CI) que ainda não foram alcançados.
 
@@ -52,14 +52,14 @@
 | > 400 fontes | ❌ ~212 fontes (excluindo vendor TinyMCE) |
 | `verbatimModuleSyntax` | ❌ Não habilitado |
 
-**Conclusão:** Nenhum pré-requisito está satisfeito. Enquanto isso, execute a [Abordagem Leve](./antes_kip_abordagem_leve.md).
+**Conclusão:** Nenhum pré-requisito está satisfeito. Enquanto isso, execute a [Abordagem Leve](./01_abordagem_leve_pre_knip.md).
 
 ---
 
 ## 🔗 Referências Cruzadas
 
-- **[antes_kip_abordagem_leve.md](./antes_kip_abordagem_leve.md)** — Plano de implementação IMEDIATA: limpeza manual + ts-prune + skill `/check-dead-code`
-- Este documento (knip_retira_codigo_morto.md) — Plano FUTURO: Knip completo com CI gate, a ser implementado quando os pré-requisitos forem alcançados
+- **[antes_kip_abordagem_leve.md](./01_abordagem_leve_pre_knip.md)** — Plano de implementação IMEDIATA: limpeza manual + ts-prune + skill `/check-dead-code`
+- Este documento (`02_plano_knip_futuro.md`) — Plano FUTURO: Knip completo com CI gate, a ser implementado quando os pré-requisitos forem alcançados
 
 ---
 
@@ -316,7 +316,7 @@ Depois de unused files, repita o mesmo processo para "unused exports" (são mais
 
 ## 📝 Plano de Execução
 
-> ⚠️ **Este plano é para execução FUTURA.** Os pré-requisitos ([ver seção acima](#-pré-requisitos-para-implementação)) não foram alcançados ainda. Enquanto isso, siga a [Abordagem Leve](./antes_kip_abordagem_leve.md).
+> ⚠️ **Este plano é para execução FUTURA.** Os pré-requisitos ([ver seção acima](#-pré-requisitos-para-implementação)) não foram alcançados ainda. Enquanto isso, siga a [Abordagem Leve](./01_abordagem_leve_pre_knip.md).
 
 ### Fase 1 — Instalação e Configuração
 
@@ -420,7 +420,7 @@ Arquivos que o Knip sinaliza mas NÃO devem ser removidos.
 
 ## 🔗 Referências
 
-- **[antes_kip_abordagem_leve.md](./antes_kip_abordagem_leve.md)** — Plano IMEDIATO: limpeza manual + ts-prune + skill `/check-dead-code`
+- **[antes_kip_abordagem_leve.md](./01_abordagem_leve_pre_knip.md)** — Plano IMEDIATO: limpeza manual + ts-prune + skill `/check-dead-code`
 - [Knip — Documentação Oficial](https://knip.dev/)
 - [Knip — Configuração com múltiplos tsconfigs](https://knip.dev/reference/configuration#typescript)
 - Skill: `check-dead-code` (`.claude/skills/check-dead-code.md`)

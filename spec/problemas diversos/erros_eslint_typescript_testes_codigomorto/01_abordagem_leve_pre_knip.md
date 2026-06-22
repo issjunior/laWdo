@@ -6,7 +6,7 @@
 >
 > **Motivação:** O projeto tem código morto identificado (~6 arquivos órfãos + ~10 imports não usados) que pode ser removido com segurança agora. Em vez de investir 4-6 horas configurando Knip (que exige pré-requisitos de maturidade ainda não alcançados), este plano entrega 80% do valor com 20% do esforço usando ferramentas leves.
 >
-> **Futuro:** Quando os pré-requisitos de maturidade forem alcançados (testes, CI), o [plano completo do Knip](./knip_retira_codigo_morto.md) deve ser implementado.
+> **Futuro:** Quando os pré-requisitos de maturidade forem alcançados (testes, CI), o [plano completo do Knip](./02_plano_knip_futuro.md) deve ser implementado.
 
 ---
 
@@ -254,7 +254,7 @@ Adicionar ao `.eslintrc.json`:
 
 ## 🛤️ Estágio 3 — Caminho para o Knip
 
-O plano completo do Knip está documentado em [knip_retira_codigo_morto.md](./knip_retira_codigo_morto.md) e deve ser implementado **quando os pré-requisitos abaixo forem satisfeitos**:
+O plano completo do Knip está documentado em [knip_retira_codigo_morto.md](./02_plano_knip_futuro.md) e deve ser implementado **quando os pré-requisitos abaixo forem satisfeitos**:
 
 ### Pré-requisitos para o Knip
 
@@ -278,7 +278,7 @@ O plano completo do Knip está documentado em [knip_retira_codigo_morto.md](./kn
 Quando os pré-requisitos estiverem satisfeitos:
 
 1. Instalar Knip: `npm install -D knip`
-2. Criar `knip.json` conforme especificado em [knip_retira_codigo_morto.md](./knip_retira_codigo_morto.md)
+2. Criar `knip.json` conforme especificado em [knip_retira_codigo_morto.md](./02_plano_knip_futuro.md)
 3. Integrar ao `lint`: `"lint": "eslint . --ext .ts,.tsx && knip"`
 4. Adicionar ao CI: workflow `lint.yml` com Knip
 5. Remover `ts-prune` (substituído pelo Knip)
@@ -305,7 +305,7 @@ Quando os pré-requisitos estiverem satisfeitos:
 
 ## 🔗 Referências
 
-- **[knip_retira_codigo_morto.md](./knip_retira_codigo_morto.md)** — Plano FUTURO completo do Knip (com CI gate, multi-tsconfig, regras)
+- **[knip_retira_codigo_morto.md](./02_plano_knip_futuro.md)** — Plano FUTURO completo do Knip (com CI gate, multi-tsconfig, regras)
 - [ts-prune — GitHub](https://github.com/nadeesha/ts-prune)
 - [eslint-plugin-import — no-unused-modules](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-unused-modules.md)
 - Skill: `check-dead-code` (`.claude/skills/check-dead-code.md`)
