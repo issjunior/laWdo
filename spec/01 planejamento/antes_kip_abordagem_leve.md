@@ -2,7 +2,7 @@
 
 > **Última atualização:** 22/06/2026
 >
-> **Status:** 🟢 **EM EXECUÇÃO** — implementação imediata, sem dependências de CI ou cobertura de testes.
+> **Status:** ✅ **CONCLUÍDO** — implementado em 22/06/2026 (commit `31aefc2`).
 >
 > **Motivação:** O projeto tem código morto identificado (~6 arquivos órfãos + ~10 imports não usados) que pode ser removido com segurança agora. Em vez de investir 4-6 horas configurando Knip (que exige pré-requisitos de maturidade ainda não alcançados), este plano entrega 80% do valor com 20% do esforço usando ferramentas leves.
 >
