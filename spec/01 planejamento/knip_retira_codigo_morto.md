@@ -1,21 +1,65 @@
 # 🔍 Plano: Detecção Automática de Código Morto com Knip
 
-> **Última atualização:** 21/06/2026
+> **Última atualização:** 22/06/2026
 >
-> **Motivação:** O componente `RepStepper.tsx` foi descoberto como código morto (criado como wrapper opcional mas nunca importado) e posteriormente refatorado em componente principal com contexto, IntersectionObserver e children — transformando o órfão em peça central do stepper. Este documento propõe uma solução dupla — ferramenta automatizada + skill — para evitar que código morto se acumule.
+> **Status:** 🟡 **PLANO FUTURO** — implementação adiada até que pré-requisitos de maturidade do projeto sejam alcançados. Ver [Abordagem Leve (implementação imediata)](./antes_kip_abordagem_leve.md) para o plano em execução agora.
+>
+> **Motivação:** O componente `RepStepper.tsx` foi descoberto como código morto (criado como wrapper opcional mas nunca importado) e posteriormente refatorado em componente principal com contexto, IntersectionObserver e children — transformando o órfão em peça central do stepper. Este documento propõe uma solução dupla — ferramenta automatizada + skill — para evitar que código morto se acumule. A implementação desta solução depende de pré-requisitos de maturidade do projeto (testes, CI) que ainda não foram alcançados.
 
 ---
 
 ## 📋 Sumário
 
-1. [O Problema](#-o-problema)
-2. [Solução Proposta](#-solução-proposta)
-3. [Knip — Ferramenta de Dead-Code Detection](#-knip--ferramenta-de-dead-code-detection)
-4. [Skill — Auditoria Sob Demanda](#-skill--auditoria-sob-demanda)
-5. [Comparação Skill vs Knip](#-comparação-skill-vs-knip)
-6. [Plano de Execução](#-plano-de-execução)
-7. [Verificação](#-verificação)
-8. [Exceções Documentadas](#-exceções-documentadas)
+1. [Pré-Requisitos para Implementação](#-pré-requisitos-para-implementação)
+2. [Referências Cruzadas](#-referências-cruzadas)
+3. [O Problema](#-o-problema)
+4. [Solução Proposta](#-solução-proposta)
+5. [Knip — Ferramenta de Dead-Code Detection](#-knip--ferramenta-de-dead-code-detection)
+6. [Skill — Auditoria Sob Demanda](#-skill--auditoria-sob-demanda)
+7. [Comparação Skill vs Knip](#-comparação-skill-vs-knip)
+8. [Plano de Execução](#-plano-de-execução)
+9. [Verificação](#-verificação)
+10. [Exceções Documentadas](#-exceções-documentadas)
+
+---
+
+## 🛑 Pré-Requisitos para Implementação
+
+**Este plano só deve ser implementado quando as condições abaixo forem satisfeitas.** O Knip é uma ferramenta poderosa, mas introduzi-la em um projeto sem a devida maturidade de qualidade gera mais riscos que benefícios.
+
+### Condições obrigatórias
+
+| # | Pré-requisito | Por quê? | Como medir |
+|---|---|---|---|
+| 1 | **Cobertura de testes ≥ 30%** em fluxos críticos | Sem testes, remover código baseado em análise estática é arriscado — imports dinâmicos (`lazy()`, `require()` condicional) podem não ser detectados | `npm run test:coverage` |
+| 2 | **CI estabelecido** rodando `type-check` + `lint` + `test` em push/PR | Knip será integrado ao `lint`; se não há CI, não há bloqueio real de código morto | Workflow GitHub Actions funcional |
+| 3 | **Cultura de qualidade estabelecida** na equipe | O `DEAD_CODE_EXCEPTIONS.md` exige disciplina de manutenção; falsos positivos precisam ser analisados, não ignorados | PRs revisados com atenção a imports/exports |
+
+### Condições desejáveis
+
+| # | Pré-requisito | Por quê? |
+|---|---|---|
+| 4 | **Projeto com > 400 fontes** TypeScript (hoje: ~212) | O custo de configurar Knip se dilui com a escala; em projetos menores, ts-prune + revisão manual são suficientes |
+| 5 | **TypeScript `verbatimModuleSyntax`** ou `isolatedModules` habilitado | Força `import type` explícito, reduzindo falsos positivos de "export não usado" que na verdade é re-exportado |
+
+### Estado atual dos pré-requisitos (22/06/2026)
+
+| Pré-requisito | Estado |
+|---|---|
+| Cobertura de testes ≥ 30% | ❌ ~1% (2 testes: `button.test.tsx`, `user.schema.test.ts`) |
+| CI estabelecido | ❌ Zero workflows GitHub Actions |
+| Cultura de qualidade | ⚠️ Em construção — lint e type-check já existem localmente |
+| > 400 fontes | ❌ ~212 fontes (excluindo vendor TinyMCE) |
+| `verbatimModuleSyntax` | ❌ Não habilitado |
+
+**Conclusão:** Nenhum pré-requisito está satisfeito. Enquanto isso, execute a [Abordagem Leve](./antes_kip_abordagem_leve.md).
+
+---
+
+## 🔗 Referências Cruzadas
+
+- **[antes_kip_abordagem_leve.md](./antes_kip_abordagem_leve.md)** — Plano de implementação IMEDIATA: limpeza manual + ts-prune + skill `/check-dead-code`
+- Este documento (knip_retira_codigo_morto.md) — Plano FUTURO: Knip completo com CI gate, a ser implementado quando os pré-requisitos forem alcançados
 
 ---
 
@@ -28,6 +72,13 @@ O projeto tinha um componente (`RepStepper.tsx`) **completamente funcional, bem 
 | `src/renderer/routes/index.tsx` | `AppRoutes` nunca importado — `App.tsx` define rotas inline |
 | `src/renderer/pages/index.ts` | Barrel de páginas nunca importado — `App.tsx` importa páginas diretamente via `lazy()` |
 | `src/renderer/components/layout/Layout.tsx` | Componente `Layout` nunca importado — `App.tsx` declara Layout inline |
+| `src/shared/types/database.ts` | `@shared/*` nunca importado por nenhum arquivo do projeto |
+| `src/shared/types/logger.ts` | `LogModule` redefinido localmente em `main/utils/logger.ts`; `@shared/*` órfão |
+| `src/shared/types/database.js` | Artefato compilado (`.js` gerado de `.ts`) — deveria estar no `.gitignore` |
+
+**Total: 6 arquivos/diretórios órfãos confirmados** (22/06/2026). Isso sem contar ~10 imports não utilizados em `App.tsx` e `main/ipc/index.ts`.
+
+Além disso, ~10 imports não utilizados foram encontrados em `App.tsx` (`useLocation`, `Dialog`+subcomponentes, `Tabs`+subcomponentes, `Badge`, `Info`, `Github`, `Mail`, `SidebarTrigger`) e `main/ipc/index.ts` (`auditLogout`).
 
 Nenhuma ferramenta existente no projeto detecta isso:
 
@@ -265,6 +316,8 @@ Depois de unused files, repita o mesmo processo para "unused exports" (são mais
 
 ## 📝 Plano de Execução
 
+> ⚠️ **Este plano é para execução FUTURA.** Os pré-requisitos ([ver seção acima](#-pré-requisitos-para-implementação)) não foram alcançados ainda. Enquanto isso, siga a [Abordagem Leve](./antes_kip_abordagem_leve.md).
+
 ### Fase 1 — Instalação e Configuração
 
 - [ ] **1.1** Instalar `knip`: `npm install -D knip`
@@ -367,6 +420,7 @@ Arquivos que o Knip sinaliza mas NÃO devem ser removidos.
 
 ## 🔗 Referências
 
+- **[antes_kip_abordagem_leve.md](./antes_kip_abordagem_leve.md)** — Plano IMEDIATO: limpeza manual + ts-prune + skill `/check-dead-code`
 - [Knip — Documentação Oficial](https://knip.dev/)
 - [Knip — Configuração com múltiplos tsconfigs](https://knip.dev/reference/configuration#typescript)
 - Skill: `check-dead-code` (`.claude/skills/check-dead-code.md`)
