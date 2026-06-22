@@ -11,12 +11,14 @@
 | Métrica | Status | Quantidade | Meta | Tendência |
 |---|---|---|---|---|
 | **Build** (`npm run build`) | ✅ OK | 0 erros | 0 | → |
-| **TypeScript** (`npm run type-check`) | 🟡 30 erros | ~30 | 0 | → |
-| **ESLint** (`npm run lint`) | 🟠 540 erros | 540 err + 45 warn | 0 err | → |
+| **TypeScript** (`npm run type-check`) | 🟡 ~30 erros | ~30 (era ~70 antes de 20/06) | 0 | 📉 melhora |
+| **ESLint** (`npm run lint`) | 🟠 540 erros | 540 err + 45 warn (era ~668 antes de 20/06) | 0 err | 📉 melhora |
 | **Testes** (`npm run test`) | 🟠 3 falhas | 27/31 pass (3 fail, 1 skip) | 31/31 | → |
 | **Código morto** (`npm run prune:all`) | 🔵 ~310 items | ~310 exports | — | → |
 
 **Build funcional ✅** — o sistema compila e roda. Os erros são de qualidade/estilo, não de runtime.
+
+> 📉 Em 20/06/2026 houve uma bateria de correções que reduziu `~70 → ~30` erros TypeScript e eliminou dezenas de erros ESLint (unused-vars, unescaped-entities, no-empty, no-useless-escape, TinyMCE vendor excluído do lint).
 
 ---
 
@@ -52,10 +54,10 @@
 Registre aqui as medições ao longo do tempo para visualizar o progresso.
 
 | Data | Build | TS Errors | ESLint (err/warn) | Testes (pass/total) | Código morto | Quem |
-|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|
+| **13/06/2026** | ✅ | ~70 | 668 (624 err, 44 warn) | — | — | — |
+| **20/06/2026** | ✅ | ~32 | ~585+ | — | — | — |
 | **22/06/2026** | ✅ | ~30 | 540 / 45 | 27/31 (+3 fail, 1 skip) | ~310 | — |
-| | | | | | | |
-| | | | | | | |
 
 ---
 
@@ -74,7 +76,6 @@ Distribuição aproximada:
 | `group: null` vs `string \| undefined` | ~6 | `exam-fields/index.ts` |
 | Outros (escopo, prop removida, etc.) | ~7 | `LaudosPage.tsx`, `SolicitantesPage.tsx`, `PlaceholdersPage.tsx` |
 
-📄 **Detalhamento completo:** [`../erros_lint_type-check.md`](../erros_lint_type-check.md)
 
 ### ESLint (540 erros, 45 warnings)
 
@@ -125,7 +126,6 @@ A maioria são falsos positivos conhecidos:
 | Plano | Status | Onde está |
 |---|---|---|
 | **Abordagem leve (pré-Knip)** | ✅ Concluído | [`01_abordagem_leve_pre_knip.md`](01_abordagem_leve_pre_knip.md) |
-| **Correção de erros lint/type-check** | 📝 Planejado | [`../erros_lint_type-check.md`](../erros_lint_type-check.md) |
 | **Knip (detecção automática)** | 🟡 Futuro | [`02_plano_knip_futuro.md`](02_plano_knip_futuro.md) |
 
 ### Prioridades sugeridas
@@ -141,8 +141,6 @@ A maioria são falsos positivos conhecidos:
 
 ## 🔗 Referências
 
-- [Diagnóstico detalhado de erros lint/type-check](../erros_lint_type-check.md)
-- [Relatório de correção de lint/type-check](../relatorio_correcao_lint_typecheck.md)
 - [Abordagem leve anti-código morto (concluído)](01_abordagem_leve_pre_knip.md)
 - [Plano Knip futuro](02_plano_knip_futuro.md)
 - [Exceções de código morto](../../../DEAD_CODE_EXCEPTIONS.md)
