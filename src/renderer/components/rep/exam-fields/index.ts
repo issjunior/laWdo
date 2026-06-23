@@ -157,6 +157,3 @@ export function deserializeCamposEspecificos(codigo: string, json: string | null
   }
 }
 
-export function getFieldMasks(codigo: string): Record<string, (v: string) => string> {
-  return EXAM_SERVICE_REGISTRY[codigo]?.fieldMasks ?? {};
-}

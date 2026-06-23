@@ -534,4 +534,3 @@ export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
   );
 }
 
-export default DualTrackTimeline;

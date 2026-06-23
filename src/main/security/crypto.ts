@@ -1,6 +1,5 @@
 import { getLogger } from '../utils/logger.js';
 import crypto from 'crypto';
-import bcrypt from 'bcrypt';
 
 const log = getLogger('sistema')
 
@@ -99,49 +98,5 @@ export const decrypt = async (encryptedData: string): Promise<string> => {
     log.error('Erro ao descriptografar texto', error);
     throw error;
   }
-};
-
-/**
- * Hash de senha usando bcrypt (para autenticação)
- */
-export const hashPassword = async (password: string): Promise<string> => {
-  try {
-    log.debug('Criando hash de senha...');
-
-    const saltRounds = 10;
-
-    const hash = await bcrypt.hash(password, saltRounds);
-    return hash;
-  } catch (error) {
-    log.error('Erro ao criar hash de senha', error);
-    throw error;
-  }
-};
-
-/**
- * Verifica se uma senha corresponde ao hash
- */
-export const verifyPassword = async (password: string, hash: string): Promise<boolean> => {
-  try {
-    log.debug('Verificando senha...');
-
-    const isValid = await bcrypt.compare(password, hash);
-
-    if (!isValid) {
-      log.warn('Senha inválida');
-    }
-
-    return isValid;
-  } catch (error) {
-    log.error('Erro ao verificar senha', error);
-    return false;
-  }
-};
-
-/**
- * Gera um token seguro aleatório
- */
-export const generateSecureToken = (length = 32): string => {
-  return crypto.randomBytes(length).toString('hex');
 };
 

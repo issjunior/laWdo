@@ -279,4 +279,3 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
 }
 
 export const placeholderService = new PlaceholderService();
-export default placeholderService;

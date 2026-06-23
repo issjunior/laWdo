@@ -224,4 +224,3 @@ export const AISectionToolbar: React.FC<AISectionToolbarProps> = ({
   );
 };
 
-export default AISectionToolbar;

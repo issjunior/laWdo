@@ -76,11 +76,6 @@ export function getDescendantIds(tree: CategoriaFull[], id: string): Set<string>
   return ids;
 }
 
-export interface ParentOption {
-  value: string;
-  label: string;
-}
-
 export function buildParentOptions(tree: CategoriaFull[], excludeId: string, noParentLabel = '(Raiz — sem categoria pai)'): ParentOption[] {
   const excludeIds = getDescendantIds(tree, excludeId);
   excludeIds.add(excludeId);

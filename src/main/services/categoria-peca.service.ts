@@ -5,8 +5,6 @@ import { withTransaction, executeNonQuery, executeQuery } from '../database/sqli
 
 const log = getLogger('peca');
 
-export type CategoriaPecaCreateData = Omit<CategoriaPecaRow, 'id' | 'created_at' | 'updated_at' | 'is_sistema'> & { is_sistema?: number };
-
 class CategoriaPecaService extends BaseService<CategoriaPecaRow> {
   constructor() {
     super('categorias_pecas', 'id');
@@ -100,4 +98,3 @@ class CategoriaPecaService extends BaseService<CategoriaPecaRow> {
 }
 
 export const categoriaPecaService = new CategoriaPecaService();
-export default categoriaPecaService;

@@ -17,8 +17,6 @@ export interface CategoriaPlaceholderRow {
   updated_at: string;
 }
 
-export type CategoriaPlaceholderCreateData = Omit<CategoriaPlaceholderRow, 'id' | 'created_at' | 'updated_at' | 'is_sistema'> & { is_sistema?: number };
-
 class CategoriaService extends BaseService<CategoriaPlaceholderRow> {
   constructor() {
     super('categorias_placeholders', 'id');
@@ -119,4 +117,3 @@ class CategoriaService extends BaseService<CategoriaPlaceholderRow> {
 }
 
 export const categoriaService = new CategoriaService();
-export default categoriaService;

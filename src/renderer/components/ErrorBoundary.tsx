@@ -226,26 +226,3 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-/**
- * Hook para usar o ErrorBoundary funcionalmente
- */
-export const useErrorBoundary = () => {
-  const [error, setError] = React.useState<Error | null>(null);
-
-  const handleError = React.useCallback((error: Error) => {
-    setError(error);
-    try {
-      window.ipcAPI?.logError('renderer', 'Erro capturado via hook', error);
-    } catch {
-      // silencioso
-    }
-  }, []);
-
-  const clearError = React.useCallback(() => {
-    setError(null);
-  }, []);
-
-  return { error, handleError, clearError };
-};
-
-export default ErrorBoundary;

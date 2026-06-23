@@ -581,4 +581,3 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   );
 };
 
-export default GdlConsultaModal;

@@ -39,11 +39,3 @@ export async function getMargens(): Promise<Margins | undefined> {
   return undefined;
 }
 
-export function marginsToInches(margins: Margins): { top: number; right: number; bottom: number; left: number } {
-  return {
-    top: margins.top * CM_TO_INCHES,
-    right: margins.right * CM_TO_INCHES,
-    bottom: margins.bottom * CM_TO_INCHES,
-    left: margins.left * CM_TO_INCHES,
-  };
-}

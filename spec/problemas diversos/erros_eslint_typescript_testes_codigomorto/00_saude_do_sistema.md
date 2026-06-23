@@ -1,6 +1,6 @@
 # 🏥 Painel de Saúde do Sistema
 
-> **Última medição:** 22/06/2026
+> **Última medição:** 23/06/2026
 > **Propósito:** Termômetro único para medir o progresso de qualidade do projeto ao longo do tempo.
 > **Próxima medição sugerida:** A cada sprint ou após cada grande refatoração.
 
@@ -76,7 +76,7 @@ Este projeto tem **4 camadas de diagnóstico** que se complementam para identifi
 | **TypeScript** (`npm run type-check`) | 🟡 ~30 erros | ~30 (era ~70 antes de 20/06) | 0 | 📉 melhora |
 | **ESLint** (`npm run lint`) | 🟠 540 erros | 540 err + 45 warn (era ~668 antes de 20/06) | 0 err | 📉 melhora |
 | **Testes** (`npm run test`) | 🟠 3 falhas | 27/31 pass (3 fail, 1 skip) | 31/31 | → |
-| **Código morto** (`npm run prune:all`) | ✅ 0 real | ~310 total (falsos positivos: shadcn/ui, Zod, TinyMCE, props) | 0 real | → |
+| **Código morto** (`npm run prune:all`) | ✅ 42 removidos | ~268 total (falsos positivos: shadcn/ui, Zod, TinyMCE) | 0 real | 📉 melhora |
 
 **Build funcional ✅** — o sistema compila e roda. Os erros são de qualidade/estilo, não de runtime.
 
@@ -120,6 +120,8 @@ Registre aqui as medições ao longo do tempo para visualizar o progresso.
 | **13/06/2026** | ✅ | ~70 | 668 (624 err, 44 warn) | — | — | — |
 | **20/06/2026** | ✅ | ~32 | ~585+ | — | — | — |
 | **22/06/2026** | ✅ | ~30 | 540 / 45 | 27/31 (+3 fail, 1 skip) | ~310 | — |
+| **23/06/2026** (pré-execução) | ✅ | ~30 | 540 / 45 | 27/31 | ~310 (30 confirmados) | skill |
+| **23/06/2026** (pós-execução) | ✅ | ~32 | 538 / 45 | 27/31 | **268** (42 removidos 🧹) | execução manual |
 
 ---
 
@@ -167,9 +169,11 @@ As 3 falhas são **pré-existentes** e localizadas no mesmo arquivo:
 
 **Correção:** Atualizar as classes CSS esperadas nos asserts do `button.test.tsx` para bater com a versão atual do componente.
 
-### Código Morto (~310 itens do ts-prune)
+### Código Morto (~268 itens do ts-prune)
 
-A maioria são falsos positivos conhecidos:
+**🧹 Execução em 23/06/2026:** 42 itens removidos (1 arquivo órfão, ~27 exports, 1 import limpo, 11 default exports redundantes). Nenhuma regressão — build, lint, type-check e testes mantidos.
+
+A maioria dos ~268 restantes são falsos positivos conhecidos:
 
 | Categoria | Exemplos |
 |---|---|
@@ -188,6 +192,7 @@ A maioria são falsos positivos conhecidos:
 | Plano | Status | Onde está |
 |---|---|---|
 | **Abordagem leve (pré-Knip)** | ✅ Concluído | [`01_abordagem_leve_pre_knip.md`](01_abordagem_leve_pre_knip.md) |
+| **Auditoria ts-prune 23/06/2026** | ✅ Executado — 42 itens removidos | [`04_auditoria_tsprune_2026-06-23.md`](04_auditoria_tsprune_2026-06-23.md) |
 | **Knip (detecção automática)** | 🟡 Futuro | [`02_plano_knip_futuro.md`](02_plano_knip_futuro.md) |
 
 ### Prioridades sugeridas
@@ -206,5 +211,6 @@ A maioria são falsos positivos conhecidos:
 - [Abordagem leve anti-código morto (concluído)](01_abordagem_leve_pre_knip.md)
 - [Plano Knip futuro](02_plano_knip_futuro.md)
 - [Melhoria Graphify](03_melhoria_graphify.md) — visão estrutural baseada no grafo do graphify (god nodes, coesão de comunidades, bridges)
+- [Auditoria ts-prune 23/06/2026](04_auditoria_tsprune_2026-06-23.md) — relatório completo de código morto com ~30 itens confirmados
 - [Exceções de código morto](../../../DEAD_CODE_EXCEPTIONS.md)
 - Skill: `check-dead-code` em `.claude/skills/check-dead-code.md` (apenas local — não versionado)

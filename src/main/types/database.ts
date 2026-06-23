@@ -226,37 +226,6 @@ export interface RespostaWizardRow extends DatabaseRow {
 }
 
 /**
- * Mapeamento de tipos por nome de entidade
- */
-export type EntityRow =
-  | UserRow
-  | SolicitanteRow
-  | TipoExameRow
-  | REPRow
-  | LaudoRow
-  | PlaceholderRow
-  | LogAuditoriaRow
-  | TemplateRow
-  | SecaoTemplateRow
-  | WizardRow
-  | EtapaWizardRow
-  | OpcaoEtapaRow
-  | PecaRow
-  | CategoriaPecaRow
-  | RegraWizardRow
-  | RespostaWizardRow
-
-/**
- * Resultado de query
- */
-export interface QueryResult<T = DatabaseRow> {
-  rows: T[]
-  lastInsertRowid?: number
-  changes?: number
-  duration?: number
-}
-
-/**
  * Paginação
  */
 export interface PaginationOptions {
@@ -265,17 +234,4 @@ export interface PaginationOptions {
   total?: number
   orderBy?: string
   orderDirection?: 'ASC' | 'DESC'
-}
-
-/**
- * Resultado paginado
- */
-export interface PaginatedResult<T> {
-  data: T[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
 }

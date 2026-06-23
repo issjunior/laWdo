@@ -77,4 +77,3 @@ class ConfiguracaoService {
 }
 
 export const configuracaoService = new ConfiguracaoService();
-export default configuracaoService;

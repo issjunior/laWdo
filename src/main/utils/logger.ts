@@ -159,14 +159,6 @@ export function getLogger(module: LogModule): ILogger {
   return loggerCache.get(module)!;
 }
 
-export function setModuleLogLevel(module: LogModule, level: LogLevel): void {
-  moduleLogLevels[module] = level;
-}
-
-export function getModuleLogLevels(): Partial<Record<LogModule, LogLevel>> {
-  return { ...moduleLogLevels };
-}
-
 export const logInfo = (message: string, meta?: any) => {
   baseLogger.info(message, { module: 'sistema', ...meta });
 };
@@ -184,10 +176,6 @@ export const logError = (message: string, error?: unknown) => {
   } else {
     baseLogger.error(message, { module: 'sistema' });
   }
-};
-
-export const logWarning = (message: string, meta?: any) => {
-  baseLogger.warn(message, { module: 'sistema', ...meta });
 };
 
 export const logDebug = (message: string, meta?: any) => {
@@ -299,35 +287,3 @@ export const clearAllLogs = (): { success: boolean; error?: string } => {
   }
 };
 
-export const getRecentLogs = (lines: number = 100): string[] => {
-  try {
-    const logFile = path.join(LOGS_DIR, 'combined.log');
-    if (!fs.existsSync(logFile)) return ['Arquivo de log não encontrado'];
-    const content = fs.readFileSync(logFile, 'utf-8');
-    return content.split('\n').filter(l => l.trim()).slice(-lines);
-  } catch (error) {
-    logError('Erro ao ler logs', error);
-    return [`Erro ao ler logs: ${error}`];
-  }
-};
-
-export const cleanupOldLogs = () => {
-  try {
-    const files = fs.readdirSync(LOGS_DIR);
-    const now = Date.now();
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-
-    for (const file of files) {
-      const filePath = path.join(LOGS_DIR, file);
-      const stats = fs.statSync(filePath);
-      if (stats.mtimeMs < thirtyDaysAgo) {
-        fs.unlinkSync(filePath);
-        logDebug(`Log antigo removido: ${file}`);
-      }
-    }
-  } catch (error) {
-    logError('Erro ao limpar logs antigos', error);
-  }
-};
-
-export { baseLogger as logger };

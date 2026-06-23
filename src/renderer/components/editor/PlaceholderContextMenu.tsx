@@ -225,4 +225,3 @@ const ExamSectionSubmenu: React.FC<{
   </ContextMenuSub>
 );
 
-export default PlaceholderContextMenu;

@@ -234,4 +234,3 @@ export const AISheet: React.FC<AISheetProps> = ({
   );
 };
 
-export default AISheet;

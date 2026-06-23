@@ -34,16 +34,3 @@ export function getDynamicSteps(codigo: string): Step[] {
     .filter(Boolean) as Step[];
 }
 
-export function getAllSteps(codigo: string | undefined): Step[] {
-  const steps: Step[] = STEP_REGISTRY.map((s) => ({
-    id: s.id,
-    label: s.label,
-    icon: s.icon,
-  }));
-
-  if (!codigo) return steps;
-
-  const dynamicSteps = getDynamicSteps(codigo);
-  steps.push(...dynamicSteps);
-  return steps;
-}

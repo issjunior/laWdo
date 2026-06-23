@@ -199,10 +199,3 @@ export const setupCertificateValidation = (): void => {
   }
 };
 
-// Exportar funções principais
-export const security = {
-  setupSecurity,
-  sanitizeInput,
-  validateSqlQuery,
-  setupCertificateValidation,
-};
