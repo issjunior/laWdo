@@ -60,11 +60,11 @@ O grafo agora captura explicitamente uma comunidade de **33 nós** dedicada a **
 
 | Nó | Grau | Risco |
 |----|------|-------|
-| `cryptoUtils` | Grau baixo | Export aggregator — pode conter código sem uso |
-| `isEncrypted()` | Grau ≤3 | Função não chamada externamente |
-| `generateSecureHash()` | Grau ≤3 | Possível dead code (já havia sido reportado em maio) |
+| ~~`cryptoUtils`~~ | ~~Grau baixo~~ | Export aggregator — **✅ confirmado morto e removido (23/06/2026)** |
+| `isEncrypted()` | Grau ≤3 | Função não chamada externamente — não exportada, mantida (uso interno) |
+| ~~`generateSecureHash()`~~ | ~~Grau ≤3~~ | Possível dead code — **✅ confirmado morto e removido (23/06/2026)** |
 
-**Recomendação:** Rodar `npx ts-prune` contra o código atual (lista de ~310 itens conhecida) para confirmar remoções seguras.
+**Recomendação:** Os itens `cryptoUtils` e `generateSecureHash()` foram removidos na auditoria de 23/06/2026. Rodar `npx ts-prune` contra o código atual (lista de ~268 itens) para novos candidatos.
 
 ---
 
@@ -129,12 +129,12 @@ O grafo identificou **10 nós mais conectados** (god nodes) que formam o núcleo
 
 | Problema | Detalhe |
 |----------|---------|
-| `generateSecureHash()` | Grau baixo — reportado como potencial dead code em maio, continua com baixa conectividade |
-| `isEncrypted()` | Grau baixo — mesmo status |
-| `cryptoUtils` | Grau baixo — export aggregator questionável |
+| ~~`generateSecureHash()`~~ | ~~Grau baixo~~ | **✅ Removido (23/06/2026)** |
+| `isEncrypted()` | Grau baixo | Mantida (uso interno em crypto.ts — não mais exportada) |
+| ~~`cryptoUtils`~~ | ~~Grau baixo~~ | **✅ Export aggregator removido (23/06/2026)** |
 | Criptografia seletiva | Apenas `senha` é criptografada (documentado em problemas conhecidos) — dados sensíveis de laudos periciais podem estar em plaintext |
 
-**Recomendação:** Verificar se `generateSecureHash()` e `isEncrypted()` foram ou serão removidos — o commit `9ef6a0c` ("ajuste_remove_codigo_morto_crypto") sugere que parte disso já foi endereçado.
+**Recomendação:** `generateSecureHash()` e `cryptoUtils` foram removidos na auditoria de 23/06/2026. `isEncrypted()` mantida como função interna não exportada.
 
 ---
 

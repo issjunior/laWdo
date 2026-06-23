@@ -67,16 +67,16 @@
 
 O projeto tinha um componente (`RepStepper.tsx`) **completamente funcional, bem escrito e documentado** que nunca foi importado por nenhum arquivo do sistema. Além dele, outros arquivos órfãos foram identificados:
 
-| Arquivo órfão | Motivo |
-|---|---|
-| `src/renderer/routes/index.tsx` | `AppRoutes` nunca importado — `App.tsx` define rotas inline |
-| `src/renderer/pages/index.ts` | Barrel de páginas nunca importado — `App.tsx` importa páginas diretamente via `lazy()` |
-| `src/renderer/components/layout/Layout.tsx` | Componente `Layout` nunca importado — `App.tsx` declara Layout inline |
-| `src/shared/types/database.ts` | `@shared/*` nunca importado por nenhum arquivo do projeto |
-| `src/shared/types/logger.ts` | `LogModule` redefinido localmente em `main/utils/logger.ts`; `@shared/*` órfão |
-| `src/shared/types/database.js` | Artefato compilado (`.js` gerado de `.ts`) — deveria estar no `.gitignore` |
+| Arquivo órfão | Motivo | Status |
+|---|---|---|
+| `src/renderer/routes/index.tsx` | `AppRoutes` nunca importado — `App.tsx` define rotas inline | ✅ Removido |
+| `src/renderer/pages/index.ts` | Barrel de páginas nunca importado — `App.tsx` importa páginas diretamente via `lazy()` | ✅ Removido |
+| `src/renderer/components/layout/Layout.tsx` | Componente `Layout` nunca importado — `App.tsx` declara Layout inline | ✅ Removido |
+| `src/shared/types/database.ts` | `@shared/*` nunca importado por nenhum arquivo do projeto | ✅ Removido |
+| `src/shared/types/logger.ts` | `LogModule` redefinido localmente em `main/utils/logger.ts`; `@shared/*` órfão | ✅ Removido |
+| `src/shared/types/database.js` | Artefato compilado (`.js` gerado de `.ts`) — deveria estar no `.gitignore` | ✅ Removido |
 
-**Total: 6 arquivos/diretórios órfãos confirmados** (22/06/2026). Isso sem contar ~10 imports não utilizados em `App.tsx` e `main/ipc/index.ts`.
+**Total: 6 arquivos/diretórios órfãos confirmados** (22/06/2026) — **todos removidos** (23/06/2026). Isso sem contar ~10 imports não utilizados em `App.tsx` e `main/ipc/index.ts`, também limpos.
 
 Além disso, ~10 imports não utilizados foram encontrados em `App.tsx` (`useLocation`, `Dialog`+subcomponentes, `Tabs`+subcomponentes, `Badge`, `Info`, `Github`, `Mail`, `SidebarTrigger`) e `main/ipc/index.ts` (`auditLogout`).
 
@@ -114,7 +114,7 @@ Nenhuma ferramenta existente no projeto detecta isso:
 ### O que é
 
 [Knip](https://github.com/webpro/knip) é uma ferramenta de análise estática que detecta:
-- **Arquivos não importados** (como `Layout.tsx`, `routes/index.tsx`)
+- **Arquivos não importados** (ex: todos os 6 órfãos acima já removidos)
 - **Exportações não utilizadas** (funções, tipos, constantes exportadas mas nunca referenciadas)
 - **Dependências npm não usadas**
 - **DevDependencies não usadas**

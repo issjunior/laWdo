@@ -2565,7 +2565,7 @@ A lógica de retroatividade (seção 4.6) só substitui os blocos `data-peca-id`
 
 
 
-Adicionar em `src/renderer/routes/index.tsx`:
+Adicionar em `src/renderer/App.tsx` (roteamento inline):
 
 ```tsx
 {
@@ -3093,5 +3093,5 @@ Ao deletar um laudo `Concluído` ou `Entregue`, o outro laudo (se estiver `Bloqu
 | `src/preload/types.ts` | Tipos para wizard/peca/regra | Fase 3 |
 | `src/renderer/pages/REPsPage.tsx` | Botão Wizard, suporte múltiplos laudos, lógica de bloqueio nos botões | Fase 7 |
 | `src/renderer/pages/LaudosPage.tsx` | `tipo_criacao` no `LaudoItem`, roteamento condicional: wizard → `/reps/:repId/wizard`, template → TinyMCE, badge `Bloqueado` (slate) | Fase 7 |
-| `src/renderer/routes/index.tsx` | Novas rotas | Fase 4 |
+| `src/renderer/App.tsx` | Novas rotas (inline, após remoção de routes/index.tsx) | Fase 4 |
 | `src/renderer/components/layout/AppSidebar.tsx` | Itens de menu | Fase 4 |
