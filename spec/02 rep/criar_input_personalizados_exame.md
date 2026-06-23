@@ -1,5 +1,10 @@
 # Como criar inputs específicos para um novo tipo de exame
 
+> **Arquivos relacionados:**
+> - Implementação completa B-602 → [`b602/criar_input_personalizado_b602.md`](b602/criar_input_personalizado_b602.md)
+> - Seções repetíveis para armas B-602 → [`b602/criar_input_personalizado_arma_b602.md`](b602/criar_input_personalizado_arma_b602.md)
+> - Salvamento/recuperação de inputs → [`salvar_input_personalizado.md`](salvar_input_personalizado.md)
+
 Quando um novo tipo de exame (ex: `MEU-COD`) precisa de campos próprios no formulário de REP, siga estes 4 passos.
 
 ---

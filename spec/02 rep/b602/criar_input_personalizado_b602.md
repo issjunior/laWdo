@@ -1,8 +1,9 @@
 # Plano: Campos Personalizados B-602 (Eficiência e Prestabilidade)
 
 > **Status:** Implementado (2026-06-11)
-> **Baseado em:** `criar_input_personalizados_exame.md` (guia de 4 passos), `ciclo_placeholder.md` (ciclo completo de placeholder)
+> **Baseado em:** [`criar_input_personalizados_exame.md`](../criar_input_personalizados_exame.md) (guia de 4 passos), `ciclo_placeholder.md` (ciclo completo de placeholder)
 > **Tipo de exame:** B-602 (já cadastrado no banco via TiposExamePage)
+> **Seções repetíveis (armas):** [`criar_input_personalizado_arma_b602.md`](criar_input_personalizado_arma_b602.md)
 
 ---
 
