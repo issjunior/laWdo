@@ -17,7 +17,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 25;
+const CURRENT_SCHEMA_VERSION = 28;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -270,12 +270,15 @@ const createDatabaseSchema = async (): Promise<void> => {
         template_id TEXT NOT NULL,
         nome TEXT NOT NULL,
         ordem INTEGER NOT NULL DEFAULT 0,
+        parent_id TEXT,
         conteudo TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+        FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_id) REFERENCES secoes_template(id) ON DELETE SET NULL
       )
     `);
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_secoes_template_parent ON secoes_template(parent_id)');
 
     // Criar índices
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_status ON reps(status)');
@@ -1652,6 +1655,76 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
     }
   }
 
+  // Migration versão 27: Adicionar coluna repetir_titulo na tabela secoes_template
+  if (fromVersion < 27) {
+    try {
+      const cols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(secoes_template)'
+      );
+      const hasRepetirTitulo = cols.some(c => c.name === 'repetir_titulo');
+
+      if (!hasRepetirTitulo) {
+        await executeNonQuery(
+          'ALTER TABLE secoes_template ADD COLUMN repetir_titulo TEXT'
+        );
+        log.debug('Migration v27: Coluna repetir_titulo adicionada à tabela secoes_template');
+      } else {
+        log.debug('Migration v27: Coluna repetir_titulo já existe');
+      }
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 27', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 26: Adicionar coluna repetir_para na tabela secoes_template
+  if (fromVersion < 26) {
+    try {
+      const cols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(secoes_template)'
+      );
+      const hasRepetirPara = cols.some(c => c.name === 'repetir_para');
+
+      if (!hasRepetirPara) {
+        await executeNonQuery(
+          'ALTER TABLE secoes_template ADD COLUMN repetir_para TEXT'
+        );
+        log.debug('Migration v26: Coluna repetir_para adicionada à tabela secoes_template');
+      } else {
+        log.debug('Migration v26: Coluna repetir_para já existe');
+      }
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 26', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 28: Adicionar coluna parent_id na tabela secoes_template
+  if (fromVersion < 28) {
+    try {
+      const cols = await executeQuery<{ name: string }>(
+        'PRAGMA table_info(secoes_template)'
+      );
+      const hasParentId = cols.some(c => c.name === 'parent_id');
+
+      if (!hasParentId) {
+        await executeNonQuery(
+          'ALTER TABLE secoes_template ADD COLUMN parent_id TEXT REFERENCES secoes_template(id) ON DELETE SET NULL'
+        );
+        log.debug('Migration v28: Coluna parent_id adicionada à tabela secoes_template');
+      } else {
+        log.debug('Migration v28: Coluna parent_id já existe');
+      }
+
+      await executeNonQuery(
+        'CREATE INDEX IF NOT EXISTS idx_secoes_template_parent ON secoes_template(parent_id)'
+      );
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 28', error);
+      throw error;
+    }
+  }
+
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);
 };
 
@@ -1671,4 +1744,3 @@ const testDatabaseConnection = async (): Promise<void> => {
     throw error;
   }
 };
-

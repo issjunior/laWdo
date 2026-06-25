@@ -61,10 +61,20 @@ export class TemplateService extends BaseService<TemplateRow> {
     try {
       const id = randomUUID();
       const sql = `
-        INSERT INTO secoes_template (id, template_id, nome, ordem, conteudo, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
-      await executeNonQuery(sql, [id, data.template_id, data.nome, data.ordem, data.conteudo || null]);
+      await executeNonQuery(sql, [
+        id,
+        data.template_id,
+        data.nome,
+        data.ordem,
+        data.parent_id || null,
+        data.conteudo || null,
+        data.condicao || null,
+        data.repetir_para || null,
+        data.repetir_titulo || null,
+      ]);
       const rows = await executeQuery<SecaoTemplateRow>('SELECT * FROM secoes_template WHERE id = ?', [id]);
       return rows[0];
     } catch (error) {
@@ -81,7 +91,11 @@ export class TemplateService extends BaseService<TemplateRow> {
 
       if (data.nome !== undefined) { sets.push('nome = ?'); params.push(data.nome); }
       if (data.ordem !== undefined) { sets.push('ordem = ?'); params.push(data.ordem); }
+      if (data.parent_id !== undefined) { sets.push('parent_id = ?'); params.push(data.parent_id); }
       if (data.conteudo !== undefined) { sets.push('conteudo = ?'); params.push(data.conteudo); }
+      if (data.condicao !== undefined) { sets.push('condicao = ?'); params.push(data.condicao); }
+      if (data.repetir_para !== undefined) { sets.push('repetir_para = ?'); params.push(data.repetir_para); }
+      if (data.repetir_titulo !== undefined) { sets.push('repetir_titulo = ?'); params.push(data.repetir_titulo); }
 
       if (sets.length === 0) {
         const rows = await executeQuery<SecaoTemplateRow>('SELECT * FROM secoes_template WHERE id = ?', [id]);

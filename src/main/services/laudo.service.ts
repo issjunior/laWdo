@@ -7,6 +7,13 @@ import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { regraWizardService } from './regra-wizard.service.js';
+import { templateService } from './template.service.js';
+import {
+  expandirSecoesRepetiveis,
+  buildHtml,
+  filtrarSecoesAtivas,
+  processarBlocosCondicionais,
+} from './secao-builder.service.js';
 
 const log = getLogger('laudo')
 
@@ -29,17 +36,18 @@ export class LaudoService extends BaseService<LaudoRow> {
         throw new Error('Já existe um laudo para esta REP');
       }
 
-      const secoesSql = `
-        SELECT nome, conteudo
-        FROM secoes_template
-        WHERE template_id = ?
-        ORDER BY ordem ASC
-      `;
-      const secoes = await executeQuery<{ nome: string; conteudo?: string }>(secoesSql, [params.template_id]);
+      // Buscar seções do template
+      const secoes = await templateService.findSecoesByTemplate(params.template_id);
 
-      const conteudo = secoes
-        .map((s, i) => `<h2>${i + 1}. ${s.nome}</h2>${s.conteudo || '<p>&nbsp;</p>'}`)
-        .join('\n');
+      // Buscar campos_especificos da REP
+      const [rep] = await executeQuery<{ campos_especificos?: string | null }>(
+        'SELECT campos_especificos FROM reps WHERE id = ?', [params.rep_id]
+      );
+      const especificos = rep?.campos_especificos ? JSON.parse(rep.campos_especificos) : {};
+
+      const secoesAtivas = filtrarSecoesAtivas(secoes, especificos);
+      const expansoes = expandirSecoesRepetiveis(secoesAtivas, especificos);
+      const conteudo = buildHtml(secoesAtivas, expansoes, especificos);
 
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -345,127 +353,21 @@ export class LaudoService extends BaseService<LaudoRow> {
       const laudo = await this.findById(laudoId);
       if (!laudo) return;
 
-      // Buscar seções do template com condição
-      const secoes = await executeQuery<{ id: string; nome: string; conteudo?: string; condicao?: string; ordem: number }>(
-        'SELECT id, nome, conteudo, condicao, ordem FROM secoes_template WHERE template_id = ? ORDER BY ordem ASC',
-        [laudo.template_id]
-      );
+      // Buscar seções do template
+      const secoes = await templateService.findSecoesByTemplate(laudo.template_id);
 
       // Buscar campos específicos da REP
       const [rep] = await executeQuery<{ campos_especificos?: string | null }>(
         'SELECT campos_especificos FROM reps WHERE id = ?', [laudo.rep_id]
       );
       const especificos = rep?.campos_especificos ? JSON.parse(rep.campos_especificos) : {};
-      const toggles = especificos?.b602 || {};
 
-      // Determinar quais seções devem aparecer
-      const secoesAtivas = new Set<string>();
-      for (const secao of secoes) {
-        if (!secao.condicao) {
-          secoesAtivas.add(secao.id);
-          continue;
-        }
-        try {
-          const cond = JSON.parse(secao.condicao);
-          const toggleVal = toggles[cond.campo];
-          if (toggleVal === 'on') {
-            secoesAtivas.add(secao.id);
-          }
-        } catch {
-          secoesAtivas.add(secao.id);
-        }
-      }
+      const secoesFiltradas = filtrarSecoesAtivas(secoes, especificos);
+      const expansoes = expandirSecoesRepetiveis(secoesFiltradas, especificos);
+      const conteudoBase = buildHtml(secoesFiltradas, expansoes, especificos);
+      const novoConteudo = this._reconciliarComBase(laudo.conteudo, conteudoBase, especificos);
 
-      // Reconstruir HTML
-      const conteudoAtual = laudo.conteudo;
-      const H2_REGEX = /<h2[^>]*>([\s\S]*?)<\/h2>/gi;
-
-      // Parsear seções atuais do HTML
-      interface SecaoPosicao {
-        nome: string;
-        inicio: number;
-        fim: number;
-        h2: string;
-      }
-      const secoesAtuais: SecaoPosicao[] = [];
-      let m;
-      while ((m = H2_REGEX.exec(conteudoAtual)) !== null) {
-        secoesAtuais.push({ nome: m[0], inicio: m.index, fim: 0, h2: m[0] });
-      }
-      for (let i = 0; i < secoesAtuais.length; i++) {
-        secoesAtuais[i].fim = i + 1 < secoesAtuais.length ? secoesAtuais[i + 1].inicio : conteudoAtual.length;
-      }
-
-      // Normalizar nome de seção (remove n. prefix)
-      const normalize = (nome: string) =>
-        nome.replace(/<\/?h2[^>]*>/gi, '').replace(/^\d+\.\s*/, '').trim().toLowerCase();
-
-      // Mapa: id seção template -> nome normalizado
-      const secoesMap = new Map(secoes.map(s => [s.id, { nome: s.nome, conteudo: s.conteudo, ordem: s.ordem }]));
-
-      // Construir novo HTML
-      const partes: string[] = [];
-
-      // Guardar conteúdo antes do primeiro H2
-      if (secoesAtuais.length > 0 && secoesAtuais[0].inicio > 0) {
-        partes.push(conteudoAtual.substring(0, secoesAtuais[0].inicio));
-      }
-
-      const secoesUsadas = new Set<string>();
-
-      // Processar na ordem do template
-      let contadorSecao = 1;
-      for (const secao of secoes) {
-        if (!secoesAtivas.has(secao.id)) continue;
-
-        const nomeTemplate = secao.nome;
-        const nomeNormalizado = normalize(nomeTemplate);
-        secoesUsadas.add(nomeNormalizado);
-
-        // Encontrar seção correspondente no HTML atual
-        const existente = secoesAtuais.find(s => normalize(s.nome) === nomeNormalizado);
-
-        if (existente) {
-          let secaoHtml = conteudoAtual.substring(existente.inicio, existente.fim);
-          // Atualizar número do H2
-          secaoHtml = secaoHtml.replace(/<h2[^>]*>[\s\S]*?<\/h2>/i,
-            existente.h2.replace(/(<h2[^>]*>)\d+\./, `$1${contadorSecao}.`)
-          );
-          // Processar blocos condicionais dentro da seção
-          secaoHtml = this._processarBlocosCondicionais(secaoHtml, toggles);
-          partes.push(secaoHtml);
-        } else {
-          // Nova seção: criar do template
-          const h2 = `<h2>${contadorSecao}. ${secao.nome}</h2>`;
-          let conteudoFresco = secao.conteudo || '<p>&nbsp;</p>';
-          conteudoFresco = this._processarBlocosCondicionais(conteudoFresco, toggles);
-          partes.push(`${h2}\n${conteudoFresco}`);
-        }
-        contadorSecao++;
-      }
-
-      // Adicionar seções do HTML atual que não estão no template (mantidas)
-      for (const existente of secoesAtuais) {
-        const nomeNorm = normalize(existente.nome);
-        if (!secoesUsadas.has(nomeNorm)) {
-          let secaoHtml = conteudoAtual.substring(existente.inicio, existente.fim);
-          secaoHtml = this._processarBlocosCondicionais(secaoHtml, toggles);
-          partes.push(secaoHtml);
-        }
-      }
-
-      // Guardar conteúdo após o último H2 (se não coberto pelas seções)
-      if (secoesAtuais.length > 0) {
-        const ultima = secoesAtuais[secoesAtuais.length - 1];
-        const resto = conteudoAtual.substring(ultima.fim);
-        if (resto.trim() && !partes.some(p => p.includes(resto.trim()))) {
-          partes.push(resto);
-        }
-      }
-
-      const novoConteudo = partes.join('\n');
-
-      if (novoConteudo !== conteudoAtual) {
+      if (novoConteudo !== laudo.conteudo) {
         await executeNonQuery(
           'UPDATE laudos SET conteudo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [novoConteudo, laudoId]
@@ -478,16 +380,207 @@ export class LaudoService extends BaseService<LaudoRow> {
     }
   }
 
-  private _processarBlocosCondicionais(html: string, toggles: Record<string, unknown>): string {
-    const BLOCK_REGEX = /<div\s+data-cond-bloco="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi;
+  /**
+   * Reconcilia a estrutura H2/H3 preservando edições do usuário fora das seções derivadas da REP.
+   */
+  private _reconciliarComBase(
+    htmlAtual: string,
+    htmlBase: string,
+    camposEspecificos: Record<string, unknown>
+  ): string {
+    const blocosAtuais = this._parseBlocosEstruturais(htmlAtual);
+    const blocosBase = this._parseBlocosEstruturais(htmlBase);
 
-    // Remove blocks whose toggles are off.
-    // Usa callback no replace para garantir que cada match é processado
-    // na posição correta, evitando o bug de String.replace(string, '')
-    // que substitui apenas a primeira ocorrência.
-    return html.replace(BLOCK_REGEX, (match, toggleId) => {
-      return toggles[toggleId] === 'on' ? match : '';
-    });
+    const mapaAtualPorId = new Map<string, typeof blocosAtuais[number]>();
+    const mapaAtualPorNome = new Map<string, typeof blocosAtuais[number]>();
+    for (const bloco of blocosAtuais) {
+      if (bloco.secaoId) mapaAtualPorId.set(bloco.secaoId, bloco);
+      mapaAtualPorNome.set(bloco.nomeNormalizado, bloco);
+    }
+
+    const partes: string[] = [];
+    const preambuloAtual = blocosAtuais.length > 0
+      ? htmlAtual.slice(0, blocosAtuais[0].inicio).trim()
+      : htmlAtual.trim();
+    if (preambuloAtual) {
+      partes.push(preambuloAtual);
+    }
+
+    let indiceH2 = 0;
+    let indiceH3 = 0;
+    const chavesBase = new Set<string>();
+
+    for (const blocoBase of blocosBase) {
+      if (blocoBase.nivel === 2) {
+        indiceH2 += 1;
+        indiceH3 = 0;
+      } else {
+        indiceH3 += 1;
+      }
+
+      const blocoAtual = blocoBase.secaoId
+        ? mapaAtualPorId.get(blocoBase.secaoId)
+        : mapaAtualPorNome.get(blocoBase.nomeNormalizado);
+
+      const preservarAtual = blocoAtual && !blocoBase.derivadaRep;
+      const tituloBase = preservarAtual
+        ? this._normalizarTituloBase(blocoAtual.tituloBase)
+        : blocoBase.tituloBase;
+      const conteudoBaseEscolhido = preservarAtual ? blocoAtual.conteudo : blocoBase.conteudo;
+      const conteudo = processarBlocosCondicionais(conteudoBaseEscolhido, camposEspecificos);
+
+      partes.push(this._montarHeadingEstrutural({
+        tag: blocoBase.nivel === 2 ? 'h2' : 'h3',
+        secaoId: blocoBase.secaoId,
+        parentId: blocoBase.parentId,
+        nivel: blocoBase.nivel,
+        tituloBase,
+        indiceH2,
+        indiceH3,
+        derivadaRep: blocoBase.derivadaRep,
+        repeatSection: blocoBase.repeatSection,
+      }));
+
+      if (conteudo.trim()) {
+        partes.push(conteudo);
+      }
+
+      if (blocoBase.secaoId) {
+        chavesBase.add(blocoBase.secaoId);
+      } else {
+        chavesBase.add(blocoBase.nomeNormalizado);
+      }
+    }
+
+    for (const blocoAtual of blocosAtuais) {
+      const chave = blocoAtual.secaoId || blocoAtual.nomeNormalizado;
+      if (chavesBase.has(chave)) continue;
+      partes.push(`${blocoAtual.heading}\n${processarBlocosCondicionais(blocoAtual.conteudo, camposEspecificos)}`);
+    }
+
+    return partes.join('\n');
+  }
+
+  private _parseBlocosEstruturais(html: string) {
+    const blocos: Array<{
+      heading: string;
+      conteudo: string;
+      inicio: number;
+      fim: number;
+      nivel: 2 | 3;
+      secaoId?: string;
+      parentId?: string | null;
+      tituloBase: string;
+      nomeNormalizado: string;
+      derivadaRep: boolean;
+      repeatSection?: string;
+    }> = [];
+
+    const regexHeading = /<(h2|h3)([^>]*)>([\s\S]*?)<\/\1>/gi;
+    const headings: Array<{
+      heading: string;
+      tag: 'h2' | 'h3';
+      attrs: string;
+      texto: string;
+      inicio: number;
+      fimHeading: number;
+    }> = [];
+
+    let match: RegExpExecArray | null;
+    while ((match = regexHeading.exec(html)) !== null) {
+      const tag = match[1].toLowerCase() as 'h2' | 'h3';
+      const attrs = match[2] || '';
+      const isEstrutural = tag === 'h2' || /data-secao-id=/i.test(attrs) || /data-estrutura-nivel="3"/i.test(attrs);
+      if (!isEstrutural) continue;
+
+      headings.push({
+        heading: match[0],
+        tag,
+        attrs,
+        texto: match[3] || '',
+        inicio: match.index,
+        fimHeading: match.index + match[0].length,
+      });
+    }
+
+    for (let i = 0; i < headings.length; i++) {
+      const atual = headings[i];
+      const proximoInicio = i + 1 < headings.length ? headings[i + 1].inicio : html.length;
+      const secaoId = atual.attrs.match(/data-secao-id="([^"]+)"/i)?.[1];
+      const parentId = atual.attrs.match(/data-parent-id="([^"]+)"/i)?.[1] || null;
+      const tituloBaseAttr = atual.attrs.match(/data-titulo-base="([^"]+)"/i)?.[1];
+      const repeatSection = atual.attrs.match(/data-repeat-section="([^"]+)"/i)?.[1];
+      const tituloBase = this._normalizarTituloBase(this._decodificarHtml(tituloBaseAttr || atual.texto));
+      const nomeNormalizado = tituloBase.toLowerCase();
+
+      blocos.push({
+        heading: atual.heading,
+        conteudo: html.slice(atual.fimHeading, proximoInicio).trim(),
+        inicio: atual.inicio,
+        fim: proximoInicio,
+        nivel: atual.tag === 'h2' ? 2 : 3,
+        secaoId,
+        parentId,
+        tituloBase,
+        nomeNormalizado,
+        derivadaRep: /data-derivada-rep="true"/i.test(atual.attrs),
+        repeatSection,
+      });
+    }
+
+    return blocos;
+  }
+
+  private _montarHeadingEstrutural(params: {
+    tag: 'h2' | 'h3';
+    secaoId?: string;
+    parentId?: string | null;
+    nivel: 2 | 3;
+    tituloBase: string;
+    indiceH2: number;
+    indiceH3: number;
+    derivadaRep?: boolean;
+    repeatSection?: string;
+  }): string {
+    const numero = params.nivel === 2
+      ? `${params.indiceH2}.`
+      : `${params.indiceH2}.${params.indiceH3}`;
+    const atributos = [
+      params.secaoId ? `data-secao-id="${this._escaparHtml(params.secaoId)}"` : '',
+      params.parentId ? `data-parent-id="${this._escaparHtml(params.parentId)}"` : '',
+      `data-estrutura-nivel="${params.nivel}"`,
+      `data-titulo-base="${this._escaparHtml(params.tituloBase)}"`,
+      params.derivadaRep ? 'data-derivada-rep="true"' : '',
+      params.repeatSection ? `data-repeat-section="${this._escaparHtml(params.repeatSection)}"` : '',
+    ].filter(Boolean).join(' ');
+
+    return `<${params.tag}${atributos ? ` ${atributos}` : ''}>${numero} ${this._escaparHtml(params.tituloBase)}</${params.tag}>`;
+  }
+
+  private _normalizarTituloBase(titulo: string): string {
+    return (titulo || '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '')
+      .trim();
+  }
+
+  private _decodificarHtml(texto: string): string {
+    return (texto || '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, '\'');
+  }
+
+  private _escaparHtml(texto: string): string {
+    return (texto || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // ==================== HELPERS ====================

@@ -273,6 +273,20 @@ export const registerLaudoHandlers = (): void => {
   });
 
   /**
+   * Sincronizar seções condicionais/repetíveis do laudo com o template e dados da REP
+   */
+  ipcMain.handle('laudo:sincronizarSecoes', async (_event, laudoId: string) => {
+    try {
+      if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
+      await laudoService.sincronizarSecoesCondicionais(laudoId);
+      return { success: true, message: 'Seções sincronizadas com sucesso' };
+    } catch (error) {
+      logError('Erro ao sincronizar seções do laudo', { laudoId, error });
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
+  });
+
+  /**
    * Verificar se LibreOffice está disponível (para habilitar opção ODT)
    */
   ipcMain.handle('laudo:verificarLibreOffice', async () => {

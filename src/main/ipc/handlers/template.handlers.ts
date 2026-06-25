@@ -109,7 +109,7 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Criar seção */
-  ipcMain.handle('template:createSecao', async (_event, data: { template_id: string; nome: string; ordem: number; conteudo?: string; condicao?: string | null }) => {
+  ipcMain.handle('template:createSecao', async (_event, data: { template_id: string; nome: string; ordem: number; parent_id?: string | null; conteudo?: string; condicao?: string | null; repetir_para?: string | null; repetir_titulo?: string | null }) => {
     try {
       if (!data.nome || !data.nome.trim()) {
         return { success: false, error: 'Nome da seção é obrigatório' };
@@ -118,8 +118,11 @@ export const registerTemplateHandlers = (): void => {
         template_id: data.template_id,
         nome: sanitizeInput(data.nome.trim()),
         ordem: data.ordem ?? 0,
+        parent_id: data.parent_id || undefined,
         conteudo: data.conteudo || undefined,
         condicao: data.condicao || undefined,
+        repetir_para: data.repetir_para || undefined,
+        repetir_titulo: data.repetir_titulo || undefined,
       });
       return { success: true, data: secao, message: 'Seção criada com sucesso' };
     } catch (error: any) {
@@ -129,13 +132,16 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Atualizar seção */
-  ipcMain.handle('template:updateSecao', async (_event, id: string, data: { nome?: string; ordem?: number; conteudo?: string; condicao?: string | null }) => {
+  ipcMain.handle('template:updateSecao', async (_event, id: string, data: { nome?: string; ordem?: number; parent_id?: string | null; conteudo?: string; condicao?: string | null; repetir_para?: string | null; repetir_titulo?: string | null }) => {
     try {
       const updateData: Record<string, unknown> = {};
       if (data.nome !== undefined) updateData.nome = sanitizeInput(data.nome);
       if (data.ordem !== undefined) updateData.ordem = data.ordem;
+      if (data.parent_id !== undefined) updateData.parent_id = data.parent_id;
       if (data.conteudo !== undefined) updateData.conteudo = data.conteudo;
       if (data.condicao !== undefined) updateData.condicao = data.condicao;
+      if (data.repetir_para !== undefined) updateData.repetir_para = data.repetir_para;
+      if (data.repetir_titulo !== undefined) updateData.repetir_titulo = data.repetir_titulo;
 
       const secao = await templateService.updateSecao(id, updateData);
       return { success: true, data: secao, message: 'Seção atualizada com sucesso' };

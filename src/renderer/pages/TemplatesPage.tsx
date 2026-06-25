@@ -24,7 +24,22 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields';
-import type { ExamToggle } from '@/components/rep/exam-fields';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface TemplateItem {
   id: string;
@@ -42,7 +57,11 @@ interface SecaoItem {
   template_id: string;
   nome: string;
   ordem: number;
+  parent_id?: string | null;
   conteudo?: string;
+  condicao?: string | null;
+  repetir_para?: string | null;
+  repetir_titulo?: string | null;
 }
 
 interface TemplateForm {
@@ -53,18 +72,236 @@ interface TemplateForm {
 
 interface SecaoForm {
   id?: string;
+  chave_local: string;
   nome: string;
+  parent_id?: string;
   conteudo: string;
   condicao?: string;
+  repetir_para?: string;
+  repetir_titulo?: string;
 }
+
+type SecaoPreview = Pick<SecaoForm, 'id' | 'chave_local' | 'nome' | 'conteudo' | 'parent_id' | 'repetir_para' | 'repetir_titulo'>;
 
 const emptyTemplateForm = (): TemplateForm => ({
   nome: '', tipo_exame_id: '', descricao: '',
 });
 
 const emptySecaoForm = (): SecaoForm => ({
-  nome: '', conteudo: '',
+  chave_local: crypto.randomUUID(),
+  nome: '',
+  parent_id: '',
+  conteudo: '',
+  repetir_para: '',
+  repetir_titulo: '',
 });
+
+function hydrateSecaoForm(row: SecaoItem, placeholderChaves: string[]): SecaoForm {
+  return {
+    id: row.id,
+    chave_local: row.id,
+    nome: row.nome,
+    parent_id: row.parent_id || '',
+    conteudo: row.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(row.conteudo, placeholderChaves, true)) : '',
+    condicao: row.condicao || '',
+    repetir_para: row.repetir_para || '',
+    repetir_titulo: row.repetir_titulo || '',
+  };
+}
+
+function normalizarNomeSecao(nome?: string): string {
+  return (nome || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
+function getSecaoVisual(secao: Pick<SecaoForm, 'nome' | 'parent_id' | 'repetir_para'>): string {
+  if (!secao.parent_id) return 'border bg-card/50 border-border';
+
+  const nome = normalizarNomeSecao(secao.nome);
+  if (nome.includes('CARTUCHO')) return 'border bg-sky-50/70 border-sky-300 dark:bg-sky-950/20 dark:border-sky-900';
+  if (nome.includes('ESTOJO')) return 'border bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-900';
+  if (nome.includes('ARMA') || secao.repetir_para === 'armas') return 'border bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900';
+
+  return 'border bg-card/50 border-border';
+}
+
+function getSecaoRef(secao: Pick<SecaoForm, 'id' | 'chave_local'>): string {
+  return secao.id || secao.chave_local;
+}
+
+function normalizarSecoesHierarquicas(secoesFonte: SecaoForm[]): SecaoForm[] {
+  const secoes = secoesFonte.map(secao => ({ ...secao }));
+  const pais = secoes.filter(secao => !secao.parent_id);
+  const paisRefs = new Set(pais.map(getSecaoRef));
+  const filhosPorPai = new Map<string, SecaoForm[]>();
+  const raizesOrdenadas: SecaoForm[] = [];
+
+  for (const secao of secoes) {
+    if (!secao.parent_id) {
+      raizesOrdenadas.push({ ...secao, parent_id: '' });
+      continue;
+    }
+
+    if (!paisRefs.has(secao.parent_id)) {
+      raizesOrdenadas.push({ ...secao, parent_id: '' });
+      continue;
+    }
+
+    const filhos = filhosPorPai.get(secao.parent_id) || [];
+    filhos.push(secao);
+    filhosPorPai.set(secao.parent_id, filhos);
+  }
+
+  return raizesOrdenadas.flatMap((pai) => {
+    const paiRef = getSecaoRef(pai);
+    return [pai, ...(filhosPorPai.get(paiRef) || [])];
+  });
+}
+
+function getBlocosSecoes(secoesFonte: SecaoForm[]) {
+  const secoes = normalizarSecoesHierarquicas(secoesFonte);
+  const blocos: Array<{ pai: SecaoForm; filhos: SecaoForm[] }> = [];
+
+  for (const secao of secoes) {
+    if (!secao.parent_id) {
+      blocos.push({ pai: secao, filhos: [] });
+      continue;
+    }
+
+    const bloco = blocos.find(({ pai }) => getSecaoRef(pai) === secao.parent_id);
+    if (bloco) {
+      bloco.filhos.push(secao);
+    } else {
+      blocos.push({ pai: { ...secao, parent_id: '' }, filhos: [] });
+    }
+  }
+
+  return blocos;
+}
+
+function flattenBlocosSecoes(blocos: Array<{ pai: SecaoForm; filhos: SecaoForm[] }>): SecaoForm[] {
+  return blocos.flatMap(({ pai, filhos }) => [pai, ...filhos]);
+}
+
+function moverSecaoHierarquica(
+  secoesFonte: SecaoForm[],
+  indiceVisual: number,
+  direcao: 'up' | 'down',
+): SecaoForm[] {
+  const secoes = normalizarSecoesHierarquicas(secoesFonte);
+  const secao = secoes[indiceVisual];
+  if (!secao) return secoesFonte;
+
+  if (!secao.parent_id) {
+    const blocos = getBlocosSecoes(secoes);
+    const indiceBloco = blocos.findIndex(({ pai }) => getSecaoRef(pai) === getSecaoRef(secao));
+    const destino = direcao === 'up' ? indiceBloco - 1 : indiceBloco + 1;
+    if (indiceBloco < 0 || destino < 0 || destino >= blocos.length) return secoes;
+    const next = [...blocos];
+    [next[indiceBloco], next[destino]] = [next[destino], next[indiceBloco]];
+    return flattenBlocosSecoes(next);
+  }
+
+  const paiRef = secao.parent_id;
+  const bloco = getBlocosSecoes(secoes).find(({ pai }) => getSecaoRef(pai) === paiRef);
+  if (!bloco) return secoes;
+  const indiceFilho = bloco.filhos.findIndex((filho) => getSecaoRef(filho) === getSecaoRef(secao));
+  const destino = direcao === 'up' ? indiceFilho - 1 : indiceFilho + 1;
+  if (indiceFilho < 0 || destino < 0 || destino >= bloco.filhos.length) return secoes;
+  const filhos = [...bloco.filhos];
+  [filhos[indiceFilho], filhos[destino]] = [filhos[destino], filhos[indiceFilho]];
+  const blocos = getBlocosSecoes(secoes).map((item) =>
+    getSecaoRef(item.pai) === paiRef ? { ...item, filhos } : item,
+  );
+  return flattenBlocosSecoes(blocos);
+}
+
+function podeMoverSecao(
+  secoesFonte: SecaoForm[],
+  indiceVisual: number,
+  direcao: 'up' | 'down',
+): boolean {
+  const secoes = normalizarSecoesHierarquicas(secoesFonte);
+  const secao = secoes[indiceVisual];
+  if (!secao) return false;
+
+  if (!secao.parent_id) {
+    const blocos = getBlocosSecoes(secoes);
+    const indiceBloco = blocos.findIndex(({ pai }) => getSecaoRef(pai) === getSecaoRef(secao));
+    return direcao === 'up'
+      ? indiceBloco > 0
+      : indiceBloco >= 0 && indiceBloco < blocos.length - 1;
+  }
+
+  const bloco = getBlocosSecoes(secoes).find(({ pai }) => getSecaoRef(pai) === secao.parent_id);
+  if (!bloco) return false;
+  const indiceFilho = bloco.filhos.findIndex((filho) => getSecaoRef(filho) === getSecaoRef(secao));
+  return direcao === 'up'
+    ? indiceFilho > 0
+    : indiceFilho >= 0 && indiceFilho < bloco.filhos.length - 1;
+}
+
+function reposicionarSecaoPorPai(
+  secoesFonte: SecaoForm[],
+  indiceVisual: number,
+  novoParentId: string,
+): SecaoForm[] {
+  const secoes = normalizarSecoesHierarquicas(secoesFonte);
+  const alvo = secoes[indiceVisual];
+  if (!alvo) return secoesFonte;
+
+  const alvoRef = getSecaoRef(alvo);
+  const base = secoes
+    .filter((secao) => getSecaoRef(secao) !== alvoRef)
+    .map((secao) => (
+      secao.parent_id === alvoRef
+        ? { ...secao, parent_id: '' }
+        : secao
+    ));
+
+  const atualizado: SecaoForm = {
+    ...alvo,
+    parent_id: novoParentId,
+  };
+
+  if (!novoParentId) {
+    const indicePaiAntigo = alvo.parent_id
+      ? base.findIndex((secao) => getSecaoRef(secao) === alvo.parent_id)
+      : -1;
+    let destino = base.length;
+    if (indicePaiAntigo >= 0) {
+      destino = indicePaiAntigo + 1;
+      while (destino < base.length && base[destino].parent_id === alvo.parent_id) {
+        destino += 1;
+      }
+    }
+
+    return normalizarSecoesHierarquicas([
+      ...base.slice(0, destino),
+      { ...atualizado, parent_id: '' },
+      ...base.slice(destino),
+    ]);
+  }
+
+  const indiceNovoPai = base.findIndex((secao) => getSecaoRef(secao) === novoParentId && !secao.parent_id);
+  if (indiceNovoPai < 0) {
+    return normalizarSecoesHierarquicas([...base, { ...atualizado, parent_id: '' }]);
+  }
+
+  let destino = indiceNovoPai + 1;
+  while (destino < base.length && base[destino].parent_id === novoParentId) {
+    destino += 1;
+  }
+
+  return normalizarSecoesHierarquicas([
+    ...base.slice(0, destino),
+    atualizado,
+    ...base.slice(destino),
+  ]);
+}
 
 interface Placeholder {
   id: string;
@@ -114,6 +351,184 @@ function buildDummyFigureHtml(): string {
   );
 }
 
+interface SortableSecaoTemplateItemProps {
+  secao: SecaoForm;
+  index: number;
+  total: number;
+  categorias: Categoria[];
+  placeholders: Placeholder[];
+  placeholderChaves: string[];
+  exameMenuStructure: typeof EXAM_MENU_REGISTRY[string] | undefined;
+  categoriaExameId: string;
+  exameToggles: typeof EXAM_TOGGLES[string] | undefined;
+  opcoesSecaoPai: Array<{ value: string; label: string }>;
+  inserirPlaceholder: (editorId: string, chave: string) => void;
+  updateSecao: (index: number, field: keyof SecaoForm, value: string) => void;
+  handleMoveSecao: (index: number, direction: 'up' | 'down') => void;
+  handleRemoveSecao: (index: number) => void;
+  podeSubir: boolean;
+  podeDescer: boolean;
+}
+
+const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
+  secao,
+  index,
+  total,
+  categorias,
+  placeholders,
+  placeholderChaves,
+  exameMenuStructure,
+  categoriaExameId,
+  exameToggles,
+  opcoesSecaoPai,
+  inserirPlaceholder,
+  updateSecao,
+  handleMoveSecao,
+  handleRemoveSecao,
+  podeSubir,
+  podeDescer,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `template-secao-sortable-${getSecaoRef(secao)}` });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.55 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-lg p-4 space-y-3 ${getSecaoVisual(secao)} ${secao.parent_id ? 'ml-5' : ''}`}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1"
+          aria-label="Reordenar seção"
+        >
+          <GripVertical size={16} />
+        </button>
+        <span className="text-sm font-semibold text-muted-foreground">
+          {secao.parent_id ? 'H3' : 'H2'} · Seção {index + 1} de {total}
+        </span>
+        <Input
+          value={secao.nome}
+          onChange={e => updateSecao(index, 'nome', e.target.value)}
+          placeholder="Nome da seção (ex: Introdução, Metodologia...)"
+          className="flex-1 h-8 text-sm"
+        />
+        {exameToggles && exameToggles.length > 0 && (
+          <Select
+            value={secao.condicao || '__always__'}
+            onValueChange={(v) => updateSecao(index, 'condicao', v === '__always__' ? '' : v)}
+          >
+            <SelectTrigger className="w-[180px] h-8 text-xs">
+              <SelectValue placeholder="Mostrar apenas se..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__always__">Sempre visível</SelectItem>
+              {exameToggles.map((t) => (
+                <SelectItem key={t.id} value={JSON.stringify({ campo: t.id, valor: 'on' })}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <Select
+          value={secao.parent_id || '__root__'}
+          onValueChange={(v) => updateSecao(index, 'parent_id', v === '__root__' ? '' : v)}
+        >
+          <SelectTrigger className="w-[190px] h-8 text-xs">
+            <SelectValue placeholder="Seção pai" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__root__">Sem pai (H2)</SelectItem>
+            {opcoesSecaoPai
+              .filter(opcao => opcao.value !== getSecaoRef(secao))
+              .map(opcao => (
+                <SelectItem key={opcao.value} value={opcao.value}>
+                  {opcao.label}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={secao.repetir_para || '__none__'}
+          onValueChange={(v) => updateSecao(index, 'repetir_para', v === '__none__' ? '' : v)}
+        >
+          <SelectTrigger className="w-[160px] h-8 text-xs">
+            <SelectValue placeholder="Repetir para cada..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Não repetir</SelectItem>
+            <SelectItem value="armas">Arma</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'up')} disabled={!podeSubir} aria-label="Mover para cima">
+          <ArrowUp size={14} />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'down')} disabled={!podeDescer} aria-label="Mover para baixo">
+          <ArrowDown size={14} />
+        </Button>
+        <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleRemoveSecao(index)} aria-label="Remover seção">
+          <X size={14} />
+        </Button>
+      </div>
+      {secao.parent_id && (
+        <p className="text-xs text-muted-foreground">
+          Subsection vinculada a uma seção pai. Nesta fase, a hierarquia aceita apenas `H2 → H3`.
+        </p>
+      )}
+      {secao.repetir_para === 'armas' && (
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Título de cada arma:</Label>
+          <Input
+            value={secao.repetir_titulo || ''}
+            onChange={e => updateSecao(index, 'repetir_titulo', e.target.value)}
+            placeholder="Ex: ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}"
+            className="flex-1 h-8 text-xs font-mono"
+          />
+        </div>
+      )}
+      {secao.repetir_para === 'armas' && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md p-2 text-xs text-amber-800 dark:text-amber-200">
+          Use placeholders com <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">_1_</code> como padrão. Ex: <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">{'{{b602_arma_1_tipo}}'}</code>, <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">{'{{b602_arma_1_letra}}'}</code>. O campo acima define o título de cada subseção (H3). <strong>Atenção:</strong> Edições manuais no conteúdo das subseções de arma serão perdidas ao atualizar a REP — os dados sempre refletem a REP atual.
+        </div>
+      )}
+      <PlaceholderContextMenu
+        editorId={`template-secao-${getSecaoRef(secao)}`}
+        categorias={categorias}
+        placeholders={placeholders}
+        onInsertPlaceholder={inserirPlaceholder}
+        exameMenuStructure={exameMenuStructure}
+        exameCamposEspecificos={undefined}
+        categoriaExameId={categoriaExameId}
+      >
+        <TinyMceEditor
+          editorId={`template-secao-${getSecaoRef(secao)}`}
+          value={secao.conteudo}
+          onChange={html => updateSecao(index, 'conteudo', html)}
+          height={250}
+          placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
+          placeholderChaves={placeholderChaves}
+          autoConverterReservados={true}
+          condToggles={exameToggles}
+        />
+      </PlaceholderContextMenu>
+    </div>
+  );
+};
+
 export const TemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,6 +555,12 @@ export const TemplatesPage: React.FC = () => {
   const [showImportDialog, setShowImportDialog] = useState(false);
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const carregarTemplates = useCallback(async () => {
     try {
@@ -195,8 +616,21 @@ export const TemplatesPage: React.FC = () => {
     return EXAM_TOGGLES[tipo.codigo];
   }, [templateForm.tipo_exame_id, tiposExame]);
 
+  const secoesOrdenadas = useMemo(() => normalizarSecoesHierarquicas(secoes), [secoes]);
+
+  const opcoesSecaoPai = useMemo(() => (
+    secoesOrdenadas
+      .map((secao, index) => ({ secao, index }))
+      .filter(({ secao }) => !secao.parent_id)
+      .map(({ secao, index }) => ({
+        value: getSecaoRef(secao),
+        label: secao.nome.trim() || `Seção ${index + 1}`,
+      }))
+  ), [secoesOrdenadas]);
+
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoForm[]) => {
-    if (secoesFonte.length === 0) {
+    const secoesNormalizadas = normalizarSecoesHierarquicas(secoesFonte);
+    if (secoesNormalizadas.length === 0) {
       return `
         <div data-template-empty="true" style="padding:12px;border:1px dashed #bbb;border-radius:8px;color:#666;">
           Nenhuma seção definida. Volte para o modo multi-editor para adicionar seções.
@@ -204,7 +638,7 @@ export const TemplatesPage: React.FC = () => {
       `;
     }
 
-    return secoesFonte
+    return secoesNormalizadas
       .map((sec, index) => {
         const nomeRaw = (sec.nome || '').trim();
         const nome = nomeRaw
@@ -264,7 +698,7 @@ export const TemplatesPage: React.FC = () => {
       return;
     }
 
-    setSecoes(prev => parseSingleHtmlToSecoes(singleEditorHtml, prev));
+    setSecoes(prev => normalizarSecoesHierarquicas(parseSingleHtmlToSecoes(singleEditorHtml, prev)));
     setEditorMode('multi');
   }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
@@ -343,8 +777,9 @@ export const TemplatesPage: React.FC = () => {
     if (r.success && r.data) {
       const s: SecaoItem[] = r.data;
       setSecoesDb(s);
-      setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' })));
-      setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' }))));
+      const forms = normalizarSecoesHierarquicas(s.map(se => hydrateSecaoForm(se, placeholderChaves)));
+      setSecoes(forms);
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(forms));
     } else {
       setSecoesDb([]);
       setSecoes([emptySecaoForm()]);
@@ -386,13 +821,36 @@ export const TemplatesPage: React.FC = () => {
 
       const novoId: string = createR.data.id;
 
-      // Copiar as seções
-      for (const sec of secoesOriginais) {
+      // Copiar as seções preservando hierarquia pai/filho
+      const mapaIds = new Map<string, string>();
+      const secoesOrdenadas = [...secoesOriginais].sort((a, b) => a.ordem - b.ordem);
+
+      for (const sec of secoesOrdenadas.filter(s => !s.parent_id)) {
+        const r = await window.ipcAPI.template.createSecao({
+          template_id: novoId,
+          nome: sec.nome,
+          ordem: sec.ordem,
+          parent_id: null,
+          conteudo: sec.conteudo || '',
+          condicao: sec.condicao || null,
+          repetir_para: sec.repetir_para || null,
+          repetir_titulo: sec.repetir_titulo || null,
+        });
+        if (r.success && r.data?.id) {
+          mapaIds.set(sec.id, r.data.id);
+        }
+      }
+
+      for (const sec of secoesOrdenadas.filter(s => s.parent_id)) {
         await window.ipcAPI.template.createSecao({
           template_id: novoId,
           nome: sec.nome,
           ordem: sec.ordem,
+          parent_id: sec.parent_id ? mapaIds.get(sec.parent_id) || null : null,
           conteudo: sec.conteudo || '',
+          condicao: sec.condicao || null,
+          repetir_para: sec.repetir_para || null,
+          repetir_titulo: sec.repetir_titulo || null,
         });
       }
 
@@ -413,8 +871,9 @@ export const TemplatesPage: React.FC = () => {
       if (r.success && r.data) {
         const s: SecaoItem[] = r.data;
         setSecoesDb(s);
-        setSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' })));
-        setSingleEditorHtml(buildSingleHtmlFromSecoes(s.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(se.conteudo, placeholderChaves, true)) : '' }))));
+        const forms = normalizarSecoesHierarquicas(s.map(se => hydrateSecaoForm(se, placeholderChaves)));
+        setSecoes(forms);
+        setSingleEditorHtml(buildSingleHtmlFromSecoes(forms));
       } else {
         setSecoesDb([]);
         setSecoes([emptySecaoForm()]);
@@ -440,34 +899,102 @@ export const TemplatesPage: React.FC = () => {
   };
 
   const handleAddSecao = () => {
-    setSecoes(prev => [...prev, emptySecaoForm()]);
+    setSecoes(prev => normalizarSecoesHierarquicas([...prev, emptySecaoForm()]));
   };
 
   const handleRemoveSecao = (index: number) => {
-    setSecoes(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleMoveSecao = (index: number, direction: 'up' | 'down') => {
     setSecoes(prev => {
-      const next = [...prev];
-      const target = direction === 'up' ? index - 1 : index + 1;
-      if (target < 0 || target >= next.length) return prev;
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
+      const secoesNormalizadas = normalizarSecoesHierarquicas(prev);
+      const removida = secoesNormalizadas[index];
+      if (!removida) return prev;
+
+      return normalizarSecoesHierarquicas(secoesNormalizadas
+        .filter((_, i) => i !== index)
+        .map(secao => {
+          const parentRef = secao.parent_id || '';
+          if (parentRef === getSecaoRef(removida)) {
+            return { ...secao, parent_id: '' };
+          }
+          return secao;
+        }));
     });
   };
 
+  const handleMoveSecao = (index: number, direction: 'up' | 'down') => {
+    setSecoes(prev => moverSecaoHierarquica(prev, index, direction));
+  };
+
   const updateSecao = (index: number, field: keyof SecaoForm, value: string) => {
-    setSecoes(prev => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
+    setSecoes(prev => {
+      const secoesNormalizadas = normalizarSecoesHierarquicas(prev);
+      if (field === 'parent_id') {
+        return reposicionarSecaoPorPai(secoesNormalizadas, index, value || '');
+      }
+
+      return secoesNormalizadas.map((secao, i) => (
+        i === index
+          ? { ...secao, [field]: value }
+          : secao
+      ));
+    });
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+
+    setSecoes((prev) => {
+      const secoesNormalizadas = normalizarSecoesHierarquicas(prev);
+      const ativa = secoesNormalizadas.find(
+        (secao) => `template-secao-sortable-${getSecaoRef(secao)}` === active.id,
+      );
+      const destino = secoesNormalizadas.find(
+        (secao) => `template-secao-sortable-${getSecaoRef(secao)}` === over.id,
+      );
+
+      if (!ativa || !destino) return prev;
+
+      if (!ativa.parent_id) {
+        const blocos = getBlocosSecoes(secoesNormalizadas);
+        const origem = blocos.findIndex(({ pai }) => getSecaoRef(pai) === getSecaoRef(ativa));
+        const alvoRef = destino.parent_id || getSecaoRef(destino);
+        const alvo = blocos.findIndex(({ pai }) => getSecaoRef(pai) === alvoRef);
+        if (origem < 0 || alvo < 0 || origem === alvo) return prev;
+
+        const next = [...blocos];
+        const [blocoAtivo] = next.splice(origem, 1);
+        next.splice(alvo, 0, blocoAtivo);
+        return flattenBlocosSecoes(next);
+      }
+
+      if (ativa.parent_id && destino.parent_id && ativa.parent_id === destino.parent_id) {
+        const blocos = getBlocosSecoes(secoesNormalizadas);
+        return flattenBlocosSecoes(
+          blocos.map((bloco) => {
+            if (getSecaoRef(bloco.pai) !== ativa.parent_id) return bloco;
+
+            const filhos = [...bloco.filhos];
+            const origem = filhos.findIndex((filho) => getSecaoRef(filho) === getSecaoRef(ativa));
+            const alvo = filhos.findIndex((filho) => getSecaoRef(filho) === getSecaoRef(destino));
+            if (origem < 0 || alvo < 0 || origem === alvo) return bloco;
+
+            const [filhoAtivo] = filhos.splice(origem, 1);
+            filhos.splice(alvo, 0, filhoAtivo);
+            return { ...bloco, filhos };
+          }),
+        );
+      }
+
+      return prev;
+    });
   };
 
   const handleSalvar = async () => {
     try {
       setSubmitting(true);
       setErrors({});
-      const secoesParaSalvar = editorMode === 'single'
+      const secoesParaSalvar = normalizarSecoesHierarquicas(editorMode === 'single'
         ? parseSingleHtmlToSecoes(singleEditorHtml, secoes)
-        : secoes;
+        : secoes);
 
       // Validar template
       const result = templateFormSchema.safeParse(templateForm);
@@ -511,29 +1038,83 @@ export const TemplatesPage: React.FC = () => {
           }
         }
 
-        // Criar/atualizar seções
+        // Criar/atualizar seções em duas etapas para resolver parent_id de seções novas
         const idsOrdenados: string[] = [];
+        const mapaIds = new Map<string, string>();
+
+        for (const sec of secoesParaSalvar) {
+          if (sec.id) {
+            mapaIds.set(sec.id, sec.id);
+          }
+        }
+
         for (let i = 0; i < secoesParaSalvar.length; i++) {
           const sec = secoesParaSalvar[i];
-          if (!sec.nome.trim()) continue;
+          if (!sec.nome.trim() || sec.parent_id) continue;
 
           if (sec.id) {
             await window.ipcAPI.template.updateSecao(sec.id, {
               nome: sec.nome.trim(),
               conteudo: sec.conteudo,
               ordem: i,
+              parent_id: null,
               condicao: sec.condicao || null,
+              repetir_para: sec.repetir_para || null,
+              repetir_titulo: sec.repetir_titulo || null,
             });
-            idsOrdenados.push(sec.id);
           } else {
             const r = await window.ipcAPI.template.createSecao({
               template_id: templateId,
               nome: sec.nome.trim(),
               ordem: i,
+              parent_id: null,
               conteudo: sec.conteudo,
               condicao: sec.condicao || null,
+              repetir_para: sec.repetir_para || null,
+              repetir_titulo: sec.repetir_titulo || null,
             });
-            if (r.success) idsOrdenados.push(r.data.id);
+            if (r.success) {
+              mapaIds.set(sec.chave_local, r.data.id);
+            }
+          }
+        }
+
+        for (let i = 0; i < secoesParaSalvar.length; i++) {
+          const sec = secoesParaSalvar[i];
+          if (!sec.nome.trim() || !sec.parent_id) continue;
+
+          const parentIdResolvido = mapaIds.get(sec.parent_id) || null;
+          if (sec.id) {
+            await window.ipcAPI.template.updateSecao(sec.id, {
+              nome: sec.nome.trim(),
+              conteudo: sec.conteudo,
+              ordem: i,
+              parent_id: parentIdResolvido,
+              condicao: sec.condicao || null,
+              repetir_para: sec.repetir_para || null,
+              repetir_titulo: sec.repetir_titulo || null,
+            });
+          } else {
+            const r = await window.ipcAPI.template.createSecao({
+              template_id: templateId,
+              nome: sec.nome.trim(),
+              ordem: i,
+              parent_id: parentIdResolvido,
+              conteudo: sec.conteudo,
+              condicao: sec.condicao || null,
+              repetir_para: sec.repetir_para || null,
+              repetir_titulo: sec.repetir_titulo || null,
+            });
+            if (r.success) {
+              mapaIds.set(sec.chave_local, r.data.id);
+            }
+          }
+        }
+
+        for (const sec of secoesParaSalvar) {
+          const secaoId = sec.id || mapaIds.get(sec.chave_local);
+          if (secaoId) {
+            idsOrdenados.push(secaoId);
           }
         }
 
@@ -555,7 +1136,9 @@ export const TemplatesPage: React.FC = () => {
         const r = await window.ipcAPI.template.findSecoes(templateId);
         if (r.success) {
           setSecoesDb(r.data);
-          const nextSecoes = r.data.map((s: SecaoItem & { condicao?: string }) => ({ id: s.id, nome: s.nome, conteudo: s.conteudo ? limparIndicadoresCondicionais(converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true)) : '', condicao: s.condicao }));
+          const nextSecoes = normalizarSecoesHierarquicas(
+            r.data.map((s: SecaoItem) => hydrateSecaoForm(s, placeholderChaves)),
+          );
           setSecoes(nextSecoes);
           setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
         }
@@ -587,7 +1170,7 @@ export const TemplatesPage: React.FC = () => {
 
   /** Monta o HTML com cabeçalho + placeholders substituídos. Retorna o HTML completo e o headerTemplate. */
   const montarHtmlPreview = async (
-    secoesFonte: { nome: string; conteudo?: string }[],
+    secoesFonte: SecaoPreview[],
     templateNome: string,
     tipoExameNome: string,
   ): Promise<{ fullHtml: string; headerTemplate: string }> => {
@@ -595,12 +1178,32 @@ export const TemplatesPage: React.FC = () => {
       numeroRepFallback: '321.654-2026',
     });
 
-    const secoesHtml = secoesFonte
-      .filter(s => s.nome.trim())
-      .map((s, i) => {
-        const titulo = s.nome.trim();
-        const conteudo = s.conteudo || '<p style="color: #999; font-style: italic;">(seção vazia)</p>';
-        return `<h2>${i + 1}. ${titulo}</h2>${conteudo}`;
+    const secoesNormalizadas = normalizarSecoesHierarquicas(secoesFonte);
+    const pais = secoesNormalizadas.filter(secao => !secao.parent_id && secao.nome.trim());
+    const filhosPorPai = new Map<string, typeof secoesFonte>();
+    secoesNormalizadas
+      .filter(secao => secao.parent_id && secao.nome.trim())
+      .forEach(secao => {
+        const filhos = filhosPorPai.get(secao.parent_id || '') || [];
+        filhos.push(secao);
+        filhosPorPai.set(secao.parent_id || '', filhos);
+      });
+
+    const secoesHtml = pais
+      .map((pai, indicePai) => {
+        const partes = [
+          `<h2>${indicePai + 1}. ${pai.nome.trim()}</h2>`,
+          pai.conteudo || '',
+        ];
+
+        const paiRef = getSecaoRef(pai);
+        const filhos = filhosPorPai.get(paiRef || '') || [];
+        filhos.forEach((filho, indiceFilho) => {
+          partes.push(`<h3>${indicePai + 1}.${indiceFilho + 1} ${filho.nome.trim()}</h3>`);
+          partes.push(filho.conteudo || '<p style="color: #999; font-style: italic;">(subseção vazia)</p>');
+        });
+
+        return partes.join('\n');
       })
       .join('\n');
 
@@ -655,9 +1258,9 @@ export const TemplatesPage: React.FC = () => {
     try {
       setGeneratingPdf(true);
       setShowPreview(true);
-      const secoesParaPreview = editorMode === 'single'
+      const secoesParaPreview = normalizarSecoesHierarquicas(editorMode === 'single'
         ? parseSingleHtmlToSecoes(singleEditorHtml, secoes)
-        : secoes;
+        : secoes);
 
       const tipoExameNome = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '';
       const { fullHtml, headerTemplate } = await montarHtmlPreview(secoesParaPreview, templateForm.nome, tipoExameNome);
@@ -677,14 +1280,19 @@ export const TemplatesPage: React.FC = () => {
       setShowPreview(true);
 
       const secResult = await window.ipcAPI.template.findSecoes(template.id);
-      const loadedSecoes: { nome: string; conteudo?: string }[] =
+      const loadedSecoes: SecaoPreview[] =
         (secResult.success && secResult.data ? secResult.data : []).map((s: any) => ({
+          id: s.id,
+          chave_local: s.id,
           nome: s.nome,
+          parent_id: s.parent_id || '',
+          repetir_para: s.repetir_para || '',
+          repetir_titulo: s.repetir_titulo || '',
           conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true) : '',
         }));
 
       const { fullHtml, headerTemplate } = await montarHtmlPreview(
-        loadedSecoes,
+        normalizarSecoesHierarquicas(loadedSecoes),
         template.nome,
         template.tipo_exame_nome || '',
       );
@@ -993,7 +1601,7 @@ export const TemplatesPage: React.FC = () => {
           <Eye size={16} /> {generatingPdf ? 'Gerando PDF...' : 'Pré-visualizar'}
         </Button>
       </div>
-
+      <p className="text-xs text-muted-foreground mt-1 italic">Placeholders de exame (B-602, I-801) são resolvidos na exportação do laudo. Use a prévia do laudo ou exporte para visualizar os dados reais.</p>
 
       {/* Dialog de Preview PDF */}
       <Dialog open={showPreview} onOpenChange={(open) => {
@@ -1168,70 +1776,41 @@ export const TemplatesPage: React.FC = () => {
                     condToggles={exameToggles}
                   />
               </PlaceholderContextMenu>
-          ) : secoes.length === 0 ? (
+          ) : secoesOrdenadas.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhuma seção. Clique em &quot;Adicionar Seção&quot; para começar.
             </div>
           ) : (
-            secoes.map((secao, index) => (
-              <div key={index} className="rounded-lg border bg-card/50 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <GripVertical size={16} className="text-muted-foreground" />
-                  <span className="text-sm font-semibold text-muted-foreground">Seção {index + 1}</span>
-                  <Input
-                    value={secao.nome}
-                    onChange={e => updateSecao(index, 'nome', e.target.value)}
-                    placeholder="Nome da seção (ex: Introdução, Metodologia...)"
-                    className="flex-1 h-8 text-sm"
-                  />
-                  {exameToggles && exameToggles.length > 0 && (
-                    <Select
-                      value={secao.condicao || '__always__'}
-                      onValueChange={(v) => updateSecao(index, 'condicao', v === '__always__' ? '' : v)}
-                    >
-                      <SelectTrigger className="w-[180px] h-8 text-xs">
-                        <SelectValue placeholder="Mostrar apenas se..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__always__">Sempre visível</SelectItem>
-                        {exameToggles.map((t) => (
-                          <SelectItem key={t.id} value={JSON.stringify({ campo: t.id, valor: 'on' })}>{t.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'up')} disabled={index === 0} aria-label="Mover para cima">
-                    <ArrowUp size={14} />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'down')} disabled={index === secoes.length - 1} aria-label="Mover para baixo">
-                    <ArrowDown size={14} />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleRemoveSecao(index)} aria-label="Remover seção">
-                    <X size={14} />
-                  </Button>
-                </div>
-                <PlaceholderContextMenu
-                  editorId={`template-secao-${index}`}
-                  categorias={categorias}
-                  placeholders={placeholders}
-                  onInsertPlaceholder={inserirPlaceholder}
-                  exameMenuStructure={exameMenuStructure}
-                  exameCamposEspecificos={undefined}
-                  categoriaExameId={categoriaExameId}
-                >
-                    <TinyMceEditor
-                      editorId={`template-secao-${index}`}
-                      value={secao.conteudo}
-                      onChange={html => updateSecao(index, 'conteudo', html)}
-                      height={250}
-                      placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext
+                items={secoesOrdenadas.map((secao) => `template-secao-sortable-${getSecaoRef(secao)}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-3">
+                  {secoesOrdenadas.map((secao, index) => (
+                    <SortableSecaoTemplateItem
+                      key={getSecaoRef(secao)}
+                      secao={secao}
+                      index={index}
+                      total={secoesOrdenadas.length}
+                      categorias={categorias}
+                      placeholders={placeholders}
                       placeholderChaves={placeholderChaves}
-                      autoConverterReservados={true}
-                      condToggles={exameToggles}
+                      exameMenuStructure={exameMenuStructure}
+                      categoriaExameId={categoriaExameId}
+                      exameToggles={exameToggles}
+                      opcoesSecaoPai={opcoesSecaoPai}
+                      inserirPlaceholder={inserirPlaceholder}
+                      updateSecao={updateSecao}
+                      handleMoveSecao={handleMoveSecao}
+                      handleRemoveSecao={handleRemoveSecao}
+                      podeSubir={podeMoverSecao(secoesOrdenadas, index, 'up')}
+                      podeDescer={podeMoverSecao(secoesOrdenadas, index, 'down')}
                     />
-                </PlaceholderContextMenu>
-              </div>
-            ))
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </CardContent>
       </Card>

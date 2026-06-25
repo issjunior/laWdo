@@ -173,6 +173,7 @@ export interface IpcAPI {
     getRespostasWizard: (laudoId: string) => Promise<UserResponse>;
     exportar: (params: { laudoId: string; formato: 'pdf' | 'docx' | 'odt'; html: string; estrutura?: any; cabecalho?: any; margens?: any }) => Promise<UserResponse>;
     verificarLibreOffice: () => Promise<UserResponse>;
+    sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
 
   // Wizard
@@ -371,6 +372,7 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:getRespostasWizard',
   'laudo:exportar',
   'laudo:verificarLibreOffice',
+  'laudo:sincronizarSecoes',
 
   // Wizards
   'wizard:findAll',
@@ -817,6 +819,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     getRespostasWizard: (laudoId: string) => ipcRenderer.invoke('laudo:getRespostasWizard', laudoId),
     exportar: (params: any) => ipcRenderer.invoke('laudo:exportar', params),
     verificarLibreOffice: () => ipcRenderer.invoke('laudo:verificarLibreOffice'),
+    sincronizarSecoes: (laudoId: string) => ipcRenderer.invoke('laudo:sincronizarSecoes', laudoId),
   },
 
   wizard: {

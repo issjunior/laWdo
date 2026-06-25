@@ -124,6 +124,11 @@ interface TinyMceEditorProps {
   condToggles?: Array<{ id: string; label: string; subtitulo?: string; subToggles?: Array<{ id: string; label: string; subtitulo?: string }> }>;
 }
 
+const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
+  { id: 'b602_arma_N_func_toggle', label: 'Arma (N) - Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
+  { id: 'b602_arma_N_coleta_toggle', label: 'Arma (N) - Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
+];
+
 export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>> = ({
   value,
   initialValue,
@@ -421,12 +426,16 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             editor.addCommand('insertCondBloco', (_ui: any, toggleId: string, subIndex?: number) => {
               if (!toggleId || typeof toggleId !== 'string') return;
               const toggles = (condToggles || []);
+              const extrasB602 = toggles.some(t => t.id === 'b602_armas_toggle')
+                ? BLOCOS_CONDICIONAIS_B602_POR_ARMA
+                : [];
 
               const allToggles = [
                 ...toggles.map(t => ({ id: t.id, label: t.label, subtitulo: t.subtitulo })),
                 ...toggles.flatMap(t => (t.subToggles || []).map((st, i) => ({
                   id: st.id, label: st.label, subtitulo: st.subtitulo, subIndex: i,
                 }))),
+                ...extrasB602,
               ];
               const found = allToggles.find(t => t.id === toggleId);
               const titulo = found?.subtitulo || found?.label || toggleId;
@@ -451,6 +460,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                       text: `  ${sub.label}`,
                       onAction: () => editor.execCommand('insertCondBloco', false, sub.id, i),
                     });
+                  });
+                }
+              }
+              if (condToggles.some(toggle => toggle.id === 'b602_armas_toggle')) {
+                for (const bloco of BLOCOS_CONDICIONAIS_B602_POR_ARMA) {
+                  menuItems.push({
+                    type: 'menuitem',
+                    text: bloco.label,
+                    onAction: () => editor.execCommand('insertCondBloco', false, bloco.id),
                   });
                 }
               }

@@ -1,6 +1,11 @@
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
 
+function numToLetra(n: number): string {
+  if (n < 26) return String.fromCharCode(65 + n);
+  return numToLetra(Math.floor(n / 26) - 1) + String.fromCharCode(65 + (n % 26));
+}
+
 function formatarData(iso: string | undefined): string {
   if (!iso) return '-';
   try {
@@ -108,6 +113,8 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
     try {
       const especificos = JSON.parse(repData.campos_especificos);
       for (const placeholder of CAMPOS_ESPECIFICOS_PLACEHOLDERS) {
+        if (placeholder.computed) continue; // valor gerado em runtime (ex: letra da arma)
+        if (!placeholder.jsonPath) continue;
         const partes = placeholder.jsonPath.split('.');
         let valor: unknown = especificos;
         for (const parte of partes) {
@@ -224,8 +231,10 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
           // --- Placeholders individuais de armas ---
           armas.forEach((arma, i) => {
             const idx = i + 1;
+            mapping[`b602_arma_${idx}_letra`] = numToLetra(i);
             mapping[`b602_arma_${idx}_tipo`] = arma.tipo || '';
             mapping[`b602_arma_${idx}_marca`] = arma.marca || '';
+            mapping[`b602_arma_${idx}_modelo`] = arma.modelo || '';
             mapping[`b602_arma_${idx}_calibre`] = arma.calibre || '';
             mapping[`b602_arma_${idx}_numeracao_serie`] = arma.numeracao_serie || '';
             mapping[`b602_arma_${idx}_numeracao_cano`] = arma.numeracao_cano || '';
@@ -237,6 +246,8 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
             mapping[`b602_arma_${idx}_quantidade`] = arma.quantidade || '';
             mapping[`b602_arma_${idx}_dito_oficio`] = arma.dito_oficio || '';
             mapping[`b602_arma_${idx}_numero_lacre`] = arma.numero_lacre || '';
+            mapping[`b602_arma_${idx}_func_toggle`] = String(arma.func_toggle || 'off');
+            mapping[`b602_arma_${idx}_coleta_toggle`] = String(arma.coleta_toggle || 'off');
           });
         }
       }

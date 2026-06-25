@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, ExternalLink, Tag, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Zap, Plus, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
+import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, ExternalLink, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -36,14 +36,15 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { reindexarFiguras } from '@/lib/figuras';
+import {
+  getClasseSecaoEstrutural,
+  normalizarTituloSecao,
+  parsearSecoesEstruturais,
+  reconstruirHtmlEstrutural,
+  reindexarHtmlEstrutural,
+  type SecaoEstruturalLaudo,
+} from '@/lib/estrutura-laudo';
 import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
 import { resolverPlaceholdersExportacao, limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
@@ -188,6 +189,7 @@ const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solici
     try {
       const especificos = JSON.parse(repData.campos_especificos);
       for (const placeholder of CAMPOS_ESPECIFICOS_PLACEHOLDERS) {
+        if (placeholder.computed || !placeholder.jsonPath) continue;
         const partes = placeholder.jsonPath.split('.');
         let valor: unknown = especificos;
         for (const parte of partes) {
@@ -399,56 +401,7 @@ interface LaudoItem {
   wizard_id?: string;
 }
 
-interface SecaoEditor {
-  titulo: string;
-  conteudo: string;
-}
-
-/** Decodifica entidades HTML (&Acirc; → Â, &amp; → &, etc.) usando o parser do navegador */
-function decodificarEntidadesHtml(texto: string): string {
-  const txt = document.createElement('textarea');
-  txt.innerHTML = texto;
-  return txt.value;
-}
-
-/** Faz o parse do HTML do laudo em seções independentes, usando <h2> como delimitador */
-function parseConteudoEmSecoes(html: string): SecaoEditor[] {
-  if (!html) return [{ titulo: 'Conteúdo', conteudo: '<p>&nbsp;</p>' }];
-
-  const regexH2 = /<h2[^>]*>(.*?)<\/h2>/gi;
-  const matches: { titulo: string; pos: number; endPos: number }[] = [];
-  let match;
-
-  while ((match = regexH2.exec(html)) !== null) {
-    matches.push({
-      titulo: decodificarEntidadesHtml(match[1].replace(/<[^>]*>/g, '').trim()),
-      pos: match.index,
-      endPos: match.index + match[0].length,
-    });
-  }
-
-  if (matches.length === 0) {
-    return [{ titulo: 'Conteúdo', conteudo: html }];
-  }
-
-  const secoes: SecaoEditor[] = [];
-  for (let i = 0; i < matches.length; i++) {
-    const start = matches[i].endPos;
-    const end = i < matches.length - 1 ? matches[i + 1].pos : html.length;
-    const conteudo = html.substring(start, end).trim();
-    secoes.push({
-      titulo: matches[i].titulo,
-      conteudo: conteudo || '<p>&nbsp;</p>',
-    });
-  }
-
-  return secoes;
-}
-
-/** Reconstrói o HTML completo concatenando as seções */
-function reconstruirConteudo(secoes: SecaoEditor[]): string {
-  return secoes.map(s => `<h2>${s.titulo}</h2>\n${s.conteudo}`).join('\n');
-}
+type SecaoEditor = SecaoEstruturalLaudo;
 
 export const LaudosPage: React.FC = () => {
   const navigate = useNavigate();
@@ -637,18 +590,37 @@ export const LaudosPage: React.FC = () => {
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
     if (secoesFonte.length === 0) return '';
+    let indiceH2 = 0;
+    let indiceH3 = 0;
     return secoesFonte
       .map((sec, index) => {
-        const tituloRaw = (sec.titulo || '').trim();
-        const titulo = tituloRaw
-          ? (/^(?:se[cç]ão\b|\d+[\s\.\-\:]|[a-zA-Z][\.\-\:]\s|[IVXLCDM]+[\.\-\:]\s)/i.test(tituloRaw)
-            ? tituloRaw
-            : `Seção ${index + 1}: ${tituloRaw}`)
-          : `Seção ${index + 1}`;
+        if (sec.nivel === 2) {
+          indiceH2 += 1;
+          indiceH3 = 0;
+        } else {
+          indiceH3 += 1;
+        }
+
+        const tituloBase = normalizarTituloSecao(sec.titulo || `Seção ${index + 1}`);
+        const titulo = sec.nivel === 2
+          ? `${indiceH2}. ${tituloBase}`
+          : `${indiceH2}.${indiceH3} ${tituloBase}`;
         const conteudo = sec.conteudo?.trim() || '<p>&nbsp;</p>';
         return `
-          <section data-laudo-secao="true" data-secao-index="${index}" style="margin-bottom:16px;border:1px solid rgba(128,128,128,0.2);border-radius:8px;overflow:hidden;">
-            <div contenteditable="false" data-laudo-secao-header="true" style="background:rgba(128,128,128,0.08);padding:8px 12px;border-bottom:1px solid rgba(128,128,128,0.2);font-weight:600;color:inherit;">
+          <section
+            data-laudo-secao="true"
+            data-secao-index="${index}"
+            data-secao-id="${sec.id || ''}"
+            data-parent-id="${sec.parentId || ''}"
+            data-estrutura-nivel="${sec.nivel}"
+            data-derivada-rep="${sec.derivadaRep ? 'true' : 'false'}"
+            style="margin-bottom:16px;border:1px solid rgba(128,128,128,0.2);border-radius:8px;overflow:hidden;"
+          >
+            <div
+              contenteditable="false"
+              data-laudo-secao-header="true"
+              style="background:rgba(128,128,128,0.08);padding:8px 12px;border-bottom:1px solid rgba(128,128,128,0.2);font-weight:600;color:inherit;"
+            >
               ${titulo}
             </div>
             <div data-laudo-secao-content="true" style="padding:8px 4px;">
@@ -687,9 +659,41 @@ export const LaudosPage: React.FC = () => {
     }
   }, []);
 
-  const getSecoesSincronizadas = useCallback(() => {
-    return editorMode === 'single' ? parseSingleHtmlToSecoes(singleEditorHtml, secoes) : secoes;
-  }, [editorMode, parseSingleHtmlToSecoes, singleEditorHtml, secoes]);
+  const reindexarSecoesEditadas = useCallback((secoesFonte: SecaoEditor[]) => (
+    secoesFonte.map(secao => ({
+      ...secao,
+      titulo: normalizarTituloSecao(secao.titulo),
+    }))
+  ), []);
+
+  const atualizarConteudoSecao = useCallback((idx: number, novoConteudo: string) => {
+    setSecoes(prev => {
+      const novas = [...prev];
+      novas[idx] = { ...novas[idx], conteudo: novoConteudo };
+      return novas;
+    });
+  }, []);
+
+  const obterSecoesAtuaisDoEditor = useCallback((): SecaoEditor[] => {
+    if (editorMode === 'single') {
+      const editor = (window as any).tinymce?.get('laudo-single-editor');
+      const latestHtml = editor ? editor.getContent() : singleEditorHtml;
+      setSingleEditorHtml(latestHtml);
+      return parseSingleHtmlToSecoes(latestHtml, secoes);
+    }
+
+    return secoes.map((secao, idx) => {
+      const editor = (window as any).tinymce?.get(`secao-${idx}`);
+      const conteudo = editor ? editor.getContent() : secao.conteudo;
+      if (editor) atualizarConteudoSecao(idx, conteudo);
+      return { ...secao, conteudo };
+    });
+  }, [atualizarConteudoSecao, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+
+  const montarHtmlEstruturalAtual = useCallback((secoesFonte: SecaoEditor[]) => {
+    const htmlEstrutural = reconstruirHtmlEstrutural(reindexarSecoesEditadas(secoesFonte));
+    return reindexarFiguras(reindexarHtmlEstrutural(htmlEstrutural));
+  }, [reindexarSecoesEditadas]);
 
   const handleEditorModeChange = useCallback((nextMode: 'multi' | 'single') => {
     if (nextMode === editorMode) return;
@@ -733,7 +737,7 @@ export const LaudosPage: React.FC = () => {
   useEffect(() => {
     carregarLaudos();
     carregarPlaceholders();
-    window.ipcAPI.laudo.verificarLibreOffice().then(r => {
+    window.ipcAPI.laudo.verificarLibreOffice().then((r: { success: boolean; data?: boolean }) => {
       setLibreOfficeDisponivel(r.success && r.data === true);
     });
   }, [carregarLaudos, carregarPlaceholders]);
@@ -758,7 +762,7 @@ export const LaudosPage: React.FC = () => {
         if (!body || !win) continue;
 
         const observer = new win.IntersectionObserver(
-          (entries) => {
+          (entries: IntersectionObserverEntry[]) => {
             for (const entry of entries) {
               const id = (entry.target as HTMLElement).getAttribute('data-image-id') || '';
               ratios.set(id, entry.intersectionRatio);
@@ -773,7 +777,7 @@ export const LaudosPage: React.FC = () => {
           { threshold: [0, 0.25, 0.5, 0.75, 1] }
         );
 
-        body.querySelectorAll('.laudo-figure').forEach(f => observer.observe(f));
+        Array.from(body.querySelectorAll('.laudo-figure') as NodeListOf<Element>).forEach((f) => observer.observe(f));
         observers.push(observer);
       }
     }, 300);
@@ -800,6 +804,7 @@ export const LaudosPage: React.FC = () => {
     if (idxExistente >= 0) return { idx: idxExistente, secoes };
 
     const novaSecao: SecaoEditor = {
+      nivel: 2,
       titulo: 'ILUSTRAÇÕES',
       conteudo: '<p>&nbsp;</p>',
     };
@@ -882,14 +887,6 @@ export const LaudosPage: React.FC = () => {
     }
   }, [editorMode, secoes]);
 
-  const atualizarConteudoSecao = useCallback((idx: number, novoConteudo: string) => {
-    setSecoes(prev => {
-      const novas = [...prev];
-      novas[idx] = { ...novas[idx], conteudo: novoConteudo };
-      return novas;
-    });
-  }, []);
-
   const obterEditorIlustracoes = useCallback((): {
     editorId: string;
     idx: number;
@@ -912,13 +909,13 @@ export const LaudosPage: React.FC = () => {
   ): { metodo: 'execCommand' | 'remount'; count: number } => {
     const { editorId, idx, editor } = obterEditorIlustracoes();
 
-    if (editor && editor.initialized && editor.getBody()) {
-      if (substituirConteudo) {
-        const body = editor.getBody();
-        Array.from(body.querySelectorAll('.laudo-figure')).forEach(fig => {
-          const next = fig.nextElementSibling;
-          fig.remove();
-          if (next && (next.tagName === 'BR' || next.tagName === 'P')) next.remove();
+      if (editor && editor.initialized && editor.getBody()) {
+        if (substituirConteudo) {
+          const body = editor.getBody();
+          Array.from(body.querySelectorAll('.laudo-figure') as NodeListOf<Element>).forEach((fig) => {
+            const next = fig.nextElementSibling;
+            fig.remove();
+            if (next && (next.tagName === 'BR' || next.tagName === 'P')) next.remove();
         });
       }
       for (const img of imagens) {
@@ -1030,7 +1027,7 @@ export const LaudosPage: React.FC = () => {
               idxIlus = idxConcl >= 0 ? idxConcl : secoesAtualizadas.length;
             }
           }
-          secoesComIlus.splice(idxIlus, 0, { titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
+          secoesComIlus.splice(idxIlus, 0, { nivel: 2, titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
         }
         const secaoIlus = secoesComIlus[idxIlus];
         const baseContent = secaoIlus.conteudo === '<p>&nbsp;</p>' ? '' : secaoIlus.conteudo;
@@ -1233,7 +1230,7 @@ export const LaudosPage: React.FC = () => {
                 idxIlus = idxConcl >= 0 ? idxConcl : secoesAtualizadas.length;
               }
             }
-            secoesComIlus.splice(idxIlus, 0, { titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
+            secoesComIlus.splice(idxIlus, 0, { nivel: 2, titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
           }
           const secaoIlus = secoesComIlus[idxIlus];
           const baseContent = secaoIlus.conteudo === '<p>&nbsp;</p>' ? '' : secaoIlus.conteudo;
@@ -1385,22 +1382,7 @@ export const LaudosPage: React.FC = () => {
     try {
       setCarregandoPreview(true);
       setError(null);
-
-      let secoesAtuais: SecaoEditor[];
-      if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
-        const latestHtml = editor ? editor.getContent() : singleEditorHtml;
-        setSingleEditorHtml(latestHtml);
-        secoesAtuais = parseSingleHtmlToSecoes(latestHtml, secoes);
-      } else {
-        secoesAtuais = [];
-        for (let idx = 0; idx < secoes.length; idx++) {
-          const editor = (window as any).tinymce?.get(`secao-${idx}`);
-          const conteudo = editor ? editor.getContent() : secoes[idx].conteudo;
-          if (editor) atualizarConteudoSecao(idx, conteudo);
-          secoesAtuais.push({ ...secoes[idx], conteudo });
-        }
-      }
+      const secoesAtuais = obterSecoesAtuaisDoEditor();
       
       // 1. Buscar dados da REP para placeholders
       const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
@@ -1440,22 +1422,10 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 3. Montar HTML completo
-      const secoesHtml = secoesAtuais
-        .map((s, i) => {
-          const tituloRaw = (s.titulo || '').trim();
-          const titulo = /^(?:se[cç]ão\b|\d+[\s\.\-\:]|[a-zA-Z][\.\-\:]\s|[IVXLCDM]+[\.\-\:]\s)/i.test(tituloRaw)
-            ? tituloRaw
-            : `${i + 1}. ${tituloRaw}`;
-          return `<h2>${titulo}</h2>${s.conteudo}`;
-        })
-        .join('\n');
-
       let fullHtml = cabecalhoPrimeiraPagina
         ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
         : '';
-      fullHtml += secoesHtml;
-
-      fullHtml = reindexarFiguras(fullHtml);
+      fullHtml += montarHtmlEstruturalAtual(secoesAtuais);
 
       // 4. Aplicar placeholders (incluindo relacionamentos)
       const htmlProcessado = aplicarPlaceholders(fullHtml, repData, {
@@ -1464,8 +1434,16 @@ export const LaudosPage: React.FC = () => {
         tipoExameCodigo,
       });
 
-      // 5. Gerar PDF via IPC (usando o mesmo handler do template)
-      const result = await window.ipcAPI.template.previewPDF(htmlProcessado, await getMargens(), headerTemplate || undefined);
+      // 5. Resolver placeholders de exame (B-602, I-801) incluindo armas computados
+      const htmlResolvido = resolverPlaceholdersExportacao(htmlProcessado, {
+        repData,
+        solicitanteNome,
+        tipoExameNome,
+        tipoExameCodigo,
+      });
+
+      // 6. Gerar PDF via IPC
+      const result = await window.ipcAPI.template.previewPDF(htmlResolvido, await getMargens(), headerTemplate || undefined);
       if (result.success && result.data) {
         const byteChars = atob(result.data);
         const byteNums = new Array(byteChars.length);
@@ -1523,12 +1501,18 @@ export const LaudosPage: React.FC = () => {
         numeroRepFallback: repData.numero || '',
       });
 
-      let html = laudo.conteudo || '<p>&nbsp;</p>';
+      let html = reindexarHtmlEstrutural(laudo.conteudo || '<p>&nbsp;</p>');
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
       html = reindexarFiguras(html);
       html = aplicarPlaceholders(html, repData, { solicitanteNome, tipoExameNome, tipoExameCodigo });
+      html = resolverPlaceholdersExportacao(html, {
+        repData,
+        solicitanteNome,
+        tipoExameNome,
+        tipoExameCodigo,
+      });
 
       const margins = await getMargens();
       const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined);
@@ -1592,23 +1576,12 @@ export const LaudosPage: React.FC = () => {
         numeroRepFallback: repData.numero || '',
       });
 
-      let html: string;
-      if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
-        html = editor ? editor.getContent() : singleEditorHtml;
-      } else {
-        html = secoes.map((s, i) => {
-          const editor = (window as any).tinymce?.get(`secao-${i}`);
-          const conteudo = editor ? editor.getContent() : s.conteudo;
-          const titulo = s.titulo?.trim() || '';
-          return `<h2>${titulo}</h2>${conteudo}`;
-        }).join('\n');
-      }
+      const secoesAtuais = obterSecoesAtuaisDoEditor();
+      let html = montarHtmlEstruturalAtual(secoesAtuais);
 
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
-      html = reindexarFiguras(html);
 
       const htmlResolvido = resolverPlaceholdersExportacao(html, {
         repData,
@@ -1693,7 +1666,14 @@ export const LaudosPage: React.FC = () => {
       navigate(`/laudos/${laudo.id}/wizard`);
       return;
     }
-    const parsedSecoes = parseConteudoEmSecoes(limparIndicadoresCondicionais(converterPlaceholdersTextuais(laudo.conteudo || '', placeholderChaves)));
+    const parsedSecoes = parsearSecoesEstruturais(
+      reindexarHtmlEstrutural(
+        limparIndicadoresCondicionais(converterPlaceholdersTextuais(laudo.conteudo || '', placeholderChaves))
+      )
+    ).map(secao => ({
+      ...secao,
+      titulo: normalizarTituloSecao(secao.titulo),
+    }));
     setEditando(laudo);
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
@@ -1750,34 +1730,20 @@ export const LaudosPage: React.FC = () => {
       setSalvando(true);
       setError(null);
       setSuccess(null);
+      const secoesAtuais = reindexarSecoesEditadas(obterSecoesAtuaisDoEditor());
+      setSecoes(secoesAtuais);
 
-      let secoesAtuais: SecaoEditor[];
-      if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
-        const latestHtml = editor ? editor.getContent() : singleEditorHtml;
-        setSingleEditorHtml(latestHtml);
-        secoesAtuais = parseSingleHtmlToSecoes(latestHtml, secoes);
-        setSecoes(secoesAtuais);
-      } else {
-        secoesAtuais = [];
-        for (let idx = 0; idx < secoes.length; idx++) {
-          const editor = (window as any).tinymce?.get(`secao-${idx}`);
-          const conteudo = editor ? editor.getContent() : secoes[idx].conteudo;
-          if (editor) atualizarConteudoSecao(idx, conteudo);
-          secoesAtuais.push({ ...secoes[idx], conteudo });
-        }
-      }
-
-      // 1. Reindexar figuras fisicamente para garantir ordem definitiva
-      const conteudoOriginal = reconstruirConteudo(secoesAtuais);
-      const htmlReindexado = reindexarFiguras(conteudoOriginal);
+      const htmlReindexado = montarHtmlEstruturalAtual(secoesAtuais);
 
       // 2. Remover formatação de placeholders e salvar
       const conteudoFinal = removerFormatacaoPlaceholders(htmlReindexado);
 
       const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudoFinal);
       if (r.success) {
-
+        const secoesNormalizadas = parsearSecoesEstruturais(conteudoFinal).map(secao => ({
+          ...secao,
+          titulo: normalizarTituloSecao(secao.titulo),
+        }));
         setSuccess('Laudo salvo com sucesso!');
         setEditando(prev => prev ? { ...prev, conteudo: conteudoFinal } : null);
         setLaudos(prev =>
@@ -1786,15 +1752,16 @@ export const LaudosPage: React.FC = () => {
 
         // Atualizar visualização atual
         if (editorMode === 'single') {
-          setSingleEditorHtml(conteudoFinal);
+          const htmlEditorUnico = buildSingleHtmlFromSecoes(secoesNormalizadas);
+          setSecoes(secoesNormalizadas);
+          setSingleEditorHtml(htmlEditorUnico);
           const editor = (window as any).tinymce?.get('laudo-single-editor');
           if (editor) {
-            editor.setContent(conteudoFinal);
+            editor.setContent(htmlEditorUnico);
           }
         } else {
-          const novasSecoes = parseConteudoEmSecoes(conteudoFinal);
-          setSecoes(novasSecoes);
-          novasSecoes.forEach((sec, idx) => {
+          setSecoes(secoesNormalizadas);
+          secoesNormalizadas.forEach((sec, idx) => {
             const editor = (window as any).tinymce?.get(`secao-${idx}`);
             if (editor) {
               editor.setContent(sec.conteudo);
@@ -1812,6 +1779,24 @@ export const LaudosPage: React.FC = () => {
       setSalvando(false);
     }
   };
+
+  const handleReindexarSecoes = useCallback(() => {
+    try {
+      const secoesAtuais = reindexarSecoesEditadas(obterSecoesAtuaisDoEditor());
+      setSecoes(secoesAtuais);
+
+      if (editorMode === 'single') {
+        const htmlEditor = buildSingleHtmlFromSecoes(secoesAtuais);
+        setSingleEditorHtml(htmlEditor);
+        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        if (editor) editor.setContent(htmlEditor);
+      }
+
+      toast.success('Seções reindexadas com sucesso');
+    } catch (e: any) {
+      setError(e.message || 'Erro ao reindexar seções');
+    }
+  }, [buildSingleHtmlFromSecoes, editorMode, obterSecoesAtuaisDoEditor, reindexarSecoesEditadas]);
 
   const handleOpenSheet = (idx: number, titulo: string) => {
     setIaSheetSecaoIdx(idx);
@@ -2390,6 +2375,19 @@ export const LaudosPage: React.FC = () => {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={handleReindexarSecoes}
+                  disabled={salvando || carregandoPreview || exportando}
+                  className="flex items-center gap-2"
+                >
+                  <Layers size={15} /> Reindexar seções
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Reaplica a numeração estrutural do laudo</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
                   <ArrowLeft size={16} /> Voltar
                 </Button>
@@ -2637,12 +2635,17 @@ export const LaudosPage: React.FC = () => {
                   <div className="space-y-6 pb-4">
                     {secoes.map((secao, idx) => {
                       const isIlustracoes = secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES';
+                      const tituloVisual = secao.nivel === 2 ? 'Seção principal' : 'Subseção';
                       return (
                       <Collapsible
                         key={isIlustracoes ? `ilus-${ilustracoesKey}` : idx}
                         open={!secoesColapsadas[idx]}
                         onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
-                        className="border rounded-lg bg-card shadow-sm"
+                        className={cn(
+                          'rounded-lg',
+                          getClasseSecaoEstrutural(secao),
+                          secao.nivel === 3 && 'ml-5'
+                        )}
                       >
                         <div className="flex items-center justify-between p-4 cursor-default">
                           <CollapsibleTrigger asChild>
@@ -2652,7 +2655,7 @@ export const LaudosPage: React.FC = () => {
                               </div>
                               <div>
                                 <h3 className="text-lg font-semibold">{secao.titulo}</h3>
-                                <p className="text-sm text-muted-foreground">Clique para expandir/recolher</p>
+                                <p className="text-sm text-muted-foreground">{tituloVisual} · clique para expandir/recolher</p>
                               </div>
                             </div>
                           </CollapsibleTrigger>

@@ -69,6 +69,8 @@ const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
   { chave: 'b602_total_estojos',         valor: '', descricao: 'Total de estojos (B-602)',                                categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_total_armas',           valor: '', descricao: 'Total de armas (B-602)',                                  categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_tabela_armas',          valor: '', descricao: 'Tabela HTML com especificações das armas (B-602)',        categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_letra',         valor: '', descricao: 'Letra sequencial da arma — valor computado em runtime (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_modelo',        valor: '', descricao: 'Modelo da arma (B-602)', categoria_id: 'cat-exam-B-602' },
 ];
 
 function getExamCategoryId(codigo: string): string {

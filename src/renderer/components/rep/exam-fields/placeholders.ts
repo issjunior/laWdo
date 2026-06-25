@@ -2,7 +2,8 @@ export interface CampoEspecificoPlaceholder {
   chave: string;
   label: string;
   descricao: string;
-  jsonPath: string;
+  jsonPath?: string;
+  computed?: true;
   categoria_exam_codigo: string;
 }
 
@@ -54,6 +55,10 @@ export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   { chave: 'b602_total_estojos',        label: 'Total Estojos (B-602)',         descricao: 'Total de estojos',                                jsonPath: 'b602.total_estojos',         categoria_exam_codigo: 'B-602' },
   { chave: 'b602_total_armas',          label: 'Total Armas (B-602)',           descricao: 'Total de armas',                                  jsonPath: 'b602.total_armas',           categoria_exam_codigo: 'B-602' },
   { chave: 'b602_tabela_armas',         label: 'Tabela Armas (B-602)',          descricao: 'Tabela HTML das armas periciadas',                jsonPath: 'b602.tabela_armas',          categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_arma_N_letra',         label: 'Letra da Arma (B-602)',         descricao: 'Letra sequencial da arma (A, B, C...) — valor computado em runtime', computed: true, categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_arma_N_modelo',        label: 'Modelo da Arma (B-602)',        descricao: 'Modelo da arma',                                    jsonPath: 'b602.armas.0.modelo',          categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_arma_N_func_toggle',   label: 'Toggle de Funcionamento da Arma (B-602)', descricao: 'Indicador on/off para exibir o bloco de funcionamento da arma atual', computed: true, categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_arma_N_coleta_toggle', label: 'Toggle de Coleta da Arma (B-602)',         descricao: 'Indicador on/off para exibir o bloco de coleta balística da arma atual', computed: true, categoria_exam_codigo: 'B-602' },
 ];
 
 export function getExamCategoryId(codigo: string): string {

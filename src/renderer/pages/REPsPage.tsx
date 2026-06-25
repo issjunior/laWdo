@@ -232,10 +232,10 @@ const emptyForm = (): REPFormData => ({
   b602_envolvidos_3: '', b602_envolvidos_4: '', b602_envolvidos_5: '',
   b602_envolvidos_6: '', b602_envolvidos_7: '', b602_envolvidos_8: '',
   b602_envolvidos_9: '',
-  b602_data_ocorrencia: '', b602_local_bairro: '', b602_local_cidade: '', b602_local_uf: '',
+  b602_data_ocorrencia: '', b602_local_bairro: '', b602_local_cidade: '', b602_local_uf: 'PR',
   b602_numero_bo: '', b602_numero_ip: '', b602_solicitante_nome: '',
   b602_material_enc_toggle: 'off', b602_cartuchos_toggle: 'off', b602_estojos_toggle: 'off',
-  b602_armas_toggle: 'off', b602_armas_funcionamento_toggle: 'off', b602_armas_coleta_toggle: 'off',
+  b602_armas_toggle: 'off',
 });
 
 const FIELD_PLACEHOLDER: Record<string, string> = {
@@ -396,6 +396,48 @@ function formatarDataHora(iso: string | undefined): string {
   }
 }
 
+function campoPreenchido(valor: unknown): boolean {
+  return typeof valor === 'string' ? valor.trim().length > 0 : Boolean(valor);
+}
+
+interface CampoObrigatorioPendente {
+  campo: keyof REPFormData;
+  label: string;
+  stepId: string;
+}
+
+function listarCamposObrigatoriosPendentes(
+  data: Partial<REPFormData>,
+  tipoExameCodigo?: string
+): CampoObrigatorioPendente[] {
+  const pendentes: CampoObrigatorioPendente[] = [];
+
+  if (!campoPreenchido(data.numero)) pendentes.push({ campo: 'numero', label: 'Nº da REP', stepId: 'dados-solicitacao' });
+  if (!campoPreenchido(data.data_requisicao)) pendentes.push({ campo: 'data_requisicao', label: 'Data de recebimento', stepId: 'dados-solicitacao' });
+  if (!campoPreenchido(data.tipo_solicitacao)) pendentes.push({ campo: 'tipo_solicitacao', label: 'Tipo de Solicitação', stepId: 'dados-solicitacao' });
+  if (!campoPreenchido(data.numero_documento)) pendentes.push({ campo: 'numero_documento', label: 'Nº da Solicitação', stepId: 'dados-solicitacao' });
+
+  if (tipoExameCodigo === 'LOC' && !campoPreenchido(data.local_fato)) {
+    pendentes.push({ campo: 'local_fato', label: 'Local do Fato', stepId: 'section-local_fato' });
+  }
+
+  if (tipoExameCodigo === 'I-801' && !campoPreenchido(data.numeracao_veiculo)) {
+    pendentes.push({ campo: 'numeracao_veiculo', label: 'Veículo', stepId: 'section-numeracao' });
+  }
+
+  if (tipoExameCodigo === 'B-602') {
+    if (!campoPreenchido(data.b602_envolvidos_0)) pendentes.push({ campo: 'b602_envolvidos_0', label: 'Envolvido(s)', stepId: 'section-dados_investigacao' });
+    if (!campoPreenchido(data.b602_data_ocorrencia)) pendentes.push({ campo: 'b602_data_ocorrencia', label: 'Data da Ocorrência', stepId: 'section-dados_investigacao' });
+    if (!campoPreenchido(data.b602_local_cidade)) pendentes.push({ campo: 'b602_local_cidade', label: 'Cidade', stepId: 'section-dados_investigacao' });
+    if (!campoPreenchido(data.b602_local_uf)) pendentes.push({ campo: 'b602_local_uf', label: 'UF', stepId: 'section-dados_investigacao' });
+    if (!campoPreenchido(data.b602_numero_bo) && !campoPreenchido(data.b602_numero_ip)) {
+      pendentes.push({ campo: 'b602_numero_bo', label: 'Nº do BO ou Nº do IP', stepId: 'section-dados_investigacao' });
+    }
+  }
+
+  return pendentes;
+}
+
 /** Wrapper para seção do formulário que faz highlight quando é o passo ativo do stepper. */
 const RepStepSection: React.FC<{ stepId: string; children: React.ReactNode }> = ({ stepId, children }) => {
   const activeStep = useRepStepperContext();
@@ -430,9 +472,12 @@ export const REPsPage: React.FC = () => {
   // Ref para evitar que o template_id seja limpo ao carregar uma edição
   const editLoadRef = useRef(false);
   const togglesOriginaisRef = useRef<Record<string, string>>({});
+  const armasSnapshotRef = useRef<Record<string, string>[] | null>(null);
   const [dialogoToggleAberto, setDialogoToggleAberto] = useState(false);
+  const [dialogoArmasAlteradasAberto, setDialogoArmasAlteradasAberto] = useState(false);
   const [togglesDesmarcados, setTogglesDesmarcados] = useState<string[]>([]);
   const dadosPendentesRef = useRef<any>(null);
+  const dadosPendentesArmasRef = useRef<any>(null);
   const codigoPendenteRef = useRef<string | undefined>(undefined);
 
   // Schema com validação condicional via superRefine
@@ -486,8 +531,6 @@ export const REPsPage: React.FC = () => {
     b602_cartuchos_toggle: z.string().optional(),
     b602_estojos_toggle: z.string().optional(),
     b602_armas_toggle: z.string().optional(),
-    b602_armas_funcionamento_toggle: z.string().optional(),
-    b602_armas_coleta_toggle: z.string().optional(),
   }).passthrough().superRefine((data, ctx) => {
     if (!data.tipo_exame_id) return;
     const tipos = tiposExameRef.current;
@@ -523,7 +566,7 @@ export const REPsPage: React.FC = () => {
   const form = useForm<REPFormData>({
     resolver: zodResolver(repFormSchema),
     defaultValues: emptyForm(),
-    mode: 'onSubmit',
+    mode: 'onChange',
   });
 
   // Estados para o Dialog "Criar Laudo" (REPs órfãs)
@@ -629,6 +672,25 @@ export const REPsPage: React.FC = () => {
   const tipoExameSelecionado = tipoExameId
     ? tiposExame.find(t => t.id === tipoExameId)
     : null;
+  const valoresFormulario = form.watch();
+  const camposObrigatoriosPendentes = useMemo(
+    () => listarCamposObrigatoriosPendentes(valoresFormulario, tipoExameSelecionado?.codigo),
+    [tipoExameSelecionado?.codigo, valoresFormulario]
+  );
+  const resumoPendencias = camposObrigatoriosPendentes.slice(0, 4);
+  const totalPendencias = camposObrigatoriosPendentes.length;
+  const formularioPodeSalvar = totalPendencias === 0 && form.formState.isValid;
+
+  const irParaPendencia = useCallback((pendencia: CampoObrigatorioPendente) => {
+    const secao = document.getElementById(`step-${pendencia.stepId}`);
+    if (secao) {
+      secao.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    window.setTimeout(() => {
+      form.setFocus(pendencia.campo);
+    }, 250);
+  }, [form]);
 
   // Seções dinâmicas baseadas no tipo de exame
   const examSections = useMemo(() => {
@@ -637,6 +699,7 @@ export const REPsPage: React.FC = () => {
   }, [tipoExameSelecionado, tiposExame]);
 
   const solicitanteId = form.watch('solicitante_id');
+  const b602LocalUf = form.watch('b602_local_uf');
   useEffect(() => {
     if (solicitanteId) {
       const solicitante = solicitantes.find(s => s.id === solicitanteId);
@@ -645,6 +708,12 @@ export const REPsPage: React.FC = () => {
       }
     }
   }, [solicitanteId, solicitantes]);
+
+  useEffect(() => {
+    if (tipoExameSelecionado?.codigo !== 'B-602') return;
+    if (b602LocalUf?.trim()) return;
+    form.setValue('b602_local_uf', 'PR', { shouldValidate: true, shouldDirty: false });
+  }, [b602LocalUf, form, tipoExameSelecionado?.codigo]);
 
   const handleNovo = () => {
     setEditingRep(null);
@@ -736,6 +805,16 @@ export const REPsPage: React.FC = () => {
       origToggles[key] = especificos?.[key as keyof typeof especificos] as string || 'off';
     }
     togglesOriginaisRef.current = origToggles;
+
+    // Snapshot dos dados de arma para detecção de mudança
+    try {
+      const rawJson = rep.campos_especificos ? JSON.parse(rep.campos_especificos) : null;
+      const armasRaw = rawJson?.b602?.armas;
+      armasSnapshotRef.current = armasRaw ? JSON.parse(JSON.stringify(armasRaw)) : null;
+    } catch {
+      armasSnapshotRef.current = null;
+    }
+
     setShowForm(true);
   };
 
@@ -921,6 +1000,30 @@ export const REPsPage: React.FC = () => {
           }
         } catch { /* prosseguir se não conseguir verificar */ }
       }
+
+      // Verificar mudanças nos dados de arma
+      if (tipoExameSelecionado?.codigo === 'B-602') {
+        const armasToggle = (data as Record<string, string>)['b602_armas_toggle'] || 'off';
+        if (armasToggle === 'on') {
+          const serializado = serializeCamposEspecificos('B-602', data);
+          const b602Data = serializado ? JSON.parse(serializado).b602 as Record<string, unknown> | undefined : undefined;
+          const armasAtuais = (b602Data?.armas as Record<string, unknown>[]) || [];
+          const armasOriginais = armasSnapshotRef.current;
+          const armasMudaram = JSON.stringify(armasAtuais) !== JSON.stringify(armasOriginais);
+
+          if (armasMudaram) {
+            try {
+              const r = await window.ipcAPI.laudo.findByRepId(editingRep.id);
+              if (r.success && r.data) {
+                dadosPendentesArmasRef.current = data;
+                setDialogoArmasAlteradasAberto(true);
+                setSubmitting(false);
+                return;
+              }
+            } catch { /* prosseguir se não conseguir verificar */ }
+          }
+        }
+      }
     }
 
     await executarSalvar(data);
@@ -938,7 +1041,7 @@ export const REPsPage: React.FC = () => {
         const r = await window.ipcAPI.rep.update(editingRep.id, apiData);
         if (r.success) {
           await carregarREPs();
-          setSuccess('REP atualizada com sucesso!');
+          toast.success('REP atualizada com sucesso!');
           setTimeout(() => handleCancelar(), 1200);
         } else {
           setError(r.error || 'Erro ao atualizar REP');
@@ -947,7 +1050,7 @@ export const REPsPage: React.FC = () => {
         const r = await window.ipcAPI.rep.create(apiData);
         if (r.success) {
           await carregarREPs();
-          setSuccess('REP criada com sucesso!');
+          toast.success('REP criada com sucesso!');
           setTimeout(() => handleCancelar(), 1200);
         } else {
           setError(r.error || 'Erro ao criar REP');
@@ -965,6 +1068,24 @@ export const REPsPage: React.FC = () => {
     const data = dadosPendentesRef.current;
     if (data) {
       await executarSalvar(data);
+    }
+  };
+
+  const handleConfirmarArmasAlteradas = async () => {
+    setDialogoArmasAlteradasAberto(false);
+    const data = dadosPendentesArmasRef.current;
+    if (data) {
+      // Salvar e depois sincronizar
+      await executarSalvar(data);
+      // Trigger sync no laudo vinculado
+      if (editingRep) {
+        try {
+          const laudoResp = await window.ipcAPI.laudo.findByRepId(editingRep.id);
+          if (laudoResp.success && laudoResp.data) {
+            await window.ipcAPI.laudo.sincronizarSecoes(laudoResp.data.id);
+          }
+        } catch { /* ignora erro de sync */ }
+      }
     }
   };
 
@@ -1298,6 +1419,31 @@ export const REPsPage: React.FC = () => {
           </DialogContent>
         </Dialog>
 
+        {/* Diálogo de aviso ao alterar dados de arma */}
+        <Dialog open={dialogoArmasAlteradasAberto} onOpenChange={setDialogoArmasAlteradasAberto}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Os dados de arma foram alterados</DialogTitle>
+              <DialogDescription asChild>
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    As seções correspondentes no laudo serão reescritas conforme o template.
+                    Edições manuais no conteúdo das subseções de arma serão perdidas — os dados sempre refletem a REP atual.
+                  </p>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setDialogoArmasAlteradasAberto(false)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmarArmasAlteradas}>
+                Continuar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
@@ -1448,6 +1594,45 @@ export const REPsPage: React.FC = () => {
                       <AlertDescription className="text-green-800 dark:text-green-400">
                         {camposPreenchidosGdl.size} campo(s) preenchido(s) via GDL.
                         Campos com fundo verde foram preenchidos automaticamente.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {totalPendencias > 0 && (
+                    <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
+                      <AlertTriangle size={16} />
+                      <AlertDescription className="space-y-3 text-amber-900 dark:text-amber-100">
+                        <p>
+                          Preencha os campos obrigatórios para liberar o botão {editingRep ? 'Atualizar REP' : 'Criar REP'}.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {resumoPendencias.map((pendencia) => (
+                            <Button
+                              key={pendencia.campo}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="border-amber-300 bg-white/80 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/40"
+                              onClick={() => irParaPendencia(pendencia)}
+                            >
+                              {pendencia.label}
+                            </Button>
+                          ))}
+                          {totalPendencias > resumoPendencias.length && (
+                            <span className="inline-flex items-center rounded-md border border-amber-300 px-3 py-1 text-sm dark:border-amber-700">
+                              +{totalPendencias - resumoPendencias.length} pendente(s)
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto p-0 text-amber-900 dark:text-amber-100"
+                            onClick={() => irParaPendencia(camposObrigatoriosPendentes[0])}
+                          >
+                            Ir para o primeiro campo pendente
+                          </Button>
+                        </div>
                       </AlertDescription>
                     </Alert>
                   )}
@@ -1713,8 +1898,13 @@ export const REPsPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6 mt-4">
+                    {totalPendencias > 0 && (
+                      <p className="sm:mr-auto text-sm text-muted-foreground">
+                        Faltam {totalPendencias} campo(s) obrigatório(s) para continuar.
+                      </p>
+                    )}
                     <Button variant="outline" type="button" onClick={handleCancelar}>Cancelar</Button>
-                    <Button type="submit" disabled={submitting || !form.formState.isValid} className="flex items-center gap-2">
+                    <Button type="submit" disabled={submitting || !formularioPodeSalvar} className="flex items-center gap-2">
                       <Plus size={16} /> {submitting ? 'Salvando...' : editingRep ? 'Atualizar' : 'Criar'} REP
                     </Button>
                   </div>

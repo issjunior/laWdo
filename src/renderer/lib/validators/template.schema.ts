@@ -22,7 +22,11 @@ export const secaoTemplateSchema = z.object({
   template_id: z.string().uuid(),
   nome: z.string().min(1, "Nome da seção é obrigatório").max(200, "Nome deve ter no máximo 200 caracteres"),
   ordem: z.number().int().min(0),
+  parent_id: z.string().uuid().nullable().optional(),
   conteudo: z.string().nullable().optional(),
+  condicao: z.string().nullable().optional(),
+  repetir_para: z.enum(['armas']).nullable().optional(),
+  repetir_titulo: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 })

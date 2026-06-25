@@ -39,6 +39,7 @@ lerna-debug.log*
 graphify-out
 skills-lock.json
 opencode.json
+.superpowers
 docs
 
 # --- SISTEMA OPERACIONAL ---

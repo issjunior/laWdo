@@ -19,7 +19,7 @@ export type LogModule =
   | 'solicitante' | 'tipo_exame' | 'placeholder' | 'backup'
   | 'configuracao' | 'ia' | 'ilustracao' | 'renderer' | 'sistema'
   | 'ipc' | 'security' | 'wizard' | 'peca' | 'regra-wizard'
-  | 'gdl' | 'exportacao';
+  | 'gdl' | 'exportacao' | 'secao-builder';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

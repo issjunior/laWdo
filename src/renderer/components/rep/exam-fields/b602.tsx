@@ -988,12 +988,10 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
     if (count > numLinhas) setNumLinhas(count);
   }, [armasValores, form, numLinhas]);
 
-  const funcToggle = form.watch('b602_armas_funcionamento_toggle' as any) as string | undefined;
-  const coletaToggle = form.watch('b602_armas_coleta_toggle' as any) as string | undefined;
-
   const ARMA_CAMPOS = [
     { key: 'tipo', label: 'Tipo *', type: 'select', opts: TIPO_OPTS },
     { key: 'marca', label: 'Marca *', type: 'input' },
+    { key: 'modelo', label: 'Modelo', type: 'input' },
     { key: 'calibre', label: 'Calibre *', type: 'input' },
     { key: 'numeracao_serie', label: 'Nº Série', type: 'input' },
     { key: 'numeracao_cano', label: 'Nº Cano', type: 'input' },
@@ -1028,6 +1026,8 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
                           ARMA_CAMPOS.forEach((c) =>
                             form.setValue(`${prefix}${c.key}` as any, '')
                           );
+                          form.setValue(`${prefix}func_toggle` as any, 'off');
+                          form.setValue(`${prefix}coleta_toggle` as any, 'off');
                           setNumLinhas((n) => Math.max(1, n - 1));
                         }}
                       >
@@ -1108,6 +1108,38 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
                       );
                     })}
                   </div>
+                  <div className="grid gap-3 pt-1 md:grid-cols-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id={`${prefix}func_toggle`}
+                        checked={(form.watch(`${prefix}func_toggle` as any) as string | undefined) === 'on'}
+                        onCheckedChange={(checked) => {
+                          form.setValue(`${prefix}func_toggle` as any, checked ? 'on' : 'off', {
+                            shouldValidate: false,
+                            shouldDirty: true,
+                          });
+                        }}
+                      />
+                      <label htmlFor={`${prefix}func_toggle`} className="text-sm font-medium leading-none cursor-pointer">
+                        Funcionamento e Eficiência
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id={`${prefix}coleta_toggle`}
+                        checked={(form.watch(`${prefix}coleta_toggle` as any) as string | undefined) === 'on'}
+                        onCheckedChange={(checked) => {
+                          form.setValue(`${prefix}coleta_toggle` as any, checked ? 'on' : 'off', {
+                            shouldValidate: false,
+                            shouldDirty: true,
+                          });
+                        }}
+                      />
+                      <label htmlFor={`${prefix}coleta_toggle`} className="text-sm font-medium leading-none cursor-pointer">
+                        Coleta de Padrões Balísticos
+                      </label>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -1119,40 +1151,6 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
             >
               <Plus size={14} className="mr-1" /> Adicionar arma
             </Button>
-
-            {/* Sub-toggles */}
-            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="b602_armas_funcionamento_toggle"
-                  checked={funcToggle === 'on'}
-                  onCheckedChange={(checked) => {
-                    form.setValue('b602_armas_funcionamento_toggle' as any, checked ? 'on' : 'off', {
-                      shouldValidate: false,
-                      shouldDirty: true,
-                    });
-                  }}
-                />
-                <label htmlFor="b602_armas_funcionamento_toggle" className="text-sm font-medium leading-none cursor-pointer">
-                  Funcionamento e Eficiência
-                </label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="b602_armas_coleta_toggle"
-                  checked={coletaToggle === 'on'}
-                  onCheckedChange={(checked) => {
-                    form.setValue('b602_armas_coleta_toggle' as any, checked ? 'on' : 'off', {
-                      shouldValidate: false,
-                      shouldDirty: true,
-                    });
-                  }}
-                />
-                <label htmlFor="b602_armas_coleta_toggle" className="text-sm font-medium leading-none cursor-pointer">
-                  Coleta de Padrões Balísticos
-                </label>
-              </div>
-            </div>
           </div>
         ) : null
       }
@@ -1256,7 +1254,9 @@ export const B602_MENU_STRUCTURE: MenuSection[] = [
         fields: [
           { name: 'tipo', label: 'Tipo' },
           { name: 'marca', label: 'Marca' },
+          { name: 'modelo', label: 'Modelo' },
           { name: 'calibre', label: 'Calibre' },
+          { name: 'letra', label: 'Letra' },
           { name: 'numeracao_serie', label: 'Nº Série' },
           { name: 'numeracao_cano', label: 'Nº Cano' },
           { name: 'capacidade_carregador', label: 'Cap. Carregador' },

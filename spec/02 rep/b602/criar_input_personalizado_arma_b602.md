@@ -15,7 +15,8 @@ Permitir que uma seção do template seja marcada como "repetir para cada arma".
 ┌─────────────────────────────────────────────────────────┐
 │                    1. TEMPLATE                           │
 │  Seção marcada com repetir_para = 'armas'                │
-│  Nome: "ARMA {{b602_arma_1_letra}} - ..."               │
+│  Nome: "DOS EXAMES"                      ← vira <h2>     │
+│  Título H3: "ARMA {{b602_arma_1_letra}} - ..." (novo!)  │
 │  Conteúdo: "A arma {{b602_arma_1_tipo}}..."             │
 └──────────────────────┬──────────────────────────────────┘
                        ↓
@@ -75,6 +76,8 @@ Permitir que uma seção do template seja marcada como "repetir para cada arma".
 └─────────────────────────────────────────────────────────┘
 ```
 
+> ⚠️ **Observação sobre duplicação:** O título do H3 e o conteúdo são campos independentes. Se o conteúdo começar com os mesmos placeholders do `repetir_titulo` (ex: `ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}}` no H3 e também na primeira linha do conteúdo), o laudo exibirá a informação duplicada — uma vez no `<h3>` e outra vez no corpo. Recomenda-se manter o conteúdo enxuto (apenas a descrição, sem repetir o padrão do H3).
+
 ---
 
 ## Decisões de Design (definidas na sessão de grilling)
@@ -82,6 +85,7 @@ Permitir que uma seção do template seja marcada como "repetir para cada arma".
 | Decisão | Escolha |
 |---------|---------|
 | `condicao` vs `repetir_para` — manter ambos? | **Manter ambos.** São ortogonais: `condicao` controla visibilidade (toggle), `repetir_para` controla repetição. Uma seção pode ter os dois. |
+| `repetir_titulo` — novo campo? | **Sim.** O nome da seção (`secao.nome`) vira título do H2. O `repetir_titulo` define o padrão do título H3 de cada subseção. Fallback: `repetir_titulo \|\| secao.nome` para compatibilidade retroativa. |
 | Correção do bug `condicao` não persistido? | **Corrigir junto.** `condicao` está na migration v25 e na interface mas NUNCA foi incluído no INSERT/UPDATE do service. Corrigir no mesmo PR. |
 | Edições do perito em subseções H3 expandidas? | **Opção A — Destrutiva.** A REP é a fonte da verdade. Toda sincronização re-expande do template, sobrescrevendo conteúdo H3. Avisar o usuário no formulário específico. |
 | Aviso ao alterar armas na REP? | **Diálogo modal** (mesmo padrão de toggles existente). Detecção por snapshot em memória (React ref) comparado no save. |
@@ -103,7 +107,7 @@ Para evitar que `laudo.service.ts` acumule lógica de parse/expansão/reconcilia
 ```
 src/main/services/secao-builder.service.ts
 ├── expandirSecoesRepetiveis(secoes: SecaoTemplateRow[], dadosRep: unknown) → string
-│   // Aplica repetir_para, gera <div data-repeat-group="armas"> com H3s e placeholders reindexados
+│   // Aplica repetir_para, gera <div data-repeat-group="armas"> com H3s (usando repetir_titulo || nome) e placeholders reindexados
 ├── colapsarSecoesExpandidas(html: string) → string
 │   // querySelectorAll('div[data-repeat-group]') → remove todos os wrappers do HTML
 ├── reconciliarSecoes(htmlOriginal: string, htmlExpansoes: Map<string, string>) → string
@@ -140,14 +144,32 @@ Não há mais `SecaoParseada` nem `SecaoExpandida`. O módulo trabalha com strin
 
 ## Implementação
 
-### 1. Database — Migration v26
+### 1. Database — Migration v26 + v27
 
 **Arquivo:** `src/main/database/index.ts`
 
-- Bump `CURRENT_SCHEMA_VERSION` de 25 para 26
-- Adicionar coluna `repetir_para TEXT` à tabela `secoes_template`
+- Bump `CURRENT_SCHEMA_VERSION` de 25 para 26 (depois 26 → 27)
+- Migration v26: coluna `repetir_para TEXT`
+- Migration v27: coluna `repetir_titulo TEXT`
 
 ```ts
+// Migration versão 27: Adicionar coluna repetir_titulo
+if (fromVersion < 27) {
+  try {
+    const cols = await executeQuery<{ name: string }>(
+      'PRAGMA table_info(secoes_template)'
+    );
+    if (!cols.some(c => c.name === 'repetir_titulo')) {
+      await executeNonQuery(
+        'ALTER TABLE secoes_template ADD COLUMN repetir_titulo TEXT'
+      );
+      log.debug('Migration v27: Coluna repetir_titulo adicionada à tabela secoes_template');
+    }
+  } catch (error) {
+    log.error('Erro ao aplicar migration versão 27', error);
+  }
+}
+
 // Migration versão 26: Adicionar coluna repetir_para
 if (fromVersion < 26) {
   try {
@@ -180,7 +202,8 @@ export interface SecaoTemplateRow extends DatabaseRow {
   ordem: number
   conteudo?: string
   condicao?: string | null      // já existe, migration v25
-  repetir_para?: string | null   // NOVO: 'armas' | null
+  repetir_para?: string | null   // 'armas' | null
+  repetir_titulo?: string | null // NOVO: padrão do título H3 (ex: "ARMA {{b602_arma_1_letra}} - ...")
   created_at: string
   updated_at: string
 }
@@ -192,40 +215,41 @@ export interface SecaoTemplateRow extends DatabaseRow {
 
 **Arquivo:** `src/main/services/template.service.ts`
 
-#### 3a. Corrigir `createSecao()` — adicionar `condicao` (bug fix) + `repetir_para`
+#### 3a. Corrigir `createSecao()` — adicionar `condicao` (bug fix) + `repetir_para` + `repetir_titulo`
 
-O INSERT atual ignora `condicao`. Corrigir incluindo ambos:
+O INSERT atual ignora `condicao`. Corrigir incluindo todos os campos:
 
 ```ts
 async createSecao(data: Omit<SecaoTemplateRow, 'id' | 'created_at' | 'updated_at'>): Promise<SecaoTemplateRow> {
   const id = randomUUID();
   await executeNonQuery(
-    `INSERT INTO secoes_template (id, template_id, nome, ordem, conteudo, condicao, repetir_para, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    [id, data.template_id, data.nome, data.ordem, data.conteudo || null, data.condicao || null, data.repetir_para || null]
+    `INSERT INTO secoes_template (id, template_id, nome, ordem, conteudo, condicao, repetir_para, repetir_titulo, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [id, data.template_id, data.nome, data.ordem, data.conteudo || null, data.condicao || null, data.repetir_para || null, data.repetir_titulo || null]
   );
   // ...
 }
 ```
 
-#### 3b. Corrigir `updateSecao()` — adicionar `condicao` (bug fix) + `repetir_para`
+#### 3b. Corrigir `updateSecao()` — adicionar `condicao` (bug fix) + `repetir_para` + `repetir_titulo`
 
 Adicionar após o bloco de `conteudo`:
 
 ```ts
 if (data.condicao !== undefined) { sets.push('condicao = ?'); params.push(data.condicao); }
 if (data.repetir_para !== undefined) { sets.push('repetir_para = ?'); params.push(data.repetir_para); }
+if (data.repetir_titulo !== undefined) { sets.push('repetir_titulo = ?'); params.push(data.repetir_titulo); }
 ```
 
 ---
 
-### 4. IPC Handlers — Propagar `repetir_para`
+### 4. IPC Handlers — Propagar `repetir_para` + `repetir_titulo`
 
 **Arquivo:** `src/main/ipc/handlers/template.handlers.ts`
 
 #### 4a. `template:createSecao`
 
-Adicionar `repetir_para` ao tipo do parâmetro `data` e propagar para o service:
+Adicionar `repetir_para` e `repetir_titulo` ao tipo do parâmetro `data` e propagar para o service:
 
 ```ts
 ipcMain.handle('template:createSecao', async (_event, data: {
@@ -234,7 +258,8 @@ ipcMain.handle('template:createSecao', async (_event, data: {
   ordem: number;
   conteudo?: string;
   condicao?: string | null;
-  repetir_para?: string | null;  // NOVO
+  repetir_para?: string | null;  // NOVO v26
+  repetir_titulo?: string | null; // NOVO v27
 }) => {
   const secao = await templateService.createSecao({
     template_id: data.template_id,
@@ -242,7 +267,8 @@ ipcMain.handle('template:createSecao', async (_event, data: {
     ordem: data.ordem ?? 0,
     conteudo: data.conteudo || undefined,
     condicao: data.condicao || undefined,
-    repetir_para: data.repetir_para || undefined,  // NOVO
+    repetir_para: data.repetir_para || undefined,
+    repetir_titulo: data.repetir_titulo || undefined,
   });
   return { success: true, data: secao, message: 'Seção criada com sucesso' };
 });
@@ -250,7 +276,7 @@ ipcMain.handle('template:createSecao', async (_event, data: {
 
 #### 4b. `template:updateSecao`
 
-Adicionar `repetir_para` ao tipo do parâmetro `data` e propagar:
+Adicionar `repetir_para` e `repetir_titulo` ao tipo do parâmetro `data` e propagar:
 
 ```ts
 ipcMain.handle('template:updateSecao', async (_event, id: string, data: {
@@ -258,14 +284,16 @@ ipcMain.handle('template:updateSecao', async (_event, id: string, data: {
   ordem?: number;
   conteudo?: string;
   condicao?: string | null;
-  repetir_para?: string | null;  // NOVO
+  repetir_para?: string | null;
+  repetir_titulo?: string | null; // NOVO v27
 }) => {
   const updateData: Record<string, unknown> = {};
   if (data.nome !== undefined) updateData.nome = sanitizeInput(data.nome);
   if (data.ordem !== undefined) updateData.ordem = data.ordem;
   if (data.conteudo !== undefined) updateData.conteudo = data.conteudo;
   if (data.condicao !== undefined) updateData.condicao = data.condicao;
-  if (data.repetir_para !== undefined) updateData.repetir_para = data.repetir_para;  // NOVO
+  if (data.repetir_para !== undefined) updateData.repetir_para = data.repetir_para;
+  if (data.repetir_titulo !== undefined) updateData.repetir_titulo = data.repetir_titulo; // NOVO v27
   // ...
 });
 ```
@@ -321,7 +349,8 @@ export function expandirSecoesRepetiveis(
     const partes: string[] = [];
     for (let i = 0; i < armas.length; i++) {
       const idx = i + 1;
-      const nome = substituirIndicePlaceholders(secao.nome, idx);
+      // O título H3 usa repetir_titulo (se definido) com fallback para o nome da seção
+      const nome = substituirIndicePlaceholders(secao.repetir_titulo || secao.nome, idx);
       const conteudo = substituirIndicePlaceholders(secao.conteudo || '', idx);
       partes.push(`<h3>${nome}</h3>\n${conteudo}`);
     }
@@ -511,7 +540,7 @@ Precisa ignorar o conteúdo de `div[data-repeat-group]` ao reaplicar blocos de p
 
 ---
 
-### 7. Schema Zod — Adicionar `condicao` (bug fix) + `repetir_para`
+### 7. Schema Zod — Adicionar `condicao` (bug fix) + `repetir_para` + `repetir_titulo`
 
 **Arquivo:** `src/renderer/lib/validators/template.schema.ts`
 
@@ -523,7 +552,8 @@ export const secaoTemplateSchema = z.object({
   ordem: z.number().int().min(0),
   conteudo: z.string().nullable().optional(),
   condicao: z.string().nullable().optional(),       // bug fix: estava ausente
-  repetir_para: z.enum(['armas']).nullable().optional(),  // NOVO
+  repetir_para: z.enum(['armas']).nullable().optional(),  // v26
+  repetir_titulo: z.string().nullable().optional(),       // v27: padrão H3
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -535,7 +565,7 @@ export const secaoTemplateSchema = z.object({
 
 **Arquivo:** `src/renderer/pages/TemplatesPage.tsx`
 
-#### 8a. Interface `SecaoForm` — adicionar `repetir_para`
+#### 8a. Interface `SecaoForm` — adicionar `repetir_para` + `repetir_titulo`
 
 ```ts
 interface SecaoForm {
@@ -543,11 +573,12 @@ interface SecaoForm {
   nome: string;
   conteudo: string;
   condicao?: string;
-  repetir_para?: string;  // NOVO
+  repetir_para?: string;    // v26
+  repetir_titulo?: string;  // v27
 }
 ```
 
-#### 8b. Interface `SecaoItem` — adicionar `condicao` (bug fix) + `repetir_para`
+#### 8b. Interface `SecaoItem` — adicionar `condicao` (bug fix) + `repetir_para` + `repetir_titulo`
 
 ```ts
 interface SecaoItem {
@@ -557,15 +588,16 @@ interface SecaoItem {
   ordem: number;
   conteudo?: string;
   condicao?: string | null;       // bug fix: estava ausente
-  repetir_para?: string | null;   // NOVO
+  repetir_para?: string | null;   // v26
+  repetir_titulo?: string | null; // v27
 }
 ```
 
-#### 8c. `emptySecaoForm()` — inicializar `repetir_para`
+#### 8c. `emptySecaoForm()` — inicializar `repetir_para` + `repetir_titulo`
 
 ```ts
 const emptySecaoForm = (): SecaoForm => ({
-  nome: '', conteudo: '', repetir_para: '',
+  nome: '', conteudo: '', repetir_para: '', repetir_titulo: '',
 });
 ```
 
@@ -581,6 +613,7 @@ function hydrateSecaoForm(row: SecaoItem): SecaoForm {
     conteudo: row.conteudo ? unescapeField(row.conteudo) : '',
     condicao: row.condicao || '',
     repetir_para: row.repetir_para || '',
+    repetir_titulo: row.repetir_titulo || '',
   };
 }
 ```
@@ -597,9 +630,9 @@ secoesDb.map(se => ({ id: se.id, nome: se.nome, conteudo: se.conteudo ? unescape
 secoesDb.map(hydrateSecaoForm)
 ```
 
-#### 8f. `handleSalvar` — propagar `repetir_para`
+#### 8f. `handleSalvar` — propagar `repetir_para` + `repetir_titulo`
 
-Adicionar `repetir_para` aos objetos passados para `updateSecao` e `createSecao`:
+Adicionar `repetir_para` e `repetir_titulo` aos objetos passados para `updateSecao` e `createSecao`:
 
 ```ts
 await window.ipcAPI.template.updateSecao(sec.id, {
@@ -607,11 +640,12 @@ await window.ipcAPI.template.updateSecao(sec.id, {
   conteudo: sec.conteudo,
   ordem: i,
   condicao: sec.condicao || null,
-  repetir_para: sec.repetir_para || null,  // NOVO
+  repetir_para: sec.repetir_para || null,   // v26
+  repetir_titulo: sec.repetir_titulo || null, // v27
 });
 ```
 
-#### 8g. `handleClonar` — propagar `condicao` (bug fix) + `repetir_para`
+#### 8g. `handleClonar` — propagar `condicao` (bug fix) + `repetir_para` + `repetir_titulo`
 
 ```ts
 await window.ipcAPI.template.createSecao({
@@ -620,13 +654,14 @@ await window.ipcAPI.template.createSecao({
   ordem: i,
   conteudo: sec.conteudo,
   condicao: sec.condicao || null,          // bug fix
-  repetir_para: sec.repetir_para || null,  // NOVO
+  repetir_para: sec.repetir_para || null,  // v26
+  repetir_titulo: sec.repetir_titulo || null, // v27
 });
 ```
 
-#### 8h. UI — Select "Repetir para cada"
+#### 8h. UI — Select "Repetir para cada" + Input "Título do H3"
 
-No painel de cada seção, ao lado do `<Select>` de condição (~linha 1201), adicionar:
+No painel de cada seção, ao lado do `<Select>` de condição (~linha 1201), adicionar o select de repetição:
 
 ```tsx
 <Select
@@ -643,9 +678,29 @@ No painel de cada seção, ao lado do `<Select>` de condição (~linha 1201), ad
 </Select>
 ```
 
+Quando `repetir_para === 'armas'`, exibir um campo de texto para o padrão do título H3:
+
+```tsx
+{secao.repetir_para === 'armas' && (
+  <div className="flex items-center gap-2">
+    <Label className="text-xs text-muted-foreground whitespace-nowrap">Título do H3:</Label>
+    <Input
+      value={secao.repetir_titulo || ''}
+      onChange={e => updateSecao(index, 'repetir_titulo', e.target.value)}
+      placeholder="Ex: ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}"
+      className="flex-1 h-8 text-xs font-mono"
+    />
+  </div>
+)}
+```
+
 **Hint** exibido quando `repetir_para = 'armas'`:
 
-> Use placeholders com `_1_` como padrão. Ex: `{{b602_arma_1_tipo}}`, `{{b602_arma_1_letra}}`. O nome da seção será usado como título de cada subseção. **Atenção:** Edições manuais no conteúdo das subseções de arma serão perdidas ao atualizar a REP — os dados sempre refletem a REP atual.
+> Use placeholders com `_1_` como padrão. Ex: `{{b602_arma_1_tipo}}`, `{{b602_arma_1_letra}}`. O campo **Título do H3** define o título de cada subseção. **Atenção:** Edições manuais no conteúdo das subseções de arma serão perdidas ao atualizar a REP — os dados sempre refletem a REP atual.
+>
+> ⚠️ **Evite duplicação:** se o título do H3 já exibe "ARMA A - Pistola Taurus", não repita os placeholders de tipo/marca/modelo na primeira linha do conteúdo.
+
+---
 
 #### 8i. Hint sobre preview de placeholders
 
@@ -843,36 +898,37 @@ if (armasMudaram) {
 ## Resumo dos Arquivos Modificados
 
 | # | Arquivo | Mudança | Tipo |
-|---|---|---|---|
-| 1 | `src/main/database/index.ts` | Migration v26: coluna `repetir_para` | Migration |
-| 2 | `src/main/types/database.ts` | Campo `repetir_para` em `SecaoTemplateRow` | Tipo |
-| 3 | `src/main/services/template.service.ts` | **Bug fix:** `condicao` no INSERT/UPDATE + `repetir_para` | Correção |
-| 4 | `src/main/services/secao-builder.service.ts` | **NOVO:** `expandirSecoesRepetiveis` (retorna Map c/ HTML de `div[data-repeat-group]`), `colapsarSecoesExpandidas` (regex DOM), `reconciliarSecoes` (substitui wrappers), `buildHtml` (H2 + expansões), `substituirIndicePlaceholders` | Novo módulo |
+|---|---|---|---|---|
+| 1 | `src/main/database/index.ts` | Migration v26: coluna `repetir_para` + Migration v27: coluna `repetir_titulo` | Migration |
+| 2 | `src/main/types/database.ts` | Campos `repetir_para` + `repetir_titulo` em `SecaoTemplateRow` | Tipo |
+| 3 | `src/main/services/template.service.ts` | **Bug fix:** `condicao` no INSERT/UPDATE + `repetir_para` + `repetir_titulo` | Correção |
+| 4 | `src/main/services/secao-builder.service.ts` | **NOVO:** `expandirSecoesRepetiveis` (usa `repetir_titulo \|\| nome` para H3), `colapsarSecoesExpandidas`, `reconciliarSecoes`, `buildHtml`, `substituirIndicePlaceholders` | Novo módulo |
 | 5 | `src/main/services/laudo.service.ts` | Integrar com `secao-builder` em `criarLaudoInicial` e `sincronizarSecoesCondicionais` | Refactor |
 | 6 | `src/main/services/placeholder.service.ts` | Placeholders `b602_arma_N_letra`, `b602_arma_N_modelo` (categoria B-602) — genéricos, sem índice fixo | Seed |
-| 7 | `src/main/ipc/handlers/template.handlers.ts` | Propagar `repetir_para` nos handlers de seção | IPC |
-| 8 | `src/renderer/pages/TemplatesPage.tsx` | **Bug fix:** `SecaoItem`, `handleEditar`, `handleClonar`, `handleSalvar` + `hydrateSecaoForm` + Select "Repetir para cada" + hints | UI + Correção |
+| 7 | `src/main/ipc/handlers/template.handlers.ts` | Propagar `repetir_para` + `repetir_titulo` nos handlers de seção | IPC |
+| 8 | `src/renderer/pages/TemplatesPage.tsx` | **Bug fix:** `SecaoItem`, `handleEditar`, `handleClonar`, `handleSalvar` + `hydrateSecaoForm` + Select "Repetir para cada" + Input "Título do H3" + hints | UI + Correção |
 | 9 | `src/renderer/components/rep/exam-fields/b602.tsx` | Campo "modelo" no `ArmasFields` + placeholders `letra`/`modelo` no `B602_MENU_STRUCTURE` | UI |
 | 10 | `src/renderer/components/rep/exam-fields/placeholders.ts` | Interface `CampoEspecificoPlaceholder` com `computed` + placeholders genéricos `b602_arma_N_letra`, `b602_arma_N_modelo` | Tipo + Dados |
 | 11 | `src/renderer/components/rep/exam-fields/services/b602.service.ts` | Adicionar `'modelo'` ao `ARMA_CAMPOS` | Dados |
 | 12 | `src/renderer/lib/exportacao-placeholders.ts` | Resolver `b602_arma_N_letra` + `b602_arma_N_modelo` + função `numToLetra()` | Export |
-| 13 | `src/renderer/lib/validators/template.schema.ts` | **Bug fix:** `condicao` no schema + `repetir_para` | Validação |
+| 13 | `src/renderer/lib/validators/template.schema.ts` | **Bug fix:** `condicao` no schema + `repetir_para` + `repetir_titulo` | Validação |
 | 14 | `src/renderer/pages/REPsPage.tsx` | Snapshot de armas + diálogo modal ao alterar dados + trigger sync no laudo | UI + Integração |
 
 ---
 
 ## Verificação
 
-1. **Criar template B-602** → adicionar seção com nome `ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}` e `repetir_para = 'armas'`
-2. **Salvar e reabrir o template** → verificar que `repetir_para = 'armas'` foi preservado (valida correção do `SecaoItem`/`handleEditar`)
-3. **Clonar o template** → verificar que `repetir_para` e `condicao` foram preservados no clone
+1. **Criar template B-602** → adicionar seção com `repetir_para = 'armas'`, `repetir_titulo = 'ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}'` e nome `DOS EXAMES`
+2. **Salvar e reabrir o template** → verificar que `repetir_para`, `repetir_titulo` e `condicao` foram preservados (valida correção do `SecaoItem`/`handleEditar` + `hydrateSecaoForm`)
+3. **Clonar o template** → verificar que `repetir_para`, `repetir_titulo` e `condicao` foram preservados no clone
 4. **Criar REP B-602** com 3 armas, preenchendo tipo, marca, modelo e demais campos
 5. **Criar laudo** → verificar HTML:
-   - `<h2>X. DAS ARMAS</h2>` seguido de `<div data-repeat-group="armas">`
-   - Dentro do div, 3 `<h3>` com títulos resolvidos
+   - `<h2>X. DOS EXAMES</h2>` seguido de `<div data-repeat-group="armas">`
+   - Dentro do div, N `<h3>` com títulos vindos de `repetir_titulo`
    - Título da 1ª arma: "ARMA A - Pistola Taurus PT 100"
    - Título da 2ª arma: "ARMA B - Revólver S&W Model 686"
    - Placeholders de conteúdo com índices corretos (`_1_`, `_2_`, `_3_`)
+   - **Fallback:** sem `repetir_titulo`, o H3 usa `secao.nome` (compatibilidade)
 6. **Toggle "Possui Arma(s)?" desligado** → seção de armas some do laudo (após sincronizar)
 7. **Toggle ligado, 0 armas cadastradas** → seção omitida (sem H2)
 8. **Alterar dados de uma arma na REP** → sincronizar laudo → conteúdo do H3 correspondente é atualizado
@@ -882,9 +938,11 @@ if (armasMudaram) {
 11. **Regressão** → templates sem `repetir_para` funcionam como antes
 12. **Regressão** → `{{b602_tabela_armas}}` continua funcionando (tabela única)
 13. **Regressão** → `condicao` que já existia no banco (se houver) continua funcionando após a correção do service
-14. **Aviso REP → Laudo** → editar REP com armas, alterar dados de uma arma, salvar → diálogo modal "Os dados de arma foram alterados" aparece → confirmar → laudo sincronizado com novos dados
-15. **Sem alteração de armas** → editar REP, alterar apenas outro campo (ex: local do fato), salvar → **sem** diálogo modal (snapshot não detectou mudança)
-16. **REP sem laudo vinculado** → alterar armas → salvar → **sem** diálogo modal (não há laudo para sincronizar)
+14. **Não duplicar conteúdo no H3** — se `repetir_titulo` exibe "ARMA A - Artesanal", o conteúdo não deve repetir esses mesmos dados na primeira linha
+15. **Duplicação acidental** — se o conteúdo começar com o mesmo padrão do `repetir_titulo` (ex: "ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}}"), o laudo terá a informação duplicada (H3 + primeira linha do corpo). Orientar o perito a remover a linha duplicada do conteúdo.
+16. **Aviso REP → Laudo** → editar REP com armas, alterar dados de uma arma, salvar → diálogo modal "Os dados de arma foram alterados" aparece → confirmar → laudo sincronizado com novos dados
+17. **Sem alteração de armas** → editar REP, alterar apenas outro campo (ex: local do fato), salvar → **sem** diálogo modal (snapshot não detectou mudança)
+18. **REP sem laudo vinculado** → alterar armas → salvar → **sem** diálogo modal (não há laudo para sincronizar)
 
 ---
 
@@ -903,14 +961,14 @@ if (armasMudaram) {
 
 ### Ordem recomendada de implementação
 
-1. Migration v26 + tipo `SecaoTemplateRow` (arquivos 1-2)
-2. Template service — corrigir `condicao` + adicionar `repetir_para` (arquivo 3)
-3. IPC handlers — propagar `repetir_para` (arquivo 7)
-4. Zod schema — adicionar `condicao` + `repetir_para` (arquivo 13)
+1. Migration v26 + v27 + tipo `SecaoTemplateRow` (arquivos 1-2)
+2. Template service — corrigir `condicao` + adicionar `repetir_para` + `repetir_titulo` (arquivo 3)
+3. IPC handlers — propagar `repetir_para` + `repetir_titulo` (arquivo 7)
+4. Zod schema — adicionar `condicao` + `repetir_para` + `repetir_titulo` (arquivo 13)
 5. Campo `modelo` nas armas (arquivos 9, 11)
 6. Placeholders `letra` e `modelo` (arquivos 6, 10, 11 — exportação)
 7. **NOVO módulo** `secao-builder.service.ts` (arquivo 4)
 8. Integração no `laudo.service.ts` (arquivo 5)
 9. TemplatesPage — UI + correções de hidratação (arquivo 8)
 10. REPsPage — snapshot + diálogo + trigger sync (arquivo 14)
-11. Testes manuais de verificação (todos os 16 itens acima)
+11. Testes manuais de verificação (todos os 18 itens acima)

@@ -48,8 +48,6 @@ export interface REPFormData {
   b602_cartuchos_toggle: string;
   b602_estojos_toggle: string;
   b602_armas_toggle: string;
-  b602_armas_funcionamento_toggle: string;
-  b602_armas_coleta_toggle: string;
 }
 
 export interface ExamSectionProps {

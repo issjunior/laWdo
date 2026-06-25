@@ -15,7 +15,7 @@ const MAX_ESTOJOS = 20;
 const MAX_ARMAS = 20;
 
 const ARMA_CAMPOS = [
-  'tipo', 'marca', 'calibre', 'numeracao_serie', 'numeracao_cano',
+  'tipo', 'marca', 'modelo', 'calibre', 'numeracao_serie', 'numeracao_cano',
   'capacidade_carregador', 'comprimento_cano', 'acabamento',
   'funcionamento', 'estado_conservacao', 'quantidade', 'dito_oficio', 'numero_lacre',
 ];
@@ -113,19 +113,22 @@ export const b602Service: ExamService = {
     if (armasToggle === 'on') {
       const items: Record<string, unknown>[] = [];
       for (let i = 0; i < MAX_ARMAS; i++) {
-        const tipo = (data as Record<string, string>)[`b602_armas_${i}_tipo`];
-        if (!tipo && i > 0) continue;
         const item: Record<string, unknown> = {};
+        let possuiDados = false;
         for (const campo of ARMA_CAMPOS) {
           const val = (data as Record<string, string>)[`b602_armas_${i}_${campo}`];
-          if (val) item[campo] = val;
+          if (val) {
+            item[campo] = val;
+            possuiDados = true;
+          }
         }
-        if (Object.keys(item).length > 0) items.push(item);
+        if (!possuiDados) continue;
+        item.func_toggle = (data as Record<string, string>)[`b602_armas_${i}_func_toggle`] || 'off';
+        item.coleta_toggle = (data as Record<string, string>)[`b602_armas_${i}_coleta_toggle`] || 'off';
+        items.push(item);
       }
       if (items.length > 0) result.armas = items;
     }
-    result.armas_funcionamento_toggle = (data as Record<string, string>)['b602_armas_funcionamento_toggle'] || 'off';
-    result.armas_coleta_toggle = (data as Record<string, string>)['b602_armas_coleta_toggle'] || 'off';
 
     return { b602: result };
   },
@@ -221,10 +224,10 @@ export const b602Service: ExamService = {
           const val = item[campo];
           if (val !== undefined) result[`b602_armas_${i}_${campo}`] = String(val);
         }
+        result[`b602_armas_${i}_func_toggle`] = String(item.func_toggle || 'off');
+        result[`b602_armas_${i}_coleta_toggle`] = String(item.coleta_toggle || 'off');
       });
     }
-    if (data.armas_funcionamento_toggle) result['b602_armas_funcionamento_toggle'] = String(data.armas_funcionamento_toggle);
-    if (data.armas_coleta_toggle) result['b602_armas_coleta_toggle'] = String(data.armas_coleta_toggle);
 
     return result as Partial<REPFormData>;
   },
