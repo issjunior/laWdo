@@ -18,9 +18,9 @@ REP B-602
   ├── Cartuchos: ON  →  editor insere <h3>DOS CARTUCHOS</h3>
   ├── Estojos: ON    →  editor insere <h3>DOS ESTOJOS</h3>
   └── Arma: ON       →  editor insere <h3>DA ARMA</h3>
-       ├── Funcionamento: ON  → <h3>FUNCIONAMENTO E EFICIÊNCIA</h3>
-       └── Coleta: ON         → <h3>COLETA DE PADRÕES BALÍSTICOS</h3>
 ```
+
+Os blocos de `Funcionamento e Eficiência` e `Coleta de Padrões Balísticos` por arma não ficam cadastrados como `subToggles` estáticos em `EXAM_TOGGLES`. O `TinyMceEditor` injeta essas ações em tempo de execução quando `b602_armas_toggle` está ativo, usando os toggles individuais de cada arma (`b602_arma_N_func_toggle` e `b602_arma_N_coleta_toggle`).
 
 ---
 
@@ -48,13 +48,7 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
   'B-602': [
     { id: 'b602_cartuchos_toggle', label: 'Cartuchos', subtitulo: 'DOS CARTUCHOS', sectionId: 'cartuchos' },
     { id: 'b602_estojos_toggle', label: 'Estojos', subtitulo: 'DOS ESTOJOS', sectionId: 'estojos' },
-    {
-      id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas',
-      subToggles: [
-        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
-        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
-      ],
-    },
+    { id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas' },
   ],
 };
 ```
@@ -88,8 +82,8 @@ Se `condToggles` tem itens, o editor registra o botão `condbloco`:
   ├── Cartuchos          → insertCondBloco('b602_cartuchos_toggle')
   ├── Estojos            → insertCondBloco('b602_estojos_toggle')
   ├── Arma               → insertCondBloco('b602_armas_toggle')
-  │   ├── Funcionamento  → insertCondBloco('b602_armas_funcionamento_toggle')
-  │   └── Coleta         → insertCondBloco('b602_armas_coleta_toggle')
+  │   ├── Funcionamento  → item dinâmico por arma
+  │   └── Coleta         → item dinâmico por arma
   └── ...
 ```
 
@@ -103,17 +97,16 @@ O `exameToggles` é filtrado com base no `exameCamposEspecificos` carregado da R
 
 ```
 exameCamposEspecificos (extraído de parsed.b602)
-  ├── cartuchos[]?          → b602_cartuchos_toggle ON (implícito)
-  ├── estojos[]?            → b602_estojos_toggle ON (implícito)
-  ├── armas_toggle === 'on' → b602_armas_toggle ON (explícito)
-  ├── armas_funcionamento_toggle === 'on' → ON (explícito)
-  └── armas_coleta_toggle === 'on'       → ON (explícito)
+  ├── cartuchos[]?           → b602_cartuchos_toggle ON (implícito)
+  ├── estojos[]?             → b602_estojos_toggle ON (implícito)
+  ├── armas_toggle === 'on'  → b602_armas_toggle ON (explícito)
+  └── armas[i].func_toggle / armas[i].coleta_toggle → usados pelo menu por arma
 ```
 
 **Regras:**
-- **Explícito**: `chave === 'on'` (ex: `armas_toggle`, `armas_funcionamento_toggle`)
+- **Explícito**: `chave === 'on'` (ex: `armas_toggle`)
 - **Implícito**: array de dados correspondente existe e tem itens (ex: `cartuchos[]` existe → `cartuchos_toggle` ativo)
-- **SubToggles**: mantidos apenas se o sub-toggle específico está 'on'; toggle pai aparece se ele próprio ou ao menos 1 sub está ativo
+- **Armas**: as ações por arma são montadas dinamicamente pelo editor, com base em `b602.armas[]`
 - **Sem dados da REP**: mostra todos os toggles (evita flicker durante carregamento)
 
 ### 3.3 Comando `insertCondBloco`
@@ -124,7 +117,7 @@ exameCamposEspecificos (extraído de parsed.b602)
 insertCondBloco(toggleId: string, subIndex?: number)
 ```
 
-1. Busca o toggle em `condToggles` (incluindo sub-toggles)
+1. Busca o toggle em `condToggles`
 2. Gera HTML: `<div data-cond-bloco="toggleId" class="cond-bloco"><h3>Subtitulo</h3><p>&nbsp;</p></div>`
 3. Insere no editor via `editor.insertContent(html)`
 
@@ -154,33 +147,29 @@ insertCondBloco(toggleId: string, subIndex?: number)
 Chamado ao salvar/atualizar a REP (via handler `rep:update`). Fluxo:
 
 1. Busca o laudo e seu template
-2. Lê `secoes_template` com `condicao` não-nula
+2. Lê `secoes_template` com `condicao`, `repetir_para`, `repetir_titulo` e `parent_id`
 3. Busca `campos_especificos` da REP associada
-4. Avalia cada condição: se `condicao.campo` === `'on'`, seção ativa
-5. Reconstrói o HTML concatenando seções na ordem do template
-6. Para seções existentes: atualiza número do H2 e processa blocos condicionais
-7. Para seções novas: cria a partir do template (com numeração H2)
-8. Para seções não-listadas no template: mantém como estão
-9. Salva se houve mudança
+4. Filtra seções ativas e expande grupos repetíveis de armas
+5. Gera o HTML base via `secao-builder.service.ts`
+6. Reconcilia o HTML atual com a base usando headings estruturais (`h2`/`h3`)
+7. Preserva edições do usuário fora das seções derivadas da REP
+8. Salva somente se houver mudança
 
-### 4.2 `_processarBlocosCondicionais()`
+### 4.2 `secao-builder.service.ts`
 
-**Arquivo:** `src/main/services/laudo.service.ts:481`
+**Arquivo:** `src/main/services/secao-builder.service.ts`
 
-Remove `<div data-cond-bloco>` cujo toggle não está ativo (`!== 'on'`):
+Processa `<div data-cond-bloco>` cujo toggle não está ativo (`!== 'on'`) e normaliza `b602_arma_N_*` para o índice atual da arma:
 
 ```ts
-private _processarBlocosCondicionais(html: string, toggles: Record<string, unknown>): string {
-  const BLOCK_REGEX = /<div\s+data-cond-bloco="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi;
-  return html.replace(BLOCK_REGEX, (match, toggleId) => {
-    return toggles[toggleId] === 'on' ? match : '';
-  });
-}
+export function processarBlocosCondicionais(
+  html: string,
+  camposEspecificos: Record<string, unknown>,
+  contexto: Record<string, unknown> = {},
+): string { /* ... */ }
 ```
 
-Usa callback no `String.replace` para garantir remoção posicional correta.
-
-> **Nota:** O parâmetro `numeroSecao` e a renumeração de `<h3>` foram removidos (2026-06-17). O método apenas remove blocos com toggle off.
+> **Nota:** o processamento atual usa um loop de regex para tratar blocos internos primeiro e não depende mais de `numeroSecao` nem de uma lista fixa de sub-toggles por arma.
 
 ### 4.3 Migration v25
 

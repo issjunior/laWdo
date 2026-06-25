@@ -33,6 +33,7 @@ lerna-debug.log*
 # --- AGENTS ---
 .opencode
 .claude
+.codex
 
 # --- SKILLS ---
 .agents

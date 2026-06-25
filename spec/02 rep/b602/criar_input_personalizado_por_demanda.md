@@ -1,43 +1,19 @@
-# Plano: B-602 — Subexames por Arma Sob Demanda
+# Plano histórico: B-602 — Subexames por Arma Sob Demanda
 
-> **Status:** Em planejamento
-> **Foco:** intuitividade, resiliência a erros, modularidade e UX
-> **Premissa:** o sistema ainda está em desenvolvimento, então esta entrega **não precisa de retrocompatibilidade**
-> **Escopo futuro relacionado:** `escopo_futuro_b602.md`
+> **Status:** Histórico
+> **Observação:** a implementação final do código atual evoluiu para a variante com `parent_id`, builder hierárquico e reconciliação estrutural. O comportamento vigente está documentado em [`criar_input_personalizado_arma_b602.md`](criar_input_personalizado_arma_b602.md).
 
 ---
 
 ## 1. Resumo
 
-Hoje o B-602 possui dois toggles globais:
+Este texto registra a ideia original de retirar os toggles globais do B-602 e migrar para toggles por arma. O código atual já aplica esse conceito, mas com uma arquitetura mais completa do que a proposta inicial:
 
-- `b602_armas_funcionamento_toggle`
-- `b602_armas_coleta_toggle`
-
-Eles valem para todas as armas ao mesmo tempo. Isso é ruim para UX e não representa o caso real em que cada arma pode exigir uma combinação diferente de subexames.
-
-Esta entrega troca esse modelo por **toggles por arma**:
-
-- cada arma pode ter `func_toggle` independente
-- cada arma pode ter `coleta_toggle` independente
-- a seção repetível de armas no template continua existindo
-- dentro de cada arma, blocos condicionais são exibidos ou removidos conforme os toggles daquela arma
-
-### Resultado esperado
-
-Exemplo:
-
-- Arma 1: funcionamento `on`, coleta `on`
-- Arma 2: funcionamento `on`, coleta `off`
-- Arma 3: funcionamento `off`, coleta `off`
-
-O laudo gerado deve conter:
-
-- uma subseção H3 para cada arma
-- bloco de funcionamento apenas nas armas com `func_toggle = on`
-- bloco de coleta apenas nas armas com `coleta_toggle = on`
-
-Sem alterar a arquitetura geral do editor de laudos.
+- template com `parent_id`
+- `repetir_para = 'armas'`
+- `repetir_titulo`
+- `func_toggle` e `coleta_toggle` por arma
+- sincronização com reconciliação estrutural
 
 ---
 
@@ -54,16 +30,12 @@ Sem alterar a arquitetura geral do editor de laudos.
   - `data-cond-bloco`
   - sincronização de seções do laudo
 
-### Não objetivos desta entrega
+### Não objetivos desta proposta histórica
 
-- não implementar hierarquia real de seções com `parent_id`
-- não criar editor H3/H4 aninhado no `LaudosPage`
 - não adicionar `toggles_snapshot` no banco
-- não criar merge inteligente ou preservação automática de conteúdo removido
 - não suportar condições compostas (`AND`, `OR`, etc.)
 - não suportar blocos condicionais aninhados dentro de outros blocos condicionais
-
-Esses pontos podem existir em uma fase futura, mas não devem contaminar esta entrega.
+- não substituir a reconciliação atual por merge heurístico complexo
 
 ---
 

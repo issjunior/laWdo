@@ -138,8 +138,10 @@ Função `resolverPlaceholdersExportacao(html, ctx)`:
 
 - Usa `DOMParser` para encontrar `<span data-placeholder="{{chave}}">` e substituir pelo valor real
 - Fallback: regex `\{\{chave\}\}` para placeholders textuais
-- Mapeamento inclui: campos da REP (18), relacionamentos (3), perito (4), datas (2), campos específicos de exame (I-801, B-602)
-- **Placeholders de tabela B-602**: `b602_tabela_dados_investigacao`, `b602_tabela_material_enc`, `b602_tabela_cartuchos`, `b602_tabela_estojos` — resolvem para HTML completo de tabela (com bordas, cabeçalhos, dados) usando funções de `@/lib/tabelas-placeholder` (`buildDadosInvestigacaoTable`, `buildNumberedTable`)
+- Mapeamento inclui: campos da REP, relacionamentos, perito, datas e campos específicos de exame (I-801, B-602)
+- **Placeholders de tabela B-602**: `b602_tabela_dados_investigacao`, `b602_tabela_material_enc`, `b602_tabela_cartuchos`, `b602_tabela_estojos`, `b602_tabela_armas` — resolvem para HTML completo de tabela (com bordas, cabeçalhos, dados) usando funções de `@/lib/tabelas-placeholder` (`buildDadosInvestigacaoTable`, `buildNumberedTable`, `buildArmasTabela`)
+- **Placeholders individuais de armas B-602**: `b602_arma_N_tipo`, `b602_arma_N_marca`, `b602_arma_N_modelo`, `b602_arma_N_calibre`, `b602_arma_N_numeracao_serie`, `b602_arma_N_numeracao_cano`, `b602_arma_N_capacidade_carregador`, `b602_arma_N_comprimento_cano`, `b602_arma_N_acabamento`, `b602_arma_N_funcionamento`, `b602_arma_N_estado_conservacao`, `b602_arma_N_quantidade`, `b602_arma_N_dito_oficio`, `b602_arma_N_numero_lacre`
+- **Campos computados por arma**: `b602_arma_N_letra`, `b602_arma_N_func_toggle`, `b602_arma_N_coleta_toggle`
 - Campos reservados `XXX` permanecem como texto, sem estilo
 
 ```typescript

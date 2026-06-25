@@ -118,18 +118,18 @@
 | `estojo` | Estojo | dropdown | Latonada, Niquelada |
 | `observacao` | Observação | checkbox múltiplo (não obrigatório) | Intacto, NTA, Picotado, Percutido, Não deflagrado |
 
-### 2.5 Seção: Arma (toggle + sub-toggles)
+### 2.5 Seção: Arma (toggle + ações por arma)
 
 **Toggle pai:** `b602_armas_toggle` — "Possui Arma?"
 
-**Sub-toggles** (controlam sub-tabelas dentro da seção Arma):
+Cada item do array `b602.armas[]` carrega seus próprios toggles:
 
-| Toggle | `id` | `subtitulo` (usado no `<h3>` do bloco condicional) |
-|---|---|---|
-| Funcionamento e Eficiência | `b602_armas_funcionamento_toggle` | `FUNCIONAMENTO E EFICIÊNCIA` |
-| Coleta de Padrões Balísticos | `b602_armas_coleta_toggle` | `COLETA DE PADRÕES BALÍSTICOS` |
+| Campo | Uso |
+|---|---|
+| `func_toggle` | Exibe ou remove o bloco "Funcionamento e Eficiência" daquela arma |
+| `coleta_toggle` | Exibe ou remove o bloco "Coleta de Padrões Balísticos" daquela arma |
 
-O campo `subtitulo` é usado pelo editor de laudo como texto do `<h3 data-cond-bloco>` quando o condicional é inserido.
+O editor de laudo insere esses blocos a partir de `b602_arma_N_func_toggle` e `b602_arma_N_coleta_toggle`. Não existe mais toggle global para todas as armas ao mesmo tempo.
 
 **Campos por linha da tabela `armas` (todos obrigatórios exceto observação):**
 
@@ -162,16 +162,12 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
   'B-602': [
     { id: 'b602_cartuchos_toggle', label: 'Cartuchos', subtitulo: 'DOS CARTUCHOS', sectionId: 'cartuchos' },
     { id: 'b602_estojos_toggle', label: 'Estojos', subtitulo: 'DOS ESTOJOS', sectionId: 'estojos' },
-    {
-      id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas',
-      subToggles: [
-        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
-        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
-      ],
-    },
+    { id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas' },
   ],
 };
 ```
+
+No caso da arma, o editor injeta ações adicionais em tempo de execução quando `b602_armas_toggle` está ativo, usando `b602_arma_N_func_toggle` e `b602_arma_N_coleta_toggle`. Esses itens não aparecem como `subToggles` estáticos no registro.
 
 ---
 
@@ -229,32 +225,21 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
       {
         "num_lacre": "XYZ789",
         "marca": "Taurus",
+        "modelo": "PT 100",
         "calibre": "9 mm Luger",
         "capacidade": "17",
         "tipo": "Pistola",
         "funcionamento": "Semiautomático",
+        "func_toggle": "on",
+        "coleta_toggle": "off",
         "observacao": ["Intacto"]
-      }
-    ],
-    "armas_funcionamento": [
-      {
-        "num_lacre": "XYZ789",
-        "resultado": "Eficiente",
-        "observacao": "Disparo de prova realizado"
-      }
-    ],
-    "armas_coleta": [
-      {
-        "num_lacre": "XYZ789",
-        "padrao": "Microcomparação",
-        "observacao": "Projétil e estojo coletados"
       }
     ]
   }
 }
 ```
 
-**Serialização condicional:** Arrays `material_enc`, `cartuchos`, `estojos`, `armas`, `armas_funcionamento`, `armas_coleta` só são incluídos no JSON se o toggle correspondente estiver ligado **e** houver dados preenchidos.
+**Serialização condicional:** Arrays `material_enc`, `cartuchos`, `estojos` e `armas` só são incluídos no JSON se o toggle correspondente estiver ligado **e** houver dados preenchidos. Em `armas`, os toggles por item (`func_toggle`, `coleta_toggle`) sempre viajam junto do objeto da arma.
 
 ---
 
@@ -335,9 +320,11 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
 |---|---|
 | `b602_arma_{N}_num_lacre` | Nº do Lacre |
 | `b602_arma_{N}_marca` | Marca |
+| `b602_arma_{N}_modelo` | Modelo |
 | `b602_arma_{N}_calibre` | Calibre |
 | `b602_arma_{N}_capacidade` | Capacidade |
 | `b602_arma_{N}_tipo` | Tipo |
+| `b602_arma_{N}_letra` | Letra sequencial da arma |
 | `b602_arma_{N}_funcionamento` | Funcionamento |
 | `b602_arma_{N}_observacao` | Observação |
 
@@ -369,17 +356,19 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
    ├── 📊 Estojos
    │   ├── {{b602_tabela_estojos}}
    │   └── ...
-   └── 📊 Armas
-       ├── {{b602_tabela_armas}}
-       ├── Arma 1 ──┐
-       │   ├── {{b602_arma_1_num_lacre}}
-       │   ├── {{b602_arma_1_marca}}
-       │   ├── {{b602_arma_1_calibre}}
-       │   ├── {{b602_arma_1_capacidade}}
-       │   ├── {{b602_arma_1_tipo}}
-       │   ├── {{b602_arma_1_funcionamento}}
-       │   └── {{b602_arma_1_observacao}}
-       └── Arma N ── (dinâmico)
+    └── 📊 Armas
+        ├── {{b602_tabela_armas}}
+        ├── Arma 1 ──┐
+        │   ├── {{b602_arma_1_num_lacre}}
+        │   ├── {{b602_arma_1_marca}}
+        │   ├── {{b602_arma_1_modelo}}
+        │   ├── {{b602_arma_1_calibre}}
+        │   ├── {{b602_arma_1_capacidade}}
+        │   ├── {{b602_arma_1_tipo}}
+        │   ├── {{b602_arma_1_letra}}
+        │   ├── {{b602_arma_1_funcionamento}}
+        │   └── {{b602_arma_1_observacao}}
+        └── Arma N ── (dinâmico)
 ```
 
 ### `B602_MENU_STRUCTURE` — localização
@@ -400,7 +389,7 @@ A estrutura cobre 5 seções:
 2. `material_enc` — field `b602_tabela_material_enc`, group `Item` (prefix `b602_material_enc_`)
 3. `cartuchos` — field `b602_tabela_cartuchos`, group `Cartucho` (prefix `b602_cartucho_`)
 4. `estojos` — field `b602_tabela_estojos`, group `Estojo` (prefix `b602_estojo_`)
-5. `armas` — field `b602_tabela_armas`, group `Arma` (prefix `b602_arma_`)
+5. `armas` — field `b602_tabela_armas`, group `Arma` (prefix `b602_arma_`) + placeholders extras `letra` e `modelo`
 
 ---
 

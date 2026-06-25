@@ -74,9 +74,11 @@
 │       ├── Arma 1 ──┐                              │
 │       │   ├── {{b602_arma_1_num_lacre}}           │
 │       │   ├── {{b602_arma_1_marca}}               │
+│       │   ├── {{b602_arma_1_modelo}}              │
 │       │   ├── {{b602_arma_1_calibre}}             │
 │       │   ├── {{b602_arma_1_capacidade}}          │
 │       │   ├── {{b602_arma_1_tipo}}                │
+│       │   ├── {{b602_arma_1_letra}}               │
 │       │   ├── {{b602_arma_1_funcionamento}}       │
 │       │   └── {{b602_arma_1_observacao}}          │
 │       └── Arma N ── (dinâmico)                   │
@@ -216,7 +218,9 @@ export const B602_MENU_STRUCTURE: MenuSection[] = [
         fields: [
           { name: 'num_lacre', label: 'Nº do Lacre' },
           { name: 'marca', label: 'Marca' },
+          { name: 'modelo', label: 'Modelo' },
           { name: 'calibre', label: 'Calibre' },
+          { name: 'letra', label: 'Letra' },
           { name: 'capacidade', label: 'Capacidade' },
           { name: 'tipo', label: 'Tipo' },
           { name: 'funcionamento', label: 'Funcionamento' },
@@ -262,18 +266,19 @@ export const EXAM_TOGGLES: Record<string, ExamToggle[]> = {
   'B-602': [
     { id: 'b602_cartuchos_toggle', label: 'Cartuchos', subtitulo: 'DOS CARTUCHOS', sectionId: 'cartuchos' },
     { id: 'b602_estojos_toggle', label: 'Estojos', subtitulo: 'DOS ESTOJOS', sectionId: 'estojos' },
-    {
-      id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas',
-      subToggles: [
-        { id: 'b602_armas_funcionamento_toggle', label: 'Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
-        { id: 'b602_armas_coleta_toggle', label: 'Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
-      ],
-    },
+    { id: 'b602_armas_toggle', label: 'Arma', subtitulo: 'DA ARMA', sectionId: 'armas' },
   ],
 };
 ```
 
 Os `subtitulo`s são usados como texto dos `<h3 data-cond-bloco>` quando o comando `insertCondBloco` insere um bloco condicional no editor (ver `bloco_condicional.md`).
+
+No caso da arma, o TinyMCE injeta ações adicionais em tempo de execução quando `b602_armas_toggle` está ativo:
+
+- `Funcionamento e Eficiência`
+- `Coleta de Padrões Balísticos`
+
+Esses itens usam os toggles por arma (`b602_arma_N_func_toggle` e `b602_arma_N_coleta_toggle`) e não ficam cadastrados em `EXAM_TOGGLES` como `subToggles`.
 
 Os `EXAM_TOGGLES` são passados como prop `condToggles` ao `<TinyMceEditor>`, que:
 1. Registra o botão `condbloco` na toolbar

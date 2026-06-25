@@ -27,7 +27,7 @@ O formulário da REP adota **progressive disclosure** em 3 níveis:
 │                                                    │
 │  Conteúdo DINÂMICO via Section Registry:           │
 │  • B-602: Dados Investigação, Material,           │
-│           Cartuchos, Estojos                      │
+│           Cartuchos, Estojos, Armas               │
 │  • Numeração (I-801): Campos de numeração         │
 │  • Local (LOC): Local Fato, Lat/Lon, Acionamento  │
 └──────────────────────────────────────────────────┘
@@ -36,6 +36,8 @@ O formulário da REP adota **progressive disclosure** em 3 níveis:
 > **Nota:** Os campos anteriormente em "Documentos Associados" (Nº BO, Nº IP, Lacre Entrada/Saída, Envolvido) foram removidos do schema principal (migration v23) e agora fazem parte dos `campos_especificos` por tipo de exame (ex: B-602 — Dados da Investigação).
 
 > **Layout atual:** O formulário usa um **Stepper vertical** em vez de Accordion. Veja [`steps_preenchimento_form.md`](steps_preenchimento_form.md) para detalhes do layout atual.
+>
+> **B-602 atual:** o tipo de exame usa componentes separados para `Dados da Investigação`, `Material Encaminhado`, `Cartuchos`, `Estojos` e `Armas`. As armas são serializadas em `b602.armas[]` com `modelo`, `func_toggle` e `coleta_toggle` por item.
 
 ### Regra de desbloqueio das seções específicas
 
@@ -62,10 +64,11 @@ src/
 │   │           ├── local-fato.tsx     ← campos: local_fato, latitude, longitude
 │   │           ├── acionamento.tsx    ← campos: data_acionamento, data_chegada, data_saida
 │   │           ├── numeracao.tsx      ← campos: numeração veicular I-801
+│   │           ├── b602.tsx           ← campos e tabela do B-602 (inclui armas)
 │   │           └── services/          ← NOVO subdiretório
 │   │               ├── types.ts       ← ExamService interface
 │   │               ├── numeracao.service.ts  ← serialize/deserialize I-801 + defaults + masks
-│   │               └── loc.service.ts       ← serialize/deserialize LOC (se necessário)
+│   │               ├── b602.service.ts       ← serialize/deserialize B-602 + toggles por arma
 │   ├── lib/
 │   │   └── validators/
 │   │       ├── tipo-exame.schema.ts   ← REMOVE eh_local
@@ -182,12 +185,12 @@ import { AcionamentoFields } from './acionamento';
 import { NumeracaoFields } from './numeracao';
 
 export interface ExamSection {
-  id: string;                    // chave única, usada no accordion value
+  id: string;                    // chave única da seção/step
   label: string;                 // título da seção
   icon: React.ComponentType<{ size?: number }>;
   description: string;           // subtítulo explicativo
   component: React.FC<ExamSectionProps>;
-  group?: string;                // se pertence a um grupo existente (ex: 'envolvido-local')
+  group?: string;                // agrupamento visual opcional dentro do formulário
 }
 
 export interface ExamSectionProps {
@@ -203,7 +206,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: MapPin,
     description: 'Coordenadas geográficas e descrição do local periciado',
     component: LocalFatoFields,
-    group: 'envolvido-local',   // renderiza DENTRO do accordion "Envolvido e Local"
+    group: 'envolvido-local',   // renderiza junto do bloco visual "Envolvido e Local"
   },
   acionamento: {
     id: 'acionamento',
@@ -211,7 +214,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     icon: Clock,
     description: 'Registro de acionamento, chegada e saída do local',
     component: AcionamentoFields,
-    group: null,                 // seção independente no accordion
+    group: null,                 // seção independente no fluxo
   },
   numeracao: {
     id: 'numeracao',
@@ -268,6 +271,7 @@ export interface ExamService {
 import { numeracaoService } from './services/numeracao.service';
 
 export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
+  'B-602': b602Service,
   'I-801': numeracaoService,
   // 'LOC' não precisa: campos são colunas nativas, campos_especificos = null
 };
@@ -482,9 +486,8 @@ export const AcionamentoFields: React.FC<ExamSectionProps> = ({ form, mostrarPla
 ### Fase 4 — REPsPage Refatoração
 - [x] Mover `nome_envolvido` para "Dados da Solicitação" (Nível 1, row com autoridade)
 - [x] Remover accordions condicionais "envolvido-local" e "acionamento"
-- [x] Adicionar estado `camposEspecificosDesbloqueados` + `canUnlockSpecificFields`
-- [x] Adicionar accordion "Campos Específicos" (Nível 3) com lock/unlock
-- [x] Renderizar seções dinâmicas via `getSectionsForExame(tipo.codigo)`
+- [x] Adotar `useRepStepper` para controlar passos dinâmicos, estado de abertura e navegação
+- [x] Renderizar seções dinâmicas via `getSectionsForExame(tipo.codigo)` dentro do stepper
 - [x] Schema Zod com `superRefine` condicional (via `useMemo` + `tiposExameRef`)
 - [x] `useEffect` no `tipo_exame_id` → `form.trigger(['local_fato', 'numeracao_descricao'])`
 - [x] Botão Salvar: `disabled={submitting || !form.formState.isValid}`

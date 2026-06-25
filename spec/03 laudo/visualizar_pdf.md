@@ -185,7 +185,9 @@ Antes de gerar o PDF, o HTML do laudo passa por duas funções de resolução de
    - `{{b602_material_enc_N_{campo}}}` — natureza, quantidade, tipo, dito_oficio, numero_lacre
    - `{{b602_cartucho_N_{campo}}}` — quantidade, calibre, marca, origem, espoleta, estojo, projetil, observacao
    - `{{b602_estojo_N_{campo}}}` — quantidade, calibre, marca, origem, espoleta, estojo, observacao
-   - **`{{b602_arma_N_{campo}}}`** — tipo, marca, calibre, numeracao_serie, numeracao_cano, capacidade_carregador, comprimento_cano, acabamento, funcionamento, estado_conservacao, quantidade, dito_oficio, numero_lacre
+   - **`{{b602_arma_N_{campo}}}`** — tipo, marca, modelo, calibre, numeracao_serie, numeracao_cano, capacidade_carregador, comprimento_cano, acabamento, funcionamento, estado_conservacao, quantidade, dito_oficio, numero_lacre
+   - **`{{b602_arma_N_letra}}`** — letra sequencial da arma, computada em runtime
+   - **`{{b602_arma_N_func_toggle}}` / `{{b602_arma_N_coleta_toggle}}`** — estado on/off usado pelos blocos condicionais por arma
 3. **DOMParser** — spans com `data-placeholder="{{chave}}"` são substituídos pelos valores do mapping.
 4. **Regex residual** — `{{chave}}` remanescentes (digitados manualmente) são substituídos como fallback.
 

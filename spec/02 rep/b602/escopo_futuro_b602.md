@@ -8,21 +8,23 @@
 
 ## 1. Contexto
 
-A entrega atual do B-602 foi reduzida para resolver bem o problema principal:
+Atualização de 2026-06-24: a entrega atual do B-602 já implementa:
 
 - subexames por arma
 - toggles por arma
-- geração condicional por arma dentro da seção repetível
+- repetição por arma dentro de `repetir_para = 'armas'`
+- hierarquia de template com `parent_id`
+- sincronização de laudo com reconciliação estrutural
 
-Algumas ideias foram removidas do escopo porque aumentavam bastante a complexidade sem melhorar a entrega imediata.
-
-Este arquivo preserva essas ideias para consulta futura.
+Este arquivo agora preserva apenas o que realmente continua fora do código atual.
 
 ---
 
 ## 2. Itens adiados
 
 ### 2.1 Hierarquia real de seções no template
+
+**Status atual:** implementado no código.
 
 **Ideia:** permitir que `secoes_template` tenha `parent_id`, formando uma estrutura de 1 nível:
 
@@ -45,6 +47,8 @@ Este arquivo preserva essas ideias para consulta futura.
 - novo builder com agrupamento por pai/filho
 
 ### 2.2 Parser H3/H4 no editor de laudos
+
+**Status atual:** implementado no código.
 
 **Ideia:** fazer `LaudosPage` entender:
 
