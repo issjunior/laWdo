@@ -161,16 +161,11 @@ export function processarBlocosCondicionais(
   contexto: ContextoCondicionalArma = {}
 ): string {
   const BLOCK_REGEX_INNERMOST = /<div\b([^>]*)\bdata-cond-bloco="([^"]*)"([^>]*)>((?:(?!<div\b[^>]*\bdata-cond-bloco=)[\s\S])*?)<\/div>/gi;
+  const MAX_PASSES = 50;
 
   let resultado = html;
-  let houveMudanca = true;
-
-  while (houveMudanca) {
-    houveMudanca = false;
-
-    resultado = resultado.replace(BLOCK_REGEX_INNERMOST, (match, _attrsAntes, toggleId, _attrsDepois) => {
-      houveMudanca = true;
-
+  for (let passagem = 0; passagem < MAX_PASSES; passagem += 1) {
+    const proximoResultado = resultado.replace(BLOCK_REGEX_INNERMOST, (match, _attrsAntes, toggleId, _attrsDepois) => {
       const toggleNormalizado = contexto.indiceArma
         ? normalizarCondicaoPorArma(toggleId, contexto.indiceArma)
         : toggleId;
@@ -188,9 +183,17 @@ export function processarBlocosCondicionais(
         `data-cond-bloco="${toggleNormalizado}"`
       );
     });
+
+    if (proximoResultado === resultado) {
+      return resultado;
+    }
+
+    resultado = proximoResultado;
   }
 
-  return resultado;
+  throw new Error(
+    `Processamento de blocos condicionais excedeu o limite de ${MAX_PASSES} iterações`
+  );
 }
 
 function avaliarCondicaoSecao(secao: SecaoTemplateRow, camposEspecificos: Record<string, unknown>): boolean {

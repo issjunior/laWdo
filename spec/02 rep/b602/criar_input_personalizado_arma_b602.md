@@ -126,6 +126,20 @@ src/main/services/secao-builder.service.ts
 
 **Por que `data-repeat-group`?** O TinyMCE 8.5 deste projeto preserva `data-*` attributes por padrão. O wrapper `<div>` com `data-repeat-group` permite identificar o bloco repetível e reexpandi-lo na reconciliação sem depender de estrutura fixa de texto.
 
+### Hotfix 2026-06-26 — congelamento ao vincular REP no template `Pistola TS9 (template)`
+
+Foi identificado um congelamento real da interface ao vincular uma REP B-602 ao template `Pistola TS9 (template)`.
+
+**Causa:** `processarBlocosCondicionais()` entrava em loop infinito quando encontrava um `data-cond-bloco` já estável e ativo. O laço antigo repetia apenas por ter encontrado o bloco, mesmo sem mudança real no HTML.
+
+**Solução aplicada no estado atual:**
+
+- o loop agora repete somente quando o HTML resultante muda de fato entre uma passagem e outra
+- a normalização de `b602_arma_N_*` para `b602_arma_<indice>_*` continua existindo, mas só conta como mudança quando o atributo é reescrito
+- foi adicionado um limite defensivo de `50` iterações; ao exceder, o `main` lança erro explícito em vez de deixar a UI travada
+
+**Impacto funcional:** blocos condicionais ativos continuam renderizando normalmente, mas o builder deixa de reprocessar indefinidamente o mesmo HTML. Esse ajuste protege tanto a criação inicial do laudo quanto `sincronizarSecoesCondicionais()`.
+
 ### Interfaces do módulo
 
 ```ts
