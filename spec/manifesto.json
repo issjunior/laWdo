@@ -1,0 +1,520 @@
+{
+  "versao": 1,
+  "artefatos": {
+    "diretorioEstado": ".codex/spec",
+    "arquivoAuditoria": ".codex/spec/ultima-auditoria.json",
+    "arquivoRelatorio": ".codex/spec/ultimo-relatorio.md",
+    "arquivoPlanoRegistrar": ".codex/spec/plano-registrar.json"
+  },
+  "gruposSugestao": [
+    {
+      "subdiretorio": "09 automacao-spec",
+      "descricao": "Automacao da documentacao spec e skill /spec.",
+      "globsCodigo": [
+        "scripts/spec*.mjs",
+        "spec/manifesto.json",
+        ".agents/skills/spec/**",
+        "AGENTS.md",
+        "package.json"
+      ]
+    },
+    {
+      "subdiretorio": "01 planejamento",
+      "descricao": "Planejamento e infraestrutura geral do projeto.",
+      "globsCodigo": [
+        "PRD.md",
+        "package.json",
+        "tsconfig*.json",
+        "vite.*",
+        "electron-builder.yml",
+        "scripts/**"
+      ]
+    },
+    {
+      "subdiretorio": "02 rep",
+      "descricao": "Fluxos de REP, formularios e campos especificos.",
+      "globsCodigo": [
+        "src/renderer/pages/REPsPage.tsx",
+        "src/renderer/components/rep/**",
+        "src/renderer/components/forms/**",
+        "src/renderer/lib/validators/rep.schema.ts",
+        "src/main/ipc/handlers/rep.handlers.ts",
+        "src/main/services/rep.service.ts",
+        "src/main/types/database.ts",
+        "src/main/database/index.ts"
+      ]
+    },
+    {
+      "subdiretorio": "03 laudo",
+      "descricao": "Laudos, templates, editor e exportacao.",
+      "globsCodigo": [
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/components/editor/**",
+        "src/renderer/components/laudo/**",
+        "src/renderer/components/timeline/**",
+        "src/renderer/lib/exportacao-placeholders.ts",
+        "src/main/services/laudo.service.ts",
+        "src/main/services/secao-builder.service.ts",
+        "src/main/ipc/handlers/laudo.handlers.ts",
+        "src/main/ipc/handlers/template.handlers.ts"
+      ]
+    },
+    {
+      "subdiretorio": "04 layout",
+      "descricao": "Temas, estilos e componentes base de layout.",
+      "globsCodigo": [
+        "src/renderer/styles/**",
+        "src/renderer/components/layout/**",
+        "src/renderer/components/ui/**",
+        "tailwind.config.js"
+      ]
+    },
+    {
+      "subdiretorio": "05 placeholder",
+      "descricao": "Placeholders, categorias e resolucao para laudo/template.",
+      "globsCodigo": [
+        "src/main/services/placeholder.service.ts",
+        "src/renderer/components/editor/PlaceholderContextMenu.tsx",
+        "src/renderer/components/placeholders/**",
+        "src/renderer/components/categorias/**",
+        "src/renderer/lib/exportacao-placeholders.ts",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/pages/TemplatesPage.tsx"
+      ]
+    },
+    {
+      "subdiretorio": "06 ia",
+      "descricao": "Integracoes com IA e configuracao de modelos.",
+      "globsCodigo": [
+        "src/main/ipc/handlers/ia.handlers.ts",
+        "src/renderer/components/ai/**",
+        "src/renderer/pages/ModelosIAPage.tsx",
+        "src/renderer/pages/LaudosPage.tsx"
+      ]
+    },
+    {
+      "subdiretorio": "07 logs",
+      "descricao": "Logger, auditoria e visualizacao de logs.",
+      "globsCodigo": [
+        "src/main/utils/logger.ts",
+        "src/renderer/pages/LogsPage.tsx",
+        "src/main/services/log*.ts",
+        "src/main/services/audit*.ts"
+      ]
+    },
+    {
+      "subdiretorio": "08 gdl",
+      "descricao": "Integracao com a API GDL.",
+      "globsCodigo": [
+        "src/main/services/gdl.service.ts",
+        "src/main/ipc/handlers/gdl.handlers.ts",
+        "src/renderer/pages/GdlConfigPage.tsx",
+        "src/renderer/components/rep/GdlConsultaModal.tsx",
+        "docs/api/**"
+      ]
+    }
+  ],
+  "specs": [
+    {
+      "arquivo": "spec/01 planejamento/planejamento_migracao_checklist.md",
+      "tipo": "planejamento",
+      "autoAtualizavel": false,
+      "descricao": "Checklist e marco de migracao."
+    },
+    {
+      "arquivo": "spec/02 rep/criar_input_personalizados_exame.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Guia do fluxo atual para campos especificos por tipo de exame.",
+      "globsCodigo": [
+        "src/renderer/components/rep/exam-fields/**"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/steps_preenchimento_form.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Stepper e fluxo visual do preenchimento da REP.",
+      "globsCodigo": [
+        "src/renderer/pages/REPsPage.tsx",
+        "src/renderer/components/rep/**"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/salvar_input_personalizado.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Persistencia e restauracao de campos especificos da REP.",
+      "globsCodigo": [
+        "src/renderer/pages/REPsPage.tsx",
+        "src/renderer/components/rep/exam-fields/**",
+        "src/main/ipc/handlers/rep.handlers.ts",
+        "src/main/database/index.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/forms_reutilizaveis.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Componentes reutilizaveis de formulario usados na REP.",
+      "globsCodigo": [
+        "src/renderer/components/forms/**",
+        "src/renderer/components/rep/**"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/forms_padrao.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Campos padrao e estruturas basicas de formulario da REP.",
+      "globsCodigo": [
+        "src/renderer/components/forms/**",
+        "src/renderer/pages/REPsPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/criar_REP.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Fluxo principal de criacao e edicao de REP.",
+      "globsCodigo": [
+        "src/renderer/pages/REPsPage.tsx",
+        "src/main/ipc/handlers/rep.handlers.ts",
+        "src/renderer/lib/validators/rep.schema.ts",
+        "src/main/database/index.ts",
+        "src/main/types/database.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/b602/escopo_futuro_b602.md",
+      "tipo": "planejamento",
+      "autoAtualizavel": false,
+      "descricao": "Escopo futuro do B-602."
+    },
+    {
+      "arquivo": "spec/02 rep/b602/criar_input_personalizado_por_demanda.md",
+      "tipo": "historico",
+      "autoAtualizavel": false,
+      "descricao": "Plano historico superado para subexames por arma."
+    },
+    {
+      "arquivo": "spec/02 rep/b602/criar_input_personalizado_b602.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Fluxo atual do formulario B-602 e seus placeholders.",
+      "globsCodigo": [
+        "src/renderer/components/rep/exam-fields/b602.tsx",
+        "src/renderer/components/rep/exam-fields/index.ts",
+        "src/renderer/components/rep/exam-fields/placeholders.ts",
+        "src/renderer/pages/REPsPage.tsx",
+        "src/main/services/placeholder.service.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/b602/criar_input_personalizado_arma_b602.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Seccoes repetiveis e comportamento por arma no B-602.",
+      "globsCodigo": [
+        "src/renderer/components/rep/exam-fields/b602.tsx",
+        "src/main/services/secao-builder.service.ts",
+        "src/main/services/laudo.service.ts",
+        "src/renderer/pages/LaudosPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/historico_rep_laudos.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Timeline atual entre REP e laudo.",
+      "globsCodigo": [
+        "src/renderer/components/timeline/**",
+        "src/renderer/pages/REPsPage.tsx",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/pages/LogsPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/fluxo_ilustracao.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Fluxo atual de ilustracoes em laudos.",
+      "globsCodigo": [
+        "src/renderer/components/laudo/**",
+        "src/renderer/pages/LaudosPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/exportar_laudo.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Exportacao do laudo e resolucao de placeholders.",
+      "globsCodigo": [
+        "src/renderer/lib/exportacao-placeholders.ts",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/main/services/laudo.service.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/cursor_jump.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Comportamento de salto de cursor no editor.",
+      "globsCodigo": [
+        "src/renderer/components/editor/**",
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/pages/LaudosPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/bloco_condicional.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Processamento atual de blocos condicionais.",
+      "globsCodigo": [
+        "src/main/services/secao-builder.service.ts",
+        "src/main/services/laudo.service.ts",
+        "src/renderer/pages/TemplatesPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/laudo_ciclo_vida.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Ciclo de vida principal de laudos.",
+      "globsCodigo": [
+        "src/main/services/laudo.service.ts",
+        "src/main/ipc/handlers/laudo.handlers.ts",
+        "src/renderer/pages/LaudosPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/importacao_template.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Importacao de template e deteccao de secoes.",
+      "globsCodigo": [
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/main/ipc/handlers/template.handlers.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/menu_contexto.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Menu de contexto do editor com placeholders dinamicos.",
+      "globsCodigo": [
+        "src/renderer/components/editor/PlaceholderContextMenu.tsx",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/components/rep/exam-fields/placeholders.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/visualizar_pdf.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Preview PDF, HTML gerado e resolucao de placeholders.",
+      "globsCodigo": [
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/lib/exportacao-placeholders.ts",
+        "src/main/services/laudo.service.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/wizard/wizard_pecas.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Wizard de pecas do laudo.",
+      "globsCodigo": [
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/components/**/wizard/**"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/wizard/task_wizard.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Wizard de tarefas associado a templates/laudos.",
+      "globsCodigo": [
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/components/**/wizard/**"
+      ]
+    },
+    {
+      "arquivo": "spec/04 layout/ajuste_thema_dark.md",
+      "tipo": "historico",
+      "autoAtualizavel": false,
+      "descricao": "Correcao historica do dark mode."
+    },
+    {
+      "arquivo": "spec/05 placeholder/ciclo_placeholder.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Ciclo completo dos placeholders atuais.",
+      "globsCodigo": [
+        "src/main/services/placeholder.service.ts",
+        "src/renderer/components/editor/PlaceholderContextMenu.tsx",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/lib/exportacao-placeholders.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/05 placeholder/categoria_placeholder.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Hierarquia e gestao das categorias de placeholder.",
+      "globsCodigo": [
+        "src/renderer/components/categorias/**",
+        "src/renderer/components/placeholders/**",
+        "src/main/services/placeholder.service.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/05 placeholder/campo_reservado_xxx.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Campo reservado XXX em templates.",
+      "globsCodigo": [
+        "src/renderer/components/editor/**",
+        "src/renderer/pages/TemplatesPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/05 placeholder/placeholder-pdf-bug.md",
+      "tipo": "historico",
+      "autoAtualizavel": false,
+      "descricao": "Diagnostico historico de bug de placeholders no PDF."
+    },
+    {
+      "arquivo": "spec/05 placeholder/novo_layout.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Layout atual da pagina de placeholders.",
+      "globsCodigo": [
+        "src/renderer/components/categorias/**",
+        "src/renderer/components/placeholders/**"
+      ]
+    },
+    {
+      "arquivo": "spec/05 placeholder/encapsulamento_placeholder.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Encapsulamento e composicao do sistema de placeholders.",
+      "globsCodigo": [
+        "src/renderer/components/editor/PlaceholderContextMenu.tsx",
+        "src/main/services/placeholder.service.ts",
+        "src/renderer/pages/LaudosPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/06 ia/integracao_groq.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Integracao atual com Groq.",
+      "globsCodigo": [
+        "src/main/ipc/handlers/ia.handlers.ts",
+        "src/renderer/components/ai/**",
+        "src/renderer/pages/ModelosIAPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/06 ia/integracao_gemini.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Integracao atual com Gemini.",
+      "globsCodigo": [
+        "src/main/ipc/handlers/ia.handlers.ts",
+        "src/renderer/components/ai/**",
+        "src/renderer/pages/ModelosIAPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/07 logs/logs.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Sistema de logs implementado no estado atual.",
+      "globsCodigo": [
+        "src/main/utils/logger.ts",
+        "src/renderer/pages/LogsPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/07 logs/reformulacao-logs-design.md",
+      "tipo": "planejamento",
+      "autoAtualizavel": false,
+      "descricao": "Design de reformulacao do sistema de logs."
+    },
+    {
+      "arquivo": "spec/08 gdl/api_gdl.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Integracao GDL implementada.",
+      "globsCodigo": [
+        "src/main/services/gdl.service.ts",
+        "src/main/ipc/handlers/gdl.handlers.ts",
+        "src/renderer/pages/GdlConfigPage.tsx",
+        "src/renderer/components/rep/GdlConsultaModal.tsx",
+        "src/renderer/pages/REPsPage.tsx",
+        "docs/api/**"
+      ]
+    },
+    {
+      "arquivo": "spec/problemas diversos/scroll_stepper_espacamento_footer.md",
+      "tipo": "historico",
+      "autoAtualizavel": false,
+      "descricao": "Problema pontual de scroll e espacamento."
+    },
+    {
+      "arquivo": "spec/problemas diversos/migracao_esm/sem_warning_deprecated_build.md",
+      "tipo": "historico",
+      "autoAtualizavel": false,
+      "descricao": "Registro de migracao ESM."
+    },
+    {
+      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md",
+      "tipo": "auditoria",
+      "autoAtualizavel": false,
+      "descricao": "Painel de saude e diagnostico do sistema."
+    },
+    {
+      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/01_abordagem_leve_pre_knip.md",
+      "tipo": "planejamento",
+      "autoAtualizavel": false,
+      "descricao": "Plano de abordagem leve pre-Knip."
+    },
+    {
+      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/02_plano_knip_futuro.md",
+      "tipo": "planejamento",
+      "autoAtualizavel": false,
+      "descricao": "Plano futuro de Knip."
+    },
+    {
+      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md",
+      "tipo": "auditoria",
+      "autoAtualizavel": false,
+      "descricao": "Analise curada do grafo."
+    },
+    {
+      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/04_auditoria_tsprune_2026-06-23.md",
+      "tipo": "auditoria",
+      "autoAtualizavel": false,
+      "descricao": "Auditoria pontual do ts-prune."
+    },
+    {
+      "arquivo": "spec/09 automacao-spec/fluxo_spec.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Fluxo implementado da skill e scripts de spec.",
+      "globsCodigo": [
+        "scripts/spec*.mjs",
+        "spec/manifesto.json",
+        ".agents/skills/spec/**",
+        "AGENTS.md",
+        "package.json"
+      ]
+    }
+  ]
+}

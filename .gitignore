@@ -37,6 +37,10 @@ lerna-debug.log*
 
 # --- SKILLS ---
 .agents
+!.agents/
+!.agents/skills/
+!.agents/skills/spec/
+!.agents/skills/spec/**
 graphify-out
 skills-lock.json
 opencode.json
