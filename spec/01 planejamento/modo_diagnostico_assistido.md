@@ -62,6 +62,13 @@ Não entram na v1:
 - envio de dados para servidor externo
 - API REST de consulta
 
+Entram como complemento útil de baixo risco:
+
+- snapshot enxuto de estado em erro fatal global
+- rota atual
+- contexto mínimo higienizado do renderer
+- recursos básicos do processo e do sistema operacional
+
 ## Estrutura da Coleta
 
 Ao iniciar o modo diagnóstico, o sistema criará uma sessão em:
@@ -74,6 +81,10 @@ Arquivos mínimos da sessão:
 
 - `eventos.ndjson`: trilha principal de eventos, um JSON por linha
 - `resumo.json`: metadados básicos da sessão, opcional na primeira entrega
+
+Arquivos complementares quando houver falha fatal:
+
+- `estado-snapshot.json`: fotografia do estado mínimo disponível no momento do erro
 
 O arquivo `eventos.ndjson` deve ser escrito de forma incremental, para que os eventos já registrados continuem legíveis mesmo se a aplicação travar ou fechar de forma inesperada.
 
@@ -115,6 +126,34 @@ Contexto desejável quando disponível:
 - `templateId`
 - `duracaoMs`
 - resumo de erro
+
+## Snapshot de Estado em Erros Fatais
+
+Além da trilha cronológica, o diagnóstico pode produzir um snapshot enxuto quando ocorrer erro global não tratado no `main` ou no `renderer`.
+
+Objetivo:
+
+- reduzir a ambiguidade sobre o estado exato da tela no momento do travamento
+- complementar a trilha temporal com uma fotografia mínima do sistema
+- manter baixo risco de exposição de dados sensíveis
+
+Conteúdo desejado do snapshot:
+
+- rota atual do renderer
+- contexto mínimo da janela
+- estado de sessão higienizado
+- recursos básicos do processo Electron
+- versão do sistema operacional
+- resumo do erro fatal
+
+Regras:
+
+- não gravar dump integral de formulário
+- não gravar conteúdo bruto sensível de periciando
+- higienizar campos como senha, token, email, telefone, foto, avatar, CPF, RG e similares
+- limitar profundidade e tamanho de strings para evitar snapshots explosivos
+
+Esse snapshot não substitui `eventos.ndjson`. Ele só complementa o diagnóstico quando a causa raiz depende do estado atual da tela, e não apenas da sequência de eventos.
 
 ## Interface do Usuário
 

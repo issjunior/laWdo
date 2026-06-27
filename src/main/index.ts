@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron';
+import { app, BrowserWindow, shell, globalShortcut } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
@@ -145,11 +145,3 @@ app.on('activate', () => {
   }
 });
 
-// Capturar erros não tratados
-process.on('uncaughtException', error => {
-  console.error('❌ Erro não tratado:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Promise rejeitada não tratada:', reason);
-});

@@ -28,6 +28,7 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { DiagnosticoBridge } from '@/components/diagnostico/DiagnosticoBridge';
 import './styles/globals.css';
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
@@ -105,6 +106,7 @@ const App = () => {
         <AuthPage onAuthenticated={handleAuthenticated} />
       ) : (
         <HashRouter>
+          <DiagnosticoBridge currentUser={currentUser} painelIlustracoes={isPanelWindow} />
           <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
             <Routes>
               <Route path="/panel-ilustracoes" element={<IlustracoesPanelWindow />} />

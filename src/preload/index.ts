@@ -241,6 +241,11 @@ export interface IpcAPI {
     timelineRep: (repId: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
   };
 
+  diagnosticoInterno: {
+    atualizarContextoRenderer: (contexto: Record<string, unknown>) => void;
+    registrarErroFatalRenderer: (erro: Record<string, unknown>) => void;
+  };
+
   // Painel de Ilustrações (janela separada)
   ilustracoes: {
     openPanel: () => void;
@@ -425,6 +430,10 @@ const ALLOWED_CHANNELS = new Set([
   'log:limpar-auditoria',
   'log:contar',
   'log:timeline-rep',
+
+  // Diagnóstico interno
+  'diagnostico:atualizar-contexto-renderer',
+  'diagnostico:erro-fatal-renderer',
 
   // Painel de Ilustrações
   'ilustracoes:open-panel',
@@ -891,6 +900,15 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     limparAuditoria: (userId?: string) => ipcRenderer.invoke('log:limpar-auditoria', userId),
     contar: () => ipcRenderer.invoke('log:contar'),
     timelineRep: (repId: string) => ipcRenderer.invoke('log:timeline-rep', repId),
+  },
+
+  diagnosticoInterno: {
+    atualizarContextoRenderer: (contexto: Record<string, unknown>) => {
+      ipcRenderer.send('diagnostico:atualizar-contexto-renderer', contexto);
+    },
+    registrarErroFatalRenderer: (erro: Record<string, unknown>) => {
+      ipcRenderer.send('diagnostico:erro-fatal-renderer', erro);
+    },
   },
 
   ilustracoes: {

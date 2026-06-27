@@ -2,6 +2,7 @@ import winston from 'winston';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
+import { registrarErroFatalMainDiagnostico } from '../services/diagnostico-state.service.js';
 
 const LOGS_DIR = path.join(app.getPath('userData'), 'logs');
 
@@ -190,16 +191,20 @@ export const setupLogging = () => {
   });
 
   process.on('uncaughtException', error => {
+    const snapshotPath = registrarErroFatalMainDiagnostico(error, 'uncaughtException');
     baseLogger.error('Erro não tratado', {
       module: 'sistema',
       error: { message: error.message, stack: error.stack },
+      snapshotPath,
     });
   });
 
   process.on('unhandledRejection', (reason) => {
+    const snapshotPath = registrarErroFatalMainDiagnostico(reason, 'unhandledRejection');
     baseLogger.error('Promise rejeitada não tratada', {
       module: 'sistema',
       reason: reason instanceof Error ? { message: reason.message, stack: reason.stack } : String(reason),
+      snapshotPath,
     });
   });
 };
@@ -286,4 +291,3 @@ export const clearAllLogs = (): { success: boolean; error?: string } => {
     return { success: false, error: String(err) };
   }
 };
-

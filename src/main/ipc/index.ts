@@ -24,6 +24,10 @@ import { registerRegraWizardHandlers } from './handlers/regra-wizard.handlers.js
 import { registerGdlHandlers } from './handlers/gdl.handlers.js';
 import { getSchemaVersion } from '../database/index.js';
 import { userService } from '../services/user.service.js';
+import {
+  atualizarContextoRendererDiagnostico,
+  registrarErroFatalRendererDiagnostico,
+} from '../services/diagnostico-state.service.js';
 
 /**
  * Registra todos os handlers IPC para comunicação entre main e renderer processes
@@ -47,6 +51,9 @@ export const registerIpcHandlers = (options: {
 
   // Logs
   registerLogHandlers();
+
+  // Diagnóstico interno
+  registerDiagnosticoInternoHandlers();
 
   // Sistema
   registerSystemHandlers();
@@ -155,6 +162,28 @@ const registerLogHandlers = (): void => {
         default: logger.info(msg);
       }
     }
+  });
+};
+
+const registerDiagnosticoInternoHandlers = (): void => {
+  ipcMain.on('diagnostico:atualizar-contexto-renderer', (_event, contexto: Record<string, unknown>) => {
+    atualizarContextoRendererDiagnostico(contexto);
+  });
+
+  ipcMain.on('diagnostico:erro-fatal-renderer', (_event, erro: Record<string, unknown>) => {
+    const snapshotPath = registrarErroFatalRendererDiagnostico({
+      message: typeof erro.message === 'string' ? erro.message : 'Erro fatal no renderer',
+      stack: typeof erro.stack === 'string' ? erro.stack : undefined,
+      source: typeof erro.source === 'string' ? erro.source : undefined,
+      lineno: typeof erro.lineno === 'number' ? erro.lineno : undefined,
+      colno: typeof erro.colno === 'number' ? erro.colno : undefined,
+      tipo: erro.tipo === 'unhandledrejection' ? 'unhandledrejection' : 'error',
+    });
+
+    getLogger('renderer').error('Erro fatal reportado pelo renderer', {
+      erro: sanitizeInput(JSON.stringify(erro)),
+      snapshotPath,
+    });
   });
 };
 
