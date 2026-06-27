@@ -28,7 +28,7 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
-Para documentação de estado atual, use o fluxo `/spec` ou os scripts `npm run spec`, `npm run spec:auditar` e `npm run spec:registrar`. A classificação e cobertura dos specs ficam em `spec/manifesto.json`.
+Para documentação de estado atual, use o fluxo `/spec` ou os scripts `npm run spec`, `npm run spec:auditar` e `npm run spec:registrar`. A classificação e cobertura dos specs ficam em `spec/09 automacao-spec/manifesto.json`.
 
 O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções. Análises curadas (LLM) do grafo ficam em `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md`.
 
@@ -205,7 +205,7 @@ O diretório `spec/` documenta o **estado atual** do sistema — não é changel
 | `06 ia/` | Integrações com IA (Gemini, Groq) | `**/ia/**`, `**/ai/**`, `**/modelos*ia*/**` |
 | `07 logs/` | Sistema de logs | `**/logs/**`, `**/log*/**`, `**/audit*/**`, `**/logger*` |
 | `08 gdl/` | API GDL | `**/gdl/**`,  `**/api/**`|
-| `09 automacao-spec/` | Skill `/spec`, scripts de auditoria/registro e manifesto de specs | `scripts/spec*.mjs`, `spec/manifesto.json`, `.agents/skills/spec/**`, `AGENTS.md`, `package.json` |
+| `09 automacao-spec/` | Skill `/spec`, scripts de auditoria/registro e manifesto de specs | `scripts/spec/**`, `spec/09 automacao-spec/manifesto.json`, `.agents/skills/spec/**`, `AGENTS.md`, `package.json` |
 | `problemas diversos/` | Problemas e edge cases pontuais | (sem padrão — análise de conteúdo) |
 
 **Quando o código muda** de forma relevante (alterações que podem confundir a IA em manutenções futuras):

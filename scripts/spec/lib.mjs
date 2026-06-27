@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const raizProjeto = path.resolve(__dirname, '..');
-const manifestoPath = path.join(raizProjeto, 'spec', 'manifesto.json');
+export const raizProjeto = path.resolve(__dirname, '..', '..');
+const manifestoPath = path.join(raizProjeto, 'spec', '09 automacao-spec', 'manifesto.json');
 
 function executarGit(args, permitirFalha = false) {
   try {
@@ -120,7 +120,7 @@ function carregarManifesto() {
   const manifesto = lerJson(manifestoPath);
   return {
     ...manifesto,
-    caminho: 'spec/manifesto.json'
+    caminho: 'spec/09 automacao-spec/manifesto.json'
   };
 }
 
@@ -164,7 +164,7 @@ function filtrarArquivosRelevantes(arquivos) {
     if (normalizado.startsWith('build/')) return false;
     if (normalizado.startsWith('release/')) return false;
     if (normalizado.startsWith('graphify-out/')) return false;
-    if (normalizado.startsWith('spec/') && normalizado !== 'spec/manifesto.json') return false;
+    if (normalizado.startsWith('spec/') && normalizado !== 'spec/09 automacao-spec/manifesto.json') return false;
     if (normalizado === '.gitignore') return true;
 
     return true;

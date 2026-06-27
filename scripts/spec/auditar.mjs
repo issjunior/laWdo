@@ -1,4 +1,4 @@
-import { executarAuditoria } from './spec-lib.mjs';
+import { executarAuditoria } from './lib.mjs';
 
 function lerArgumento(nome, args) {
   const indice = args.indexOf(nome);
@@ -11,12 +11,12 @@ function temFlag(nome, args) {
 
 function imprimirAjuda() {
   console.log([
-    'Uso: node scripts/spec-auditar.mjs [--modo diff|total|focado] [--alvo "<subdiretorio>"] [--modelo "<nome>"]',
+    'Uso: node scripts/spec/auditar.mjs [--modo diff|total|focado] [--alvo "<subdiretorio>"] [--modelo "<nome>"]',
     '',
     'Exemplos:',
-    '  node scripts/spec-auditar.mjs',
-    '  node scripts/spec-auditar.mjs --modo total',
-    '  node scripts/spec-auditar.mjs --modo focado --alvo "03 laudo"'
+    '  node scripts/spec/auditar.mjs',
+    '  node scripts/spec/auditar.mjs --modo total',
+    '  node scripts/spec/auditar.mjs --modo focado --alvo "03 laudo"'
   ].join('\n'));
 }
 

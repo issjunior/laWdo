@@ -1,4 +1,4 @@
-import { executarAuditoria, executarRegistro } from './spec-lib.mjs';
+import { executarAuditoria, executarRegistro } from './lib.mjs';
 
 function lerArgumento(nome, args) {
   const indice = args.indexOf(nome);
@@ -12,9 +12,9 @@ function temFlag(nome, args) {
 function imprimirAjuda() {
   console.log([
     'Uso:',
-    '  node scripts/spec.mjs',
-    '  node scripts/spec.mjs auditar [--modo diff|total|focado] [--alvo "<subdiretorio>"]',
-    '  node scripts/spec.mjs registrar [--plano ".codex/spec/plano-registrar.json"]',
+    '  node scripts/spec/index.mjs',
+    '  node scripts/spec/index.mjs auditar [--modo diff|total|focado] [--alvo "<subdiretorio>"]',
+    '  node scripts/spec/index.mjs registrar [--plano ".codex/spec/plano-registrar.json"]',
     '',
     'Sem subcomando, o script executa a auditoria padrão (git diff).'
   ].join('\n'));

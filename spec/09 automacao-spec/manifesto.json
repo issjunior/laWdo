@@ -11,8 +11,8 @@
       "subdiretorio": "09 automacao-spec",
       "descricao": "Automacao da documentacao spec e skill /spec.",
       "globsCodigo": [
-        "scripts/spec*.mjs",
-        "spec/manifesto.json",
+        "scripts/spec/**",
+        "spec/09 automacao-spec/manifesto.json",
         ".agents/skills/spec/**",
         "AGENTS.md",
         "package.json"
@@ -509,8 +509,8 @@
       "autoAtualizavel": true,
       "descricao": "Fluxo implementado da skill e scripts de spec.",
       "globsCodigo": [
-        "scripts/spec*.mjs",
-        "spec/manifesto.json",
+        "scripts/spec/**",
+        "spec/09 automacao-spec/manifesto.json",
         ".agents/skills/spec/**",
         "AGENTS.md",
         "package.json"

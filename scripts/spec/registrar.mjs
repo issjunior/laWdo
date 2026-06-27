@@ -1,4 +1,4 @@
-import { executarRegistro } from './spec-lib.mjs';
+import { executarRegistro } from './lib.mjs';
 
 function lerArgumento(nome, args) {
   const indice = args.indexOf(nome);
@@ -11,7 +11,7 @@ function temFlag(nome, args) {
 
 function imprimirAjuda() {
   console.log([
-    'Uso: node scripts/spec-registrar.mjs [--plano ".codex/spec/plano-registrar.json"]',
+    'Uso: node scripts/spec/registrar.mjs [--plano ".codex/spec/plano-registrar.json"]',
     '',
     'O plano precisa conter:',
     '{',
