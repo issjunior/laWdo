@@ -209,5 +209,5 @@ Conforme `03_melhoria_graphify.md`:
 - [`01_abordagem_leve_pre_knip.md`](./01_abordagem_leve_pre_knip.md) — Abordagem pré-Knip (concluída)
 - [`02_plano_knip_futuro.md`](./02_plano_knip_futuro.md) — Plano futuro do Knip
 - [`03_melhoria_graphify.md`](./03_melhoria_graphify.md) — Análise estrutural do grafo
-- [`DEAD_CODE_EXCEPTIONS.md`](../../../DEAD_CODE_EXCEPTIONS.md) — Exceções documentadas
+- [`DEAD_CODE_EXCEPTIONS.md`](./DEAD_CODE_EXCEPTIONS.md) — Exceções documentadas
 - Skill: `check-dead-code` (`.claude/skills/check-dead-code/`)

@@ -183,7 +183,7 @@ A maioria dos ~268 restantes são falsos positivos conhecidos:
 | **Props de componentes** | `ButtonProps`, `StepperProps`, `BadgeProps` (usadas internamente) |
 | **Funções internas** | `marginsToInches`, `getDescendantIds` (usadas no mesmo módulo) |
 
-📄 **Exceções documentadas:** [`DEAD_CODE_EXCEPTIONS.md`](../../../../DEAD_CODE_EXCEPTIONS.md)
+📄 **Exceções documentadas:** [`DEAD_CODE_EXCEPTIONS.md`](./DEAD_CODE_EXCEPTIONS.md)
 
 ---
 
@@ -212,5 +212,5 @@ A maioria dos ~268 restantes são falsos positivos conhecidos:
 - [Plano Knip futuro](02_plano_knip_futuro.md)
 - [Melhoria Graphify](03_melhoria_graphify.md) — visão estrutural baseada no grafo do graphify (god nodes, coesão de comunidades, bridges)
 - [Auditoria ts-prune 23/06/2026](04_auditoria_tsprune_2026-06-23.md) — relatório completo de código morto com ~30 itens confirmados
-- [Exceções de código morto](../../../DEAD_CODE_EXCEPTIONS.md)
+- [Exceções de código morto](./DEAD_CODE_EXCEPTIONS.md)
 - Skill: `check-dead-code` em `.claude/skills/check-dead-code.md` (apenas local — não versionado)

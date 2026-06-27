@@ -299,7 +299,7 @@ Quando os pré-requisitos estiverem satisfeitos:
 
 5. `npm run prune:all` → zero exports não usados (exceto exceções documentadas)
 6. Skill `/check-dead-code` funcional em `.claude/skills/check-dead-code.md`
-7. `DEAD_CODE_EXCEPTIONS.md` versionado na raiz
+7. `DEAD_CODE_EXCEPTIONS.md` versionado no diretório de dead code
 
 ---
 

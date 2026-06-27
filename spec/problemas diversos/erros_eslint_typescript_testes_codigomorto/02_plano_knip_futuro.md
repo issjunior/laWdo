@@ -382,7 +382,7 @@ Validar incrementalmente a cada remoção:
 
 ## 📄 Exceções Documentadas
 
-`DEAD_CODE_EXCEPTIONS.md` (raiz do projeto). Conteúdo inicial esperado:
+`DEAD_CODE_EXCEPTIONS.md` (no diretório `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/`). Conteúdo inicial esperado:
 
 ```markdown
 # Exceções de Código Morto

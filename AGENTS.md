@@ -171,7 +171,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 7. **`Omit<'onChange'>` em componentes com `onChange` próprio** — se um componente define sua própria prop `onChange` e estende `React.HTMLAttributes<HTMLDivElement>`, os tipos colidem (`HTMLAttributes` também tem `onChange: FormEventHandler`). Use `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>` para evitar o conflito. Ex: `TinyMceEditor`.
 8. **Index signature quando Zod usa `.passthrough()`** — se o schema usa `.passthrough()` para aceitar campos dinâmicos, a interface TypeScript precisa de `[key: string]: string`. Sem isso, acesso indexado e casts com `as Record<string, string>` falham. Ex: `REPFormData` em `exam-fields/types.ts`.
 9. **Arrow function wrapper em handlers com parâmetro opcional** — funções como `async (silent?: boolean) => void` não são atribuíveis a `MouseEventHandler` diretamente. Sempre usar `onClick={() => handler()}` em vez de `onClick={handler}`.
-10. **`DEAD_CODE_EXCEPTIONS.md`** — arquivos sinalizados como código morto por `ts-prune` mas que não devem ser removidos são registrados aqui. Ao adicionar uma exceção, justificar com motivo e data. Ver também: `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md`.
+10. **`spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md`** — arquivos sinalizados como código morto por `ts-prune` mas que não devem ser removidos são registrados aqui. Ao adicionar uma exceção, justificar com motivo e data. Ver também: `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md`.
 
 ---
 
@@ -245,7 +245,7 @@ Se nenhuma alteração for necessária, informar em uma linha.
 
 - `PRD.md` — requisitos do produto e contexto de negócio.
 - `spec/` — especificações detalhadas por funcionalidade.
-- `DEAD_CODE_EXCEPTIONS.md` — exceções de código morto (não remover).
+- `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md` — exceções de código morto (não remover).
 - `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md` — painel de saúde do sistema (métricas de TS, lint, testes, código morto).
 - `graphify-out/GRAPH_REPORT.md` — relações entre arquivos e funções (auto-gerado).
 - `spec/.../codigomorto/03_melhoria_graphify.md` — análise curada do grafo com recomendações de melhoria (gerado por LLM).
