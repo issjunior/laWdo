@@ -9,8 +9,8 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
-  Plus, Search, Edit, Trash2, X, Copy, ArrowUp, ArrowDown, ArrowLeft,
-  FileText, GripVertical, Layers, Eye, LayoutGrid, List, Upload,
+  Plus, Search, Edit, Trash2, Copy, ArrowLeft,
+  FileText, Layers, Eye, LayoutGrid, List, Upload,
   Image as ImageIcon,
   Baseline,
 } from 'lucide-react';
@@ -40,6 +40,18 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { ImportTemplateDialog } from '@/components/template/ImportTemplateDialog';
+import { SecaoConfiguracaoTemplate } from '@/components/template/SecaoConfiguracaoTemplate';
+import {
+  getOpcoesRepeticaoTemplate,
+  getTituloPadraoRepeticao,
+  type DiagnosticoSecaoTemplate,
+  type OpcaoSecaoPai,
+  validarConfiguracaoSecaoTemplate,
+} from '@/components/template/secao-configuracao-template.utils';
+import { getMargens } from '@/lib/margens';
+import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
 
 interface TemplateItem {
   id: string;
@@ -323,11 +335,6 @@ const templateFormSchema = z.object({
   descricao: z.string().max(500, 'Máximo 500 caracteres').optional(),
 });
 
-import { ImportTemplateDialog } from '@/components/template/ImportTemplateDialog';
-import { getMargens } from '@/lib/margens';
-import { buildPdfHeaderConfig } from '@/lib/pdf-header';
-import { limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
-
 function gerarSvgPlaceholderBase64(): string {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'>
     <rect width='600' height='400' fill='#3a3a3a' rx='8'/>
@@ -360,8 +367,11 @@ interface SortableSecaoTemplateItemProps {
   placeholderChaves: string[];
   exameMenuStructure: typeof EXAM_MENU_REGISTRY[string] | undefined;
   categoriaExameId: string;
+  tipoExameCodigo?: string;
   exameToggles: typeof EXAM_TOGGLES[string] | undefined;
-  opcoesSecaoPai: Array<{ value: string; label: string }>;
+  opcoesSecaoPai: OpcaoSecaoPai[];
+  opcoesRepeticao: Array<{ value: string; label: string }>;
+  diagnosticos: DiagnosticoSecaoTemplate[];
   inserirPlaceholder: (editorId: string, chave: string) => void;
   updateSecao: (index: number, field: keyof SecaoForm, value: string) => void;
   handleMoveSecao: (index: number, direction: 'up' | 'down') => void;
@@ -379,8 +389,11 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
   placeholderChaves,
   exameMenuStructure,
   categoriaExameId,
+  tipoExameCodigo,
   exameToggles,
   opcoesSecaoPai,
+  opcoesRepeticao,
+  diagnosticos,
   inserirPlaceholder,
   updateSecao,
   handleMoveSecao,
@@ -409,102 +422,25 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
       style={style}
       className={`rounded-lg p-4 space-y-3 ${getSecaoVisual(secao)} ${secao.parent_id ? 'ml-5' : ''}`}
     >
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1"
-          aria-label="Reordenar seção"
-        >
-          <GripVertical size={16} />
-        </button>
-        <span className="text-sm font-semibold text-muted-foreground">
-          {secao.parent_id ? 'H3' : 'H2'} · Seção {index + 1} de {total}
-        </span>
-        <Input
-          value={secao.nome}
-          onChange={e => updateSecao(index, 'nome', e.target.value)}
-          placeholder="Nome da seção (ex: Introdução, Metodologia...)"
-          className="flex-1 h-8 text-sm"
-        />
-        {exameToggles && exameToggles.length > 0 && (
-          <Select
-            value={secao.condicao || '__always__'}
-            onValueChange={(v) => updateSecao(index, 'condicao', v === '__always__' ? '' : v)}
-          >
-            <SelectTrigger className="w-[180px] h-8 text-xs">
-              <SelectValue placeholder="Mostrar apenas se..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__always__">Sempre visível</SelectItem>
-              {exameToggles.map((t) => (
-                <SelectItem key={t.id} value={JSON.stringify({ campo: t.id, valor: 'on' })}>{t.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <Select
-          value={secao.parent_id || '__root__'}
-          onValueChange={(v) => updateSecao(index, 'parent_id', v === '__root__' ? '' : v)}
-        >
-          <SelectTrigger className="w-[190px] h-8 text-xs">
-            <SelectValue placeholder="Seção pai" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__root__">Sem pai (H2)</SelectItem>
-            {opcoesSecaoPai
-              .filter(opcao => opcao.value !== getSecaoRef(secao))
-              .map(opcao => (
-                <SelectItem key={opcao.value} value={opcao.value}>
-                  {opcao.label}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={secao.repetir_para || '__none__'}
-          onValueChange={(v) => updateSecao(index, 'repetir_para', v === '__none__' ? '' : v)}
-        >
-          <SelectTrigger className="w-[160px] h-8 text-xs">
-            <SelectValue placeholder="Repetir para cada..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">Não repetir</SelectItem>
-            <SelectItem value="armas">Arma</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'up')} disabled={!podeSubir} aria-label="Mover para cima">
-          <ArrowUp size={14} />
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleMoveSecao(index, 'down')} disabled={!podeDescer} aria-label="Mover para baixo">
-          <ArrowDown size={14} />
-        </Button>
-        <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleRemoveSecao(index)} aria-label="Remover seção">
-          <X size={14} />
-        </Button>
-      </div>
-      {secao.parent_id && (
-        <p className="text-xs text-muted-foreground">
-          Subsection vinculada a uma seção pai. Nesta fase, a hierarquia aceita apenas `H2 → H3`.
-        </p>
-      )}
-      {secao.repetir_para === 'armas' && (
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Título de cada arma:</Label>
-          <Input
-            value={secao.repetir_titulo || ''}
-            onChange={e => updateSecao(index, 'repetir_titulo', e.target.value)}
-            placeholder="Ex: ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}"
-            className="flex-1 h-8 text-xs font-mono"
-          />
-        </div>
-      )}
-      {secao.repetir_para === 'armas' && (
-        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md p-2 text-xs text-amber-800 dark:text-amber-200">
-          Use placeholders com <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">_1_</code> como padrão. Ex: <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">{'{{b602_arma_1_tipo}}'}</code>, <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">{'{{b602_arma_1_letra}}'}</code>. O campo acima define o título de cada subseção (H3). <strong>Atenção:</strong> Edições manuais no conteúdo das subseções de arma serão perdidas ao atualizar a REP — os dados sempre refletem a REP atual.
-        </div>
-      )}
+      <SecaoConfiguracaoTemplate
+        secao={secao}
+        index={index}
+        total={total}
+        tipoExameCodigo={tipoExameCodigo}
+        exameToggles={exameToggles}
+        opcoesSecaoPai={opcoesSecaoPai}
+        opcoesRepeticao={opcoesRepeticao}
+        diagnosticos={diagnosticos}
+        podeSubir={podeSubir}
+        podeDescer={podeDescer}
+        dragHandleProps={{
+          attributes: attributes as React.ButtonHTMLAttributes<HTMLButtonElement>,
+          listeners: (listeners || {}) as React.ButtonHTMLAttributes<HTMLButtonElement>,
+        }}
+        onUpdateSecao={(field, value) => updateSecao(index, field, value)}
+        onMoveSecao={direction => handleMoveSecao(index, direction)}
+        onRemoveSecao={() => handleRemoveSecao(index)}
+      />
       <PlaceholderContextMenu
         editorId={`template-secao-${getSecaoRef(secao)}`}
         categorias={categorias}
@@ -528,7 +464,6 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
     </div>
   );
 };
-
 export const TemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -597,11 +532,14 @@ export const TemplatesPage: React.FC = () => {
 
   useEffect(() => { carregarTemplates(); carregarTiposExame(); carregarPlaceholders(); }, []);
 
-  const categoriaExameId = useMemo(() => {
+  const tipoExameCodigo = useMemo(() => {
     if (!templateForm.tipo_exame_id) return '';
-    const codigo = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.codigo;
-    return codigo ? `cat-exam-${codigo}` : '';
+    return tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.codigo || '';
   }, [templateForm.tipo_exame_id, tiposExame]);
+
+  const categoriaExameId = useMemo(() => (
+    tipoExameCodigo ? `cat-exam-${tipoExameCodigo}` : ''
+  ), [tipoExameCodigo]);
 
   const exameMenuStructure = useMemo(() => {
     if (!categoriaExameId) return undefined;
@@ -610,15 +548,13 @@ export const TemplatesPage: React.FC = () => {
   }, [categoriaExameId]);
 
   const exameToggles = useMemo(() => {
-    if (!templateForm.tipo_exame_id) return undefined;
-    const tipo = tiposExame.find(t => t.id === templateForm.tipo_exame_id);
-    if (!tipo?.codigo) return undefined;
-    return EXAM_TOGGLES[tipo.codigo];
-  }, [templateForm.tipo_exame_id, tiposExame]);
+    if (!tipoExameCodigo) return undefined;
+    return EXAM_TOGGLES[tipoExameCodigo];
+  }, [tipoExameCodigo]);
 
   const secoesOrdenadas = useMemo(() => normalizarSecoesHierarquicas(secoes), [secoes]);
 
-  const opcoesSecaoPai = useMemo(() => (
+  const opcoesSecaoPai = useMemo<OpcaoSecaoPai[]>(() => (
     secoesOrdenadas
       .map((secao, index) => ({ secao, index }))
       .filter(({ secao }) => !secao.parent_id)
@@ -627,6 +563,19 @@ export const TemplatesPage: React.FC = () => {
         label: secao.nome.trim() || `Seção ${index + 1}`,
       }))
   ), [secoesOrdenadas]);
+
+  const opcoesRepeticao = useMemo(() => (
+    getOpcoesRepeticaoTemplate(tipoExameCodigo)
+  ), [tipoExameCodigo]);
+
+  const diagnosticosSecoes = useMemo(() => (
+    Object.fromEntries(
+      secoesOrdenadas.map((secao) => [
+        getSecaoRef(secao),
+        validarConfiguracaoSecaoTemplate(secao, tipoExameCodigo),
+      ]),
+    ) as Record<string, DiagnosticoSecaoTemplate[]>
+  ), [secoesOrdenadas, tipoExameCodigo]);
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoForm[]) => {
     const secoesNormalizadas = normalizarSecoesHierarquicas(secoesFonte);
@@ -933,7 +882,13 @@ export const TemplatesPage: React.FC = () => {
 
       return secoesNormalizadas.map((secao, i) => (
         i === index
-          ? { ...secao, [field]: value }
+          ? {
+            ...secao,
+            [field]: value,
+            ...(field === 'repetir_para' && value === 'armas' && !secao.repetir_titulo?.trim()
+              ? { repetir_titulo: getTituloPadraoRepeticao({ repetir_para: 'armas' }, tipoExameCodigo) }
+              : {}),
+          }
           : secao
       ));
     });
@@ -1005,6 +960,15 @@ export const TemplatesPage: React.FC = () => {
           if (!fErrors[f]) fErrors[f] = err.message;
         });
         setErrors(fErrors);
+        setSubmitting(false);
+        return;
+      }
+
+      const diagnosticos = secoesParaSalvar.flatMap(secao => (
+        validarConfiguracaoSecaoTemplate(secao, tipoExameCodigo)
+      ));
+      if (diagnosticos.some(item => item.tipo === 'erro')) {
+        toast.error('Revise as seções destacadas antes de salvar o template.');
         setSubmitting(false);
         return;
       }
@@ -1798,8 +1762,11 @@ export const TemplatesPage: React.FC = () => {
                       placeholderChaves={placeholderChaves}
                       exameMenuStructure={exameMenuStructure}
                       categoriaExameId={categoriaExameId}
+                      tipoExameCodigo={tipoExameCodigo}
                       exameToggles={exameToggles}
                       opcoesSecaoPai={opcoesSecaoPai}
+                      opcoesRepeticao={opcoesRepeticao}
+                      diagnosticos={diagnosticosSecoes[getSecaoRef(secao)] || []}
                       inserirPlaceholder={inserirPlaceholder}
                       updateSecao={updateSecao}
                       handleMoveSecao={handleMoveSecao}
