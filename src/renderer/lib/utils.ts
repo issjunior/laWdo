@@ -12,6 +12,53 @@ export function removerFormatacaoPlaceholders(html: string): string {
   return html;
 }
 
+function escaparRegex(valor: string): string {
+  return valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getRegexPlaceholderIndexado(chaveBase: string): RegExp | null {
+  if (!chaveBase.includes('_N_')) return null;
+  return new RegExp(`^${escaparRegex(chaveBase).replace('_N_', '_(\\d+)_')}$`);
+}
+
+export function placeholderChaveEhValida(chave: string, chavesValidas: Iterable<string>): boolean {
+  const lista = Array.isArray(chavesValidas) ? chavesValidas : Array.from(chavesValidas);
+  if (lista.includes(chave)) return true;
+
+  return lista.some((chaveBase) => {
+    const regex = getRegexPlaceholderIndexado(chaveBase);
+    return regex ? regex.test(chave) : false;
+  });
+}
+
+export function segmentarTextoComPlaceholders(texto: string, chavesValidas: Iterable<string>) {
+  const segmentos: Array<{ tipo: 'texto' | 'placeholder'; valor: string }> = [];
+  const regex = /\{\{([^{}]+)\}\}/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(texto)) !== null) {
+    if (match.index > cursor) {
+      segmentos.push({ tipo: 'texto', valor: texto.slice(cursor, match.index) });
+    }
+
+    const valor = match[0];
+    const chave = match[1];
+    segmentos.push({
+      tipo: placeholderChaveEhValida(chave, chavesValidas) ? 'placeholder' : 'texto',
+      valor,
+    });
+
+    cursor = match.index + valor.length;
+  }
+
+  if (cursor < texto.length) {
+    segmentos.push({ tipo: 'texto', valor: texto.slice(cursor) });
+  }
+
+  return segmentos;
+}
+
 export function converterPlaceholdersTextuais(html: string, chavesValidas: string[], converterReservados = false): string {
   if (!html) return html;
 
@@ -19,7 +66,6 @@ export function converterPlaceholdersTextuais(html: string, chavesValidas: strin
   const doc = parser.parseFromString(html, 'text/html');
 
   if (chavesValidas.length > 0) {
-    const chavesSet = new Set(chavesValidas);
     const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
     const textNodes: Text[] = [];
     while (walker.nextNode()) {
@@ -38,7 +84,7 @@ export function converterPlaceholdersTextuais(html: string, chavesValidas: strin
       let match: RegExpExecArray | null;
 
       while ((match = regex.exec(text)) !== null) {
-        if (chavesSet.has(match[1])) {
+        if (placeholderChaveEhValida(match[1], chavesValidas)) {
           substituicoes.push({ pos: match.index, fim: match.index + match[0].length, chave: match[1] });
         }
       }

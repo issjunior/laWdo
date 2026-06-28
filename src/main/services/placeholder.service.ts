@@ -70,12 +70,21 @@ const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
   { chave: 'b602_total_armas',           valor: '', descricao: 'Total de armas (B-602)',                                  categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_tabela_armas',          valor: '', descricao: 'Tabela HTML com especificações das armas (B-602)',        categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_arma_N_letra',         valor: '', descricao: 'Letra sequencial da arma — valor computado em runtime (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_tipo',          valor: '', descricao: 'Tipo da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_marca',         valor: '', descricao: 'Marca da arma (B-602)', categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_arma_N_modelo',        valor: '', descricao: 'Modelo da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_calibre',       valor: '', descricao: 'Calibre da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_numeracao_serie', valor: '', descricao: 'Numeração de série da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_numeracao_cano', valor: '', descricao: 'Numeração do cano da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_capacidade_carregador', valor: '', descricao: 'Capacidade do carregador da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_comprimento_cano', valor: '', descricao: 'Comprimento do cano da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_acabamento',    valor: '', descricao: 'Acabamento da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_funcionamento', valor: '', descricao: 'Funcionamento da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_estado_conservacao', valor: '', descricao: 'Estado de conservação da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_quantidade',    valor: '', descricao: 'Quantidade da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_dito_oficio',   valor: '', descricao: 'Dito do ofício da arma (B-602)', categoria_id: 'cat-exam-B-602' },
+  { chave: 'b602_arma_N_numero_lacre',  valor: '', descricao: 'Número do lacre da arma (B-602)', categoria_id: 'cat-exam-B-602' },
 ];
-
-function getExamCategoryId(codigo: string): string {
-  return `cat-exam-${codigo}`;
-}
 
 const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   // Tabela reps (18)

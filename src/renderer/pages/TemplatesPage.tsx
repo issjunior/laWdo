@@ -24,6 +24,7 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields';
+import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import {
   DndContext,
   closestCenter,
@@ -430,6 +431,7 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
         exameToggles={exameToggles}
         opcoesSecaoPai={opcoesSecaoPai}
         opcoesRepeticao={opcoesRepeticao}
+        placeholderChaves={placeholderChaves}
         diagnosticos={diagnosticos}
         podeSubir={podeSubir}
         podeDescer={podeDescer}
@@ -489,7 +491,13 @@ export const TemplatesPage: React.FC = () => {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
 
-  const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
+  const placeholderChaves = useMemo(
+    () => Array.from(new Set([
+      ...placeholders.map(p => p.chave),
+      ...CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave),
+    ])),
+    [placeholders],
+  );
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { segmentarTextoComPlaceholders } from '@/lib/utils';
 import {
   type DiagnosticoSecaoTemplate,
   type OpcaoSecaoPai,
@@ -22,6 +23,7 @@ interface SecaoConfiguracaoTemplateProps {
   opcoesSecaoPai: OpcaoSecaoPai[];
   exameToggles?: ToggleTemplateOption[];
   opcoesRepeticao: Array<{ value: string; label: string }>;
+  placeholderChaves: string[];
   diagnosticos: DiagnosticoSecaoTemplate[];
   podeSubir: boolean;
   podeDescer: boolean;
@@ -42,6 +44,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
   opcoesSecaoPai,
   exameToggles = [],
   opcoesRepeticao,
+  placeholderChaves,
   diagnosticos,
   podeSubir,
   podeDescer,
@@ -58,6 +61,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
   const opcoesRepeticaoRenderizadas = secao.repetir_para && !opcoesRepeticao.some(opcao => opcao.value === secao.repetir_para)
     ? [...opcoesRepeticao, { value: secao.repetir_para, label: 'Configuração atual não suportada' }]
     : opcoesRepeticao;
+  const segmentosTituloRepeticao = segmentarTextoComPlaceholders(secao.repetir_titulo || '', placeholderChaves);
 
   return (
     <div className="space-y-3">
@@ -180,6 +184,27 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
             placeholder="Ex: ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}}"
             className="h-9 font-mono text-xs"
           />
+          {(secao.repetir_titulo || '').trim() && (
+            <div className="rounded-md border border-amber-200/80 bg-white/80 px-3 py-2 dark:border-amber-800/70 dark:bg-amber-950/10">
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                Prévia visual
+              </p>
+              <p className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">
+                {segmentosTituloRepeticao.map((segmento, index) => (
+                  segmento.tipo === 'placeholder' ? (
+                    <span
+                      key={`${segmento.valor}-${index}`}
+                      className="mx-[1px] inline-flex rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-200"
+                    >
+                      {segmento.valor}
+                    </span>
+                  ) : (
+                    <React.Fragment key={`${segmento.valor}-${index}`}>{segmento.valor}</React.Fragment>
+                  )
+                ))}
+              </p>
+            </div>
+          )}
           <p className="text-xs text-amber-900 dark:text-amber-100">
             Use placeholders com <code className="rounded bg-amber-100 px-1 dark:bg-amber-900">_1_</code> como padrão.
             O bloco repetido sempre reflete a REP atual. Edições manuais nesses blocos serão reescritas quando os dados da REP mudarem.

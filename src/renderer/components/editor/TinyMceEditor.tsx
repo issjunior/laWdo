@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
+import { placeholderChaveEhValida } from '@/lib/utils';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
 
@@ -124,10 +125,103 @@ interface TinyMceEditorProps {
   condToggles?: Array<{ id: string; label: string; subtitulo?: string; subToggles?: Array<{ id: string; label: string; subtitulo?: string }> }>;
 }
 
+type ToggleCondicionalFlat = { id: string; label: string; subtitulo?: string };
+
 const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
   { id: 'b602_arma_N_func_toggle', label: 'Arma (N) - Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
   { id: 'b602_arma_N_coleta_toggle', label: 'Arma (N) - Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
 ];
+
+const BADGE_BLOCO_CONDICIONAL = 'Bloco condicional';
+
+const RESUMOS_FIXOS_BLOCO_CONDICIONAL: Record<string, string> = {
+  b602_armas_toggle: 'Mostra quando: houver armas na REP',
+  b602_cartuchos_toggle: 'Mostra quando: houver cartuchos na REP',
+  b602_estojos_toggle: 'Mostra quando: houver estojos na REP',
+  b602_arma_N_func_toggle: 'Mostra quando: Funcionamento e eficiência da arma atual',
+  b602_arma_N_coleta_toggle: 'Mostra quando: Coleta de padrões balísticos da arma atual',
+};
+
+function getTogglesCondicionaisDisponiveis(condToggles?: TinyMceEditorProps['condToggles']): ToggleCondicionalFlat[] {
+  const toggles = condToggles || [];
+  const extrasB602 = toggles.some(toggle => toggle.id === 'b602_armas_toggle')
+    ? BLOCOS_CONDICIONAIS_B602_POR_ARMA
+    : [];
+
+  return [
+    ...toggles.map(toggle => ({ id: toggle.id, label: toggle.label, subtitulo: toggle.subtitulo })),
+    ...toggles.flatMap(toggle => (toggle.subToggles || []).map(subToggle => ({
+      id: subToggle.id,
+      label: subToggle.label,
+      subtitulo: subToggle.subtitulo,
+    }))),
+    ...extrasB602,
+  ];
+}
+
+function getResumoCondicional(toggleId: string, condToggles?: TinyMceEditorProps['condToggles']): string {
+  if (RESUMOS_FIXOS_BLOCO_CONDICIONAL[toggleId]) {
+    return RESUMOS_FIXOS_BLOCO_CONDICIONAL[toggleId];
+  }
+
+  const toggle = getTogglesCondicionaisDisponiveis(condToggles).find(item => item.id === toggleId);
+  if (toggle?.label) {
+    return `Mostra quando: ${toggle.label}`;
+  }
+
+  return `Mostra quando: ${toggleId}`;
+}
+
+function getTituloBlocoCondicional(toggleId: string, condToggles?: TinyMceEditorProps['condToggles']): string {
+  const toggle = getTogglesCondicionaisDisponiveis(condToggles).find(item => item.id === toggleId);
+  return toggle?.subtitulo || toggle?.label || toggleId;
+}
+
+function criarHtmlBlocoCondicional(toggleId: string, condToggles?: TinyMceEditorProps['condToggles']): string {
+  const titulo = getTituloBlocoCondicional(toggleId, condToggles);
+  const resumo = getResumoCondicional(toggleId, condToggles);
+
+  return [
+    `<div class="cond-bloco"`,
+    ` data-cond-bloco="${toggleId}"`,
+    ` data-cond-badge="${BADGE_BLOCO_CONDICIONAL}"`,
+    ` data-cond-resumo="${resumo}"`,
+    ` title="${resumo}">`,
+    `<h3>${titulo}</h3><p>&nbsp;</p></div>`,
+  ].join('');
+}
+
+function normalizarBlocosCondicionais(raiz: HTMLElement | null, condToggles?: TinyMceEditorProps['condToggles']): number {
+  if (!raiz) return 0;
+
+  let alterados = 0;
+  const blocos = Array.from(raiz.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]'));
+
+  for (const bloco of blocos) {
+    const toggleId = bloco.getAttribute('data-cond-bloco');
+    if (!toggleId) continue;
+
+    const badge = BADGE_BLOCO_CONDICIONAL;
+    const resumo = getResumoCondicional(toggleId, condToggles);
+
+    if (bloco.getAttribute('data-cond-badge') !== badge) {
+      bloco.setAttribute('data-cond-badge', badge);
+      alterados += 1;
+    }
+
+    if (bloco.getAttribute('data-cond-resumo') !== resumo) {
+      bloco.setAttribute('data-cond-resumo', resumo);
+      alterados += 1;
+    }
+
+    if (bloco.getAttribute('title') !== resumo) {
+      bloco.setAttribute('title', resumo);
+      alterados += 1;
+    }
+  }
+
+  return alterados;
+}
 
 export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>> = ({
   value,
@@ -152,7 +246,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
   useEffect(() => {
     if (editorRef.current && placeholderChaves) {
-      (editorRef.current as any)._placeholderChaves = new Set(placeholderChaves);
+      (editorRef.current as any)._placeholderChaves = placeholderChaves;
     }
   }, [placeholderChaves]);
 
@@ -292,12 +386,63 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               border-bottom-color: #f59e0b;
             }
             .cond-bloco {
+              display: flex;
+              flex-direction: column;
+              align-items: flex-start;
               border-left: 3px solid #f59e0b;
-              padding-left: 12px;
-              margin: 8px 0;
+              border-radius: 0 10px 10px 0;
+              background-color: rgba(245, 158, 11, 0.08);
+              padding: 10px 14px 12px;
+              margin: 12px 0;
             }
             body.dark-content .cond-bloco {
               border-left-color: #d97706;
+              background-color: rgba(245, 158, 11, 0.12);
+            }
+            .cond-bloco::before {
+              content: "Bloco condicional";
+              order: -2;
+              display: inline-flex;
+              align-items: center;
+              margin-bottom: 8px;
+              padding: 2px 8px;
+              border-radius: 999px;
+              border: 1px solid #fdba74;
+              background-color: #fff7ed;
+              color: #9a3412;
+              font-size: 10px;
+              font-weight: 700;
+              letter-spacing: 0.04em;
+              text-transform: uppercase;
+              line-height: 1.4;
+            }
+            .cond-bloco::after {
+              content: attr(data-cond-resumo);
+              order: -1;
+              display: block;
+              margin-bottom: 10px;
+              color: #9a3412;
+              font-size: 12px;
+              font-weight: 500;
+              line-height: 1.4;
+              white-space: pre-wrap;
+            }
+            .cond-bloco h1,
+            .cond-bloco h2,
+            .cond-bloco h3,
+            .cond-bloco h4,
+            .cond-bloco h5,
+            .cond-bloco h6,
+            .cond-bloco p:first-of-type {
+              margin-top: 0;
+            }
+            body.dark-content .cond-bloco::before {
+              border-color: rgba(251, 191, 36, 0.45);
+              background-color: rgba(120, 53, 15, 0.75);
+              color: #fde68a;
+            }
+            body.dark-content .cond-bloco::after {
+              color: #fcd34d;
             }
             img {
               max-width: 100%;
@@ -423,25 +568,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             });
 
             // Comando: Inserir bloco condicional
-            editor.addCommand('insertCondBloco', (_ui: any, toggleId: string, subIndex?: number) => {
+            editor.addCommand('insertCondBloco', (_ui: any, toggleId: string) => {
               if (!toggleId || typeof toggleId !== 'string') return;
-              const toggles = (condToggles || []);
-              const extrasB602 = toggles.some(t => t.id === 'b602_armas_toggle')
-                ? BLOCOS_CONDICIONAIS_B602_POR_ARMA
-                : [];
-
-              const allToggles = [
-                ...toggles.map(t => ({ id: t.id, label: t.label, subtitulo: t.subtitulo })),
-                ...toggles.flatMap(t => (t.subToggles || []).map((st, i) => ({
-                  id: st.id, label: st.label, subtitulo: st.subtitulo, subIndex: i,
-                }))),
-                ...extrasB602,
-              ];
-              const found = allToggles.find(t => t.id === toggleId);
-              const titulo = found?.subtitulo || found?.label || toggleId;
-
-              const html = `<div data-cond-bloco="${toggleId}" class="cond-bloco"><h3>${titulo}</h3><p>&nbsp;</p></div>`;
-              editor.insertContent(html);
+              editor.insertContent(criarHtmlBlocoCondicional(toggleId, condToggles));
             });
 
             // Registrar botão "Bloco Condicional" na toolbar
@@ -492,6 +621,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             editor.on('init', () => {
               const doc = editor.getDoc();
               if (!doc) return;
+              const body = editor.getBody();
+
+              if (normalizarBlocosCondicionais(body, condToggles) > 0) {
+                onChange(editor.getContent());
+              }
 
               doc.addEventListener('contextmenu', (e: MouseEvent) => {
                 e.preventDefault();
@@ -541,7 +675,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               });
 
               // ─── Observer para imagens arrastadas/soltadas ─────
-              const body = editor.getBody();
               if (body) {
                 let processando = false;
 
@@ -611,13 +744,13 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
             // ─── Auto-converter {{chave}} digitado manualmente em span estilizado ─────
             if (placeholderChaves && placeholderChaves.length > 0) {
-              (editor as any)._placeholderChaves = new Set(placeholderChaves);
+              (editor as any)._placeholderChaves = placeholderChaves;
 
               let placeholderTimer: ReturnType<typeof setTimeout> | null = null;
 
               const converterPlaceholderLocal = () => {
-                const chavesSet: Set<string> = (editor as any)._placeholderChaves;
-                if (!chavesSet || chavesSet.size === 0) return;
+                const chavesValidas: string[] = (editor as any)._placeholderChaves;
+                if (!chavesValidas || chavesValidas.length === 0) return;
 
                 const rng = editor.selection.getRng();
                 if (!rng || !rng.startContainer) return;
@@ -635,7 +768,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 let match: RegExpExecArray | null;
 
                 while ((match = regex.exec(text)) !== null) {
-                  if (chavesSet.has(match[1])) {
+                  if (placeholderChaveEhValida(match[1], chavesValidas)) {
                     substituicoes.push({ pos: match.index, fim: match.index + match[0].length, chave: match[1] });
                   }
                 }

@@ -586,7 +586,13 @@ export const LaudosPage: React.FC = () => {
 
   const SINGLE_CHAT_KEY = 'single-editor';
 
-  const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
+  const placeholderChaves = useMemo(
+    () => Array.from(new Set([
+      ...placeholders.map(p => p.chave),
+      ...CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave),
+    ])),
+    [placeholders],
+  );
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
     if (secoesFonte.length === 0) return '';
