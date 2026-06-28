@@ -318,15 +318,23 @@ No caso da arma, o editor injeta ações adicionais em tempo de execução quand
 
 | Chave | Valor |
 |---|---|
-| `b602_arma_{N}_num_lacre` | Nº do Lacre |
+| `b602_arma_{N}_numero_lacre` | Nº do Lacre |
 | `b602_arma_{N}_marca` | Marca |
 | `b602_arma_{N}_modelo` | Modelo |
+| `b602_arma_{N}_tipo` | Tipo da arma |
 | `b602_arma_{N}_calibre` | Calibre |
-| `b602_arma_{N}_capacidade` | Capacidade |
-| `b602_arma_{N}_tipo` | Tipo |
+| `b602_arma_{N}_numeracao_serie` | Numeração de série |
+| `b602_arma_{N}_numeracao_cano` | Numeração do cano |
+| `b602_arma_{N}_capacidade_carregador` | Capacidade do carregador |
+| `b602_arma_{N}_comprimento_cano` | Comprimento do cano |
+| `b602_arma_{N}_acabamento` | Acabamento |
 | `b602_arma_{N}_letra` | Letra sequencial da arma |
 | `b602_arma_{N}_funcionamento` | Funcionamento |
-| `b602_arma_{N}_observacao` | Observação |
+| `b602_arma_{N}_estado_conservacao` | Estado de conservação |
+| `b602_arma_{N}_quantidade` | Quantidade |
+| `b602_arma_{N}_dito_oficio` | Dito do ofício |
+| `b602_arma_{N}_func_toggle` | Toggle por arma para bloco de funcionamento |
+| `b602_arma_{N}_coleta_toggle` | Toggle por arma para bloco de coleta balística |
 
 ---
 
@@ -389,7 +397,18 @@ A estrutura cobre 5 seções:
 2. `material_enc` — field `b602_tabela_material_enc`, group `Item` (prefix `b602_material_enc_`)
 3. `cartuchos` — field `b602_tabela_cartuchos`, group `Cartucho` (prefix `b602_cartucho_`)
 4. `estojos` — field `b602_tabela_estojos`, group `Estojo` (prefix `b602_estojo_`)
-5. `armas` — field `b602_tabela_armas`, group `Arma` (prefix `b602_arma_`) + placeholders extras `letra` e `modelo`
+5. `armas` — field `b602_tabela_armas`, group `Arma` (prefix `b602_arma_`) + placeholders indexados reconhecidos a partir das chaves-base com `_N_`
+
+### Atualização 2026-06-28 — placeholders indexados de armas
+
+O manifest de placeholders (`src/renderer/components/rep/exam-fields/placeholders.ts`) e o seed do main (`src/main/services/placeholder.service.ts`) passaram a registrar explicitamente as chaves-base com `_N_` para armas do B-602.
+
+Essas chaves cumprem dois papéis:
+
+1. alimentam o menu de placeholders e o conjunto `placeholderChaves`
+2. permitem que o TinyMCE reconheça placeholders digitados manualmente como `{{b602_arma_1_tipo}}`, `{{b602_arma_1_numero_lacre}}` ou `{{b602_arma_1_estado_conservacao}}`
+
+O reconhecimento não depende de cadastrar cada índice no banco. A chave-base com `_N_` é validada em runtime e aceita qualquer índice numérico no formato `_<n>_`.
 
 ---
 

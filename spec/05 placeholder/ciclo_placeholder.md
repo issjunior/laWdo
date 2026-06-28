@@ -1,9 +1,9 @@
 # Ciclo Completo: Placeholders de Campos Específicos de Exame
 
 **Data:** 2026-05-23
-**Status:** Implementado (parcial — 7/9 fases concluídas, 2 itens cosméticos pendentes)
+**Status:** Implementado
 **Depende de:** Migration V17 (campos_especificos), Section Registry (exam-fields)
-**Última atualização:** 2026-06-19
+**Última atualização:** 2026-06-28
 
 ---
 
@@ -256,9 +256,45 @@ if (data.campos_especificos !== undefined) {
 
 ### 3.3b B-602 — Placeholders Individuais de Armas
 
-Em 2026-06-19, foi adicionada a resolução dos placeholders individuais de cada arma (`{{b602_arma_N_tipo}}`, `{{b602_arma_N_numero_lacre}}`, etc.). Na implementação atual, também entram `{{b602_arma_N_modelo}}`, `{{b602_arma_N_letra}}`, `{{b602_arma_N_func_toggle}}` e `{{b602_arma_N_coleta_toggle}}`.
+Em 2026-06-19, foi adicionada a resolução dos placeholders individuais de cada arma. Em 2026-06-28, o conjunto de chaves-base do B-602 foi ampliado e passou a ser tratado como placeholder indexado por contrato.
 
-**Mudança:** Tanto `aplicarPlaceholders()` quanto `buildPlaceholderMapping()` iteram `b602.armas` e registram no mapping os campos de arma suportados, incluindo o modelo e os toggles por item. O campo `letra` é computado em runtime; os toggles viajam como `on`/`off`.
+Hoje o sistema reconhece as chaves-base:
+
+- `b602_arma_N_letra`
+- `b602_arma_N_tipo`
+- `b602_arma_N_marca`
+- `b602_arma_N_modelo`
+- `b602_arma_N_calibre`
+- `b602_arma_N_numeracao_serie`
+- `b602_arma_N_numeracao_cano`
+- `b602_arma_N_capacidade_carregador`
+- `b602_arma_N_comprimento_cano`
+- `b602_arma_N_acabamento`
+- `b602_arma_N_funcionamento`
+- `b602_arma_N_estado_conservacao`
+- `b602_arma_N_quantidade`
+- `b602_arma_N_dito_oficio`
+- `b602_arma_N_numero_lacre`
+- `b602_arma_N_func_toggle`
+- `b602_arma_N_coleta_toggle`
+
+`aplicarPlaceholders()` resolve as chaves indexadas concretas a partir de `b602.armas[]`. O campo `letra` continua computado em runtime.
+
+### 3.3c Reconhecimento de placeholders indexados no editor
+
+Em 2026-06-28, o contrato de placeholder deixou de depender apenas de igualdade literal.
+
+Os utilitários em `src/renderer/lib/utils.ts` passaram a considerar chaves-base com `_N_`:
+
+- `placeholderChaveEhValida(chave, chavesValidas)` aceita uma chave concreta se ela casar com a regex derivada de uma chave-base
+- `segmentarTextoComPlaceholders()` usa essa mesma validação para destacar placeholders em previews textuais
+- `converterPlaceholdersTextuais()` converte no DOM qualquer `{{...}}` reconhecido para `span.placeholder-tag`
+
+Consequência prática:
+
+- o usuário pode digitar manualmente `{{b602_arma_1_tipo}}` no editor do laudo ou do template
+- o TinyMCE converte a tag para placeholder visual mesmo sem existir uma entrada literal `b602_arma_1_tipo` em `placeholderChaves`
+- o campo `repetir_titulo` do template também consegue mostrar prévia visual para essas chaves
 
 **Detalhes da implementação** em `spec/03 laudo/visualizar_pdf.md` (seção "Placeholder Resolution Pipeline").
 
@@ -509,8 +545,7 @@ O `tailwind.config.js` já tem safelist com regex que cobre `(bg|text|border|rin
 - [x] `LaudosPage.tsx`: Adicionar `<PlaceholderContextMenu>` em cada editor do modo multi-seção (linha 2128)
 
 ### Fase 5 — UX na PlaceholdersPage
-- [ ] `PlaceholdersPage.tsx`: `DraggableCard` — badge `{código}` para placeholders de exame (NÃO IMPLEMENTADO)
-- [ ] `PlaceholdersPage.tsx`: `DraggableCard` — tooltip/jsonPath na descrição (NÃO IMPLEMENTADO — cards substituídos por DataTable)
+- [x] Layout atual migrou para `SortableCategoryTree` + DataTable; o spec antigo do card Kanban não é mais a referência do comportamento vigente
 
 ### Fase 6 — Sincronização e Limpeza
 - [x] `REPsPage.tsx`: `prepareForApi()` — `payload.campos_especificos = serializeCamposEspecificos(codigo, data) || null` (linha 160)
@@ -522,12 +557,13 @@ O `tailwind.config.js` já tem safelist com regex que cobre `(bg|text|border|rin
 
 
 ### Build & Verificação
-- [ ] `build:main` compila sem erros
-- [ ] `build:preload` compila sem erros
-- [ ] `npm run dev` executa sem erros
-- [ ] Teste manual: criar REP I-801 → ver placeholders na PlaceholdersPage
-- [ ] Teste manual: editar laudo → menu de contexto com categoria I-801
-- [ ] Teste manual: preview PDF → {{numeracao_chassi}} resolvido
+- [x] `build:main` compila sem erros
+- [x] `build:preload` compila sem erros
+- [x] `npm run dev` executa sem erros
+- [x] Teste manual: criar REP I-801 → ver placeholders na PlaceholdersPage
+- [x] Teste manual: editar laudo → menu de contexto com categoria I-801
+- [x] Teste manual: preview PDF → `{{chassi}}` resolvido
+- [x] Teste manual: digitar `{{b602_arma_1_tipo}}` ou `{{b602_arma_1_numero_lacre}}` no editor converte para placeholder visual
 
 ---
 

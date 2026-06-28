@@ -1,470 +1,116 @@
-# Backlog Técnico: Ajuste de UX do Template B-602
+# Configuração de Seções do Template B-602
 
-> **Status:** Proposto
-> **Escopo:** editor de template em `src/renderer/pages/TemplatesPage.tsx`, com foco nas seções do B-602
-> **Objetivo:** tornar a configuração de seções mais intuitiva, reduzir combinações inválidas e isolar a complexidade específica do B-602
+> **Status:** Implementado
+> **Última atualização:** 2026-06-28
+> **Escopo:** `src/renderer/pages/TemplatesPage.tsx`, `src/renderer/components/template/SecaoConfiguracaoTemplate.tsx`, `src/renderer/components/template/secao-configuracao-template.utils.ts`
 
----
-
-## 1. Resumo do problema
-
-O fluxo atual funciona, mas a UX ainda expõe o modelo interno da implementação:
-
-- `Sempre visível`, `Sem pai (H2)` e `Não repetir` exigem contexto técnico demais
-- os controles de estrutura ficam comprimidos na mesma linha do nome da seção
-- a repetição por arma não comunica claramente quando usar nem quais efeitos produz
-- a tela aceita combinações semanticamente frágeis
-- `TemplatesPage.tsx` concentra UI, regra estrutural e comportamento específico do exame
+Este spec descreve como o editor de templates funciona hoje para qualquer exame, com regras extras para o B-602 quando a seção usa repetição por arma.
 
 ---
 
-## 2. Diretriz de implementação
+## 1. Estrutura da UI
 
-Executar em 3 frentes, nesta ordem:
+Cada seção do template no modo multi-seção é renderizada por `SecaoConfiguracaoTemplate`, enquanto `TemplatesPage.tsx` mantém o estado, ordenação, persistência e preview.
 
-1. clareza da interface
-2. guardrails e validações
-3. modularização com ganho real
+O cabeçalho da seção foi dividido em duas camadas:
 
-Regra: não abrir refatoração ampla antes de estabilizar a linguagem da UI e as regras de uso.
+1. linha superior com drag handle, badge da posição, nome da seção e ações de mover/remover
+2. grade inferior com controles explícitos de `Visibilidade`, `Estrutura` e `Repetição`
 
----
+O resumo textual da configuração aparece logo abaixo do nome, em tempo real, no formato:
 
-## 3. Backlog
-
-## Epic 1 — Clareza da Interface
-
-### UXT-001 — Reescrever rótulos técnicos para linguagem orientada à tarefa
-
-**Objetivo**
-
-Remover da interface principal a necessidade de entender `H2`, `H3` e termos internos do builder.
-
-**Tarefas**
-
-- trocar `Sempre visível` por `Sempre mostrar`
-- trocar `Sem pai (H2)` por `Seção principal`
-- trocar `Não repetir` por `Conteúdo único`
-- trocar `Arma` por `Uma seção por arma`
-- revisar placeholders e textos auxiliares da mesma área para manter consistência
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- os selects deixam de usar `H2/H3/H4` como linguagem principal
-- os novos textos continuam transmitindo a mesma regra funcional
-
-**Prioridade**
-
-Alta
+```txt
+Sempre mostrar · seção principal · conteúdo único
+Mostrar quando Arma · subseção de Histórico · uma seção por arma
+```
 
 ---
 
-### UXT-002 — Adicionar labels explícitas para os controles estruturais
+## 2. Terminologia exposta ao usuário
 
-**Objetivo**
+Os rótulos deixaram de usar `H2/H3` como linguagem principal.
 
-Deixar claro o papel de cada select sem exigir tentativa e erro.
+| Regra interna | Texto exibido |
+|---|---|
+| seção sem `parent_id` | `Seção principal` |
+| seção com `parent_id` | `Subseção de <seção pai>` |
+| seção sem `condicao` | `Sempre mostrar` |
+| `repetir_para` vazio | `Conteúdo único` |
+| `repetir_para = armas` | `Uma seção por arma` |
 
-**Tarefas**
+Os textos de ajuda ficam visíveis abaixo de cada select:
 
-- incluir labels visíveis para:
-  - `Visibilidade`
-  - `Estrutura`
-  - `Repetição`
-- garantir que a disposição continue boa em desktop e mobile
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- os 3 controles passam a ser legíveis sem depender do valor selecionado
-- os labels permanecem visíveis em layouts estreitos
-
-**Prioridade**
-
-Alta
+- `Visibilidade`: a seção pode aparecer sempre ou apenas quando um toggle da REP estiver ativo
+- `Estrutura`: a hierarquia atual vai só até subseção
+- `Repetição`: só faz sentido quando o exame suporta blocos derivados da REP
 
 ---
 
-### UXT-003 — Reorganizar o cabeçalho de configuração da seção
+## 3. Repetição por arma
 
-**Objetivo**
+`repetir_para = armas` é uma capacidade declarativa por exame, não um `if` espalhado no JSX.
 
-Separar nome, estrutura e ações para reduzir densidade visual.
+Hoje apenas o exame `B-602` registra essa opção em `CONFIGURACOES_POR_EXAME`:
 
-**Tarefas**
+```ts
+'B-602': {
+  opcoesRepeticao: [{ value: 'armas', label: 'Uma seção por arma' }],
+  tituloPadraoArmas: 'ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}',
+}
+```
 
-- mover nome da seção e ações principais para uma primeira linha
-- mover `Visibilidade`, `Estrutura` e `Repetição` para uma segunda linha
-- manter editor e hints abaixo da área estrutural
+Comportamento atual:
 
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- a configuração da seção não fica toda comprimida em uma única linha
-- a hierarquia visual entre “configurar a seção” e “editar conteúdo” fica clara
-
-**Prioridade**
-
-Alta
+- exames sem suporte não exibem a opção `Uma seção por arma`
+- ao trocar a repetição para `armas`, o campo `repetir_titulo` recebe o título padrão apenas se ainda estiver vazio
+- o campo `Título de cada arma` ganha prévia visual, segmentando placeholders válidos
+- a ajuda fixa informa que o bloco repetido sempre reflete a REP atual
 
 ---
 
-### UXT-004 — Exibir resumo legível da configuração da seção
+## 4. Guardrails e validações
 
-**Objetivo**
+As validações ficam centralizadas em `validarConfiguracaoSecaoTemplate()`. O resultado é calculado por seção e usado de duas formas:
 
-Permitir revisão rápida da configuração sem interpretar 3 selects.
+- erros e avisos inline no card da seção
+- bloqueio de salvamento quando existe pelo menos um diagnóstico do tipo `erro`
 
-**Tarefas**
+Regras atuais para `repetir_para = armas`:
 
-- montar resumo textual com base nos valores atuais
-- exemplos esperados:
-  - `Sempre mostrar · seção principal · conteúdo único`
-  - `Mostrar quando houver arma · subseção de DOS EXAMES · uma seção por arma`
-- recalcular o resumo em tempo real ao editar a seção
+| Tipo | Regra |
+|---|---|
+| erro | só pode ser usado em templates do exame `B-602` |
+| erro | a seção precisa ser subseção de uma seção principal |
+| erro | `repetir_titulo` é obrigatório |
+| aviso | o título deveria usar placeholders com `_1_` para variar por arma |
+| aviso | se o conteúdo repete o mesmo padrão textual do título, a UI avisa possível duplicação no laudo |
 
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- cada seção mostra seu estado estrutural de forma legível
-- o resumo acompanha alterações sem delay perceptível
-
-**Prioridade**
-
-Média
+Ao tentar salvar um template com erro estrutural, `TemplatesPage.tsx` cancela o envio e mostra `Revise as seções destacadas antes de salvar o template.`
 
 ---
 
-### UXT-005 — Adicionar ajuda contextual fixa
+## 5. Placeholder e preview no título repetido
 
-**Objetivo**
+O campo `repetir_titulo` usa `segmentarTextoComPlaceholders()` para destacar placeholders válidos sem alterar o texto digitado.
 
-Reduzir dependência de tooltip como única fonte de entendimento.
+Essa validação aceita placeholders indexados a partir de chaves-base com `_N_`, por exemplo:
 
-**Tarefas**
+- `{{b602_arma_1_letra}}`
+- `{{b602_arma_1_tipo}}`
+- `{{b602_arma_1_numero_lacre}}`
 
-- adicionar texto curto para `Visibilidade`
-- adicionar texto curto para `Estrutura`
-- adicionar texto curto para `Repetição`
-- manter tooltip apenas como complemento
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- a área explica o comportamento básico sem hover
-- os textos não poluem demais a interface
-
-**Prioridade**
-
-Alta
+O reconhecimento usa a mesma regra utilitária aplicada no TinyMCE (`placeholderChaveEhValida`), então a prévia do título e a digitação no editor seguem o mesmo contrato.
 
 ---
 
-## Epic 2 — Guardrails e Resiliência
+## 6. Modularização atual
 
-### UXT-006 — Restringir repetição por arma ao contexto suportado
+Responsabilidades efetivas:
 
-**Objetivo**
+| Arquivo | Responsabilidade |
+|---|---|
+| `TemplatesPage.tsx` | carrega dados, calcula `tipoExameCodigo`, ordena seções, salva template e preview |
+| `SecaoConfiguracaoTemplate.tsx` | renderiza a configuração visual e mensagens inline de uma seção |
+| `secao-configuracao-template.utils.ts` | registry por exame, labels, resumo, ajuda e validações |
 
-Impedir uso de `repetir_para = armas` fora do contexto do B-602 ou em combinações sem sentido.
-
-**Tarefas**
-
-- mostrar a opção `Uma seção por arma` apenas quando o tipo de exame suportar isso
-- impedir ou desestimular o uso fora da estrutura esperada
-- se a UI não bloquear automaticamente, pelo menos avisar inline
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-- eventual helper novo no renderer para regras por tipo de exame
-
-**Critérios de aceite**
-
-- a opção não aparece para exames que não suportam repetição por arma
-- a seção não pode ser configurada silenciosamente de forma ambígua
-
-**Prioridade**
-
-Alta
-
----
-
-### UXT-007 — Aplicar default seguro para `repetir_titulo`
-
-**Objetivo**
-
-Reduzir erro manual quando o usuário escolhe repetição por arma.
-
-**Tarefas**
-
-- preencher `repetir_titulo` automaticamente ao ativar repetição por arma, se estiver vazio
-- usar modelo compatível com o fluxo atual do B-602
-- evitar sobrescrever título já editado manualmente
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- ao ativar repetição por arma em seção nova, o campo já vem com padrão útil
-- um valor já digitado pelo usuário não é perdido
-
-**Prioridade**
-
-Alta
-
----
-
-### UXT-008 — Exibir aviso inline sobre sincronização destrutiva
-
-**Objetivo**
-
-Deixar explícito que blocos derivados da REP podem ser reescritos.
-
-**Tarefas**
-
-- manter aviso visível quando `repetir_para = armas`
-- revisar a linguagem para não depender de `H3` ou tag específica errada
-- explicar que o conteúdo derivado reflete a REP atual
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- o usuário entende que o bloco repetido é derivado da REP
-- a mensagem não contradiz a estrutura real gerada pelo builder
-
-**Prioridade**
-
-Alta
-
----
-
-### UXT-009 — Validar combinações inválidas ou frágeis antes de salvar
-
-**Objetivo**
-
-Evitar persistir configuração estrutural incoerente.
-
-**Tarefas**
-
-- validar `repetir_titulo` quando `repetir_para = armas`
-- validar contexto estrutural mínimo para seção repetível
-- detectar situações que merecem aviso, como conteúdo que duplica o mesmo padrão do título repetido
-- decidir quais casos são bloqueio e quais casos são apenas warning
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-- `src/renderer/lib/validators/template.schema.ts` se a validação sair do nível puramente visual
-
-**Critérios de aceite**
-
-- configurações claramente inválidas não são salvas silenciosamente
-- warnings aparecem antes do usuário descobrir o problema no laudo final
-
-**Prioridade**
-
-Alta
-
----
-
-### UXT-010 — Alinhar terminologia da UI com o comportamento real do builder
-
-**Objetivo**
-
-Eliminar a divergência entre o texto mostrado ao usuário e a estrutura real do laudo.
-
-**Tarefas**
-
-- revisar textos que prometem `H3` quando o builder usa outra estrutura
-- preferir termos neutros:
-  - `seção principal`
-  - `subseção`
-  - `bloco repetido por arma`
-- revisar hints existentes relacionados a repetição
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-- `src/main/services/secao-builder.service.ts` apenas se for necessário confirmar ou ajustar contrato de comportamento
-
-**Critérios de aceite**
-
-- a UI não promete uma estrutura diferente da que o builder gera
-- o texto fica compreensível mesmo sem conhecer HTML
-
-**Prioridade**
-
-Alta
-
----
-
-## Epic 3 — Modularização
-
-### UXT-011 — Extrair componente `SecaoConfiguracaoTemplate`
-
-**Objetivo**
-
-Reduzir o acoplamento do JSX estrutural dentro de `TemplatesPage.tsx`.
-
-**Tarefas**
-
-- extrair a área de configuração da seção para componente dedicado
-- manter no componente:
-  - labels
-  - selects
-  - resumo
-  - hints
-  - campo de repetição
-- deixar `TemplatesPage.tsx` como orquestrador de estado e lista de seções
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-- novo arquivo em `src/renderer/components/template/` ou pasta equivalente do renderer
-
-**Critérios de aceite**
-
-- `TemplatesPage.tsx` fica materialmente menor e mais legível
-- a extração não duplica regra nem cria props caóticas demais
-
-**Prioridade**
-
-Média
-
----
-
-### UXT-012 — Extrair helpers de apresentação e resumo estrutural
-
-**Objetivo**
-
-Separar regra de exibição da regra de manipulação de estado.
-
-**Tarefas**
-
-- mover builders de label/resumo para helper local ou util do renderer
-- centralizar mapeamento entre valor interno e texto exibido
-- evitar strings de apresentação espalhadas no JSX
-
-**Arquivos prováveis**
-
-- `src/renderer/pages/TemplatesPage.tsx`
-- novo helper do renderer
-
-**Critérios de aceite**
-
-- textos estruturais ficam centralizados
-- manutenção de labels e resumo não exige caça manual no JSX
-
-**Prioridade**
-
-Média
-
----
-
-### UXT-013 — Introduzir registry declarativo de comportamento por exame
-
-**Objetivo**
-
-Remover condicionais ad hoc específicas do B-602 de dentro da renderização.
-
-**Tarefas**
-
-- definir estrutura de configuração por exame
-- mapear:
-  - opções de repetição
-  - textos de ajuda
-  - defaults
-  - restrições de uso
-- usar o registry no fluxo de template
-
-**Arquivos prováveis**
-
-- novo arquivo de configuração no renderer
-- `src/renderer/pages/TemplatesPage.tsx`
-
-**Critérios de aceite**
-
-- comportamento específico do B-602 não fica hardcoded em múltiplos pontos do JSX
-- a solução permite extensão futura sem acoplamento excessivo
-
-**Prioridade**
-
-Média
-
----
-
-## 4. Ordem recomendada de execução
-
-### Fase 1 — Clareza imediata
-
-- `UXT-001`
-- `UXT-002`
-- `UXT-003`
-- `UXT-005`
-- `UXT-004`
-
-### Fase 2 — Regras e segurança
-
-- `UXT-006`
-- `UXT-007`
-- `UXT-008`
-- `UXT-010`
-- `UXT-009`
-
-### Fase 3 — Modularização
-
-- `UXT-011`
-- `UXT-012`
-- `UXT-013`
-
----
-
-## 5. Dependências e observações
-
-- `UXT-009` depende de a linguagem e os fluxos básicos já estarem claros na UI
-- `UXT-011` não deve vir antes de `UXT-001` a `UXT-010`, para evitar extrair uma interface ainda instável
-- qualquer alteração que mude regra funcional real do B-602 deve refletir também nas specs relacionadas
-
----
-
-## 6. Fora de escopo
-
-- redesign completo do preview PDF
-- nova estratégia de repetição além de armas
-- ampliar hierarquia além de `H2 → H3`
-- reescrever o builder de laudo sem necessidade direta
-- refatoração total de `TemplatesPage.tsx`
-
----
-
-## 7. Critérios de sucesso
-
-O backlog pode ser considerado concluído quando:
-
-1. a configuração de seção deixa de exigir entendimento prévio de `H2/H3`
-2. a repetição por arma fica autoexplicativa no fluxo B-602
-3. combinações inválidas deixam de ser aceitas silenciosamente
-4. a terminologia da UI fica compatível com o comportamento real do builder
-5. `TemplatesPage.tsx` passa a concentrar menos responsabilidade visual específica
+A modularização reduziu o acoplamento do builder de template sem mover a lógica de persistência para fora da página.

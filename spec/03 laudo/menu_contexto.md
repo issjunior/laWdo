@@ -458,3 +458,63 @@ Ao criar um novo tipo de exame (ex: B-700), o desenvolvedor deve:
 4. Semear placeholders escalares no `placeholder.service.ts`
 
 O menu de contexto funcionará automaticamente para o novo tipo, sem mexer no componente `PlaceholderContextMenu`.
+
+---
+
+## 6. Atualizações de 2026-06-28
+
+### 6.1 Placeholders indexados digitados manualmente
+
+O contrato do editor deixou de exigir que cada chave concreta exista em `placeholderChaves`.
+
+Agora o TinyMCE aceita placeholders derivados de chaves-base com `_N_`, por exemplo:
+
+- `{{b602_arma_1_tipo}}`
+- `{{b602_arma_1_marca}}`
+- `{{b602_arma_1_numero_lacre}}`
+
+Fluxo atual:
+
+1. `LaudosPage.tsx` e `TemplatesPage.tsx` montam `placeholderChaves` como união entre placeholders carregados do banco e `CAMPOS_ESPECIFICOS_PLACEHOLDERS`
+2. `TinyMceEditor.tsx` guarda essa lista bruta no editor
+3. `placeholderChaveEhValida()` aceita chaves concretas que casem com uma chave-base contendo `_N_`
+4. a digitação manual de `{{...}}` é convertida para placeholder visual sem precisar cadastrar cada índice
+
+### 6.2 Blocos condicionais com metadados visuais
+
+O comando `insertCondBloco` passou a gerar blocos com HTML padronizado:
+
+```html
+<div
+  class="cond-bloco"
+  data-cond-bloco="b602_armas_toggle"
+  data-cond-badge="Bloco condicional"
+  data-cond-resumo="Mostra quando: houver armas na REP"
+  title="Mostra quando: houver armas na REP"
+>
+  <h3>DA ARMA</h3>
+  <p>&nbsp;</p>
+</div>
+```
+
+Além da inserção, o editor normaliza blocos existentes na inicialização:
+
+- preenche `data-cond-badge`
+- recalcula `data-cond-resumo`
+- sincroniza o atributo `title`
+
+Isso permite que templates antigos recebam o resumo visual novo sem reedição manual.
+
+### 6.3 Resumos fixos e toggles extras do B-602
+
+Para o B-602, o editor mantém descrições fixas para os blocos:
+
+| Toggle | Resumo |
+|---|---|
+| `b602_armas_toggle` | `Mostra quando: houver armas na REP` |
+| `b602_cartuchos_toggle` | `Mostra quando: houver cartuchos na REP` |
+| `b602_estojos_toggle` | `Mostra quando: houver estojos na REP` |
+| `b602_arma_N_func_toggle` | `Mostra quando: Funcionamento e eficiência da arma atual` |
+| `b602_arma_N_coleta_toggle` | `Mostra quando: Coleta de padrões balísticos da arma atual` |
+
+Os dois toggles por arma continuam sendo extras do editor e não precisam aparecer como `subToggles` estáticos em `EXAM_TOGGLES`.
