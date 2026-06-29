@@ -2,201 +2,268 @@
 
 > **Princípio fundamental: Somente leitura.**
 > Métodos permitidos: `GET`, `HEAD`, `OPTIONS`. Proibidos: `POST`, `PUT`, `PATCH`, `DELETE`.
+>
+> **Última revisão:** 2026-06-29
 
 ---
 
 ## 1. Visão Geral
 
-Integração com a API REST do GDL (Sistema de Gerenciamento de Laudos da Polícia Científica do Paraná)
-para consulta de dados de REPs e preenchimento automático do formulário local.
+Integração com a API REST do GDL para:
 
-**Requisito:** VPN da Polícia Científica do Paraná deve estar ativa.
-**Fallback:** Preenchimento manual sempre disponível.
+1. testar acesso de rede ao ambiente configurado;
+2. validar credenciais com uma consulta real de REP;
+3. consultar REP e aplicar dados ao formulário local;
+4. persistir localmente o status de validação da sessão por ambiente.
+
+O sistema continua sendo apenas consumidor de dados do GDL. O preenchimento manual da REP permanece como fallback.
+
+**Requisito:** VPN da Polícia Científica do Paraná ativa quando o ambiente exigir acesso interno.
 
 ---
 
 ## 2. Arquivos da Feature
 
-### Criados
-
-| Arquivo | Descrição |
+| Arquivo | Papel atual |
 |---|---|
-| `src/main/services/safe-storage.service.ts` | Wrapper do `safeStorage` do Electron (`encrypt`/`decrypt`/`isAvailable`) — base64 encode/decode |
-| `src/main/services/gdl.service.ts` | Chamadas HTTPS à API GDL: `testarConexao(ambiente)`, `consultarRep(numero, ano)` |
-| `src/main/ipc/handlers/gdl.handlers.ts` | IPC handlers `gdl:testar-conexao` e `gdl:consultar-rep` |
-| `src/renderer/pages/GdlConfigPage.tsx` | Página de configuração "API GDL" (sidebar Configurações) |
-| `src/renderer/components/rep/GdlConsultaModal.tsx` | Modal wizard 2 passos para consulta via GDL dentro da REPsPage |
-
-### Modificados
-
-| Arquivo | Mudança |
-|---|---|
-| `src/main/utils/logger.ts` | Adicionado `'gdl'` ao tipo `LogModule` |
-| `src/main/services/configuracao.service.ts` | `obter()`/`salvar()` com criptografia transparente para `tipo ∈ {senha, api_key}` |
-| `src/main/database/index.ts` | `CURRENT_SCHEMA_VERSION` → 24. Migration v24: API keys IA plaintext → safeStorage |
-| `src/main/ipc/index.ts` | Registro de `registerGdlHandlers()` |
-| `src/preload/index.ts` | Canais `gdl:testar-conexao`, `gdl:consultar-rep` + métodos no `IpcAPI` |
-| `src/renderer/App.tsx` | Rota `/gdl-config` lazy-loaded |
-| `src/renderer/components/layout/AppSidebar.tsx` | Item "API GDL" (ícone `Database`) no grupo Configurações |
-| `src/renderer/pages/REPsPage.tsx` | Botão "GDL" no CardHeader + `camposPreenchidosGdl` + bg verde + integração com modal |
-| `src/renderer/pages/LogsPage.tsx` | Módulo `gdl` no array `MODULOS` |
-| `src/renderer/pages/ModelosIAPage.tsx` | `tipo: 'api_key'` ao salvar credenciais IA (criptografia via safeStorage) |
+| `src/main/services/gdl.service.ts` | Cliente HTTP/HTTPS do GDL, teste de rede, consulta de REP, validação de credenciais e persistência local do estado de validação |
+| `src/main/ipc/handlers/gdl.handlers.ts` | Handlers IPC de leitura para GDL |
+| `src/preload/index.ts` | Expõe os canais GDL permitidos em `window.ipcAPI.gdl` |
+| `src/renderer/pages/GdlConfigPage.tsx` | Configuração dos ambientes, teste de rede e validação de credenciais |
+| `src/renderer/components/rep/GdlConsultaModal.tsx` | Consulta de REP e revisão dos campos que serão aplicados ao formulário |
+| `src/main/services/configuracao.service.ts` | Leitura e gravação das credenciais por ambiente, com criptografia transparente para senha |
+| `src/main/services/safe-storage.service.ts` | Wrapper do `safeStorage` do Electron |
+| `src/renderer/pages/REPsPage.tsx` | Aciona o modal GDL, aplica os campos retornados e destaca visualmente o que foi preenchido |
 
 ---
 
-## 3. Arquitetura
+## 3. Canais IPC
 
-```
-Renderer (React)                        Main Process (Electron)
-───────────────                         ──────────────────────
+Todos os canais seguem o modelo renderer → preload → main.
 
-GdlConfigPage.tsx                       gdl.handlers.ts
-├─ Cards Homologação/Produção           ├─ gdl:testar-conexao(ambiente)
-├─ Login, Senha (👁 toggle), CPF       │   └─ gdlService.testarConexao(ambiente)
-├─ Botão "Testar Conexão"              │       ├─ carregarCredenciais(ambiente)
-│   └─ ipcAPI.gdl.testarConexao(amb)   │       │   ├─ configuracaoService.obter(gdl_login_{amb})
-├─ Botão "Salvar Configurações"        │       │   ├─ configuracaoService.obter(gdl_senha_{amb})
-│   └─ ipcAPI.configuracao.salvar()    │       │   └─ configuracaoService.obter(gdl_cpf_usuario_{amb})
-└─ Banner validação (login/senha)      │       └─ GET {baseUrl}/unidadesMedida + Basic Auth
-                                       │
-GdlConsultaModal.tsx                    ├─ gdl:consultar-rep(numero, ano)
-├─ Passo 1: nº REP + ano              │   └─ gdlService.consultarRep(numero, ano)
-│   └─ Pré-teste GET /unidadesMedida  │       ├─ lê gdl_ambiente do banco
-├─ Passo 2: revisão dados             │       ├─ carregarCredenciais(ambiente)
-│   ├─ Campos preenchidos ✓           │       └─ GET {baseUrl}/rep/obter?numero=&ano=
-│   ├─ Campos vazios (badges)         │
-│   └─ Substituir/Mesclar              safe-storage.service.ts
-│       └─ onAplicar(campos, modo)    ├─ encrypt(p): base64
-└──────────────────────────────────    └─ decrypt(b64): string
-
-REPsPage.tsx                            configuracao.service.ts
-├─ Estado camposPreenchidosGdl         ├─ obter(): tipo ∈ {senha, api_key} → decrypt
-├─ getGdlFieldStyle(name) → bg-green  └─ salvar(): tipo ∈ {senha, api_key} → encrypt
-├─ handleAplicarGdl()
-└─ Banner "N campos preenchidos"
-```
+| Canal | Responsabilidade |
+|---|---|
+| `gdl:testar-conexao` | Verifica acesso de rede ao ambiente informado |
+| `gdl:obter-validacao-sessao` | Retorna o estado persistido da validação da sessão no ambiente |
+| `gdl:limpar-validacao-sessao` | Invalida o estado local de sessão validada |
+| `gdl:validar-credenciais` | Faz uma consulta real usando login/senha/CPF informados e uma REP de referência |
+| `gdl:consultar-rep` | Consulta uma REP usando o ambiente salvo nas configurações |
 
 ---
 
-## 4. Configurações Armazenadas
+## 4. Arquitetura Atual
+
+```text
+Renderer                               Main
+────────                               ────
+
+GdlConfigPage                          gdl.handlers
+├─ seleciona ambiente                  ├─ gdl:testar-conexao
+├─ edita login/senha/cpf               ├─ gdl:obter-validacao-sessao
+├─ salva configurações                 ├─ gdl:limpar-validacao-sessao
+├─ testa rede                          ├─ gdl:validar-credenciais
+└─ valida credenciais                  └─ gdl:consultar-rep
+
+GdlConsultaModal                       gdl.service
+├─ consulta REP                            ├─ carregarCredenciais()
+├─ revisa campos                           ├─ testarConexao()
+└─ aplica ao formulário                    ├─ validarCredenciais()
+                                           ├─ consultarRep()
+REPsPage                                   ├─ obterValidacaoSessao()
+├─ abre modal GDL                          ├─ limparValidacaoSessao()
+├─ aplica campos retornados                └─ persistir validacao-sessao.json
+└─ destaca campos vindos do GDL
+```
+
+Separação atual:
+
+- **teste de rede** verifica conectividade ao endpoint;
+- **validação de credenciais** exige uma REP real e marca a sessão como validada;
+- **consulta de REP** usa as credenciais persistidas do ambiente salvo.
+
+---
+
+## 5. Configurações e Estado Local
+
+### 5.1 Configurações persistidas
 
 | Chave | Tipo | Criptografado | Descrição |
 |---|---|---|---|
-| `gdl_ambiente` | `texto` | Não | `"homologacao"` ou `"producao"` |
+| `gdl_ambiente` | `texto` | Não | Ambiente ativo para consultas de REP |
 | `gdl_login_homologacao` | `texto` | Não | Login do ambiente de homologação |
-| `gdl_senha_homologacao` | `senha` | **Sim** (safeStorage) | Senha do ambiente de homologação |
-| `gdl_cpf_usuario_homologacao` | `texto` | Não | CPF para homologação |
+| `gdl_senha_homologacao` | `senha` | Sim | Senha do ambiente de homologação |
+| `gdl_cpf_usuario_homologacao` | `texto` | Não | CPF opcional enviado ao GDL |
 | `gdl_login_producao` | `texto` | Não | Login do ambiente de produção |
-| `gdl_senha_producao` | `senha` | **Sim** (safeStorage) | Senha do ambiente de produção |
-| `gdl_cpf_usuario_producao` | `texto` | Não | CPF para produção |
-| `api_key_groq` | `api_key` | **Sim** (safeStorage) | Migrado via migration v24 |
-| `api_key_gemini` | `api_key` | **Sim** (safeStorage) | Migrado via migration v24 |
+| `gdl_senha_producao` | `senha` | Sim | Senha do ambiente de produção |
+| `gdl_cpf_usuario_producao` | `texto` | Não | CPF opcional enviado ao GDL |
+| `gdl_url_homologacao` | `texto` | Não | Override opcional de endpoint |
+| `gdl_url_producao` | `texto` | Não | Override opcional de endpoint |
 
-> **Nota:** As chaves `gdl_url_homologacao` e `gdl_url_producao` existem no código (`gdl.service.ts:64-69`) com fallback hardcoded. Não possuem UI — são chaves internas/opcionais para override de endpoint.
+### 5.2 Estado da validação de sessão
 
-> **Credenciais separadas por ambiente.** Cada card (Homologação/Produção) gerencia suas próprias credenciais.
-> Trocar de card carrega as credenciais salvas daquele ambiente. Sem auto-save — o usuário deve clicar "Salvar Configurações".
-> As chaves antigas sem sufixo (`gdl_login`, `gdl_senha`, `gdl_cpf_usuario`) **não são migradas** — usuário reconfigura.
+O `gdl.service.ts` persiste um arquivo local em:
+
+```text
+{userData}/gdl/validacao-sessao.json
+```
+
+Estrutura lógica por ambiente:
+
+```json
+{
+  "homologacao": {
+    "ambiente": "Homologação",
+    "validado": true,
+    "numeroRep": "12345",
+    "anoRep": "2026",
+    "dataHora": "2026-06-29T16:00:00.000Z"
+  }
+}
+```
+
+Esse estado não substitui a autenticação do GDL. Ele serve apenas para UX local, mostrando se as credenciais já foram validadas manualmente naquela sessão persistida.
 
 ---
 
-## 5. API GDL — Endpoints Utilizados
+## 6. Operações Implementadas
 
-### 5.1 Teste de Conexão
+### 6.1 Teste de rede
 
-```
-GET {base_url}/unidadesMedida
-Headers: Authorization: Basic <base64(login:senha)>
-         Content-Type: application/json
-         cpfUsuario: XXXXXXXXXXX (se configurado)
-Timeout: 5000ms
+Usa o ambiente informado pela tela de configuração e tenta acessar:
+
+```text
+GET {baseUrl}/unidadesMedida
 ```
 
-> O ambiente testado é determinado pelo card selecionado na GdlConfigPage, **não** pelo `gdl_ambiente` salvo no banco.
-> O `ambiente` é passado do renderer via parâmetro IPC.
+Características:
 
-Retorna ao renderer: `{ sucesso, latencia, statusCode, autenticado, ambiente, endpointTestado }`
+- timeout curto;
+- mede latência;
+- retorna status HTTP;
+- não exige uma REP de referência;
+- alimenta o card "Teste de Rede" da `GdlConfigPage`.
 
-### 5.2 Consulta de REP
+### 6.2 Validação de credenciais
 
+Usa credenciais informadas na UI e uma REP real (`numero` + `ano`) para validar o acesso funcional ao GDL:
+
+```text
+GET {baseUrl}/rep/obter?numero={numero}&ano={ano}
 ```
-GET {base_url}/rep/obter?numero={numero}&ano={ano}
-Timeout: 15000ms
-```
 
-> O ambiente usado é o `gdl_ambiente` salvo no banco (via "Salvar Configurações").
+Comportamento:
+
+- sanitiza `login`, `cpfUsuario`, `numero` e `ano`;
+- se a consulta funcionar, registra a sessão como validada;
+- se falhar, limpa a validação persistida daquele ambiente;
+- alimenta o card "Validação de Credenciais" e o modal de validação da `GdlConfigPage`.
+
+### 6.3 Consulta de REP
+
+`gdl:consultar-rep` usa o ambiente salvo em `gdl_ambiente` e as credenciais persistidas daquele ambiente.
+
+Retorno principal:
+
+```ts
+interface GdlRepData {
+  codRep: number;
+  numero: number;
+  ano: number;
+  origens: GdlOrigem[];
+  pecas: GdlPeca[];
+  andamentos: GdlAndamento[];
+}
+```
 
 ---
 
-## 6. Mapeamento GDL → Campos do Formulário
+## 7. Mapeamento GDL → Formulário da REP
 
-| Campo GDL (`obter`) | Campo `REPFormData` | Estilo |
+O mapeamento continua conservador e focado em preenchimento assistido:
+
+| Campo GDL | Campo local | Observação |
 |---|---|---|
-| `numero` + `ano` | `numero` (formatado `{numero}-{ano}`) | `bg-green-50` |
-| `origens[0].tipo` | `tipo_solicitacao` | `bg-green-50` |
-| `origens[0].numero` | `numero_documento` | `bg-green-50` |
-| `andamentos[0].dataHora` | `data_requisicao` | `bg-green-50` |
-| `pecas[*]` (quantidade, tipoPeca, identificacao, unidadeMedida) | `observacoes` | `bg-green-50` |
-| `naturezaExame` (futuro) | `tipo_exame_id` | — |
+| `numero` + `ano` | `numero` | Formato `{numero}-{ano}` |
+| `origens[0].tipo` | `tipo_solicitacao` | Primeira origem disponível |
+| `origens[0].numero` | `numero_documento` | Primeira origem disponível |
+| `andamentos[0].dataHora` | `data_requisicao` | Usa a data do primeiro andamento |
+| `pecas[*]` | `observacoes` | Consolida material consultado em texto auxiliar |
+
+Os campos aplicados via GDL ficam destacados no formulário com estilo verde em `REPsPage.tsx`.
 
 ---
 
-## 7. UX — Comportamentos
+## 8. UX Implementada
 
-### 7.1 Página de Configuração (`GdlConfigPage`)
+### 8.1 `GdlConfigPage`
 
-- **Cards visuais** para seleção de ambiente (Homologação / Produção) com `ring-2 ring-primary` no selecionado e opacidade reduzida no outro
-- **Toggle 👁** no campo senha (`Eye`/`EyeOff` do lucide-react) para conferir o que está salvo
-- **Banner inline** ao tentar salvar com login ou senha vazios: *"Preencha login e senha de {Ambiente} para consultas."*
-- **Diagnóstico** mostra: ambiente testado (badge), latência, status HTTP, autenticação (OK/Falha), endpoint usado (`/api/unidadesMedida`)
-- **Salvar** persiste cada ambiente independentemente via chaves com sufixo
+Fluxo visual atual:
 
-### 7.2 Modal de Consulta (`GdlConsultaModal`)
+- cards de seleção de ambiente com destaque visual do ambiente ativo;
+- campos de login, senha com toggle de visibilidade e CPF opcional;
+- botão **Salvar Configurações**;
+- card **Teste de Rede** com botão **Testar Rede**;
+- card **Validação de Credenciais** com status da sessão e botão **Validar Credenciais**;
+- modal para informar número e ano de uma REP de referência;
+- exibição da data/hora da última validação bem-sucedida.
 
-- **Passo 1 — Busca:** pré-teste de conectividade automático + campos nº REP e ano
-- **Passo 2 — Revisão:** lista campos que serão preenchidos (✓ verde) + badges dos campos que ficarão vazios
-- **Rádio Substituir/Mesclar** se o formulário já tiver dados; default "Mesclar"
-- Botão "Aplicar ao Formulário" preenche via `form.setValue()` e marca no `Set<string> camposPreenchidosGdl`
+Detalhes relevantes:
 
-### 7.3 Integração na REPsPage
+- trocar o ambiente recarrega credenciais e estado de validação daquele ambiente;
+- salvar configurações limpa a validação de sessão do ambiente salvo;
+- a validação pode acontecer sem salvar previamente, usando os valores atualmente digitados na UI.
 
-- Botão **"GDL"** no `CardHeader` (ícone `Database`), ao lado do botão Placeholders
-- Helper `getGdlFieldStyle(name)` retorna `bg-green-50 border-green-300` para campos no set
-- Banner verde: *"N campo(s) preenchido(s) via GDL. Campos com fundo verde foram preenchidos automaticamente."*
-- `handleNovo` e `handleCancelar` limpam `camposPreenchidosGdl`
+### 8.2 `GdlConsultaModal`
 
----
+Mantém o fluxo em duas etapas:
 
-## 8. Logs (Módulo `gdl`)
+1. informar número e ano da REP;
+2. revisar os campos que serão aplicados.
 
-Registros visíveis na **LogsPage** (aba Sistema), filtráveis pelo módulo "API GDL".
+Ao aplicar:
 
-| Nível | Quando | Dados |
-|---|---|---|
-| `info` | Conexão testada com sucesso | `{ latencia, statusCode, ambiente }` |
-| `info` | REP consultada com sucesso | `{ numero, ano, codRep }` |
-| `error` | Falha no teste de conexão | `{ erro, latencia }` |
-| `error` | Timeout / erro de rede | `{ erro, numero, ano }` |
-| `error` | Autenticação rejeitada (401/403) | `{ statusCode }` |
-| `warn` | Credenciais não configuradas | `"Teste de conexão GDL: credenciais não configuradas"` |
+- usa `substituir` ou `mesclar`;
+- marca os campos preenchidos em `camposPreenchidosGdl`;
+- permite ao usuário revisar o resultado diretamente no formulário da REP.
 
----
+### 8.3 `REPsPage`
 
-## 9. Criptografia — safeStorage
-
-- `safe-storage.service.ts` encapsula `safeStorage.encryptString()` / `decryptString()` do Electron
-- Dados armazenados como base64 na coluna `valor` da tabela `configuracoes`
-- `configuracao.service.ts` faz encrypt/decrypt transparente baseado no campo `tipo`:
-  - `tipo = 'senha'` ou `'api_key'` → auto-encrypt no `salvar()`, auto-decrypt no `obter()`
-  - Demais tipos (`'texto'`, `'html'`, `'json'`) → plaintext
-- **Migration v24:** na inicialização, migra `api_key_groq` e `api_key_gemini` de plaintext para safeStorage (altera `tipo` para `'api_key'`)
-- Se `safeStorage.isEncryptionAvailable()` retornar `false`, os valores são armazenados sem criptografia (fallback)
+- botão `GDL` no cabeçalho do formulário;
+- destaque verde nos campos preenchidos automaticamente;
+- banner informando quantos campos vieram do GDL;
+- limpeza do estado visual ao iniciar/cancelar edição.
 
 ---
 
-## 10. Segurança
+## 9. Logs
 
-- **Credenciais nunca trafegam no renderer.** O renderer chama `ipcAPI.gdl.testarConexao(ambiente)` e recebe apenas o resultado do diagnóstico. Login/senha são lidos e usados exclusivamente no main process.
-- **Somente leitura na API GDL.** Nenhum endpoint de escrita (`POST`, `PUT`, `DELETE`) é implementado. Apenas `GET` e `HEAD`.
-- **HTTPS com `rejectUnauthorized: false`** para ambientes de homologação com certificados auto-assinados.
-- **Timeout** de 5s para teste de conexão, 15s para consulta de REP.
+O módulo `gdl` continua registrando eventos visíveis na `LogsPage`.
+
+| Nível | Situação típica |
+|---|---|
+| `info` | teste de rede bem-sucedido |
+| `info` | REP consultada com sucesso |
+| `warn` | falha ao persistir ou carregar a validação local |
+| `error` | timeout, rede indisponível, credencial rejeitada ou erro na consulta |
+
+---
+
+## 10. Criptografia e Segurança
+
+### 10.1 Armazenamento
+
+- senhas do GDL usam `safeStorage` via `configuracao.service.ts`;
+- valores são persistidos em base64 criptografada quando o Electron suporta criptografia local;
+- se `safeStorage` não estiver disponível, o sistema faz fallback controlado para texto simples.
+
+### 10.2 Limites de segurança
+
+- a integração continua **somente leitura**;
+- renderer nunca acessa `http`, `https`, banco local ou módulos do Electron diretamente;
+- toda chamada passa por canais IPC explicitamente liberados no preload;
+- o serviço usa `rejectUnauthorized: false` para tolerar certificados problemáticos de ambientes internos;
+- timeouts curtos evitam travamentos longos na UI.
+
+### 10.3 Tráfego de credenciais
+
+As credenciais digitadas na `GdlConfigPage` existem temporariamente no renderer enquanto o usuário edita o formulário, mas o uso efetivo contra o GDL acontece apenas no main process via IPC. O renderer não executa chamadas HTTP diretas ao GDL.

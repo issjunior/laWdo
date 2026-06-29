@@ -54,6 +54,8 @@ Na automação padrão, apenas specs com tipo `estado_atual` entram na auditoria
 
 `.codex/spec/` é uma área operacional temporária. A documentação oficial continua sendo apenas o conteúdo sob `spec/`.
 
+Rascunhos de conteúdo final não devem ser materializados como arquivos Markdown fora de `spec/`. Em `.codex/spec/`, a automação deve manter apenas os artefatos operacionais previstos pelo fluxo.
+
 Arquivos usados no fluxo:
 
 | Arquivo | Papel |
@@ -61,6 +63,8 @@ Arquivos usados no fluxo:
 | `.codex/spec/ultima-auditoria.json` | resultado estruturado da última auditoria |
 | `.codex/spec/ultimo-relatorio.md` | relatório em Markdown no formato `/spec` |
 | `.codex/spec/plano-registrar.json` | plano aprovado com o conteúdo final a ser gravado |
+
+Fora esses artefatos, a skill não deve criar novos `.md` temporários em `.codex/spec/` nem em qualquer outro diretório fora de `spec/`.
 
 ## Papel da skill `/spec`
 
@@ -71,7 +75,7 @@ A skill orquestra a conversa e o uso dos scripts neste fluxo:
 3. apresenta o relatório no formato definido em `AGENTS.md`
 4. se não houver mudança relevante, informa isso em uma linha e encerra
 5. se houver impacto, espera aprovação humana antes de montar o plano
-6. após aprovação, grava `.codex/spec/plano-registrar.json`
+6. após aprovação, grava `.codex/spec/plano-registrar.json`, sem criar arquivos `.md` temporários com o conteúdo final
 7. roda `npm run spec:registrar`
 8. informa o resultado com arquivos criados, atualizados ou mantidos inalterados
 
