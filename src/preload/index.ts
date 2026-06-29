@@ -117,6 +117,9 @@ export interface IpcAPI {
   // GDL
   gdl: {
     testarConexao: (ambiente?: string) => Promise<UserResponse>;
+    obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
+    limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
+    validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
     consultarRep: (numero: string, ano: string) => Promise<UserResponse>;
   };
 
@@ -323,6 +326,9 @@ const ALLOWED_CHANNELS = new Set([
 
   // GDL
   'gdl:testar-conexao',
+  'gdl:obter-validacao-sessao',
+  'gdl:limpar-validacao-sessao',
+  'gdl:validar-credenciais',
   'gdl:consultar-rep',
   'rep:create',
   'rep:findAll',
@@ -759,6 +765,20 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   gdl: {
     testarConexao: (ambiente?: string) => ipcRenderer.invoke('gdl:testar-conexao', ambiente),
+    obterValidacaoSessao: (ambiente?: string) => ipcRenderer.invoke('gdl:obter-validacao-sessao', ambiente),
+    limparValidacaoSessao: (ambiente?: string) => ipcRenderer.invoke('gdl:limpar-validacao-sessao', ambiente),
+    validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => {
+      if (typeof ambiente !== 'string' || !ambiente.trim()) {
+        throw new Error('Ambiente GDL é obrigatório');
+      }
+      if (typeof numero !== 'string' || !numero.trim()) {
+        throw new Error('Número da REP é obrigatório');
+      }
+      if (typeof ano !== 'string' || !ano.trim()) {
+        throw new Error('Ano da REP é obrigatório');
+      }
+      return ipcRenderer.invoke('gdl:validar-credenciais', ambiente.trim(), credenciais, numero.trim(), ano.trim());
+    },
     consultarRep: (numero: string, ano: string) => {
       if (typeof numero !== 'string' || !numero.trim()) {
         throw new Error('Número da REP é obrigatório');

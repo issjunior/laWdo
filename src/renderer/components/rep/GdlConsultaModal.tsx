@@ -59,6 +59,25 @@ interface PreTesteResultado {
   statusCode: number;
   autenticado: boolean;
   erro?: string;
+  rede?: PreTesteEtapa;
+}
+
+interface PreTesteEtapa {
+  sucesso: boolean;
+  latencia: number;
+  statusCode: number;
+  endpointTestado: string;
+  erro?: string;
+}
+
+interface GdlTesteRespostaApi {
+  sucesso: boolean;
+  latencia: number;
+  ambiente: string;
+  statusCode: number;
+  autenticado: boolean;
+  erro?: string;
+  rede?: PreTesteEtapa;
 }
 
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
@@ -85,19 +104,22 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [camposMapeados, setCamposMapeados] = useState<CampoMapeado[]>([]);
   const [camposNaoPreenchidos, setCamposNaoPreenchidos] = useState<string[]>([]);
 
+  const montarPreTeste = (data: GdlTesteRespostaApi): PreTesteResultado => ({
+    ok: data.sucesso,
+    latencia: data.latencia,
+    ambiente: data.ambiente,
+    statusCode: data.statusCode,
+    autenticado: data.autenticado,
+    erro: data.erro,
+    rede: data.rede,
+  });
+
   const handleTestarConexao = useCallback(async () => {
     setPreTesteTestando(true);
     try {
       const r = await window.ipcAPI.gdl.testarConexao(ambiente);
       if (r.success && r.data) {
-        setPreTeste({
-          ok: r.data.sucesso,
-          latencia: r.data.latencia,
-          ambiente: r.data.ambiente,
-          statusCode: r.data.statusCode,
-          autenticado: r.data.autenticado,
-          erro: r.data.erro,
-        });
+        setPreTeste(montarPreTeste(r.data));
       } else {
         setPreTeste({
           ok: false,
@@ -145,14 +167,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
         try {
           const r = await window.ipcAPI.gdl.testarConexao(amb);
           if (r.success && r.data) {
-            setPreTeste({
-              ok: r.data.sucesso,
-              latencia: r.data.latencia,
-              ambiente: r.data.ambiente,
-              statusCode: r.data.statusCode,
-              autenticado: r.data.autenticado,
-              erro: r.data.erro,
-            });
+            setPreTeste(montarPreTeste(r.data));
           } else {
             setPreTeste({
               ok: false,
@@ -178,8 +193,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       })();
     }
   }, [open]);
-
-  const inputsDesabilitados = !preTeste || !preTeste.ok;
 
   const handleAnoChange = (value: string) => {
     if (value === 'manual') {
@@ -329,16 +342,10 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const getPreTesteMensagem = (): string => {
     if (!preTeste) return 'Verificando conexão...';
     if (preTeste.ok) {
-      return `Conectado ao GDL \u2014 ${preTeste.ambiente} (${preTeste.latencia}ms)`;
-    }
-    if (preTeste.erro?.includes('Credenciais')) {
-      return `Credenciais não configuradas para ${ambienteLabel}. Acesse a página de API GDL para configurar.`;
+      return `GDL acessível na rede \u2014 ${preTeste.ambiente} (${preTeste.latencia}ms)`;
     }
     if (preTeste.erro?.includes('Timeout') || preTeste.erro?.includes('ENOTFOUND') || preTeste.erro?.includes('ECONNREFUSED')) {
       return `Sem conexão com o servidor GDL (${ambienteLabel}). Verifique a VPN.`;
-    }
-    if (preTeste.statusCode === 401 || preTeste.statusCode === 403) {
-      return `Falha de autenticação no GDL (${ambienteLabel}). Verifique login e senha.`;
     }
     return preTeste.erro || `Erro de conexão com o GDL (${ambienteLabel}).`;
   };
@@ -352,23 +359,16 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           <DialogTitle className="flex items-center gap-2">
             <Network className="h-5 w-5 text-primary" />
             Consultar GDL
-            {ambiente && (
-              <>
-                <Badge variant={ambiente === 'producao' ? 'default' : 'secondary'} className="text-xs">
-                  {ambienteLabel}
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={handleTestarConexao}
-                  disabled={preTesteTestando}
-                  title="Testar conexão"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${preTesteTestando ? 'animate-spin' : ''}`} />
-                </Button>
-              </>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={handleTestarConexao}
+              disabled={preTesteTestando}
+              title="Testar conexão"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${preTesteTestando ? 'animate-spin' : ''}`} />
+            </Button>
           </DialogTitle>
           <DialogDescription>
             Busque uma REP no GDL para preencher automaticamente o formulário.
@@ -394,14 +394,21 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
             <div className="flex-1 overflow-y-auto min-h-0 space-y-4">
               {preTeste && (
                 <Alert variant={preTeste.ok ? 'default' : 'destructive'}>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-start gap-2">
                     {preTeste.ok ? (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                     ) : (
-                      <XCircle className="h-4 w-4" />
+                      <XCircle className="h-4 w-4 mt-0.5" />
                     )}
-                    <AlertDescription>
-                      {getPreTesteMensagem()}
+                    <AlertDescription className="space-y-1">
+                      <p>{getPreTesteMensagem()}</p>
+                      {preTeste.rede && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <Badge variant={preTeste.rede.sucesso ? 'secondary' : 'destructive'} className="text-xs">
+                            Rede: {preTeste.rede.sucesso ? 'OK' : 'Falha'}
+                          </Badge>
+                        </div>
+                      )}
                     </AlertDescription>
                   </div>
                 </Alert>
@@ -422,8 +429,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                     value={numeroRep}
                     onChange={e => setNumeroRep(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="12345"
-                    disabled={inputsDesabilitados}
-                    onKeyDown={e => { if (e.key === 'Enter' && !inputsDesabilitados) handleBuscar(); }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
                   />
                 </div>
                 <div className="space-y-2">
@@ -431,7 +437,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                   <Select
                     value={selectTriggerAnoValue}
                     onValueChange={handleAnoChange}
-                    disabled={inputsDesabilitados}
                   >
                     <SelectTrigger id="gdl-ano-rep">
                       <SelectValue placeholder="Selecione..." />
@@ -451,7 +456,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                         placeholder="Ex: 2024"
                         maxLength={4}
                         inputMode="numeric"
-                        disabled={inputsDesabilitados}
                         className={anoManualErro ? 'border-destructive' : ''}
                       />
                       {anoManualErro && (
@@ -477,7 +481,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               </Button>
               <Button
                 onClick={handleBuscar}
-                disabled={inputsDesabilitados || !numeroRep.trim() || !anoRep.trim() || buscando}
+                disabled={!numeroRep.trim() || !anoRep.trim() || buscando}
                 className="gap-2"
               >
                 {buscando ? (
@@ -580,4 +584,3 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     </Dialog>
   );
 };
-

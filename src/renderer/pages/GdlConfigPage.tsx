@@ -5,25 +5,33 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Database,
   CheckCircle,
   XCircle,
   AlertTriangle,
   Wifi,
-  Clock,
   Shield,
   FlaskConical,
   Building2,
   Globe,
   Eye,
   EyeOff,
+  Search,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const URL_HOMOLOGACAO = 'iishml01.pr.gov.br';
 const URL_PRODUCAO = 'www.gdl.sesp.parana';
+const ANO_ATUAL = new Date().getFullYear().toString();
 
 interface TesteDiagnostico {
   sucesso: boolean;
@@ -33,6 +41,23 @@ interface TesteDiagnostico {
   ambiente: string;
   endpointTestado: string;
   erro?: string;
+  rede?: TesteDiagnosticoEtapa;
+}
+
+interface TesteDiagnosticoEtapa {
+  sucesso: boolean;
+  latencia: number;
+  statusCode: number;
+  endpointTestado: string;
+  erro?: string;
+}
+
+interface ValidacaoSessaoGdl {
+  ambiente: string;
+  validado: boolean;
+  numeroRep?: string;
+  anoRep?: string;
+  dataHora?: string;
 }
 
 export const GdlConfigPage: React.FC = () => {
@@ -44,8 +69,15 @@ export const GdlConfigPage: React.FC = () => {
   const [salvando, setSalvando] = useState(false);
   const [testando, setTestando] = useState(false);
   const [diagnostico, setDiagnostico] = useState<TesteDiagnostico | null>(null);
+  const [validacaoSessao, setValidacaoSessao] = useState<ValidacaoSessaoGdl | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvarErro, setSalvarErro] = useState<string | null>(null);
+  const [modalValidacaoOpen, setModalValidacaoOpen] = useState(false);
+  const [numeroRepValidacao, setNumeroRepValidacao] = useState('');
+  const [anoRepValidacao, setAnoRepValidacao] = useState(ANO_ATUAL);
+  const [validandoCredenciais, setValidandoCredenciais] = useState(false);
+  const [erroValidacao, setErroValidacao] = useState<string | null>(null);
+  const [sucessoValidacao, setSucessoValidacao] = useState<string | null>(null);
 
   const carregarCredenciaisAmbiente = useCallback(async (amb: string) => {
     try {
@@ -79,6 +111,18 @@ export const GdlConfigPage: React.FC = () => {
     carregarCredenciaisAmbiente(ambiente);
   }, [ambiente]);
 
+  useEffect(() => {
+    window.ipcAPI.gdl.obterValidacaoSessao(ambiente)
+      .then((r: { success: boolean; data?: unknown }) => {
+        if (r.success && r.data) {
+          setValidacaoSessao(r.data as ValidacaoSessaoGdl);
+        } else {
+          setValidacaoSessao(null);
+        }
+      })
+      .catch(() => setValidacaoSessao(null));
+  }, [ambiente]);
+
   const formatarCPF = (v: string) => {
     const d = v.replace(/\D/g, '').slice(0, 11);
     if (d.length <= 3) return d;
@@ -109,6 +153,10 @@ export const GdlConfigPage: React.FC = () => {
         window.ipcAPI.configuracao.salvar(`gdl_senha_${ambiente}`, senha, 'senha', `Senha GDL (${ambLabel})`),
         window.ipcAPI.configuracao.salvar(`gdl_cpf_usuario_${ambiente}`, cpfUsuario.replace(/\D/g, ''), 'texto', `CPF usuário GDL (${ambLabel})`),
       ]);
+      const rValidacao = await window.ipcAPI.gdl.limparValidacaoSessao(ambiente);
+      if (rValidacao.success && rValidacao.data) {
+        setValidacaoSessao(rValidacao.data as ValidacaoSessaoGdl);
+      }
       toast.success(`Credenciais de ${ambLabel} salvas com sucesso!`);
     } catch (e: any) {
       setErro(e.message || 'Erro ao salvar configurações');
@@ -136,7 +184,66 @@ export const GdlConfigPage: React.FC = () => {
     }
   };
 
+  const abrirModalValidacao = () => {
+    setErroValidacao(null);
+    setSucessoValidacao(null);
+    setNumeroRepValidacao('');
+    setAnoRepValidacao(ANO_ATUAL);
+    setModalValidacaoOpen(true);
+  };
+
+  const handleValidarCredenciais = async () => {
+    setErroValidacao(null);
+    setSucessoValidacao(null);
+
+    if (!login.trim() || !senha.trim()) {
+      setErroValidacao('Preencha login e senha antes de validar as credenciais.');
+      return;
+    }
+
+    if (!numeroRepValidacao.trim() || !anoRepValidacao.trim()) {
+      setErroValidacao('Informe número e ano de uma REP válida para validar as credenciais.');
+      return;
+    }
+
+    setValidandoCredenciais(true);
+    try {
+      const r = await window.ipcAPI.gdl.validarCredenciais(
+        ambiente,
+        {
+          login,
+          senha,
+          cpfUsuario,
+        },
+        numeroRepValidacao.trim(),
+        anoRepValidacao.trim(),
+      );
+
+      if (r.success && r.data) {
+        const rSessao = await window.ipcAPI.gdl.obterValidacaoSessao(ambiente);
+        if (rSessao.success && rSessao.data) {
+          setValidacaoSessao(rSessao.data as ValidacaoSessaoGdl);
+        }
+        setSucessoValidacao(`Credenciais validadas com sucesso usando a REP ${numeroRepValidacao}/${anoRepValidacao}.`);
+      } else {
+        setErroValidacao(r.error || 'Não foi possível validar as credenciais no GDL.');
+      }
+    } catch (e: any) {
+      setErroValidacao(e.message || 'Erro ao validar credenciais no GDL.');
+    } finally {
+      setValidandoCredenciais(false);
+    }
+  };
+
   const isHomologacao = ambiente === 'homologacao';
+  const ambienteLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
+  const formatarEndpoint = (endpoint: string) => endpoint ? endpoint.replace(endpoint.split('/api')[0], '') : '—';
+  const formatarDataHora = (dataHora?: string) => {
+    if (!dataHora) return '—';
+    const data = new Date(dataHora);
+    if (Number.isNaN(data.getTime())) return dataHora;
+    return data.toLocaleString('pt-BR');
+  };
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
@@ -144,6 +251,9 @@ export const GdlConfigPage: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
           <Database className="h-6 w-6 text-primary" />
           API GDL
+          <Badge variant={ambiente === 'producao' ? 'default' : 'secondary'} className="text-xs">
+            Ambiente em uso: {ambienteLabel}
+          </Badge>
         </h1>
         <p className="text-muted-foreground mt-1">
           Configure o acesso à API do GDL para consulta automática de dados de REPs.
@@ -276,10 +386,6 @@ export const GdlConfigPage: React.FC = () => {
           </div>
 
           <div className="flex gap-3">
-            <Button variant="outline" onClick={handleTestar} disabled={testando} className="gap-2">
-              <Wifi className="h-4 w-4" />
-              {testando ? 'Testando...' : 'Testar Conexão'}
-            </Button>
             <Button onClick={handleSalvar} disabled={salvando} className="gap-2">
               <Shield className="h-4 w-4" />
               {salvando ? 'Salvando...' : 'Salvar Configurações'}
@@ -293,89 +399,167 @@ export const GdlConfigPage: React.FC = () => {
             </Alert>
           )}
 
-          {/* ---------- Diagnóstico ---------- */}
-          {diagnostico && (
-            <Card className={diagnostico.sucesso ? 'border-green-300 dark:border-green-800' : 'border-red-300 dark:border-red-800'}>
-              <CardContent className="pt-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  {diagnostico.sucesso ? (
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-600" />
-                  )}
-                  <span className="font-medium">
-                    {diagnostico.sucesso
-                      ? `Conectado ao GDL — ${diagnostico.ambiente || 'Homologação'}`
-                      : 'Falha na conexão'}
-                  </span>
-                  {diagnostico.ambiente && (
-                    <Badge variant="secondary" className="text-xs ml-1">{diagnostico.ambiente}</Badge>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    Latência:
-                  </div>
-                  <div>{diagnostico.latencia}ms</div>
-
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Wifi className="h-3.5 w-3.5" />
-                    Status HTTP:
-                  </div>
-                  <div>
-                    {diagnostico.statusCode > 0 ? (
-                      <Badge variant={diagnostico.statusCode < 400 ? 'secondary' : 'destructive'}>
-                        {diagnostico.statusCode}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Wifi className="h-4 w-4 text-muted-foreground" />
+                  Teste de Rede
+                </CardTitle>
+                <CardDescription>
+                  Verifica se o ambiente {ambienteLabel} está acessível pela rede.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {diagnostico ? (
+                  <div className={`rounded-lg border p-3 space-y-3 ${diagnostico.sucesso ? 'border-green-300 dark:border-green-800' : 'border-red-300 dark:border-red-800'}`}>
+                    <div className="flex items-center gap-2">
+                      {diagnostico.sucesso ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      )}
+                      <span className="font-medium text-sm">
+                        {diagnostico.sucesso ? 'Rede acessível' : 'Falha na rede'}
+                      </span>
+                      <Badge variant={diagnostico.sucesso ? 'secondary' : 'destructive'} className="text-xs ml-auto">
+                        {diagnostico.sucesso ? 'OK' : 'Falha'}
                       </Badge>
-                    ) : (
-                      <span className="text-red-600">—</span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Shield className="h-3.5 w-3.5" />
-                    Autenticação:
-                  </div>
-                  <div>
-                    {diagnostico.autenticado ? (
-                      <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">OK</Badge>
-                    ) : (
-                      <Badge variant="destructive">Falha</Badge>
-                    )}
-                  </div>
-
-                  {diagnostico.endpointTestado && (
-                    <>
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Globe className="h-3.5 w-3.5" />
-                        Endpoint:
-                      </div>
-                      <div className="text-xs font-mono text-muted-foreground truncate" title={diagnostico.endpointTestado}>
-                        {diagnostico.endpointTestado.replace(diagnostico.endpointTestado.split('/api')[0], '')}
-                      </div>
-                    </>
-                  )}
-                </div>
-                {diagnostico.erro && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-sm text-red-600 font-medium">Detalhes do erro:</p>
-                    <p className="text-sm text-red-600">{diagnostico.erro}</p>
-                    <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
-                      <p>Verifique:</p>
-                      <ul className="list-disc pl-4 space-y-0.5">
-                        <li>VPN da Polícia Científica está ativa?</li>
-                        <li>Ambiente correto selecionado? (Homologação / Produção)</li>
-                        <li>Login e senha válidos?</li>
-                      </ul>
                     </div>
+
+                    {diagnostico.rede ? (
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">Latência</span>
+                        <span>{diagnostico.rede.latencia}ms</span>
+                        <span className="text-muted-foreground">HTTP</span>
+                        <span>{diagnostico.rede.statusCode || '—'}</span>
+                        <span className="text-muted-foreground">Endpoint</span>
+                        <span className="truncate font-mono text-xs" title={diagnostico.rede.endpointTestado}>
+                          {formatarEndpoint(diagnostico.rede.endpointTestado)}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {diagnostico.erro || 'Ainda não executado.'}
+                      </p>
+                    )}
+
+                    {(diagnostico.rede?.erro || diagnostico.erro) && (
+                      <p className="text-sm text-red-600">
+                        {diagnostico.rede?.erro || diagnostico.erro}
+                      </p>
+                    )}
                   </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Execute o teste para verificar conectividade com o ambiente selecionado.
+                  </p>
                 )}
+
+                <Button variant="outline" onClick={handleTestar} disabled={testando} className="gap-2 w-full">
+                  <Wifi className="h-4 w-4" />
+                  {testando ? 'Testando...' : 'Testar Rede'}
+                </Button>
               </CardContent>
             </Card>
-          )}
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  Validação de Credenciais
+                </CardTitle>
+                <CardDescription>
+                  Confirma as credenciais com uma consulta real de REP no ambiente atual.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg border p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">Status da sessão</span>
+                    <Badge variant={validacaoSessao?.validado ? 'default' : 'secondary'} className="text-xs ml-auto">
+                      {validacaoSessao?.validado ? 'Validada' : 'Pendente'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {validacaoSessao?.validado
+                      ? `Credenciais validadas nesta sessão com a REP ${validacaoSessao.numeroRep}/${validacaoSessao.anoRep}.`
+                      : 'A validação de credenciais acontece quando uma REP válida é consultada com sucesso no ambiente atual.'}
+                  </p>
+                  {validacaoSessao?.validado && (
+                    <p className="text-xs text-muted-foreground">
+                      Última validação: {formatarDataHora(validacaoSessao.dataHora)}
+                    </p>
+                  )}
+                </div>
+
+                <Button variant="outline" onClick={abrirModalValidacao} className="gap-2 w-full">
+                  <Search className="h-4 w-4" />
+                  Validar Credenciais
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </CardContent>
       </Card>
+
+      <Dialog open={modalValidacaoOpen} onOpenChange={setModalValidacaoOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Validar credenciais GDL</DialogTitle>
+            <DialogDescription>
+              Informe uma REP existente no ambiente {ambienteLabel} para validar as credenciais atuais sem precisar salvar antes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="validacao-numero-rep">Nº da REP</Label>
+                <Input
+                  id="validacao-numero-rep"
+                  value={numeroRepValidacao}
+                  onChange={(e) => setNumeroRepValidacao(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="12345"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="validacao-ano-rep">Ano</Label>
+                <Input
+                  id="validacao-ano-rep"
+                  value={anoRepValidacao}
+                  onChange={(e) => setAnoRepValidacao(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="2026"
+                  maxLength={4}
+                />
+              </div>
+            </div>
+
+            {erroValidacao && (
+              <Alert variant="destructive">
+                <AlertDescription>{erroValidacao}</AlertDescription>
+              </Alert>
+            )}
+
+            {sucessoValidacao && (
+              <Alert>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription>{sucessoValidacao}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setModalValidacaoOpen(false)} disabled={validandoCredenciais}>
+                Fechar
+              </Button>
+              <Button onClick={handleValidarCredenciais} disabled={validandoCredenciais} className="gap-2">
+                {validandoCredenciais ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                {validandoCredenciais ? 'Validando...' : 'Validar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
