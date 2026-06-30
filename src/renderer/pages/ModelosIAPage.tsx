@@ -52,8 +52,6 @@ import {
   Loader2,
   ShieldCheck,
   ExternalLink,
-  Lock,
-  Server,
   KeyRound,
   BookOpen,
 } from 'lucide-react';
@@ -453,8 +451,8 @@ export const ModelosIAPage: React.FC = () => {
                             @policiacientifica.pr.gov.br
                           </code>
                         </li>
-                        <li>Clique em <strong>"Criar chave de API"</strong> (ou "Create API Key")</li>
-                        <li>Copie a chave gerada e cole no campo <em>"Chave de API"</em> acima</li>
+                        <li>Clique em <strong>&quot;Criar chave de API&quot;</strong> (ou &quot;Create API Key&quot;)</li>
+                        <li>Copie a chave gerada e cole no campo <em>&quot;Chave de API&quot;</em> acima</li>
                       </ol>
                       <p className="text-xs text-muted-foreground/80 mt-2">
                         <strong>Cota gratuita:</strong> O Google AI Studio oferece cota gratuita generosa.
@@ -487,8 +485,8 @@ export const ModelosIAPage: React.FC = () => {
                           </a>
                         </li>
                         <li>Crie uma conta gratuita ou faça login</li>
-                        <li>Clique em <strong>"Create API Key"</strong></li>
-                        <li>Copie a chave gerada e cole no campo <em>"Chave de API"</em> acima</li>
+                        <li>Clique em <strong>&quot;Create API Key&quot;</strong></li>
+                        <li>Copie a chave gerada e cole no campo <em>&quot;Chave de API&quot;</em> acima</li>
                       </ol>
                       <p className="text-xs text-muted-foreground/80 mt-2">
                         <strong>Uso gratuito:</strong> A Groq oferece créditos gratuitos para desenvolvedores.

@@ -67,7 +67,7 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solic
   return `<table style="${style(s.table)}">${rows.join('')}</table>`;
 }
 
-export function buildArmasTabela(b602: Record<string, unknown>, solicitanteNome?: string): string {
+export function buildArmasTabela(b602: Record<string, unknown>, _solicitanteNome?: string): string {
   const armas = (b602.armas as Record<string, unknown>[] | undefined) ?? [];
   if (armas.length === 0) return '';
 
@@ -82,7 +82,7 @@ export function buildArmasTabela(b602: Record<string, unknown>, solicitanteNome?
   const celula = (val: string, extra?: string) =>
     `<td style="${style(s.td)}${extra ? ';' + extra : ''}">${val || '-'}</td>`;
 
-  const theadRow = `<tr>${headers.map((h, i) =>
+  const theadRow = `<tr>${headers.map((h) =>
     `<th style="${style(s.th)}">${h}</th>`
   ).join('')}</tr>`;
 

@@ -229,7 +229,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   onChange,
   height = 300,
   placeholder,
-  laudoId,
+  laudoId: _laudoId,
   editorId,
   onImageInserted,
   placeholderChaves,

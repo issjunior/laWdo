@@ -55,7 +55,7 @@ type PerfilUpdateFormValues = z.infer<typeof perfilValidationSchema>;
 const AUTH_USER_KEY = 'lawdo_auth_user';
 
 export const PerfilPage: React.FC = () => {
-  const [loading, setLoading] = useState(false);
+  const loading = false;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);

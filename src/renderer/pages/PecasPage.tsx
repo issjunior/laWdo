@@ -405,7 +405,7 @@ const PecasPage: React.FC = () => {
             <DialogHeader>
               <DialogTitle>Excluir Peça</DialogTitle>
               <DialogDescription>
-                Tem certeza que deseja excluir a peça "{deletingItem?.nome}"? Esta ação não pode ser desfeita.
+                Tem certeza que deseja excluir a peça &quot;{deletingItem?.nome}&quot;? Esta ação não pode ser desfeita.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

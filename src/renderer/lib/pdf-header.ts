@@ -51,8 +51,6 @@ export interface PdfHeaderOptions {
  * Centralizes the DB loading + template building logic that was duplicated across pages.
  */
 export async function buildPdfHeaderConfig(opts: PdfHeaderOptions = {}): Promise<PdfHeaderConfig> {
-  const debugTag = '[pdf-header:buildPdfHeaderConfig]';
-
   const [headerLaudoResult, headerPaginasResult] = await Promise.all([
     window.ipcAPI.configuracao.obter('cabecalho_laudo'),
     window.ipcAPI.configuracao.obter('cabecalho_paginas'),
@@ -60,9 +58,6 @@ export async function buildPdfHeaderConfig(opts: PdfHeaderOptions = {}): Promise
 
   const cabecalhoPrimeiraPagina = (headerLaudoResult.success && headerLaudoResult.data) ? headerLaudoResult.data : '';
   const cabecalhoPaginasHtml = (headerPaginasResult.success && headerPaginasResult.data) ? headerPaginasResult.data : '';
-
-  console.debug(`${debugTag} cabecalho_laudo: ${cabecalhoPrimeiraPagina ? `${cabecalhoPrimeiraPagina.length} chars` : 'vazio'}`);
-  console.debug(`${debugTag} cabecalho_paginas: ${cabecalhoPaginasHtml ? `${cabecalhoPaginasHtml.length} chars` : 'vazio'}`);
 
   const replacements: Record<string, string> = {};
   if (opts.numeroRepFallback) {
@@ -75,8 +70,6 @@ export async function buildPdfHeaderConfig(opts: PdfHeaderOptions = {}): Promise
   const result = cabecalhoPaginasHtml
     ? buildHeaderTemplate(cabecalhoPaginasHtml, replacements)
     : { html: '', align: 'flex-start' };
-
-  console.debug(`${debugTag} headerTemplate: ${result.html ? `${result.html.length} chars` : 'vazio'} | align: ${result.align} | cabecalhoPrimeiraPagina: ${cabecalhoPrimeiraPagina ? `${cabecalhoPrimeiraPagina.length} chars` : 'vazio'}`);
 
   return { headerTemplate: result.html, cabecalhoPrimeiraPagina };
 }

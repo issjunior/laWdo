@@ -20,7 +20,6 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   GripVertical,
   Trash2,
-  Type,
   Maximize2,
   Info,
   Plus,
@@ -32,8 +31,6 @@ import {
   Search,
   SearchX,
 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -360,9 +357,9 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onRefreshHtml,
   figurasNoEditor,
   onUpdateLegendaInEditor,
-  syncEnabled,
+  syncEnabled: _syncEnabled,
   figuraAtivaId,
-  onSyncToggle,
+  onSyncToggle: _onSyncToggle,
   onScrollToFigure,
   onPopOut,
   onReplaceImage,

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, AlertCircle, Plus, Lock, Check, FolderTree } from 'lucide-react';
+import { Loader2, AlertCircle, Plus, Check, FolderTree } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { SortableCategoryTree, type CategoriaNode } from '@/components/categorias/SortableCategoryTree';
 import { toast } from 'sonner';
@@ -459,13 +459,13 @@ const CategoriasPecasPage: React.FC = () => {
             <CardHeader>
               <CardTitle>Excluir Categoria</CardTitle>
               <CardDescription>
-                Tem certeza que deseja excluir "{deleteTarget.label}"?
+                Tem certeza que deseja excluir &quot;{deleteTarget.label}&quot;?
                 {deleteTarget.subcategorias?.length > 0 && (
                   <span className="block mt-1 text-destructive font-medium">
                     Suas subcategorias serão movidas para raiz.
                   </span>
                 )}
-                Peças nesta categoria serão movidas para "Sem categoria".
+                Peças nesta categoria serão movidas para &quot;Sem categoria&quot;.
               </CardDescription>
             </CardHeader>
             <CardContent>

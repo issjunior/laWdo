@@ -18,7 +18,7 @@ interface HeaderProps {
   currentUser: any;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
+export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser: _currentUser }) => {
   const [appInfo, setAppInfo] = useState<{
     version: string;
     name: string;
