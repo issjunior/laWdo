@@ -929,7 +929,6 @@ export const LaudosPage: React.FC = () => {
           url: img.url, id: img.id, legenda: img.legenda
         });
       }
-      console.info(`[ilustracoes] ${operacao}: execCommand ${editorId} ✓ ${imagens.length} figs`);
       return { metodo: 'execCommand', count: imagens.length };
     }
 
@@ -969,7 +968,6 @@ export const LaudosPage: React.FC = () => {
       scrollRestoreRef.current = null;
     }
     setIlustracoesRemounting(false);
-    console.info('[ilustracoes] remount: editor inicializado, scroll restaurado ✓');
   }, []);
 
   /**
@@ -1079,7 +1077,6 @@ export const LaudosPage: React.FC = () => {
           }
         }
         setSecoes(novasSecoes);
-        console.info('[ilustracoes] deleteImage: single mode ✓');
         return;
       }
       const idxIlustracoes = secoes.findIndex(
@@ -1131,7 +1128,6 @@ export const LaudosPage: React.FC = () => {
         });
         toast.success('Seção ILUSTRAÇÕES removida');
       }
-      console.info(`[ilustracoes] deleteImage: execCommand secao-${idxIlustracoes} ✓`);
     },
     onUpdateLegenda: (id, legenda) => {
       const atualizarFigcaption = (editor: any) => {
@@ -1578,7 +1574,7 @@ export const LaudosPage: React.FC = () => {
         } catch {}
       }
 
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      const { cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
       });
 
