@@ -56,7 +56,7 @@ export interface UserAvatarResponse {
 /**
  * Resposta padrão para operações de usuário
  */
-export interface UserResponse<T = any> {
+export interface UserResponse<T = unknown> {
   success: boolean
   data?: T
   message?: string
@@ -67,7 +67,7 @@ export interface UserResponse<T = any> {
 /**
  * Resultado paginado
  */
-export interface PaginatedUserResponse<T = any> extends UserResponse<T> {
+export interface PaginatedUserResponse<T = unknown> extends UserResponse<T> {
   pagination?: {
     page: number
     pageSize: number

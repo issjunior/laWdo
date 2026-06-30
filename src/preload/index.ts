@@ -23,6 +23,22 @@ interface LogEntry {
   message: string;
 }
 
+type IpcPayload = unknown;
+type IpcParams = unknown[];
+type IpcResult = unknown;
+type ImportarArquivoResponse = { success: boolean; data?: IpcPayload; error?: string };
+type BackupResponse = { success: boolean; path?: string; error?: string };
+type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; total?: number; error?: string };
+type TimelineResponse = { success: boolean; data?: IpcPayload[]; error?: string };
+type ExportacaoLaudoParams = {
+  laudoId: string;
+  formato: 'pdf' | 'docx' | 'odt';
+  html: string;
+  estrutura?: IpcPayload;
+  cabecalho?: IpcPayload;
+  margens?: IpcPayload;
+};
+
 // Tipos para a API exposta
 export interface IpcAPI {
   // Utilitários
@@ -39,7 +55,7 @@ export interface IpcAPI {
 
   // Logs
   logInfo: (module: string, message: string) => void;
-  logError: (module: string, message: string, error?: any) => void;
+  logError: (module: string, message: string, error?: IpcPayload) => void;
   logWarning: (module: string, message: string) => void;
 
   // Sistema
@@ -48,10 +64,10 @@ export interface IpcAPI {
   openDevTools: () => void;
 
   // Banco de dados
-  executeQuery: (query: string, params?: any[]) => Promise<any>;
+  executeQuery: (query: string, params?: IpcParams) => Promise<IpcResult>;
 
   // Autenticação
-  login: (username: string, password: string) => Promise<{ success: boolean; user?: any }>;
+  login: (username: string, password: string) => Promise<{ success: boolean; user?: IpcPayload }>;
   verifyPassword: (userId: string, password: string) => Promise<{ success: boolean; valid: boolean; error?: string }>;
 
   // Usuários
@@ -102,8 +118,8 @@ export interface IpcAPI {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
     findByNumero: (numero: string) => Promise<UserResponse>;
-    create: (data: any) => Promise<UserResponse>;
-    update: (id: string, data: any) => Promise<UserResponse>;
+    create: (data: IpcPayload) => Promise<UserResponse>;
+    update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     updateStatus: (id: string, status: string) => Promise<UserResponse>;
   };
@@ -129,16 +145,16 @@ export interface IpcAPI {
   categoria: {
     findAll: () => Promise<UserResponse>;
     findArvore: () => Promise<UserResponse>;
-    create: (data: any) => Promise<UserResponse>;
-    update: (id: string, data: any) => Promise<UserResponse>;
+    create: (data: IpcPayload) => Promise<UserResponse>;
+    update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
   };
 
   placeholder: {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
-    create: (data: any) => Promise<UserResponse>;
-    update: (id: string, data: any) => Promise<UserResponse>;
+    create: (data: IpcPayload) => Promise<UserResponse>;
+    update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     seedSistema: () => Promise<UserResponse>;
     migrateSistema: () => Promise<UserResponse>;
@@ -149,16 +165,16 @@ export interface IpcAPI {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
     findByTipoExame: (tipoExameId: string) => Promise<UserResponse>;
-    create: (data: any) => Promise<UserResponse>;
-    update: (id: string, data: any) => Promise<UserResponse>;
+    create: (data: IpcPayload) => Promise<UserResponse>;
+    update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     findSecoes: (templateId: string) => Promise<UserResponse>;
-    createSecao: (data: any) => Promise<UserResponse>;
-    updateSecao: (id: string, data: any) => Promise<UserResponse>;
+    createSecao: (data: IpcPayload) => Promise<UserResponse>;
+    updateSecao: (id: string, data: IpcPayload) => Promise<UserResponse>;
     deleteSecao: (id: string) => Promise<UserResponse>;
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => Promise<UserResponse>;
-    importarArquivo: () => Promise<{ success: boolean; data?: any; error?: string }>;
+    importarArquivo: () => Promise<ImportarArquivoResponse>;
   };
 
   // Laudos
@@ -171,10 +187,10 @@ export interface IpcAPI {
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
     delete: (laudoId: string, userId?: string) => Promise<UserResponse>;
     updateStatus: (laudoId: string, status: string) => Promise<UserResponse>;
-    gerarWizard: (params: any) => Promise<UserResponse>;
-    salvarProgressoWizard: (laudoId: string, respostas: any) => Promise<UserResponse>;
+    gerarWizard: (params: IpcPayload) => Promise<UserResponse>;
+    salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => Promise<UserResponse>;
     getRespostasWizard: (laudoId: string) => Promise<UserResponse>;
-    exportar: (params: { laudoId: string; formato: 'pdf' | 'docx' | 'odt'; html: string; estrutura?: any; cabecalho?: any; margens?: any }) => Promise<UserResponse>;
+    exportar: (params: ExportacaoLaudoParams) => Promise<UserResponse>;
     verificarLibreOffice: () => Promise<UserResponse>;
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
@@ -184,27 +200,27 @@ export interface IpcAPI {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
     findByTipoExame: (tipoExameId: string) => Promise<UserResponse>;
-    create: (data: any) => Promise<UserResponse>;
-    update: (id: string, data: any) => Promise<UserResponse>;
+    create: (data: IpcPayload) => Promise<UserResponse>;
+    update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     getArvore: (wizardId: string) => Promise<UserResponse>;
-    saveArvore: (wizardId: string, arvore: any) => Promise<UserResponse>;
+    saveArvore: (wizardId: string, arvore: IpcPayload) => Promise<UserResponse>;
   };
 
   // Peças (Banco de Peças)
   categoriaPeca: {
     findAll: () => Promise<UserResponse>;
     findArvore: () => Promise<UserResponse>;
-    create: (data: any) => Promise<UserResponse>;
-    update: (id: string, data: any) => Promise<UserResponse>;
+    create: (data: IpcPayload) => Promise<UserResponse>;
+    update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
   };
 
   peca: {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
-    create: (data: any) => Promise<UserResponse>;
-    update: (id: string, data: any) => Promise<UserResponse>;
+    create: (data: IpcPayload) => Promise<UserResponse>;
+    update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     search: (query: string) => Promise<UserResponse>;
     findByCategoria: (categoriaId: string) => Promise<UserResponse>;
@@ -214,8 +230,8 @@ export interface IpcAPI {
   // Regras do Wizard
   regraWizard: {
     findByWizard: (wizardId: string) => Promise<UserResponse>;
-    save: (regras: any[]) => Promise<UserResponse>;
-    calcularPecas: (wizardId: string, respostas: any) => Promise<UserResponse>;
+    save: (regras: IpcPayload[]) => Promise<UserResponse>;
+    calcularPecas: (wizardId: string, respostas: IpcPayload) => Promise<UserResponse>;
   };
 
   // IA / Integração Groq
@@ -228,20 +244,20 @@ export interface IpcAPI {
 
   // Backup e Restauração
   backup: {
-    criar: () => Promise<{ success: boolean; path?: string; error?: string }>;
-    restaurar: () => Promise<{ success: boolean; error?: string }>;
-    configExportar: () => Promise<{ success: boolean; path?: string; error?: string }>;
-    configImportar: () => Promise<{ success: boolean; error?: string }>;
+    criar: () => Promise<BackupResponse>;
+    restaurar: () => Promise<Omit<BackupResponse, 'path'>>;
+    configExportar: () => Promise<BackupResponse>;
+    configImportar: () => Promise<Omit<BackupResponse, 'path'>>;
   };
 
   // Logs do sistema
   log: {
     listar: (filters?: Record<string, unknown>) => Promise<{ success: boolean; data?: LogEntry[]; error?: string }>;
     limpar: () => Promise<{ success: boolean; error?: string }>;
-    listarAuditoria: (filters?: Record<string, unknown>) => Promise<{ success: boolean; data?: any[]; total?: number; error?: string }>;
+    listarAuditoria: (filters?: Record<string, unknown>) => Promise<ListaAuditoriaResponse>;
     limparAuditoria: (userId?: string) => Promise<{ success: boolean; count?: number; error?: string }>;
     contar: () => Promise<{ success: boolean; data?: { sistema: number; auditoria: number }; error?: string }>;
-    timelineRep: (repId: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+    timelineRep: (repId: string) => Promise<TimelineResponse>;
   };
 
   diagnosticoInterno: {
@@ -450,11 +466,27 @@ const ALLOWED_CHANNELS = new Set([
   'ilustracoes:panel-closed',
 ]);
 
+const validarCanal = (channel: string): void => {
+  if (!ALLOWED_CHANNELS.has(channel)) {
+    throw new Error(`Canal IPC não permitido: ${channel}`);
+  }
+};
+
+const invokeSeguro = <T = IpcResult>(channel: string, ...args: IpcParams): Promise<T> => {
+  validarCanal(channel);
+  return ipcRenderer.invoke(channel, ...args) as Promise<T>;
+};
+
+const sendSeguro = (channel: string, ...args: IpcParams): void => {
+  validarCanal(channel);
+  ipcRenderer.send(channel, ...args);
+};
+
 // Expor API segura para o renderer
 contextBridge.exposeInMainWorld('ipcAPI', {
   // Utilitários
-  ping: () => ipcRenderer.invoke('ping'),
-  getAppInfo: () => ipcRenderer.invoke('get-app-info'),
+  ping: () => invokeSeguro<string>('ping'),
+  getAppInfo: () => invokeSeguro('get-app-info'),
 
   // Logs
   logInfo: (module: string, message: string) => {
@@ -462,15 +494,15 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       console.error('Tentativa de log com mensagem inválida:', message);
       return;
     }
-    ipcRenderer.send('log-info', module, message);
+    sendSeguro('log-info', module, message);
   },
 
-  logError: (module: string, message: string, error?: any) => {
+  logError: (module: string, message: string, error?: IpcPayload) => {
     if (typeof message !== 'string') {
       console.error('Tentativa de log de erro com mensagem inválida:', message);
       return;
     }
-    ipcRenderer.send('log-error', module, message, error);
+    sendSeguro('log-error', module, message, error);
   },
 
   logWarning: (module: string, message: string) => {
@@ -478,16 +510,16 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       console.error('Tentativa de log de warning com mensagem inválida:', message);
       return;
     }
-    ipcRenderer.send('log-warning', module, message);
+    sendSeguro('log-warning', module, message);
   },
 
   // Sistema
-  restartApp: () => ipcRenderer.invoke('restart-app'),
-  closeApp: () => ipcRenderer.invoke('close-app'),
-  openDevTools: () => ipcRenderer.send('open-dev-tools'),
+  restartApp: () => invokeSeguro<void>('restart-app'),
+  closeApp: () => invokeSeguro<void>('close-app'),
+  openDevTools: () => sendSeguro('open-dev-tools'),
 
   // Banco de dados
-  executeQuery: (query: string, params?: any[]) => {
+  executeQuery: (query: string, params?: IpcParams) => {
     if (typeof query !== 'string') {
       throw new Error('Query deve ser uma string');
     }
@@ -794,8 +826,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findAll: () => ipcRenderer.invoke('rep:findAll'),
     findById: (id: string) => ipcRenderer.invoke('rep:findById', id),
     findByNumero: (numero: string) => ipcRenderer.invoke('rep:findByNumero', numero),
-    create: (data: any) => ipcRenderer.invoke('rep:create', data),
-    update: (id: string, data: any) => ipcRenderer.invoke('rep:update', id, data),
+    create: (data: IpcPayload) => ipcRenderer.invoke('rep:create', data),
+    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('rep:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('rep:delete', id),
     updateStatus: (id: string, status: string) => ipcRenderer.invoke('rep:updateStatus', id, status),
   },
@@ -803,16 +835,16 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   categoria: {
     findAll: () => ipcRenderer.invoke('categoria:findAll'),
     findArvore: () => ipcRenderer.invoke('categoria:findArvore'),
-    create: (data: any) => ipcRenderer.invoke('categoria:create', data),
-    update: (id: string, data: any) => ipcRenderer.invoke('categoria:update', id, data),
+    create: (data: IpcPayload) => ipcRenderer.invoke('categoria:create', data),
+    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('categoria:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('categoria:delete', id),
   },
 
   placeholder: {
     findAll: () => ipcRenderer.invoke('placeholder:findAll'),
     findById: (id: string) => ipcRenderer.invoke('placeholder:findById', id),
-    create: (data: any) => ipcRenderer.invoke('placeholder:create', data),
-    update: (id: string, data: any) => ipcRenderer.invoke('placeholder:update', id, data),
+    create: (data: IpcPayload) => ipcRenderer.invoke('placeholder:create', data),
+    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('placeholder:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('placeholder:delete', id),
     migrateSistema: () => ipcRenderer.invoke('placeholder:migrateSistema'),
     seedSistema: () => ipcRenderer.invoke('placeholder:seedSistema'),
@@ -822,12 +854,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findAll: () => ipcRenderer.invoke('template:findAll'),
     findById: (id: string) => ipcRenderer.invoke('template:findById', id),
     findByTipoExame: (tipoExameId: string) => ipcRenderer.invoke('template:findByTipoExame', tipoExameId),
-    create: (data: any) => ipcRenderer.invoke('template:create', data),
-    update: (id: string, data: any) => ipcRenderer.invoke('template:update', id, data),
+    create: (data: IpcPayload) => ipcRenderer.invoke('template:create', data),
+    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('template:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('template:delete', id),
     findSecoes: (templateId: string) => ipcRenderer.invoke('template:findSecoes', templateId),
-    createSecao: (data: any) => ipcRenderer.invoke('template:createSecao', data),
-    updateSecao: (id: string, data: any) => ipcRenderer.invoke('template:updateSecao', id, data),
+    createSecao: (data: IpcPayload) => ipcRenderer.invoke('template:createSecao', data),
+    updateSecao: (id: string, data: IpcPayload) => ipcRenderer.invoke('template:updateSecao', id, data),
     deleteSecao: (id: string) => ipcRenderer.invoke('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => ipcRenderer.invoke('template:previewPDF', { html, margins, headerTemplate }),
@@ -843,10 +875,10 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => ipcRenderer.invoke('laudo:create', data),
     delete: (laudoId: string, userId?: string) => ipcRenderer.invoke('laudo:delete', laudoId, userId),
     updateStatus: (laudoId: string, status: string) => ipcRenderer.invoke('laudo:updateStatus', laudoId, status),
-    gerarWizard: (params: any) => ipcRenderer.invoke('laudo:gerarWizard', params),
-    salvarProgressoWizard: (laudoId: string, respostas: any) => ipcRenderer.invoke('laudo:salvarProgressoWizard', laudoId, respostas),
+    gerarWizard: (params: IpcPayload) => ipcRenderer.invoke('laudo:gerarWizard', params),
+    salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => ipcRenderer.invoke('laudo:salvarProgressoWizard', laudoId, respostas),
     getRespostasWizard: (laudoId: string) => ipcRenderer.invoke('laudo:getRespostasWizard', laudoId),
-    exportar: (params: any) => ipcRenderer.invoke('laudo:exportar', params),
+    exportar: (params: ExportacaoLaudoParams) => ipcRenderer.invoke('laudo:exportar', params),
     verificarLibreOffice: () => ipcRenderer.invoke('laudo:verificarLibreOffice'),
     sincronizarSecoes: (laudoId: string) => ipcRenderer.invoke('laudo:sincronizarSecoes', laudoId),
   },
@@ -855,26 +887,26 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findAll: () => ipcRenderer.invoke('wizard:findAll'),
     findById: (id: string) => ipcRenderer.invoke('wizard:findById', id),
     findByTipoExame: (tipoExameId: string) => ipcRenderer.invoke('wizard:findByTipoExame', tipoExameId),
-    create: (data: any) => ipcRenderer.invoke('wizard:create', data),
-    update: (id: string, data: any) => ipcRenderer.invoke('wizard:update', id, data),
+    create: (data: IpcPayload) => ipcRenderer.invoke('wizard:create', data),
+    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('wizard:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('wizard:delete', id),
     getArvore: (wizardId: string) => ipcRenderer.invoke('wizard:getArvore', wizardId),
-    saveArvore: (wizardId: string, arvore: any) => ipcRenderer.invoke('wizard:saveArvore', wizardId, arvore),
+    saveArvore: (wizardId: string, arvore: IpcPayload) => ipcRenderer.invoke('wizard:saveArvore', wizardId, arvore),
   },
 
   categoriaPeca: {
     findAll: () => ipcRenderer.invoke('categoria-peca:findAll'),
     findArvore: () => ipcRenderer.invoke('categoria-peca:findArvore'),
-    create: (data: any) => ipcRenderer.invoke('categoria-peca:create', data),
-    update: (id: string, data: any) => ipcRenderer.invoke('categoria-peca:update', id, data),
+    create: (data: IpcPayload) => ipcRenderer.invoke('categoria-peca:create', data),
+    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('categoria-peca:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('categoria-peca:delete', id),
   },
 
   peca: {
     findAll: () => ipcRenderer.invoke('peca:findAll'),
     findById: (id: string) => ipcRenderer.invoke('peca:findById', id),
-    create: (data: any) => ipcRenderer.invoke('peca:create', data),
-    update: (id: string, data: any) => ipcRenderer.invoke('peca:update', id, data),
+    create: (data: IpcPayload) => ipcRenderer.invoke('peca:create', data),
+    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('peca:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('peca:delete', id),
     search: (query: string) => ipcRenderer.invoke('peca:search', query),
     findByCategoria: (categoriaId: string) => ipcRenderer.invoke('peca:findByCategoria', categoriaId),
@@ -883,8 +915,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   regraWizard: {
     findByWizard: (wizardId: string) => ipcRenderer.invoke('regra-wizard:findByWizard', wizardId),
-    save: (regras: any[]) => ipcRenderer.invoke('regra-wizard:save', regras),
-    calcularPecas: (wizardId: string, respostas: any) => ipcRenderer.invoke('regra-wizard:calcularPecas', wizardId, respostas),
+    save: (regras: IpcPayload[]) => ipcRenderer.invoke('regra-wizard:save', regras),
+    calcularPecas: (wizardId: string, respostas: IpcPayload) => ipcRenderer.invoke('regra-wizard:calcularPecas', wizardId, respostas),
   },
 
   ia: {
@@ -961,5 +993,3 @@ declare global {
   }
 }
 
-// Log de segurança
-console.log('🔒 Preload script carregado com segurança');
