@@ -8,6 +8,23 @@
 import '@testing-library/jest-dom/vitest'
 import { vi } from 'vitest'
 
+const electronAPIMock = {
+  ping: vi.fn(() => Promise.resolve('pong')),
+  getAppInfo: vi.fn(() => Promise.resolve({
+    name: 'laWdo Test',
+    version: '0.1.0-test',
+  })),
+  logInfo: vi.fn(() => Promise.resolve()),
+  logError: vi.fn(() => Promise.resolve()),
+  logWarning: vi.fn(() => Promise.resolve()),
+  openDevTools: vi.fn(),
+  restartApp: vi.fn(),
+  clearCache: vi.fn(),
+  executeQuery: vi.fn(() => Promise.resolve([])),
+  backupDatabase: vi.fn(() => Promise.resolve(true)),
+  restoreDatabase: vi.fn(() => Promise.resolve(true)),
+}
+
 // Mock global do Electron
 vi.mock('electron', () => ({
   app: {
@@ -25,28 +42,13 @@ vi.mock('electron', () => ({
 
 // Mock do window.electronAPI
 Object.defineProperty(window, 'electronAPI', {
-  value: {
-    ping: vi.fn(() => Promise.resolve('pong')),
-    getAppInfo: vi.fn(() => Promise.resolve({
-      name: 'laWdo Test',
-      version: '0.1.0-test',
-    })),
-    logInfo: vi.fn(() => Promise.resolve()),
-    logError: vi.fn(() => Promise.resolve()),
-    logWarning: vi.fn(() => Promise.resolve()),
-    openDevTools: vi.fn(),
-    restartApp: vi.fn(),
-    clearCache: vi.fn(),
-    executeQuery: vi.fn(() => Promise.resolve([])),
-    backupDatabase: vi.fn(() => Promise.resolve(true)),
-    restoreDatabase: vi.fn(() => Promise.resolve(true)),
-  },
+  value: electronAPIMock,
   writable: true,
 })
 
 // Mock do window.ipcAPI (alias)
 Object.defineProperty(window, 'ipcAPI', {
-  value: window.electronAPI,
+  value: electronAPIMock,
   writable: true,
 })
 
@@ -82,7 +84,7 @@ Object.defineProperty(window, 'sessionStorage', {
 Date.now = vi.fn(() => new Date('2024-01-01T00:00:00.000Z').getTime())
 
 // Mock de crypto.randomUUID para UUIDs consistentes
-Object.defineProperty(global, 'crypto', {
+Object.defineProperty(globalThis, 'crypto', {
   value: {
     randomUUID: vi.fn(() => '00000000-0000-0000-0000-000000000000'),
   },

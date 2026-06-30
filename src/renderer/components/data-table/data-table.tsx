@@ -2,6 +2,7 @@ import * as React from "react"
 import {
   ColumnDef,
   ColumnFiltersState,
+  RowPinningState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -12,8 +13,6 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 import { Pin, PinOff, Search, Settings2 } from "lucide-react"
-
-type RowPinningState = { top: string[]; bottom: string[] }
 
 import { Button } from "@/components/ui/button"
 import {

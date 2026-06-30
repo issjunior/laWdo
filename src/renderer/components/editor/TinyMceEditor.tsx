@@ -254,6 +254,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
     <div className={ready ? '' : 'opacity-0'} {...rest}>
       <Editor
         id={editorId}
+        licenseKey="gpl"
         tinymceScriptSrc="./tinymce/tinymce.min.js"
         onInit={(_evt, editor) => {
           editorRef.current = editor;
@@ -266,14 +267,13 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
         )}
         onEditorChange={(html: string) => onChange(html)}
         init={{
-          license_key: 'gpl',
           height,
           menubar: false,
           placeholder,
           promotion: false,
           branding: false,
           statusbar: true,
-          resize: 'vertical',
+          resize: true,
           contextmenu: false,
           skin_url: './tinymce/skins/ui/oxide',
           content_css: './tinymce/skins/content/default/content.css',

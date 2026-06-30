@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/forms/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -401,7 +401,7 @@ function campoPreenchido(valor: unknown): boolean {
 }
 
 interface CampoObrigatorioPendente {
-  campo: keyof REPFormData;
+  campo: Extract<keyof REPFormData, string>;
   label: string;
   stepId: string;
 }
@@ -564,7 +564,7 @@ export const REPsPage: React.FC = () => {
   }), []);
 
   const form = useForm<REPFormData>({
-    resolver: zodResolver(repFormSchema),
+    resolver: zodResolver(repFormSchema) as Resolver<REPFormData>,
     defaultValues: emptyForm(),
     mode: 'onChange',
   });
