@@ -26,7 +26,7 @@ interface UseRepStepperReturn {
 
 export function useRepStepper({
   form,
-  tipoExameId,
+  tipoExameId: _tipoExameId,
   tipoExameSelecionado,
 }: UseRepStepperOptions): UseRepStepperReturn {
   const [activeStep, setActiveStep] = useState('dados-solicitacao');

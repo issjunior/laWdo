@@ -79,13 +79,13 @@ const initApp = async () => {
       window.ipcAPI = {
         ping: async () => 'pong (mock)',
         getAppInfo: async () => ({ version: '0.1.0-dev', name: 'laWdo' }),
-        logInfo: (_module: string, msg: string) => console.log(`[INFO] ${msg}`),
+        logInfo: async () => undefined,
         logError: (_module: string, msg: string, err?: any) => console.error(`[ERROR] ${msg}`, err),
         logWarning: (_module: string, msg: string) => console.warn(`[WARN] ${msg}`),
         verifyPassword: async () => ({ success: true, valid: true }),
         executeQuery: async () => ({ success: false, message: 'Mock mode' }),
         login: async () => ({ success: true, user: { id: 1, name: 'Usuario Mock', username: 'mock', email: 'mock@pcp.pr.gov.br', cargo: 'Perito Oficial Criminal', lotacao: 'Curitiba', foto_url: null } }),
-        closeApp: async () => { console.log('Mock: closeApp'); },
+        closeApp: async () => undefined,
         user: {
           findAll: async () => ({ success: true, data: [] }),
           findById: async () => ({ success: false, error: 'Mock mode' }),
@@ -132,8 +132,7 @@ const initApp = async () => {
     // Testar conexao com main process
     if (hasIpcApi()) {
       try {
-        const pingResult = await window.ipcAPI.ping();
-        console.log('Conexao com main process:', pingResult);
+        await window.ipcAPI.ping();
       } catch (error) {
         console.error('Erro ao conectar com main process:', error);
       }

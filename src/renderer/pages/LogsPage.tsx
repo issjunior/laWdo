@@ -164,7 +164,6 @@ export function LogsPage() {
   const [aba, setAba] = useState<'sistema' | 'auditoria' | 'timeline'>('sistema');
   const [logsSistema, setLogsSistema] = useState<SystemLog[]>([]);
   const [logsAuditoria, setLogsAuditoria] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [senha, setSenha] = useState('');

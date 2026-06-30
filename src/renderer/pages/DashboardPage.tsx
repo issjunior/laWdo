@@ -1,12 +1,11 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
 import logo from '@/assets/logo.png';
 
 interface DashboardPageProps {
   onNavigate?: (page: string) => void;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate: _onNavigate }) => {
   return (
     <main className="main-content">
       <div className="welcome-card">

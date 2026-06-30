@@ -177,7 +177,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
   open,
   onOpenChange,
   tiposExame,
-  placeholders,
+  placeholders: _placeholders,
   onImportSuccess,
 }) => {
   const [etapa, setEtapa] = useState<'upload' | 'revisao'>('upload');

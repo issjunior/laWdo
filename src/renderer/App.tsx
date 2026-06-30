@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Link } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
@@ -23,7 +23,6 @@ const WizardsPage = lazy(() => import('@/pages/WizardsPage'));
 const WizardEditorPage = lazy(() => import('@/pages/WizardEditorPage'));
 const WizardLaudoPage = lazy(() => import('@/pages/WizardLaudoPage'));
 import { AuthPage } from '@/pages/AuthPage';
-import { LogOut } from 'lucide-react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { Header } from '@/components/layout/Header';

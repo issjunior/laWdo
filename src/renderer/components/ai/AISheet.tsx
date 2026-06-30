@@ -128,7 +128,7 @@ export const AISheet: React.FC<AISheetProps> = ({
               Modelo Ativo: {modelName}
             </p>
             <p className="text-xs text-muted-foreground truncate">
-              Contexto atual: Seção "{secaoTitulo}"
+              Contexto atual: Seção &quot;{secaoTitulo}&quot;
             </p>
           </div>
         </SheetHeader>

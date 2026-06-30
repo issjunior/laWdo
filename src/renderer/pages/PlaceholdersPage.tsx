@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -110,7 +110,7 @@ export const PlaceholdersPage: React.FC = () => {
     setEditingCategory(false);
   }, []);
 
-  const handleTreeAdd = useCallback((parentId: string | null) => {
+  const handleTreeAdd = useCallback((_parentId: string | null) => {
     setManageCategoriesOpen(true);
   }, []);
 
@@ -125,8 +125,6 @@ export const PlaceholdersPage: React.FC = () => {
       else { setCategorias(prev); toast.error(res.error || 'Erro ao mover'); }
     } catch { setCategorias(prev); }
   }, [categorias]);
-
-  const handleOutdent = useCallback((id: string) => handleMove(id, null), [handleMove]);
 
   /* ── Edição inline de categoria ── */
   const handleEditCategory = () => {
@@ -573,8 +571,8 @@ export const PlaceholdersPage: React.FC = () => {
               <CardHeader>
                 <CardTitle>Excluir Categoria</CardTitle>
                 <CardDescription>
-                  Tem certeza que deseja excluir "{deleteTarget.label}"?
-                  Placeholders serão movidos para "Sem categoria".
+                  Tem certeza que deseja excluir &quot;{deleteTarget.label}&quot;?
+                  Placeholders serão movidos para &quot;Sem categoria&quot;.
                 </CardDescription>
               </CardHeader>
               <CardContent>

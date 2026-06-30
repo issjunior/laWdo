@@ -9,7 +9,6 @@ import {
   Send,
   RotateCcw,
   Clock,
-  Loader2,
   ArrowRight,
   ArrowLeft,
   History,
@@ -533,4 +532,3 @@ export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
     </div>
   );
 }
-
