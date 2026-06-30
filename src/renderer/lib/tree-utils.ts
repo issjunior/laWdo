@@ -11,6 +11,11 @@ export interface CategoriaFull {
   subcategorias: CategoriaFull[];
 }
 
+export interface ParentOption {
+  value: string;
+  label: string;
+}
+
 export function findCat(tree: CategoriaFull[], id: string): CategoriaFull | null {
   for (const cat of tree) {
     if (cat.id === id) return cat;

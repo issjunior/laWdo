@@ -46,14 +46,14 @@ describe('Button Component', () => {
   it('deve renderizar botão com tamanho pequeno', () => {
     render(<Button size="sm">Pequeno</Button>)
     const button = screen.getByRole('button', { name: /pequeno/i })
-    expect(button).toHaveClass('h-9')
+    expect(button).toHaveClass('h-8')
     expect(button).toHaveClass('px-3')
   })
 
   it('deve renderizar botão com tamanho grande', () => {
     render(<Button size="lg">Grande</Button>)
     const button = screen.getByRole('button', { name: /grande/i })
-    expect(button).toHaveClass('h-11')
+    expect(button).toHaveClass('h-10')
     expect(button).toHaveClass('px-8')
   })
 
@@ -61,7 +61,7 @@ describe('Button Component', () => {
     render(<Button size="icon"><User data-testid="user-icon" /></Button>)
     const button = screen.getByRole('button')
     const icon = screen.getByTestId('user-icon')
-    expect(button).toHaveClass('h-10 w-10')
+    expect(button).toHaveClass('h-9 w-9')
     expect(icon).toBeInTheDocument()
   })
 

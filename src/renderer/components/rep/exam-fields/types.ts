@@ -58,7 +58,7 @@ export interface ExamSectionProps {
 export interface ExamSection {
   id: string;
   label: string;
-  icon: React.ComponentType<{ size?: number | string }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   description: string;
   component: React.FC<ExamSectionProps>;
   group?: string;

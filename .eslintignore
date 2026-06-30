@@ -1,2 +1,3 @@
 # Vendor: TinyMCE skins — código de terceiros, não deve ser lintado
 src/renderer/public/tinymce/skins/**
+out/**

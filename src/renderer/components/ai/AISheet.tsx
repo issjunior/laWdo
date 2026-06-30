@@ -30,6 +30,11 @@ interface AISheetProps {
   error?: string | null;
 }
 
+type ConfiguracaoResposta = {
+  success: boolean;
+  data?: string | null;
+};
+
 export const AISheet: React.FC<AISheetProps> = ({
   open,
   onOpenChange,
@@ -59,11 +64,11 @@ export const AISheet: React.FC<AISheetProps> = ({
       }, 100);
 
       // Buscar provedor e modelo configurados
-      window.ipcAPI.configuracao.obter('provedor_ia').then(res => {
+      window.ipcAPI.configuracao.obter('provedor_ia').then((res: ConfiguracaoResposta) => {
         if (res.success && res.data) {
           const prov = res.data;
           const keyModelo = prov === 'gemini' ? 'modelo_gemini_padrao' : 'modelo_ia_padrao';
-          window.ipcAPI.configuracao.obter(keyModelo).then(mRes => {
+          window.ipcAPI.configuracao.obter(keyModelo).then((mRes: ConfiguracaoResposta) => {
             const provedorStr = prov === 'gemini' ? 'Google Gemini' : 'Groq';
             if (mRes.success && mRes.data) {
               setModelName(`${provedorStr} · ${mRes.data}`);
@@ -233,4 +238,3 @@ export const AISheet: React.FC<AISheetProps> = ({
     </Sheet>
   );
 };
-

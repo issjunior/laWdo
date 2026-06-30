@@ -62,8 +62,8 @@ const iaConfigSchema = z.object({
   provedor: z.enum(['groq', 'gemini']),
   apiKeyGroq: z.string().optional(),
   apiKeyGemini: z.string().optional(),
-  modeloGroq: z.string().default('llama-3.3-70b-versatile'),
-  modeloGemini: z.string().default('gemini-2.5-flash'),
+  modeloGroq: z.string(),
+  modeloGemini: z.string(),
 });
 
 type IAConfigForm = z.infer<typeof iaConfigSchema>;
