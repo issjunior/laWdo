@@ -1,6 +1,6 @@
 # 🏥 Painel de Saúde do Sistema
 
-> **Última medição:** 23/06/2026
+> **Última medição:** 30/06/2026
 > **Propósito:** Termômetro único para medir o progresso de qualidade do projeto ao longo do tempo.
 > **Próxima medição sugerida:** A cada sprint ou após cada grande refatoração.
 
@@ -43,7 +43,7 @@ Este projeto tem **4 camadas de diagnóstico** que se complementam para identifi
 
 | Peça | O que é | Quando usar |
 |------|---------|-------------|
-| **`00_saude_do_sistema.md`** (este arquivo) | Painel com métricas atuais: build ✅, TS ~30 err, ESLint 540, testes 27/31, dead code ~310 | Consultar antes de auditar — mostra o panorama geral e categorias de falso positivo já mapeadas |
+| **`00_saude_do_sistema.md`** (este arquivo) | Painel com métricas atuais: build ✅, TS ✅, ESLint sem erros bloqueantes, testes 34/35, dead code ainda com apontamentos | Consultar antes de auditar — mostra o panorama geral e categorias de falso positivo já mapeadas |
 | **`01_abordagem_leve_pre_knip.md`** | Plano concluído: lista de órfãos já removidos, imports limpos, scripts configurados | **Evitar retrabalho** — itens já tratados não são reanalisados |
 | **`02_plano_knip_futuro.md`** | Especificação do Knip: config, entry points, regras, pré-requisitos (testes ≥30%, CI) | **Futuro** — quando os pré-requisitos forem atingidos, Knip substitui ts-prune |
 | **`03_melhoria_graphify.md`** | Análise estrutural do grafo: god nodes, coesão de comunidades, bridges, impacto de remoção | **Decisão enriquecida** — saber se um nó morto é isolado ou parte de um hub crítico |
@@ -73,14 +73,16 @@ Este projeto tem **4 camadas de diagnóstico** que se complementam para identifi
 | Métrica | Status | Quantidade | Meta | Tendência |
 |---|---|---|---|---|
 | **Build** (`npm run build`) | ✅ OK | 0 erros | 0 | → |
-| **TypeScript** (`npm run type-check`) | 🟡 ~30 erros | ~30 (era ~70 antes de 20/06) | 0 | 📉 melhora |
-| **ESLint** (`npm run lint`) | 🟠 540 erros | 540 err + 45 warn (era ~668 antes de 20/06) | 0 err | 📉 melhora |
-| **Testes** (`npm run test`) | 🟠 3 falhas | 27/31 pass (3 fail, 1 skip) | 31/31 | → |
-| **Código morto** (`npm run prune:all`) | ✅ 42 removidos | ~268 total (falsos positivos: shadcn/ui, Zod, TinyMCE) | 0 real | 📉 melhora |
+| **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | 0 | 📉 melhora |
+| **ESLint** (`npm run lint`) | 🟡 OK com warnings | 0 err + 514 warn | 0 err | 📉 melhora |
+| **Testes** (`npm run test`) | ✅ OK | 34 pass, 1 skip | suíte verde | 📉 melhora |
+| **Código morto** (`npm run prune:all`) | 🟡 Em auditoria | apontamentos remanescentes e falsos positivos conhecidos | 0 real | → |
 
-**Build funcional ✅** — o sistema compila e roda. Os erros são de qualidade/estilo, não de runtime.
+**Baseline funcional ✅** — build, type-check, lint e testes executam sem erro bloqueante.
+O lint ainda concentra dívida técnica em warnings conhecidos.
 
 > 📉 Em 20/06/2026 houve uma bateria de correções que reduziu `~70 → ~30` erros TypeScript e eliminou dezenas de erros ESLint (unused-vars, unescaped-entities, no-empty, no-useless-escape, TinyMCE vendor excluído do lint).
+> 📉 Em 30/06/2026 o baseline foi estabilizado: TypeScript chegou a `0` erros, testes passaram para `34/35`, e ESLint passou a ser executável como gate com `0` erros e warnings explícitos.
 
 ---
 
@@ -122,52 +124,54 @@ Registre aqui as medições ao longo do tempo para visualizar o progresso.
 | **22/06/2026** | ✅ | ~30 | 540 / 45 | 27/31 (+3 fail, 1 skip) | ~310 | — |
 | **23/06/2026** (pré-execução) | ✅ | ~30 | 540 / 45 | 27/31 | ~310 (30 confirmados) | skill |
 | **23/06/2026** (pós-execução) | ✅ | ~32 | 538 / 45 | 27/31 | **268** (42 removidos 🧹) | execução manual |
+| **30/06/2026** (baseline) | ✅ | 0 | 0 / 514 | 34/35 (+1 skip) | apontamentos remanescentes | Codex |
 
 ---
 
 ## 🔬 Detalhamento dos Erros
 
-### TypeScript (~30 erros)
+### TypeScript (0 erros)
 
-Distribuição aproximada:
+O comando `npm run type-check` passa no baseline atual.
+
+Os principais grupos que bloqueavam a checagem foram tratados:
 
 | Grupo | Qtde | Arquivos afetados |
 |---|---|---|
-| `REPFormData` vs `Record<string, string>` (cast) | ~25 | `exam-fields/services/b602.service.ts`, `exam-fields/index.ts` |
-| Zod `.passthrough()` vs `REPFormData` | ~15 | `REPsPage.tsx` |
-| TinyMCE prop mismatch | ~6 | `TinyMceEditor.tsx`, `CabecalhoPage.tsx`, `LaudosPage.tsx`, `TemplatesPage.tsx` |
-| `LucideIcon` vs `ComponentType<{ size }>` | ~6 | `exam-fields/index.ts`, `REPsPage.tsx` |
-| `group: null` vs `string \| undefined` | ~6 | `exam-fields/index.ts` |
-| Outros (escopo, prop removida, etc.) | ~7 | `LaudosPage.tsx`, `SolicitantesPage.tsx`, `PlaceholdersPage.tsx` |
+| Zod/react-hook-form e `REPFormData` | resolvido | `REPsPage.tsx`, `exam-fields/types.ts` |
+| Schema de modelos de IA | resolvido | `ModelosIAPage.tsx` |
+| TinyMCE prop mismatch | resolvido | `TinyMceEditor.tsx` |
+| Tipos do TanStack Table | resolvido | `data-table.tsx` |
+| Tipagem de ícones | resolvido | `exam-fields/types.ts` |
 
 
-### ESLint (540 erros, 45 warnings)
+### ESLint (0 erros, 514 warnings)
+
+O comando `npm run lint` passa porque as dívidas abaixo foram mantidas visíveis
+como warnings, não porque foram eliminadas.
 
 | Regra | Qtde | Gravidade |
 |---|---|---|
-| `@typescript-eslint/no-explicit-any` | ~200 | error |
-| `no-extra-semi` (TinyMCE vendor) | ~30 | error |
+| `@typescript-eslint/no-explicit-any` | majoritária | warning |
+| `@typescript-eslint/no-unused-vars` | remanescente | warning |
+| `react/no-unescaped-entities` | remanescente | warning |
 | `react-hooks/exhaustive-deps` | ~20 | warning |
-| `no-unused-vars` | ~5 | error |
-| `no-empty` (catch blocks) | ~5 | error |
-| `react/no-unescaped-entities` | ~6 | error |
-| `no-extra-boolean-cast` | ~4 | error |
-| `no-useless-escape` | ~6 | error |
-| Demais (espalhados) | ~264 | error |
+| Demais warnings | remanescente | warning |
 
-> ⚠️ Os erros `no-extra-semi` são do vendor TinyMCE em `out/renderer/tinymce/` e `public/tinymce/` — código de terceiros. Devem ser **excluídos do lint** (`.eslintignore`), não corrigidos.
+> ⚠️ `out/**` está excluído do lint para evitar análise de artefatos de build. O vendor TinyMCE em `public/tinymce/` continua tratado como código de terceiros.
 
-### Testes (3 falhas, 1 skip)
+### Testes (34 pass, 1 skip)
 
-As 3 falhas são **pré-existentes** e localizadas no mesmo arquivo:
+As falhas pré-existentes em `button.test.tsx` foram corrigidas para refletir as
+classes atuais do componente `Button`.
 
 | Teste | Arquivo | Causa |
 |---|---|---|
-| Botão tamanho pequeno | `button.test.tsx:49` | Espera `h-9`, recebe `h-8` (shadcn/ui atualizou classes) |
-| Botão tamanho grande | `button.test.tsx:56` | Espera `h-11`, recebe `h-10` (shadcn/ui atualizou classes) |
-| Botão com ícone | `button.test.tsx:64` | Espera `h-10 w-10`, recebe `h-9 w-9` (shadcn/ui atualizou classes) |
+| Botão tamanho pequeno | `button.test.tsx` | Assert atualizado para `h-8` |
+| Botão tamanho grande | `button.test.tsx` | Assert atualizado para `h-10` |
+| Botão com ícone | `button.test.tsx` | Assert atualizado para `h-9 w-9` |
 
-**Correção:** Atualizar as classes CSS esperadas nos asserts do `button.test.tsx` para bater com a versão atual do componente.
+O skip remanescente segue como parte da suíte atual.
 
 ### Código Morto (~268 itens do ts-prune)
 
@@ -193,16 +197,17 @@ A maioria dos ~268 restantes são falsos positivos conhecidos:
 |---|---|---|
 | **Abordagem leve (pré-Knip)** | ✅ Concluído | [`01_abordagem_leve_pre_knip.md`](01_abordagem_leve_pre_knip.md) |
 | **Auditoria ts-prune 23/06/2026** | ✅ Executado — 42 itens removidos | [`04_auditoria_tsprune_2026-06-23.md`](04_auditoria_tsprune_2026-06-23.md) |
+| **Baseline de qualidade 30/06/2026** | 🟡 Em revisão | [`plan_implementacao.md`](plan_implementacao.md) |
 | **Knip (detecção automática)** | 🟡 Futuro | [`02_plano_knip_futuro.md`](02_plano_knip_futuro.md) |
 
 ### Prioridades sugeridas
 
-1. 🥇 **Excluir vendor TinyMCE do ESLint** (~30 erros resolvidos em 1 minuto)
-2. 🥇 **Corrigir os 7 erros críticos de type-check** (escopo, prop removida, etc.) — risco real de runtime
-3. 🥈 **Corrigir os 5 `no-unused-vars`** — código morto já confirmado
-4. 🥈 **Atualizar `button.test.tsx`** — 3 falhas resolvidas
-5. 🥉 **Resolver casts `REPFormData`** — ~25 erros de uma vez
-6. 🥉 **Exhaustive-deps** — ~20 warnings, melhora runtime
+1. 🥇 **Publicar a branch do baseline e abrir Draft PR**
+2. 🥇 **Reduzir warnings de `no-unused-vars`** até a regra poder voltar para error
+3. 🥈 **Reduzir warnings de `react/no-unescaped-entities`** até a regra poder voltar para error
+4. 🥈 **Atacar `no-explicit-any` por módulo** sem trocar dívida real por tipos artificiais
+5. 🥉 **Auditar código morto remanescente** e registrar exceções confirmadas
+6. 🥉 **Reavaliar Knip** depois do baseline ser aceito
 
 ---
 
