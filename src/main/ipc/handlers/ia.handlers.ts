@@ -1,6 +1,4 @@
-import { ipcMain, app } from 'electron';
-import path from 'path';
-import fs from 'fs';
+import { ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 
@@ -132,16 +130,6 @@ function extrairTextoDoHtml(html: string): string {
   // 3. Normalizar espaços
   texto = texto.replace(/\s+/g, ' ').trim();
   return texto || '';
-}
-
-function obterMimeType(ext: string): string {
-  switch (ext.toLowerCase()) {
-    case '.png': return 'image/png';
-    case '.gif': return 'image/gif';
-    case '.webp': return 'image/webp';
-    case '.bmp': return 'image/bmp';
-    default: return 'image/jpeg';
-  }
 }
 
 /**

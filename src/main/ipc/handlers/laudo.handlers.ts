@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { logDebug, logError, logInfo } from '../../utils/logger.js';
+import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';

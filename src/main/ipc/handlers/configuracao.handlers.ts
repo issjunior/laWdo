@@ -1,6 +1,5 @@
 import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
-import { sanitizeInput } from '../../security/index.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 
 /**

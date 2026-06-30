@@ -1,5 +1,4 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import path from 'path';
 import { logDebug, logError } from '../../utils/logger.js';
 
 interface IlustracoesHandlerOptions {

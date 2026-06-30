@@ -1,6 +1,6 @@
-import { ipcMain, dialog, BrowserWindow, nativeImage, app } from 'electron';
+import { ipcMain, BrowserWindow, app } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
-import { auditDelete, auditExport } from '../../services/audit-log.service.js';
+import { auditDelete } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
 import path from 'path';

@@ -1,10 +1,7 @@
 import { BaseService } from './base.service.js';
 import { PecaRow } from '../types/database.js';
-import { getLogger } from '../utils/logger.js';
 import { executeQuery } from '../database/sqlite.js';
 import { categoriaPecaService } from './categoria-peca.service.js';
-
-const log = getLogger('peca');
 
 export class PecaService extends BaseService<PecaRow> {
   constructor() {

@@ -28,11 +28,6 @@ const MAX_FILE_SIZE_MB = 20;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx'];
-const ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-];
-
 const PALAVRAS_CHAVE_PERICIAIS = new Set([
   'PREÂMBULO', 'HISTÓRICO', 'DO HISTÓRICO', 'INTRODUÇÃO', 'METODOLOGIA',
   'DO EXAME', 'EXAME', 'ANÁLISE', 'CONCLUSÃO', 'RESULTADO', 'CONSIDERAÇÕES',

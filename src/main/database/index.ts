@@ -3,11 +3,8 @@ import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
 import {
-  getDatabase,
   executeQuery,
   executeNonQuery,
-  executeSingle,
-  closeDatabase,
 } from './sqlite.js';
 
 const log = getLogger('database');

@@ -41,7 +41,7 @@ export abstract class BaseService<T extends Record<string, any>> {
       // Construir filtros
       const filterEntries = Object.entries(filters).filter(([_, value]) => value !== undefined)
       if (filterEntries.length > 0) {
-        const conditions = filterEntries.map(([key, value], index) => {
+        const conditions = filterEntries.map(([key, value], _index) => {
           params.push(value)
           return `${key} = ?`
         })

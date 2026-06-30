@@ -4,11 +4,12 @@ import { fileURLToPath } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
 import { setupDatabase } from './database/index.js';
-import { setupLogging } from './utils/logger.js';
+import { getLogger, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const log = getLogger('sistema');
 
 // Configurações de segurança
 if (squirrelStartup) {
@@ -115,11 +116,11 @@ app.whenReady().then(async () => {
       if (!ret) {
         console.warn(`❌ Não foi possível registrar atalho: ${shortcut}`);
       } else {
-        console.log(`✅ Atalho registrado: ${shortcut}`);
+        log.debug(`Atalho registrado: ${shortcut}`);
       }
     });
 
-    console.log('✅ Aplicação Electron inicializada com sucesso');
+    log.debug('Aplicação Electron inicializada com sucesso');
   } catch (error) {
     console.error('❌ Erro ao inicializar aplicação:', error);
     app.quit();
@@ -130,7 +131,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   // Desregistrar todos os atalhos de teclado
   globalShortcut.unregisterAll();
-  console.log('🔧 Atalhos de teclado desregistrados');
+  log.debug('Atalhos de teclado desregistrados');
 
   if (process.platform !== 'darwin') {
     app.quit();
