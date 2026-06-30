@@ -16,7 +16,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Plus, X } from 'lucide-react';
-import type { ExamSectionProps, MenuSection } from './types';
+import type { Path } from 'react-hook-form';
+import type { ExamSectionProps, MenuSection, REPFormData } from './types';
+
+type CampoRep = Path<REPFormData>;
+
+const campoRep = (nome: string): CampoRep => nome as CampoRep;
+const camposRep = (nomes: string[]): CampoRep[] => nomes.map(campoRep);
 
 const Label = ({ children }: { children: React.ReactNode }) => (
   <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -48,7 +54,6 @@ const PROJETIL_OPTS = [
   'ETPT – Encamisado Total Pontiagudo',
 ] as const;
 const OBS_CARTUCHO_OPTS = ['Intacto', 'NTA', 'Picotado', 'Percutido', 'Não deflagrado'] as const;
-const OBS_ESTOJO_OPTS = ['Intacto', 'NTA', 'Picotado', 'Percutido', 'Não deflagrado'] as const;
 
 function formatarNumeroBO(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
@@ -68,7 +73,7 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
   const [numEnvolvidos, setNumEnvolvidos] = useState(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
-      const valor = form.getValues(`b602_envolvidos_${i}` as any);
+      const valor = form.getValues(campoRep(`b602_envolvidos_${i}`));
       if (valor && typeof valor === 'string' && valor.trim() !== '') {
         maxIndex = i;
       }
@@ -76,17 +81,17 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
     return Math.max(1, maxIndex + 1);
   });
 
-  const envolvidosValores = form.watch([
+  const envolvidosValores = form.watch(camposRep([
     'b602_envolvidos_0', 'b602_envolvidos_1', 'b602_envolvidos_2',
     'b602_envolvidos_3', 'b602_envolvidos_4', 'b602_envolvidos_5',
     'b602_envolvidos_6', 'b602_envolvidos_7', 'b602_envolvidos_8',
     'b602_envolvidos_9'
-  ] as any);
+  ]));
 
   useEffect(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
-      const valor = form.getValues(`b602_envolvidos_${i}` as any);
+      const valor = form.getValues(campoRep(`b602_envolvidos_${i}`));
       if (valor && typeof valor === 'string' && valor.trim() !== '') {
         maxIndex = i;
       }
@@ -331,7 +336,7 @@ function ToggleSection({
   label: string;
   children: (active: boolean) => React.ReactNode;
 }) {
-  const toggleValue = form.watch(toggleName as any) as string | undefined;
+  const toggleValue = form.watch(campoRep(toggleName)) as string | undefined;
   const active = toggleValue === 'on';
 
   return (
@@ -341,7 +346,7 @@ function ToggleSection({
           id={toggleName}
           checked={active}
           onCheckedChange={(checked) => {
-            form.setValue(toggleName as any, checked ? 'on' : 'off', {
+            form.setValue(campoRep(toggleName), checked ? 'on' : 'off', {
               shouldValidate: false,
               shouldDirty: true,
             });
@@ -361,11 +366,11 @@ export const MaterialEncFields: React.FC<ExamSectionProps> = ({ form }) => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_material_enc_${i}_`;
-      const natureza = form.getValues(`${prefix}natureza` as any);
-      const quantidade = form.getValues(`${prefix}quantidade` as any);
-      const tipo = form.getValues(`${prefix}tipo` as any);
-      const dito = form.getValues(`${prefix}dito_oficio` as any);
-      const lacre = form.getValues(`${prefix}numero_lacre` as any);
+      const natureza = form.getValues(campoRep(`${prefix}natureza`));
+      const quantidade = form.getValues(campoRep(`${prefix}quantidade`));
+      const tipo = form.getValues(campoRep(`${prefix}tipo`));
+      const dito = form.getValues(campoRep(`${prefix}dito_oficio`));
+      const lacre = form.getValues(campoRep(`${prefix}numero_lacre`));
       if (natureza || quantidade || tipo || dito || lacre) {
         maxIndex = i;
       }
@@ -373,23 +378,23 @@ export const MaterialEncFields: React.FC<ExamSectionProps> = ({ form }) => {
     return Math.max(1, maxIndex + 1);
   });
 
-  const materialValores = form.watch([
+  const materialValores = form.watch(camposRep([
     'b602_material_enc_0_natureza', 'b602_material_enc_1_natureza',
     'b602_material_enc_2_natureza', 'b602_material_enc_3_natureza',
     'b602_material_enc_4_natureza', 'b602_material_enc_5_natureza',
     'b602_material_enc_6_natureza', 'b602_material_enc_7_natureza',
     'b602_material_enc_8_natureza', 'b602_material_enc_9_natureza'
-  ] as any);
+  ]));
 
   useEffect(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_material_enc_${i}_`;
-      const natureza = form.getValues(`${prefix}natureza` as any);
-      const quantidade = form.getValues(`${prefix}quantidade` as any);
-      const tipo = form.getValues(`${prefix}tipo` as any);
-      const dito = form.getValues(`${prefix}dito_oficio` as any);
-      const lacre = form.getValues(`${prefix}numero_lacre` as any);
+      const natureza = form.getValues(campoRep(`${prefix}natureza`));
+      const quantidade = form.getValues(campoRep(`${prefix}quantidade`));
+      const tipo = form.getValues(campoRep(`${prefix}tipo`));
+      const dito = form.getValues(campoRep(`${prefix}dito_oficio`));
+      const lacre = form.getValues(campoRep(`${prefix}numero_lacre`));
       if (natureza || quantidade || tipo || dito || lacre) {
         maxIndex = i;
       }
@@ -416,7 +421,7 @@ export const MaterialEncFields: React.FC<ExamSectionProps> = ({ form }) => {
     <div className="space-y-3">
       {Array.from({ length: numLinhas }, (_, i) => {
         const prefix = `b602_material_enc_${i}_`;
-        const natureza = form.watch(`${prefix}natureza` as any) as string | undefined;
+        const natureza = form.watch(campoRep(`${prefix}natureza`)) as string | undefined;
         const isArma = natureza === 'Arma';
         return (
           <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/30">
@@ -434,7 +439,7 @@ export const MaterialEncFields: React.FC<ExamSectionProps> = ({ form }) => {
                      'arma_marca', 'arma_calibre', 'arma_numeracao_serie', 'arma_numeracao_cano',
                      'arma_capacidade_carregador', 'arma_comprimento_cano', 'arma_acabamento',
                      'arma_funcionamento', 'arma_estado_conservacao'].forEach((f) =>
-                      form.setValue(`${pf}${f}` as any, '')
+                      form.setValue(campoRep(`${pf}${f}`), '')
                     );
                     setNumLinhas((n) => Math.max(1, n - 1));
                   }}
@@ -579,7 +584,7 @@ function LinhaTabelaBalistica({
   prefix: string;
   showProjetil: boolean;
 }) {
-  const obsValue = (form.watch(`${prefix}_observacao` as any) as string) || '';
+  const obsValue = (form.watch(campoRep(`${prefix}_observacao`)) as string) || '';
   const selectedObs = obsValue ? obsValue.split(',') : [];
 
   return (
@@ -763,14 +768,14 @@ export const CartuchosFields: React.FC<ExamSectionProps> = ({ form }) => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_cartuchos_${i}_`;
-      const qtd = form.getValues(`${prefix}quantidade` as any);
-      const calibre = form.getValues(`${prefix}calibre` as any);
-      const marca = form.getValues(`${prefix}marca` as any);
-      const origem = form.getValues(`${prefix}origem` as any);
-      const espoleta = form.getValues(`${prefix}espoleta` as any);
-      const estojo = form.getValues(`${prefix}estojo` as any);
-      const projetil = form.getValues(`${prefix}projetil` as any);
-      const obs = form.getValues(`${prefix}observacao` as any);
+      const qtd = form.getValues(campoRep(`${prefix}quantidade`));
+      const calibre = form.getValues(campoRep(`${prefix}calibre`));
+      const marca = form.getValues(campoRep(`${prefix}marca`));
+      const origem = form.getValues(campoRep(`${prefix}origem`));
+      const espoleta = form.getValues(campoRep(`${prefix}espoleta`));
+      const estojo = form.getValues(campoRep(`${prefix}estojo`));
+      const projetil = form.getValues(campoRep(`${prefix}projetil`));
+      const obs = form.getValues(campoRep(`${prefix}observacao`));
       if (qtd || calibre || marca || origem || espoleta || estojo || projetil || obs) {
         maxIndex = i;
       }
@@ -778,26 +783,26 @@ export const CartuchosFields: React.FC<ExamSectionProps> = ({ form }) => {
     return Math.max(1, maxIndex + 1);
   });
 
-  const cartuchosValores = form.watch([
+  const cartuchosValores = form.watch(camposRep([
     'b602_cartuchos_0_quantidade', 'b602_cartuchos_1_quantidade',
     'b602_cartuchos_2_quantidade', 'b602_cartuchos_3_quantidade',
     'b602_cartuchos_4_quantidade', 'b602_cartuchos_5_quantidade',
     'b602_cartuchos_6_quantidade', 'b602_cartuchos_7_quantidade',
     'b602_cartuchos_8_quantidade', 'b602_cartuchos_9_quantidade'
-  ] as any);
+  ]));
 
   useEffect(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_cartuchos_${i}_`;
-      const qtd = form.getValues(`${prefix}quantidade` as any);
-      const calibre = form.getValues(`${prefix}calibre` as any);
-      const marca = form.getValues(`${prefix}marca` as any);
-      const origem = form.getValues(`${prefix}origem` as any);
-      const espoleta = form.getValues(`${prefix}espoleta` as any);
-      const estojo = form.getValues(`${prefix}estojo` as any);
-      const projetil = form.getValues(`${prefix}projetil` as any);
-      const obs = form.getValues(`${prefix}observacao` as any);
+      const qtd = form.getValues(campoRep(`${prefix}quantidade`));
+      const calibre = form.getValues(campoRep(`${prefix}calibre`));
+      const marca = form.getValues(campoRep(`${prefix}marca`));
+      const origem = form.getValues(campoRep(`${prefix}origem`));
+      const espoleta = form.getValues(campoRep(`${prefix}espoleta`));
+      const estojo = form.getValues(campoRep(`${prefix}estojo`));
+      const projetil = form.getValues(campoRep(`${prefix}projetil`));
+      const obs = form.getValues(campoRep(`${prefix}observacao`));
       if (qtd || calibre || marca || origem || espoleta || estojo || projetil || obs) {
         maxIndex = i;
       }
@@ -807,9 +812,6 @@ export const CartuchosFields: React.FC<ExamSectionProps> = ({ form }) => {
       setNumLinhas(count);
     }
   }, [cartuchosValores, form, numLinhas]);
-
-  const toggleValue = form.watch('b602_cartuchos_toggle' as any) as string | undefined;
-  const active = toggleValue === 'on';
 
   return (
     <ToggleSection form={form} toggleName="b602_cartuchos_toggle" label="Possui Cartuchos?">
@@ -859,13 +861,13 @@ export const EstojosFields: React.FC<ExamSectionProps> = ({ form }) => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_estojos_${i}_`;
-      const qtd = form.getValues(`${prefix}quantidade` as any);
-      const calibre = form.getValues(`${prefix}calibre` as any);
-      const marca = form.getValues(`${prefix}marca` as any);
-      const origem = form.getValues(`${prefix}origem` as any);
-      const espoleta = form.getValues(`${prefix}espoleta` as any);
-      const estojo = form.getValues(`${prefix}estojo` as any);
-      const obs = form.getValues(`${prefix}observacao` as any);
+      const qtd = form.getValues(campoRep(`${prefix}quantidade`));
+      const calibre = form.getValues(campoRep(`${prefix}calibre`));
+      const marca = form.getValues(campoRep(`${prefix}marca`));
+      const origem = form.getValues(campoRep(`${prefix}origem`));
+      const espoleta = form.getValues(campoRep(`${prefix}espoleta`));
+      const estojo = form.getValues(campoRep(`${prefix}estojo`));
+      const obs = form.getValues(campoRep(`${prefix}observacao`));
       if (qtd || calibre || marca || origem || espoleta || estojo || obs) {
         maxIndex = i;
       }
@@ -873,25 +875,25 @@ export const EstojosFields: React.FC<ExamSectionProps> = ({ form }) => {
     return Math.max(1, maxIndex + 1);
   });
 
-  const estojosValores = form.watch([
+  const estojosValores = form.watch(camposRep([
     'b602_estojos_0_quantidade', 'b602_estojos_1_quantidade',
     'b602_estojos_2_quantidade', 'b602_estojos_3_quantidade',
     'b602_estojos_4_quantidade', 'b602_estojos_5_quantidade',
     'b602_estojos_6_quantidade', 'b602_estojos_7_quantidade',
     'b602_estojos_8_quantidade', 'b602_estojos_9_quantidade'
-  ] as any);
+  ]));
 
   useEffect(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_estojos_${i}_`;
-      const qtd = form.getValues(`${prefix}quantidade` as any);
-      const calibre = form.getValues(`${prefix}calibre` as any);
-      const marca = form.getValues(`${prefix}marca` as any);
-      const origem = form.getValues(`${prefix}origem` as any);
-      const espoleta = form.getValues(`${prefix}espoleta` as any);
-      const estojo = form.getValues(`${prefix}estojo` as any);
-      const obs = form.getValues(`${prefix}observacao` as any);
+      const qtd = form.getValues(campoRep(`${prefix}quantidade`));
+      const calibre = form.getValues(campoRep(`${prefix}calibre`));
+      const marca = form.getValues(campoRep(`${prefix}marca`));
+      const origem = form.getValues(campoRep(`${prefix}origem`));
+      const espoleta = form.getValues(campoRep(`${prefix}espoleta`));
+      const estojo = form.getValues(campoRep(`${prefix}estojo`));
+      const obs = form.getValues(campoRep(`${prefix}observacao`));
       if (qtd || calibre || marca || origem || espoleta || estojo || obs) {
         maxIndex = i;
       }
@@ -901,9 +903,6 @@ export const EstojosFields: React.FC<ExamSectionProps> = ({ form }) => {
       setNumLinhas(count);
     }
   }, [estojosValores, form, numLinhas]);
-
-  const toggleValue = form.watch('b602_estojos_toggle' as any) as string | undefined;
-  const active = toggleValue === 'on';
 
   return (
     <ToggleSection form={form} toggleName="b602_estojos_toggle" label="Possui Estojos?">
@@ -949,21 +948,18 @@ export const EstojosFields: React.FC<ExamSectionProps> = ({ form }) => {
 };
 
 export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
-  const toggleValue = form.watch('b602_armas_toggle' as any) as string | undefined;
-  const active = toggleValue === 'on';
-
   const [numLinhas, setNumLinhas] = useState(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_armas_${i}_`;
-      const tipo = form.getValues(`${prefix}tipo` as any);
-      const marca = form.getValues(`${prefix}marca` as any);
+      const tipo = form.getValues(campoRep(`${prefix}tipo`));
+      const marca = form.getValues(campoRep(`${prefix}marca`));
       if (tipo || marca) { maxIndex = i; }
     }
     return Math.max(1, maxIndex + 1);
   });
 
-  const armasValores = form.watch([
+  const armasValores = form.watch(camposRep([
     'b602_armas_0_tipo', 'b602_armas_0_marca',
     'b602_armas_1_tipo', 'b602_armas_1_marca',
     'b602_armas_2_tipo', 'b602_armas_2_marca',
@@ -974,14 +970,14 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
     'b602_armas_7_tipo', 'b602_armas_7_marca',
     'b602_armas_8_tipo', 'b602_armas_8_marca',
     'b602_armas_9_tipo', 'b602_armas_9_marca',
-  ] as any);
+  ]));
 
   useEffect(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
       const prefix = `b602_armas_${i}_`;
-      const tipo = form.getValues(`${prefix}tipo` as any);
-      const marca = form.getValues(`${prefix}marca` as any);
+      const tipo = form.getValues(campoRep(`${prefix}tipo`));
+      const marca = form.getValues(campoRep(`${prefix}marca`));
       if (tipo || marca) { maxIndex = i; }
     }
     const count = maxIndex + 1;
@@ -1024,10 +1020,10 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
                         className="h-6 w-6 text-muted-foreground hover:text-destructive"
                         onClick={() => {
                           ARMA_CAMPOS.forEach((c) =>
-                            form.setValue(`${prefix}${c.key}` as any, '')
+                            form.setValue(campoRep(`${prefix}${c.key}`), '')
                           );
-                          form.setValue(`${prefix}func_toggle` as any, 'off');
-                          form.setValue(`${prefix}coleta_toggle` as any, 'off');
+                          form.setValue(campoRep(`${prefix}func_toggle`), 'off');
+                          form.setValue(campoRep(`${prefix}coleta_toggle`), 'off');
                           setNumLinhas((n) => Math.max(1, n - 1));
                         }}
                       >
@@ -1112,9 +1108,9 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
                     <div className="flex items-center gap-3">
                       <Checkbox
                         id={`${prefix}func_toggle`}
-                        checked={(form.watch(`${prefix}func_toggle` as any) as string | undefined) === 'on'}
+                        checked={(form.watch(campoRep(`${prefix}func_toggle`)) as string | undefined) === 'on'}
                         onCheckedChange={(checked) => {
-                          form.setValue(`${prefix}func_toggle` as any, checked ? 'on' : 'off', {
+                          form.setValue(campoRep(`${prefix}func_toggle`), checked ? 'on' : 'off', {
                             shouldValidate: false,
                             shouldDirty: true,
                           });
@@ -1127,9 +1123,9 @@ export const ArmasFields: React.FC<ExamSectionProps> = ({ form }) => {
                     <div className="flex items-center gap-3">
                       <Checkbox
                         id={`${prefix}coleta_toggle`}
-                        checked={(form.watch(`${prefix}coleta_toggle` as any) as string | undefined) === 'on'}
+                        checked={(form.watch(campoRep(`${prefix}coleta_toggle`)) as string | undefined) === 'on'}
                         onCheckedChange={(checked) => {
-                          form.setValue(`${prefix}coleta_toggle` as any, checked ? 'on' : 'off', {
+                          form.setValue(campoRep(`${prefix}coleta_toggle`), checked ? 'on' : 'off', {
                             shouldValidate: false,
                             shouldDirty: true,
                           });

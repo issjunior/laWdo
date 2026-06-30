@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useForm, type Resolver } from 'react-hook-form';
+import { useForm, type Path, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/forms/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,6 +58,30 @@ const REP_TABLE_STYLES = {
   label:  'border:1px solid #000;padding:6px 10px;font-weight:600;font-size:12px',
 };
 
+type ValorDesconhecido = string | number | boolean | null | undefined;
+
+interface RegistroNome {
+  id: string;
+  nome: string;
+}
+
+interface SolicitanteResumo extends RegistroNome {
+  tipo?: string;
+}
+
+interface TipoExameResumo extends RegistroNome {
+  codigo: string;
+}
+
+type TemplateResumo = RegistroNome;
+type LaudoResumo = { rep_id: string };
+type RegistroRep = REP & Record<string, ValorDesconhecido>;
+type CampoRep = Path<REPFormData>;
+
+function mensagemErro(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 function buildRepLabelValue(label: string, value: string, labelW?: string): string {
   const lw = labelW ? `;width:${labelW}` : '';
   return `<tr><td style="${REP_TABLE_STYLES.label}${lw}">${label}</td><td style="${REP_TABLE_STYLES.td}">${value}</td></tr>`;
@@ -84,8 +108,8 @@ function buildRepNumberedTable(titulo: string, headers: string[], rows: string[]
   return `<table style="${REP_TABLE_STYLES.table}"><thead>${titleRow}${thead}</thead><tbody>${tbody}</tbody></table>`;
 }
 
-function buildRepHtml(rep: any, solicitanteNome: string, tipoExameNome: string): string {
-  const s = (v: any): string => (v != null && v !== '') ? String(v) : '-';
+function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: string): string {
+  const s = (v: ValorDesconhecido): string => (v != null && v !== '') ? String(v) : '-';
   const statusMap: Record<string, string> = { 'Pendente': 'Pendente', 'Em Andamento': 'Em Andamento', 'Concluído': 'Concluído' };
   const statusLabel = statusMap[rep.status] || rep.status || 'Pendente';
 
@@ -273,14 +297,6 @@ const FIELD_PLACEHOLDER: Record<string, string> = {
   b602_solicitante_nome: 'b602_solicitante_nome',
 };
 
-function formatarNumeroBO(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 10);
-  if (digits.length <= 4) return digits;
-  const year = digits.slice(0, 4);
-  const num = digits.slice(4, 10);
-  return `${year}/${num}`;
-}
-
 function formatarNumeroREP(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
   const len = digits.length;
@@ -374,7 +390,7 @@ const LabelWithPlaceholder: React.FC<{ field: string; children: React.ReactNode;
   );
 };
 
-function formatarDataBR(iso: string | undefined): string {
+function formatarDataBR(iso: string | null | undefined): string {
   if (!iso) return '-';
   try {
     const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
@@ -385,7 +401,7 @@ function formatarDataBR(iso: string | undefined): string {
   }
 }
 
-function formatarDataHora(iso: string | undefined): string {
+function formatarDataHora(iso: string | null | undefined): string {
   if (!iso) return '-';
   try {
     const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
@@ -461,12 +477,12 @@ export const REPsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [solicitantes, setSolicitantes] = useState<any[]>([]);
-  const [tiposExame, setTiposExame] = useState<any[]>([]);
-  const [templatesVinculados, setTemplatesVinculados] = useState<any[]>([]);
+  const [solicitantes, setSolicitantes] = useState<SolicitanteResumo[]>([]);
+  const [tiposExame, setTiposExame] = useState<TipoExameResumo[]>([]);
+  const [templatesVinculados, setTemplatesVinculados] = useState<TemplateResumo[]>([]);
 
   // Ref para o superRefine sempre ter os tiposExame atualizados
-  const tiposExameRef = useRef<any[]>([]);
+  const tiposExameRef = useRef<TipoExameResumo[]>([]);
   useEffect(() => { tiposExameRef.current = tiposExame; }, [tiposExame]);
 
   // Ref para evitar que o template_id seja limpo ao carregar uma edição
@@ -476,9 +492,8 @@ export const REPsPage: React.FC = () => {
   const [dialogoToggleAberto, setDialogoToggleAberto] = useState(false);
   const [dialogoArmasAlteradasAberto, setDialogoArmasAlteradasAberto] = useState(false);
   const [togglesDesmarcados, setTogglesDesmarcados] = useState<string[]>([]);
-  const dadosPendentesRef = useRef<any>(null);
-  const dadosPendentesArmasRef = useRef<any>(null);
-  const codigoPendenteRef = useRef<string | undefined>(undefined);
+  const dadosPendentesRef = useRef<REPFormData | null>(null);
+  const dadosPendentesArmasRef = useRef<REPFormData | null>(null);
 
   // Schema com validação condicional via superRefine
   const repFormSchema = useMemo(() => z.object({
@@ -575,7 +590,7 @@ export const REPsPage: React.FC = () => {
   const [criarLaudoTipoExameId, setCriarLaudoTipoExameId] = useState('');
   const [mostrarPlaceholders, setMostrarPlaceholders] = useState(false);
   const [criarLaudoTemplateId, setCriarLaudoTemplateId] = useState('');
-  const [criarLaudoTemplates, setCriarLaudoTemplates] = useState<any[]>([]);
+  const [criarLaudoTemplates, setCriarLaudoTemplates] = useState<TemplateResumo[]>([]);
   const [criarLaudoSubmitting, setCriarLaudoSubmitting] = useState(false);
   const [repsComLaudo, setRepsComLaudo] = useState<Set<string>>(new Set());
 
@@ -619,7 +634,7 @@ export const REPsPage: React.FC = () => {
           const laudosResp = await window.ipcAPI.laudo.findAll();
           if (laudosResp.success && laudosResp.data) {
             const idsComLaudo = new Set<string>(
-              (laudosResp.data as any[]).map((l: any) => l.rep_id)
+              (laudosResp.data as LaudoResumo[]).map((l) => l.rep_id)
             );
             setRepsComLaudo(idsComLaudo);
           }
@@ -628,7 +643,7 @@ export const REPsPage: React.FC = () => {
       } else {
         setError(r.error);
       }
-    } catch (e: any) { setError(e.message); } finally { setLoading(false); }
+    } catch (e: unknown) { setError(mensagemErro(e, 'Erro ao carregar REPs')); } finally { setLoading(false); }
   }, []);
 
   const carregarSolicitantes = useCallback(async () => {
@@ -641,7 +656,7 @@ export const REPsPage: React.FC = () => {
     if (r.success && r.data) setTiposExame(r.data);
   }, []);
 
-  useEffect(() => { carregarREPs(); carregarSolicitantes(); carregarTiposExame(); }, []);
+  useEffect(() => { carregarREPs(); carregarSolicitantes(); carregarTiposExame(); }, [carregarREPs, carregarSolicitantes, carregarTiposExame]);
 
   const tipoExameId = form.watch('tipo_exame_id');
 
@@ -659,18 +674,18 @@ export const REPsPage: React.FC = () => {
     (async () => {
       const r = await window.ipcAPI.template.findByTipoExame(tipoExameId);
       if (r.success && r.data) {
-        const ordenados = [...r.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
         setTemplatesVinculados(ordenados);
       } else {
         setTemplatesVinculados([]);
       }
     })();
-  }, [tipoExameId, showForm]);
+  }, [form, tipoExameId, showForm]);
 
 
 
   const tipoExameSelecionado = tipoExameId
-    ? tiposExame.find(t => t.id === tipoExameId)
+    ? tiposExame.find(t => t.id === tipoExameId) || null
     : null;
   const valoresFormulario = form.watch();
   const camposObrigatoriosPendentes = useMemo(
@@ -696,7 +711,7 @@ export const REPsPage: React.FC = () => {
   const examSections = useMemo(() => {
     if (!tipoExameSelecionado) return [];
     return getSectionsForExame(tipoExameSelecionado.codigo);
-  }, [tipoExameSelecionado, tiposExame]);
+  }, [tipoExameSelecionado]);
 
   const solicitanteId = form.watch('solicitante_id');
   const b602LocalUf = form.watch('b602_local_uf');
@@ -707,7 +722,7 @@ export const REPsPage: React.FC = () => {
         form.setValue('b602_solicitante_nome', solicitante.nome, { shouldValidate: false });
       }
     }
-  }, [solicitanteId, solicitantes]);
+  }, [form, solicitanteId, solicitantes]);
 
   useEffect(() => {
     if (tipoExameSelecionado?.codigo !== 'B-602') return;
@@ -759,7 +774,7 @@ export const REPsPage: React.FC = () => {
       try {
         const templatesResp = await window.ipcAPI.template.findByTipoExame(rep.tipo_exame_id);
         if (templatesResp.success && templatesResp.data) {
-          const ordenados = [...templatesResp.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          const ordenados = [...(templatesResp.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           setTemplatesVinculados(ordenados);
         } else {
           setTemplatesVinculados([]);
@@ -836,7 +851,7 @@ export const REPsPage: React.FC = () => {
         setError(r.error || 'Erro ao excluir REP');
         setDeleteDialogOpen(false);
       }
-    } catch (e: any) {
+    } catch {
       setError('Erro ao excluir REP');
       setDeleteDialogOpen(false);
     }
@@ -896,8 +911,8 @@ export const REPsPage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao gerar PDF da REP');
       }
-    } catch (e: any) {
-      setError('Erro ao gerar preview: ' + e.message);
+    } catch (e: unknown) {
+      setError('Erro ao gerar preview: ' + mensagemErro(e, 'Erro desconhecido'));
     } finally {
       setPreviewLoading(false);
     }
@@ -915,7 +930,7 @@ export const REPsPage: React.FC = () => {
       (async () => {
         const r = await window.ipcAPI.template.findByTipoExame(rep.tipo_exame_id!);
         if (r.success && r.data) {
-          const ordenados = [...r.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           setCriarLaudoTemplates(ordenados);
         }
       })();
@@ -947,8 +962,8 @@ export const REPsPage: React.FC = () => {
       } else {
         setError(r.error || 'Erro ao criar laudo');
       }
-    } catch (e: any) {
-      setError('Erro ao criar laudo: ' + e.message);
+    } catch (e: unknown) {
+      setError('Erro ao criar laudo: ' + mensagemErro(e, 'Erro desconhecido'));
     } finally {
       setCriarLaudoSubmitting(false);
     }
@@ -963,7 +978,7 @@ export const REPsPage: React.FC = () => {
     }
     const r = await window.ipcAPI.template.findByTipoExame(tipoExameId);
     if (r.success && r.data) {
-      const ordenados = [...r.data].sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
+      const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       setCriarLaudoTemplates(ordenados);
     } else {
       setCriarLaudoTemplates([]);
@@ -974,11 +989,6 @@ export const REPsPage: React.FC = () => {
     // Verificar toggles desmarcados
     if (editingRep) {
       const toggleKeys = ['b602_cartuchos_toggle', 'b602_estojos_toggle', 'b602_armas_toggle'];
-      const toggleLabels: Record<string, string> = {
-        'b602_cartuchos_toggle': 'Cartuchos',
-        'b602_estojos_toggle': 'Estojos',
-        'b602_armas_toggle': 'Armas',
-      };
       const desmarcados: string[] = [];
       for (const key of toggleKeys) {
         const original = togglesOriginaisRef.current[key] || 'off';
@@ -1029,7 +1039,7 @@ export const REPsPage: React.FC = () => {
     await executarSalvar(data);
   });
 
-  const executarSalvar = async (data: any) => {
+  const executarSalvar = async (data: REPFormData) => {
     try {
       setSuccess(null);
       setSubmitting(true);
@@ -1056,8 +1066,8 @@ export const REPsPage: React.FC = () => {
           setError(r.error || 'Erro ao criar REP');
         }
       }
-    } catch (e: any) {
-      setError(e.message || 'Erro ao salvar REP');
+    } catch (e: unknown) {
+      setError(mensagemErro(e, 'Erro ao salvar REP'));
     } finally {
       setSubmitting(false);
     }
@@ -1115,8 +1125,8 @@ export const REPsPage: React.FC = () => {
       } else {
         setSolicitanteQCError(r.error || 'Erro ao criar solicitante');
       }
-    } catch (e: any) {
-      setSolicitanteQCError(e.message || 'Erro ao criar solicitante');
+    } catch (e: unknown) {
+      setSolicitanteQCError(mensagemErro(e, 'Erro ao criar solicitante'));
     } finally {
       setSolicitanteQCSubmitting(false);
     }
@@ -1145,8 +1155,8 @@ export const REPsPage: React.FC = () => {
       } else {
         setTipoExameQCError(r.error || 'Erro ao criar tipo de exame');
       }
-    } catch (e: any) {
-      setTipoExameQCError(e.message || 'Erro ao criar tipo de exame');
+    } catch (e: unknown) {
+      setTipoExameQCError(mensagemErro(e, 'Erro ao criar tipo de exame'));
     } finally {
       setTipoExameQCSubmitting(false);
     }
@@ -1162,8 +1172,9 @@ export const REPsPage: React.FC = () => {
     const novosPreenchidos = new Set<string>();
 
     for (const [key, value] of Object.entries(campos)) {
-      if (modo === 'substituir' || !form.getValues(key as any)) {
-        form.setValue(key as any, value, { shouldValidate: true });
+      const campo = key as CampoRep;
+      if (modo === 'substituir' || !form.getValues(campo)) {
+        form.setValue(campo, value, { shouldValidate: true });
       }
       if (value) {
         novosPreenchidos.add(key);
@@ -1391,7 +1402,7 @@ export const REPsPage: React.FC = () => {
                 <div className="space-y-2">
                   <p className="text-sm">
                     Desmarcar{' '}
-                    {togglesDesmarcados.map((t, i) => {
+                    {togglesDesmarcados.map((t) => {
                       const labels: Record<string, string> = {
                         'b602_cartuchos_toggle': '"Possui Cartuchos?"',
                         'b602_estojos_toggle': '"Possui Estojos?"',
