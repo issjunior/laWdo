@@ -160,7 +160,7 @@ export function getLogger(module: LogModule): ILogger {
   return loggerCache.get(module)!;
 }
 
-export const logInfo = (message: string, meta?: any) => {
+export const logInfo = (message: string, meta?: Record<string, unknown>) => {
   baseLogger.info(message, { module: 'sistema', ...meta });
 };
 
@@ -179,7 +179,7 @@ export const logError = (message: string, error?: unknown) => {
   }
 };
 
-export const logDebug = (message: string, meta?: any) => {
+export const logDebug = (message: string, meta?: Record<string, unknown>) => {
   baseLogger.debug(message, { module: 'sistema', ...meta });
 };
 

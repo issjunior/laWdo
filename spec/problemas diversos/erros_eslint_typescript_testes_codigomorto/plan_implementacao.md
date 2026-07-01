@@ -18,7 +18,7 @@ de trabalho. Nao descreve comportamento funcional do produto.
 | Build | Passando | Validado nas tranches de `src/main/**` |
 | TypeScript | Passando | `npm run type-check` OK na ultima tranche registrada |
 | Testes | Passando | `npm test` OK na ultima tranche registrada |
-| ESLint | Passando com warnings | `0 errors`, `81 warnings` |
+| ESLint | Passando com warnings | `0 errors`, `79 warnings` |
 | Codigo morto | Ainda com apontamentos | Tratar separado de lint/types |
 
 ## Linha de progresso
@@ -365,6 +365,31 @@ Proxima recomendacao operacional: escolher entre duas rotas curtas:
 `src/main/utils/logger.ts`, com 2 warnings localizados, ou iniciar handlers IPC
 por grupos pequenos. Deixar `src/main/services/exportacao.service.ts` para
 tranche propria.
+
+### Resultado da tranche `codex/remove-grill-me-e-logger`
+
+O skill local `.agents/skills/grill-me/SKILL.md` foi removido do rastreamento
+do Git para sair do GitHub. A copia local foi preservada, porque `.agents` ja
+esta coberto pelo `.gitignore`.
+
+`src/main/utils/logger.ts` ficou sem warnings `no-explicit-any`; `logInfo` e
+`logDebug` agora recebem `Record<string, unknown>` nos metadados.
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/main/utils/logger.ts` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `79 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+| `npm run build` | Passou |
+
+Efeito: `no-explicit-any` caiu de `54` para `52`; hooks permaneceram em
+`27`; total caiu de `81` para `79`.
+
+Proxima recomendacao operacional: iniciar handlers IPC por grupos pequenos,
+comecando por handlers simples de CRUD antes de `template.handlers.ts` e
+`src/main/ipc/index.ts`. Manter `src/main/services/exportacao.service.ts`
+separado.
 
 ## Proximas tranches sugeridas
 
