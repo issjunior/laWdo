@@ -15,9 +15,12 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   ArrowLeft, Plus, Trash2, GripVertical, Loader2, AlertCircle, Save, Link2, Search,
+  type LucideIcon,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { toast } from 'sonner';
+
+const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
 
 interface EtapaWizard {
   id: string;
@@ -40,8 +43,15 @@ interface OpcaoWizard {
 }
 
 interface ArvoreWizard {
-  wizard: any;
+  wizard: WizardResumo;
   etapas: EtapaWizard[];
+}
+
+interface WizardResumo {
+  id: string;
+  nome?: string;
+  descricao?: string;
+  template_id?: string;
 }
 
 interface PecaItem {
@@ -65,6 +75,12 @@ interface CategoriaArvore {
   subcategorias: CategoriaArvore[];
 }
 
+type ValorEtapa = EtapaWizard[keyof EtapaWizard];
+
+function mensagemErro(error: unknown): string {
+  return error instanceof Error ? error.message : 'Erro';
+}
+
 const TIPO_INPUT_OPTIONS = [
   { value: 'select', label: 'Select (Dropdown)' },
   { value: 'radio', label: 'Radio' },
@@ -77,7 +93,7 @@ const WizardEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [wizard, setWizard] = useState<any>(null);
+  const [wizard, setWizard] = useState<WizardResumo | null>(null);
   const [arvore, setArvore] = useState<ArvoreWizard | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -143,8 +159,8 @@ const WizardEditorPage: React.FC = () => {
           }
         }
       }
-    } catch (e: any) {
-      setError(e.message || 'Erro');
+    } catch (e: unknown) {
+      setError(mensagemErro(e) || 'Erro');
     } finally {
       setLoading(false);
     }
@@ -189,7 +205,7 @@ const WizardEditorPage: React.FC = () => {
     if (etapaSelecionada?.id === etapaId) setEtapaSelecionada(null);
   };
 
-  const handleUpdateEtapa = (field: string, value: any) => {
+  const handleUpdateEtapa = (field: keyof EtapaWizard, value: ValorEtapa) => {
     if (!etapaSelecionada || !arvore) return;
     const updateInTree = (etapas: EtapaWizard[]): EtapaWizard[] =>
       etapas.map(e => {
@@ -273,8 +289,8 @@ const WizardEditorPage: React.FC = () => {
         })));
       }
       toast.success('Wizard salvo');
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar');
+    } catch (e: unknown) {
+      toast.error(mensagemErro(e) || 'Erro ao salvar');
     } finally {
       setSaving(false);
     }
@@ -417,7 +433,7 @@ const WizardEditorPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Tipo de Input</Label>
-                      <Select value={etapaSelecionada.tipo_input} onValueChange={v => handleUpdateEtapa('tipo_input', v)}>
+                      <Select value={etapaSelecionada.tipo_input} onValueChange={v => handleUpdateEtapa('tipo_input', v as EtapaWizard['tipo_input'])}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {TIPO_INPUT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -581,7 +597,7 @@ const WizardEditorPage: React.FC = () => {
               </div>
               <div className="max-h-[200px] overflow-y-auto border rounded-md">
                 {pecasFiltradas.map(p => {
-                  const IconComp = (LucideIcons as any)[p.categoria_icone || 'Tag'] || LucideIcons.Tag;
+                  const IconComp = iconesLucide[p.categoria_icone || 'Tag'] || LucideIcons.Tag;
                   return (
                     <div
                       key={p.id}

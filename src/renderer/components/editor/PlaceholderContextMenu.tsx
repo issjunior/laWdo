@@ -1,5 +1,6 @@
 import React from 'react';
 import * as LucideIcons from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -14,6 +15,8 @@ import {
 import type { MenuSection, MenuEntry, MenuGroup } from '@/components/rep/exam-fields';
 import { getGroupCount } from '@/components/rep/exam-fields/services/b602.service';
 
+const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
+
 export interface PlaceholderItem {
   id: string;
   chave: string;
@@ -26,6 +29,7 @@ export interface CategoriaItem {
   label: string;
   icone: string;
   cor: string;
+  is_sistema?: number;
 }
 
 const PlaceholderItemView: React.FC<{ chave: string; descricao: string }> = ({ chave, descricao }) => (
@@ -80,15 +84,15 @@ export const PlaceholderContextMenu: React.FC<{
           .sort((a, b) => {
             const aIsExam = a.id.startsWith('cat-exam-');
             const bIsExam = b.id.startsWith('cat-exam-');
-            const ordemA = aIsExam ? 1 : ((a as any).is_sistema === 1 ? 0 : 2);
-            const ordemB = bIsExam ? 1 : ((b as any).is_sistema === 1 ? 0 : 2);
+            const ordemA = aIsExam ? 1 : (a.is_sistema === 1 ? 0 : 2);
+            const ordemB = bIsExam ? 1 : (b.is_sistema === 1 ? 0 : 2);
             return ordemA - ordemB;
           })
           .map(cat => {
             const isExamCat = cat.id === categoriaExameId;
 
             if (isExamCat && exameMenuStructure && exameMenuStructure.length > 0) {
-              const IconComp = (LucideIcons as any)[(cat as any).icone] || LucideIcons.Tag;
+              const IconComp = iconesLucide[cat.icone] || LucideIcons.Tag;
               return (
                 <ContextMenuSub key={cat.id}>
                   <ContextMenuSubTrigger>
@@ -112,11 +116,11 @@ export const PlaceholderContextMenu: React.FC<{
 
             const items = placeholders.filter(p => p.categoria_id === cat.id);
             if (items.length === 0) return null;
-            const IconComp = (LucideIcons as any)[(cat as any).icone] || LucideIcons.Tag;
+            const IconComp = iconesLucide[cat.icone] || LucideIcons.Tag;
             return (
               <ContextMenuSub key={cat.id}>
                 <ContextMenuSubTrigger>
-                  <IconComp size={(cat as any).icone === 'Car' ? 16 : 14} className="mr-2" />
+                  <IconComp size={cat.icone === 'Car' ? 16 : 14} className="mr-2" />
                   <span>{cat.label}</span>
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent className="w-56 max-h-[350px] overflow-y-auto">

@@ -23,6 +23,23 @@ interface Placeholder {
   categoria_id: string;
 }
 
+interface TinyMceGlobal {
+  get: (editorId: string) => { execCommand: (command: string, ui: boolean, value: unknown) => void } | null;
+}
+
+interface PeritoSessao {
+  nome?: string;
+  name?: string;
+  cargo?: string;
+  role?: string;
+  lotacao?: string;
+  matricula?: string;
+}
+
+function mensagemErro(error: unknown): string {
+  return error instanceof Error ? error.message : 'Erro inesperado';
+}
+
 const DEFAUL_PAGINAS_HTML = `<p style="text-align: right;">FLS. {{pagina}}/{{totalPaginas}}</p>\n<p style="text-align: right;">LAUDO n&ordm; {{numero_rep}}</p>`;
 
 export const CabecalhoPage: React.FC = () => {
@@ -51,7 +68,7 @@ export const CabecalhoPage: React.FC = () => {
       if (result.success && result.data) {
         setConteudo(converterPlaceholdersTextuais(result.data, placeholderChaves));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao carregar cabeçalho:', err);
     } finally {
       setLoading(false);
@@ -64,7 +81,7 @@ export const CabecalhoPage: React.FC = () => {
       if (result.success && result.data) {
         setConteudoPaginas(converterPlaceholdersTextuais(result.data, placeholderChaves));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao carregar cabeçalho de páginas:', err);
     }
   }, []);
@@ -87,7 +104,8 @@ export const CabecalhoPage: React.FC = () => {
   }, [carregarCabecalho, carregarCabecalhoPaginas, carregarPlaceholders]);
 
   const inserirPlaceholder = (editorId: string, chave: string) => {
-    const editor = (window as any).tinymce?.get(editorId);
+    const tinymce = (window as Window & typeof globalThis & { tinymce?: TinyMceGlobal }).tinymce;
+    const editor = tinymce?.get(editorId);
     if (editor) {
       editor.execCommand('insertPlaceholder', false, { chave });
     }
@@ -112,7 +130,7 @@ export const CabecalhoPage: React.FC = () => {
       try {
         const userJson = sessionStorage.getItem('lawdo_auth_user');
         if (userJson) {
-          const perito = JSON.parse(userJson);
+          const perito = JSON.parse(userJson) as PeritoSessao;
           peritoNome = perito.nome || perito.name || '';
           peritoCargo = perito.cargo || perito.role || '';
           peritoLotacao = perito.lotacao || '';
@@ -151,8 +169,8 @@ export const CabecalhoPage: React.FC = () => {
         setError(result.error || 'Erro ao gerar PDF');
         setPreview(false);
       }
-    } catch (err: any) {
-      setError(err.message || 'Erro ao gerar PDF');
+    } catch (err: unknown) {
+      setError(mensagemErro(err) || 'Erro ao gerar PDF');
       setPreview(false);
     } finally {
       setGeneratingPdf(false);
@@ -178,9 +196,9 @@ export const CabecalhoPage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao salvar cabeçalho');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar cabeçalho:', err);
-      setError(err.message || 'Erro ao salvar cabeçalho');
+      setError(mensagemErro(err) || 'Erro ao salvar cabeçalho');
     } finally {
       setSalvando(false);
     }
@@ -205,9 +223,9 @@ export const CabecalhoPage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao salvar cabeçalho');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar cabeçalho:', err);
-      setError(err.message || 'Erro ao salvar cabeçalho');
+      setError(mensagemErro(err) || 'Erro ao salvar cabeçalho');
     } finally {
       setSalvandoPaginas(false);
     }

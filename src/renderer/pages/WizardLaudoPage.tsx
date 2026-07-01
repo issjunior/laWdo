@@ -29,6 +29,26 @@ interface OpcaoWizard {
   etapa_filha?: EtapaWizard;
 }
 
+interface WizardResumo {
+  id: string;
+  nome?: string;
+}
+
+interface ArvoreWizard {
+  wizard: WizardResumo;
+  etapas: EtapaWizard[];
+}
+
+interface LaudoWizard {
+  id: string;
+  rep_id: string;
+  template_id: string;
+  wizard_id?: string;
+  respostas_wizard?: string;
+  rep_numero?: string;
+  status?: string;
+}
+
 interface PecaCalculada {
   peca: { id: string; nome: string; conteudo: string; descricao?: string; categoria?: string };
   secao_template_id: string | null;
@@ -37,13 +57,32 @@ interface PecaCalculada {
 }
 
 type EtapaEstado = 'respondida' | 'atual' | 'pendente' | 'bloqueada';
+type RespostasWizard = Record<string, string | string[]>;
+
+function mensagemErro(error: unknown): string {
+  return error instanceof Error ? error.message : 'Erro';
+}
+
+function normalizarRespostasWizard(valor: unknown): RespostasWizard {
+  if (!valor || typeof valor !== 'object') return {};
+
+  const respostas: RespostasWizard = {};
+  for (const [chave, resposta] of Object.entries(valor as Record<string, unknown>)) {
+    if (chave.startsWith('_')) continue;
+    if (typeof resposta === 'string') respostas[chave] = resposta;
+    if (Array.isArray(resposta) && resposta.every(item => typeof item === 'string')) {
+      respostas[chave] = resposta;
+    }
+  }
+  return respostas;
+}
 
 const WizardLaudoPage: React.FC = () => {
   const { laudoId } = useParams<{ laudoId: string }>();
   const navigate = useNavigate();
 
-  const [laudo, setLaudo] = useState<any>(null);
-  const [arvore, setArvore] = useState<{ wizard: any; etapas: EtapaWizard[] } | null>(null);
+  const [laudo, setLaudo] = useState<LaudoWizard | null>(null);
+  const [arvore, setArvore] = useState<ArvoreWizard | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,20 +123,16 @@ const WizardLaudoPage: React.FC = () => {
       if (l.respostas_wizard && l.respostas_wizard !== '{}') {
         try {
           const cached = JSON.parse(l.respostas_wizard);
-          const resp: Record<string, string | string[]> = {};
-          for (const [k, v] of Object.entries(cached)) {
-            if (!k.startsWith('_')) resp[k] = v as string | string[];
-          }
-          setRespostas(resp);
+          setRespostas(normalizarRespostasWizard(cached));
         } catch {}
       } else {
         const respRes = await window.ipcAPI.laudo.getRespostasWizard(laudoId);
         if (respRes.success && Object.keys(respRes.data || {}).length > 0) {
-          setRespostas(respRes.data);
+          setRespostas(normalizarRespostasWizard(respRes.data));
         }
       }
-    } catch (e: any) {
-      setError(e.message || 'Erro ao carregar');
+    } catch (e: unknown) {
+      setError(mensagemErro(e) || 'Erro ao carregar');
     } finally {
       setLoading(false);
     }
@@ -170,7 +205,7 @@ const WizardLaudoPage: React.FC = () => {
       const res = await window.ipcAPI.laudo.salvarProgressoWizard(laudo.id, respostas);
       if (res.success) toast.success('Progresso salvo. Você pode continuar depois.');
       else toast.error(res.error || 'Erro ao salvar');
-    } catch (e: any) { toast.error(e.message || 'Erro'); }
+    } catch (e: unknown) { toast.error(mensagemErro(e) || 'Erro'); }
     finally { setSaving(false); }
   };
 
@@ -195,7 +230,7 @@ const WizardLaudoPage: React.FC = () => {
         toast.success('Laudo preenchido! Você pode continuar editando no editor.');
         navigate('/laudos');
       } else toast.error(res.error || 'Erro ao gerar');
-    } catch (e: any) { toast.error(e.message || 'Erro'); }
+    } catch (e: unknown) { toast.error(mensagemErro(e) || 'Erro'); }
     finally { setSaving(false); }
   };
 
