@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
+import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
@@ -53,12 +54,12 @@ function processarImagensPuras(raiz: Node): number {
 }
 
 /** Varre o body do editor e converte todos os <img>s órfãos em figuras laudo-figure */
-function scanEditorForRawImages(editor: any): number {
+function scanEditorForRawImages(editor: TinyMceEditorInstance): number {
   const body = editor.getBody();
   if (!body) return 0;
 
   const rawImages = Array.from(body.querySelectorAll('img')).filter(
-    (img: any) =>
+    (img) =>
       !img.closest('.laudo-figure') &&
       (img.src?.startsWith('data:') || img.src?.startsWith('http') || img.src?.startsWith('blob:'))
   ) as HTMLImageElement[];
@@ -89,7 +90,7 @@ function removeDarkSkin() {
   document.getElementById('tinymce-dark-skin')?.remove();
 }
 
-function aplicarTemaEditor(editor: any, dark: boolean) {
+function aplicarTemaEditor(editor: TinyMceEditorInstance, dark: boolean) {
   const body = editor.getBody();
   if (!body) return;
   if (dark) {
@@ -118,7 +119,7 @@ interface TinyMceEditorProps {
   /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
-  onEditorInit?: (editor: any) => void;
+  onEditorInit?: (editor: TinyMceEditorInstance) => void;
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
@@ -126,6 +127,35 @@ interface TinyMceEditorProps {
 }
 
 type ToggleCondicionalFlat = { id: string; label: string; subtitulo?: string };
+type UploadImagemHandler = NonNullable<RawEditorOptions['images_upload_handler']>;
+type PastePostprocessHandler = NonNullable<RawEditorOptions['paste_postprocess']>;
+type FilePickerHandler = NonNullable<RawEditorOptions['file_picker_callback']>;
+type TinymceWindow = Window & {
+  tinymce?: {
+    get: (id?: string) => TinyMceEditorInstance | null;
+  };
+};
+type ComandoTinyMce<T> = (_ui: boolean, data: T) => void;
+
+interface PlaceholderPayload {
+  chave: string;
+}
+
+interface ImagemLaudoPayload {
+  url: string;
+  id: string;
+  legenda: string;
+}
+
+interface RemoverImagemPayload {
+  id: string;
+}
+
+interface SubstituirImagemPayload {
+  imageId?: string;
+  figureElement?: HTMLElement;
+  newUrl: string;
+}
 
 const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
   { id: 'b602_arma_N_func_toggle', label: 'Arma (N) - Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
@@ -238,17 +268,56 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   condToggles,
   ...rest
 }) => {
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<TinyMceEditorInstance | null>(null);
+  const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
   const [ready, setReady] = useState(false);
 
   const [stableInitialValue] = useState(initialValue);
   const isUncontrolled = initialValue !== undefined;
 
   useEffect(() => {
-    if (editorRef.current && placeholderChaves) {
-      (editorRef.current as any)._placeholderChaves = placeholderChaves;
-    }
+    placeholderChavesRef.current = placeholderChaves;
   }, [placeholderChaves]);
+
+  const imagesUploadHandler: UploadImagemHandler = (blobInfo) =>
+    new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(blobInfo.blob());
+    });
+
+  const pastePostprocess: PastePostprocessHandler = (_editor, args) => {
+    const fragment = args.node;
+    if (!fragment) return;
+    const convertidas = processarImagensPuras(fragment);
+    if (convertidas > 0) {
+      onImageInserted?.();
+    }
+  };
+
+  const filePickerCallback: FilePickerHandler = (_callback, _value, meta) => {
+    if (meta.filetype === 'image') {
+      const id = crypto.randomUUID();
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUri = reader.result as string;
+          const editor = (window as TinymceWindow).tinymce?.get(editorId);
+          if (editor) {
+            editor.insertContent(buildFigureHtml(dataUri, id, ''));
+            onImageInserted?.();
+          }
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    }
+  };
 
   return (
     <div className={ready ? '' : 'opacity-0'} {...rest}>
@@ -284,24 +353,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           image_title: true,
 
           // ─── Upload de imagens (converte blob→dataURI na origem) ──
-          images_upload_handler: (blobInfo: any) =>
-            new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.readAsDataURL(blobInfo.blob());
-            }),
+          images_upload_handler: imagesUploadHandler,
 
           paste_data_images: true,
 
           // ─── Pós-processamento de conteúdo colado ──────────
-          paste_postprocess: (_editor: any, args: any) => {
-            const fragment = args.node;
-            if (!fragment) return;
-            const convertidas = processarImagensPuras(fragment);
-            if (convertidas > 0) {
-              onImageInserted?.();
-            }
-          },
+          paste_postprocess: pastePostprocess,
           relative_urls: false,
           remove_script_host: false,
           convert_urls: false,
@@ -467,40 +524,18 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           `,
 
           // ─── Upload de imagens ───────────────────────────
-          file_picker_callback: (_callback: any, _value: any, meta: any) => {
-            if (meta.filetype === 'image') {
-              const id = crypto.randomUUID();
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'image/*';
-              input.onchange = () => {
-                const file = input.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const dataUri = reader.result as string;
-                  const editor = (window as any).tinymce.get(editorId);
-                  if (editor) {
-                    editor.insertContent(buildFigureHtml(dataUri, id, ''));
-                    onImageInserted?.();
-                  }
-                };
-                reader.readAsDataURL(file);
-              };
-              input.click();
-            }
-          },
+          file_picker_callback: filePickerCallback,
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
-          setup: (editor: any) => {
-            editor.addCommand('insertPlaceholder', (_ui: any, placeholder: { chave: string }) => {
+          setup: (editor: TinyMceEditorInstance) => {
+            editor.addCommand('insertPlaceholder', ((_ui, placeholder) => {
               const html = `<span contenteditable="false" class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
-            });
+            }) satisfies ComandoTinyMce<PlaceholderPayload>);
 
-            editor.addCommand('insertLaudoImage', (_ui: any, data: { url: string, id: string, legenda: string }) => {
+            editor.addCommand('insertLaudoImage', ((_ui, data) => {
               editor.insertContent(buildFigureHtml(data.url, data.id, data.legenda));
-            });
+            }) satisfies ComandoTinyMce<ImagemLaudoPayload>);
 
             editor.addCommand('reindexFiguras', () => {
               const body = editor.getBody();
@@ -522,7 +557,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               editor.undoManager.add();
             });
 
-            editor.addCommand('removeLaudoImage', (_ui: any, data: { id: string }) => {
+            editor.addCommand('removeLaudoImage', ((_ui, data) => {
               const body = editor.getBody();
               const figure = body.querySelector(`.laudo-figure[data-image-id="${data.id}"]`);
               if (figure) {
@@ -532,9 +567,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   nextSibling.remove();
                 }
               }
-            });
+            }) satisfies ComandoTinyMce<RemoverImagemPayload>);
 
-            editor.addCommand('replaceLaudoImage', (_ui: any, data: { imageId?: string; figureElement?: HTMLElement; newUrl: string }) => {
+            editor.addCommand('replaceLaudoImage', ((_ui, data) => {
               editor.undoManager.transact(() => {
                 const body = editor.getBody();
                 let figure: HTMLElement | null = null;
@@ -551,7 +586,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 figure.removeAttribute('data-dummy');
                 figure.style.cursor = '';
               });
-            });
+            }) satisfies ComandoTinyMce<SubstituirImagemPayload>);
 
             editor.addCommand('insertLaudoImageDummy', () => {
               const id = crypto.randomUUID();
@@ -568,14 +603,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             });
 
             // Comando: Inserir bloco condicional
-            editor.addCommand('insertCondBloco', (_ui: any, toggleId: string) => {
+            editor.addCommand('insertCondBloco', ((_ui, toggleId) => {
               if (!toggleId || typeof toggleId !== 'string') return;
               editor.insertContent(criarHtmlBlocoCondicional(toggleId, condToggles));
-            });
+            }) satisfies ComandoTinyMce<string>);
 
             // Registrar botão "Bloco Condicional" na toolbar
             if (condToggles && condToggles.length > 0) {
-              const menuItems: Array<{ type: string; text: string; onAction: () => void }> = [];
+              const menuItems: Ui.Menu.MenuItemSpec[] = [];
               for (const toggle of condToggles) {
                 menuItems.push({
                   type: 'menuitem',
@@ -583,11 +618,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   onAction: () => editor.execCommand('insertCondBloco', false, toggle.id),
                 });
                 if (toggle.subToggles) {
-                  toggle.subToggles.forEach((sub, i) => {
+                  toggle.subToggles.forEach((sub) => {
                     menuItems.push({
                       type: 'menuitem',
                       text: `  ${sub.label}`,
-                      onAction: () => editor.execCommand('insertCondBloco', false, sub.id, i),
+                      onAction: () => editor.execCommand('insertCondBloco', false, sub.id),
                     });
                   });
                 }
@@ -604,14 +639,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               editor.ui.registry.addMenuButton('condbloco', {
                 text: 'Bloco Cond.',
                 tooltip: 'Inserir bloco condicional',
-                fetch: (callback: (items: any[]) => void) => callback(menuItems),
+                fetch: (callback) => callback(menuItems),
               });
             } else {
               editor.ui.registry.addButton('condbloco', {
                 text: 'Bloco Cond.',
                 tooltip: 'Bloco Condicional (sem toggles configurados)',
                 onAction: () => {},
-                disabled: true,
+                enabled: false,
               });
             }
 
@@ -744,12 +779,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
             // ─── Auto-converter {{chave}} digitado manualmente em span estilizado ─────
             if (placeholderChaves && placeholderChaves.length > 0) {
-              (editor as any)._placeholderChaves = placeholderChaves;
-
               let placeholderTimer: ReturnType<typeof setTimeout> | null = null;
 
               const converterPlaceholderLocal = () => {
-                const chavesValidas: string[] = (editor as any)._placeholderChaves;
+                const chavesValidas = placeholderChavesRef.current;
                 if (!chavesValidas || chavesValidas.length === 0) return;
 
                 const rng = editor.selection.getRng();

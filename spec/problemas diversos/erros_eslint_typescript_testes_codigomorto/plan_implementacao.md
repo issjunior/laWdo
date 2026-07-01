@@ -164,19 +164,43 @@ Efeito:
   legadas flexiveis. A tranche manteve uma tipagem legada local para o bootstrap
   sem ampliar handlers, canais ou contratos IPC.
 
+### Resultado da tranche `codex/limpa-any-tinymce-editor`
+
+Arquivo tratado:
+
+- `src/renderer/components/editor/TinyMceEditor.tsx`
+
+Resultado validado:
+
+| Comando | Resultado |
+|---|---|
+| `npx eslint src/renderer/components/editor/TinyMceEditor.tsx` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `166 warnings`, `0 errors` |
+
+Efeito:
+
+- `no-explicit-any`: caiu de `161` para `139`.
+- `react-hooks/exhaustive-deps`: permaneceu em `27`.
+- Total: caiu de `188` para `166`.
+- A integracao com TinyMCE passou a usar tipos oficiais/locais para instancia do
+  editor, callbacks de upload/paste/file picker, comandos customizados e menu
+  condicional. A mutacao dinamica `_placeholderChaves` foi substituida por ref
+  React local. Nenhuma dependencia de hook foi alterada nesta tranche.
+
 ## Proxima tranche operacional
 
-### Tranche recomendada: TinyMCE/editor
+### Tranche recomendada: LaudosPage
 
-Branch sugerida: `codex/limpa-any-tinymce-editor`
+Branch sugerida: `codex/limpa-any-laudos-page`
 
-Commit sugerido: `ajuste_tipa_tinymce_editor`
+Commit sugerido: `ajuste_tipa_laudos_page`
 
 Objetivo quantitativo:
 
-- Reduzir os `22` warnings de `no-explicit-any` em
-  `src/renderer/components/editor/TinyMceEditor.tsx`.
-- Usar tipos oficiais do TinyMCE quando estiverem disponiveis.
+- Reduzir os warnings de `no-explicit-any` em `src/renderer/pages/LaudosPage.tsx`.
+- Nao misturar a limpeza de tipos com o warning de hook do mesmo arquivo, salvo
+  decisao explicita.
 - Manter `npm run lint` com `0 errors`.
 - Manter `npm run type-check` passando.
 
@@ -184,40 +208,26 @@ Escopo principal:
 
 | Ordem | Arquivo | Acao esperada | Criterio de corte |
 |---:|---|---|---|
-| 1 | `src/renderer/components/editor/TinyMceEditor.tsx` | Remover `any` com tipos oficiais/locais para editor, eventos e callbacks | Parar se exigir alterar fluxo do editor ou comportamento de placeholders |
+| 1 | `src/renderer/pages/LaudosPage.tsx` | Remover `any` com tipos locais/contratos ja existentes para dados de laudo, REP, exportacao e painel de ilustracoes | Parar se exigir reestruturar estado, fluxo de salvamento/exportacao ou hooks |
 
 Fora do escopo nesta tranche:
 
 - `src/main/**`
-- `LaudosPage.tsx`
 - `TemplatesPage.tsx`
 - `src/renderer/index.tsx`
+- `TinyMceEditor.tsx`
 - Qualquer warning de `react-hooks/exhaustive-deps`
 
 Validacao recomendada:
 
 - `npm run lint`
 - `npm run type-check`
-- teste manual do editor, placeholders, menu de contexto, salvamento e exportacao
+- `npm test`
+- teste manual de listar, editar, salvar, exportar e navegar em laudos
 
 ## Proximas tranches sugeridas
 
-### 1. TinyMCE/editor
-
-Objetivo: reduzir `any` em `TinyMceEditor.tsx` sem quebrar integracao com editor.
-
-Risco:
-
-- API de TinyMCE tem tipos complexos e eventos customizados.
-- Evitar tipos inventados quando o pacote fornecer tipos oficiais.
-
-Validacao recomendada:
-
-- `npm run lint`
-- `npm run type-check`
-- teste manual de editor, placeholders, menu de contexto, salvamento e exportacao
-
-### 2. LaudosPage
+### 1. LaudosPage
 
 Objetivo: reduzir `any` no fluxo principal de laudos.
 
@@ -233,7 +243,7 @@ Validacao recomendada:
 - `npm test`
 - teste manual de listar, editar, criar, salvar, exportar e navegar em laudos
 
-### 3. Main process: database/services/handlers
+### 2. Main process: database/services/handlers
 
 Objetivo: reduzir `any` em `src/main/**`.
 
@@ -256,7 +266,7 @@ Validacao recomendada:
 - `npm test`
 - `npm run build` se houver alteracao de contrato compartilhado
 
-### 4. Hooks (`react-hooks/exhaustive-deps`)
+### 3. Hooks (`react-hooks/exhaustive-deps`)
 
 Objetivo: tratar os 27 warnings restantes de hooks com analise comportamental.
 
