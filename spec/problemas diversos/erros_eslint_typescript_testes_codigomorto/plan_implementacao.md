@@ -271,23 +271,42 @@ Proxima recomendacao operacional: tratar
 `src/renderer/lib/exportacao-placeholders.ts` em uma tranche curta, removendo
 os `2` warnings `no-explicit-any` restantes nesse helper de exportacao.
 
+### Resultado da tranche `codex/limpa-any-exportacao-placeholders`
+
+`src/renderer/lib/exportacao-placeholders.ts` ficou sem warnings
+`no-explicit-any`. Foram tipados os dados de REP usados na exportacao e o
+perito lido da sessao com `unknown` + narrowing.
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/renderer/lib/exportacao-placeholders.ts` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `110 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+
+Efeito: `no-explicit-any` caiu de `85` para `83`; hooks permaneceram em
+`27`; total caiu de `112` para `110`.
+
+Proxima recomendacao operacional: iniciar `src/main/**` por um corte estreito
+em `database/sqlite.ts` e `types/database.ts`, antes de services/handlers.
+
 ## Proximas tranches sugeridas
 
-### 1. exportacao-placeholders
+### 1. Main process: database/sqlite
 
-Objetivo: reduzir `any` no helper de placeholders de exportacao.
+Objetivo: reduzir `any` na fronteira SQLite sem alterar SQL ou comportamento.
 
 Risco:
 
-- Helper pequeno, mas usado por preview/exportacao de laudos.
-- Preferir tipos locais para REP/campos especificos sem alterar HTML gerado.
+- Fronteira dinamica de banco; preferir `unknown`/tipos de linha e parametros.
+- Evitar mudar queries, migrations ou contratos IPC nesta tranche.
 
 Validacao recomendada:
 
 - `npm run lint`
 - `npm run type-check`
 - `npm test`
-- teste manual de preview/exportacao quando houver proxima janela de QA
+- `npm run build`
 
 ### 2. Main process: database/services/handlers
 

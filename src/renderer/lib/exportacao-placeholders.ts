@@ -39,8 +39,56 @@ function formatarDataHora(iso: string | undefined): string {
   }
 }
 
+interface RepExportacaoData {
+  numero?: string;
+  data_requisicao?: string;
+  prazo?: string;
+  tipo_solicitacao?: string;
+  numero_documento?: string;
+  data_documento?: string;
+  data_acionamento?: string;
+  data_chegada?: string;
+  data_saida?: string;
+  observacoes?: string;
+  local_fato?: string;
+  autoridade_solicitante?: string;
+  latitude?: string;
+  longitude?: string;
+  campos_especificos?: string;
+}
+
+interface PeritoSessaoData {
+  nome?: string;
+  cargo?: string;
+  especialidade?: string;
+  lotacao?: string;
+  matricula?: string;
+}
+
+function isRecord(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === 'object' && valor !== null;
+}
+
+function lerPeritoSessao(): PeritoSessaoData | null {
+  try {
+    const userJson = sessionStorage.getItem('lawdo_auth_user');
+    if (!userJson) return null;
+    const parsed: unknown = JSON.parse(userJson);
+    if (!isRecord(parsed)) return null;
+    return {
+      nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
+      cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
+      especialidade: typeof parsed.especialidade === 'string' ? parsed.especialidade : undefined,
+      lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
+      matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface ExportacaoContext {
-  repData: any;
+  repData: RepExportacaoData;
   solicitanteNome?: string;
   tipoExameNome?: string;
   tipoExameCodigo?: string;
@@ -48,11 +96,7 @@ export interface ExportacaoContext {
 
 function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string> {
   const repData = ctx.repData;
-  let perito: any = null;
-  try {
-    const userJson = sessionStorage.getItem('lawdo_auth_user');
-    if (userJson) perito = JSON.parse(userJson);
-  } catch { /* ignora */ }
+  const perito = lerPeritoSessao();
 
   const mapping: Record<string, string> = {
     'rep_numero': repData.numero || '',
