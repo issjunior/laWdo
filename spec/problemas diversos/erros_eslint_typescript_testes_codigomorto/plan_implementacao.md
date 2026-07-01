@@ -138,65 +138,71 @@ Efeito:
 - Total: caiu de `214` para `190`.
 - Nenhuma dependencia de hook foi alterada nesta tranche.
 
+### Resultado da tranche `codex/tipa-ipc-renderer-bootstrap`
+
+Arquivo tratado:
+
+- `src/renderer/index.tsx`
+
+Resultado validado:
+
+| Comando | Resultado |
+|---|---|
+| `npx eslint src/renderer/index.tsx` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `188 warnings`, `0 errors` |
+| `npm test` | Passou com `34 passed`, `1 skipped` |
+| `npm run build` | Passou |
+
+Efeito:
+
+- `no-explicit-any`: caiu de `163` para `161`.
+- `react-hooks/exhaustive-deps`: permaneceu em `27`.
+- Total: caiu de `190` para `188`.
+- A tipagem global estrita do `IpcAPI` do preload foi testada, mas ficou fora do
+  corte por abrir erros em consumidores IPC que ainda dependem de respostas
+  legadas flexiveis. A tranche manteve uma tipagem legada local para o bootstrap
+  sem ampliar handlers, canais ou contratos IPC.
+
 ## Proxima tranche operacional
 
-### Tranche recomendada: tipagem global IPC/bootstrap
+### Tranche recomendada: TinyMCE/editor
 
-Branch sugerida: `codex/tipa-ipc-renderer-bootstrap`
+Branch sugerida: `codex/limpa-any-tinymce-editor`
 
-Commit sugerido: `ajuste_tipa_ipc_renderer_bootstrap`
+Commit sugerido: `ajuste_tipa_tinymce_editor`
 
 Objetivo quantitativo:
 
-- Reduzir os `2` warnings de `no-explicit-any` em `src/renderer/index.tsx`.
-- Alinhar a declaracao global de `window.ipcAPI` com `src/preload/types.ts`
-  quando possivel.
+- Reduzir os `22` warnings de `no-explicit-any` em
+  `src/renderer/components/editor/TinyMceEditor.tsx`.
+- Usar tipos oficiais do TinyMCE quando estiverem disponiveis.
 - Manter `npm run lint` com `0 errors`.
-- Manter `npm run type-check`, `npm test` e `npm run build` passando.
+- Manter `npm run type-check` passando.
 
 Escopo principal:
 
 | Ordem | Arquivo | Acao esperada | Criterio de corte |
 |---:|---|---|---|
-| 1 | `src/renderer/index.tsx` | Remover `any` da declaracao global e do mock de desenvolvimento | Parar se exigir reescrever o contrato IPC inteiro |
-| 2 | `src/preload/types.ts` | Reusar/exportar tipos existentes se necessario | Nao ampliar escopo para handlers |
+| 1 | `src/renderer/components/editor/TinyMceEditor.tsx` | Remover `any` com tipos oficiais/locais para editor, eventos e callbacks | Parar se exigir alterar fluxo do editor ou comportamento de placeholders |
 
 Fora do escopo nesta tranche:
 
 - `src/main/**`
-- `TinyMceEditor.tsx`
 - `LaudosPage.tsx`
 - `TemplatesPage.tsx`
+- `src/renderer/index.tsx`
 - Qualquer warning de `react-hooks/exhaustive-deps`
 
 Validacao recomendada:
 
 - `npm run lint`
 - `npm run type-check`
-- `npm test`
-- `npm run build`
-- teste manual de abertura do app e login
+- teste manual do editor, placeholders, menu de contexto, salvamento e exportacao
 
 ## Proximas tranches sugeridas
 
-### 1. Tipagem global IPC/bootstrap
-
-Objetivo: tratar `src/renderer/index.tsx` e reduzir `any` associado a `window.ipcAPI`.
-
-Risco:
-
-- `index.tsx` atua como declaracao global e tambem contem mock de desenvolvimento.
-- Deve ser alinhado com `src/preload/types.ts` e com o contrato exposto pelo preload.
-
-Validacao recomendada:
-
-- `npm run lint`
-- `npm run type-check`
-- `npm test`
-- `npm run build`
-- teste manual de abertura do app e login
-
-### 2. TinyMCE/editor
+### 1. TinyMCE/editor
 
 Objetivo: reduzir `any` em `TinyMceEditor.tsx` sem quebrar integracao com editor.
 
@@ -211,7 +217,7 @@ Validacao recomendada:
 - `npm run type-check`
 - teste manual de editor, placeholders, menu de contexto, salvamento e exportacao
 
-### 3. LaudosPage
+### 2. LaudosPage
 
 Objetivo: reduzir `any` no fluxo principal de laudos.
 
@@ -227,7 +233,7 @@ Validacao recomendada:
 - `npm test`
 - teste manual de listar, editar, criar, salvar, exportar e navegar em laudos
 
-### 4. Main process: database/services/handlers
+### 3. Main process: database/services/handlers
 
 Objetivo: reduzir `any` em `src/main/**`.
 
@@ -250,7 +256,7 @@ Validacao recomendada:
 - `npm test`
 - `npm run build` se houver alteracao de contrato compartilhado
 
-### 5. Hooks (`react-hooks/exhaustive-deps`)
+### 4. Hooks (`react-hooks/exhaustive-deps`)
 
 Objetivo: tratar os 27 warnings restantes de hooks com analise comportamental.
 

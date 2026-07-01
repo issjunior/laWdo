@@ -3,10 +3,84 @@ import ReactDOM from 'react-dom/client';
 import App from './App.js';
 import './styles/globals.css';
 
+// Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
+type IpcDadoLegado = ReturnType<typeof JSON.parse>;
+
+interface AppInfoLegado {
+  version: string;
+  name: string;
+  platform: string;
+  osVersion: string;
+  arch: string;
+  memory: string;
+  dbVersion: number;
+}
+
+interface IpcRespostaLegada {
+  success: boolean;
+  data?: IpcDadoLegado;
+  user?: IpcDadoLegado;
+  error: string;
+  message?: string;
+  total?: number;
+  count?: number;
+  path?: string;
+  valid?: boolean;
+}
+
+type IpcMetodoLegado = (...args: unknown[]) => Promise<IpcRespostaLegada>;
+
+interface IpcGrupoLegado {
+  [metodo: string]: IpcMetodoLegado;
+}
+
+interface IpcIlustracoesLegado {
+  openPanel: () => void;
+  closePanel: () => void;
+  syncToPanel: (data: Record<string, unknown>) => void;
+  sendAction: (action: string, ...args: unknown[]) => void;
+  onPanelAction: (cb: (action: string, ...args: unknown[]) => void) => () => void;
+  onStateSync: <T>(cb: (data: T) => void) => () => void;
+  onPanelClosed: (cb: () => void) => () => void;
+}
+
+interface IpcAPIRendererLegada {
+  ping: () => Promise<string>;
+  getAppInfo: () => Promise<AppInfoLegado>;
+  logInfo: (module: string, message: string) => void | Promise<void>;
+  logError: (module: string, message: string, error?: unknown) => void | Promise<void>;
+  logWarning: (module: string, message: string) => void | Promise<void>;
+  restartApp?: () => Promise<void>;
+  closeApp: () => Promise<void>;
+  openDevTools?: () => void;
+  executeQuery: (...args: unknown[]) => Promise<IpcRespostaLegada>;
+  login: (username: string, password: string) => Promise<IpcRespostaLegada>;
+  verifyPassword: (userId: string, password: string) => Promise<IpcRespostaLegada>;
+  user: IpcGrupoLegado;
+  solicitante: IpcGrupoLegado;
+  tipoExame: IpcGrupoLegado;
+  rep: IpcGrupoLegado;
+  configuracao: IpcGrupoLegado;
+  gdl: IpcGrupoLegado;
+  categoria: IpcGrupoLegado;
+  placeholder: IpcGrupoLegado;
+  template: IpcGrupoLegado;
+  laudo: IpcGrupoLegado;
+  wizard: IpcGrupoLegado;
+  categoriaPeca: IpcGrupoLegado;
+  peca: IpcGrupoLegado;
+  regraWizard: IpcGrupoLegado;
+  ia: IpcGrupoLegado;
+  backup: IpcGrupoLegado;
+  log: IpcGrupoLegado;
+  diagnosticoInterno: IpcGrupoLegado;
+  ilustracoes: IpcIlustracoesLegado;
+}
+
 // Tipos globais para TypeScript
 declare global {
   interface Window {
-    ipcAPI: any;
+    ipcAPI: IpcAPIRendererLegada;
   }
 }
 
@@ -78,9 +152,17 @@ const initApp = async () => {
       // Mock para desenvolvimento
       window.ipcAPI = {
         ping: async () => 'pong (mock)',
-        getAppInfo: async () => ({ version: '0.1.0-dev', name: 'laWdo' }),
+        getAppInfo: async () => ({
+          version: '0.1.0-dev',
+          name: 'laWdo',
+          platform: 'dev',
+          osVersion: 'dev',
+          arch: 'dev',
+          memory: 'dev',
+          dbVersion: 0,
+        }),
         logInfo: async () => undefined,
-        logError: (_module: string, msg: string, err?: any) => console.error(`[ERROR] ${msg}`, err),
+        logError: (_module: string, msg: string, err?: unknown) => console.error(`[ERROR] ${msg}`, err),
         logWarning: (_module: string, msg: string) => console.warn(`[WARN] ${msg}`),
         verifyPassword: async () => ({ success: true, valid: true }),
         executeQuery: async () => ({ success: false, message: 'Mock mode' }),
@@ -126,7 +208,7 @@ const initApp = async () => {
           delete: async () => ({ success: false, error: 'Mock mode' }),
           updateStatus: async () => ({ success: false, error: 'Mock mode' }),
         },
-      };
+      } as unknown as IpcAPIRendererLegada;
     }
 
     // Testar conexao com main process
