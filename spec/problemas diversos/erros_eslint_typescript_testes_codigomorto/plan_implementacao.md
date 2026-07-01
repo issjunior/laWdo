@@ -248,25 +248,46 @@ Efeito: `no-explicit-any` caiu de `139` para `96`; hooks permaneceram em
 `27`; total caiu de `166` para `123`.
 
 Proxima recomendacao operacional: tratar `TemplatesPage.tsx` em uma tranche
-separada, removendo os `10` warnings `no-explicit-any` sem mexer nos hooks.
+separada, removendo os warnings `no-explicit-any` sem mexer nos hooks.
+
+### Resultado da tranche `codex/limpa-any-templates-page`
+
+`src/renderer/pages/TemplatesPage.tsx` ficou sem warnings `no-explicit-any`.
+Foram tipados o acesso global ao TinyMCE, tipos de exame, placeholders vindos
+do IPC, dados de perito da sessao, preview por card e tratamentos `catch` com
+`unknown`. Os warnings de hooks do arquivo foram preservados fora do escopo.
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/renderer/pages/TemplatesPage.tsx` | Passou com `5 warnings` de `react-hooks/exhaustive-deps`, fora do escopo |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `112 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+
+Efeito: `no-explicit-any` caiu de `96` para `85`; hooks permaneceram em
+`27`; total caiu de `123` para `112`.
+
+Proxima recomendacao operacional: tratar
+`src/renderer/lib/exportacao-placeholders.ts` em uma tranche curta, removendo
+os `2` warnings `no-explicit-any` restantes nesse helper de exportacao.
 
 ## Proximas tranches sugeridas
 
-### 1. TemplatesPage
+### 1. exportacao-placeholders
 
-Objetivo: reduzir `any` no fluxo de templates.
+Objetivo: reduzir `any` no helper de placeholders de exportacao.
 
 Risco:
 
-- Arquivo grande, com editor, preview e fluxos de clone/exclusao.
-- Nao misturar com hooks na mesma tranche, salvo decisao explicita.
+- Helper pequeno, mas usado por preview/exportacao de laudos.
+- Preferir tipos locais para REP/campos especificos sem alterar HTML gerado.
 
 Validacao recomendada:
 
 - `npm run lint`
 - `npm run type-check`
 - `npm test`
-- teste manual de listar, editar, criar, clonar, excluir e preview de templates
+- teste manual de preview/exportacao quando houver proxima janela de QA
 
 ### 2. Main process: database/services/handlers
 

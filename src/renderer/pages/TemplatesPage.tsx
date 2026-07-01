@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,6 +64,12 @@ interface TemplateItem {
   tipo_exame_nome?: string;
   tipo_exame_codigo?: string;
   created_at: string;
+}
+
+interface TipoExameItem {
+  id: string;
+  codigo?: string;
+  nome: string;
 }
 
 interface SecaoItem {
@@ -330,6 +337,62 @@ interface Categoria {
   cor: string;
 }
 
+interface PlaceholderIpcData extends Partial<Placeholder> {
+  id: string;
+  chave: string;
+}
+
+interface PeritoSessaoData {
+  nome?: string;
+  name?: string;
+  cargo?: string;
+  role?: string;
+  lotacao?: string;
+  matricula?: string;
+}
+
+type TinymceWindow = Window & {
+  tinymce?: {
+    get: (id?: string) => TinyMceEditorInstance | null;
+    activeEditor?: TinyMceEditorInstance | null;
+  };
+};
+
+const obterEditorTinyMce = (editorId: string): TinyMceEditorInstance | null => (
+  (window as TinymceWindow).tinymce?.get(editorId) ?? null
+);
+
+const obterEditorAtivoTinyMce = (): TinyMceEditorInstance | null => (
+  (window as TinymceWindow).tinymce?.activeEditor ?? null
+);
+
+const obterMensagemErro = (erro: unknown, fallback: string): string => (
+  erro instanceof Error && erro.message ? erro.message : fallback
+);
+
+const isRecord = (valor: unknown): valor is Record<string, unknown> => (
+  typeof valor === 'object' && valor !== null
+);
+
+const lerPeritoSessao = (): PeritoSessaoData => {
+  try {
+    const userJson = sessionStorage.getItem('lawdo_auth_user');
+    if (!userJson) return {};
+    const parsed: unknown = JSON.parse(userJson);
+    if (!isRecord(parsed)) return {};
+    return {
+      nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
+      name: typeof parsed.name === 'string' ? parsed.name : undefined,
+      cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
+      role: typeof parsed.role === 'string' ? parsed.role : undefined,
+      lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
+      matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+    };
+  } catch {
+    return {};
+  }
+};
+
 const templateFormSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório').max(200, 'Máximo 200 caracteres'),
   tipo_exame_id: z.string().min(1, 'Tipo de exame é obrigatório'),
@@ -471,7 +534,7 @@ export const TemplatesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroTipoExame, setFiltroTipoExame] = useState('');
-  const [tiposExame, setTiposExame] = useState<any[]>([]);
+  const [tiposExame, setTiposExame] = useState<TipoExameItem[]>([]);
 
   // Modo de edição
   const [editMode, setEditMode] = useState(false);
@@ -511,8 +574,8 @@ export const TemplatesPage: React.FC = () => {
       const r = await window.ipcAPI.template.findAll();
       if (r.success) setTemplates(r.data || []);
       else toast.error(r.error);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(obterMensagemErro(e, 'Erro ao carregar templates'));
     } finally {
       setLoading(false);
     }
@@ -530,7 +593,7 @@ export const TemplatesPage: React.FC = () => {
     }
     const r = await window.ipcAPI.placeholder.findAll();
     if (r.success && r.data) {
-      setPlaceholders(r.data.map((p: any) => ({
+      setPlaceholders((r.data as PlaceholderIpcData[]).map((p) => ({
         ...p,
         descricao: p.descricao || '',
         categoria_id: p.categoria_id || '',
@@ -660,14 +723,14 @@ export const TemplatesPage: React.FC = () => {
   }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
   const inserirPlaceholder = (editorId: string, chave: string) => {
-    const editor = (window as any).tinymce?.get(editorId);
+    const editor = obterEditorTinyMce(editorId);
     if (editor) {
       editor.execCommand('insertPlaceholder', false, { chave });
     }
   };
 
   const inserirDummyNoEditor = () => {
-    const activeEditor = (window as any).tinymce?.activeEditor;
+    const activeEditor = obterEditorAtivoTinyMce();
     if (!activeEditor) {
       toast.error('Selecione o editor primeiro');
       return;
@@ -685,7 +748,7 @@ export const TemplatesPage: React.FC = () => {
   };
 
   const inserirReservadoNoEditor = () => {
-    const activeEditor = (window as any).tinymce?.activeEditor;
+    const activeEditor = obterEditorAtivoTinyMce();
     if (!activeEditor) {
       toast.error('Selecione o editor primeiro');
       return;
@@ -838,7 +901,7 @@ export const TemplatesPage: React.FC = () => {
       }
       setEditorMode('single');
       setEditMode(true);
-    } catch (e: any) {
+    } catch {
       toast.error('Erro ao clonar template');
     }
   };
@@ -1115,8 +1178,8 @@ export const TemplatesPage: React.FC = () => {
           setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
         }
       }
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(obterMensagemErro(e, 'Erro ao salvar template'));
     } finally {
       setSubmitting(false);
     }
@@ -1189,14 +1252,11 @@ export const TemplatesPage: React.FC = () => {
     let peritoLotacao = '';
     let peritoMatricula = '';
     try {
-      const userJson = sessionStorage.getItem('lawdo_auth_user');
-      if (userJson) {
-        const perito = JSON.parse(userJson);
-        peritoNome = perito.nome || perito.name || '';
-        peritoCargo = perito.cargo || perito.role || '';
-        peritoLotacao = perito.lotacao || '';
-        peritoMatricula = perito.matricula || '';
-      }
+      const perito = lerPeritoSessao();
+      peritoNome = perito.nome || perito.name || '';
+      peritoCargo = perito.cargo || perito.role || '';
+      peritoLotacao = perito.lotacao || '';
+      peritoMatricula = perito.matricula || '';
     } catch {}
 
     const replacements: Record<string, string> = {
@@ -1237,8 +1297,8 @@ export const TemplatesPage: React.FC = () => {
       const tipoExameNome = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '';
       const { fullHtml, headerTemplate } = await montarHtmlPreview(secoesParaPreview, templateForm.nome, tipoExameNome);
       await gerarEExibirPdf(fullHtml, headerTemplate);
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao gerar PDF');
+    } catch (err: unknown) {
+      toast.error(obterMensagemErro(err, 'Erro ao gerar PDF'));
       setShowPreview(false);
     } finally {
       setGeneratingPdf(false);
@@ -1252,8 +1312,11 @@ export const TemplatesPage: React.FC = () => {
       setShowPreview(true);
 
       const secResult = await window.ipcAPI.template.findSecoes(template.id);
+      const secoesCarregadas = (
+        secResult.success && Array.isArray(secResult.data) ? secResult.data : []
+      ) as SecaoItem[];
       const loadedSecoes: SecaoPreview[] =
-        (secResult.success && secResult.data ? secResult.data : []).map((s: any) => ({
+        secoesCarregadas.map((s) => ({
           id: s.id,
           chave_local: s.id,
           nome: s.nome,
@@ -1269,8 +1332,8 @@ export const TemplatesPage: React.FC = () => {
         template.tipo_exame_nome || '',
       );
       await gerarEExibirPdf(fullHtml, headerTemplate);
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao gerar PDF');
+    } catch (err: unknown) {
+      toast.error(obterMensagemErro(err, 'Erro ao gerar PDF'));
       setShowPreview(false);
     } finally {
       setGeneratingPdf(false);
