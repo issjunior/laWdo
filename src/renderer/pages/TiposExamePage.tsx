@@ -28,6 +28,9 @@ export const TiposExamePage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const inativosCount = todosTipos.filter(t => !t.ativo).length;
 
+  const getMensagemErro = (erro: unknown, fallback: string): string =>
+    erro instanceof Error ? erro.message : fallback;
+
   // Carregar tipos de exame
   const carregarTiposExame = useCallback(async () => {
     try {
@@ -41,9 +44,8 @@ export const TiposExamePage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao carregar tipos de exame');
       }
-    } catch (err: any) {
-      console.error('Erro ao carregar tipos de exame:', err);
-      setError(err.message || 'Erro ao carregar tipos de exame');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err, 'Erro ao carregar tipos de exame'));
     } finally {
       setLoading(false);
     }
@@ -61,9 +63,8 @@ export const TiposExamePage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao carregar tipos de exame');
       }
-    } catch (err: any) {
-      console.error('Erro ao carregar tipos de exame:', err);
-      setError(err.message || 'Erro ao carregar tipos de exame');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err, 'Erro ao carregar tipos de exame'));
     } finally {
       setLoading(false);
     }
@@ -76,8 +77,8 @@ export const TiposExamePage: React.FC = () => {
       if (allResult.success && allResult.data) {
         setTodosTipos(allResult.data);
       }
-    } catch (err: any) {
-      console.error('Erro ao carregar todos os tipos:', err);
+    } catch {
+      // silencioso
     }
   }, []);
 
@@ -188,9 +189,8 @@ export const TiposExamePage: React.FC = () => {
           setError(result.error || 'Erro ao criar tipo de exame');
         }
       }
-    } catch (err: any) {
-      console.error('Erro ao salvar tipo de exame:', err);
-      setError(err.message || 'Erro ao salvar tipo de exame');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err, 'Erro ao salvar tipo de exame'));
     }
   };
 

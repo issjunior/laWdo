@@ -38,6 +38,9 @@ interface TemplateItem {
   nome: string;
 }
 
+const getMensagemErro = (erro: unknown, fallback = 'Erro'): string =>
+  erro instanceof Error ? erro.message : fallback;
+
 const WizardsPage: React.FC = () => {
   const navigate = useNavigate();
   const [wizards, setWizards] = useState<WizardItem[]>([]);
@@ -68,8 +71,8 @@ const WizardsPage: React.FC = () => {
       else setError(wizRes.error || 'Erro');
       if (tipoRes.success) setTiposExame(tipoRes.data || []);
       if (tplRes.success) setTemplates(tplRes.data || []);
-    } catch (e: any) {
-      setError(e.message || 'Erro');
+    } catch (e: unknown) {
+      setError(getMensagemErro(e));
     } finally {
       setLoading(false);
     }
@@ -109,8 +112,8 @@ const WizardsPage: React.FC = () => {
         else loadData();
         setDialogOpen(false);
       } else toast.error(res.error || 'Erro');
-    } catch (e: any) {
-      toast.error(e.message || 'Erro');
+    } catch (e: unknown) {
+      toast.error(getMensagemErro(e));
     } finally {
       setSaving(false);
     }
@@ -122,8 +125,8 @@ const WizardsPage: React.FC = () => {
       const res = await window.ipcAPI.wizard.delete(deletingItem.id);
       if (res.success) { toast.success('Wizard excluído'); loadData(); }
       else toast.error(res.error || 'Erro');
-    } catch (e: any) {
-      toast.error(e.message || 'Erro');
+    } catch (e: unknown) {
+      toast.error(getMensagemErro(e));
     } finally {
       setDeleteDialogOpen(false);
       setDeletingItem(null);

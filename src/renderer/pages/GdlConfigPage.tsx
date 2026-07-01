@@ -60,6 +60,9 @@ interface ValidacaoSessaoGdl {
   dataHora?: string;
 }
 
+const getMensagemErro = (erro: unknown, fallback: string): string =>
+  erro instanceof Error ? erro.message : fallback;
+
 export const GdlConfigPage: React.FC = () => {
   const [ambiente, setAmbiente] = useState('homologacao');
   const [login, setLogin] = useState('');
@@ -158,8 +161,8 @@ export const GdlConfigPage: React.FC = () => {
         setValidacaoSessao(rValidacao.data as ValidacaoSessaoGdl);
       }
       toast.success(`Credenciais de ${ambLabel} salvas com sucesso!`);
-    } catch (e: any) {
-      setErro(e.message || 'Erro ao salvar configurações');
+    } catch (e: unknown) {
+      setErro(getMensagemErro(e, 'Erro ao salvar configurações'));
     } finally {
       setSalvando(false);
     }
@@ -177,8 +180,8 @@ export const GdlConfigPage: React.FC = () => {
       } else {
         setErro(r.error || 'Erro ao testar conexão');
       }
-    } catch (e: any) {
-      setErro(e.message || 'Erro ao testar conexão');
+    } catch (e: unknown) {
+      setErro(getMensagemErro(e, 'Erro ao testar conexão'));
     } finally {
       setTestando(false);
     }
@@ -228,8 +231,8 @@ export const GdlConfigPage: React.FC = () => {
       } else {
         setErroValidacao(r.error || 'Não foi possível validar as credenciais no GDL.');
       }
-    } catch (e: any) {
-      setErroValidacao(e.message || 'Erro ao validar credenciais no GDL.');
+    } catch (e: unknown) {
+      setErroValidacao(getMensagemErro(e, 'Erro ao validar credenciais no GDL.'));
     } finally {
       setValidandoCredenciais(false);
     }

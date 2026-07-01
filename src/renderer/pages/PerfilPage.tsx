@@ -54,6 +54,30 @@ type PerfilUpdateFormValues = z.infer<typeof perfilValidationSchema>;
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
 
+type UsuarioSessao = Record<string, unknown>;
+type PerfilUpdatePayload = {
+  nome: string;
+  email: string;
+  cargo: PerfilUpdateFormValues['cargo'];
+  lotacao: string;
+  senha?: string;
+};
+
+const parseUsuarioSessao = (raw: string | null): UsuarioSessao | null => {
+  if (!raw) return null;
+  const parsed: unknown = JSON.parse(raw);
+  return parsed && typeof parsed === 'object' ? parsed as UsuarioSessao : null;
+};
+
+const getString = (valor: unknown): string =>
+  typeof valor === 'string' ? valor : '';
+
+const getCargo = (valor: unknown): PerfilUpdateFormValues['cargo'] =>
+  valor === 'Técnico de Perícia Oficial' ? valor : 'Perito Oficial Criminal';
+
+const getMensagemErro = (erro: unknown, fallback: string): string =>
+  erro instanceof Error ? erro.message : fallback;
+
 export const PerfilPage: React.FC = () => {
   const loading = false;
   const [saving, setSaving] = useState(false);
@@ -79,12 +103,13 @@ export const PerfilPage: React.FC = () => {
 
   const loadAvatar = useCallback(async () => {
     const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    const user = raw ? JSON.parse(raw) : null;
-    if (!user?.id) return;
+    const user = parseUsuarioSessao(raw);
+    const id = getString(user?.id);
+    if (!id) return;
 
     if (user?.foto_url) {
       try {
-        const result = await window.ipcAPI.user.getAvatar(user.id);
+        const result = await window.ipcAPI.user.getAvatar(id);
         if (result.success && result.data?.foto_url) {
           setFotoUrl(result.data.foto_url);
           return;
@@ -101,14 +126,15 @@ export const PerfilPage: React.FC = () => {
     }
 
     try {
-      const user = JSON.parse(rawUser);
-      setUserId(user.id);
+      const user = parseUsuarioSessao(rawUser);
+      if (!user) return;
+      setUserId(getString(user.id));
       form.reset({
-        nome: user?.name || user?.nome || '',
-        username: user?.username || '',
-        email: user?.email || '',
-        cargo: user?.cargo || 'Perito Oficial Criminal',
-        lotacao: user?.lotacao || '',
+        nome: getString(user.name) || getString(user.nome),
+        username: getString(user.username),
+        email: getString(user.email),
+        cargo: getCargo(user.cargo),
+        lotacao: getString(user.lotacao),
         senha: '',
         confirmarSenha: '',
       });
@@ -129,7 +155,7 @@ export const PerfilPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const updatePayload: any = { nome: data.nome, email: data.email, cargo: data.cargo, lotacao: data.lotacao };
+      const updatePayload: PerfilUpdatePayload = { nome: data.nome, email: data.email, cargo: data.cargo, lotacao: data.lotacao };
       if (isChangingPassword && data.senha) {
         updatePayload.senha = data.senha;
       }
@@ -143,7 +169,8 @@ export const PerfilPage: React.FC = () => {
       const rawUser = sessionStorage.getItem(AUTH_USER_KEY);
       if (rawUser) {
         try {
-          const user = JSON.parse(rawUser);
+          const user = parseUsuarioSessao(rawUser);
+          if (!user) return;
           user.name = data.nome;
           user.nome = data.nome;
           user.email = data.email;
@@ -161,9 +188,8 @@ export const PerfilPage: React.FC = () => {
       form.setValue('senha', '');
       form.setValue('confirmarSenha', '');
       setIsChangingPassword(false);
-    } catch (err: any) {
-      console.error('Erro ao atualizar perfil:', err);
-      setError(err.message || 'Erro ao atualizar perfil.');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err, 'Erro ao atualizar perfil.'));
     } finally {
       setSaving(false);
     }
@@ -174,7 +200,8 @@ export const PerfilPage: React.FC = () => {
     const raw = sessionStorage.getItem(AUTH_USER_KEY);
     if (raw) {
       try {
-        const user = JSON.parse(raw);
+        const user = parseUsuarioSessao(raw);
+        if (!user) return;
         user.foto_url = 'updated';
         sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
         window.dispatchEvent(new Event('storage'));
@@ -419,14 +446,14 @@ export const PerfilPage: React.FC = () => {
 
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => {
-                  const user = JSON.parse(sessionStorage.getItem(AUTH_USER_KEY) || '{}');
+                  const user = parseUsuarioSessao(sessionStorage.getItem(AUTH_USER_KEY));
                   setIsChangingPassword(false);
                   form.reset({
-                    nome: user?.name || user?.nome || '',
-                    username: user?.username || '',
-                    email: user?.email || '',
-                    cargo: user?.cargo || 'Perito Oficial Criminal',
-                    lotacao: user?.lotacao || '',
+                    nome: getString(user?.name) || getString(user?.nome),
+                    username: getString(user?.username),
+                    email: getString(user?.email),
+                    cargo: getCargo(user?.cargo),
+                    lotacao: getString(user?.lotacao),
                     senha: '',
                     confirmarSenha: '',
                   });

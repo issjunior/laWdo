@@ -80,6 +80,33 @@ interface GdlTesteRespostaApi {
   rede?: PreTesteEtapa;
 }
 
+interface GdlPeca {
+  quantidade?: number | string;
+  tipoPeca?: string;
+  identificacao?: string;
+  unidadeMedida?: string;
+}
+
+interface GdlOrigem {
+  tipo?: string;
+  numero?: string;
+}
+
+interface GdlAndamento {
+  dataHora?: string;
+}
+
+interface GdlRepDados {
+  numero?: string | number;
+  ano?: string | number;
+  origens?: GdlOrigem[];
+  andamentos?: GdlAndamento[];
+  pecas?: GdlPeca[];
+}
+
+const getMensagemErro = (erro: unknown, fallback: string): string =>
+  erro instanceof Error ? erro.message : fallback;
+
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   open,
   onOpenChange,
@@ -100,7 +127,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [preTesteTestando, setPreTesteTestando] = useState(false);
   const [ambiente, setAmbiente] = useState<string>('homologacao');
 
-  const [dadosBrutos, setDadosBrutos] = useState<any>(null);
+  const [dadosBrutos, setDadosBrutos] = useState<GdlRepDados | null>(null);
   const [camposMapeados, setCamposMapeados] = useState<CampoMapeado[]>([]);
   const [camposNaoPreenchidos, setCamposNaoPreenchidos] = useState<string[]>([]);
 
@@ -235,7 +262,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     try {
       const r = await window.ipcAPI.gdl.consultarRep(numeroRep.trim(), anoRep.trim());
       if (r.success && r.data) {
-        const dados = r.data;
+        const dados = r.data as GdlRepDados;
         setDadosBrutos(dados);
 
         const mapeados: CampoMapeado[] = [];
@@ -245,8 +272,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           mapeados.push({ label: 'Nº REP', valor: `${dados.numero}-${dados.ano}` });
         }
 
-        if (dados.origens?.length > 0) {
-          const origem = dados.origens[0];
+        const origens = dados.origens ?? [];
+        if (origens.length > 0) {
+          const origem = origens[0];
           if (origem.tipo) {
             mapeados.push({ label: 'Tipo de Solicitação', valor: origem.tipo });
           }
@@ -255,17 +283,19 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           }
         }
 
-        if (dados.andamentos?.length > 0) {
-          const dataHora = dados.andamentos[0].dataHora;
+        const andamentos = dados.andamentos ?? [];
+        if (andamentos.length > 0) {
+          const dataHora = andamentos[0].dataHora;
           if (dataHora) {
             const data = dataHora.split('T')[0];
             mapeados.push({ label: 'Data de Recebimento', valor: data });
           }
         }
 
-        if (dados.pecas?.length > 0) {
-          const listaPecas = dados.pecas
-            .map((p: any) => `${p.quantidade}x ${p.tipoPeca} \u2014 ${p.identificacao || 'sem identificação'} (${p.unidadeMedida || '-'})`)
+        const pecas = dados.pecas ?? [];
+        if (pecas.length > 0) {
+          const listaPecas = pecas
+            .map((p) => `${p.quantidade}x ${p.tipoPeca} \u2014 ${p.identificacao || 'sem identificação'} (${p.unidadeMedida || '-'})`)
             .join('\n');
           mapeados.push({ label: 'Observações (peças)', valor: listaPecas });
         }
@@ -297,8 +327,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       } else {
         setErro(r.error || 'Erro ao consultar REP');
       }
-    } catch (e: any) {
-      setErro(e.message || 'Erro ao consultar REP');
+    } catch (e: unknown) {
+      setErro(getMensagemErro(e, 'Erro ao consultar REP'));
     } finally {
       setBuscando(false);
     }
@@ -310,20 +340,23 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       if (dadosBrutos.numero && dadosBrutos.ano) {
         campos.numero = `${dadosBrutos.numero}-${dadosBrutos.ano}`;
       }
-      if (dadosBrutos.origens?.length > 0) {
-        const origem = dadosBrutos.origens[0];
+      const origens = dadosBrutos.origens ?? [];
+      if (origens.length > 0) {
+        const origem = origens[0];
         if (origem.tipo) campos.tipo_solicitacao = origem.tipo;
         if (origem.numero) campos.numero_documento = origem.numero;
       }
-      if (dadosBrutos.andamentos?.length > 0) {
-        const dataHora = dadosBrutos.andamentos[0].dataHora;
+      const andamentos = dadosBrutos.andamentos ?? [];
+      if (andamentos.length > 0) {
+        const dataHora = andamentos[0].dataHora;
         if (dataHora) {
           campos.data_requisicao = dataHora.split('T')[0];
         }
       }
-      if (dadosBrutos.pecas?.length > 0) {
-        campos.observacoes = dadosBrutos.pecas
-          .map((p: any) => `${p.quantidade}x ${p.tipoPeca} \u2014 ${p.identificacao || 'sem identificação'} (${p.unidadeMedida || '-'})`)
+      const pecas = dadosBrutos.pecas ?? [];
+      if (pecas.length > 0) {
+        campos.observacoes = pecas
+          .map((p) => `${p.quantidade}x ${p.tipoPeca} \u2014 ${p.identificacao || 'sem identificação'} (${p.unidadeMedida || '-'})`)
           .join('\n');
       }
     }

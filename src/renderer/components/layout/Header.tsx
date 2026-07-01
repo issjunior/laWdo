@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 
 interface HeaderProps {
   onLogout: () => void;
-  currentUser: any;
+  currentUser: Record<string, unknown> | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser: _currentUser }) => {

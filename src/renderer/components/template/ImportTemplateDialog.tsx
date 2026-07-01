@@ -60,6 +60,9 @@ interface ImportTemplateDialogProps {
   onImportSuccess: () => void;
 }
 
+const getMensagemErro = (erro: unknown, fallback: string): string =>
+  erro instanceof Error ? erro.message : fallback;
+
 // ─── Sortable Section Item ─────────────────────────────────
 
 interface SortableSecaoItemProps {
@@ -225,8 +228,8 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
       setSecoes(secoesImportadas || []);
       setEtapa('revisao');
       toast.success(`${secoesImportadas?.length || 0} seções detectadas`);
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao importar arquivo');
+    } catch (e: unknown) {
+      toast.error(getMensagemErro(e, 'Erro ao importar arquivo'));
     } finally {
       setImportando(false);
     }
@@ -322,8 +325,8 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
       toast.success('Template importado com sucesso!');
       handleClose(false);
       onImportSuccess();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar template');
+    } catch (e: unknown) {
+      toast.error(getMensagemErro(e, 'Erro ao salvar template'));
     } finally {
       setSalvando(false);
     }

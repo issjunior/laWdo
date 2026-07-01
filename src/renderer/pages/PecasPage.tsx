@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, Loader2, AlertCircle, Package, Settings2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Loader2, AlertCircle, Package, Settings2, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as LucideIcons from 'lucide-react';
 import { DataTable } from '@/components/data-table/data-table';
@@ -37,6 +37,31 @@ interface PecaItem {
   created_at: string;
   updated_at: string;
 }
+
+type PecaPayload = {
+  nome: string;
+  descricao?: string;
+  categoria_id: string | null;
+  tags?: string;
+  conteudo: string;
+  ativo: boolean;
+};
+
+const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
+
+const getMensagemErro = (erro: unknown, fallback: string): string =>
+  erro instanceof Error ? erro.message : fallback;
+
+const parseTags = (tags: string | string[] | undefined): string[] => {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags;
+  try {
+    const parsed: unknown = JSON.parse(tags);
+    return Array.isArray(parsed) && parsed.every(item => typeof item === 'string') ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 const PecasPage: React.FC = () => {
   const navigate = useNavigate();
@@ -71,8 +96,8 @@ const PecasPage: React.FC = () => {
       if (pecasRes.success) setPecas(pecasRes.data || []);
       else setError(pecasRes.error || 'Erro ao carregar peças');
       if (arvoreRes.success) setCategoriasArvore(arvoreRes.data || []);
-    } catch (e: any) {
-      setError(e.message || 'Erro ao carregar');
+    } catch (e: unknown) {
+      setError(getMensagemErro(e, 'Erro ao carregar'));
     } finally {
       setLoading(false);
     }
@@ -95,7 +120,7 @@ const PecasPage: React.FC = () => {
     setFormNome(item.nome);
     setFormDescricao(item.descricao || '');
     setFormCategoriaId(item.categoria_id || '');
-    setFormTags(item.tags ? (typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags).join(', ') : '');
+    setFormTags(parseTags(item.tags).join(', '));
     setFormConteudo(item.conteudo);
     setDialogOpen(true);
   };
@@ -110,7 +135,7 @@ const PecasPage: React.FC = () => {
         .map(t => t.trim())
         .filter(t => t.length > 0);
 
-      const data: Record<string, any> = {
+      const data: PecaPayload = {
         nome: formNome.trim(),
         descricao: formDescricao.trim() || undefined,
         categoria_id: formCategoriaId || null,
@@ -134,8 +159,8 @@ const PecasPage: React.FC = () => {
           setDialogOpen(false);
         } else toast.error(res.error || 'Erro ao criar');
       }
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar');
+    } catch (e: unknown) {
+      toast.error(getMensagemErro(e, 'Erro ao salvar'));
     } finally {
       setSaving(false);
     }
@@ -149,8 +174,8 @@ const PecasPage: React.FC = () => {
         toast.success('Peça excluída');
         loadData();
       } else toast.error(res.error || 'Erro ao excluir');
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao excluir');
+    } catch (e: unknown) {
+      toast.error(getMensagemErro(e, 'Erro ao excluir'));
     } finally {
       setDeleteDialogOpen(false);
       setDeletingItem(null);
@@ -167,7 +192,7 @@ const PecasPage: React.FC = () => {
     }
     if (busca) {
       const q = busca.toLowerCase();
-      const tags: string[] = p.tags ? (typeof p.tags === 'string' ? JSON.parse(p.tags) : p.tags) : [];
+      const tags = parseTags(p.tags);
       return (
         p.nome.toLowerCase().includes(q) ||
         (p.descricao || '').toLowerCase().includes(q) ||
@@ -198,7 +223,7 @@ const PecasPage: React.FC = () => {
         const label = row.original.categoria_label;
         const cor = row.original.categoria_cor || 'slate';
         const icone = row.original.categoria_icone || 'Tag';
-        const IconComp = (LucideIcons as any)[icone] || LucideIcons.Tag;
+        const IconComp = iconesLucide[icone] || LucideIcons.Tag;
         return label ? (
           <Badge variant="secondary" className={`text-xs gap-1 bg-${cor}-100 dark:bg-${cor}-900/30 text-${cor}-700 dark:text-${cor}-300`}>
             <IconComp size={12} /> {label}
@@ -212,7 +237,7 @@ const PecasPage: React.FC = () => {
       accessorKey: 'tags',
       header: 'Tags',
       cell: ({ row }) => {
-        const tags: string[] = row.original.tags ? (typeof row.original.tags === 'string' ? JSON.parse(row.original.tags) : row.original.tags) : [];
+        const tags = parseTags(row.original.tags);
         return (
           <div className="flex flex-wrap gap-1">
             {tags.slice(0, 3).map(t => <Badge key={t} variant="outline" className="text-[10px] h-4 px-1.5">{t}</Badge>)}

@@ -108,9 +108,18 @@ const menuItems = [
 const AUTH_USER_KEY = 'lawdo_auth_user';
 
 interface AppSidebarProps {
-  currentUser: any;
+  currentUser: Record<string, unknown> | null;
   onLogout: () => void;
 }
+
+const obterString = (valor: unknown): string | undefined =>
+  typeof valor === 'string' ? valor : undefined;
+
+const parseObjetoSessao = (raw: string | null): Record<string, unknown> | null => {
+  if (!raw) return null;
+  const parsed: unknown = JSON.parse(raw);
+  return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+};
 
 export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
   const { pathname } = useLocation();
@@ -119,9 +128,9 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
   const [fotoUrl, setFotoUrl] = useState<string | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 
-  const userName = currentUser?.name || currentUser?.nome || currentUser?.username || 'Usuário';
-  const userCargo = currentUser?.cargo || '';
-  const userId = currentUser?.id;
+  const userName = obterString(currentUser?.name) || obterString(currentUser?.nome) || obterString(currentUser?.username) || 'Usuário';
+  const userCargo = obterString(currentUser?.cargo) || '';
+  const userId = obterString(currentUser?.id);
   const firstName = userName.split(' ')[0];
 
   const initials = userName
@@ -134,7 +143,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
   const loadAvatar = useCallback(async () => {
     if (!userId) return;
     const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    const user = raw ? JSON.parse(raw) : null;
+    const user = parseObjetoSessao(raw);
 
     if (user?.foto_url) {
       try {
@@ -165,7 +174,8 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
     const raw = sessionStorage.getItem(AUTH_USER_KEY);
     if (raw) {
       try {
-        const user = JSON.parse(raw);
+        const user = parseObjetoSessao(raw);
+        if (!user) return;
         user.foto_url = 'updated';
         sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
         window.dispatchEvent(new Event('storage'));

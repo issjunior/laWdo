@@ -32,7 +32,15 @@ import './styles/globals.css';
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
 
-const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; currentUser: any }> = ({
+type UsuarioSessao = Record<string, unknown> | null;
+
+const parseUsuarioSessao = (raw: string | null): UsuarioSessao => {
+  if (!raw) return null;
+  const parsed: unknown = JSON.parse(raw);
+  return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+};
+
+const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; currentUser: UsuarioSessao }> = ({
   children,
   onLogout,
   currentUser,
@@ -71,16 +79,16 @@ const NotFoundPage = () => (
 );
 
 const App = () => {
-  const [currentUser, setCurrentUser] = useState<any>(() => {
+  const [currentUser, setCurrentUser] = useState<UsuarioSessao>(() => {
     try {
       const raw = sessionStorage.getItem(AUTH_USER_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return parseUsuarioSessao(raw);
     } catch {
       return null;
     }
   });
 
-  const handleAuthenticated = (user: any) => {
+  const handleAuthenticated = (user: Record<string, unknown>) => {
     sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
     setCurrentUser(user);
   };

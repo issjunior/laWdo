@@ -87,7 +87,8 @@ const TIPOS_ACAO = [
 function getCurrentUserId(): string {
   try {
     const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    return raw ? JSON.parse(raw)?.id ?? '' : '';
+    const user = parseUsuarioSessao(raw);
+    return getString(user?.id);
   } catch {
     return '';
   }
@@ -115,6 +116,21 @@ interface AuditLog {
   dados_anteriores?: string;
   dados_novos?: string;
 }
+
+interface TimelineRepResumo {
+  id: string;
+  numero?: string;
+  status?: string;
+}
+
+const parseUsuarioSessao = (raw: string | null): Record<string, unknown> | null => {
+  if (!raw) return null;
+  const parsed: unknown = JSON.parse(raw);
+  return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+};
+
+const getString = (valor: unknown): string =>
+  typeof valor === 'string' ? valor : '';
 
 const NivelBadge = ({ level }: { level: string }) => {
   const config: Record<string, { label: string; classes: string }> = {
@@ -189,7 +205,7 @@ export function LogsPage() {
   const [timelineRepNumero, setTimelineRepNumero] = useState('');
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineRepId, setTimelineRepId] = useState<string | null>(null);
-  const [timelineRepEncontrada, setTimelineRepEncontrada] = useState<any>(null);
+  const [timelineRepEncontrada, setTimelineRepEncontrada] = useState<TimelineRepResumo | null>(null);
   const [timelineError, setTimelineError] = useState('');
 
   useEffect(() => {
@@ -283,8 +299,9 @@ export function LogsPage() {
     try {
       const r = await window.ipcAPI.rep.findByNumero(numero);
       if (r.success && r.data) {
-        setTimelineRepId(r.data.id);
-        setTimelineRepEncontrada(r.data);
+        const rep = r.data as TimelineRepResumo;
+        setTimelineRepId(rep.id);
+        setTimelineRepEncontrada(rep);
       } else {
         setTimelineError(r.error || 'REP não encontrada');
       }

@@ -24,6 +24,9 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { createSolicitanteSchema, type Solicitante, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteFormFields';
 
+const getMensagemErro = (erro: unknown, fallback: string): string =>
+  erro instanceof Error ? erro.message : fallback;
+
 export const SolicitantesPage: React.FC = () => {
   const [solicitantes, setSolicitantes] = useState<Solicitante[]>([]);
   const [todosSolicitantes, setTodosSolicitantes] = useState<Solicitante[]>([]);
@@ -63,9 +66,8 @@ export const SolicitantesPage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao carregar solicitantes');
       }
-    } catch (err: any) {
-      console.error('Erro ao carregar solicitantes:', err);
-      setError(err.message || 'Erro ao carregar solicitantes');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err, 'Erro ao carregar solicitantes'));
     } finally {
       setLoading(false);
     }
@@ -80,9 +82,8 @@ export const SolicitantesPage: React.FC = () => {
       } else {
         setError(allResult.error || 'Erro ao carregar todos os solicitantes');
       }
-    } catch (err: any) {
-      console.error('Erro ao carregar todos os solicitantes:', err);
-      setError(err.message || 'Erro ao carregar todos os solicitantes');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err, 'Erro ao carregar todos os solicitantes'));
     }
   }, []);
 
@@ -190,9 +191,8 @@ export const SolicitantesPage: React.FC = () => {
           setError(result.error || 'Erro ao criar solicitante');
         }
       }
-    } catch (err: any) {
-      console.error('Erro ao salvar solicitante:', err);
-      setError(err.message || 'Erro ao salvar solicitante');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err, 'Erro ao salvar solicitante'));
     }
   };
 

@@ -5,9 +5,11 @@ import {
 } from '@dnd-kit/core';
 import * as LucideIcons from 'lucide-react';
 import {
-  ChevronRight, GripVertical, Lock, FolderTree,
+  ChevronRight, GripVertical, Lock, FolderTree, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
 
 export interface CategoriaNode {
   id: string;
@@ -76,7 +78,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     }
   }, [isOver, expanded, node.subcategorias.length]);
 
-  const IconComp = (LucideIcons as any)[node.icone] || LucideIcons.Folder;
+  const IconComp = iconesLucide[node.icone] || LucideIcons.Folder;
   const isSys = node.is_sistema === 1;
 
   const handleClick = (e: React.MouseEvent) => {
@@ -269,7 +271,7 @@ export function SortableCategoryTree({
               `bg-${activeNode.cor}-100 dark:bg-${activeNode.cor}-900/30`,
             )}>
               {(() => {
-                const Icon = (LucideIcons as any)[activeNode.icone] || LucideIcons.Folder;
+                const Icon = iconesLucide[activeNode.icone] || LucideIcons.Folder;
                 return <Icon size={14} />;
               })()}
             </div>

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Edit, Plus, Lock, Check } from 'lucide-react';
+import { Trash2, Edit, Plus, Lock, Check, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 
 export interface CategoriaPlaceholderRow {
@@ -30,6 +30,11 @@ const POPULAR_ICONS = [
   'Zap', 'Star', 'Heart', 'Flag', 'Bell', 'Info', 'AlertCircle', 'CheckCircle',
   'XCircle', 'HelpCircle', 'MessageSquare', 'Mail', 'Phone', 'Camera', 'Video', 'Music'
 ];
+
+const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
+
+const getMensagemErro = (erro: unknown): string =>
+  erro instanceof Error ? erro.message : 'Erro interno';
 
 interface ManageCategoriesModalProps {
   open: boolean;
@@ -125,8 +130,8 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
           setError(res.error || 'Erro ao criar categoria');
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Erro interno');
+    } catch (err: unknown) {
+      setError(getMensagemErro(err));
     }
   };
 
@@ -142,8 +147,8 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
       } else {
         alert(res.error || 'Erro ao excluir');
       }
-    } catch (err: any) {
-      alert('Erro interno: ' + err.message);
+    } catch (err: unknown) {
+      alert('Erro interno: ' + getMensagemErro(err));
     } finally {
       setIsDeleting(null);
     }
@@ -168,7 +173,7 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
 
               <div className="space-y-2">
                 {categorias.filter(c => c.id !== 'cat-sem-categoria').map(cat => {
-                  const Icon = (LucideIcons as any)[cat.icone] || LucideIcons.Tag;
+                  const Icon = iconesLucide[cat.icone] || LucideIcons.Tag;
                   const isSys = cat.is_sistema === 1;
 
                   return (
@@ -264,7 +269,7 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
                 <Label>Ícone</Label>
                 <div className="grid grid-cols-8 sm:grid-cols-10 gap-2 border rounded-lg p-3 max-h-48 overflow-y-auto bg-muted/10">
                   {POPULAR_ICONS.map(iconName => {
-                    const IconComp = (LucideIcons as any)[iconName];
+                    const IconComp = iconesLucide[iconName];
                     if (!IconComp) return null;
                     return (
                       <button

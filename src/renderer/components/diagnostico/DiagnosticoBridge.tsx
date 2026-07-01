@@ -2,11 +2,11 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 interface DiagnosticoBridgeProps {
-  currentUser: any;
+  currentUser: Record<string, unknown> | null;
   painelIlustracoes: boolean;
 }
 
-function extrairUsuarioSeguro(currentUser: any) {
+function extrairUsuarioSeguro(currentUser: Record<string, unknown> | null) {
   if (!currentUser || typeof currentUser !== 'object') {
     return null;
   }

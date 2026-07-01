@@ -79,6 +79,9 @@ const GEMINI_MODEL_OPTIONS = [
   { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
 ];
 
+const getMensagemErro = (erro: unknown): string =>
+  erro instanceof Error ? erro.message : 'Erro desconhecido';
+
 export const ModelosIAPage: React.FC = () => {
   const [mostrarChave, setMostrarChave] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -127,8 +130,8 @@ export const ModelosIAPage: React.FC = () => {
       if (rModeloGemini.success && rModeloGemini.data) {
         form.setValue('modeloGemini', rModeloGemini.data);
       }
-    } catch (_e) {
-      console.error('Erro ao carregar configurações IA:', _e);
+    } catch {
+      // silencioso
     }
   }, [form]);
 
@@ -189,8 +192,8 @@ export const ModelosIAPage: React.FC = () => {
         setTestResult({ status: 'error', message: msg });
         window.ipcAPI.logError('IA', msg, r.data);
       }
-    } catch (_e: any) {
-      const erroTecnico = _e?.message || 'Erro desconhecido';
+    } catch (_e: unknown) {
+      const erroTecnico = getMensagemErro(_e);
       const msg = `Ops! Algo deu errado ao tentar falar com o ${provedorNome}. Verifique sua conexão e sua chave de API.\n\nDetalhes: ${erroTecnico}`;
       setTestResult({ status: 'error', message: msg });
       window.ipcAPI.logError('IA', msg, _e);

@@ -14,6 +14,9 @@ interface AvatarUploadDialogProps {
   onAvatarUpdated: (fotoUrl: string) => void
 }
 
+const getMensagemErro = (erro: unknown, fallback: string): string =>
+  erro instanceof Error ? erro.message : fallback
+
 function resizeImage(file: File, maxSize: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -107,8 +110,8 @@ export function AvatarUploadDialog({
       toast.success('Foto de perfil atualizada com sucesso!')
       onAvatarUpdated(previewUrl)
       onOpenChange(false)
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao salvar avatar.')
+    } catch (err: unknown) {
+      toast.error(getMensagemErro(err, 'Erro ao salvar avatar.'))
     } finally {
       setIsUploading(false)
     }

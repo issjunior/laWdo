@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, AlertCircle, Plus, Check, FolderTree } from 'lucide-react';
+import { Loader2, AlertCircle, Plus, Check, FolderTree, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { SortableCategoryTree, type CategoriaNode } from '@/components/categorias/SortableCategoryTree';
 import { toast } from 'sonner';
@@ -22,6 +22,21 @@ import {
 } from '@/lib/tree-utils';
 
 const emptyForm = { label: '', descricao: '', cor: 'slate', icone: 'Tag', parent_id: '__none__' as string };
+const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
+
+type CategoriaPecaPayload = {
+  label: string;
+  descricao: string | null;
+  cor: string;
+  icone: string;
+  parent_id: string | null;
+  chave?: string;
+  is_sistema?: number;
+  ordem?: number;
+};
+
+const getMensagemErro = (erro: unknown, fallback = 'Erro'): string =>
+  erro instanceof Error ? erro.message : fallback;
 
 const CategoriasPecasPage: React.FC = () => {
   const [arvore, setArvore] = useState<CategoriaFull[]>([]);
@@ -48,8 +63,8 @@ const CategoriasPecasPage: React.FC = () => {
       } else {
         if (!silent) setError(res.error || 'Erro ao carregar');
       }
-    } catch (e: any) {
-      if (!silent) setError(e.message || 'Erro');
+    } catch (e: unknown) {
+      if (!silent) setError(getMensagemErro(e));
     } finally {
       if (!silent) setLoading(false);
     }
@@ -105,7 +120,7 @@ const CategoriasPecasPage: React.FC = () => {
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
 
-    const payload: Record<string, any> = {
+    const payload: CategoriaPecaPayload = {
       label: formData.label.trim(),
       descricao: formData.descricao.trim() || null,
       cor: formData.cor,
@@ -146,7 +161,7 @@ const CategoriasPecasPage: React.FC = () => {
           toast.success('Categoria criada');
           setArvore(prev => {
             const without = removeFromTree(prev, tempId).tree;
-            const real: CategoriaFull = { ...res.data, subcategorias: [] };
+            const real: CategoriaFull = { ...(res.data as CategoriaFull), subcategorias: [] };
             if (!real.parent_id) return [...without, real];
             return insertIntoTree(without, real.parent_id, real);
           });
@@ -194,8 +209,8 @@ const CategoriasPecasPage: React.FC = () => {
           }
         }
       }
-    } catch (e: any) {
-      setFormError(e.message || 'Erro');
+    } catch (e: unknown) {
+      setFormError(getMensagemErro(e));
     } finally {
       setSaving(false);
     }
@@ -216,9 +231,9 @@ const CategoriasPecasPage: React.FC = () => {
         setArvore(prevArvore);
         toast.error(res.error || 'Erro ao mover');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setArvore(prevArvore);
-      toast.error(e.message || 'Erro');
+      toast.error(getMensagemErro(e));
     }
   }, [arvore]);
 
@@ -244,9 +259,9 @@ const CategoriasPecasPage: React.FC = () => {
         setArvore(prevArvore);
         toast.error(res.error || 'Erro ao excluir');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setArvore(prevArvore);
-      toast.error(e.message || 'Erro');
+      toast.error(getMensagemErro(e));
     }
   };
 
@@ -401,7 +416,7 @@ const CategoriasPecasPage: React.FC = () => {
                         <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">{cat.label}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {cat.icons.map(iconName => {
-                            const IconComp = (LucideIcons as any)[iconName];
+                            const IconComp = iconesLucide[iconName];
                             if (!IconComp) return null;
                             return (
                               <button
