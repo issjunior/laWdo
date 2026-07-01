@@ -112,13 +112,14 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
     } = {}
   ): Promise<SolicitanteRow[]> {
     try {
+      const filtrosAplicados: Partial<SolicitanteRow> = { ...filters }
+
       // Garantir que busque apenas ativos se não houver filtro explícito
-      if (!('ativo' in filters)) {
-        // Usar any temporariamente para contornar a incompatibilidade de tipos
-        (filters as any).ativo = 1
+      if (!('ativo' in filtrosAplicados)) {
+        filtrosAplicados.ativo = 1
       }
 
-      const rows = await super.findAll(filters, options)
+      const rows = await super.findAll(filtrosAplicados, options)
       const decryptedRows = await Promise.all(
         rows.map(row => this.decryptFields(row))
       )
@@ -233,7 +234,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
     try {
       const { limit = 100, offset = 0 } = options
       let whereClause = ''
-      const params: any[] = []
+      const params: unknown[] = []
 
       // Sempre filtrar por status ativo
       whereClause = 'WHERE ativo = 1'
@@ -287,7 +288,7 @@ export class SolicitanteService extends BaseService<SolicitanteRow> {
     try {
       const { limit = 100, offset = 0 } = options
       let whereClause = ''
-      const params: any[] = []
+      const params: unknown[] = []
 
       // Adiciona filtro de tipo se fornecido, MAS NUNCA filtra por ativo
       if (filters.tipo) {

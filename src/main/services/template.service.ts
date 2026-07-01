@@ -87,7 +87,7 @@ export class TemplateService extends BaseService<TemplateRow> {
   async updateSecao(id: string, data: Partial<Omit<SecaoTemplateRow, 'id' | 'template_id' | 'created_at' | 'updated_at'>>): Promise<SecaoTemplateRow> {
     try {
       const sets: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
 
       if (data.nome !== undefined) { sets.push('nome = ?'); params.push(data.nome); }
       if (data.ordem !== undefined) { sets.push('ordem = ?'); params.push(data.ordem); }

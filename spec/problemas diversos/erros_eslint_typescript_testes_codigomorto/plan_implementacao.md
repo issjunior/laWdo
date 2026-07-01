@@ -2,7 +2,7 @@
 
 > Ultima atualizacao: 01/07/2026
 > Branch atual publicada: `main`
-> HEAD publicado: `6ea0dcb ajuste_limpa_any_renderer_simples`
+> HEAD publicado: ver ultimo resultado de tranche registrado abaixo
 > Escopo deste arquivo: checkpoint operacional para continuidade da limpeza de lint, TypeScript, testes e codigo morto.
 
 Este arquivo registra o progresso e o plano de continuidade da implementacao de
@@ -14,11 +14,11 @@ de trabalho. Nao descreve comportamento funcional do produto.
 | Area | Estado atual | Observacao |
 |---|---|---|
 | Branch principal | Publicada | `main` alinhada com `origin/main` |
-| HEAD atual | Publicado | `6ea0dcb ajuste_limpa_any_renderer_simples` |
-| Build | Passando | Ultima validacao completa feita na tranche de preload |
-| TypeScript | Passando | `npm run type-check` OK em `6ea0dcb` |
-| Testes | Passando | `npm test` OK na integracao anterior; nao exigido na ultima tranche puramente tipologica |
-| ESLint | Passando com warnings | `0 errors`, `214 warnings` |
+| HEAD atual | Publicado | Ver ultima tranche registrada neste arquivo |
+| Build | Passando | Validado nas tranches de `src/main/**` |
+| TypeScript | Passando | `npm run type-check` OK na ultima tranche registrada |
+| Testes | Passando | `npm test` OK na ultima tranche registrada |
+| ESLint | Passando com warnings | `0 errors`, `87 warnings` |
 | Codigo morto | Ainda com apontamentos | Tratar separado de lint/types |
 
 ## Linha de progresso
@@ -311,6 +311,30 @@ Efeito: `no-explicit-any` caiu de `83` para `69`; hooks permaneceram em
 
 Proxima recomendacao operacional: tratar `src/main/services/base.service.ts`
 e, se couber no mesmo corte, helpers de services com parametros SQL.
+
+### Resultado da tranche `codex/limpa-any-base-service`
+
+`src/main/services/base.service.ts` ficou sem warnings `no-explicit-any`.
+No mesmo corte, foram removidos `any` de parametros SQL próximos em
+`SolicitanteService` e `TemplateService`, e o filtro padrão `ativo = 1` deixou
+de depender de mutação com cast dinâmico.
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/main/services/base.service.ts src/main/services/solicitante.service.ts src/main/services/template.service.ts` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `87 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+| `npm run build` | Passou |
+
+Efeito: `no-explicit-any` caiu de `69` para `60`; hooks permaneceram em
+`27`; total caiu de `96` para `87`.
+
+Proxima recomendacao operacional: tratar um corte de services pequenos antes de
+entrar nos handlers IPC, com candidatos como `config-backup.service.ts`,
+`importacao.service.ts`, `laudo.service.ts`, `regra-wizard.service.ts` e
+`user.service.ts`. Manter `exportacao.service.ts` separado por envolver `docx`
+e tipos de documento.
 
 ## Proximas tranches sugeridas
 

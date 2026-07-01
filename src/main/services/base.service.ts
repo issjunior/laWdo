@@ -1,12 +1,13 @@
 import { getLogger } from '../utils/logger.js'
 import { executeQuery, executeNonQuery } from '../database/sqlite.js'
+import type { DatabaseRow } from '../types/database.js'
 
 const log = getLogger('database')
 
 /**
  * Serviço base com operações CRUD comuns
  */
-export abstract class BaseService<T extends Record<string, any>> {
+export abstract class BaseService<T extends object> {
   protected tableName: string
   protected primaryKey: string
 
@@ -36,7 +37,7 @@ export abstract class BaseService<T extends Record<string, any>> {
       } = options
 
       let whereClause = ''
-      const params: any[] = []
+      const params: unknown[] = []
 
       // Construir filtros
       const filterEntries = Object.entries(filters).filter(([_, value]) => value !== undefined)
@@ -182,7 +183,7 @@ export abstract class BaseService<T extends Record<string, any>> {
   async count(filters: Partial<T> = {}): Promise<number> {
     try {
       let whereClause = ''
-      const params: any[] = []
+      const params: unknown[] = []
 
       const filterEntries = Object.entries(filters).filter(([_, value]) => value !== undefined)
       if (filterEntries.length > 0) {
@@ -217,9 +218,9 @@ export abstract class BaseService<T extends Record<string, any>> {
   /**
    * Executar query personalizada
    */
-  protected async executeCustomQuery<TResult = any>(
+  protected async executeCustomQuery<TResult = DatabaseRow>(
     sql: string,
-    params: any[] = []
+    params: unknown[] = []
   ): Promise<TResult[]> {
     return await executeQuery<TResult>(sql, params)
   }
