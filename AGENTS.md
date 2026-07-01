@@ -45,6 +45,38 @@ O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas se
 
 ---
 
+## Prevenção de erros recorrentes
+
+Ao implementar ou alterar código, preserve a qualidade da tipagem e não aumente a dívida de lint existente.
+
+- Evite `any`. Quando o formato for conhecido, declare `interface` ou `type`; quando não for conhecido, use `unknown` com narrowing.
+- Não substitua `any` por casts artificiais apenas para calar o TypeScript. Use type assertions somente em fronteiras bem entendidas, com fallback ou validação quando o dado vier de IPC, JSON, storage, API externa ou biblioteca dinâmica.
+- Em `catch`, trate o erro como `unknown`: use `error instanceof Error ? error.message : 'Erro inesperado'`.
+- Após `JSON.parse`, normalize ou valide o resultado antes de alimentar estado tipado ou acessar propriedades.
+- Para dados vindos de IPC, alinhe payloads e respostas com `src/preload/types.ts`. Não introduza novas declarações `ipcAPI: any`.
+- Ao criar ou alterar canal IPC, atualize em conjunto: handler, `ALLOWED_CHANNELS`, `IpcAPI` e tipos de entrada/saída.
+- No Electron, exponha ao renderer apenas wrappers específicos via preload/contextBridge. Nunca exponha módulos Node/Electron diretamente no renderer.
+- Não corrija `react-hooks/exhaustive-deps` mecanicamente. Antes de adicionar dependências, avalie stale closures, loops de renderização e recarregamentos indevidos.
+- Se uma função usada por `useEffect`, `useMemo` ou tabela muda a cada render, estabilize com `useCallback`, mova para dentro do hook ou reestruture o estado conforme o comportamento esperado.
+- Para ícones Lucide dinâmicos, siga o padrão local já usado no projeto com `Record<string, LucideIcon>` e fallback explícito.
+- Antes de finalizar, rode `npm run type-check` e `npm run lint`. Código novo não deve aumentar a contagem de warnings.
+
+### Fronteiras inseguras
+
+Considere como fronteira insegura qualquer dado que venha de fora do fluxo tipado normal da aplicação. Nesses pontos, não confie no formato apenas por expectativa.
+
+Exemplos:
+- respostas de IPC (`window.ipcAPI`);
+- resultado de `JSON.parse`;
+- dados de `sessionStorage` ou `localStorage`;
+- respostas de APIs externas;
+- APIs dinâmicas de bibliotecas como TinyMCE e Lucide;
+- linhas retornadas por SQLite/SQL bruto.
+
+Regra prática: ao cruzar uma fronteira insegura, não use `any` nem cast direto para “forçar” o tipo. Primeiro valide, normalize ou faça narrowing com `unknown`, e só então alimente estado tipado ou acesse propriedades.
+
+---
+
 ## Arquitetura
 
 A aplicação segue o modelo de 3 camadas do Electron com `shared/` para tipos comuns:
@@ -85,7 +117,7 @@ React 18 + React Router 7 (HashRouter — obrigatório para Electron com `file:/
 
 ### Organização de módulos (features)
 
-Cada feature deve ter responsabilidade única e clara, com seus próprios serviços, handlers, componentes e páginas — nomeados consistentemente (ex: `rep.service.ts`, `rep.handlers.ts`, `RepStepper`, `REPsPage.tsx`).
+Cada feature deve ter responsabilidade única e clara, com seus próprios serviços, handlers, componentes e páginas quando aplicável — nomeados consistentemente (ex: `rep.service.ts`, `rep.handlers.ts`, `RepStepper`, `REPsPage.tsx`).
 
 **Comunicação entre features**:
 - **Main ↔ Renderer**: sempre via IPC + preload. Nunca importar módulos do main no renderer.
@@ -99,6 +131,16 @@ Cada feature deve ter responsabilidade única e clara, com seus próprios servi�
 - Acoplamento circular entre features.
 
 **Quando modularizar**: quando uma feature cresce e ganha múltiplas páginas, componentes, handlers IPC e serviços próprios. Evite modularizar demais (overhead de comunicação IPC, arquivos minúsculos) ou de menos (feature monolítica que dificulta manutenção).
+
+### Regras de modularização segura
+
+- Nem toda feature precisa ter todas as camadas; crie service, handler, hook ou componente apenas quando houver responsabilidade real.
+- Páginas podem compor múltiplas features, mas componentes/hooks internos de uma feature não devem depender de detalhes internos de outra.
+- Extraia para `src/shared/types/` apenas tipos usados por mais de uma camada ou feature e com contrato estável.
+- Evite transformar `shared/` em depósito genérico. Se algo pertence ao domínio de uma feature, mantenha junto da feature.
+- Para fluxos grandes, prefira página como orquestradora e extraia componentes/hooks por responsabilidade clara.
+- Ao adicionar IPC de uma feature, mantenha juntos: handler, canal permitido, tipo no preload e chamada tipada no renderer.
+- Antes de criar uma nova abstração, verifique se ela reduz duplicação real ou melhora clareza; não criar arquivos pequenos apenas por simetria.
 
 ---
 
@@ -162,16 +204,27 @@ Consultas usam SQL bruto (strings template), não há ORM.
 
 ## Gotchas
 
-1. **NUNCA importar `electron` ou módulos Node.js no renderer** — toda comunicação é via `window.ipcAPI`.
-2. **Sempre registrar novos canais no `ALLOWED_CHANNELS` do preload** — handler no main sem channel no preload = canal bloqueado.
-3. **Sempre usar `HashRouter`** (não `BrowserRouter`) — `BrowserRouter` quebra em produção no Electron.
-4. **Sempre criar migration ao alterar schema** — incrementar `CURRENT_SCHEMA_VERSION` sem criar a função `migrateVXX()` correspondente corrompe upgrades do banco.
-5. O script `scripts/fix-imports.mjs` roda no postbuild para adicionar extensões `.js` nos imports relativos (TypeScript `module: NodeNext` exige, mas `tsc` não adiciona).
-6. **Em caso de dúvida** — perguntar, somente prosseguir quando souber ao menos 95% do que fazer.
-7. **`Omit<'onChange'>` em componentes com `onChange` próprio** — se um componente define sua própria prop `onChange` e estende `React.HTMLAttributes<HTMLDivElement>`, os tipos colidem (`HTMLAttributes` também tem `onChange: FormEventHandler`). Use `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>` para evitar o conflito. Ex: `TinyMceEditor`.
-8. **Index signature quando Zod usa `.passthrough()`** — se o schema usa `.passthrough()` para aceitar campos dinâmicos, a interface TypeScript precisa de `[key: string]: string`. Sem isso, acesso indexado e casts com `as Record<string, string>` falham. Ex: `REPFormData` em `exam-fields/types.ts`.
-9. **Arrow function wrapper em handlers com parâmetro opcional** — funções como `async (silent?: boolean) => void` não são atribuíveis a `MouseEventHandler` diretamente. Sempre usar `onClick={() => handler()}` em vez de `onClick={handler}`.
-10. **`spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md`** — arquivos sinalizados como código morto por `ts-prune` mas que não devem ser removidos são registrados aqui. Ao adicionar uma exceção, justificar com motivo e data. Ver também: `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md`.
+### TypeScript
+
+- **`Omit<'onChange'>` em componentes com `onChange` próprio** — se um componente define sua própria prop `onChange` e estende `React.HTMLAttributes<HTMLDivElement>`, os tipos colidem (`HTMLAttributes` também tem `onChange: FormEventHandler`). Use `Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>` para evitar o conflito. Ex: `TinyMceEditor`.
+- **Index signature quando Zod usa `.passthrough()`** — se o schema usa `.passthrough()` para aceitar campos dinâmicos, a interface TypeScript precisa de `[key: string]: string`. Sem isso, acesso indexado e casts com `as Record<string, string>` falham. Ex: `REPFormData` em `exam-fields/types.ts`.
+
+### React
+
+- **Arrow function wrapper em handlers com parâmetro opcional** — funções como `async (silent?: boolean) => void` não são atribuíveis a `MouseEventHandler` diretamente. Sempre usar `onClick={() => handler()}` em vez de `onClick={handler}`.
+
+### Banco de dados
+
+- **Sempre criar migration ao alterar schema** — incrementar `CURRENT_SCHEMA_VERSION` sem criar a função `migrateVXX()` correspondente corrompe upgrades do banco.
+
+### Build e código morto
+
+- O script `scripts/fix-imports.mjs` roda no postbuild para adicionar extensões `.js` nos imports relativos (TypeScript `module: NodeNext` exige, mas `tsc` não adiciona).
+- **`spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md`** — arquivos sinalizados como código morto por `ts-prune` mas que não devem ser removidos são registrados aqui. Ao adicionar uma exceção, justificar com motivo e data. Ver também: `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md`.
+
+### Processo de trabalho
+
+- **Em caso de dúvida** — perguntar, somente prosseguir quando souber ao menos 95% do que fazer.
 
 ---
 
@@ -179,7 +232,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 
 Zod + react-hook-form com `@hookform/resolvers`. Schemas em `src/renderer/lib/validators/`.
 
-Quando o schema Zod usa `.passthrough()` para aceitar campos dinâmicos, a interface TypeScript correspondente deve ter `[key: string]: string` (ver gotcha #8).
+Quando o schema Zod usa `.passthrough()` para aceitar campos dinâmicos, ver gotchas de TypeScript.
 
 ## AI / LLM
 
