@@ -14,12 +14,58 @@ de trabalho. Nao descreve comportamento funcional do produto.
 | Area | Estado atual | Observacao |
 |---|---|---|
 | Branch principal | Publicada | `main` alinhada com `origin/main` |
-| HEAD atual | Publicado | Ver ultima tranche registrada neste arquivo |
+| HEAD atual | Publicado | `16c91fa ajuste_tipa_template_handlers` |
 | Build | Passando | Validado nas tranches de `src/main/**` |
 | TypeScript | Passando | `npm run type-check` OK na ultima tranche registrada |
 | Testes | Passando | `npm test` OK na ultima tranche registrada |
 | ESLint | Passando com warnings | `0 errors`, `49 warnings` |
 | Codigo morto | Ainda com apontamentos | Tratar separado de lint/types |
+
+## Checkpoint de pausa - 01/07/2026
+
+Pausa planejada pelo usuario: a continuidade desta iniciativa deve ser retomada
+em outro dia a partir deste checkpoint.
+
+Estado publicado no momento da pausa:
+
+| Item | Estado |
+|---|---|
+| Branch ativa/publicada | `main` alinhada com `origin/main` |
+| HEAD publicado | `16c91fa ajuste_tipa_template_handlers` |
+| Ultima tranche concluida | `codex/limpa-any-template-handlers` |
+| Lint atual | `49 warnings`, `0 errors` |
+| Distribuicao do lint | `22 no-explicit-any` + `27 react-hooks/exhaustive-deps` |
+| TypeScript | `npm run type-check` passando |
+| Testes automatizados | `npm test` passando com `34` aprovados e `1` skipped |
+| Build | `npm run build` passando |
+| Smoke manual | Usuario informou smoke sem observacao de erros |
+
+Retomada recomendada:
+
+1. Confirmar base limpa em `main`:
+   - `git switch main`
+   - `git pull`
+   - `git status --short --branch`
+2. Reconfirmar medicao:
+   - `npm run lint`
+   - `npm run type-check`
+3. Criar branch para a proxima tranche:
+   - `git switch -c codex/limpa-any-laudo-handlers`
+4. Tratar `src/main/ipc/handlers/laudo.handlers.ts`, removendo os `3`
+   warnings `no-explicit-any` restantes do handler de laudos.
+5. Validar com:
+   - `npx eslint src/main/ipc/handlers/laudo.handlers.ts`
+   - `npm run type-check`
+   - `npm run lint`
+   - `npm test`
+   - `npm run build`
+
+Fora do escopo da proxima retomada curta:
+
+- `src/main/services/exportacao.service.ts`
+- `src/main/ipc/index.ts`
+- warnings de `react-hooks/exhaustive-deps`
+- codigo morto/ts-prune
 
 ## Linha de progresso
 
