@@ -166,27 +166,20 @@ Efeito:
 
 ### Resultado da tranche `codex/limpa-any-tinymce-editor`
 
-Arquivo tratado:
+`src/renderer/components/editor/TinyMceEditor.tsx` ficou sem warnings
+`no-explicit-any`, usando tipos oficiais/locais para instancia do editor,
+callbacks TinyMCE, comandos customizados e menu condicional. A mutacao dinamica
+`_placeholderChaves` foi substituida por ref React local.
 
-- `src/renderer/components/editor/TinyMceEditor.tsx`
-
-Resultado validado:
-
-| Comando | Resultado |
+| Comando/teste | Resultado |
 |---|---|
 | `npx eslint src/renderer/components/editor/TinyMceEditor.tsx` | Passou sem warnings |
 | `npm run type-check` | Passou |
 | `npm run lint` | Passou com `166 warnings`, `0 errors` |
+| Teste manual do editor | Realizado pelo usuario sem erros observados |
 
-Efeito:
-
-- `no-explicit-any`: caiu de `161` para `139`.
-- `react-hooks/exhaustive-deps`: permaneceu em `27`.
-- Total: caiu de `188` para `166`.
-- A integracao com TinyMCE passou a usar tipos oficiais/locais para instancia do
-  editor, callbacks de upload/paste/file picker, comandos customizados e menu
-  condicional. A mutacao dinamica `_placeholderChaves` foi substituida por ref
-  React local. Nenhuma dependencia de hook foi alterada nesta tranche.
+Efeito: `no-explicit-any` caiu de `161` para `139`; hooks permaneceram em
+`27`; total caiu de `188` para `166`.
 
 ## Proxima tranche operacional
 
@@ -198,7 +191,8 @@ Commit sugerido: `ajuste_tipa_laudos_page`
 
 Objetivo quantitativo:
 
-- Reduzir os warnings de `no-explicit-any` em `src/renderer/pages/LaudosPage.tsx`.
+- Reduzir os `43` warnings de `no-explicit-any` em
+  `src/renderer/pages/LaudosPage.tsx`.
 - Nao misturar a limpeza de tipos com o warning de hook do mesmo arquivo, salvo
   decisao explicita.
 - Manter `npm run lint` com `0 errors`.
@@ -208,7 +202,18 @@ Escopo principal:
 
 | Ordem | Arquivo | Acao esperada | Criterio de corte |
 |---:|---|---|---|
-| 1 | `src/renderer/pages/LaudosPage.tsx` | Remover `any` com tipos locais/contratos ja existentes para dados de laudo, REP, exportacao e painel de ilustracoes | Parar se exigir reestruturar estado, fluxo de salvamento/exportacao ou hooks |
+| 1 | `src/renderer/pages/LaudosPage.tsx` | Tipar acesso global ao TinyMCE, dados de REP/perito usados em placeholders, callbacks do painel de ilustracoes, `catch` e helpers locais | Parar se exigir reestruturar estado, fluxo de salvamento/exportacao ou hooks |
+
+Agrupamento observado em retomada:
+
+- Acesso ao editor: repeticoes de `(window as any).tinymce?.get(...)` e arrays
+  de editores.
+- Placeholders/exportacao: `aplicarPlaceholders`, perito vindo de
+  `sessionStorage` e dados de REP usados por chave.
+- Painel de ilustracoes: callback `onPanelAction`, `handleIlustracoesEditorInit`
+  e helper local de atualizacao de `figcaption`.
+- Tratamento de erro: varios `catch (e: any)` que podem virar `unknown` com
+  helper de mensagem.
 
 Fora do escopo nesta tranche:
 
