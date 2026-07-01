@@ -3,22 +3,21 @@
  * Correspondem à estrutura das tabelas SQLite
  */
 
-export interface DatabaseRow {
-  [key: string]: any
-}
+export interface DatabaseRow {}
 
 // Usuário/Perito
 export interface UserRow extends DatabaseRow {
   id: string
   nome: string
   email: string
-  matricula?: string
-  telefone?: string
-  cargo?: string
-  lotacao?: string
+  matricula?: string | null
+  telefone?: string | null
+  cargo?: string | null
+  lotacao?: string | null
   username: string
   senha_hash: string
-  ativo: boolean
+  foto_url?: string | null
+  ativo: boolean | number
   data_criacao: string
   data_atualizacao: string
 }
@@ -28,10 +27,10 @@ export interface SolicitanteRow extends DatabaseRow {
   id: string
   nome: string
   tipo: string
-  endereco?: string
-  telefone?: string
-  email?: string
-  ativo?: boolean
+  endereco?: string | null
+  telefone?: string | null
+  email?: string | null
+  ativo?: boolean | number
   created_at: string
   updated_at: string
 }
@@ -41,9 +40,11 @@ export interface TipoExameRow extends DatabaseRow {
   id: string
   codigo: string
   nome: string
-  descricao?: string
+  descricao?: string | null
   template_padrao?: string
+  ativo?: boolean | number
   created_at: string
+  updated_at?: string
 }
 
 // REP (Requisição de Exame Pericial)
@@ -184,7 +185,7 @@ export interface CategoriaPecaRow extends DatabaseRow {
   id: string
   chave: string
   label: string
-  descricao?: string
+  descricao?: string | null
   cor?: string
   icone?: string
   parent_id?: string | null

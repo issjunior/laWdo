@@ -290,16 +290,38 @@ Efeito: `no-explicit-any` caiu de `85` para `83`; hooks permaneceram em
 Proxima recomendacao operacional: iniciar `src/main/**` por um corte estreito
 em `database/sqlite.ts` e `types/database.ts`, antes de services/handlers.
 
+### Resultado da tranche `codex/limpa-any-sqlite-database`
+
+`src/main/database/sqlite.ts` e `src/main/types/database.ts` ficaram sem
+warnings `no-explicit-any`. A fronteira SQLite passou a usar `sqlite3.Database`,
+callbacks com `Error | null`, parametros `unknown[]` e linhas padrão
+`DatabaseRow`. A index signature ampla de `DatabaseRow` foi removida; campos
+reais usados pelo código atual foram declarados explicitamente.
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/main/database/sqlite.ts src/main/types/database.ts` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `96 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+| `npm run build` | Passou |
+
+Efeito: `no-explicit-any` caiu de `83` para `69`; hooks permaneceram em
+`27`; total caiu de `110` para `96`.
+
+Proxima recomendacao operacional: tratar `src/main/services/base.service.ts`
+e, se couber no mesmo corte, helpers de services com parametros SQL.
+
 ## Proximas tranches sugeridas
 
-### 1. Main process: database/sqlite
+### 1. Main process: base service
 
-Objetivo: reduzir `any` na fronteira SQLite sem alterar SQL ou comportamento.
+Objetivo: reduzir `any` no `BaseService` e helpers de query de services.
 
 Risco:
 
-- Fronteira dinamica de banco; preferir `unknown`/tipos de linha e parametros.
-- Evitar mudar queries, migrations ou contratos IPC nesta tranche.
+- Classe compartilhada por services; manter assinatura CRUD compatível.
+- Evitar alterar nomes de colunas, filtros ou montagem de SQL.
 
 Validacao recomendada:
 
