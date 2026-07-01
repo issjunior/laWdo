@@ -230,15 +230,35 @@ Validacao recomendada:
 - `npm test`
 - teste manual de listar, editar, salvar, exportar e navegar em laudos
 
+### Resultado da tranche `codex/limpa-any-laudos-page`
+
+`src/renderer/pages/LaudosPage.tsx` ficou sem warnings
+`no-explicit-any`. Foram tipados o acesso global ao TinyMCE, os dados locais de
+REP/perito usados por placeholders, callbacks do painel de ilustracoes,
+helpers de editor e tratamentos `catch` com `unknown`.
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/renderer/pages/LaudosPage.tsx` | Passou com `1 warning` de `react-hooks/exhaustive-deps`, fora do escopo |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `123 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+
+Efeito: `no-explicit-any` caiu de `139` para `96`; hooks permaneceram em
+`27`; total caiu de `166` para `123`.
+
+Proxima recomendacao operacional: tratar `TemplatesPage.tsx` em uma tranche
+separada, removendo os `10` warnings `no-explicit-any` sem mexer nos hooks.
+
 ## Proximas tranches sugeridas
 
-### 1. LaudosPage
+### 1. TemplatesPage
 
-Objetivo: reduzir `any` no fluxo principal de laudos.
+Objetivo: reduzir `any` no fluxo de templates.
 
 Risco:
 
-- Arquivo grande, com estado complexo e fluxo central do produto.
+- Arquivo grande, com editor, preview e fluxos de clone/exclusao.
 - Nao misturar com hooks na mesma tranche, salvo decisao explicita.
 
 Validacao recomendada:
@@ -246,7 +266,7 @@ Validacao recomendada:
 - `npm run lint`
 - `npm run type-check`
 - `npm test`
-- teste manual de listar, editar, criar, salvar, exportar e navegar em laudos
+- teste manual de listar, editar, criar, clonar, excluir e preview de templates
 
 ### 2. Main process: database/services/handlers
 

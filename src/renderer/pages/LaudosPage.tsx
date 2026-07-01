@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -115,15 +116,88 @@ function formatarDataHora(iso: string | undefined): string {
   }
 }
 
-const aplicarPlaceholders = (html: string, repData: any, extraContext?: { solicitanteNome?: string; tipoExameNome?: string; tipoExameCodigo?: string }) => {
-  if (!repData) return html;
+interface RepPlaceholderData {
+  numero?: string;
+  numero_documento?: string;
+  local_fato?: string;
+  data_requisicao?: string;
+  autoridade_solicitante?: string;
+  prazo?: string;
+  tipo_solicitacao?: string;
+  data_documento?: string;
+  data_acionamento?: string;
+  data_chegada?: string;
+  data_saida?: string;
+  observacoes?: string;
+  solicitante_id?: string;
+  tipo_exame_id?: string;
+  campos_especificos?: string;
+}
 
-  // Buscar usuário logado para placeholders de perito
-  let perito: any = null;
+interface PeritoSessaoData {
+  id?: string;
+  nome?: string;
+  cargo?: string;
+  especialidade?: string;
+  lotacao?: string;
+  matricula?: string;
+}
+
+type TinymceWindow = Window & {
+  tinymce?: {
+    get: (id?: string) => TinyMceEditorInstance | null;
+  };
+};
+
+type WindowComIntersectionObserver = Window & {
+  IntersectionObserver: typeof IntersectionObserver;
+};
+
+const obterEditorTinyMce = (editorId: string): TinyMceEditorInstance | null => (
+  (window as TinymceWindow).tinymce?.get(editorId) ?? null
+);
+
+const isTinyMceEditor = (editor: TinyMceEditorInstance | null | undefined): editor is TinyMceEditorInstance => (
+  editor != null
+);
+
+const obterMensagemErro = (erro: unknown, fallback: string): string => (
+  erro instanceof Error && erro.message ? erro.message : fallback
+);
+
+const isRecord = (valor: unknown): valor is Record<string, unknown> => (
+  typeof valor === 'object' && valor !== null
+);
+
+const isString = (valor: unknown): valor is string => typeof valor === 'string';
+
+const isBoolean = (valor: unknown): valor is boolean => typeof valor === 'boolean';
+
+const isImagemLaudoArray = (valor: unknown): valor is ImagemLaudo[] => Array.isArray(valor);
+
+const lerPeritoSessao = (): PeritoSessaoData | null => {
   try {
     const userJson = sessionStorage.getItem('lawdo_auth_user');
-    if (userJson) perito = JSON.parse(userJson);
-  } catch (e) {}
+    if (!userJson) return null;
+    const parsed: unknown = JSON.parse(userJson);
+    if (!isRecord(parsed)) return null;
+    return {
+      id: typeof parsed.id === 'string' ? parsed.id : undefined,
+      nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
+      cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
+      especialidade: typeof parsed.especialidade === 'string' ? parsed.especialidade : undefined,
+      lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
+      matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const aplicarPlaceholders = (html: string, repData: RepPlaceholderData, extraContext?: { solicitanteNome?: string; tipoExameNome?: string; tipoExameCodigo?: string }) => {
+  if (!repData) return html;
+
+  const perito = lerPeritoSessao();
 
   // Mapeamento exaustivo para cobrir diferentes estilos de tag
   const mapping: Record<string, string> = {
@@ -682,14 +756,14 @@ export const LaudosPage: React.FC = () => {
 
   const obterSecoesAtuaisDoEditor = useCallback((): SecaoEditor[] => {
     if (editorMode === 'single') {
-      const editor = (window as any).tinymce?.get('laudo-single-editor');
+      const editor = obterEditorTinyMce('laudo-single-editor');
       const latestHtml = editor ? editor.getContent() : singleEditorHtml;
       setSingleEditorHtml(latestHtml);
       return parseSingleHtmlToSecoes(latestHtml, secoes);
     }
 
     return secoes.map((secao, idx) => {
-      const editor = (window as any).tinymce?.get(`secao-${idx}`);
+      const editor = obterEditorTinyMce(`secao-${idx}`);
       const conteudo = editor ? editor.getContent() : secao.conteudo;
       if (editor) atualizarConteudoSecao(idx, conteudo);
       return { ...secao, conteudo };
@@ -733,8 +807,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setError(r.error || 'Erro ao carregar laudos');
       }
-    } catch (e: any) {
-      setError(e.message || 'Erro ao carregar laudos');
+    } catch (e: unknown) {
+      setError(obterMensagemErro(e, 'Erro ao carregar laudos'));
     } finally {
       setLoading(false);
     }
@@ -758,13 +832,13 @@ export const LaudosPage: React.FC = () => {
     const observers: IntersectionObserver[] = [];
 
     const timeout = setTimeout(() => {
-      const editors: any[] = editorMode === 'single'
-        ? [(window as any).tinymce?.get('laudo-single-editor')].filter(Boolean)
-        : secoes.map((_, i) => (window as any).tinymce?.get(`secao-${i}`)).filter(Boolean);
+      const editors: TinyMceEditorInstance[] = editorMode === 'single'
+        ? [obterEditorTinyMce('laudo-single-editor')].filter(isTinyMceEditor)
+        : secoes.map((_, i) => obterEditorTinyMce(`secao-${i}`)).filter(isTinyMceEditor);
 
       for (const editor of editors) {
         const body = editor.getBody();
-        const win = editor.getWin();
+        const win = editor.getWin() as WindowComIntersectionObserver;
         if (!body || !win) continue;
 
         const observer = new win.IntersectionObserver(
@@ -795,7 +869,7 @@ export const LaudosPage: React.FC = () => {
   }, [syncEnabled, editando, editorMode, secoes, singleEditorHtml]);
 
   const inserirPlaceholder = (editorId: string, chave: string) => {
-    const editor = (window as any).tinymce?.get(editorId);
+    const editor = obterEditorTinyMce(editorId);
     if (editor) {
       editor.execCommand('insertPlaceholder', false, { chave });
     }
@@ -883,7 +957,7 @@ export const LaudosPage: React.FC = () => {
       ? ['laudo-single-editor']
       : secoes.map((_, i) => `secao-${i}`);
     for (const editorId of editorIds) {
-      const editor = (window as any).tinymce?.get(editorId);
+      const editor = obterEditorTinyMce(editorId);
       if (!editor) continue;
       const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
       if (figure) {
@@ -896,15 +970,15 @@ export const LaudosPage: React.FC = () => {
   const obterEditorIlustracoes = useCallback((): {
     editorId: string;
     idx: number;
-    editor: any | null;
+    editor: TinyMceEditorInstance | null;
     secoesAtuais: SecaoEditor[];
   } => {
     if (editorMode === 'single') {
-      const editor = (window as any).tinymce?.get('laudo-single-editor');
+      const editor = obterEditorTinyMce('laudo-single-editor');
       return { editorId: 'laudo-single-editor', idx: -1, editor, secoesAtuais: secoes };
     }
     const { idx, secoes: secoesAtuais } = garantirSecaoIlustracoes();
-    const editor = (window as any).tinymce?.get(`secao-${idx}`);
+    const editor = obterEditorTinyMce(`secao-${idx}`);
     return { editorId: `secao-${idx}`, idx, editor, secoesAtuais };
   }, [editorMode, secoes, garantirSecaoIlustracoes]);
 
@@ -959,7 +1033,7 @@ export const LaudosPage: React.FC = () => {
     return { metodo: 'remount', count: imagens.length };
   }, [secoes, obterEditorIlustracoes, atualizarConteudoSecao]);
 
-  const handleIlustracoesEditorInit = useCallback((editor: any) => {
+  const handleIlustracoesEditorInit = useCallback((editor: TinyMceEditorInstance) => {
     if (scrollRestoreRef.current !== null && editor.getBody()) {
       const scrollContainer = editor.getBody().parentElement;
       if (scrollContainer) {
@@ -1010,7 +1084,7 @@ export const LaudosPage: React.FC = () => {
   panelCallbacksRef.current = {
     onInsertImage: (url, id, legenda) => {
       if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (!editor) {
           console.error('[ilustracoes] insertImage: ERRO single mode - editor not found');
           toast.error('Editor não encontrado. Tente recarregar a página.');
@@ -1052,7 +1126,7 @@ export const LaudosPage: React.FC = () => {
     },
     onDeleteImage: (imageId) => {
       if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (!editor) return;
         editor.execCommand('removeLaudoImage', false, { id: imageId });
         const novoHtml = editor.getContent();
@@ -1086,7 +1160,7 @@ export const LaudosPage: React.FC = () => {
         console.warn('[ilustracoes] deleteImage: seção ILUSTRAÇÕES não encontrada');
         return;
       }
-      const editor = (window as any).tinymce?.get(`secao-${idxIlustracoes}`);
+      const editor = obterEditorTinyMce(`secao-${idxIlustracoes}`);
       if (!editor || !editor.getBody()) {
         console.warn(
           `[ilustracoes] deleteImage: secao-${idxIlustracoes} editor not ready, falling back to state-path`
@@ -1130,7 +1204,7 @@ export const LaudosPage: React.FC = () => {
       }
     },
     onUpdateLegenda: (id, legenda) => {
-      const atualizarFigcaption = (editor: any) => {
+      const atualizarFigcaption = (editor: TinyMceEditorInstance) => {
         const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${id}"]`);
         if (figure) {
           const figcaption = figure.querySelector('figcaption');
@@ -1150,7 +1224,7 @@ export const LaudosPage: React.FC = () => {
         return false;
       };
       if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (editor && atualizarFigcaption(editor)) {
           const novoHtml = editor.getContent();
           setSingleEditorHtml(novoHtml);
@@ -1159,7 +1233,7 @@ export const LaudosPage: React.FC = () => {
         return;
       }
       for (let idx = 0; idx < secoes.length; idx++) {
-        const editor = (window as any).tinymce?.get(`secao-${idx}`);
+        const editor = obterEditorTinyMce(`secao-${idx}`);
         if (editor && atualizarFigcaption(editor)) {
           atualizarConteudoSecao(idx, editor.getContent());
           break;
@@ -1168,7 +1242,7 @@ export const LaudosPage: React.FC = () => {
     },
     onReorder: (imagens) => {
       if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (!editor) return;
         const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
         const idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
@@ -1185,7 +1259,7 @@ export const LaudosPage: React.FC = () => {
     },
     onRefreshHtml: () => {
       if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (editor) {
           editor.execCommand('scanAndWrapImages');
           const novoHtml = editor.getContent();
@@ -1196,7 +1270,7 @@ export const LaudosPage: React.FC = () => {
         setSecoes(prev => {
           const novas = [...prev];
           for (let idx = 0; idx < prev.length; idx++) {
-            const editor = (window as any).tinymce?.get(`secao-${idx}`);
+            const editor = obterEditorTinyMce(`secao-${idx}`);
             if (editor) {
               editor.execCommand('scanAndWrapImages');
               novas[idx] = { ...novas[idx], conteudo: editor.getContent() };
@@ -1215,7 +1289,7 @@ export const LaudosPage: React.FC = () => {
       }
 
       if (editorMode === 'single') {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (editor) {
           const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
           let idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
@@ -1258,7 +1332,7 @@ export const LaudosPage: React.FC = () => {
     onReplaceImage: (imageId, dataUri?) => {
       const executarReplace = (dataUrl: string) => {
         if (editorMode === 'single') {
-          const editor = (window as any).tinymce?.get('laudo-single-editor');
+          const editor = obterEditorTinyMce('laudo-single-editor');
           if (editor) {
             editor.execCommand('replaceLaudoImage', false, { imageId, newUrl: dataUrl });
             const novoHtml = editor.getContent();
@@ -1267,7 +1341,7 @@ export const LaudosPage: React.FC = () => {
           }
         } else {
           for (let idx = 0; idx < secoes.length; idx++) {
-            const editor = (window as any).tinymce?.get(`secao-${idx}`);
+            const editor = obterEditorTinyMce(`secao-${idx}`);
             if (editor) {
               const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
               if (figure) {
@@ -1323,18 +1397,34 @@ export const LaudosPage: React.FC = () => {
 
   useEffect(() => {
     if (!panelPoppedOut) return;
-    return window.ipcAPI.ilustracoes.onPanelAction((action: string, ...args: any[]) => {
+    return window.ipcAPI.ilustracoes.onPanelAction((action: string, ...args: unknown[]) => {
       const cbs = panelCallbacksRef.current;
       switch (action) {
-        case 'insertImage': cbs.onInsertImage(args[0], args[1], args[2]); break;
-        case 'deleteImage': cbs.onDeleteImage(args[0]); break;
-        case 'updateLegenda': cbs.onUpdateLegenda(args[0], args[1]); break;
-        case 'reorder': cbs.onReorder(args[0]); break;
+        case 'insertImage':
+          if (isString(args[0]) && isString(args[1]) && isString(args[2])) cbs.onInsertImage(args[0], args[1], args[2]);
+          break;
+        case 'deleteImage':
+          if (isString(args[0])) cbs.onDeleteImage(args[0]);
+          break;
+        case 'updateLegenda':
+          if (isString(args[0]) && isString(args[1])) cbs.onUpdateLegenda(args[0], args[1]);
+          break;
+        case 'reorder':
+          if (isImagemLaudoArray(args[0])) cbs.onReorder(args[0]);
+          break;
         case 'refreshHtml': cbs.onRefreshHtml(); break;
-        case 'insertAll': cbs.onInsertAll(args[0]); break;
-        case 'syncToggle': cbs.onSyncToggle(args[0]); break;
-        case 'scrollToFigure': cbs.onScrollToFigure(args[0]); break;
-        case 'replaceImage': cbs.onReplaceImage(args[0], args[1]); break;
+        case 'insertAll':
+          if (isImagemLaudoArray(args[0])) cbs.onInsertAll(args[0]);
+          break;
+        case 'syncToggle':
+          if (isBoolean(args[0])) cbs.onSyncToggle(args[0]);
+          break;
+        case 'scrollToFigure':
+          if (isString(args[0])) cbs.onScrollToFigure(args[0]);
+          break;
+        case 'replaceImage':
+          if (isString(args[0]) && (args[1] === undefined || isString(args[1]))) cbs.onReplaceImage(args[0], args[1]);
+          break;
         case 'ready': cbs.syncCurrentState(); break;
         case 'popIn':
           setPanelPoppedOut(false);
@@ -1461,8 +1551,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao gerar PDF do laudo');
       }
-    } catch (e: any) {
-      setError('Erro ao gerar preview: ' + e.message);
+    } catch (e: unknown) {
+      setError('Erro ao gerar preview: ' + obterMensagemErro(e, 'Erro inesperado'));
     } finally {
       setCarregandoPreview(false);
     }
@@ -1531,8 +1621,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setError(result.error || 'Erro ao gerar PDF do laudo');
       }
-    } catch (e: any) {
-      setError('Erro ao gerar preview: ' + e.message);
+    } catch (e: unknown) {
+      setError('Erro ao gerar preview: ' + obterMensagemErro(e, 'Erro inesperado'));
     } finally {
       setListaPreviewLoading(false);
     }
@@ -1656,8 +1746,8 @@ export const LaudosPage: React.FC = () => {
           toast.dismiss(toastId);
         }
       }
-    } catch (e: any) {
-      toast.error('Erro ao exportar: ' + e.message, { id: toastId });
+    } catch (e: unknown) {
+      toast.error('Erro ao exportar: ' + obterMensagemErro(e, 'Erro inesperado'), { id: toastId });
     } finally {
       setExportando(false);
     }
@@ -1757,14 +1847,14 @@ export const LaudosPage: React.FC = () => {
           const htmlEditorUnico = buildSingleHtmlFromSecoes(secoesNormalizadas);
           setSecoes(secoesNormalizadas);
           setSingleEditorHtml(htmlEditorUnico);
-          const editor = (window as any).tinymce?.get('laudo-single-editor');
+          const editor = obterEditorTinyMce('laudo-single-editor');
           if (editor) {
             editor.setContent(htmlEditorUnico);
           }
         } else {
           setSecoes(secoesNormalizadas);
           secoesNormalizadas.forEach((sec, idx) => {
-            const editor = (window as any).tinymce?.get(`secao-${idx}`);
+            const editor = obterEditorTinyMce(`secao-${idx}`);
             if (editor) {
               editor.setContent(sec.conteudo);
             }
@@ -1775,8 +1865,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setError(r.error || 'Erro ao salvar laudo');
       }
-    } catch (e: any) {
-      setError(e.message || 'Erro ao salvar laudo');
+    } catch (e: unknown) {
+      setError(obterMensagemErro(e, 'Erro ao salvar laudo'));
     } finally {
       setSalvando(false);
     }
@@ -1790,13 +1880,13 @@ export const LaudosPage: React.FC = () => {
       if (editorMode === 'single') {
         const htmlEditor = buildSingleHtmlFromSecoes(secoesAtuais);
         setSingleEditorHtml(htmlEditor);
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (editor) editor.setContent(htmlEditor);
       }
 
       toast.success('Seções reindexadas com sucesso');
-    } catch (e: any) {
-      setError(e.message || 'Erro ao reindexar seções');
+    } catch (e: unknown) {
+      setError(obterMensagemErro(e, 'Erro ao reindexar seções'));
     }
   }, [buildSingleHtmlFromSecoes, editorMode, obterSecoesAtuaisDoEditor, reindexarSecoesEditadas]);
 
@@ -1877,8 +1967,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setIaError(r.error || 'Erro ao revisar ortografia');
       }
-    } catch (e: any) {
-      setIaError(e.message || 'Erro ao revisar ortografia');
+    } catch (e: unknown) {
+      setIaError(obterMensagemErro(e, 'Erro ao revisar ortografia'));
     } finally {
       setIaLoading(false);
     }
@@ -1905,8 +1995,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setIaError(r.error || 'Erro ao adequar escrita');
       }
-    } catch (e: any) {
-      setIaError(e.message || 'Erro ao adequar escrita');
+    } catch (e: unknown) {
+      setIaError(obterMensagemErro(e, 'Erro ao adequar escrita'));
     } finally {
       setIaLoading(false);
     }
@@ -1932,8 +2022,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setIaError(r.error || 'Erro ao descrever imagem');
       }
-    } catch (e: any) {
-      setIaError(e.message || 'Erro ao descrever imagem');
+    } catch (e: unknown) {
+      setIaError(obterMensagemErro(e, 'Erro ao descrever imagem'));
     } finally {
       setIaLoading(false);
     }
@@ -1971,8 +2061,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setIaError(r.error || 'Erro ao processar pergunta');
       }
-    } catch (e: any) {
-      setIaError(e.message || 'Erro ao processar pergunta');
+    } catch (e: unknown) {
+      setIaError(obterMensagemErro(e, 'Erro ao processar pergunta'));
     } finally {
       setIaLoading(false);
     }
@@ -1981,7 +2071,7 @@ export const LaudosPage: React.FC = () => {
   const handleApplyResponse = (texto: string) => {
     if (iaSheetSecaoIdx !== null) {
       if (iaSheetSecaoIdx === -1) {
-        const editor = (window as any).tinymce?.get('laudo-single-editor');
+        const editor = obterEditorTinyMce('laudo-single-editor');
         if (!editor) return;
         if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
           const descHtml = texto
@@ -1998,7 +2088,6 @@ export const LaudosPage: React.FC = () => {
       }
 
       const editorId = `secao-${iaSheetSecaoIdx}`;
-      const win = window as any;
 
       if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
         // Converter quebras de linha em parágrafos de HTML
@@ -2007,7 +2096,7 @@ export const LaudosPage: React.FC = () => {
           .map((line) => (line.trim() ? `<p>${line}</p>` : ''))
           .join('');
 
-        const editor = win.tinymce?.get(editorId);
+        const editor = obterEditorTinyMce(editorId);
         if (editor) {
           // Insere na posição atual do cursor no editor correspondente
           editor.insertContent(descHtml);
@@ -2018,7 +2107,7 @@ export const LaudosPage: React.FC = () => {
           atualizarConteudoSecao(iaSheetSecaoIdx, atual + divisor + descHtml);
         }
       } else {
-        const editor = win.tinymce?.get(editorId);
+        const editor = obterEditorTinyMce(editorId);
         if (editor) {
           editor.setContent(texto);
         }
@@ -2101,8 +2190,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setError(r.error || 'Erro ao excluir laudo');
       }
-    } catch (e: any) {
-      setError(e.message || 'Erro ao excluir laudo');
+    } catch (e: unknown) {
+      setError(obterMensagemErro(e, 'Erro ao excluir laudo'));
     }
   };
 
@@ -2115,8 +2204,8 @@ export const LaudosPage: React.FC = () => {
       } else {
         setError(r.error || 'Erro ao atualizar status');
       }
-    } catch (e: any) {
-      setError(e.message || 'Erro ao atualizar status');
+    } catch (e: unknown) {
+      setError(obterMensagemErro(e, 'Erro ao atualizar status'));
     }
   };
 
