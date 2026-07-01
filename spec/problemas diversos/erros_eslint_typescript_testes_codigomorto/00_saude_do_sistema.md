@@ -1,6 +1,6 @@
 # 🏥 Painel de Saúde do Sistema
 
-> **Última medição:** 30/06/2026
+> **Última medição:** 01/07/2026
 > **Propósito:** Termômetro único para medir o progresso de qualidade do projeto ao longo do tempo.
 > **Próxima medição sugerida:** A cada sprint ou após cada grande refatoração.
 
@@ -74,7 +74,7 @@ Este projeto tem **4 camadas de diagnóstico** que se complementam para identifi
 |---|---|---|---|---|
 | **Build** (`npm run build`) | ✅ OK | 0 erros | 0 | → |
 | **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | 0 | 📉 melhora |
-| **ESLint** (`npm run lint`) | 🟡 OK com warnings | 0 err + 514 warn | 0 err | 📉 melhora |
+| **ESLint** (`npm run lint`) | 🟡 OK com warnings | 0 err + 79 warn | 0 err | 📉 melhora |
 | **Testes** (`npm run test`) | ✅ OK | 34 pass, 1 skip | suíte verde | 📉 melhora |
 | **Código morto** (`npm run prune:all`) | 🟡 Em auditoria | apontamentos remanescentes e falsos positivos conhecidos | 0 real | → |
 
@@ -83,6 +83,7 @@ O lint ainda concentra dívida técnica em warnings conhecidos.
 
 > 📉 Em 20/06/2026 houve uma bateria de correções que reduziu `~70 → ~30` erros TypeScript e eliminou dezenas de erros ESLint (unused-vars, unescaped-entities, no-empty, no-useless-escape, TinyMCE vendor excluído do lint).
 > 📉 Em 30/06/2026 o baseline foi estabilizado: TypeScript chegou a `0` erros, testes passaram para `34/35`, e ESLint passou a ser executável como gate com `0` erros e warnings explícitos.
+> 📉 Em 01/07/2026 a limpeza incremental reduziu o lint de `214` para `79` warnings, mantendo `0` erros, `type-check`, testes e build passando.
 
 ---
 
@@ -125,6 +126,7 @@ Registre aqui as medições ao longo do tempo para visualizar o progresso.
 | **23/06/2026** (pré-execução) | ✅ | ~30 | 540 / 45 | 27/31 | ~310 (30 confirmados) | skill |
 | **23/06/2026** (pós-execução) | ✅ | ~32 | 538 / 45 | 27/31 | **268** (42 removidos 🧹) | execução manual |
 | **30/06/2026** (baseline) | ✅ | 0 | 0 / 514 | 34/35 (+1 skip) | apontamentos remanescentes | Codex |
+| **01/07/2026** (limpeza incremental) | ✅ | 0 | 0 / 79 | 34/35 (+1 skip) | apontamentos remanescentes | Codex |
 
 ---
 
@@ -145,20 +147,23 @@ Os principais grupos que bloqueavam a checagem foram tratados:
 | Tipagem de ícones | resolvido | `exam-fields/types.ts` |
 
 
-### ESLint (0 erros, 514 warnings)
+### ESLint (0 erros, 79 warnings)
 
 O comando `npm run lint` passa porque as dívidas abaixo foram mantidas visíveis
 como warnings, não porque foram eliminadas.
 
 | Regra | Qtde | Gravidade |
 |---|---|---|
-| `@typescript-eslint/no-explicit-any` | majoritária | warning |
-| `@typescript-eslint/no-unused-vars` | remanescente | warning |
-| `react/no-unescaped-entities` | remanescente | warning |
-| `react-hooks/exhaustive-deps` | ~20 | warning |
-| Demais warnings | remanescente | warning |
+| `@typescript-eslint/no-explicit-any` | 52 | warning |
+| `react-hooks/exhaustive-deps` | 27 | warning |
+| Demais warnings | 0 | warning |
 
 > ⚠️ `out/**` está excluído do lint para evitar análise de artefatos de build. O vendor TinyMCE em `public/tinymce/` continua tratado como código de terceiros.
+
+As reduções de 01/07/2026 foram feitas em tranches pequenas, sem mudar o
+comportamento funcional: renderer/editor/laudos/templates, helpers de
+exportação, banco SQLite, services, logger e remoção do skill local
+`grill-me` do repositório.
 
 ### Testes (34 pass, 1 skip)
 
@@ -197,17 +202,16 @@ A maioria dos ~268 restantes são falsos positivos conhecidos:
 |---|---|---|
 | **Abordagem leve (pré-Knip)** | ✅ Concluído | [`01_abordagem_leve_pre_knip.md`](01_abordagem_leve_pre_knip.md) |
 | **Auditoria ts-prune 23/06/2026** | ✅ Executado — 42 itens removidos | [`04_auditoria_tsprune_2026-06-23.md`](04_auditoria_tsprune_2026-06-23.md) |
-| **Baseline de qualidade 30/06/2026** | 🟡 Em revisão | [`plan_implementacao.md`](plan_implementacao.md) |
+| **Baseline e limpeza incremental 01/07/2026** | 🟡 Em andamento | [`plan_implementacao.md`](plan_implementacao.md) |
 | **Knip (detecção automática)** | 🟡 Futuro | [`02_plano_knip_futuro.md`](02_plano_knip_futuro.md) |
 
 ### Prioridades sugeridas
 
-1. 🥇 **Publicar a branch do baseline e abrir Draft PR**
-2. 🥇 **Reduzir warnings de `no-unused-vars`** até a regra poder voltar para error
-3. 🥈 **Reduzir warnings de `react/no-unescaped-entities`** até a regra poder voltar para error
-4. 🥈 **Atacar `no-explicit-any` por módulo** sem trocar dívida real por tipos artificiais
-5. 🥉 **Auditar código morto remanescente** e registrar exceções confirmadas
-6. 🥉 **Reavaliar Knip** depois do baseline ser aceito
+1. 🥇 **Iniciar handlers IPC por grupos pequenos**, começando por CRUD simples antes de `template.handlers.ts` e `src/main/ipc/index.ts`
+2. 🥇 **Tratar `src/main/services/exportacao.service.ts`** em tranche própria por envolver `docx` e estrutura de documento
+3. 🥈 **Tratar `react-hooks/exhaustive-deps`** com revisão comportamental por tela, sem correção mecânica
+4. 🥉 **Auditar código morto remanescente** e registrar exceções confirmadas
+5. 🥉 **Reavaliar Knip** depois da dívida de lint ficar menor e estável
 
 ---
 

@@ -368,9 +368,9 @@ tranche propria.
 
 ### Resultado da tranche `codex/remove-grill-me-e-logger`
 
-O skill local `.agents/skills/grill-me/SKILL.md` foi removido do rastreamento
-do Git para sair do GitHub. A copia local foi preservada, porque `.agents` ja
-esta coberto pelo `.gitignore`.
+O skill local `.agents/skills/grill-me/SKILL.md` foi removido do repositorio
+para sair do GitHub. `.agents` ja esta coberto pelo `.gitignore`, entao uma
+copia local futura nao deve voltar a ser rastreada por acidente.
 
 `src/main/utils/logger.ts` ficou sem warnings `no-explicit-any`; `logInfo` e
 `logDebug` agora recebem `Record<string, unknown>` nos metadados.
