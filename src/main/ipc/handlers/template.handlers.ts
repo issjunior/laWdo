@@ -8,15 +8,18 @@ import fs from 'fs';
 
 const CM_TO_INCHES = 1 / 2.54;
 
+const mensagemErro = (error: unknown): string =>
+  error instanceof Error ? error.message : 'Erro desconhecido';
+
 export const registerTemplateHandlers = (): void => {
   /** Listar todos os templates (com contagem de seções) */
   ipcMain.handle('template:findAll', async () => {
     try {
       const data = await templateService.findAllComSecoes();
       return { success: true, data };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao listar templates', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -26,9 +29,9 @@ export const registerTemplateHandlers = (): void => {
       const data = await templateService.findById(id);
       if (!data) return { success: false, error: 'Template não encontrado' };
       return { success: true, data };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao buscar template', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -37,9 +40,9 @@ export const registerTemplateHandlers = (): void => {
     try {
       const data = await templateService.findByTipoExame(tipoExameId);
       return { success: true, data };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao buscar templates por tipo de exame', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -59,9 +62,9 @@ export const registerTemplateHandlers = (): void => {
       });
       logDebug(`Template criado: ${template.nome}`);
       return { success: true, data: template, message: 'Template criado com sucesso' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao criar template', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -76,9 +79,9 @@ export const registerTemplateHandlers = (): void => {
       const template = await templateService.update(id, updateData);
       logDebug(`Template atualizado: ${id}`);
       return { success: true, data: template, message: 'Template atualizado com sucesso' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao atualizar template', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -89,9 +92,9 @@ export const registerTemplateHandlers = (): void => {
       logDebug(`Template excluído: ${id}`);
       auditDelete('', 'templates', id, `Template ${id} excluído`);
       return { success: true, message: 'Template excluído com sucesso' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao excluir template', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -102,9 +105,9 @@ export const registerTemplateHandlers = (): void => {
     try {
       const data = await templateService.findSecoesByTemplate(templateId);
       return { success: true, data };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao listar seções do template', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -125,9 +128,9 @@ export const registerTemplateHandlers = (): void => {
         repetir_titulo: data.repetir_titulo || undefined,
       });
       return { success: true, data: secao, message: 'Seção criada com sucesso' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao criar seção', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -145,9 +148,9 @@ export const registerTemplateHandlers = (): void => {
 
       const secao = await templateService.updateSecao(id, updateData);
       return { success: true, data: secao, message: 'Seção atualizada com sucesso' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao atualizar seção', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -156,9 +159,9 @@ export const registerTemplateHandlers = (): void => {
     try {
       await templateService.deleteSecao(id);
       return { success: true, message: 'Seção excluída com sucesso' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao excluir seção', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -167,9 +170,9 @@ export const registerTemplateHandlers = (): void => {
     try {
       await templateService.reordenarSecoes(templateId, idsOrdenados);
       return { success: true, message: 'Seções reordenadas com sucesso' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao reordenar seções', error);
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 
@@ -286,11 +289,11 @@ export const registerTemplateHandlers = (): void => {
       const base64PDF = buffer.toString('base64');
       logDebug('PDF de preview gerado com sucesso (imagens otimizadas)');
       return { success: true, data: base64PDF };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logError('Erro ao gerar PDF de preview', error);
       if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch { /* ignora */ } }
       if (win) { try { win.close(); } catch { /* ignora */ } }
-      return { success: false, error: error.message };
+      return { success: false, error: mensagemErro(error) };
     }
   });
 };

@@ -18,7 +18,7 @@ de trabalho. Nao descreve comportamento funcional do produto.
 | Build | Passando | Validado nas tranches de `src/main/**` |
 | TypeScript | Passando | `npm run type-check` OK na ultima tranche registrada |
 | Testes | Passando | `npm test` OK na ultima tranche registrada |
-| ESLint | Passando com warnings | `0 errors`, `61 warnings` |
+| ESLint | Passando com warnings | `0 errors`, `49 warnings` |
 | Codigo morto | Ainda com apontamentos | Tratar separado de lint/types |
 
 ## Linha de progresso
@@ -428,17 +428,40 @@ em tranche propria, por concentrar `12` warnings em blocos repetidos de
 `src/main/ipc/index.ts` e `src/main/services/exportacao.service.ts` em cortes
 separados.
 
+### Resultado da tranche `codex/limpa-any-template-handlers`
+
+`src/main/ipc/handlers/template.handlers.ts` ficou sem warnings
+`no-explicit-any`. Os blocos `catch (error: any)` foram trocados por
+`unknown` com helper local de mensagem, preservando os retornos IPC, logs,
+fluxo de templates/secoes e preview PDF.
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/main/ipc/handlers/template.handlers.ts` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `49 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+| `npm run build` | Passou |
+
+Efeito: `no-explicit-any` caiu de `34` para `22`; hooks permaneceram em
+`27`; total caiu de `61` para `49`.
+
+Proxima recomendacao operacional: tratar `src/main/ipc/handlers/laudo.handlers.ts`
+em uma tranche curta, removendo os `3` warnings restantes no handler de laudos.
+Em seguida, tratar `src/main/ipc/index.ts` e manter
+`src/main/services/exportacao.service.ts` separado por envolver `docx`.
+
 ## Proximas tranches sugeridas
 
-### 1. Main process: template handlers
+### 1. Main process: laudo handlers
 
-Objetivo: remover os `12` warnings `no-explicit-any` de
-`src/main/ipc/handlers/template.handlers.ts`.
+Objetivo: remover os `3` warnings `no-explicit-any` de
+`src/main/ipc/handlers/laudo.handlers.ts`.
 
 Risco:
 
-- Handler grande, mas os warnings atuais se concentram em tratamento de erro.
-- Preservar mensagens, retornos IPC e fluxo de secoes/templates.
+- Afeta criacao por wizard, progresso de wizard e exportacao de laudo.
+- Preservar payloads atuais e retornos IPC.
 
 Validacao recomendada:
 
@@ -447,13 +470,12 @@ Validacao recomendada:
 - `npm test`
 - `npm run build`
 
-### 2. Main process: laudo handlers e IPC index
+### 2. Main process: IPC index
 
 Objetivo: reduzir `any` em `src/main/**`.
 
 Alvos provaveis:
 
-- `src/main/ipc/handlers/laudo.handlers.ts`
 - `src/main/ipc/index.ts`
 
 Risco:

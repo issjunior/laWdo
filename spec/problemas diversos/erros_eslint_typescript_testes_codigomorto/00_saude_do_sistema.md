@@ -74,7 +74,7 @@ Este projeto tem **4 camadas de diagnóstico** que se complementam para identifi
 |---|---|---|---|---|
 | **Build** (`npm run build`) | ✅ OK | 0 erros | 0 | → |
 | **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | 0 | 📉 melhora |
-| **ESLint** (`npm run lint`) | 🟡 OK com warnings | 0 err + 61 warn | 0 err | 📉 melhora |
+| **ESLint** (`npm run lint`) | 🟡 OK com warnings | 0 err + 49 warn | 0 err | 📉 melhora |
 | **Testes** (`npm run test`) | ✅ OK | 34 pass, 1 skip | suíte verde | 📉 melhora |
 | **Código morto** (`npm run prune:all`) | 🟡 Em auditoria | apontamentos remanescentes e falsos positivos conhecidos | 0 real | → |
 
@@ -83,7 +83,7 @@ O lint ainda concentra dívida técnica em warnings conhecidos.
 
 > 📉 Em 20/06/2026 houve uma bateria de correções que reduziu `~70 → ~30` erros TypeScript e eliminou dezenas de erros ESLint (unused-vars, unescaped-entities, no-empty, no-useless-escape, TinyMCE vendor excluído do lint).
 > 📉 Em 30/06/2026 o baseline foi estabilizado: TypeScript chegou a `0` erros, testes passaram para `34/35`, e ESLint passou a ser executável como gate com `0` erros e warnings explícitos.
-> 📉 Em 01/07/2026 a limpeza incremental reduziu o lint de `214` para `61` warnings, mantendo `0` erros, `type-check`, testes e build passando.
+> 📉 Em 01/07/2026 a limpeza incremental reduziu o lint de `214` para `49` warnings, mantendo `0` erros, `type-check`, testes e build passando.
 
 ---
 
@@ -126,7 +126,7 @@ Registre aqui as medições ao longo do tempo para visualizar o progresso.
 | **23/06/2026** (pré-execução) | ✅ | ~30 | 540 / 45 | 27/31 | ~310 (30 confirmados) | skill |
 | **23/06/2026** (pós-execução) | ✅ | ~32 | 538 / 45 | 27/31 | **268** (42 removidos 🧹) | execução manual |
 | **30/06/2026** (baseline) | ✅ | 0 | 0 / 514 | 34/35 (+1 skip) | apontamentos remanescentes | Codex |
-| **01/07/2026** (limpeza incremental) | ✅ | 0 | 0 / 61 | 34/35 (+1 skip) | apontamentos remanescentes | Codex |
+| **01/07/2026** (limpeza incremental) | ✅ | 0 | 0 / 49 | 34/35 (+1 skip) | apontamentos remanescentes | Codex |
 
 ---
 
@@ -147,14 +147,14 @@ Os principais grupos que bloqueavam a checagem foram tratados:
 | Tipagem de ícones | resolvido | `exam-fields/types.ts` |
 
 
-### ESLint (0 erros, 61 warnings)
+### ESLint (0 erros, 49 warnings)
 
 O comando `npm run lint` passa porque as dívidas abaixo foram mantidas visíveis
 como warnings, não porque foram eliminadas.
 
 | Regra | Qtde | Gravidade |
 |---|---|---|
-| `@typescript-eslint/no-explicit-any` | 34 | warning |
+| `@typescript-eslint/no-explicit-any` | 22 | warning |
 | `react-hooks/exhaustive-deps` | 27 | warning |
 | Demais warnings | 0 | warning |
 
@@ -162,8 +162,8 @@ como warnings, não porque foram eliminadas.
 
 As reduções de 01/07/2026 foram feitas em tranches pequenas, sem mudar o
 comportamento funcional: renderer/editor/laudos/templates, helpers de
-exportação, banco SQLite, services, logger, handlers IPC pequenos e remoção do
-skill local `grill-me` do repositório.
+exportação, banco SQLite, services, logger, handlers IPC pequenos,
+`template.handlers.ts` e remoção do skill local `grill-me` do repositório.
 
 ### Testes (34 pass, 1 skip)
 
@@ -207,8 +207,8 @@ A maioria dos ~268 restantes são falsos positivos conhecidos:
 
 ### Prioridades sugeridas
 
-1. 🥇 **Tratar `template.handlers.ts`** em tranche própria, por concentrar `12` warnings restantes de `no-explicit-any`
-2. 🥇 **Tratar `laudo.handlers.ts` e `src/main/ipc/index.ts`** em cortes separados, preservando contratos IPC
+1. 🥇 **Tratar `laudo.handlers.ts`** em tranche curta, por concentrar `3` warnings restantes de `no-explicit-any`
+2. 🥇 **Tratar `src/main/ipc/index.ts`** em corte separado, preservando contratos IPC e logs
 3. 🥈 **Tratar `src/main/services/exportacao.service.ts`** em tranche própria por envolver `docx` e estrutura de documento
 4. 🥈 **Tratar `react-hooks/exhaustive-deps`** com revisão comportamental por tela, sem correção mecânica
 5. 🥉 **Auditar código morto remanescente** e registrar exceções confirmadas
