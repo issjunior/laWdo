@@ -3,6 +3,9 @@ import { logDebug, logError } from '../../utils/logger.js'
 import { auditDelete } from '../../services/audit-log.service.js'
 import { tipoExameService } from '../../services/tipo-exame.service.js'
 import { sanitizeInput } from '../../security/index.js'
+import type { TipoExameRow } from '../../types/database.js'
+
+type TipoExameUpdatePayload = Partial<Omit<TipoExameRow, 'id' | 'created_at'>>
 
 /**
  * Registra handlers IPC para operações de tipo de exame
@@ -108,7 +111,7 @@ export const registerTipoExameHandlers = (): void => {
       }
 
       // Sanitizar dados de entrada
-      const sanitizedData: any = {}
+      const sanitizedData: TipoExameUpdatePayload = {}
       if (updateData.codigo) sanitizedData.codigo = sanitizeInput(updateData.codigo)
       if (updateData.nome) sanitizedData.nome = sanitizeInput(updateData.nome)
       if (updateData.descricao !== undefined) sanitizedData.descricao = sanitizeInput(updateData.descricao)

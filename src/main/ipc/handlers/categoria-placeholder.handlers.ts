@@ -3,9 +3,11 @@ import { logInfo, logError } from '../../utils/logger.js';
 import { auditDelete } from '../../services/audit-log.service.js';
 import { categoriaService } from '../../services/categoria-placeholder.service.js';
 import { sanitizeInput } from '../../security/index.js';
+import type { CategoriaPlaceholderRow } from '../../services/categoria-placeholder.service.js';
 
 // Cores permitidas do Tailwind
 const ALLOWED_COLORS = ['slate', 'red', 'orange', 'amber', 'emerald', 'teal', 'blue', 'indigo', 'violet', 'fuchsia', 'pink', 'rose'];
+type CategoriaPayload = Partial<Omit<CategoriaPlaceholderRow, 'id' | 'created_at' | 'updated_at'>>;
 
 export const registerCategoriaHandlers = (): void => {
   logInfo('Registrando handlers de categoria de placeholder...');
@@ -32,7 +34,7 @@ export const registerCategoriaHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('categoria:create', async (_event, data) => {
+  ipcMain.handle('categoria:create', async (_event, data: CategoriaPayload) => {
     try {
       if (!data.chave || typeof data.chave !== 'string' || !data.chave.trim()) {
         return { success: false, error: 'Chave da categoria é obrigatória.' };
@@ -66,17 +68,17 @@ export const registerCategoriaHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('categoria:update', async (_event, id: string, data) => {
+  ipcMain.handle('categoria:update', async (_event, id: string, data: CategoriaPayload) => {
     try {
       if (!id || typeof id !== 'string') return { success: false, error: 'ID inválido' };
       
-      const updateData: Record<string, any> = {};
+      const updateData: CategoriaPayload = {};
       
       if (data.chave !== undefined) updateData.chave = sanitizeInput(data.chave);
       if (data.label !== undefined) updateData.label = sanitizeInput(data.label);
       if (data.descricao !== undefined) updateData.descricao = data.descricao ? sanitizeInput(data.descricao) : null;
       if (data.cor !== undefined) {
-        updateData.cor = ALLOWED_COLORS.includes(data.cor) ? sanitizeInput(data.cor) : 'slate';
+        updateData.cor = typeof data.cor === 'string' && ALLOWED_COLORS.includes(data.cor) ? sanitizeInput(data.cor) : 'slate';
       }
       if (data.icone !== undefined) updateData.icone = data.icone ? sanitizeInput(data.icone) : 'Tag';
       if (data.ordem !== undefined && typeof data.ordem === 'number') updateData.ordem = data.ordem;

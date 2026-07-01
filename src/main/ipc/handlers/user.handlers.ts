@@ -5,6 +5,9 @@ import { sanitizeInput } from '../../security/index.js'
 import bcrypt from 'bcrypt'
 import fs from 'fs'
 import path from 'path'
+import type { UserRow } from '../../types/database.js'
+
+type UserUpdatePayload = Partial<Omit<UserRow, 'id' | 'data_criacao'>>
 
 /**
  * Registra handlers IPC para operações de usuário
@@ -127,7 +130,7 @@ export const registerUserHandlers = (): void => {
       }
 
       // Sanitizar dados de entrada
-      const sanitizedData: any = {}
+      const sanitizedData: UserUpdatePayload = {}
       if (updateData.nome) sanitizedData.nome = sanitizeInput(updateData.nome)
       if (updateData.matricula) sanitizedData.matricula = sanitizeInput(updateData.matricula)
       if (updateData.telefone) sanitizedData.telefone = sanitizeInput(updateData.telefone)
@@ -264,7 +267,7 @@ export const registerUserHandlers = (): void => {
       }
 
       // Sanitizar dados
-      const sanitizedData: any = {}
+      const sanitizedData: UserUpdatePayload = {}
       if (profileData.nome) sanitizedData.nome = sanitizeInput(profileData.nome)
       if (profileData.matricula) sanitizedData.matricula = sanitizeInput(profileData.matricula)
       if (profileData.telefone) sanitizedData.telefone = sanitizeInput(profileData.telefone)
@@ -323,7 +326,8 @@ export const registerUserHandlers = (): void => {
       const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, '')
       fs.writeFileSync(filePath, Buffer.from(base64Image, 'base64'))
 
-      await userService.update(userId, { foto_url: filePath } as any)
+      const avatarData: UserUpdatePayload = { foto_url: filePath }
+      await userService.update(userId, avatarData)
 
       logDebug('Avatar salvo com sucesso', { userId })
       return { success: true, data: { foto_url: filePath }, message: 'Avatar atualizado com sucesso' }

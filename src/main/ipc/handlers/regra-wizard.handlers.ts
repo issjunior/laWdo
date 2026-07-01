@@ -1,6 +1,10 @@
 import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
 import { regraWizardService } from '../../services/regra-wizard.service.js';
+import type { RegraWizardRow } from '../../types/database.js';
+
+type RegraWizardPayload = Omit<RegraWizardRow, 'created_at'>;
+type RespostasWizardPayload = Record<string, string | string[]>;
 
 export const registerRegraWizardHandlers = (): void => {
   ipcMain.handle('regra-wizard:findByWizard', async (_event, wizardId: string) => {
@@ -14,7 +18,7 @@ export const registerRegraWizardHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('regra-wizard:save', async (_event, regras: any[]) => {
+  ipcMain.handle('regra-wizard:save', async (_event, regras: RegraWizardPayload[]) => {
     try {
       await regraWizardService.saveBatch(regras);
       return { success: true, message: 'Regras salvas' };
@@ -24,7 +28,7 @@ export const registerRegraWizardHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('regra-wizard:calcularPecas', async (_event, wizardId: string, respostas: any) => {
+  ipcMain.handle('regra-wizard:calcularPecas', async (_event, wizardId: string, respostas: RespostasWizardPayload) => {
     try {
       if (!wizardId) return { success: false, error: 'ID do wizard inválido' };
       const data = await regraWizardService.calcularPecas(wizardId, respostas || {});

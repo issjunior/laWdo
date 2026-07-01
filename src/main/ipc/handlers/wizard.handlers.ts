@@ -1,6 +1,11 @@
 import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
 import { wizardService } from '../../services/wizard.service.js';
+import type { ArvoreWizard } from '../../services/wizard.service.js';
+import type { WizardRow } from '../../types/database.js';
+
+type WizardCreatePayload = Omit<WizardRow, 'id' | 'created_at' | 'updated_at'>;
+type WizardUpdatePayload = Partial<Omit<WizardRow, 'id' | 'created_at' | 'updated_at'>>;
 
 export const registerWizardHandlers = (): void => {
   ipcMain.handle('wizard:findAll', async () => {
@@ -36,7 +41,7 @@ export const registerWizardHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('wizard:create', async (_event, data: any) => {
+  ipcMain.handle('wizard:create', async (_event, data: WizardCreatePayload) => {
     try {
       if (!data.nome) return { success: false, error: 'Nome é obrigatório' };
       if (!data.tipo_exame_id) return { success: false, error: 'Tipo de exame é obrigatório' };
@@ -49,7 +54,7 @@ export const registerWizardHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('wizard:update', async (_event, id: string, data: any) => {
+  ipcMain.handle('wizard:update', async (_event, id: string, data: WizardUpdatePayload) => {
     try {
       if (!id) return { success: false, error: 'ID inválido' };
       const updated = await wizardService.update(id, data);
@@ -82,7 +87,7 @@ export const registerWizardHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('wizard:saveArvore', async (_event, wizardId: string, arvore: any) => {
+  ipcMain.handle('wizard:saveArvore', async (_event, wizardId: string, arvore: ArvoreWizard) => {
     try {
       if (!wizardId) return { success: false, error: 'ID do wizard inválido' };
       await wizardService.saveArvoreCompleta(wizardId, arvore);

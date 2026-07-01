@@ -3,8 +3,10 @@ import { logInfo, logError } from '../../utils/logger.js';
 import { auditDelete } from '../../services/audit-log.service.js';
 import { categoriaPecaService } from '../../services/categoria-peca.service.js';
 import { sanitizeInput } from '../../security/index.js';
+import type { CategoriaPecaRow } from '../../types/database.js';
 
 const ALLOWED_COLORS = ['slate', 'red', 'orange', 'amber', 'emerald', 'teal', 'blue', 'indigo', 'violet', 'fuchsia', 'pink', 'rose'];
+type CategoriaPecaPayload = Partial<Omit<CategoriaPecaRow, 'id' | 'created_at' | 'updated_at'>>;
 
 export const registerCategoriaPecaHandlers = (): void => {
   logInfo('Registrando handlers de categoria de peça...');
@@ -29,7 +31,7 @@ export const registerCategoriaPecaHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('categoria-peca:create', async (_event, data) => {
+  ipcMain.handle('categoria-peca:create', async (_event, data: CategoriaPecaPayload) => {
     try {
       if (!data.chave || typeof data.chave !== 'string' || !data.chave.trim()) {
         return { success: false, error: 'Chave da categoria é obrigatória.' };
@@ -62,11 +64,11 @@ export const registerCategoriaPecaHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('categoria-peca:update', async (_event, id: string, data) => {
+  ipcMain.handle('categoria-peca:update', async (_event, id: string, data: CategoriaPecaPayload) => {
     try {
       if (!id || typeof id !== 'string') return { success: false, error: 'ID inválido' };
 
-      const updateData: Record<string, any> = {};
+      const updateData: CategoriaPecaPayload = {};
 
       if (data.chave !== undefined) updateData.chave = sanitizeInput(data.chave);
       if (data.label !== undefined) updateData.label = sanitizeInput(data.label);

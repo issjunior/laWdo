@@ -5,7 +5,11 @@ import { sanitizeInput } from '../../security/index.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { repService } from '../../services/rep.service.js';
 import { laudoService } from '../../services/laudo.service.js';
-import { REPRow } from '../../types/database.js';
+import type { REPRow } from '../../types/database.js';
+
+type RepCreatePayload = Omit<REPRow, 'id' | 'created_at' | 'updated_at'> & { template_id?: string; perito_id?: string };
+type RepUpdatePayload = Partial<REPRow> & { template_id?: string; perito_id?: string };
+type RepSanitizada = Partial<REPRow> & { id?: string };
 
 /**
  * Registra handlers IPC para operações de REP
@@ -15,7 +19,7 @@ export const registerRepHandlers = (): void => {
    * Criar nova REP
    * template_id e perito_id são opcionais: se fornecidos, um laudo é criado automaticamente
    */
-  ipcMain.handle('rep:create', async (_event, data: Omit<REPRow, 'id' | 'created_at' | 'updated_at'> & { template_id?: string; perito_id?: string }) => {
+  ipcMain.handle('rep:create', async (_event, data: RepCreatePayload) => {
     try {
       if (!data.numero || !data.numero.trim()) {
         return { success: false, error: 'Número da REP é obrigatório.' };
@@ -27,7 +31,7 @@ export const registerRepHandlers = (): void => {
         return { success: false, error: `Já existe outra REP com o número '${data.numero}'.` };
       }
 
-      const sanitizedData: any = {
+      const sanitizedData: RepSanitizada = {
         id: randomUUID(),
         numero: sanitizeInput(data.numero.trim()),
         data_requisicao: data.data_requisicao,
@@ -51,7 +55,7 @@ export const registerRepHandlers = (): void => {
       if (data.prazo) sanitizedData.prazo = data.prazo;
       if (data.campos_especificos) sanitizedData.campos_especificos = data.campos_especificos;
 
-      const rep = await repService.create(sanitizedData);
+      const rep = await repService.create(sanitizedData as Omit<REPRow, 'id' | 'created_at' | 'updated_at'>);
       logInfo('REP criada', { numero: data.numero, id: rep.id });
 
       auditCicloVida('', 'rep', rep.id, 'criacao',         `Requisição ${data.numero} registrada`, null, {
@@ -140,12 +144,12 @@ export const registerRepHandlers = (): void => {
   /**
    * Atualizar REP
    */
-  ipcMain.handle('rep:update', async (_event, id: string, data: Partial<REPRow> & { template_id?: string; perito_id?: string }) => {
+  ipcMain.handle('rep:update', async (_event, id: string, data: RepUpdatePayload) => {
     let repAntes: REPRow | null = null;
     try {
       if (!id) return { success: false, error: 'ID inválido' };
 
-      const sanitizedData: any = {};
+      const sanitizedData: Partial<Omit<REPRow, 'id' | 'created_at'>> = {};
       if (data.numero) sanitizedData.numero = sanitizeInput(data.numero);
       if (data.solicitante_id !== undefined) sanitizedData.solicitante_id = data.solicitante_id;
       if (data.tipo_exame_id !== undefined) sanitizedData.tipo_exame_id = data.tipo_exame_id;

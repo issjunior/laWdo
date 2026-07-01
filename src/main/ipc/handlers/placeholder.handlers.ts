@@ -3,6 +3,9 @@ import { logDebug, logError } from '../../utils/logger.js';
 import { auditDelete } from '../../services/audit-log.service.js';
 import { placeholderService } from '../../services/placeholder.service.js';
 import { sanitizeInput } from '../../security/index.js';
+import type { PlaceholderRow } from '../../services/placeholder.service.js';
+
+type PlaceholderPayload = Partial<Omit<PlaceholderRow, 'id' | 'created_at' | 'updated_at'>>;
 
 export const registerPlaceholderHandlers = (): void => {
   logDebug('Registrando handlers de placeholder...');
@@ -29,7 +32,7 @@ export const registerPlaceholderHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('placeholder:create', async (_event, data) => {
+  ipcMain.handle('placeholder:create', async (_event, data: PlaceholderPayload) => {
     try {
       if (!data.chave || typeof data.chave !== 'string' || !data.chave.trim()) {
         return { success: false, error: 'Chave do placeholder é obrigatória.' };
@@ -48,10 +51,10 @@ export const registerPlaceholderHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('placeholder:update', async (_event, id: string, data) => {
+  ipcMain.handle('placeholder:update', async (_event, id: string, data: PlaceholderPayload) => {
     try {
       if (!id || typeof id !== 'string') return { success: false, error: 'ID inválido' };
-      const updateData: Record<string, any> = {};
+      const updateData: PlaceholderPayload = {};
       if (data.chave !== undefined) updateData.chave = sanitizeInput(data.chave);
       if (data.valor !== undefined) updateData.valor = sanitizeInput(data.valor);
       if (data.descricao !== undefined) updateData.descricao = data.descricao ? sanitizeInput(data.descricao) : null;

@@ -1,6 +1,10 @@
 import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
 import { pecaService } from '../../services/peca.service.js';
+import type { PecaRow } from '../../types/database.js';
+
+type PecaCreatePayload = Omit<PecaRow, 'id' | 'created_at' | 'updated_at'>;
+type PecaUpdatePayload = Partial<Omit<PecaRow, 'id' | 'created_at' | 'updated_at'>>;
 
 export const registerPecaHandlers = (): void => {
   ipcMain.handle('peca:findAll', async () => {
@@ -25,7 +29,7 @@ export const registerPecaHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('peca:create', async (_event, data: any) => {
+  ipcMain.handle('peca:create', async (_event, data: PecaCreatePayload) => {
     try {
       if (!data.nome) return { success: false, error: 'Nome é obrigatório' };
       if (!data.conteudo) return { success: false, error: 'Conteúdo é obrigatório' };
@@ -37,7 +41,7 @@ export const registerPecaHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('peca:update', async (_event, id: string, data: any) => {
+  ipcMain.handle('peca:update', async (_event, id: string, data: PecaUpdatePayload) => {
     try {
       if (!id) return { success: false, error: 'ID inválido' };
       const updated = await pecaService.update(id, data);

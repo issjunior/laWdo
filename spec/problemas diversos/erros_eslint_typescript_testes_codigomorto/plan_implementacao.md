@@ -18,7 +18,7 @@ de trabalho. Nao descreve comportamento funcional do produto.
 | Build | Passando | Validado nas tranches de `src/main/**` |
 | TypeScript | Passando | `npm run type-check` OK na ultima tranche registrada |
 | Testes | Passando | `npm test` OK na ultima tranche registrada |
-| ESLint | Passando com warnings | `0 errors`, `79 warnings` |
+| ESLint | Passando com warnings | `0 errors`, `61 warnings` |
 | Codigo morto | Ainda com apontamentos | Tratar separado de lint/types |
 
 ## Linha de progresso
@@ -391,16 +391,54 @@ comecando por handlers simples de CRUD antes de `template.handlers.ts` e
 `src/main/ipc/index.ts`. Manter `src/main/services/exportacao.service.ts`
 separado.
 
+### Resultado da tranche `codex/limpa-any-handlers-crud`
+
+Handlers IPC pequenos ficaram sem warnings `no-explicit-any`, usando tipos de
+linha do banco, tipos exportados dos services e payloads locais para create,
+update, arvore de wizard, filtros de auditoria e respostas de regras.
+
+Arquivos tratados:
+
+- `src/main/ipc/handlers/categoria-peca.handlers.ts`
+- `src/main/ipc/handlers/categoria-placeholder.handlers.ts`
+- `src/main/ipc/handlers/placeholder.handlers.ts`
+- `src/main/ipc/handlers/peca.handlers.ts`
+- `src/main/ipc/handlers/tipo-exame.handlers.ts`
+- `src/main/ipc/handlers/solicitante.handlers.ts`
+- `src/main/ipc/handlers/wizard.handlers.ts`
+- `src/main/ipc/handlers/regra-wizard.handlers.ts`
+- `src/main/ipc/handlers/log.handlers.ts`
+- `src/main/ipc/handlers/rep.handlers.ts`
+- `src/main/ipc/handlers/user.handlers.ts`
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint` nos handlers tratados | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `61 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+| `npm run build` | Passou |
+
+Efeito: `no-explicit-any` caiu de `52` para `34`; hooks permaneceram em
+`27`; total caiu de `79` para `61`.
+
+Proxima recomendacao operacional: tratar `src/main/ipc/handlers/template.handlers.ts`
+em tranche propria, por concentrar `12` warnings em blocos repetidos de
+`catch (error: any)`. Depois, tratar `laudo.handlers.ts`,
+`src/main/ipc/index.ts` e `src/main/services/exportacao.service.ts` em cortes
+separados.
+
 ## Proximas tranches sugeridas
 
-### 1. Main process: base service
+### 1. Main process: template handlers
 
-Objetivo: reduzir `any` no `BaseService` e helpers de query de services.
+Objetivo: remover os `12` warnings `no-explicit-any` de
+`src/main/ipc/handlers/template.handlers.ts`.
 
 Risco:
 
-- Classe compartilhada por services; manter assinatura CRUD compatível.
-- Evitar alterar nomes de colunas, filtros ou montagem de SQL.
+- Handler grande, mas os warnings atuais se concentram em tratamento de erro.
+- Preservar mensagens, retornos IPC e fluxo de secoes/templates.
 
 Validacao recomendada:
 
@@ -409,16 +447,14 @@ Validacao recomendada:
 - `npm test`
 - `npm run build`
 
-### 2. Main process: database/services/handlers
+### 2. Main process: laudo handlers e IPC index
 
 Objetivo: reduzir `any` em `src/main/**`.
 
 Alvos provaveis:
 
-- `src/main/database/sqlite.ts`
-- `src/main/services/base.service.ts`
-- handlers IPC com `Record<string, any>`
-- `src/main/services/exportacao.service.ts`
+- `src/main/ipc/handlers/laudo.handlers.ts`
+- `src/main/ipc/index.ts`
 
 Risco:
 
@@ -432,9 +468,10 @@ Validacao recomendada:
 - `npm test`
 - `npm run build` se houver alteracao de contrato compartilhado
 
-### 3. Hooks (`react-hooks/exhaustive-deps`)
+### 3. Exportacao e hooks
 
-Objetivo: tratar os 27 warnings restantes de hooks com analise comportamental.
+Objetivo: tratar `src/main/services/exportacao.service.ts` em tranche propria e,
+depois, os 27 warnings restantes de hooks com analise comportamental.
 
 Regra:
 

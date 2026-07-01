@@ -3,6 +3,9 @@ import { logDebug, logError } from '../../utils/logger.js'
 import { auditDelete } from '../../services/audit-log.service.js'
 import { solicitanteService } from '../../services/solicitante.service.js'
 import { sanitizeInput } from '../../security/index.js'
+import type { SolicitanteRow } from '../../types/database.js'
+
+type SolicitanteUpdatePayload = Partial<Omit<SolicitanteRow, 'id' | 'created_at' | 'updated_at'>>
 
 /**
  * Registra handlers IPC para operações de solicitante
@@ -110,7 +113,7 @@ export const registerSolicitanteHandlers = (): void => {
       }
 
       // Sanitizar dados de entrada
-      const sanitizedData: any = {}
+      const sanitizedData: SolicitanteUpdatePayload = {}
       if (updateData.nome !== undefined) sanitizedData.nome = sanitizeInput(updateData.nome)
       if (updateData.tipo !== undefined) sanitizedData.tipo = sanitizeInput(updateData.tipo ?? '')
       if (updateData.endereco !== undefined) sanitizedData.endereco = sanitizeInput(updateData.endereco ?? '')
