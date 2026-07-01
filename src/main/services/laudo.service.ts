@@ -17,6 +17,17 @@ import {
 
 const log = getLogger('laudo')
 
+type LaudoComRepRow = LaudoRow & {
+  rep_numero: string;
+  template_nome: string;
+  status_rep: string;
+  tipo_exame_nome?: string;
+  tipo_exame_codigo?: string;
+  data_requisicao?: string;
+  tipo_solicitacao?: string;
+  numero_documento?: string;
+};
+
 export class LaudoService extends BaseService<LaudoRow> {
   constructor() {
     super('laudos', 'id');
@@ -103,20 +114,7 @@ export class LaudoService extends BaseService<LaudoRow> {
     }
   }
 
-  async findAllComRep(): Promise<
-    Array<
-      LaudoRow & {
-        rep_numero: string;
-        template_nome: string;
-        status_rep: string;
-        tipo_exame_nome?: string;
-        tipo_exame_codigo?: string;
-        data_requisicao?: string;
-        tipo_solicitacao?: string;
-        numero_documento?: string;
-      }
-    >
-  > {
+  async findAllComRep(): Promise<LaudoComRepRow[]> {
     try {
       const sql = `
         SELECT
@@ -135,7 +133,7 @@ export class LaudoService extends BaseService<LaudoRow> {
         LEFT JOIN tipos_exame te ON te.id = r.tipo_exame_id
         ORDER BY l.updated_at DESC
       `;
-      return await executeQuery<any>(sql);
+      return await executeQuery<LaudoComRepRow>(sql);
     } catch (error) {
       log.error('Erro ao buscar laudos com REPs', error);
       throw error;

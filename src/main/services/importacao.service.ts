@@ -72,8 +72,9 @@ export function validarArquivo(filePath: string): { valido: boolean; erro?: stri
 
     // MIME type não é confiável no Windows; usamos extensão como primary check
     return { valido: true };
-  } catch (error: any) {
-    return { valido: false, erro: `Erro ao acessar arquivo: ${error.message}` };
+  } catch (error) {
+    const mensagem = error instanceof Error ? error.message : 'Erro inesperado';
+    return { valido: false, erro: `Erro ao acessar arquivo: ${mensagem}` };
   }
 }
 

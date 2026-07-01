@@ -13,6 +13,18 @@ export interface PecaComSecao {
   ordem: number;
 }
 
+type RegraWizardComPecaSqlRow = RegraWizardRow & {
+  peca_nome: string;
+  peca_descricao?: string | null;
+  peca_conteudo: string;
+  peca_categoria?: string | null;
+  peca_tags?: string | null;
+  peca_ativo: boolean | number;
+  peca_created_at: string;
+  peca_updated_at: string;
+  secao_nome?: string | null;
+};
+
 export class RegraWizardService extends BaseService<RegraWizardRow> {
   constructor() {
     super('regras_wizard', 'id');
@@ -37,9 +49,9 @@ export class RegraWizardService extends BaseService<RegraWizardRow> {
       WHERE rw.wizard_id = ?
       ORDER BY rw.ordem ASC
     `;
-    const rows = await executeQuery<any>(sql, [wizardId]);
+    const rows = await executeQuery<RegraWizardComPecaSqlRow>(sql, [wizardId]);
 
-    return rows.map((r: any) => ({
+    return rows.map((r) => ({
       id: r.id,
       wizard_id: r.wizard_id,
       peca_id: r.peca_id,
@@ -50,11 +62,11 @@ export class RegraWizardService extends BaseService<RegraWizardRow> {
       peca: {
         id: r.peca_id,
         nome: r.peca_nome,
-        descricao: r.peca_descricao,
+        descricao: r.peca_descricao ?? undefined,
         conteudo: r.peca_conteudo,
-        categoria: r.peca_categoria,
-        tags: r.peca_tags,
-        ativo: r.peca_ativo,
+        categoria_id: r.peca_categoria ?? undefined,
+        tags: r.peca_tags ?? undefined,
+        ativo: Boolean(r.peca_ativo),
         created_at: r.peca_created_at,
         updated_at: r.peca_updated_at,
       },

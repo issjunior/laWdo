@@ -18,7 +18,7 @@ de trabalho. Nao descreve comportamento funcional do produto.
 | Build | Passando | Validado nas tranches de `src/main/**` |
 | TypeScript | Passando | `npm run type-check` OK na ultima tranche registrada |
 | Testes | Passando | `npm test` OK na ultima tranche registrada |
-| ESLint | Passando com warnings | `0 errors`, `87 warnings` |
+| ESLint | Passando com warnings | `0 errors`, `81 warnings` |
 | Codigo morto | Ainda com apontamentos | Tratar separado de lint/types |
 
 ## Linha de progresso
@@ -335,6 +335,36 @@ entrar nos handlers IPC, com candidatos como `config-backup.service.ts`,
 `importacao.service.ts`, `laudo.service.ts`, `regra-wizard.service.ts` e
 `user.service.ts`. Manter `exportacao.service.ts` separado por envolver `docx`
 e tipos de documento.
+
+### Resultado da tranche `codex/limpa-any-services-pequenos`
+
+Os services pequenos restantes ficaram sem warnings `no-explicit-any`, exceto
+`exportacao.service.ts`, que permanece separado por envolver contratos do
+pacote `docx` e estrutura de documento.
+
+Arquivos tratados:
+
+- `src/main/services/config-backup.service.ts`
+- `src/main/services/importacao.service.ts`
+- `src/main/services/laudo.service.ts`
+- `src/main/services/regra-wizard.service.ts`
+- `src/main/services/user.service.ts`
+
+| Comando/teste | Resultado |
+|---|---|
+| `npx eslint src/main/services/config-backup.service.ts src/main/services/importacao.service.ts src/main/services/laudo.service.ts src/main/services/regra-wizard.service.ts src/main/services/user.service.ts` | Passou sem warnings |
+| `npm run type-check` | Passou |
+| `npm run lint` | Passou com `81 warnings`, `0 errors` |
+| `npm test` | Passou com `34` testes aprovados e `1` skipped |
+| `npm run build` | Passou |
+
+Efeito: `no-explicit-any` caiu de `60` para `54`; hooks permaneceram em
+`27`; total caiu de `87` para `81`.
+
+Proxima recomendacao operacional: escolher entre duas rotas curtas:
+`src/main/utils/logger.ts`, com 2 warnings localizados, ou iniciar handlers IPC
+por grupos pequenos. Deixar `src/main/services/exportacao.service.ts` para
+tranche propria.
 
 ## Proximas tranches sugeridas
 

@@ -7,6 +7,17 @@ const log = getLogger('auth')
 import bcrypt from 'bcrypt'
 // A senha e armazenada em hash bcrypt.
 
+interface RelatorioAtividadeUsuario {
+  userId: string
+  period: {
+    startDate?: Date
+    endDate?: Date
+  }
+  laudosCriados: number
+  laudosConcluidos: number
+  atividades: unknown[]
+}
+
 export class UserService extends BaseService<UserRow> {
   constructor() {
     super('users', 'id')
@@ -186,7 +197,7 @@ export class UserService extends BaseService<UserRow> {
     }
   }
 
-  async generateActivityReport(userId: string, startDate?: Date, endDate?: Date): Promise<any> {
+  async generateActivityReport(userId: string, startDate?: Date, endDate?: Date): Promise<RelatorioAtividadeUsuario> {
     try {
       log.info('Relatório de atividades solicitado', { userId, startDate, endDate })
       return {

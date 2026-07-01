@@ -13,6 +13,14 @@ interface ManifestConfig {
   tabelas: string[];
 }
 
+type LinhaConfig = Record<string, unknown> & {
+  chave?: string;
+};
+
+function isLinhaConfig(valor: unknown): valor is LinhaConfig {
+  return valor !== null && typeof valor === 'object' && !Array.isArray(valor);
+}
+
 const TABELAS_CONFIG: { tabela: string; ordem: number }[] = [
   { tabela: 'tipos_exame', ordem: 1 },
   { tabela: 'templates', ordem: 2 },
@@ -44,11 +52,11 @@ export const exportarConfig = async (
     zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8'));
 
     for (const { tabela } of TABELAS_CONFIG) {
-      const rows = await executeQuery(`SELECT * FROM ${tabela}`);
+      const rows = await executeQuery<LinhaConfig>(`SELECT * FROM ${tabela}`);
 
       if (tabela === 'configuracoes') {
         const filtrado = rows.filter(
-          (r: any) => !CHAVES_IA_EXCLUIDAS.includes(r.chave)
+          (r) => typeof r.chave !== 'string' || !CHAVES_IA_EXCLUIDAS.includes(r.chave)
         );
         zip.addFile(`${tabela}.json`, Buffer.from(JSON.stringify(filtrado, null, 2), 'utf-8'));
         log.info(`Tabela ${tabela} exportada: ${filtrado.length} registros (${rows.length - filtrado.length} IA excluidos)`);
@@ -108,10 +116,16 @@ export const importarConfig = async (
       const entry = zip.getEntry(`${tabela}.json`);
       if (!entry) continue;
 
-      const registros = JSON.parse(entry.getData().toString('utf-8'));
+      const registrosRaw: unknown = JSON.parse(entry.getData().toString('utf-8'));
 
-      if (!Array.isArray(registros) || registros.length === 0) {
+      if (!Array.isArray(registrosRaw) || registrosRaw.length === 0) {
         log.info(`Tabela ${tabela}: vazia, nada a importar`);
+        continue;
+      }
+
+      const registros = registrosRaw.filter(isLinhaConfig);
+      if (registros.length === 0) {
+        log.info(`Tabela ${tabela}: sem registros validos, nada a importar`);
         continue;
       }
 
