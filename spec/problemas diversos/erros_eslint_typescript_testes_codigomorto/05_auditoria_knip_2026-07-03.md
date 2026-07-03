@@ -17,6 +17,17 @@ npm run knip -- --no-exit-code
 O modo `--no-exit-code` foi usado intencionalmente para medir ruido e achados
 sem bloquear a pipeline.
 
+Desde esta mesma tranche, o repositório também passou a contar com automação do
+GitHub para dependências:
+
+- `Dependency graph` habilitado no repositório
+- `Dependabot` habilitado
+- `.github/dependabot.yml` publicado com agenda semanal para `npm` e `github-actions`
+
+Essa camada não substitui o Knip. O GitHub monitora árvore, risco e updates; o
+Knip continua sendo a ferramenta de auditoria de possível dependência sobrando
+ou export sem consumidor.
+
 ## Configuracao Aplicada
 
 Arquivo criado: `knip.json`

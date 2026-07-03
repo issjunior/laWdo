@@ -16,6 +16,7 @@
 | **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real; CI validado |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
 | **Knip** (`npm run knip -- --no-exit-code`) | 🟡 Observacional | 4 deps, 1 devDep, 73 exports, 39 tipos, 8 duplicatas | primeira linha de base registrada; ainda não é gate |
+| **GitHub dependencies** (`Dependency graph` + `Dependabot`) | 🟡 Ativo | monitoramento semanal em `main` | visibilidade de supply chain ligada no GitHub; `dependabot.yml` publicado |
 
 Leitura prática do estado atual:
 
@@ -27,6 +28,7 @@ Leitura prática do estado atual:
 - a suíte automatizada voltou a ficar verde
 - a auditoria de código morto foi reexecutada e a frente do renderer ficou sem candidatos reais
 - a cobertura passou a ser mensurável com `@vitest/coverage-v8`
+- o GitHub agora monitora dependências e actions com `Dependency graph` e `Dependabot`
 
 ---
 
@@ -55,6 +57,7 @@ npm run knip -- --no-exit-code
 | **03/07/2026 (triagem código morto)** | ✅* | 0 | 0 / 0 | 43 pass, 1 skip* | vendor TinyMCE excluído da análise; barrel morto de validadores removido; renderer sem candidatos reais |
 | **03/07/2026 (CI mínimo)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | workflow GitHub Actions publicado e validado em `main` |
 | **03/07/2026 (Knip observacional)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | Knip instalado como comando manual e primeira linha de base registrada |
+| **03/07/2026 (monitoramento GitHub de dependências)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | `Dependency graph` e `Dependabot` habilitados; `dependabot.yml` publicado com agenda semanal |
 
 ---
 
@@ -243,6 +246,13 @@ Primeira linha de base Knip:
 
 Próximo passo recomendado: triar primeiro dependências/devDependencies, depois duplicatas, e só então exports/tipos por camada.
 
+Automação complementar já ativada no GitHub:
+
+- `Dependency graph` habilitado para expor a árvore de dependências do repositório
+- `Dependabot` habilitado com `version updates` para `npm` e `github-actions`
+- agenda semanal na branch `main`, com limite baixo de PRs e agrupamento para reduzir ruído
+- essa automação complementa o Knip: o GitHub monitora versões e segurança; o Knip continua apontando possível sobra de dependências no código
+
 ## Notas desta tranche
 
 - `npm run type-check` foi reexecutado e continua verde
@@ -256,6 +266,7 @@ Próximo passo recomendado: triar primeiro dependências/devDependencies, depois
 - o threshold de cobertura foi convertido de 70% global para gate progressivo inicial
 - os hooks do renderer foram ajustados sem supressões de ESLint
 - `.github/workflows/ci.yml` foi criado com gate mínimo de type-check, lint, testes e coverage
+- `.github/dependabot.yml` foi criado para atualizações automáticas semanais de `npm` e `github-actions`
 - a primeira execução verde do CI em `main` foi confirmada após alinhar Node.js 24 e corrigir o mock global de path do Electron em testes
 - `02_plano_knip_futuro.md` foi atualizado de plano futuro condicionado para plano observacional executável
 
