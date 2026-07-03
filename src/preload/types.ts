@@ -53,6 +53,12 @@ export interface UserAvatarResponse {
   error?: string
 }
 
+export interface DashboardResponse<T> {
+  success: boolean
+  data?: T
+  error?: string
+}
+
 /**
  * Resposta padrão para operações de usuário
  */

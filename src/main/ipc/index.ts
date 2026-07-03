@@ -22,6 +22,7 @@ import { registerPecaHandlers } from './handlers/peca.handlers.js';
 import { registerCategoriaPecaHandlers } from './handlers/categoria-peca.handlers.js';
 import { registerRegraWizardHandlers } from './handlers/regra-wizard.handlers.js';
 import { registerGdlHandlers } from './handlers/gdl.handlers.js';
+import { registerDashboardHandlers } from './handlers/dashboard.handlers.js';
 import { getSchemaVersion } from '../database/index.js';
 import { userService } from '../services/user.service.js';
 import {
@@ -85,6 +86,7 @@ export const registerIpcHandlers = (options: {
   registerCategoriaPecaHandlers();
   registerRegraWizardHandlers();
   registerGdlHandlers();
+  registerDashboardHandlers();
 
   log.debug('Handlers IPC registrados com sucesso');
 };

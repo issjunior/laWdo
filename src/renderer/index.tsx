@@ -60,6 +60,7 @@ interface IpcAPIRendererLegada {
   solicitante: IpcGrupoLegado;
   tipoExame: IpcGrupoLegado;
   rep: IpcGrupoLegado;
+  dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
   gdl: IpcGrupoLegado;
   categoria: IpcGrupoLegado;
@@ -168,6 +169,10 @@ const initApp = async () => {
         executeQuery: async () => ({ success: false, message: 'Mock mode' }),
         login: async () => ({ success: true, user: { id: 1, name: 'Usuario Mock', username: 'mock', email: 'mock@pcp.pr.gov.br', cargo: 'Perito Oficial Criminal', lotacao: 'Curitiba', foto_url: null } }),
         closeApp: async () => undefined,
+        dashboard: {
+          resumo: async () => ({ success: true, data: null }),
+          projecoes: async () => ({ success: true, data: null }),
+        },
         user: {
           findAll: async () => ({ success: true, data: [] }),
           findById: async () => ({ success: false, error: 'Mock mode' }),

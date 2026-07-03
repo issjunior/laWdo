@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  DashboardResponse,
   UserFilters,
   PaginationOptions,
   UserCreateData,
@@ -14,6 +15,7 @@ import type {
   TipoExameCreateData,
   TipoExameUpdateData
 } from './types.js';
+import type { DashboardProjecoes, DashboardResumo } from '../types/dashboard.js';
 
 // Tipo para entrada de log do sistema
 interface LogEntry {
@@ -122,6 +124,11 @@ export interface IpcAPI {
     update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     updateStatus: (id: string, status: string) => Promise<UserResponse>;
+  };
+
+  dashboard: {
+    resumo: () => Promise<DashboardResponse<DashboardResumo>>;
+    projecoes: () => Promise<DashboardResponse<DashboardProjecoes>>;
   };
 
   // Configurações
@@ -353,6 +360,8 @@ const ALLOWED_CHANNELS = new Set([
   'rep:update',
   'rep:delete',
   'rep:updateStatus',
+  'dashboard:resumo',
+  'dashboard:projecoes',
 
   // Categorias de Placeholders
   'categoria:findAll',
@@ -830,6 +839,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     update: (id: string, data: IpcPayload) => ipcRenderer.invoke('rep:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('rep:delete', id),
     updateStatus: (id: string, status: string) => ipcRenderer.invoke('rep:updateStatus', id, status),
+  },
+
+  dashboard: {
+    resumo: () => ipcRenderer.invoke('dashboard:resumo'),
+    projecoes: () => ipcRenderer.invoke('dashboard:projecoes'),
   },
 
   categoria: {
