@@ -10,10 +10,10 @@
 | Métrica | Status | Quantidade | Observação |
 |---|---|---|---|
 | **Build** (`npm run build`) | ✅ OK | 0 erros bloqueantes | build completo reexecutado após limpeza de lint |
-| **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | main + preload + renderer passam |
-| **ESLint** (`npm run lint`) | ✅ OK | 0 erros, 0 warnings | frente de lint zerada após revisão dos hooks restantes |
-| **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após limpeza dos hooks do renderer |
-| **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real |
+| **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | main + preload + renderer passam; CI validado |
+| **ESLint** (`npm run lint`) | ✅ OK | 0 erros, 0 warnings | frente de lint zerada após revisão dos hooks restantes; CI validado |
+| **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após ajuste do setup para runner Linux |
+| **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real; CI validado |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
 
 Leitura prática do estado atual:
@@ -51,6 +51,7 @@ npm run test:coverage
 | **03/07/2026 (tranche hooks renderer)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | remoção dos warnings `react-hooks/exhaustive-deps` em componentes e páginas do renderer |
 | **03/07/2026 (fechamento planejamento)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | `prune:all` reavaliado; coverage desbloqueado e medido |
 | **03/07/2026 (triagem código morto)** | ✅* | 0 | 0 / 0 | 43 pass, 1 skip* | vendor TinyMCE excluído da análise; barrel morto de validadores removido; renderer sem candidatos reais |
+| **03/07/2026 (CI mínimo)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | workflow GitHub Actions publicado e validado em `main` |
 
 ---
 
@@ -200,22 +201,29 @@ Comandos executados pelo workflow:
 - `npm test`
 - `npm run test:coverage`
 
-Recomendação atual: **não instalar Knip ainda**.
+Primeira execução validada:
+
+- run inicial falhou em `npm ci` por diferença entre Node/npm do runner e do ambiente local
+- o workflow foi alinhado para Node.js 24
+- a execução seguinte expôs um path Linux inválido no mock global do Electron em `src/test-setup.ts`
+- o mock passou a usar `os.tmpdir()`
+- o CI passou em `main` com instalação, type-check, lint, testes e coverage
+
+Recomendação atual: **revisar `02_plano_knip_futuro.md` antes de instalar Knip**.
 
 Motivos:
 
-- a saúde principal do sistema está verde e agora tem gate automático mínimo
+- a saúde principal do sistema está verde e agora tem gate automático mínimo validado
 - a cobertura já é mensurável com gate progressivo
 - a triagem inicial de código morto já foi concluída no renderer
 - os falsos positivos conhecidos do `ts-prune` no main já foram registrados
-- a primeira execução do CI no GitHub ainda deve ser observada para confirmar
-  eventuais diferenças de ambiente
+- as diferenças iniciais do runner Linux já foram corrigidas
 
 Sequência fechada:
 
-1. acompanhar a primeira execução do CI no GitHub
-2. corrigir eventuais diferenças de ambiente se o runner Linux expuser algo não observado localmente
-3. depois disso, revisar `02_plano_knip_futuro.md` e decidir a instalação do Knip
+1. revisar `02_plano_knip_futuro.md` contra o estado atual dos pré-requisitos
+2. decidir se a instalação do Knip já vale o custo operacional
+3. se aprovada, implementar Knip em branch própria, começando por relatório sem bloqueio
 
 ## Notas desta tranche
 
@@ -230,6 +238,7 @@ Sequência fechada:
 - o threshold de cobertura foi convertido de 70% global para gate progressivo inicial
 - os hooks do renderer foram ajustados sem supressões de ESLint
 - `.github/workflows/ci.yml` foi criado com gate mínimo de type-check, lint, testes e coverage
+- a primeira execução verde do CI em `main` foi confirmada após alinhar Node.js 24 e corrigir o mock global de path do Electron em testes
 
 ## Referências úteis
 
