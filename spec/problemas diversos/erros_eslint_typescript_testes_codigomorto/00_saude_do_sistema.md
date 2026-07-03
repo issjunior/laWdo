@@ -187,22 +187,34 @@ Leitura correta:
 
 ---
 
-## Planejamento Fechado Antes do Knip
+## Gate automático e planejamento antes do Knip
+
+O CI mínimo foi criado em `.github/workflows/ci.yml` para bloquear regressões na
+branch `main` e em pull requests contra `main`.
+
+Comandos executados pelo workflow:
+
+- `npm run type-check`
+- `npm run lint`
+- `npm test`
+- `npm run test:coverage`
 
 Recomendação atual: **não instalar Knip ainda**.
 
 Motivos:
 
-- a saúde principal do sistema está verde e a cobertura já é mensurável com gate progressivo
+- a saúde principal do sistema está verde e agora tem gate automático mínimo
+- a cobertura já é mensurável com gate progressivo
 - a triagem inicial de código morto já foi concluída no renderer
 - os falsos positivos conhecidos do `ts-prune` no main já foram registrados
-- o projeto ainda não tem CI documentado como gate de qualidade
-- instalar Knip antes do CI tende a ampliar o volume de sinais sem garantir bloqueio automatizado de regressões
+- a primeira execução do CI no GitHub ainda deve ser observada para confirmar
+  eventuais diferenças de ambiente
 
 Sequência fechada:
 
-1. criar CI mínimo com `npm run type-check`, `npm run lint`, `npm test` e `npm run test:coverage`
-2. depois disso, revisar `02_plano_knip_futuro.md` e decidir a instalação do Knip
+1. acompanhar a primeira execução do CI no GitHub
+2. corrigir eventuais diferenças de ambiente se o runner Linux expuser algo não observado localmente
+3. depois disso, revisar `02_plano_knip_futuro.md` e decidir a instalação do Knip
 
 ## Notas desta tranche
 
@@ -216,6 +228,7 @@ Sequência fechada:
 - `@vitest/coverage-v8` foi instalado e `npm run test:coverage` passou a medir cobertura
 - o threshold de cobertura foi convertido de 70% global para gate progressivo inicial
 - os hooks do renderer foram ajustados sem supressões de ESLint
+- `.github/workflows/ci.yml` foi criado com gate mínimo de type-check, lint, testes e coverage
 
 ## Referências úteis
 
