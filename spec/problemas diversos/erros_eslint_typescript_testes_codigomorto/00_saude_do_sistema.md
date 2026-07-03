@@ -9,17 +9,19 @@
 
 | Métrica | Status | Quantidade | Observação |
 |---|---|---|---|
-| **Build** (`npm run build`) | ✅ OK | 0 erros bloqueantes | build completo executado em 03/07/2026 |
+| **Build** (`npm run build`) | ✅ OK | 0 erros bloqueantes | build completo reexecutado após limpeza de lint |
 | **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | main + preload + renderer passam |
-| **ESLint** (`npm run lint`) | 🟡 OK com warnings | 0 erros, 49 warnings | warnings concentrados em `no-explicit-any` e `react-hooks/exhaustive-deps` |
-| **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após alinhar a fixture de `dashboard.service` ao contrato atual |
+| **ESLint** (`npm run lint`) | ✅ OK | 0 erros, 0 warnings | frente de lint zerada após revisão dos hooks restantes |
+| **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após limpeza dos hooks do renderer |
 | **Código morto** (`npm run prune:all`) | 🟡 Não reavaliado nesta medição | último painel mantinha apontamentos remanescentes | sem nova rodada em 03/07/2026 |
 
 Leitura prática do estado atual:
 
 - a aplicação compila
 - a checagem de tipos passa
-- o lint continua executável como gate, sem erros bloqueantes
+- o lint está limpo e volta a funcionar como gate sem tolerância a warnings
+- os warnings de `no-explicit-any` saíram da frente prioritária de IPC/exportação
+- os warnings de `react-hooks/exhaustive-deps` foram tratados com revisão comportamental
 - a suíte automatizada voltou a ficar verde
 
 ---
@@ -27,10 +29,10 @@ Leitura prática do estado atual:
 ## Comandos executados nesta medição
 
 ```bash
-npm run build
 npm run type-check
 npm run lint
 npm test
+npm run build
 ```
 
 ## Evolução recente
@@ -40,6 +42,8 @@ npm test
 | **30/06/2026** | ✅ | 0 | 0 / 514 | 34 pass, 1 skip | baseline com warnings altos |
 | **01/07/2026** | ✅ | 0 | 0 / 49 | 34 pass, 1 skip | limpeza incremental de lint |
 | **03/07/2026** | ✅ | 0 | 0 / 49 | 43 pass, 1 skip | dashboard mantida e suíte restaurada após correção da fixture |
+| **03/07/2026 (tranche IPC/exportação)** | ✅* | 0 | 0 / 27 | 43 pass, 1 skip* | remoção dos warnings `no-explicit-any` em `laudo.handlers`, `ipc/index` e `exportacao.service` |
+| **03/07/2026 (tranche hooks renderer)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | remoção dos warnings `react-hooks/exhaustive-deps` em componentes e páginas do renderer |
 
 ---
 
@@ -47,13 +51,13 @@ npm test
 
 ### Build
 
-`npm run build` passou em 03/07/2026.
+`npm run build` passou em 03/07/2026 após a limpeza de lint.
 
 Observações não bloqueantes da execução atual:
 
 - o build do renderer concluiu normalmente
 - o Vite ainda alerta sobre chunks grandes no bundle final
-- a presença da dashboard não quebrou a pipeline de `main`, `preload` ou `renderer`
+- a pipeline de `main`, `preload` e `renderer` continua íntegra
 
 ### TypeScript
 
@@ -70,23 +74,33 @@ Isso confirma que os contratos novos da dashboard ficaram alinhados entre:
 
 ### ESLint
 
-`npm run lint` passa com `49` warnings e `0` erros.
+`npm run lint` passa com `0` warnings e `0` erros.
 
 Distribuição atual:
 
-- `@typescript-eslint/no-explicit-any`: 22 warnings
-- `react-hooks/exhaustive-deps`: 27 warnings
+- sem warnings remanescentes
 
-Os focos que continuam mais carregados são:
+Avanço confirmado nesta tranche:
 
-- `src/main/services/exportacao.service.ts`
-- `src/main/ipc/index.ts`
-- `src/main/ipc/handlers/laudo.handlers.ts`
-- páginas grandes do renderer com dependências de hooks ainda não revisitadas
+- `src/main/ipc/handlers/laudo.handlers.ts` saiu da lista
+- `src/main/ipc/index.ts` saiu da lista
+- `src/main/services/exportacao.service.ts` saiu da lista
+- `src/renderer/components/rep/RepStepper.tsx` saiu da lista
+- `src/renderer/pages/CabecalhoPage.tsx` saiu da lista
+- `src/renderer/pages/CategoriasPecasPage.tsx` saiu da lista
+- `src/renderer/pages/GdlConfigPage.tsx` saiu da lista
+- `src/renderer/pages/LaudosPage.tsx` saiu da lista
+- `src/renderer/pages/LogsPage.tsx` saiu da lista
+- `src/renderer/pages/PlaceholdersPage.tsx` saiu da lista
+- `src/renderer/pages/REPsPage.tsx` saiu da lista
+- `src/renderer/pages/SolicitantesPage.tsx` saiu da lista
+- `src/renderer/pages/TemplatesPage.tsx` saiu da lista
+- `src/renderer/pages/TiposExamePage.tsx` saiu da lista
+- `src/renderer/pages/WizardEditorPage.tsx` saiu da lista
 
 ### Testes
 
-`npm test` passa em 03/07/2026.
+`npm test` passa em 03/07/2026 após a limpeza dos hooks do renderer.
 
 Resumo atual:
 
@@ -114,11 +128,17 @@ O estado de referência continua sendo o painel anterior:
 
 ## Prioridades atuais
 
-1. tratar os warnings restantes de `src/main/ipc/handlers/laudo.handlers.ts`
-2. tratar os warnings restantes de `src/main/ipc/index.ts`
-3. revisar `src/main/services/exportacao.service.ts` em tranche própria
-4. atacar `react-hooks/exhaustive-deps` com revisão comportamental, sem correção mecânica
-5. rodar nova auditoria de código morto quando a frente de lint estiver mais estável
+1. rodar nova auditoria de código morto (`npm run prune:all`) com lint e TypeScript estabilizados
+2. revisar os apontamentos remanescentes contra `DEAD_CODE_EXCEPTIONS.md`
+3. atualizar o painel com a nova medição de código morto
+
+## Notas desta tranche
+
+- `npm run type-check` foi reexecutado e continua verde
+- `npm run lint` caiu de `49` para `0` warnings no acumulado das tranches de 03/07/2026
+- `npm test` foi reexecutado e continua com `43 pass, 1 skip`
+- `npm run build` foi reexecutado e continua verde, com o aviso conhecido de chunks grandes do Vite
+- os hooks do renderer foram ajustados sem supressões de ESLint
 
 ## Referências úteis
 

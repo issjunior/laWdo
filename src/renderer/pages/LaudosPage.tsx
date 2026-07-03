@@ -1558,7 +1558,7 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleListaPreview = async (laudo: LaudoItem) => {
+  const handleListaPreview = useCallback(async (laudo: LaudoItem) => {
     try {
       setListaPreviewLoading(true);
       setError(null);
@@ -1626,7 +1626,7 @@ export const LaudosPage: React.FC = () => {
     } finally {
       setListaPreviewLoading(false);
     }
-  };
+  }, [listaPreviewBlobUrl]);
 
   const handleExportar = async (formato: 'pdf' | 'docx' | 'odt') => {
     if (!editando) return;
@@ -1753,7 +1753,7 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleEditar = async (laudo: LaudoItem) => {
+  const handleEditar = useCallback(async (laudo: LaudoItem) => {
     if (laudo.tipo_criacao === 'wizard') {
       navigate(`/laudos/${laudo.id}/wizard`);
       return;
@@ -1794,7 +1794,7 @@ export const LaudosPage: React.FC = () => {
       setExameMenuStructure(undefined);
       setExameCamposEspecificos(undefined);
     }
-  };
+  }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes]);
 
   const handleVoltar = () => {
     if (panelPoppedOut) {
@@ -2139,14 +2139,14 @@ export const LaudosPage: React.FC = () => {
   const precisaSenhaParaExcluir = (status: string) =>
     status === 'Concluído' || status === 'Entregue';
 
-  const handleAbrirExclusao = (laudo: LaudoItem) => {
+  const handleAbrirExclusao = useCallback((laudo: LaudoItem) => {
     setLaudoParaExcluir(laudo);
     setSenhaExclusao('');
     setSenhaExclusaoErro('');
     setVerificandoSenhaExclusao(false);
     setPassoExclusao(precisaSenhaParaExcluir(laudo.status) ? 'senha' : 'confirmar');
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
   const handleConfirmarExclusao = async () => {
     if (!senhaExclusao) {
@@ -2195,7 +2195,7 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleUpdateStatus = async (laudo: LaudoItem, novoStatus: string) => {
+  const handleUpdateStatus = useCallback(async (laudo: LaudoItem, novoStatus: string) => {
     try {
       setError(null);
       const r = await window.ipcAPI.laudo.updateStatus(laudo.id, novoStatus);
@@ -2207,7 +2207,7 @@ export const LaudosPage: React.FC = () => {
     } catch (e: unknown) {
       setError(obterMensagemErro(e, 'Erro ao atualizar status'));
     }
-  };
+  }, [carregarLaudos]);
 
   const getProximoStatus = (status: string): { label: string; value: string; icon: typeof CheckCircle } | null => {
     if (status === 'Em andamento') return { label: 'Concluir', value: 'Concluído', icon: CheckCircle };
@@ -2394,7 +2394,7 @@ export const LaudosPage: React.FC = () => {
         );
       },
     },
-  ], [handleEditar, handleUpdateStatus, handleListaPreview, listaPreviewLoading]);
+  ], [handleEditar, handleUpdateStatus, handleListaPreview, listaPreviewLoading, handleAbrirExclusao, navigate]);
 
   // Modo editor com múltiplas seções
   if (editando) {

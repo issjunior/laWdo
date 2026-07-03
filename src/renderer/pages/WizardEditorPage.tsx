@@ -130,10 +130,12 @@ const WizardEditorPage: React.FC = () => {
     if (!id) return;
     setLoading(true);
     try {
+      const wizRes = await window.ipcAPI.wizard.findById(id);
+      const templateId = wizRes.success && wizRes.data?.template_id ? wizRes.data.template_id : '';
       const [arvoreRes, regrasRes, secoesRes, pecasRes, catsRes] = await Promise.all([
         window.ipcAPI.wizard.getArvore(id),
         window.ipcAPI.regraWizard.findByWizard(id),
-        window.ipcAPI.template.findSecoes(wizard?.template_id || (await window.ipcAPI.wizard.findById(id)).data?.template_id || ''),
+        window.ipcAPI.template.findSecoes(templateId),
         window.ipcAPI.peca.findAll(),
         window.ipcAPI.categoriaPeca.findArvore(),
       ]);
@@ -148,25 +150,17 @@ const WizardEditorPage: React.FC = () => {
       if (pecasRes.success) setPecas(pecasRes.data || []);
       if (catsRes.success) setCategoriasArvore(catsRes.data || []);
 
-      // If wizard not loaded yet, try loading just wizard
-      if (!wizard) {
-        const wizRes = await window.ipcAPI.wizard.findById(id);
-        if (wizRes.success) {
-          setWizard(wizRes.data);
-          if (wizRes.data?.template_id) {
-            const stRes = await window.ipcAPI.template.findSecoes(wizRes.data.template_id);
-            if (stRes.success) setSecoesTemplate(stRes.data || []);
-          }
-        }
+      if (wizRes.success && wizRes.data && !arvoreRes.success) {
+        setWizard(wizRes.data);
       }
     } catch (e: unknown) {
       setError(mensagemErro(e) || 'Erro');
     } finally {
       setLoading(false);
     }
-  }, [id, wizard?.template_id]);
+  }, [id]);
 
-  useEffect(() => { loadDados(); }, []);
+  useEffect(() => { loadDados(); }, [loadDados]);
 
   // Etapa selection
   const handleSelectEtapa = (etapa: EtapaWizard) => {

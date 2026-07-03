@@ -92,7 +92,7 @@ const CategoriasPecasPage: React.FC = () => {
       });
       setFormError(null);
     }
-  }, [selectedId, arvore]);
+  }, [selectedCat]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);

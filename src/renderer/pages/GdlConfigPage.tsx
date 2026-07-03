@@ -106,13 +106,13 @@ export const GdlConfigPage: React.FC = () => {
     } catch {
       // silencioso
     }
-  }, []);
+  }, [carregarCredenciaisAmbiente]);
 
-  useEffect(() => { carregarConfigs(); }, []);
+  useEffect(() => { carregarConfigs(); }, [carregarConfigs]);
 
   useEffect(() => {
     carregarCredenciaisAmbiente(ambiente);
-  }, [ambiente]);
+  }, [ambiente, carregarCredenciaisAmbiente]);
 
   useEffect(() => {
     window.ipcAPI.gdl.obterValidacaoSessao(ambiente)

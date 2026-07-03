@@ -208,12 +208,6 @@ export function LogsPage() {
   const [timelineRepEncontrada, setTimelineRepEncontrada] = useState<TimelineRepResumo | null>(null);
   const [timelineError, setTimelineError] = useState('');
 
-  useEffect(() => {
-    carregarLogsSistema();
-    carregarLogsAuditoria();
-    carregarContagens();
-  }, []);
-
   const carregarLogsSistema = useCallback(async () => {
     try {
       const filters: Record<string, unknown> = {};
@@ -261,6 +255,33 @@ export function LogsPage() {
     } catch {
       // silencioso
     }
+  }, []);
+
+  useEffect(() => {
+    const carregarInicial = async () => {
+      try {
+        const [sistema, auditoria, contagens] = await Promise.all([
+          window.ipcAPI.log.listar(),
+          window.ipcAPI.log.listarAuditoria(),
+          window.ipcAPI.log.contar(),
+        ]);
+
+        if (sistema.success && Array.isArray(sistema.data)) {
+          setLogsSistema(sistema.data as unknown as SystemLog[]);
+        }
+        if (auditoria.success && Array.isArray(auditoria.data)) {
+          setLogsAuditoria(auditoria.data as unknown as AuditLog[]);
+        }
+        if (contagens.success && contagens.data) {
+          setContagemSistema(contagens.data.sistema);
+          setContagemAuditoria(contagens.data.auditoria);
+        }
+      } catch {
+        toast.error('Erro ao carregar logs');
+      }
+    };
+
+    void carregarInicial();
   }, []);
 
   const contadoresSistema = useMemo(() => ({

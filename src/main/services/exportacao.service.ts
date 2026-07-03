@@ -2,21 +2,100 @@ import { app, dialog, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import type {
+  FileChild,
+  IParagraphOptions,
+  ISectionOptions,
+  ParagraphChild,
+} from 'docx';
 import { getLogger } from '../utils/logger.js';
 
 const log = getLogger('exportacao');
 
 const CM_TO_INCHES = 1 / 2.54;
 
+export interface ExportacaoCabecalho {
+  logoBase64?: string;
+  texto?: string;
+  alinhamento?: string;
+}
+
+export interface ExportacaoMargens {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface ImagemExportacao {
+  id: string;
+  base64: string;
+  formato: string;
+  legenda: string;
+  numero: number;
+}
+
+export interface ElementoParagrafoExportacao {
+  tipo: 'paragrafo';
+  html: string;
+  alinhamento?: string;
+  nivelTitulo?: number;
+}
+
+export interface ElementoTabelaExportacao {
+  tipo: 'tabela';
+  linhas: string[][];
+  cabecalho?: boolean;
+}
+
+export interface ElementoListaExportacao {
+  tipo: 'lista';
+  items: string[];
+  ordenada: boolean;
+  nivel: number;
+}
+
+export interface ElementoFiguraExportacao {
+  tipo: 'figura';
+  imagemId: string;
+  legenda: string;
+  numero: number;
+}
+
+export interface ElementoQuebraExportacao {
+  tipo: 'quebra';
+}
+
+export type ElementoExportacao =
+  | ElementoParagrafoExportacao
+  | ElementoTabelaExportacao
+  | ElementoListaExportacao
+  | ElementoFiguraExportacao
+  | ElementoQuebraExportacao;
+
+export interface SecaoExportacao {
+  titulo: string;
+  elementos: ElementoExportacao[];
+}
+
+export interface EstruturaExportacaoLaudo {
+  fontFamily: string;
+  fontSize: string;
+  secoes: SecaoExportacao[];
+  imagens: ImagemExportacao[];
+}
+
 export interface ExportarParams {
   laudoId: string;
   formato: 'pdf' | 'docx' | 'odt';
   html: string;
-  estrutura?: any;
-  cabecalho?: { logoBase64?: string; texto?: string; alinhamento?: string };
-  margens?: { top: number; right: number; bottom: number; left: number };
+  estrutura?: EstruturaExportacaoLaudo;
+  cabecalho?: ExportacaoCabecalho;
+  margens?: ExportacaoMargens;
   nomeArquivo?: string;
 }
+
+type TipoImagemDocx = 'jpg' | 'png' | 'gif' | 'bmp';
 
 function removerZerosEsquerda(numero: string): string {
   return numero.replace(/^0+/, '') || '0';
@@ -133,14 +212,52 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   }
 }
 
-async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho'], margens?: ExportarParams['margens']): Promise<Buffer> {
+function normalizarTipoImagemDocx(formato: string): TipoImagemDocx | null {
+  switch (formato.toLowerCase()) {
+    case 'jpeg':
+    case 'jpg':
+      return 'jpg';
+    case 'png':
+      return 'png';
+    case 'gif':
+      return 'gif';
+    case 'bmp':
+      return 'bmp';
+    default:
+      return null;
+  }
+}
+
+function mapearHeadingDocx(
+  headingLevel: typeof import('docx').HeadingLevel,
+  nivel: number
+): (typeof import('docx').HeadingLevel)[keyof typeof import('docx').HeadingLevel] | undefined {
+  switch (nivel) {
+    case 3:
+      return headingLevel.HEADING_3;
+    case 4:
+      return headingLevel.HEADING_4;
+    case 5:
+      return headingLevel.HEADING_5;
+    case 6:
+      return headingLevel.HEADING_6;
+    default:
+      return undefined;
+  }
+}
+
+async function gerarDOCX(
+  estrutura: EstruturaExportacaoLaudo,
+  cabecalho?: ExportarParams['cabecalho'],
+  margens?: ExportarParams['margens']
+): Promise<Buffer> {
   const docx = await import('docx');
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    HeadingLevel, AlignmentType, ImageRun, Header, WidthType,
+    HeadingLevel, AlignmentType, ImageRun, Header, UnderlineType, WidthType,
   } = docx;
 
-  const children: any[] = [];
+  const children: FileChild[] = [];
   const imagensMap = new Map<string, { base64: string; formato: string }>();
 
   if (estrutura.imagens) {
@@ -149,8 +266,8 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
     }
   }
 
-  function parseInlineHtml(html: string): any[] {
-    const runs: any[] = [];
+  function parseInlineHtml(html: string): ParagraphChild[] {
+    const runs: ParagraphChild[] = [];
     const regex = /<(\/?)(\w+)([^>]*)>/g;
     let lastIndex = 0;
     let currentBold = false;
@@ -167,7 +284,7 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
             text,
             bold: currentBold,
             italics: currentItalic,
-            underline: currentUnderline ? { type: 'single' as any } : undefined,
+            underline: currentUnderline ? { type: UnderlineType.SINGLE } : undefined,
             strike: currentStrikethrough,
           }));
         }
@@ -197,7 +314,9 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
     return runs;
   }
 
-  function alinhamentoToAlignmentType(alinhamento?: string): string {
+  function alinhamentoToAlignmentType(
+    alinhamento?: string
+  ): (typeof AlignmentType)[keyof typeof AlignmentType] {
     switch (alinhamento) {
       case 'center': return AlignmentType.CENTER;
       case 'right': return AlignmentType.RIGHT;
@@ -212,7 +331,7 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
         children.push(new Paragraph({
           heading: HeadingLevel.HEADING_2,
           children: [new TextRun({ text: secao.titulo, bold: true })],
-        }));
+        } satisfies IParagraphOptions));
       }
 
       if (secao.elementos) {
@@ -221,12 +340,14 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
             case 'paragrafo': {
               const runs = parseInlineHtml(el.html);
               if (runs.length > 0) {
-                const isHeading = el.nivelTitulo && el.nivelTitulo >= 3 && el.nivelTitulo <= 6;
+                const heading = typeof el.nivelTitulo === 'number'
+                  ? mapearHeadingDocx(HeadingLevel, el.nivelTitulo)
+                  : undefined;
                 children.push(new Paragraph({
-                  ...(isHeading ? { heading: `Heading${el.nivelTitulo}` as any } : {}),
-                  alignment: alinhamentoToAlignmentType(el.alinhamento) as any,
+                  ...(heading ? { heading } : {}),
+                  alignment: alinhamentoToAlignmentType(el.alinhamento),
                   children: runs,
-                }));
+                } satisfies IParagraphOptions));
               }
               break;
             }
@@ -266,14 +387,18 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
               if (imgData) {
                 try {
                   const imgBuffer = Buffer.from(imgData.base64, 'base64');
+                  const tipoImagem = normalizarTipoImagemDocx(imgData.formato);
+                  if (!tipoImagem) {
+                    break;
+                  }
                   children.push(new Paragraph({
                     alignment: AlignmentType.CENTER,
                     children: [new ImageRun({
-                      type: imgData.formato as any,
+                      type: tipoImagem,
                       data: imgBuffer,
                       transformation: { width: 450, height: 300 },
                     })],
-                  }));
+                  } satisfies IParagraphOptions));
                 } catch { /* ignora imagem inválida */ }
               }
               if (el.legenda) {
@@ -297,25 +422,20 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
     }
   }
 
-  const sectionOpts: any = { children };
-
-  if (margens) {
-    const CM_TO_TWIP = 567;
-    sectionOpts.properties = {
-      page: {
-        margin: {
-          top: Math.round(margens.top * CM_TO_TWIP),
-          right: Math.round(margens.right * CM_TO_TWIP),
-          bottom: Math.round(margens.bottom * CM_TO_TWIP),
-          left: Math.round(margens.left * CM_TO_TWIP),
-        },
+  const propriedadesSecao = margens ? {
+    page: {
+      margin: {
+        top: Math.round(margens.top * 567),
+        right: Math.round(margens.right * 567),
+        bottom: Math.round(margens.bottom * 567),
+        left: Math.round(margens.left * 567),
       },
-    };
-  }
+    },
+  } : undefined;
 
-  const headers: any = {};
+  let headers: ISectionOptions['headers'] | undefined;
   if (cabecalho?.texto || cabecalho?.logoBase64) {
-    const headerChildren: any[] = [];
+    const headerChildren: Array<InstanceType<typeof Paragraph>> = [];
 
     if (cabecalho.logoBase64) {
       try {
@@ -323,11 +443,11 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
         headerChildren.push(new Paragraph({
           alignment: AlignmentType.CENTER,
           children: [new ImageRun({
-            type: 'png' as any,
+            type: 'png',
             data: logoBuffer,
             transformation: { width: 120, height: 60 },
           })],
-        }));
+        } satisfies IParagraphOptions));
       } catch { /* ignora logo inválido */ }
     }
 
@@ -338,17 +458,19 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
       headerChildren.push(new Paragraph({
         alignment: align,
         children: [new TextRun({ text: cabecalho.texto, size: 18, color: '666666' })],
-      }));
+      } satisfies IParagraphOptions));
     }
 
     if (headerChildren.length > 0) {
-      headers.first = new Header({ children: headerChildren });
+      headers = { first: new Header({ children: headerChildren }) };
     }
   }
 
-  if (Object.keys(headers).length > 0) {
-    sectionOpts.headers = headers;
-  }
+  const sectionOpts: ISectionOptions = {
+    children,
+    ...(propriedadesSecao ? { properties: propriedadesSecao } : {}),
+    ...(headers ? { headers } : {}),
+  };
 
   const doc = new Document({
     styles: {
@@ -367,7 +489,11 @@ async function gerarDOCX(estrutura: any, cabecalho?: ExportarParams['cabecalho']
   return await Packer.toBuffer(doc);
 }
 
-async function gerarODT(html: string, estrutura?: any, margens?: ExportarParams['margens']): Promise<Buffer> {
+async function gerarODT(
+  html: string,
+  estrutura?: EstruturaExportacaoLaudo,
+  margens?: ExportarParams['margens']
+): Promise<Buffer> {
   const { promisify } = await import('util');
   const libre = await import('libreoffice-convert');
   const convertAsync = promisify(libre.convert);
@@ -498,8 +624,11 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
     log.debug(`Laudo exportado: ${filePath}`);
 
     return { success: true, path: filePath };
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Erro ao exportar laudo', { laudoId: params.laudoId, formato: params.formato, error });
-    return { success: false, error: error.message || 'Erro desconhecido ao exportar' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro desconhecido ao exportar',
+    };
   }
 }

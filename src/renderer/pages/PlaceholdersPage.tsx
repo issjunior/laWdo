@@ -199,7 +199,7 @@ export const PlaceholdersPage: React.FC = () => {
     setDialogOpen(true);
   };
 
-  const handleEditar = (p: Placeholder) => {
+  const handleEditar = useCallback((p: Placeholder) => {
     setEditingPlaceholder(p);
     setFormData({
       chave: p.chave,
@@ -210,16 +210,16 @@ export const PlaceholdersPage: React.FC = () => {
     setFormErrorState(null);
     setFormSuccess(null);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleExcluir = async (id: string) => {
+  const handleExcluir = useCallback(async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este placeholder?')) return;
     try {
       const r = await window.ipcAPI.placeholder.delete(id);
       if (r.success) await carregarDados();
       else alert(`Erro: ${r.error}`);
     } catch { alert('Erro ao excluir placeholder'); }
-  };
+  }, [carregarDados]);
 
   const handleSalvar = async () => {
     try {
@@ -365,7 +365,7 @@ export const PlaceholdersPage: React.FC = () => {
         );
       },
     },
-  ], [categorias]);
+  ], [categorias, handleEditar, handleExcluir]);
 
   /* ── Nodes para a árvore ── */
   const arvoreNodes = categorias

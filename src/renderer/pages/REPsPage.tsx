@@ -756,7 +756,7 @@ export const REPsPage: React.FC = () => {
     document.body.style.pointerEvents = '';
   };
 
-  const handleEditar = async (rep: REP) => {
+  const handleEditar = useCallback(async (rep: REP) => {
     setEditingRep(rep);
     setError(null);
     setSuccess(null);
@@ -831,12 +831,12 @@ export const REPsPage: React.FC = () => {
     }
 
     setShowForm(true);
-  };
+  }, [form, tiposExame]);
 
-  const handleDelete = (rep: REP) => {
+  const handleDelete = useCallback((rep: REP) => {
     setDeleteDialogRep(rep);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
   const handleDeleteConfirm = async () => {
     if (!deleteDialogRep) return;
@@ -857,7 +857,7 @@ export const REPsPage: React.FC = () => {
     }
   };
 
-  const handlePreviewRep = async (rep: REP) => {
+  const handlePreviewRep = useCallback(async (rep: REP) => {
     try {
       setPreviewLoading(true);
       setError(null);
@@ -916,9 +916,9 @@ export const REPsPage: React.FC = () => {
     } finally {
       setPreviewLoading(false);
     }
-  };
+  }, [solicitantes, tiposExame, previewBlobUrl]);
 
-  const handleCriarLaudo = (rep: REP) => {
+  const handleCriarLaudo = useCallback((rep: REP) => {
     setCriarLaudoRep(rep);
     setCriarLaudoTipoExameId(rep.tipo_exame_id || '');
     setCriarLaudoTemplateId('');
@@ -935,7 +935,7 @@ export const REPsPage: React.FC = () => {
         }
       })();
     }
-  };
+  }, []);
 
   const handleCriarLaudoConfirmar = async () => {
     if (!criarLaudoRep || !criarLaudoTemplateId) return;

@@ -109,7 +109,7 @@ export const SolicitantesPage: React.FC = () => {
   };
 
   // Abrir diálogo para edição
-  const handleEditar = (solicitante: Solicitante) => {
+  const handleEditar = useCallback((solicitante: Solicitante) => {
     setEditingSolicitante(solicitante);
     setFormData({
       nome: solicitante.nome,
@@ -121,7 +121,7 @@ export const SolicitantesPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setDialogOpen(true);
-  };
+  }, []);
 
   // Salvar solicitante (criar ou atualizar)
   const handleSalvar = async () => {
@@ -219,7 +219,7 @@ export const SolicitantesPage: React.FC = () => {
   };
 
   // Excluir permanentemente (hard delete)
-  const handleHardDelete = async (id: string, nome: string) => {
+  const handleHardDelete = useCallback(async (id: string, nome: string) => {
     if (!confirm(`⚠️ ATENÇÃO: Você está prestes a EXCLUIR PERMANENTEMENTE o solicitante "${nome}".\n\nEsta ação não pode ser desfeita e pode afetar laudos que utilizam este solicitante. Tem certeza absoluta?`)) {
       return;
     }
@@ -237,10 +237,10 @@ export const SolicitantesPage: React.FC = () => {
     } catch (error) {
       toast.error('Erro ao excluir permanentemente');
     }
-  };
+  }, [mostrarTodos, carregarSolicitantes, carregarTodosSolicitantes]);
 
   // Gerenciar status (ativar/desativar)
-  const handleToggleStatus = async (solicitante: Solicitante) => {
+  const handleToggleStatus = useCallback(async (solicitante: Solicitante) => {
     try {
       // Mostrar mensagem de confirmação mais específica
       const acao = solicitante.ativo !== false ? 'desativar' : 'ativar';
@@ -268,7 +268,7 @@ export const SolicitantesPage: React.FC = () => {
       console.error('Erro ao alterar status:', error);
       alert('Erro ao alterar status');
     }
-  };
+  }, [mostrarTodos, carregarSolicitantes, carregarTodosSolicitantes]);
 
   // Definições de colunas da DataTable
   const columnDefs = useMemo<ColumnDef<Solicitante>[]>(() => [

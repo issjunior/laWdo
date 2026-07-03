@@ -105,7 +105,7 @@ export const RepStepper: React.FC<RepStepperProps> = ({
       observerRef.current?.disconnect();
       observerRef.current = null;
     };
-  }, [showForm, steps.length]);
+  }, [showForm, steps.length, setActiveStep]);
 
   return (
     <RepStepperContext.Provider value={activeStep}>

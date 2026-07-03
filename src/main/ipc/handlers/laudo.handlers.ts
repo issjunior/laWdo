@@ -3,7 +3,21 @@ import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
-import { exportarLaudo, verificarLibreOffice } from '../../services/exportacao.service.js';
+import {
+  exportarLaudo,
+  verificarLibreOffice,
+  type ExportarParams,
+} from '../../services/exportacao.service.js';
+
+type RespostasWizard = Record<string, string | string[]>;
+
+type GerarWizardParams = {
+  laudo_id: string;
+  wizard_id: string;
+  template_id: string;
+  respostas: RespostasWizard;
+  pecas_selecionadas?: string[];
+};
 
 /**
  * Registra handlers IPC para operações de Laudo
@@ -138,7 +152,7 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Gerar laudo wizard (preenche laudo existente com peças)
    */
-  ipcMain.handle('laudo:gerarWizard', async (_event, params: any) => {
+  ipcMain.handle('laudo:gerarWizard', async (_event, params: GerarWizardParams) => {
     try {
       const laudo = await laudoService.gerarLaudoWizard(params);
       return { success: true, data: laudo };
@@ -151,7 +165,7 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Salvar progresso do wizard (respostas parciais)
    */
-  ipcMain.handle('laudo:salvarProgressoWizard', async (_event, laudoId: string, respostas: any) => {
+  ipcMain.handle('laudo:salvarProgressoWizard', async (_event, laudoId: string, respostas: RespostasWizard) => {
     try {
       await laudoService.salvarProgressoWizard(laudoId, respostas);
       return { success: true, message: 'Progresso salvo' };
@@ -252,14 +266,7 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Exportar laudo (PDF, DOCX ou ODT)
    */
-  ipcMain.handle('laudo:exportar', async (_event, params: {
-    laudoId: string;
-    formato: 'pdf' | 'docx' | 'odt';
-    html: string;
-    estrutura?: any;
-    cabecalho?: { logoBase64?: string; texto?: string; alinhamento?: string };
-    margens?: { top: number; right: number; bottom: number; left: number };
-  }) => {
+  ipcMain.handle('laudo:exportar', async (_event, params: ExportarParams) => {
     try {
       if (!params.laudoId || !params.formato) {
         return { success: false, error: 'Parâmetros inválidos' };

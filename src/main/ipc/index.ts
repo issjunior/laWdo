@@ -30,6 +30,13 @@ import {
   registrarErroFatalRendererDiagnostico,
 } from '../services/diagnostico-state.service.js';
 
+type LogRendererEntry = {
+  module: string;
+  level: string;
+  message: string;
+  error?: unknown;
+};
+
 /**
  * Registra todos os handlers IPC para comunicação entre main e renderer processes
  */
@@ -136,7 +143,7 @@ const registerLogHandlers = (): void => {
     }
   });
 
-  ipcMain.on('log-error', (_event, module: string, message: string, error?: any) => {
+  ipcMain.on('log-error', (_event, module: string, message: string, error?: unknown) => {
     if (typeof message === 'string') {
       const logger = (module && typeof module === 'string') ? getLogger(module as LogModule) : defaultLogger;
       logger.error(`[Renderer] ${sanitizeInput(message)}`, error);
@@ -150,7 +157,7 @@ const registerLogHandlers = (): void => {
     }
   });
 
-  ipcMain.on('log-batch', (_event, entries: Array<{ module: string; level: string; message: string; error?: any }>) => {
+  ipcMain.on('log-batch', (_event, entries: LogRendererEntry[]) => {
     if (!Array.isArray(entries)) return;
     for (const entry of entries) {
       if (typeof entry.message !== 'string') continue;
@@ -225,7 +232,7 @@ const registerSystemHandlers = (): void => {
  */
 const registerDatabaseHandlers = (): void => {
   // Executar query (protegida)
-  ipcMain.handle('execute-query', async (event, query: string, params: any[] = []) => {
+  ipcMain.handle('execute-query', async (_event, query: string, params: unknown[] = []) => {
     try {
       // Validação de segurança
       if (!validateSqlQuery(query)) {
@@ -272,7 +279,7 @@ const registerDatabaseHandlers = (): void => {
  */
 const registerAuthHandlers = (): void => {
   // Login
-  ipcMain.handle('login', async (event, username: string, password: string) => {
+  ipcMain.handle('login', async (_event, username: string, password: string) => {
     try {
       // Validação básica
       if (!username || !password) {
@@ -349,7 +356,7 @@ export const setMainWindow = (window: BrowserWindow): void => {
 /**
  * Enviar mensagem para o renderer process
  */
-export const sendToRenderer = (channel: string, data: any): void => {
+export const sendToRenderer = (channel: string, data: unknown): void => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, data);
   } else {

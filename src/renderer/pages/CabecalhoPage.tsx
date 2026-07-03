@@ -41,6 +41,8 @@ function mensagemErro(error: unknown): string {
 }
 
 const DEFAUL_PAGINAS_HTML = `<p style="text-align: right;">FLS. {{pagina}}/{{totalPaginas}}</p>\n<p style="text-align: right;">LAUDO n&ordm; {{numero_rep}}</p>`;
+const CHAVE_CONFIG = 'cabecalho_laudo';
+const CHAVE_CONFIG_PAGINAS = 'cabecalho_paginas';
 
 export const CabecalhoPage: React.FC = () => {
   const [conteudo, setConteudo] = useState('');
@@ -58,9 +60,6 @@ export const CabecalhoPage: React.FC = () => {
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
 
-  const CHAVE_CONFIG = 'cabecalho_laudo';
-  const CHAVE_CONFIG_PAGINAS = 'cabecalho_paginas';
-
   const carregarCabecalho = useCallback(async () => {
     try {
       setLoading(true);
@@ -73,7 +72,7 @@ export const CabecalhoPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [placeholderChaves]);
 
   const carregarCabecalhoPaginas = useCallback(async () => {
     try {
@@ -84,7 +83,7 @@ export const CabecalhoPage: React.FC = () => {
     } catch (err: unknown) {
       console.error('Erro ao carregar cabeçalho de páginas:', err);
     }
-  }, []);
+  }, [placeholderChaves]);
 
   const carregarPlaceholders = useCallback(async () => {
     const rCat = await window.ipcAPI.categoria.findAll();

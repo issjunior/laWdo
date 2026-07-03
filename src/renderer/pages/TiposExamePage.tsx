@@ -97,7 +97,7 @@ export const TiposExamePage: React.FC = () => {
   }, [mostrarTodos, carregarTiposExame, carregarTiposTodos]);
 
   // Alternar status ativo/inativo
-  const handleToggleStatus = async (id: string) => {
+  const handleToggleStatus = useCallback(async (id: string) => {
     try {
       const result = await window.ipcAPI.tipoExame.toggleStatus(id);
       if (result.success) {
@@ -114,7 +114,7 @@ export const TiposExamePage: React.FC = () => {
     } catch (error) {
       toast.error('Erro ao alterar status do tipo de exame');
     }
-  };
+  }, [mostrarTodos, carregarTiposTodos, carregarTiposExame, carregarTodosTipos]);
 
   // Abrir diálogo para novo tipo
   const handleNovo = () => {
@@ -130,7 +130,7 @@ export const TiposExamePage: React.FC = () => {
   };
 
   // Abrir diálogo para edição
-  const handleEditar = (tipo: TipoExame) => {
+  const handleEditar = useCallback((tipo: TipoExame) => {
     setEditingTipo(tipo);
     setFormData({
       codigo: tipo.codigo,
@@ -140,7 +140,7 @@ export const TiposExamePage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setDialogOpen(true);
-  };
+  }, []);
 
   // Salvar tipo de exame (criar ou atualizar)
   const handleSalvar = async () => {
@@ -195,7 +195,7 @@ export const TiposExamePage: React.FC = () => {
   };
 
   // Excluir tipo de exame
-  const handleExcluir = async (id: string) => {
+  const handleExcluir = useCallback(async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este tipo de exame?')) {
       return;
     }
@@ -217,7 +217,7 @@ export const TiposExamePage: React.FC = () => {
     } catch (error) {
       toast.error('Erro ao excluir tipo de exame');
     }
-  };
+  }, [mostrarTodos, carregarTiposTodos, carregarTiposExame, carregarTodosTipos]);
 
   // Definições de colunas da DataTable
   const columnDefs = useMemo<ColumnDef<TipoExame>[]>(() => [

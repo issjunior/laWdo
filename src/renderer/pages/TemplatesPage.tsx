@@ -601,7 +601,11 @@ export const TemplatesPage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { carregarTemplates(); carregarTiposExame(); carregarPlaceholders(); }, []);
+  useEffect(() => {
+    carregarTemplates();
+    carregarTiposExame();
+    carregarPlaceholders();
+  }, [carregarTemplates, carregarTiposExame, carregarPlaceholders]);
 
   const tipoExameCodigo = useMemo(() => {
     if (!templateForm.tipo_exame_id) return '';
@@ -783,7 +787,7 @@ export const TemplatesPage: React.FC = () => {
     setEditMode(true);
   };
 
-  const handleEditar = async (template: TemplateItem) => {
+  const handleEditar = useCallback(async (template: TemplateItem) => {
     setEditingTemplateId(template.id);
     setTemplateForm({
       nome: template.nome,
@@ -807,9 +811,9 @@ export const TemplatesPage: React.FC = () => {
     }
     setEditorMode('single');
     setEditMode(true);
-  };
+  }, [placeholderChaves, buildSingleHtmlFromSecoes]);
 
-  const handleExcluir = async (id: string) => {
+  const handleExcluir = useCallback(async (id: string) => {
     if (!confirm('Excluir este template? As seções vinculadas também serão removidas.')) return;
     const r = await window.ipcAPI.template.delete(id);
     if (r.success) {
@@ -817,9 +821,9 @@ export const TemplatesPage: React.FC = () => {
     } else {
       toast.error(r.error || 'Erro ao excluir template');
     }
-  };
+  }, [carregarTemplates]);
 
-  const handleClonar = async (template: TemplateItem) => {
+  const handleClonar = useCallback(async (template: TemplateItem) => {
     try {
       // Buscar as seções do template original
       const secResult = await window.ipcAPI.template.findSecoes(template.id);
@@ -904,7 +908,7 @@ export const TemplatesPage: React.FC = () => {
     } catch {
       toast.error('Erro ao clonar template');
     }
-  };
+  }, [carregarTemplates, placeholderChaves, buildSingleHtmlFromSecoes]);
 
   const handleVoltar = () => {
     setEditMode(false);
@@ -1186,7 +1190,7 @@ export const TemplatesPage: React.FC = () => {
   };
 
   /** Converte HTML em PDF e exibe no dialog */
-  const gerarEExibirPdf = async (fullHtml: string, headerTemplate?: string) => {
+  const gerarEExibirPdf = useCallback(async (fullHtml: string, headerTemplate?: string) => {
     const result = await window.ipcAPI.template.previewPDF(fullHtml, await getMargens(), headerTemplate);
     if (result.success && result.data) {
       const byteChars = atob(result.data);
@@ -1201,10 +1205,10 @@ export const TemplatesPage: React.FC = () => {
       toast.error(result.error || 'Erro ao gerar PDF');
       setShowPreview(false);
     }
-  };
+  }, []);
 
   /** Monta o HTML com cabeçalho + placeholders substituídos. Retorna o HTML completo e o headerTemplate. */
-  const montarHtmlPreview = async (
+  const montarHtmlPreview = useCallback(async (
     secoesFonte: SecaoPreview[],
     templateNome: string,
     tipoExameNome: string,
@@ -1283,7 +1287,7 @@ export const TemplatesPage: React.FC = () => {
     fullHtml = limparIndicadoresCondicionais(fullHtml);
 
     return { fullHtml, headerTemplate };
-  };
+  }, []);
 
   /** Pré-visualizar a partir do editor (usa estado atual das seções) */
   const handlePreview = async () => {
@@ -1306,7 +1310,7 @@ export const TemplatesPage: React.FC = () => {
   };
 
   /** Pré-visualizar a partir do card (carrega seções do banco) */
-  const handlePreviewCard = async (template: TemplateItem) => {
+  const handlePreviewCard = useCallback(async (template: TemplateItem) => {
     try {
       setGeneratingPdf(true);
       setShowPreview(true);
@@ -1338,7 +1342,7 @@ export const TemplatesPage: React.FC = () => {
     } finally {
       setGeneratingPdf(false);
     }
-  };
+  }, [placeholderChaves, montarHtmlPreview, gerarEExibirPdf]);
 
   const columnDefs = useMemo<ColumnDef<TemplateItem>[]>(() => [
     {
