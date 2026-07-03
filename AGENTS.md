@@ -13,12 +13,12 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm run lint` | ESLint |
 | `npm run lint:fix` | ESLint com autocorreção |
 | `npm run type-check` | TypeScript (`tsc --noEmit`) |
-| `npm run spec` | Executa a auditoria padrão de spec (`git diff`) |
+| `npm run spec` | Executa a auditoria padrão de spec (diff atual + último commit) |
 | `npm run spec:auditar` | Audita quais specs de estado atual precisam ser revistos |
 | `npm run spec:registrar` | Aplica um plano aprovado de escrita em `spec/` |
 | `npm test` | Vitest (single run) |
 | `npm run test:watch` | Vitest em watch mode |
-| `npm run test:coverage` | Vitest com coverage (threshold 70%) |
+| `npm run test:coverage` | Vitest com coverage (gate progressivo em `vitest.config.ts`) |
 | `npm run package` | Empacotar com electron-builder |
 | `npm run prune` | ts-prune (renderer) — exports não usados |
 | `npm run prune:all` | ts-prune nos 3 tsconfigs (renderer + main + preload) |
@@ -270,7 +270,7 @@ O diretório `spec/` documenta o **estado atual** do sistema — não é changel
 ```
 ## /spec — Relatório
 
-**Modo:** <padrão (git diff) | auditoria total | focado: <subdir>>
+**Modo:** <padrão (diff + último commit) | diff atual | último commit | auditoria total | focado: <subdir>>
 **Modelo IA:** <nome curto do modelo — extraia de "You are powered by the model named..." no system prompt>
 **Base:** <arquivos analisados>
 

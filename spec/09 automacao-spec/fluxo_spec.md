@@ -24,17 +24,21 @@ O fluxo separa duas etapas:
 
 | Comando | Papel |
 |---|---|
-| `npm run spec` | atalho para a auditoria padrão baseada em `git diff` |
+| `npm run spec` | atalho para a auditoria padrão baseada no diff atual mais o último commit |
 | `npm run spec:auditar` | gera o relatório `/spec` e os artefatos temporários da auditoria |
 | `npm run spec:registrar` | aplica um plano aprovado de escrita em `spec/` |
 
 ## Modos de auditoria
 
-A skill roda `npm run spec:auditar` por padrão. Quando o usuário pedir outro escopo, a auditoria aceita:
+A skill roda `npm run spec:auditar -- --modo recente` por padrão. Quando o usuário pedir outro escopo, a auditoria aceita:
 
-- padrão: `git diff`
+- recente: `npm run spec:auditar -- --modo recente`
+- diff atual: `npm run spec:auditar -- --modo diff`
+- último commit: `npm run spec:auditar -- --modo ultimo-commit`
 - total: `npm run spec:auditar -- --modo total`
 - focado: `npm run spec:auditar -- --modo focado --alvo "<subdiretorio>"`
+
+O modo `recente` combina os arquivos não commitados do worktree com os arquivos alterados em `HEAD~1..HEAD`, removendo duplicidades antes do mapeamento por globs. O modo `diff` preserva a auditoria estrita contra o `HEAD`; o modo `ultimo-commit` audita apenas o último commit já gravado.
 
 O script filtra artefatos irrelevantes como `.codex/`, `dist/`, `build/`, `release/`, `node_modules/` e também ignora specs já existentes, exceto `spec/09 automacao-spec/manifesto.json`.
 
@@ -70,7 +74,7 @@ Fora esses artefatos, a skill não deve criar novos `.md` temporários em `.code
 
 A skill orquestra a conversa e o uso dos scripts neste fluxo:
 
-1. roda `npm run spec:auditar`
+1. roda `npm run spec:auditar -- --modo recente`
 2. lê `.codex/spec/ultimo-relatorio.md` e `.codex/spec/ultima-auditoria.json`
 3. apresenta o relatório no formato definido em `AGENTS.md`
 4. se não houver mudança relevante, informa isso em uma linha e encerra
@@ -114,6 +118,13 @@ Regras do registro:
 - o `HEAD` atual precisa bater com `headAuditado`
 - se o `HEAD` divergir, é obrigatório rodar nova auditoria antes de registrar
 - se o conteúdo final for igual ao já existente, o arquivo é marcado como `inalterado`
+
+
+## Integração com `AGENTS.md`
+
+`AGENTS.md` é o guia operacional lido pelos agentes antes de alterar o projeto. Ele lista os comandos essenciais, as regras de validação e as referências de spec que devem ser consultadas durante manutenção.
+
+A tabela de comandos do `AGENTS.md` deve refletir o estado atual dos gates de qualidade. No estado atual, `npm run test:coverage` roda o Vitest com cobertura e usa o gate progressivo definido em `vitest.config.ts`, não um percentual global fixo documentado fora da configuração.
 
 ## Relatório `/spec`
 

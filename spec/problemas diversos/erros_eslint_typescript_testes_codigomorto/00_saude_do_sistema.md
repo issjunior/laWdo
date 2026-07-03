@@ -193,10 +193,11 @@ Recomendação atual: **não instalar Knip ainda**.
 
 Motivos:
 
-- a saúde principal do sistema está verde, mas a cobertura ainda não pode ser medida
+- a saúde principal do sistema está verde e a cobertura já é mensurável com gate progressivo
+- a triagem inicial de código morto já foi concluída no renderer
+- os falsos positivos conhecidos do `ts-prune` no main já foram registrados
 - o projeto ainda não tem CI documentado como gate de qualidade
-- a auditoria atual de código morto ainda tem ruído alto e precisa de classificação
-- instalar Knip agora tende a ampliar o volume de sinais sem mudar a capacidade de decisão
+- instalar Knip antes do CI tende a ampliar o volume de sinais sem garantir bloqueio automatizado de regressões
 
 Sequência fechada:
 
