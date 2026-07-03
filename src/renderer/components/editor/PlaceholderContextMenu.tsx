@@ -12,7 +12,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import type { MenuSection, MenuEntry, MenuGroup } from '@/components/rep/exam-fields';
+import type { MenuSection, MenuEntry, MenuGroup } from '@/components/rep/exam-fields/types';
 import { getGroupCount } from '@/components/rep/exam-fields/services/b602.service';
 
 const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import type { CreateTipoExameInput } from '@/lib/validators';
+import type { CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
 
 interface TipoExameFormFieldsProps {
   formData: CreateTipoExameInput;

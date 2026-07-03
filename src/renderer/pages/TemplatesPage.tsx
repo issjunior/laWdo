@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields';
+import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/index';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import {
   DndContext,

@@ -3,11 +3,6 @@ export interface DashboardKpiStatus {
   total: number
 }
 
-export interface DashboardAlertaPrazo {
-  tipo: 'proximo' | 'vencido'
-  total: number
-}
-
 export interface DashboardTempoMedioTipoExame {
   tipoExameId: string | null
   tipoExameNome: string

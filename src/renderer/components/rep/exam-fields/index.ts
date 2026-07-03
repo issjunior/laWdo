@@ -8,9 +8,8 @@ import { b602Service } from './services/b602.service';
 import type { ExamSection, MenuSection } from './types';
 import type { ExamService } from './services/types';
 
-export type { ExamSection, ExamSectionProps, REPFormData } from './types';
+export type { ExamSection, REPFormData } from './types';
 export type { ExamService } from './services/types';
-export * from './placeholders';
 
 export interface ExamToggle {
   id: string;
@@ -115,7 +114,7 @@ export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
 };
 
 export { B602_MENU_STRUCTURE };
-export type { MenuSection, MenuSectionItem, MenuEntry, MenuGroup, MenuField } from './types';
+export type { MenuSection } from './types';
 
 export const EXAM_MENU_REGISTRY: Record<string, MenuSection[]> = {
   'B-602': B602_MENU_STRUCTURE,

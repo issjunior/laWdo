@@ -16,25 +16,4 @@ export const placeholderSchema = z.object({
   updated_at: z.string(),
 });
 
-export const createPlaceholderSchema = z.object({
-  chave: z.string()
-    .min(1, 'Chave é obrigatória')
-    .max(100, 'Chave não pode exceder 100 caracteres'),
-  valor: z.string().optional().default(''),
-  descricao: z.string().optional().nullable(),
-  categoria_id: z.string().optional().nullable(),
-});
-
-export const updatePlaceholderSchema = z.object({
-  chave: z.string().min(1).max(100).optional(),
-  valor: z.string().optional(),
-  descricao: z.string().optional().nullable(),
-  categoria_id: z.string().optional().nullable(),
-});
-
-export const placeholderResponseSchema = placeholderSchema;
-
 export type Placeholder = z.infer<typeof placeholderSchema>;
-export type PlaceholderResponse = z.infer<typeof placeholderResponseSchema>;
-export type CreatePlaceholderInput = z.infer<typeof createPlaceholderSchema>;
-export type UpdatePlaceholderInput = z.infer<typeof updatePlaceholderSchema>;

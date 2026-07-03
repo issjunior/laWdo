@@ -309,33 +309,6 @@ export function expandirSecoesRepetiveis(
   return resultado;
 }
 
-export function colapsarSecoesExpandidas(html: string): string {
-  return html.replace(/<div\s+data-repeat-group="[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-}
-
-export function reconciliarSecoes(
-  htmlColapsado: string,
-  expansoes: Map<string, string>
-): string {
-  let html = htmlColapsado;
-
-  for (const [repeatGroup, htmlGrupo] of expansoes) {
-    const regexH3 = new RegExp(
-      `<h3[^>]*data-repeat-section="${repeatGroup}"[^>]*>[\\s\\S]*?<\\/h3>`,
-      'i'
-    );
-    const match = regexH3.exec(html);
-    if (!match) continue;
-
-    const posFimHeading = match.index + match[0].length;
-    if (htmlGrupo) {
-      html = html.slice(0, posFimHeading) + '\n' + htmlGrupo + html.slice(posFimHeading);
-    }
-  }
-
-  return html;
-}
-
 export function buildHtml(
   secoes: SecaoTemplateRow[],
   expansoes: Map<string, string>,

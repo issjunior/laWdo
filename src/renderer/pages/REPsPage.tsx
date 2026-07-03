@@ -18,7 +18,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Network } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { type REP } from '@/lib/validators';
+import type { REP } from '@/lib/validators/rep.schema';
 import { z } from 'zod';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
@@ -36,14 +36,14 @@ import {
   EXAM_FIELD_MAP,
   serializeCamposEspecificos,
   deserializeCamposEspecificos,
-} from '@/components/rep/exam-fields';
-import type { REPFormData } from '@/components/rep/exam-fields';
+} from '@/components/rep/exam-fields/index';
+import type { REPFormData } from '@/components/rep/exam-fields/types';
 import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteFormFields';
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 import { RepStepper, useRepStepperContext } from '@/components/rep/RepStepper';
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
-import type { CreateTipoExameInput } from '@/lib/validators';
+import type { CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
 import { buildHeaderTemplate } from '@/lib/pdf-header';
 import { getMargens } from '@/lib/margens';
 import { toast } from 'sonner';

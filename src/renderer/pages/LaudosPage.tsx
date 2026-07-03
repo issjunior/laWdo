@@ -28,8 +28,9 @@ import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/Ilustraco
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
-import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields';
-import type { MenuSection, ExamToggle } from '@/components/rep/exam-fields';
+import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/index';
+import type { ExamToggle } from '@/components/rep/exam-fields/index';
+import type { MenuSection } from '@/components/rep/exam-fields/types';
 import {
   DropdownMenu,
   DropdownMenuContent,

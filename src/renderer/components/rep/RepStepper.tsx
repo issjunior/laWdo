@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useCallback } from
 import { Stepper } from '@/components/ui/stepper';
 import { useRepStepper } from './useRepStepper';
 import type { UseFormReturn } from 'react-hook-form';
-import type { REPFormData } from '@/components/rep/exam-fields';
+import type { REPFormData } from '@/components/rep/exam-fields/types';
 
 /* ─── Contexto ─── */
 

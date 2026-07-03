@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { TipoExame, CreateTipoExameInput } from '@/lib/validators';
+import type { TipoExame, CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 
 export const TiposExamePage: React.FC = () => {

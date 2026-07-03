@@ -26,32 +26,3 @@ export const repSchema = z.object({
 })
 
 export type REP = z.infer<typeof repSchema>
-
-export const createRepSchema = repSchema.omit({
-  id: true, status: true, created_at: true, updated_at: true,
-})
-
-export type CreateREPInput = z.infer<typeof createRepSchema>
-
-export const updateRepSchema = repSchema.partial().omit({
-  id: true, created_at: true, updated_at: true,
-})
-
-export type UpdateREPInput = z.infer<typeof updateRepSchema>
-
-export const updateRepStatusSchema = z.object({
-  id: z.string().uuid(),
-  status: z.enum(["Pendente", "Em Andamento", "Concluído"]),
-})
-
-export type UpdateREPStatusInput = z.infer<typeof updateRepStatusSchema>
-
-export const atribuirPeritoREPSchema = z.object({
-  rep_id: z.string().uuid(),
-  usuario_id: z.string().uuid(),
-})
-
-export type AtribuirPeritoREPInput = z.infer<typeof atribuirPeritoREPSchema>
-
-export const repResponseSchema = repSchema.partial()
-export type REPResponse = z.infer<typeof repResponseSchema>

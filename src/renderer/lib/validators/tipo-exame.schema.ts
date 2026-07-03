@@ -31,25 +31,6 @@ export const createTipoExameSchema = tipoExameSchema.omit({
   ativo: true,
 })
 
-/**
- * Schema para atualização de tipo de exame
- */
-export const updateTipoExameSchema = tipoExameSchema.partial().omit({
-  id: true,
-  data_criacao: true,
-})
-
-/**
- * Schema para resposta de tipo de exame
- */
-export const tipoExameResponseSchema = tipoExameSchema.omit({
-  data_atualizacao: true,
-}).partial({
-  descricao: true,
-})
-
 // Tipos inferidos
 export type TipoExame = z.infer<typeof tipoExameSchema>
 export type CreateTipoExameInput = z.infer<typeof createTipoExameSchema>
-export type UpdateTipoExameInput = z.infer<typeof updateTipoExameSchema>
-export type TipoExameResponse = z.infer<typeof tipoExameResponseSchema>

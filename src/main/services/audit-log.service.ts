@@ -60,17 +60,6 @@ export function auditLogin(
   });
 }
 
-export function auditLogout(usuarioId: string): void {
-  insertAuditLog({
-    usuario_id: usuarioId,
-    acao: 'Logout',
-    tipo_acao: 'logout',
-    modulo: 'autenticacao',
-    entidade: 'users',
-    entidade_id: usuarioId,
-  });
-}
-
 export function auditDelete(
   usuarioId: string,
   entidade: string,

@@ -41,9 +41,6 @@ type LogRendererEntry = {
  * Registra todos os handlers IPC para comunicação entre main e renderer processes
  */
 
-// Cache para a janela principal
-let mainWindow: BrowserWindow | null = null;
-
 /**
  * Registra todos os handlers IPC
  */
@@ -346,28 +343,4 @@ const registerAuthHandlers = (): void => {
   });
 };
 
-/**
- * Configurar referência para a janela principal
- */
-export const setMainWindow = (window: BrowserWindow): void => {
-  mainWindow = window;
-};
-
-/**
- * Enviar mensagem para o renderer process
- */
-export const sendToRenderer = (channel: string, data: unknown): void => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(channel, data);
-  } else {
-    log.error('Janela principal não disponível para enviar mensagem', { channel });
-  }
-};
-
-// Exportar funções principais
-export const ipc = {
-  registerIpcHandlers,
-  setMainWindow,
-  sendToRenderer,
-};
 

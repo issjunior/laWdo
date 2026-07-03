@@ -13,8 +13,6 @@ export const MARGINS_MIN = 0;
 export const MARGINS_MAX = 5;
 export const MARGINS_STEP = 0.1;
 
-export const CM_TO_INCHES = 1 / 2.54;
-
 export const MARGINS_A4_MM = { width: 210, height: 297 } as const;
 
 export function clampMargin(value: number): number {
@@ -38,4 +36,3 @@ export async function getMargens(): Promise<Margins | undefined> {
   }
   return undefined;
 }
-

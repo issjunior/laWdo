@@ -1,4 +1,4 @@
-export interface CampoEspecificoPlaceholder {
+interface CampoEspecificoPlaceholder {
   chave: string;
   label: string;
   descricao: string;
@@ -6,31 +6,6 @@ export interface CampoEspecificoPlaceholder {
   computed?: true;
   categoria_exam_codigo: string;
 }
-
-export interface ExamPlaceholderCategory {
-  id: string;
-  codigo: string;
-  label: string;
-  cor: string;
-  icone: string;
-}
-
-export const EXAM_PLACEHOLDER_CATEGORIES: ExamPlaceholderCategory[] = [
-  {
-    id: 'cat-exam-I-801',
-    codigo: 'I-801',
-    label: 'I-801 - Numerações Identificadoras',
-    cor: 'amber',
-    icone: 'Car',
-  },
-  {
-    id: 'cat-exam-B-602',
-    codigo: 'B-602',
-    label: 'B-602 - Eficiência e Prestabilidade',
-    cor: 'red',
-    icone: 'Crosshair',
-  },
-];
 
 export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   { chave: 'veiculo',                    label: 'Veículo',            descricao: 'Marca, modelo ou tipo do veículo periciado',       jsonPath: 'numeracao.veiculo',          categoria_exam_codigo: 'I-801' },
@@ -74,10 +49,3 @@ export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   { chave: 'b602_arma_N_coleta_toggle', label: 'Toggle de Coleta da Arma (B-602)',         descricao: 'Indicador on/off para exibir o bloco de coleta balística da arma atual', computed: true, categoria_exam_codigo: 'B-602' },
 ];
 
-export function getExamCategoryId(codigo: string): string {
-  return `cat-exam-${codigo}`;
-}
-
-export function getPlaceholdersForExam(codigo: string): CampoEspecificoPlaceholder[] {
-  return CAMPOS_ESPECIFICOS_PLACEHOLDERS.filter(p => p.categoria_exam_codigo === codigo);
-}

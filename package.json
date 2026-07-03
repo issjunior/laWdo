@@ -101,6 +101,7 @@
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^4.1.5",
     "@vitest/ui": "^4.1.5",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",

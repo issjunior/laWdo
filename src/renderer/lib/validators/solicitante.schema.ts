@@ -45,21 +45,6 @@ export const createSolicitanteSchema = z.object({
     .or(z.literal('')),
 })
 
-/**
- * Schema para atualização de solicitante
- */
-export const updateSolicitanteSchema = solicitanteSchema.partial().omit({
-  id: true,
-  created_at: true,
-})
-
-/**
- * Schema para resposta de solicitante
- */
-export const solicitanteResponseSchema = solicitanteSchema
-
 // Tipos inferidos dos schemas
 export type Solicitante = z.infer<typeof solicitanteSchema>
 export type CreateSolicitanteInput = z.infer<typeof createSolicitanteSchema>
-export type UpdateSolicitanteInput = z.infer<typeof updateSolicitanteSchema>
-export type SolicitanteResponse = z.infer<typeof solicitanteResponseSchema>

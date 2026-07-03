@@ -186,16 +186,3 @@ export const validateSqlQuery = (query: string): boolean => {
   return true;
 };
 
-/**
- * Configura validação de certificados SSL (apenas em produção)
- */
-export const setupCertificateValidation = (): void => {
-  if (process.env.NODE_ENV === 'production') {
-    app.commandLine.appendSwitch('ignore-certificate-errors', 'false');
-    log.info('Validação de certificados SSL habilitada');
-  } else {
-    app.commandLine.appendSwitch('ignore-certificate-errors', 'true');
-    log.warn('Validação de certificados SSL desabilitada (modo desenvolvimento)');
-  }
-};
-

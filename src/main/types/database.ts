@@ -92,30 +92,6 @@ export interface LaudoRow extends DatabaseRow {
   respostas_wizard?: string
 }
 
-// Placeholder
-export interface PlaceholderRow extends DatabaseRow {
-  id: string
-  chave: string
-  valor: string
-  descricao?: string
-  categoria?: string
-  created_at: string
-  updated_at: string
-}
-
-// Log de Auditoria
-export interface LogAuditoriaRow extends DatabaseRow {
-  id: number
-  usuario_id?: string
-  acao: string
-  entidade: string
-  entidade_id?: string
-  detalhes?: string
-  ip_address?: string
-  user_agent?: string
-  created_at: string
-}
-
 // Template de Laudo
 export interface TemplateRow extends DatabaseRow {
   id: string
@@ -219,23 +195,3 @@ export interface RegraWizardRow extends DatabaseRow {
   created_at: string
 }
 
-// Resposta do Wizard
-export interface RespostaWizardRow extends DatabaseRow {
-  id: string
-  laudo_id: string
-  etapa_id: string
-  opcao_id: string | null
-  valor_texto: string | null
-  created_at: string
-}
-
-/**
- * Paginação
- */
-export interface PaginationOptions {
-  page?: number
-  pageSize?: number
-  total?: number
-  orderBy?: string
-  orderDirection?: 'ASC' | 'DESC'
-}

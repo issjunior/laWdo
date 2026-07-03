@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import type { REPFormData } from '@/components/rep/exam-fields';
-import { SECTION_REGISTRY } from '@/components/rep/exam-fields';
+import { SECTION_REGISTRY } from '@/components/rep/exam-fields/index';
+import type { REPFormData } from '@/components/rep/exam-fields/types';
 import type { Step } from '@/components/ui/stepper';
 import {
   STEP_REGISTRY,

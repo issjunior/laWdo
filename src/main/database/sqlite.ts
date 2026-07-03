@@ -122,34 +122,6 @@ export const executeNonQuery = async (sql: string, params: unknown[] = []): Prom
 };
 
 /**
- * Executa uma query e retorna o primeiro resultado
- */
-export const executeSingle = async <T = DatabaseRow>(
-  sql: string,
-  params: unknown[] = []
-): Promise<T | null> => {
-  const db = await getDatabase();
-
-  return new Promise((resolve, reject) => {
-    try {
-      log.debug(`Executando query única: ${sql}`, { params });
-
-      db.get<T>(sql, params, (err: Error | null, row: T) => {
-        if (err) {
-          log.error('Erro ao executar query única', { sql, params, error: err });
-          reject(err);
-        } else {
-          resolve(row || null);
-        }
-      });
-    } catch (error) {
-      log.error('Erro ao executar query única', { sql, params, error });
-      reject(error);
-    }
-  });
-};
-
-/**
  * Inicia uma transação
  */
 export const beginTransaction = async (): Promise<void> => {

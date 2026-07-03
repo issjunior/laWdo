@@ -1,6 +1,6 @@
 import { FileText } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { SECTION_REGISTRY, EXAM_FIELD_MAP } from '@/components/rep/exam-fields';
+import { SECTION_REGISTRY, EXAM_FIELD_MAP } from '@/components/rep/exam-fields/index';
 import type { Step } from '@/components/ui/stepper';
 
 export interface StepEntry {
@@ -33,4 +33,3 @@ export function getDynamicSteps(codigo: string): Step[] {
     })
     .filter(Boolean) as Step[];
 }
-

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
-import type { CreateSolicitanteInput } from '@/lib/validators';
+import type { CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 
 interface SolicitanteFormFieldsProps {
   formData: CreateSolicitanteInput;
