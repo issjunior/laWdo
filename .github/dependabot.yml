@@ -1,0 +1,42 @@
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 3
+    groups:
+      npm-producao:
+        applies-to: "version-updates"
+        dependency-type: "production"
+      npm-desenvolvimento:
+        applies-to: "version-updates"
+        dependency-type: "development"
+      npm-seguranca:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 2
+    groups:
+      github-actions-versoes:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+      github-actions-seguranca:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
