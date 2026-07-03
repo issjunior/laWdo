@@ -75,7 +75,7 @@ Fora do escopo:
 - transformar Knip em erro de CI
 - reestruturar tsconfig, aliases ou module resolution
 
-## Configuracao Inicial Proposta
+## Configuracao Inicial Aplicada
 
 Arquivo: `knip.json`
 
@@ -83,9 +83,7 @@ Arquivo: `knip.json`
 {
   "$schema": "https://unpkg.com/knip/schema.json",
   "entry": [
-    "src/main/index.ts",
     "src/preload/index.ts",
-    "src/renderer/index.tsx",
     "src/renderer/index.html",
     "scripts/*.mjs"
   ],
@@ -96,22 +94,10 @@ Arquivo: `knip.json`
     "src/types/**/*.d.ts",
     "scripts/**/*.mjs",
     "*.config.{js,ts}",
-    "vite.*.ts",
-    "vitest.config.ts",
-    "tailwind.config.js",
-    "postcss.config.js"
+    "vite.*.ts"
   ],
   "ignore": [
-    "out/**",
-    "dist/**",
-    "coverage/**",
-    "src/renderer/public/**"
-  ],
-  "ignoreDependencies": [
-    "electron-squirrel-startup"
-  ],
-  "ignoreBinaries": [
-    "electron-builder"
+    "src/renderer/types/assets.d.ts"
   ],
   "rules": {
     "files": "warn",
@@ -131,6 +117,9 @@ Arquivo: `knip.json`
   }
 }
 ```
+
+A primeira execucao indicou hints de configuracao redundante. A configuracao
+acima ja reflete o ajuste para reduzir ruido sem ocultar achados de codigo morto.
 
 Script inicial:
 
@@ -222,6 +211,10 @@ No GitHub:
 - publicar branch propria
 - observar o CI existente
 - nao exigir que Knip passe como gate nessa primeira etapa
+
+Primeira linha de base registrada em:
+
+- `05_auditoria_knip_2026-07-03.md`
 
 ## Entregaveis Esperados
 

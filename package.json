@@ -34,6 +34,7 @@
     "prune": "ts-prune -p tsconfig.renderer.json",
     "prune:all": "ts-prune -p tsconfig.renderer.json && ts-prune -p tsconfig.main.json && ts-prune -p tsconfig.preload.json",
     "dead-code:check": "npm run prune:all",
+    "knip": "knip",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder"
   },
@@ -110,6 +111,7 @@
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "jsdom": "^29.1.1",
+    "knip": "^6.24.0",
     "postcss": "^8.4.31",
     "prettier": "^3.1.0",
     "tailwindcss": "^3.3.5",

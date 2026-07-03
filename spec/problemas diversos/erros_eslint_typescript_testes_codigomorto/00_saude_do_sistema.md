@@ -15,6 +15,7 @@
 | **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após ajuste do setup para runner Linux |
 | **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real; CI validado |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
+| **Knip** (`npm run knip -- --no-exit-code`) | 🟡 Observacional | 4 deps, 1 devDep, 73 exports, 39 tipos, 8 duplicatas | primeira linha de base registrada; ainda não é gate |
 
 Leitura prática do estado atual:
 
@@ -38,6 +39,7 @@ npm test
 npm run build
 npm run prune:all
 npm run test:coverage
+npm run knip -- --no-exit-code
 ```
 
 ## Evolução recente
@@ -52,6 +54,7 @@ npm run test:coverage
 | **03/07/2026 (fechamento planejamento)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | `prune:all` reavaliado; coverage desbloqueado e medido |
 | **03/07/2026 (triagem código morto)** | ✅* | 0 | 0 / 0 | 43 pass, 1 skip* | vendor TinyMCE excluído da análise; barrel morto de validadores removido; renderer sem candidatos reais |
 | **03/07/2026 (CI mínimo)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | workflow GitHub Actions publicado e validado em `main` |
+| **03/07/2026 (Knip observacional)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | Knip instalado como comando manual e primeira linha de base registrada |
 
 ---
 
@@ -209,7 +212,7 @@ Primeira execução validada:
 - o mock passou a usar `os.tmpdir()`
 - o CI passou em `main` com instalação, type-check, lint, testes e coverage
 
-Recomendação atual: **implementar Knip primeiro em modo observacional**.
+Recomendação atual: **manter Knip em modo observacional e iniciar triagem curta por dependências**.
 
 Motivos:
 
@@ -220,12 +223,25 @@ Motivos:
 - as diferenças iniciais do runner Linux já foram corrigidas
 - `02_plano_knip_futuro.md` foi revisado para refletir os pré-requisitos atuais
 
-Sequência fechada:
+Sequência já executada:
 
-1. criar branch `codex/knip-observacional`
-2. instalar e configurar Knip sem alterar `npm run lint`
-3. gerar o primeiro relatório com `--no-exit-code`
-4. triar achados antes de decidir se Knip entra como gate
+1. branch `codex/knip-observacional` criada
+2. `knip` instalado como `devDependency`
+3. `knip.json` criado sem alterar `npm run lint`
+4. script `npm run knip` adicionado
+5. primeiro relatório gerado com `--no-exit-code`
+6. linha de base registrada em `05_auditoria_knip_2026-07-03.md`
+
+Primeira linha de base Knip:
+
+- **4** dependências apontadas: `@dnd-kit/modifiers`, `groq`, `react-icons`, `sqlite`
+- **1** devDependency apontada: `@types/sqlite3`
+- **73** exports apontados
+- **39** tipos exportados apontados
+- **8** exports duplicados
+- **0** arquivos não usados após registrar `src/renderer/types/assets.d.ts` como declaração ambiente esperada
+
+Próximo passo recomendado: triar primeiro dependências/devDependencies, depois duplicatas, e só então exports/tipos por camada.
 
 ## Notas desta tranche
 
