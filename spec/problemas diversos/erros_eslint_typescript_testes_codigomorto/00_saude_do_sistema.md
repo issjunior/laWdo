@@ -190,7 +190,8 @@ Leitura correta:
 ## Gate automático e planejamento antes do Knip
 
 O CI mínimo foi criado em `.github/workflows/ci.yml` para bloquear regressões na
-branch `main` e em pull requests contra `main`.
+branch `main` e em pull requests contra `main`. O runner usa Node.js 24,
+alinhado ao ambiente local que validou o `package-lock.json`.
 
 Comandos executados pelo workflow:
 
