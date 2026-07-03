@@ -5,17 +5,11 @@ import {
   ArrowRight,
   BarChart3,
   CalendarRange,
-  ClipboardList,
   Clock3,
   FileText,
-  FolderClock,
-  FolderKanban,
-  FolderSearch,
   Gauge,
   LineChart,
-  PackageCheck,
   RefreshCcw,
-  ScrollText,
   Siren,
   Sparkles,
 } from 'lucide-react'
@@ -31,10 +25,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { obterIconeMenuPorRota } from '@/lib/menu-config'
 import type {
   DashboardIndicadorConfiabilidade,
   DashboardKpiStatus,
   DashboardLaudoRecente,
+  DashboardRepRecente,
   DashboardProjecoes,
   DashboardResumo,
   DashboardSerieAnual,
@@ -51,6 +47,7 @@ type RespostaDashboard<T> = {
 }
 
 type RegistroDesconhecido = Record<string, unknown>
+type ModoLayoutDashboard = 'compacto' | 'padrao' | 'amplo'
 
 const classesAnimacao = [
   '[animation-delay:0ms]',
@@ -60,6 +57,9 @@ const classesAnimacao = [
   '[animation-delay:240ms]',
   '[animation-delay:300ms]',
 ] as const
+
+const IconeRepMenu = obterIconeMenuPorRota('/reps', FileText)
+const IconeLaudoMenu = obterIconeMenuPorRota('/laudos', FileText)
 
 const classesConfiabilidade: Record<DashboardIndicadorConfiabilidade['nivel'], string> = {
   alta: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700',
@@ -72,50 +72,29 @@ const configStatus: Record<string, { titulo: string; destaque: string; icone: ty
   Pendente: {
     titulo: 'REPs pendentes',
     destaque: 'text-slate-700 dark:text-slate-200',
-    icone: FolderSearch,
+    icone: IconeRepMenu,
   },
   'Em Andamento': {
     titulo: 'REPs em andamento',
     destaque: 'text-amber-700 dark:text-amber-300',
-    icone: FolderClock,
+    icone: IconeRepMenu,
   },
   'Concluído': {
     titulo: 'Concluído',
     destaque: 'text-emerald-700 dark:text-emerald-300',
-    icone: PackageCheck,
+    icone: IconeRepMenu,
   },
   'Em andamento': {
     titulo: 'Laudos em andamento',
     destaque: 'text-amber-700 dark:text-amber-300',
-    icone: FileText,
+    icone: IconeLaudoMenu,
   },
   Entregue: {
     titulo: 'Laudos entregues',
     destaque: 'text-blue-700 dark:text-blue-300',
-    icone: ScrollText,
+    icone: IconeLaudoMenu,
   },
 }
-
-const atalhosDashboard = [
-  {
-    titulo: 'REPs',
-    descricao: 'Cadastrar, revisar e retomar requisições.',
-    rota: '/reps',
-    icone: FolderKanban,
-  },
-  {
-    titulo: 'Laudos',
-    descricao: 'Abrir o fluxo geral de elaboração e revisão.',
-    rota: '/laudos',
-    icone: ScrollText,
-  },
-  {
-    titulo: 'Logs',
-    descricao: 'Consultar rastreabilidade e diagnóstico do sistema.',
-    rota: '/logs',
-    icone: ClipboardList,
-  },
-] as const
 
 const formatadorDataCompleta = new Intl.DateTimeFormat('pt-BR', {
   weekday: 'long',
@@ -183,7 +162,7 @@ const formatarSaudacao = (nome: string, data = new Date()): string => {
   const hora = data.getHours()
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
   const nomeLimpo = nome.trim() || 'Perito'
-  return `${saudacao} ${nomeLimpo} — ${formatadorDataCompleta.format(data)}`
+  return `${saudacao}, ${nomeLimpo} - ${formatadorDataCompleta.format(data)}`
 }
 
 const formatarDataRelativa = (valor: string): string => {
@@ -264,6 +243,20 @@ const normalizarLaudoRecente = (valor: unknown): DashboardLaudoRecente | null =>
   }
 }
 
+const normalizarRepRecente = (valor: unknown): DashboardRepRecente | null => {
+  if (!isRecord(valor)) return null
+  const id = obterTexto(valor.id)
+  if (!id) return null
+
+  return {
+    id,
+    numero: obterTexto(valor.numero, 'REP sem número'),
+    tipo_exame_nome: obterTexto(valor.tipo_exame_nome, 'Tipo de exame não informado'),
+    status: obterTexto(valor.status, 'Sem status'),
+    updated_at: obterTexto(valor.updated_at),
+  }
+}
+
 const normalizarSerieMensal = (valor: unknown): DashboardSerieMensal | null => {
   if (!isRecord(valor)) return null
 
@@ -332,6 +325,11 @@ const normalizarDashboardResumo = (valor: unknown): DashboardResumo => {
         .map(normalizarTempoMedio)
         .filter((item): item is DashboardTempoMedioTipoExame => item !== null)
       : [],
+    repsRecentes: Array.isArray(payload.repsRecentes)
+      ? payload.repsRecentes
+        .map(normalizarRepRecente)
+        .filter((item): item is DashboardRepRecente => item !== null)
+      : [],
     laudosRecentes: Array.isArray(payload.laudosRecentes)
       ? payload.laudosRecentes
         .map(normalizarLaudoRecente)
@@ -390,9 +388,34 @@ const dashboardVazio = (dados: DashboardResumo | null): boolean => Boolean(
   dados &&
   dados.repsPorStatus.every(item => item.total === 0) &&
   dados.laudosPorStatus.every(item => item.total === 0) &&
+  dados.repsRecentes.length === 0 &&
   dados.laudosRecentes.length === 0 &&
   dados.tempoMedioPorTipoExame.length === 0,
 )
+
+const obterModoLayoutDashboard = (largura: number, altura: number): ModoLayoutDashboard => {
+  if (largura >= 1680 && altura >= 920) {
+    return 'amplo'
+  }
+
+  if (largura < 1360 || altura < 860) {
+    return 'compacto'
+  }
+
+  return 'padrao'
+}
+
+const obterLimiteRecentes = (modo: ModoLayoutDashboard): number => {
+  if (modo === 'compacto') return 2
+  if (modo === 'padrao') return 3
+  return 4
+}
+
+const obterLimiteTempoMedio = (modo: ModoLayoutDashboard): number => {
+  if (modo === 'compacto') return 3
+  if (modo === 'padrao') return 4
+  return 6
+}
 
 const fallbackBloco = (titulo: string) => (
   <Card className="border-red-300/80 bg-red-50/50 dark:border-red-700 dark:bg-red-950/20">
@@ -479,7 +502,7 @@ function DashboardVazio() {
           <div className="grid gap-3 text-left md:grid-cols-2">
             <div className="rounded-xl border border-border/70 bg-background/60 p-4">
               <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                <FolderSearch className="h-4 w-4 text-primary" />
+                <IconeRepMenu className="h-4 w-4 text-primary" />
                 REPs
               </div>
               <p className="text-sm text-muted-foreground">
@@ -488,7 +511,7 @@ function DashboardVazio() {
             </div>
             <div className="rounded-xl border border-border/70 bg-background/60 p-4">
               <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                <ScrollText className="h-4 w-4 text-primary" />
+                <IconeLaudoMenu className="h-4 w-4 text-primary" />
                 Laudos
               </div>
               <p className="text-sm text-muted-foreground">
@@ -502,11 +525,26 @@ function DashboardVazio() {
   )
 }
 
-function KpiCards({ reps, laudos }: { reps: DashboardKpiStatus[]; laudos: DashboardKpiStatus[] }) {
-  const itens = [...reps, ...laudos]
+function GridKpis({
+  itens,
+  modo,
+}: {
+  itens: DashboardKpiStatus[]
+  modo: ModoLayoutDashboard
+}) {
+  const classeGrid = modo === 'compacto'
+    ? 'grid-cols-3 gap-2'
+    : 'xl:grid-cols-3 gap-3'
+  const classeCard = modo === 'compacto' ? 'p-3' : 'p-4'
+  const classeTitulo = modo === 'compacto'
+    ? 'text-[10px] tracking-[0.1em]'
+    : 'text-[11px] tracking-[0.12em]'
+  const classeValor = modo === 'compacto' ? 'text-xl' : 'text-2xl'
+  const classeIconeWrapper = modo === 'compacto' ? 'rounded-lg p-2' : 'rounded-lg p-2.5'
+  const classeIcone = modo === 'compacto' ? 'h-4 w-4' : 'h-4.5 w-4.5'
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
+    <div className={`grid ${classeGrid}`}>
       {itens.map((item, index) => {
         const config = obterConfigStatus(item.status)
         const Icone = config.icone
@@ -516,22 +554,65 @@ function KpiCards({ reps, laudos }: { reps: DashboardKpiStatus[]; laudos: Dashbo
             key={`${item.status}-${index}`}
             className={`animate-fade-in border-border/80 bg-card/95 ${classesAnimacao[index] ?? ''}`}
           >
-            <CardContent className="flex items-start justify-between p-5">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <CardContent className={`flex items-start justify-between gap-3 ${classeCard}`}>
+              <div className="min-w-0 space-y-1.5">
+                <p className={`font-semibold uppercase text-muted-foreground ${classeTitulo}`}>
                   {config.titulo}
                 </p>
-                <p className={`text-3xl font-bold leading-none ${config.destaque}`}>
+                <p className={`${classeValor} font-bold leading-none ${config.destaque}`}>
                   {item.total}
                 </p>
               </div>
-              <div className="rounded-xl border border-border/70 bg-muted/50 p-3">
-                <Icone className={`h-5 w-5 ${config.destaque}`} />
+              <div className={`border border-border/70 bg-muted/50 ${classeIconeWrapper}`}>
+                <Icone className={`${classeIcone} ${config.destaque}`} />
               </div>
             </CardContent>
           </Card>
         )
       })}
+    </div>
+  )
+}
+
+function KpiCards({
+  reps,
+  laudos,
+  modo,
+}: {
+  reps: DashboardKpiStatus[]
+  laudos: DashboardKpiStatus[]
+  modo: ModoLayoutDashboard
+}) {
+  const classeContainer = modo === 'amplo' ? '2xl:grid-cols-2' : 'gap-3'
+  const classeHeader = modo === 'compacto' ? 'pb-1.5 pt-5' : 'pb-2 pt-5'
+  const classeTitulo = modo === 'compacto' ? 'text-base' : 'text-lg'
+  const classeCardContent = modo === 'compacto' ? 'pt-0 pb-5' : 'pt-0 pb-5'
+
+  return (
+    <div className={`grid gap-4 ${classeContainer}`}>
+      <Card className="border-border/80 bg-card/95">
+        <CardHeader className={classeHeader}>
+          <CardTitle className={`flex items-center gap-2 ${classeTitulo}`}>
+            <IconeRepMenu className="h-5 w-5 text-primary" />
+            REPs
+          </CardTitle>
+        </CardHeader>
+        <CardContent className={classeCardContent}>
+          <GridKpis itens={reps} modo={modo} />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80 bg-card/95">
+        <CardHeader className={classeHeader}>
+          <CardTitle className={`flex items-center gap-2 ${classeTitulo}`}>
+            <IconeLaudoMenu className="h-5 w-5 text-primary" />
+            Laudos
+          </CardTitle>
+        </CardHeader>
+        <CardContent className={classeCardContent}>
+          <GridKpis itens={laudos} modo={modo} />
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -593,16 +674,21 @@ function AlertaPrazo({
 function LaudosRecentes({
   laudos,
   onAbrirLaudos,
+  modo,
 }: {
   laudos: DashboardLaudoRecente[]
   onAbrirLaudos: () => void
+  modo: ModoLayoutDashboard
 }) {
+  const laudosExibidos = laudos.slice(0, obterLimiteRecentes(modo))
+  const compacto = modo === 'compacto'
+
   return (
     <Card className="animate-fade-in border-border/80 bg-card/95">
-      <CardHeader className="flex flex-row items-center justify-between gap-4 pb-4">
+      <CardHeader className={`flex flex-row items-center justify-between gap-4 ${compacto ? 'pb-2 pt-5' : 'pb-3 pt-5'}`}>
         <div className="space-y-1">
-          <CardTitle className="text-lg">Laudos recentes</CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <CardTitle className={compacto ? 'text-base' : 'text-lg'}>Laudos recentes</CardTitle>
+          <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
             Últimos laudos atualizados para retomada rápida.
           </p>
         </div>
@@ -611,27 +697,27 @@ function LaudosRecentes({
           <ArrowRight className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className={`space-y-2.5 ${compacto ? 'pt-0 pb-5' : 'pt-0 pb-5'}`}>
         {laudos.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
             Nenhum laudo recente encontrado.
           </div>
         ) : (
-          laudos.map(laudo => (
+          laudosExibidos.map(laudo => (
             <button
               key={laudo.id}
               type="button"
               onClick={onAbrirLaudos}
-              className="flex w-full items-center justify-between rounded-xl border border-border/70 bg-background/60 p-4 text-left transition-colors hover:bg-accent/70"
+              className={`flex w-full items-center justify-between rounded-xl border border-border/70 bg-background/60 text-left transition-colors hover:bg-accent/70 ${compacto ? 'p-3' : 'p-4'}`}
             >
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                  <div className={`rounded-lg bg-primary/10 text-primary ${compacto ? 'p-1.5' : 'p-2'}`}>
                     <FileText className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="font-semibold text-foreground">REP {laudo.rep_numero}</p>
-                    <p className="text-sm text-muted-foreground">{laudo.tipo_exame_nome}</p>
+                    <p className={`font-semibold text-foreground ${compacto ? 'text-sm' : ''}`}>REP {laudo.rep_numero}</p>
+                    <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>{laudo.tipo_exame_nome}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -650,38 +736,64 @@ function LaudosRecentes({
   )
 }
 
-function TempoMedioCiclo({ itens }: { itens: DashboardTempoMedioTipoExame[] }) {
+function RepsRecentes({
+  reps,
+  onAbrirReps,
+  modo,
+}: {
+  reps: DashboardRepRecente[]
+  onAbrirReps: () => void
+  modo: ModoLayoutDashboard
+}) {
+  const repsExibidas = reps.slice(0, obterLimiteRecentes(modo))
+  const compacto = modo === 'compacto'
+
   return (
     <Card className="animate-fade-in border-border/80 bg-card/95">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Gauge className="h-5 w-5 text-primary" />
-          Tempo médio de ciclo
-        </CardTitle>
+      <CardHeader className={`flex flex-row items-center justify-between gap-4 ${compacto ? 'pb-2 pt-5' : 'pb-3 pt-5'}`}>
+        <div className="space-y-1">
+          <CardTitle className={compacto ? 'text-base' : 'text-lg'}>REPs recentes</CardTitle>
+          <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
+            Últimas requisições atualizadas para retomada rápida.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onAbrirReps}>
+          Abrir REPs
+          <ArrowRight className="h-4 w-4" />
+        </Button>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {itens.length === 0 ? (
+      <CardContent className={`space-y-2.5 ${compacto ? 'pt-0 pb-5' : 'pt-0 pb-5'}`}>
+        {reps.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-            Ainda não há laudos concluídos suficientes para calcular o tempo médio de ciclo.
+            Nenhuma REP recente encontrada.
           </div>
         ) : (
-          itens.map(item => (
-            <div
-              key={`${item.tipoExameId ?? item.tipoExameNome}`}
-              className="flex items-center justify-between rounded-xl border border-border/70 bg-background/60 px-4 py-3"
+          repsExibidas.map(rep => (
+            <button
+              key={rep.id}
+              type="button"
+              onClick={onAbrirReps}
+              className={`flex w-full items-center justify-between rounded-xl border border-border/70 bg-background/60 text-left transition-colors hover:bg-accent/70 ${compacto ? 'p-3' : 'p-4'}`}
             >
-              <div>
-                <p className="font-medium text-foreground">{item.tipoExameNome}</p>
-                <p className="text-xs text-muted-foreground">
-                  {item.totalLaudos} laudo{item.totalLaudos === 1 ? '' : 's'} concluído{item.totalLaudos === 1 ? '' : 's'}
-                </p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className={`rounded-lg bg-primary/10 text-primary ${compacto ? 'p-1.5' : 'p-2'}`}>
+                    <IconeRepMenu className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className={`font-semibold text-foreground ${compacto ? 'text-sm' : ''}`}>REP {rep.numero}</p>
+                    <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>{rep.tipo_exame_nome}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  <span>{formatarDataRelativa(rep.updated_at)}</span>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-semibold text-foreground">
-                  {formatarDuracaoDias(item.tempoMedioDias)}
-                </p>
-              </div>
-            </div>
+              <Badge className={obterClasseBadgeStatus(rep.status)}>
+                {rep.status}
+              </Badge>
+            </button>
           ))
         )}
       </CardContent>
@@ -689,33 +801,49 @@ function TempoMedioCiclo({ itens }: { itens: DashboardTempoMedioTipoExame[] }) {
   )
 }
 
-function AtalhosDashboard({ onAbrirRota }: { onAbrirRota: (rota: string) => void }) {
+function TempoMedioCiclo({
+  itens,
+  modo,
+}: {
+  itens: DashboardTempoMedioTipoExame[]
+  modo: ModoLayoutDashboard
+}) {
+  const itensExibidos = itens.slice(0, obterLimiteTempoMedio(modo))
+  const compacto = modo === 'compacto'
+
   return (
     <Card className="animate-fade-in border-border/80 bg-card/95">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg">Atalhos rápidos</CardTitle>
+      <CardHeader className={compacto ? 'pb-2 pt-5' : 'pb-3 pt-5'}>
+        <CardTitle className={`flex items-center gap-2 ${compacto ? 'text-base' : 'text-lg'}`}>
+          <Gauge className="h-5 w-5 text-primary" />
+          Tempo médio de ciclo
+        </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        {atalhosDashboard.map(atalho => {
-          const Icone = atalho.icone
-
-          return (
-            <Button
-              key={atalho.titulo}
-              variant="outline"
-              className="h-auto justify-start gap-3 rounded-xl px-4 py-4 text-left"
-              onClick={() => onAbrirRota(atalho.rota)}
+      <CardContent className={`space-y-2.5 ${compacto ? 'pt-0 pb-5' : 'pt-0 pb-5'}`}>
+        {itens.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+            Ainda não há laudos concluídos suficientes para calcular o tempo médio de ciclo.
+          </div>
+        ) : (
+          itensExibidos.map(item => (
+            <div
+              key={`${item.tipoExameId ?? item.tipoExameNome}`}
+              className={`flex items-center justify-between rounded-xl border border-border/70 bg-background/60 ${compacto ? 'px-3 py-2.5' : 'px-4 py-3'}`}
             >
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <Icone className="h-4 w-4" />
-              </div>
               <div>
-                <p className="font-semibold text-foreground">{atalho.titulo}</p>
-                <p className="text-xs text-muted-foreground">{atalho.descricao}</p>
+                <p className={`font-medium text-foreground ${compacto ? 'text-sm' : ''}`}>{item.tipoExameNome}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.totalLaudos} laudo{item.totalLaudos === 1 ? '' : 's'} concluído{item.totalLaudos === 1 ? '' : 's'}
+                </p>
               </div>
-            </Button>
-          )
-        })}
+              <div className="text-right">
+                <p className={`${compacto ? 'text-base' : 'text-lg'} font-semibold text-foreground`}>
+                  {formatarDuracaoDias(item.tempoMedioDias)}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   )
@@ -903,6 +1031,9 @@ export function DashboardPage() {
   const [dadosProjecoes, setDadosProjecoes] = useState<DashboardProjecoes | null>(null)
   const [carregandoProjecoes, setCarregandoProjecoes] = useState(false)
   const [erroProjecoes, setErroProjecoes] = useState<string | null>(null)
+  const [modoLayout, setModoLayout] = useState<ModoLayoutDashboard>(() =>
+    obterModoLayoutDashboard(window.innerWidth, window.innerHeight),
+  )
 
   const carregarResumo = useCallback(async () => {
     setCarregandoResumo(true)
@@ -949,6 +1080,17 @@ export function DashboardPage() {
   }, [carregarResumo])
 
   useEffect(() => {
+    const onResize = () => {
+      setModoLayout(obterModoLayoutDashboard(window.innerWidth, window.innerHeight))
+    }
+
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!projecoesHabilitadas || dadosProjecoes) {
       return
     }
@@ -992,25 +1134,30 @@ export function DashboardPage() {
   }
 
   const vazio = dashboardVazio(dadosResumo)
+  const layoutCompacto = modoLayout === 'compacto'
+  const classeBlocoTopo = layoutCompacto ? 'p-4' : 'p-6'
+  const classeTituloPrincipal = layoutCompacto ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'
+  const classeTopo = layoutCompacto
+    ? 'gap-4 lg:flex-row lg:items-center lg:justify-between'
+    : 'gap-5 lg:flex-row lg:items-start lg:justify-between'
+  const classeListasRecentes = modoLayout === 'compacto' ? '2xl:grid-cols-2' : 'xl:grid-cols-2'
+  const classePainel = layoutCompacto ? 'space-y-4' : 'space-y-6'
 
   return (
     <>
-      <div className="space-y-6">
-        <section className="relative overflow-hidden rounded-[28px] border border-border/80 bg-card/95 p-6 shadow-sm animate-fade-in">
+      <div className={classePainel}>
+        <section className={`relative overflow-hidden rounded-[28px] border border-border/80 bg-card/95 shadow-sm animate-fade-in ${classeBlocoTopo}`}>
           <div className="absolute inset-y-0 right-0 w-48 bg-[radial-gradient(circle_at_top,_hsl(var(--primary)/0.16),_transparent_72%)]" />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
+          <div className={`relative flex flex-col ${classeTopo}`}>
+            <div className={layoutCompacto ? 'space-y-2' : 'space-y-3'}>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 <BarChart3 className="h-3.5 w-3.5 text-primary" />
                 Painel operacional
               </div>
-              <div className="space-y-2">
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+              <div className="space-y-1">
+                <h1 className={`font-semibold tracking-tight text-foreground ${classeTituloPrincipal}`}>
                   {formatarSaudacao(extrairNomeUsuario())}
                 </h1>
-                <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
-                  Visão rápida do que está pendente, em andamento e do que exige retomada imediata.
-                </p>
               </div>
             </div>
 
@@ -1035,9 +1182,9 @@ export function DashboardPage() {
         {!carregandoResumo && !erroResumo && dadosResumo && vazio && <DashboardVazio />}
 
         {!carregandoResumo && dadosResumo && !vazio && (
-          <div className="space-y-6">
+          <div className={classePainel}>
             <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os indicadores principais.')}>
-              <KpiCards reps={dadosResumo.repsPorStatus} laudos={dadosResumo.laudosPorStatus} />
+              <KpiCards reps={dadosResumo.repsPorStatus} laudos={dadosResumo.laudosPorStatus} modo={modoLayout} />
             </ErrorBoundary>
 
             <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os alertas de prazo.')}>
@@ -1047,18 +1194,18 @@ export function DashboardPage() {
               />
             </ErrorBoundary>
 
-            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os laudos recentes.')}>
-              <LaudosRecentes laudos={dadosResumo.laudosRecentes} onAbrirLaudos={() => navigate('/laudos')} />
-            </ErrorBoundary>
-
-            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-              <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar o tempo médio de ciclo.')}>
-                <TempoMedioCiclo itens={dadosResumo.tempoMedioPorTipoExame} />
+            <div className={`grid gap-4 ${classeListasRecentes}`}>
+              <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar as REPs recentes.')}>
+                <RepsRecentes reps={dadosResumo.repsRecentes} onAbrirReps={() => navigate('/reps')} modo={modoLayout} />
               </ErrorBoundary>
-              <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os atalhos rápidos.')}>
-                <AtalhosDashboard onAbrirRota={navigate} />
+              <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os laudos recentes.')}>
+                <LaudosRecentes laudos={dadosResumo.laudosRecentes} onAbrirLaudos={() => navigate('/laudos')} modo={modoLayout} />
               </ErrorBoundary>
             </div>
+
+            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar o tempo médio de ciclo.')}>
+              <TempoMedioCiclo itens={dadosResumo.tempoMedioPorTipoExame} modo={modoLayout} />
+            </ErrorBoundary>
           </div>
         )}
       </div>

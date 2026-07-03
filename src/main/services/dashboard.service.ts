@@ -4,6 +4,7 @@ import type {
   DashboardIndicadorConfiabilidade,
   DashboardKpiStatus,
   DashboardLaudoRecente,
+  DashboardRepRecente,
   DashboardProjecoes,
   DashboardResumo,
   DashboardSerieAnual,
@@ -28,6 +29,14 @@ type LinhaTempoMedio = {
 type LinhaLaudoRecente = {
   id: string | null
   rep_numero: string | null
+  tipo_exame_nome: string | null
+  status: string | null
+  updated_at: string | null
+}
+
+type LinhaRepRecente = {
+  id: string | null
+  numero: string | null
   tipo_exame_nome: string | null
   status: string | null
   updated_at: string | null
@@ -279,6 +288,7 @@ export class DashboardService {
         prazoVencidoRaw,
         laudosPorStatusRaw,
         tempoMedioRaw,
+        repsRecentesRaw,
         laudosRecentesRaw,
       ] = await Promise.all([
         executeQuery<LinhaContagemStatus>(`
@@ -320,6 +330,18 @@ export class DashboardService {
           GROUP BY te.id, te.nome
           ORDER BY te.nome COLLATE NOCASE ASC
         `),
+        executeQuery<LinhaRepRecente>(`
+          SELECT
+            r.id,
+            r.numero,
+            COALESCE(te.nome, 'Tipo de exame não informado') AS tipo_exame_nome,
+            r.status,
+            r.updated_at
+          FROM reps r
+          LEFT JOIN tipos_exame te ON te.id = r.tipo_exame_id
+          ORDER BY r.updated_at DESC
+          LIMIT 6
+        `),
         executeQuery<LinhaLaudoRecente>(`
           SELECT
             l.id,
@@ -344,6 +366,22 @@ export class DashboardService {
         tempoMedioDias: Number(toFloat(item.tempoMedioDias).toFixed(1)),
       }))
 
+      const repsRecentes: DashboardRepRecente[] = repsRecentesRaw
+        .filter(item => typeof item.id === 'string' && item.id.trim())
+        .map(item => ({
+          id: item.id as string,
+          numero: typeof item.numero === 'string' && item.numero.trim()
+            ? item.numero
+            : 'REP sem número',
+          tipo_exame_nome: typeof item.tipo_exame_nome === 'string' && item.tipo_exame_nome.trim()
+            ? item.tipo_exame_nome
+            : 'Tipo de exame não informado',
+          status: typeof item.status === 'string' && item.status.trim()
+            ? item.status
+            : 'Sem status',
+          updated_at: typeof item.updated_at === 'string' ? item.updated_at : '',
+        }))
+
       const laudosRecentes: DashboardLaudoRecente[] = laudosRecentesRaw
         .filter(item => typeof item.id === 'string' && item.id.trim())
         .map(item => ({
@@ -366,6 +404,7 @@ export class DashboardService {
         repsPrazoVencido: toInt(prazoVencidoRaw[0]?.total),
         laudosPorStatus: preencherStatus(laudosPorStatusRaw, STATUS_LAUDO),
         tempoMedioPorTipoExame,
+        repsRecentes,
         laudosRecentes,
       }
     } catch (error) {

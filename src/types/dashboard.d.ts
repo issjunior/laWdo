@@ -23,6 +23,14 @@ export interface DashboardLaudoRecente {
   updated_at: string
 }
 
+export interface DashboardRepRecente {
+  id: string
+  numero: string
+  tipo_exame_nome: string
+  status: string
+  updated_at: string
+}
+
 export interface DashboardSerieMensal {
   referencia: string
   ano: number
@@ -51,6 +59,7 @@ export interface DashboardResumo {
   repsPrazoVencido: number
   laudosPorStatus: DashboardKpiStatus[]
   tempoMedioPorTipoExame: DashboardTempoMedioTipoExame[]
+  repsRecentes: DashboardRepRecente[]
   laudosRecentes: DashboardLaudoRecente[]
 }
 

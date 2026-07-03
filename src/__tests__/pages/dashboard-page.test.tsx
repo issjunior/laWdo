@@ -27,6 +27,15 @@ const dadosResumoBase = {
       tempoMedioDias: 5.5,
     },
   ],
+  repsRecentes: [
+    {
+      id: 'rep-1',
+      numero: '045-2026',
+      tipo_exame_nome: 'Balística',
+      status: 'Pendente',
+      updated_at: '2026-07-02T10:00:00.000Z',
+    },
+  ],
   laudosRecentes: [
     {
       id: 'laudo-1',
@@ -93,7 +102,7 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/painel operacional/i)).toBeInTheDocument()
     expect(screen.getByText(/laudos recentes/i)).toBeInTheDocument()
     expect(screen.getByText(/tempo médio de ciclo/i)).toBeInTheDocument()
-    expect(screen.getByText(/REP 045-2026/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/REP 045-2026/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/balística/i).length).toBeGreaterThan(0)
   })
 
@@ -126,6 +135,7 @@ describe('DashboardPage', () => {
           { status: 'Entregue', total: 0 },
         ],
         tempoMedioPorTipoExame: [],
+        repsRecentes: [],
         laudosRecentes: [],
       },
     })
@@ -178,7 +188,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/dados insuficientes para estimativa confiável/i)).toBeInTheDocument()
   })
 
-  it('deve navegar para laudos, reps e logs a partir dos atalhos da dashboard', async () => {
+  it('deve navegar para laudos e reps a partir dos cards do dashboard', async () => {
     resumoMock.mockResolvedValue({
       success: true,
       data: dadosResumoBase,
@@ -195,14 +205,8 @@ describe('DashboardPage', () => {
     const segundaRenderizacao = renderDashboard()
     await screen.findByText(/laudos recentes/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /REPs cadastrar, revisar e retomar requisições\./i }))
+    fireEvent.click(screen.getByRole('button', { name: /abrir reps/i }))
     expect(await screen.findByTestId('rota-atual')).toHaveTextContent('/reps')
     segundaRenderizacao.unmount()
-
-    renderDashboard()
-    await screen.findByText(/laudos recentes/i)
-
-    fireEvent.click(screen.getByRole('button', { name: /Logs consultar rastreabilidade e diagnóstico do sistema\./i }))
-    expect(await screen.findByTestId('rota-atual')).toHaveTextContent('/logs')
   })
 })

@@ -1,24 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Users,
-  FlaskConical,
-  FileText,
-  Puzzle,
-  ScrollText,
   UserCircle,
-  Settings,
   ChevronRight,
-  Brain,
-  Database,
-  Network,
   Camera,
   LogOut,
-  Ruler,
-  Wand2,
-  Package,
-  Layers,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -51,59 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from '@/components/ui/avatar';
 import { AvatarUploadDialog } from '@/components/avatar/AvatarUploadDialog';
-
-const menuItems = [
-  {
-    title: 'Dashboard',
-    icon: LayoutDashboard,
-    path: '/',
-  },
-  {
-    title: 'Cadastros',
-    icon: Puzzle,
-    items: [
-      { title: 'Solicitantes', path: '/solicitantes', icon: Users },
-      { title: 'Tipos de Exame', path: '/tipos-exame', icon: FlaskConical },
-      { title: 'Cabeçalho', path: '/cabecalho', icon: FileText },
-      { title: 'Placeholders', path: '/placeholders', icon: Puzzle },
-      { title: 'Templates', path: '/templates', icon: FileText },
-    ],
-  },
-  {
-    title: 'Requisições (REPs)',
-    icon: ScrollText,
-    items: [
-      { title: 'REPs', path: '/reps', icon: ScrollText },
-    ],
-  },
-  {
-    title: 'Laudos',
-    icon: FileText,
-    items: [
-      { title: 'Editor de Laudos', path: '/laudos', icon: FileText },
-    ],
-  },
-  {
-    title: 'Wizard',
-    icon: Wand2,
-    items: [
-      { title: 'Categorias', path: '/categorias-pecas', icon: Layers },
-      { title: 'Peças', path: '/pecas', icon: Package },
-      { title: 'Wizards', path: '/wizards', icon: Wand2 },
-    ],
-  },
-  {
-    title: 'Configurações',
-    icon: Settings,
-    items: [
-      { title: 'Modelos IA', path: '/modelos-ia', icon: Brain },
-      { title: 'Margens do PDF', path: '/margens', icon: Ruler },
-      { title: 'API GDL', path: '/gdl-config', icon: Network },
-      { title: 'Backup', path: '/backup', icon: Database },
-      { title: 'Logs', path: '/logs', icon: FileText },
-    ],
-  },
-];
+import { itensMenu } from '@/lib/menu-config';
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
 
@@ -203,9 +137,9 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
             <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">Menu Principal</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {menuItems.map((item) => (
+                {itensMenu.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    {item.items ? (
+                    {'items' in item ? (
                       state === 'collapsed' ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -252,7 +186,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
                       )
                     ) : (
                       <SidebarMenuButton asChild isActive={pathname === item.path}>
-                        <Link to={item.path!}>
+                        <Link to={item.path}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </Link>
