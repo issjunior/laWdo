@@ -209,7 +209,7 @@ Primeira execução validada:
 - o mock passou a usar `os.tmpdir()`
 - o CI passou em `main` com instalação, type-check, lint, testes e coverage
 
-Recomendação atual: **revisar `02_plano_knip_futuro.md` antes de instalar Knip**.
+Recomendação atual: **implementar Knip primeiro em modo observacional**.
 
 Motivos:
 
@@ -218,12 +218,14 @@ Motivos:
 - a triagem inicial de código morto já foi concluída no renderer
 - os falsos positivos conhecidos do `ts-prune` no main já foram registrados
 - as diferenças iniciais do runner Linux já foram corrigidas
+- `02_plano_knip_futuro.md` foi revisado para refletir os pré-requisitos atuais
 
 Sequência fechada:
 
-1. revisar `02_plano_knip_futuro.md` contra o estado atual dos pré-requisitos
-2. decidir se a instalação do Knip já vale o custo operacional
-3. se aprovada, implementar Knip em branch própria, começando por relatório sem bloqueio
+1. criar branch `codex/knip-observacional`
+2. instalar e configurar Knip sem alterar `npm run lint`
+3. gerar o primeiro relatório com `--no-exit-code`
+4. triar achados antes de decidir se Knip entra como gate
 
 ## Notas desta tranche
 
@@ -239,6 +241,7 @@ Sequência fechada:
 - os hooks do renderer foram ajustados sem supressões de ESLint
 - `.github/workflows/ci.yml` foi criado com gate mínimo de type-check, lint, testes e coverage
 - a primeira execução verde do CI em `main` foi confirmada após alinhar Node.js 24 e corrigir o mock global de path do Electron em testes
+- `02_plano_knip_futuro.md` foi atualizado de plano futuro condicionado para plano observacional executável
 
 ## Referências úteis
 

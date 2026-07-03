@@ -6,7 +6,9 @@
 >
 > **Motivação:** O projeto tem código morto identificado (~6 arquivos órfãos + ~10 imports não usados) que pode ser removido com segurança agora. Em vez de investir 4-6 horas configurando Knip (que exige pré-requisitos de maturidade ainda não alcançados), este plano entrega 80% do valor com 20% do esforço usando ferramentas leves.
 >
-> **Futuro:** Quando os pré-requisitos de maturidade forem alcançados (testes, CI), o [plano completo do Knip](./02_plano_knip_futuro.md) deve ser implementado.
+> **Futuro:** Os pré-requisitos principais de maturidade foram alcançados em
+> 03/07/2026 (coverage mensurável e CI validado). A transição para Knip agora
+> deve seguir o modo observacional descrito em [plano do Knip](./02_plano_knip_futuro.md).
 
 ---
 
@@ -254,35 +256,37 @@ Adicionar ao `.eslintrc.json`:
 
 ## 🛤️ Estágio 3 — Caminho para o Knip
 
-O plano completo do Knip está documentado em [knip_retira_codigo_morto.md](./02_plano_knip_futuro.md) e deve ser implementado **quando os pré-requisitos abaixo forem satisfeitos**:
+O plano do Knip está documentado em [02_plano_knip_futuro.md](./02_plano_knip_futuro.md).
+Em 03/07/2026, os pré-requisitos principais deixaram de bloquear a transição,
+mas a adoção deve começar em modo observacional.
 
 ### Pré-requisitos para o Knip
 
-| # | Pré-requisito | Estado atual (22/06/2026) |
+| # | Pré-requisito | Estado atual (03/07/2026) |
 |---|---|---|
-| 1 | Cobertura de testes ≥ 30% em fluxos críticos | ❌ ~1% |
-| 2 | CI estabelecido (type-check + lint + test em PRs) | ❌ Inexistente |
-| 3 | Cultura de qualidade consolidada | ⚠️ Em construção |
-| 4 | > 400 fontes TypeScript | ❌ ~212 fontes |
+| 1 | Cobertura de testes ≥ 30% em fluxos críticos | ✅ linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% |
+| 2 | CI estabelecido (type-check + lint + test em PRs) | ✅ GitHub Actions validado em `main` |
+| 3 | Cultura de qualidade consolidada | ⚠️ Em consolidação: lint zerado, coverage gate e exceções documentadas |
+| 4 | > 400 fontes TypeScript | ❌ 169 fontes TS/TSX em `src` |
 | 5 | `verbatimModuleSyntax` ou `isolatedModules` habilitado | ❌ Não habilitado |
 
-### O que fazer até lá
+### Situação atual
 
-1. **Manter `ts-prune` rodando sob demanda** — a cada 1-2 sprints, rodar `/check-dead-code` para auditar
-2. **Investir em testes** — prioridade #1 do projeto. Sem testes, qualquer ferramenta de qualidade é uma ilha
-3. **Estabelecer CI** — GitHub Actions com `type-check` + `lint` + `test` é pré-requisito para qualquer gate automático
-4. **Evoluir ESLint** — migrar para `eslint.config.js` (flat config) com TypeScript strict rules
+1. **Manter `ts-prune` rodando sob demanda** — ainda serve como baseline comparativo.
+2. **Iniciar Knip sem gate** — instalar e gerar relatório em branch própria.
+3. **Triar achados antes de bloquear CI** — começar por unused files, depois deps e exports.
+4. **Promover para gate somente depois da triagem** — não acoplar ao `lint` na primeira tranche.
 
 ### Transição para Knip
 
-Quando os pré-requisitos estiverem satisfeitos:
+Agora que os pré-requisitos principais foram satisfeitos:
 
 1. Instalar Knip: `npm install -D knip`
-2. Criar `knip.json` conforme especificado em [knip_retira_codigo_morto.md](./02_plano_knip_futuro.md)
-3. Integrar ao `lint`: `"lint": "eslint . --ext .ts,.tsx && knip"`
-4. Adicionar ao CI: workflow `lint.yml` com Knip
-5. Remover `ts-prune` (substituído pelo Knip)
-6. Manter `DEAD_CODE_EXCEPTIONS.md` e skill `/check-dead-code`
+2. Criar `knip.json` conforme especificado em [02_plano_knip_futuro.md](./02_plano_knip_futuro.md)
+3. Adicionar script `"knip": "knip"`
+4. Rodar a primeira auditoria com `--no-exit-code`
+5. Registrar achados e falsos positivos
+6. Decidir depois se Knip entra no CI ou no `lint`
 
 ---
 
