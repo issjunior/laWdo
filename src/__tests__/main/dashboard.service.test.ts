@@ -31,6 +31,15 @@ describe('dashboard.service', () => {
       ])
       .mockResolvedValueOnce([
         {
+          id: 'rep-1',
+          numero: '045-2026',
+          tipo_exame_nome: 'Balística',
+          status: 'Em Andamento',
+          updated_at: '2026-07-02T09:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
           id: 'laudo-1',
           rep_numero: '045-2026',
           tipo_exame_nome: 'Balística',
@@ -55,6 +64,7 @@ describe('dashboard.service', () => {
       { status: 'Entregue', total: 8 },
     ])
     expect(resumo.tempoMedioPorTipoExame[0]?.tempoMedioDias).toBe(6.4)
+    expect(resumo.repsRecentes[0]?.numero).toBe('045-2026')
     expect(resumo.laudosRecentes[0]?.rep_numero).toBe('045-2026')
   })
 

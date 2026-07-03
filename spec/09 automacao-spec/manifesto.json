@@ -113,6 +113,22 @@
         "src/renderer/components/rep/GdlConsultaModal.tsx",
         "docs/api/**"
       ]
+    },
+    {
+      "subdiretorio": "10 dashboard",
+      "descricao": "Dashboard operacional, agregacoes iniciais, listas recentes e projecoes.",
+      "globsCodigo": [
+        "src/renderer/pages/DashboardPage.tsx",
+        "src/main/services/dashboard.service.ts",
+        "src/main/ipc/handlers/dashboard.handlers.ts",
+        "src/main/ipc/index.ts",
+        "src/preload/index.ts",
+        "src/preload/types.ts",
+        "src/renderer/App.tsx",
+        "src/renderer/index.tsx",
+        "src/renderer/lib/menu-config.ts",
+        "src/types/dashboard.d.ts"
+      ]
     }
   ],
   "specs": [
@@ -514,6 +530,24 @@
         ".agents/skills/spec/**",
         "AGENTS.md",
         "package.json"
+      ]
+    },
+    {
+      "arquivo": "spec/10 dashboard/dashboard_operacional.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Dashboard operacional inicial com resumo, recentes e projecoes.",
+      "globsCodigo": [
+        "src/renderer/pages/DashboardPage.tsx",
+        "src/main/services/dashboard.service.ts",
+        "src/main/ipc/handlers/dashboard.handlers.ts",
+        "src/main/ipc/index.ts",
+        "src/preload/index.ts",
+        "src/preload/types.ts",
+        "src/renderer/App.tsx",
+        "src/renderer/index.tsx",
+        "src/renderer/lib/menu-config.ts",
+        "src/types/dashboard.d.ts"
       ]
     }
   ]
