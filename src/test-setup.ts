@@ -6,6 +6,8 @@
  */
 
 import '@testing-library/jest-dom/vitest'
+import os from 'node:os'
+import path from 'node:path'
 import { vi } from 'vitest'
 
 const electronAPIMock = {
@@ -28,8 +30,8 @@ const electronAPIMock = {
 // Mock global do Electron
 vi.mock('electron', () => ({
   app: {
-    getPath: vi.fn(() => '/mock/app/path'),
-    getAppPath: vi.fn(() => '/mock/app'),
+    getPath: vi.fn(() => path.join(os.tmpdir(), 'lawdo-test')),
+    getAppPath: vi.fn(() => path.join(os.tmpdir(), 'lawdo-test-app')),
     getName: vi.fn(() => 'laWdoTest'),
     getVersion: vi.fn(() => '0.1.0-test'),
   },
