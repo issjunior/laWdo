@@ -18,7 +18,33 @@ interface HeaderProps {
   currentUser: Record<string, unknown> | null;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser: _currentUser }) => {
+const formatadorDataCompleta = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+const extrairNomeUsuario = (usuario: Record<string, unknown> | null): string => {
+  if (!usuario) return '';
+
+  const nome = usuario.nome;
+  if (typeof nome === 'string') {
+    return nome;
+  }
+
+  const name = usuario.name;
+  return typeof name === 'string' ? name : '';
+};
+
+const formatarSaudacao = (nome: string, data = new Date()): string => {
+  const hora = data.getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const nomeLimpo = nome.trim() || 'Perito';
+  return `${saudacao}, ${nomeLimpo} - ${formatadorDataCompleta.format(data)}`;
+};
+
+export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   const [appInfo, setAppInfo] = useState<{
     version: string;
     name: string;
@@ -60,10 +86,17 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser: _currentU
     localStorage.setItem('theme', newMode ? 'dark' : 'light');
   };
 
+  const saudacao = formatarSaudacao(extrairNomeUsuario(currentUser));
+
   return (
-    <header className="header flex items-center px-3 h-12 shrink-0 border-b border-border">
+    <header className="header flex min-h-12 shrink-0 items-center border-b border-border px-3 py-2">
       <div className="header-content justify-between w-full flex items-center">
-        <SidebarTrigger className="-ml-1" />
+        <div className="flex min-w-0 items-center gap-3">
+          <SidebarTrigger className="-ml-1" />
+          <p className="truncate text-sm font-medium text-foreground">
+            {saudacao}
+          </p>
+        </div>
         
         <div className="flex items-center gap-6 ml-auto">
           {/* Escolha de Tema */}

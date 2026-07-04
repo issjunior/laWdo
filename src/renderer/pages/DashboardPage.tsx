@@ -5,25 +5,19 @@ import {
   ArrowRight,
   BarChart3,
   CalendarRange,
+  ChevronDown,
   Clock3,
   FileText,
   Gauge,
   LineChart,
   RefreshCcw,
   Siren,
-  Sparkles,
 } from 'lucide-react'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { obterIconeMenuPorRota } from '@/lib/menu-config'
 import type {
@@ -37,8 +31,6 @@ import type {
   DashboardSerieMensal,
   DashboardTempoMedioTipoExame,
 } from '../../types/dashboard.js'
-
-const AUTH_USER_KEY = 'lawdo_auth_user'
 
 type RespostaDashboard<T> = {
   success: boolean
@@ -57,6 +49,8 @@ const classesAnimacao = [
   '[animation-delay:240ms]',
   '[animation-delay:300ms]',
 ] as const
+
+const CHAVE_PROJECOES_EXPANDIDO = 'dashboard_projecoes_expandido'
 
 const IconeRepMenu = obterIconeMenuPorRota('/reps', FileText)
 const IconeLaudoMenu = obterIconeMenuPorRota('/laudos', FileText)
@@ -82,7 +76,7 @@ const configStatus: Record<string, { titulo: string; destaque: string; icone: ty
   'Concluído': {
     titulo: 'Concluído',
     destaque: 'text-emerald-700 dark:text-emerald-300',
-    icone: IconeRepMenu,
+    icone: IconeLaudoMenu,
   },
   'Em andamento': {
     titulo: 'Laudos em andamento',
@@ -95,13 +89,6 @@ const configStatus: Record<string, { titulo: string; destaque: string; icone: ty
     icone: IconeLaudoMenu,
   },
 }
-
-const formatadorDataCompleta = new Intl.DateTimeFormat('pt-BR', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-})
 
 const formatadorMesAno = new Intl.DateTimeFormat('pt-BR', {
   month: 'short',
@@ -139,31 +126,6 @@ const obterFloat = (valor: unknown): number => {
 
 const obterTexto = (valor: unknown, fallback = ''): string =>
   typeof valor === 'string' ? valor : fallback
-
-const extrairNomeUsuario = (): string => {
-  try {
-    const raw = sessionStorage.getItem(AUTH_USER_KEY)
-    if (!raw) return ''
-
-    const parsed: unknown = JSON.parse(raw)
-    if (!isRecord(parsed)) return ''
-
-    return typeof parsed.nome === 'string'
-      ? parsed.nome
-      : typeof parsed.name === 'string'
-        ? parsed.name
-        : ''
-  } catch {
-    return ''
-  }
-}
-
-const formatarSaudacao = (nome: string, data = new Date()): string => {
-  const hora = data.getHours()
-  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
-  const nomeLimpo = nome.trim() || 'Perito'
-  return `${saudacao}, ${nomeLimpo} - ${formatadorDataCompleta.format(data)}`
-}
 
 const formatarDataRelativa = (valor: string): string => {
   const data = new Date(valor)
@@ -849,15 +811,15 @@ function TempoMedioCiclo({
   )
 }
 
-function ModalProjecoes({
-  aberto,
-  onAbertoChange,
+function CardProjecoes({
+  expandido,
+  onExpandidoChange,
   dados,
   carregando,
   erro,
 }: {
-  aberto: boolean
-  onAbertoChange: (aberto: boolean) => void
+  expandido: boolean
+  onExpandidoChange: (expandido: boolean) => void
   dados: DashboardProjecoes | null
   carregando: boolean
   erro: string | null
@@ -867,19 +829,35 @@ function ModalProjecoes({
   const indicador = dados?.indicadorConfiabilidade
 
   return (
-    <Dialog open={aberto} onOpenChange={onAbertoChange}>
-      <DialogContent className="max-w-5xl border-border/80 bg-background p-0">
-        <DialogHeader className="border-b border-border/80 px-6 py-5">
-          <DialogTitle className="flex items-center gap-2 text-xl">
+    <Collapsible
+      open={expandido}
+      onOpenChange={onExpandidoChange}
+      className="rounded-3xl border border-border/80 bg-card/95 shadow-sm"
+    >
+      <div className="flex items-center justify-between gap-4 p-5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
             <LineChart className="h-5 w-5 text-primary" />
-            Projeções
-          </DialogTitle>
-          <DialogDescription>
-            Projeção estimada a partir de laudos concluídos no histórico do banco.
-          </DialogDescription>
-        </DialogHeader>
+            <h2 className="text-lg font-semibold text-foreground">Projeções</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Estimativas com base nos laudos concluídos do histórico.
+          </p>
+        </div>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            aria-label={expandido ? 'Recolher projeções' : 'Expandir projeções'}
+          >
+            {expandido ? 'Recolher' : 'Expandir'}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${expandido ? 'rotate-180' : ''}`} />
+          </button>
+        </CollapsibleTrigger>
+      </div>
 
-        <div className="max-h-[80vh] space-y-6 overflow-y-auto px-6 py-6">
+      <CollapsibleContent forceMount className={expandido ? 'border-t border-border/80' : 'hidden'}>
+        <div className="space-y-6 p-5">
           {carregando && (
             <div className="grid gap-4 lg:grid-cols-2">
               <Skeleton className="h-56 rounded-2xl bg-muted" />
@@ -1015,8 +993,8 @@ function ModalProjecoes({
             </>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -1026,11 +1004,16 @@ export function DashboardPage() {
   const [dadosResumo, setDadosResumo] = useState<DashboardResumo | null>(null)
   const [carregandoResumo, setCarregandoResumo] = useState(true)
   const [erroResumo, setErroResumo] = useState<string | null>(null)
-  const [modalProjecoesAberto, setModalProjecoesAberto] = useState(false)
-  const [projecoesHabilitadas, setProjecoesHabilitadas] = useState(false)
   const [dadosProjecoes, setDadosProjecoes] = useState<DashboardProjecoes | null>(null)
   const [carregandoProjecoes, setCarregandoProjecoes] = useState(false)
   const [erroProjecoes, setErroProjecoes] = useState<string | null>(null)
+  const [projecoesExpandidas, setProjecoesExpandidas] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(CHAVE_PROJECOES_EXPANDIDO) === 'true'
+    } catch {
+      return false
+    }
+  })
   const [modoLayout, setModoLayout] = useState<ModoLayoutDashboard>(() =>
     obterModoLayoutDashboard(window.innerWidth, window.innerHeight),
   )
@@ -1091,7 +1074,7 @@ export function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (!projecoesHabilitadas || dadosProjecoes) {
+    if (!projecoesExpandidas || dadosProjecoes) {
       return
     }
 
@@ -1126,98 +1109,66 @@ export function DashboardPage() {
     return () => {
       ativo = false
     }
-  }, [dadosProjecoes, projecoesHabilitadas])
+  }, [dadosProjecoes, projecoesExpandidas])
 
-  const abrirModalProjecoes = () => {
-    setProjecoesHabilitadas(true)
-    setModalProjecoesAberto(true)
+  const handleExpandidoChange = (expandido: boolean) => {
+    setProjecoesExpandidas(expandido)
+    localStorage.setItem(CHAVE_PROJECOES_EXPANDIDO, String(expandido))
   }
 
   const vazio = dashboardVazio(dadosResumo)
   const layoutCompacto = modoLayout === 'compacto'
-  const classeBlocoTopo = layoutCompacto ? 'p-4' : 'p-6'
-  const classeTituloPrincipal = layoutCompacto ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'
-  const classeTopo = layoutCompacto
-    ? 'gap-4 lg:flex-row lg:items-center lg:justify-between'
-    : 'gap-5 lg:flex-row lg:items-start lg:justify-between'
   const classeListasRecentes = modoLayout === 'compacto' ? '2xl:grid-cols-2' : 'xl:grid-cols-2'
   const classePainel = layoutCompacto ? 'space-y-4' : 'space-y-6'
 
   return (
-    <>
-      <div className={classePainel}>
-        <section className={`relative overflow-hidden rounded-[28px] border border-border/80 bg-card/95 shadow-sm animate-fade-in ${classeBlocoTopo}`}>
-          <div className="absolute inset-y-0 right-0 w-48 bg-[radial-gradient(circle_at_top,_hsl(var(--primary)/0.16),_transparent_72%)]" />
-          <div className={`relative flex flex-col ${classeTopo}`}>
-            <div className={layoutCompacto ? 'space-y-2' : 'space-y-3'}>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                <BarChart3 className="h-3.5 w-3.5 text-primary" />
-                Painel operacional
-              </div>
-              <div className="space-y-1">
-                <h1 className={`font-semibold tracking-tight text-foreground ${classeTituloPrincipal}`}>
-                  {formatarSaudacao(extrairNomeUsuario())}
-                </h1>
-              </div>
-            </div>
+    <div className={classePainel}>
+      {carregandoResumo && !dadosResumo && <DashboardSkeleton />}
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => void carregarResumo()} aria-label="Atualizar dashboard">
-                <RefreshCcw className="h-4 w-4" />
-              </Button>
-              <Button onClick={abrirModalProjecoes}>
-                <Sparkles className="h-4 w-4" />
-                Projeções
-              </Button>
-            </div>
-          </div>
-        </section>
+      {!carregandoResumo && erroResumo && !dadosResumo && (
+        <DashboardErro mensagem={erroResumo} onTentarNovamente={() => void carregarResumo()} />
+      )}
 
-        {carregandoResumo && !dadosResumo && <DashboardSkeleton />}
+      {!carregandoResumo && !erroResumo && dadosResumo && vazio && <DashboardVazio />}
 
-        {!carregandoResumo && erroResumo && !dadosResumo && (
-          <DashboardErro mensagem={erroResumo} onTentarNovamente={() => void carregarResumo()} />
-        )}
+      {!carregandoResumo && dadosResumo && !vazio && (
+        <div className={classePainel}>
+          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os indicadores principais.')}>
+            <KpiCards reps={dadosResumo.repsPorStatus} laudos={dadosResumo.laudosPorStatus} modo={modoLayout} />
+          </ErrorBoundary>
 
-        {!carregandoResumo && !erroResumo && dadosResumo && vazio && <DashboardVazio />}
+          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os alertas de prazo.')}>
+            <AlertaPrazo
+              prazoProximo={dadosResumo.repsPrazoProximo}
+              prazoVencido={dadosResumo.repsPrazoVencido}
+            />
+          </ErrorBoundary>
 
-        {!carregandoResumo && dadosResumo && !vazio && (
-          <div className={classePainel}>
-            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os indicadores principais.')}>
-              <KpiCards reps={dadosResumo.repsPorStatus} laudos={dadosResumo.laudosPorStatus} modo={modoLayout} />
+          <div className={`grid gap-4 ${classeListasRecentes}`}>
+            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar as REPs recentes.')}>
+              <RepsRecentes reps={dadosResumo.repsRecentes} onAbrirReps={() => navigate('/reps')} modo={modoLayout} />
             </ErrorBoundary>
-
-            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os alertas de prazo.')}>
-              <AlertaPrazo
-                prazoProximo={dadosResumo.repsPrazoProximo}
-                prazoVencido={dadosResumo.repsPrazoVencido}
-              />
-            </ErrorBoundary>
-
-            <div className={`grid gap-4 ${classeListasRecentes}`}>
-              <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar as REPs recentes.')}>
-                <RepsRecentes reps={dadosResumo.repsRecentes} onAbrirReps={() => navigate('/reps')} modo={modoLayout} />
-              </ErrorBoundary>
-              <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os laudos recentes.')}>
-                <LaudosRecentes laudos={dadosResumo.laudosRecentes} onAbrirLaudos={() => navigate('/laudos')} modo={modoLayout} />
-              </ErrorBoundary>
-            </div>
-
-            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar o tempo médio de ciclo.')}>
-              <TempoMedioCiclo itens={dadosResumo.tempoMedioPorTipoExame} modo={modoLayout} />
+            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os laudos recentes.')}>
+              <LaudosRecentes laudos={dadosResumo.laudosRecentes} onAbrirLaudos={() => navigate('/laudos')} modo={modoLayout} />
             </ErrorBoundary>
           </div>
-        )}
-      </div>
 
-      <ModalProjecoes
-        aberto={modalProjecoesAberto}
-        onAbertoChange={setModalProjecoesAberto}
-        dados={dadosProjecoes}
-        carregando={carregandoProjecoes}
-        erro={erroProjecoes}
-      />
-    </>
+          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar o tempo médio de ciclo.')}>
+            <TempoMedioCiclo itens={dadosResumo.tempoMedioPorTipoExame} modo={modoLayout} />
+          </ErrorBoundary>
+
+          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar as projeções.')}>
+            <CardProjecoes
+              expandido={projecoesExpandidas}
+              onExpandidoChange={handleExpandidoChange}
+              dados={dadosProjecoes}
+              carregando={carregandoProjecoes}
+              erro={erroProjecoes}
+            />
+          </ErrorBoundary>
+        </div>
+      )}
+    </div>
   )
 }
 

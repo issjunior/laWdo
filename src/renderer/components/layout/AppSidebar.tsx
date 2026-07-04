@@ -120,7 +120,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
   return (
     <>
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-        <SidebarHeader className="flex items-center justify-between px-4 py-6">
+        <SidebarHeader className="flex items-center justify-between px-4 py-6 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
           <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
             <div className="flex flex-col">
               <span className="text-lg font-bold tracking-tight text-sidebar-foreground">laWdo</span>
@@ -132,7 +132,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
           </div>
         </SidebarHeader>
 
-        <SidebarContent className="px-2">
+        <SidebarContent className="px-2 group-data-[collapsible=icon]:px-1">
           <SidebarGroup>
             <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">Menu Principal</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -143,7 +143,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
                       state === 'collapsed' ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <SidebarMenuButton className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+                            <SidebarMenuButton className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:mx-auto">
                               <item.icon className="h-4 w-4" />
                               <span>{item.title}</span>
                             </SidebarMenuButton>
@@ -162,7 +162,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
                       ) : (
                         <Collapsible defaultOpen className="group/collapsible">
                           <CollapsibleTrigger asChild>
-                            <SidebarMenuButton>
+                            <SidebarMenuButton className="group-data-[collapsible=icon]:mx-auto">
                               <item.icon className="h-4 w-4" />
                               <span>{item.title}</span>
                               <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
@@ -185,7 +185,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
                         </Collapsible>
                       )
                     ) : (
-                      <SidebarMenuButton asChild isActive={pathname === item.path}>
+                      <SidebarMenuButton asChild isActive={pathname === item.path} className="group-data-[collapsible=icon]:mx-auto">
                         <Link to={item.path}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
@@ -199,7 +199,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="p-4">
+        <SidebarFooter className="p-4 group-data-[collapsible=icon]:px-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-2 rounded-md p-1 text-left outline-none transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center">
