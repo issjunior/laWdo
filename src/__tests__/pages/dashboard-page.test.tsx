@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { DashboardPage } from '@/pages/DashboardPage'
 
@@ -99,9 +99,10 @@ describe('DashboardPage', () => {
 
     renderDashboard()
 
-    expect(await screen.findByText(/painel operacional/i)).toBeInTheDocument()
-    expect(screen.getByText(/laudos recentes/i)).toBeInTheDocument()
-    expect(screen.getByText(/tempo médio de ciclo/i)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /reps recentes/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /laudos recentes/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /tempo médio de ciclo/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /projeções/i })).toBeInTheDocument()
     expect(screen.getAllByText(/REP 045-2026/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/balística/i).length).toBeGreaterThan(0)
   })
@@ -145,7 +146,7 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/dashboard pronto para começar/i)).toBeInTheDocument()
   })
 
-  it('deve abrir o modal de projeções sob demanda', async () => {
+  it('deve carregar e exibir projeções sob demanda ao expandir a seção', async () => {
     resumoMock.mockResolvedValue({
       success: true,
       data: dadosResumoBase,
@@ -179,12 +180,16 @@ describe('DashboardPage', () => {
 
     renderDashboard()
 
-    fireEvent.click(await screen.findByRole('button', { name: /projeções/i }))
+    expect(projecoesMock).not.toHaveBeenCalled()
 
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/^projeções$/i)).toBeInTheDocument()
+    const botaoExpandir = await screen.findByRole('button', { name: /expandir projeções/i })
+    expect(botaoExpandir).toHaveAttribute('aria-label', 'Expandir projeções')
+
+    fireEvent.click(botaoExpandir)
+
     await waitFor(() => expect(projecoesMock).toHaveBeenCalledTimes(1))
-    expect(screen.getByText(/projeção mensal/i)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /recolher projeções/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /projeção mensal/i })).toBeInTheDocument()
     expect(screen.getByText(/dados insuficientes para estimativa confiável/i)).toBeInTheDocument()
   })
 
