@@ -6,7 +6,7 @@ const log = getLogger('configuracao');
 
 const TIPOS_CRIPTOGRAFADOS = new Set(['senha', 'api_key']);
 
-export interface ConfiguracaoRow {
+interface ConfiguracaoRow {
   chave: string
   valor: string | null
   tipo: string

@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 
 const log = getLogger('wizard');
 
-export interface ArvoreEtapa {
+interface ArvoreEtapa {
   id: string;
   pergunta: string;
   descricao_ajuda?: string;
@@ -18,7 +18,7 @@ export interface ArvoreEtapa {
   opcoes: ArvoreOpcao[];
 }
 
-export interface ArvoreOpcao {
+interface ArvoreOpcao {
   id: string;
   label: string;
   valor: string;
@@ -31,7 +31,7 @@ export interface ArvoreWizard {
   etapas: ArvoreEtapa[];
 }
 
-export class WizardService extends BaseService<WizardRow> {
+class WizardService extends BaseService<WizardRow> {
   constructor() {
     super('wizards', 'id');
   }

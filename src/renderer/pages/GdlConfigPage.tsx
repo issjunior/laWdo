@@ -567,4 +567,3 @@ export const GdlConfigPage: React.FC = () => {
   );
 };
 
-export default GdlConfigPage;

@@ -1,6 +1,6 @@
 # Painel de Saúde do Sistema
 
-> **Última medição:** 03/07/2026
+> **Última medição:** 05/07/2026
 > **Propósito:** registrar o estado atual de build, tipagem, lint, testes e auditoria de código morto.
 
 ---
@@ -15,7 +15,7 @@
 | **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após ajuste do setup para runner Linux |
 | **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real; CI validado |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
-| **Knip** (`npm run knip -- --no-exit-code`) | 🟡 Observacional | 4 deps, 1 devDep, 73 exports, 39 tipos, 8 duplicatas | primeira linha de base registrada; ainda não é gate |
+| **Knip** (`npm run knip -- --no-exit-code`) | 🟡 Observacional | 0 deps, 0 devDep, 57 exports, 15 tipos, 0 duplicatas | duas rodadas de triagem concluídas; o foco saiu do `main` e agora está no renderer/shared |
 | **GitHub dependencies** (`Dependency graph` + `Dependabot`) | 🟡 Ativo | monitoramento semanal em `main` | visibilidade de supply chain ligada no GitHub; `dependabot.yml` publicado |
 
 Leitura prática do estado atual:
@@ -29,6 +29,7 @@ Leitura prática do estado atual:
 - a auditoria de código morto foi reexecutada e a frente do renderer ficou sem candidatos reais
 - a cobertura passou a ser mensurável com `@vitest/coverage-v8`
 - o GitHub agora monitora dependências e actions com `Dependency graph` e `Dependabot`
+- a primeira rodada do Knip removeu pacotes ociosos e duplicatas de export sem abrir regressão
 
 ---
 
@@ -58,6 +59,8 @@ npm run knip -- --no-exit-code
 | **03/07/2026 (CI mínimo)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | workflow GitHub Actions publicado e validado em `main` |
 | **03/07/2026 (Knip observacional)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | Knip instalado como comando manual e primeira linha de base registrada |
 | **03/07/2026 (monitoramento GitHub de dependências)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | `Dependency graph` e `Dependabot` habilitados; `dependabot.yml` publicado com agenda semanal |
+| **05/07/2026 (Knip rodada 1)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | dependências/devDependency ociosas removidas, duplicatas zeradas e exports do `main` reduzidos |
+| **05/07/2026 (Knip rodada 2)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | tipos exportados ociosos do `main` removidos; frente remanescente ficou concentrada em renderer/shared |
 
 ---
 
@@ -244,7 +247,31 @@ Primeira linha de base Knip:
 - **8** exports duplicados
 - **0** arquivos não usados após registrar `src/renderer/types/assets.d.ts` como declaração ambiente esperada
 
-Próximo passo recomendado: triar primeiro dependências/devDependencies, depois duplicatas, e só então exports/tipos por camada.
+Resultado após a primeira rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **57** exports apontados
+- **39** tipos exportados apontados
+- **0** exports duplicados
+
+Limpezas aplicadas nesta rodada:
+
+- remoção das dependências `@dnd-kit/modifiers`, `groq`, `react-icons` e `sqlite`
+- remoção da devDependency `@types/sqlite3`
+- remoção de `default exports` redundantes em páginas lazy-loaded e em `safe-storage.service.ts`
+- remoção de `export` em helpers internos de `sqlite.ts` usados apenas no próprio módulo
+- remoção de `export` em classes de services do `main` consumidas apenas pelos singletons públicos
+
+Resultado após a segunda rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **57** exports apontados
+- **15** tipos exportados apontados
+- **0** exports duplicados
+
+Próximo passo recomendado: continuar a triagem no renderer/shared, começando por utilitários e validadores antes de mexer nos componentes `ui`.
 
 Automação complementar já ativada no GitHub:
 
@@ -269,6 +296,10 @@ Automação complementar já ativada no GitHub:
 - `.github/dependabot.yml` foi criado para atualizações automáticas semanais de `npm` e `github-actions`
 - a primeira execução verde do CI em `main` foi confirmada após alinhar Node.js 24 e corrigir o mock global de path do Electron em testes
 - `02_plano_knip_futuro.md` foi atualizado de plano futuro condicionado para plano observacional executável
+- `npm uninstall` removeu 5 pacotes sem impacto em `type-check`, `lint`, `test` ou `knip`
+- a contagem do Knip caiu de `73` para `57` exports após a limpeza segura do `main`
+- dependências/devDependencies ociosas e duplicatas foram zeradas no relatório observacional
+- os tipos exportados ociosos caíram de `39` para `15` após recolher tipagem interna do `main`
 
 ## Referências úteis
 

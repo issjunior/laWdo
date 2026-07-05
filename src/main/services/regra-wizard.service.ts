@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 
 const log = getLogger('regra-wizard');
 
-export interface PecaComSecao {
+interface PecaComSecao {
   peca: PecaRow;
   secao_template_id: string | null;
   regra_id: string;
@@ -25,7 +25,7 @@ type RegraWizardComPecaSqlRow = RegraWizardRow & {
   secao_nome?: string | null;
 };
 
-export class RegraWizardService extends BaseService<RegraWizardRow> {
+class RegraWizardService extends BaseService<RegraWizardRow> {
   constructor() {
     super('regras_wizard', 'id');
   }
@@ -147,7 +147,7 @@ export class RegraWizardService extends BaseService<RegraWizardRow> {
  * | image                | string (path)    | "*"                | sempre true      |
  * | (sem resposta)       | undefined        | qualquer           | false            |
  */
-export function condicaoSatisfeita(
+function condicaoSatisfeita(
   resposta: string | string[] | undefined,
   condicao: string | string[]
 ): boolean {

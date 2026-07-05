@@ -11,7 +11,7 @@ import fs from 'fs';
 import { getLogger } from '../utils/logger.js'
 const log = getLogger('laudo');
 
-export interface SecaoImportada {
+interface SecaoImportada {
   nome: string;
   conteudo: string;
   incluir: boolean;
@@ -58,7 +58,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
 
 // ─── Validação de Arquivo ─────────────────────────────────
 
-export function validarArquivo(filePath: string): { valido: boolean; erro?: string } {
+function validarArquivo(filePath: string): { valido: boolean; erro?: string } {
   try {
     const stats = fs.statSync(filePath);
     if (stats.size > MAX_FILE_SIZE_BYTES) {

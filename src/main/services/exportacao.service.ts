@@ -14,20 +14,20 @@ const log = getLogger('exportacao');
 
 const CM_TO_INCHES = 1 / 2.54;
 
-export interface ExportacaoCabecalho {
+interface ExportacaoCabecalho {
   logoBase64?: string;
   texto?: string;
   alinhamento?: string;
 }
 
-export interface ExportacaoMargens {
+interface ExportacaoMargens {
   top: number;
   right: number;
   bottom: number;
   left: number;
 }
 
-export interface ImagemExportacao {
+interface ImagemExportacao {
   id: string;
   base64: string;
   formato: string;
@@ -35,50 +35,50 @@ export interface ImagemExportacao {
   numero: number;
 }
 
-export interface ElementoParagrafoExportacao {
+interface ElementoParagrafoExportacao {
   tipo: 'paragrafo';
   html: string;
   alinhamento?: string;
   nivelTitulo?: number;
 }
 
-export interface ElementoTabelaExportacao {
+interface ElementoTabelaExportacao {
   tipo: 'tabela';
   linhas: string[][];
   cabecalho?: boolean;
 }
 
-export interface ElementoListaExportacao {
+interface ElementoListaExportacao {
   tipo: 'lista';
   items: string[];
   ordenada: boolean;
   nivel: number;
 }
 
-export interface ElementoFiguraExportacao {
+interface ElementoFiguraExportacao {
   tipo: 'figura';
   imagemId: string;
   legenda: string;
   numero: number;
 }
 
-export interface ElementoQuebraExportacao {
+interface ElementoQuebraExportacao {
   tipo: 'quebra';
 }
 
-export type ElementoExportacao =
+type ElementoExportacao =
   | ElementoParagrafoExportacao
   | ElementoTabelaExportacao
   | ElementoListaExportacao
   | ElementoFiguraExportacao
   | ElementoQuebraExportacao;
 
-export interface SecaoExportacao {
+interface SecaoExportacao {
   titulo: string;
   elementos: ElementoExportacao[];
 }
 
-export interface EstruturaExportacaoLaudo {
+interface EstruturaExportacaoLaudo {
   fontFamily: string;
   fontSize: string;
   secoes: SecaoExportacao[];

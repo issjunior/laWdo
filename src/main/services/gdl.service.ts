@@ -8,7 +8,7 @@ import { configuracaoService } from './configuracao.service.js';
 
 const log = getLogger('gdl');
 
-export interface GdlCredenciais {
+interface GdlCredenciais {
   baseUrl: string;
   login: string;
   senha: string;
@@ -32,7 +32,7 @@ export interface GdlTesteResultado {
   rede?: GdlTesteEtapa;
 }
 
-export interface GdlTesteEtapa {
+interface GdlTesteEtapa {
   sucesso: boolean;
   latencia: number;
   statusCode: number;
@@ -40,12 +40,12 @@ export interface GdlTesteEtapa {
   erro?: string;
 }
 
-export interface GdlOrigem {
+interface GdlOrigem {
   tipo: string;
   numero: string;
 }
 
-export interface GdlPeca {
+interface GdlPeca {
   codPeca: number;
   tipoPeca: string;
   identificacao: string;
@@ -57,13 +57,13 @@ export interface GdlPeca {
   consumida: string;
 }
 
-export interface GdlAndamento {
+interface GdlAndamento {
   dataHora: string;
   nomeUsuario: string;
   descricao: string;
 }
 
-export interface GdlRepData {
+interface GdlRepData {
   codRep: number;
   numero: number;
   ano: number;

@@ -1,7 +1,7 @@
 # Auditoria Knip Observacional - 03/07/2026
 
-> **Status:** primeira linha de base registrada. Knip ainda nao e gate de CI,
-> lint ou build.
+> **Status:** linha de base registrada e primeira rodada de triagem concluida.
+> Knip ainda nao e gate de CI, lint ou build.
 
 ## Contexto
 
@@ -108,5 +108,107 @@ Nao fazer nesta tranche:
 - adicionar Knip como falha de CI
 - remover `ts-prune`
 
-Proximo passo recomendado: iniciar tranche pequena de triagem das dependencias
-apontadas pelo Knip.
+## Resultado da Primeira Rodada de Triagem - 05/07/2026
+
+Comandos executados:
+
+```bash
+npm uninstall @dnd-kit/modifiers groq react-icons sqlite @types/sqlite3
+npm run type-check
+npm run lint
+npm test
+npm run knip -- --no-exit-code
+```
+
+Resultado observado apos a rodada:
+
+| Categoria | Antes | Depois | Leitura atual |
+|---|---:|---:|---|
+| Arquivos nao usados | 0 | 0 | sem mudanca |
+| Dependencias nao usadas | 4 | 0 | zeradas com remocao segura de pacotes ociosos |
+| DevDependencies nao usadas | 1 | 0 | zerada |
+| Exports nao usados | 73 | 57 | queda puxada pela limpeza segura do `main` |
+| Tipos exportados nao usados | 39 | 39 | ainda sem triagem nesta rodada |
+| Exports duplicados | 8 | 0 | zerados ao remover `default exports` redundantes |
+
+Dependencias/devDependency removidas:
+
+- `@dnd-kit/modifiers`
+- `groq`
+- `react-icons`
+- `sqlite`
+- `@types/sqlite3`
+
+Duplicatas resolvidas:
+
+- `src/main/services/safe-storage.service.ts`
+- `src/renderer/pages/CabecalhoPage.tsx`
+- `src/renderer/pages/DashboardPage.tsx`
+- `src/renderer/pages/GdlConfigPage.tsx`
+- `src/renderer/pages/LogsPage.tsx`
+- `src/renderer/pages/ModelosIAPage.tsx`
+- `src/renderer/pages/SolicitantesPage.tsx`
+- `src/renderer/pages/TiposExamePage.tsx`
+
+Exports do `main` reduzidos nesta rodada:
+
+- helpers internos de `src/main/database/sqlite.ts` deixaram de ser publicos
+- `validarArquivo` em `src/main/services/importacao.service.ts` deixou de ser publico
+- classes de services do `main` deixaram de ser exportadas quando o contrato publico real era apenas o singleton
+- `condicaoSatisfeita` em `src/main/services/regra-wizard.service.ts` deixou de ser publico
+
+Validacao da rodada:
+
+- `npm run type-check` OK
+- `npm run lint` OK
+- `npm test` OK com `43` passando e `1` skip
+- `npm run knip -- --no-exit-code` sem dependencias/devDependencies ociosas e sem duplicatas
+
+## Resultado da Segunda Rodada de Triagem - 05/07/2026
+
+Comandos executados:
+
+```bash
+npm run type-check
+npm run lint
+npm test
+npm run knip -- --no-exit-code
+```
+
+Resultado observado apos a rodada:
+
+| Categoria | Antes da rodada 2 | Depois da rodada 2 | Leitura atual |
+|---|---:|---:|---|
+| Arquivos nao usados | 0 | 0 | sem mudanca |
+| Dependencias nao usadas | 0 | 0 | sem mudanca |
+| DevDependencies nao usadas | 0 | 0 | sem mudanca |
+| Exports nao usados | 57 | 57 | frente remanescente esta no renderer/shared |
+| Tipos exportados nao usados | 39 | 15 | queda puxada por recolhimento da tipagem interna do `main` |
+| Exports duplicados | 0 | 0 | sem mudanca |
+
+Tipos internos recolhidos nesta rodada:
+
+- `CreateAuditInput`
+- `ConfiguracaoRow`
+- tipos internos de `exportacao.service.ts`
+- tipos internos de `gdl.service.ts`
+- `SecaoImportada`
+- `PecaComSecao`
+- `ArvoreEtapa`
+- `ArvoreOpcao`
+- `LogLevel`
+
+Validacao da rodada:
+
+- `npm run type-check` OK
+- `npm run lint` OK
+- `npm test` OK com `43` passando e `1` skip
+- `npm run knip -- --no-exit-code` com `57` exports e `15` tipos exportados restantes
+
+## Proxima Prioridade
+
+O proximo passo agora ficou concentrado no renderer/shared:
+
+1. revisar helpers/utilitarios exportados do renderer/shared
+2. revisar validadores e tipos de parser ainda exportados sem consumidor
+3. tratar componentes `ui`/shadcn por ultimo, pois podem ser estoque publico intencional

@@ -521,4 +521,3 @@ export const ModelosIAPage: React.FC = () => {
   );
 };
 
-export default ModelosIAPage;

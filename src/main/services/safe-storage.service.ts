@@ -32,4 +32,3 @@ class SafeStorageService {
 }
 
 export const safeStorageService = new SafeStorageService();
-export default safeStorageService;

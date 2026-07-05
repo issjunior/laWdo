@@ -17,7 +17,7 @@ let dbInstance: sqlite3.Database | null = null;
 /**
  * Obtém ou cria conexão com o banco de dados SQLite
  */
-export const getDatabase = async (): Promise<sqlite3.Database> => {
+const getDatabase = async (): Promise<sqlite3.Database> => {
   if (dbInstance) {
     return dbInstance;
   }
@@ -124,7 +124,7 @@ export const executeNonQuery = async (sql: string, params: unknown[] = []): Prom
 /**
  * Inicia uma transação
  */
-export const beginTransaction = async (): Promise<void> => {
+const beginTransaction = async (): Promise<void> => {
   await executeNonQuery('BEGIN TRANSACTION');
   log.debug('Transação iniciada');
 };
@@ -132,7 +132,7 @@ export const beginTransaction = async (): Promise<void> => {
 /**
  * Comita uma transação
  */
-export const commitTransaction = async (): Promise<void> => {
+const commitTransaction = async (): Promise<void> => {
   await executeNonQuery('COMMIT');
   log.debug('Transação commitada');
 };
@@ -140,7 +140,7 @@ export const commitTransaction = async (): Promise<void> => {
 /**
  * Reverte uma transação
  */
-export const rollbackTransaction = async (): Promise<void> => {
+const rollbackTransaction = async (): Promise<void> => {
   await executeNonQuery('ROLLBACK');
   log.debug('Transação revertida');
 };

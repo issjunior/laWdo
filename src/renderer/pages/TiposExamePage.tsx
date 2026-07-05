@@ -485,4 +485,3 @@ export const TiposExamePage: React.FC = () => {
   );
 };
 
-export default TiposExamePage;
