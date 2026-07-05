@@ -15,7 +15,7 @@
 | **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após ajuste do setup para runner Linux |
 | **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real; CI validado |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
-| **Knip** (`npm run knip -- --no-exit-code`) | 🟡 Observacional | 0 deps, 0 devDep, 57 exports, 15 tipos, 0 duplicatas | duas rodadas de triagem concluídas; o foco saiu do `main` e agora está no renderer/shared |
+| **Knip** (`npm run knip -- --no-exit-code`) | ✅ Observacional zerado | 0 deps, 0 devDep, 0 exports, 0 tipos, 0 duplicatas | quatro rodadas de triagem concluídas; relatório observacional ficou sem apontamentos |
 | **GitHub dependencies** (`Dependency graph` + `Dependabot`) | 🟡 Ativo | monitoramento semanal em `main` | visibilidade de supply chain ligada no GitHub; `dependabot.yml` publicado |
 
 Leitura prática do estado atual:
@@ -30,6 +30,7 @@ Leitura prática do estado atual:
 - a cobertura passou a ser mensurável com `@vitest/coverage-v8`
 - o GitHub agora monitora dependências e actions com `Dependency graph` e `Dependabot`
 - a primeira rodada do Knip removeu pacotes ociosos e duplicatas de export sem abrir regressão
+- a frente observacional do Knip foi encerrada com relatório zerado sem regressão em type-check, lint ou testes
 
 ---
 
@@ -61,6 +62,8 @@ npm run knip -- --no-exit-code
 | **03/07/2026 (monitoramento GitHub de dependências)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | `Dependency graph` e `Dependabot` habilitados; `dependabot.yml` publicado com agenda semanal |
 | **05/07/2026 (Knip rodada 1)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | dependências/devDependency ociosas removidas, duplicatas zeradas e exports do `main` reduzidos |
 | **05/07/2026 (Knip rodada 2)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | tipos exportados ociosos do `main` removidos; frente remanescente ficou concentrada em renderer/shared |
+| **05/07/2026 (Knip rodada 3)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | utilitários, validadores e tipos de parser do renderer/shared triados; sobra concentrou em `ui` |
+| **05/07/2026 (Knip rodada 4)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | exports de `ui` triados; relatório do Knip zerado em modo observacional |
 
 ---
 
@@ -271,7 +274,30 @@ Resultado após a segunda rodada de triagem em 05/07/2026:
 - **15** tipos exportados apontados
 - **0** exports duplicados
 
-Próximo passo recomendado: continuar a triagem no renderer/shared, começando por utilitários e validadores antes de mexer nos componentes `ui`.
+Resultado após a terceira rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **41** exports apontados
+- **3** tipos exportados apontados
+- **0** exports duplicados
+
+Resultado após a quarta rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **0** exports apontados
+- **0** tipos exportados apontados
+- **0** exports duplicados
+
+Limpezas aplicadas nas rodadas 3 e 4:
+
+- recolhimento de exports sem consumidor em `forms`, `exam-fields`, utilitários de template, `tree-utils`, parser de exportação e schemas de validação
+- recolhimento dos helpers internos remanescentes de `secao-builder.service.ts`
+- triagem conservadora dos exports do design system local em `src/renderer/components/ui/**`
+- remoção dos aliases locais que ficaram órfãos após a redução de superfície pública
+
+Próximo passo recomendado: manter Knip em modo observacional, registrar este estado zerado e decidir em tranche separada se vale ou não promover a ferramenta a gate futuro.
 
 Automação complementar já ativada no GitHub:
 
@@ -300,6 +326,9 @@ Automação complementar já ativada no GitHub:
 - a contagem do Knip caiu de `73` para `57` exports após a limpeza segura do `main`
 - dependências/devDependencies ociosas e duplicatas foram zeradas no relatório observacional
 - os tipos exportados ociosos caíram de `39` para `15` após recolher tipagem interna do `main`
+- os exports remanescentes caíram de `57` para `0` após triagem de `renderer/shared` e `components/ui`
+- os tipos exportados remanescentes caíram de `15` para `0`
+- o `npm run knip -- --no-exit-code` terminou sem apontamentos mantendo `type-check`, `lint` e `test` verdes
 
 ## Referências úteis
 

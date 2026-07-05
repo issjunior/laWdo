@@ -1,4 +1,4 @@
-export interface ImagemExportacao {
+interface ImagemExportacao {
   id: string;
   base64: string;
   formato: string;
@@ -6,45 +6,45 @@ export interface ImagemExportacao {
   numero: number;
 }
 
-export interface ElementoParagrafo {
+interface ElementoParagrafo {
   tipo: 'paragrafo';
   html: string;
   alinhamento?: string;
   nivelTitulo?: number;
 }
 
-export interface ElementoTabela {
+interface ElementoTabela {
   tipo: 'tabela';
   linhas: string[][];
   cabecalho?: boolean;
 }
 
-export interface ElementoLista {
+interface ElementoLista {
   tipo: 'lista';
   items: string[];
   ordenada: boolean;
   nivel: number;
 }
 
-export interface ElementoFigura {
+interface ElementoFigura {
   tipo: 'figura';
   imagemId: string;
   legenda: string;
   numero: number;
 }
 
-export interface ElementoQuebra {
+interface ElementoQuebra {
   tipo: 'quebra';
 }
 
-export type ElementoExportacao =
+type ElementoExportacao =
   | ElementoParagrafo
   | ElementoTabela
   | ElementoLista
   | ElementoFigura
   | ElementoQuebra;
 
-export interface SecaoExportacao {
+interface SecaoExportacao {
   titulo: string;
   elementos: ElementoExportacao[];
 }

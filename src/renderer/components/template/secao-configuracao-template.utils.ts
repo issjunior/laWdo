@@ -30,7 +30,7 @@ interface ConfiguracaoTemplateExame {
   ajudaRepeticao: string;
 }
 
-export const TITULO_PADRAO_REPETICAO_ARMAS = 'ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}';
+const TITULO_PADRAO_REPETICAO_ARMAS = 'ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}} {{b602_arma_1_marca}} {{b602_arma_1_modelo}}';
 
 const CONFIGURACAO_PADRAO: ConfiguracaoTemplateExame = {
   opcoesRepeticao: [],
@@ -58,7 +58,7 @@ function encontrarLabelPai(parentId: string | undefined, opcoesSecaoPai: OpcaoSe
   return opcoesSecaoPai.find(opcao => opcao.value === parentId)?.label || null;
 }
 
-export function getConfiguracaoTemplateExame(tipoExameCodigo?: string): ConfiguracaoTemplateExame {
+function getConfiguracaoTemplateExame(tipoExameCodigo?: string): ConfiguracaoTemplateExame {
   if (!tipoExameCodigo) return CONFIGURACAO_PADRAO;
   return CONFIGURACOES_POR_EXAME[tipoExameCodigo] || CONFIGURACAO_PADRAO;
 }
@@ -67,7 +67,7 @@ export function getOpcoesRepeticaoTemplate(tipoExameCodigo?: string) {
   return getConfiguracaoTemplateExame(tipoExameCodigo).opcoesRepeticao;
 }
 
-export function suportaRepeticaoPorArma(tipoExameCodigo?: string): boolean {
+function suportaRepeticaoPorArma(tipoExameCodigo?: string): boolean {
   return getOpcoesRepeticaoTemplate(tipoExameCodigo).some(opcao => opcao.value === 'armas');
 }
 
@@ -76,7 +76,7 @@ export function getTituloPadraoRepeticao(secao: Pick<SecaoTemplateEstrutural, 'r
   return getConfiguracaoTemplateExame(tipoExameCodigo).tituloPadraoArmas || '';
 }
 
-export function getLabelVisibilidade(condicao: string | undefined, toggles: ToggleTemplateOption[] = []): string {
+function getLabelVisibilidade(condicao: string | undefined, toggles: ToggleTemplateOption[] = []): string {
   if (!condicao) return 'Sempre mostrar';
 
   try {
@@ -90,12 +90,12 @@ export function getLabelVisibilidade(condicao: string | undefined, toggles: Togg
   return 'Mostrar conforme condição configurada';
 }
 
-export function getLabelEstrutura(secao: Pick<SecaoTemplateEstrutural, 'parent_id'>, opcoesSecaoPai: OpcaoSecaoPai[]): string {
+function getLabelEstrutura(secao: Pick<SecaoTemplateEstrutural, 'parent_id'>, opcoesSecaoPai: OpcaoSecaoPai[]): string {
   const labelPai = encontrarLabelPai(secao.parent_id, opcoesSecaoPai);
   return labelPai ? `Subseção de ${labelPai}` : 'Seção principal';
 }
 
-export function getLabelRepeticao(secao: Pick<SecaoTemplateEstrutural, 'repetir_para'>): string {
+function getLabelRepeticao(secao: Pick<SecaoTemplateEstrutural, 'repetir_para'>): string {
   if (secao.repetir_para === 'armas') return 'Uma seção por arma';
   return 'Conteúdo único';
 }

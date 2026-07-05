@@ -70,7 +70,7 @@ export function flattenTree(tree: CategoriaFull[]): CategoriaFull[] {
   return result;
 }
 
-export function getDescendantIds(tree: CategoriaFull[], id: string): Set<string> {
+function getDescendantIds(tree: CategoriaFull[], id: string): Set<string> {
   const node = findCat(tree, id);
   if (!node) return new Set();
   const ids = new Set<string>();

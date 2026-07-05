@@ -1,6 +1,7 @@
 # Auditoria Knip Observacional - 03/07/2026
 
-> **Status:** linha de base registrada e primeira rodada de triagem concluida.
+> **Status:** linha de base registrada e frente observacional concluida com
+> relatorio zerado.
 > Knip ainda nao e gate de CI, lint ou build.
 
 ## Contexto
@@ -207,8 +208,95 @@ Validacao da rodada:
 
 ## Proxima Prioridade
 
-O proximo passo agora ficou concentrado no renderer/shared:
+## Resultado da Terceira Rodada de Triagem - 05/07/2026
 
-1. revisar helpers/utilitarios exportados do renderer/shared
-2. revisar validadores e tipos de parser ainda exportados sem consumidor
-3. tratar componentes `ui`/shadcn por ultimo, pois podem ser estoque publico intencional
+Comandos executados:
+
+```bash
+npm run type-check
+npm run lint
+npm test
+npm run knip -- --no-exit-code
+```
+
+Resultado observado apos a rodada:
+
+| Categoria | Antes da rodada 3 | Depois da rodada 3 | Leitura atual |
+|---|---:|---:|---|
+| Arquivos nao usados | 0 | 0 | sem mudanca |
+| Dependencias nao usadas | 0 | 0 | sem mudanca |
+| DevDependencies nao usadas | 0 | 0 | sem mudanca |
+| Exports nao usados | 57 | 41 | queda puxada por limpeza de `renderer/shared` |
+| Tipos exportados nao usados | 15 | 3 | remanescente ficou concentrado em `ui` |
+| Exports duplicados | 0 | 0 | sem mudanca |
+
+Escopo limpo nesta rodada:
+
+- exports sem consumidor em `forms`
+- exports/tipos sem consumidor em `exam-fields`
+- utilitarios de configuracao de template
+- `tree-utils`
+- parser de exportacao do renderer
+- schemas de validacao sem consumidor externo
+- helpers internos remanescentes de `secao-builder.service.ts`
+
+Validacao da rodada:
+
+- `npm run type-check` OK
+- `npm run lint` OK
+- `npm test` OK com `43` passando e `1` skip
+- `npm run knip -- --no-exit-code` com `41` exports e `3` tipos exportados restantes
+
+## Resultado da Quarta Rodada de Triagem - 05/07/2026
+
+Comandos executados:
+
+```bash
+npm run type-check
+npm run lint
+npm test
+npm run knip -- --no-exit-code
+```
+
+Resultado observado apos a rodada:
+
+| Categoria | Antes da rodada 4 | Depois da rodada 4 | Leitura atual |
+|---|---:|---:|---|
+| Arquivos nao usados | 0 | 0 | sem mudanca |
+| Dependencias nao usadas | 0 | 0 | sem mudanca |
+| DevDependencies nao usadas | 0 | 0 | sem mudanca |
+| Exports nao usados | 41 | 0 | relatorio zerado |
+| Tipos exportados nao usados | 3 | 0 | relatorio zerado |
+| Exports duplicados | 0 | 0 | sem mudanca |
+
+Escopo limpo nesta rodada:
+
+- exports remanescentes de `src/renderer/components/ui/**`
+- tipos publicos de `badge`, `button` e `textarea`
+- aliases locais que ficaram sem uso apos a reducao de exports
+
+Validacao da rodada:
+
+- `npm run type-check` OK
+- `npm run lint` OK
+- `npm test` OK com `43` passando e `1` skip
+- `npm run knip -- --no-exit-code` sem apontamentos
+
+## Estado Atual
+
+O Knip permanece em modo observacional, mas a trilha iniciada nesta issue saiu
+da fase de baseline e chegou a um estado limpo no repositório:
+
+1. dependencias/devDependencies ociosas zeradas
+2. duplicatas de export zeradas
+3. exports nao usados zerados
+4. tipos exportados nao usados zerados
+
+## Proxima Prioridade
+
+O proximo passo deixou de ser limpeza estrutural imediata e passou a ser
+decisao de estrategia:
+
+1. registrar o estado zerado no painel de saude do sistema
+2. decidir separadamente se Knip continua apenas observacional ou se entra em gate futuro
+3. se houver nova rodada, tratar apenas regressao nova em vez de nova limpeza ampla

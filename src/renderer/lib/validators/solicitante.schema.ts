@@ -4,7 +4,7 @@ import { z } from "zod"
  * Schema de validação para entidade Solicitante
  * Tabela: solicitantes
  */
-export const solicitanteSchema = z.object({
+const solicitanteSchema = z.object({
   id: z.string().uuid("ID deve ser um UUID válido"),
   nome: z.string()
     .min(2, "Nome deve ter pelo menos 2 caracteres")

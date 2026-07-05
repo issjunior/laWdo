@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-export const repSchema = z.object({
+const repSchema = z.object({
   id: z.string().uuid(),
   numero: z.string().min(1, "Número da REP é obrigatório").max(30).regex(/^(\d{1,3}|\d{1,3}\.\d{3})-\d{4}$/, "Formato inválido. Use entre 1-AAAA e 000.000-AAAA"),
   solicitante_id: z.string().uuid().nullable().optional(),

@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Schema de validação para entidade Placeholder
  * Tabela: placeholders (alinhado com schema SQL)
  */
-export const placeholderSchema = z.object({
+const placeholderSchema = z.object({
   id: z.string(),
   chave: z.string()
     .min(1, 'Chave é obrigatória')
