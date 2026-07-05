@@ -1,140 +1,89 @@
-# Fluxo `/spec` — Skill e Scripts de Auditoria/Registro
+# Fluxo atual de `/spec`
 
-## Visão geral
+## Comandos do `package.json`
 
-O projeto mantém `spec/` como documentação do comportamento atual. O fluxo `/spec` existe para auditar impacto de mudanças no código e registrar atualizações aprovadas sem transformar a pasta em histórico de alterações.
+O estado atual exposto em `package.json` e:
 
-A automação combina:
-
-- a skill local em `.agents/skills/spec/SKILL.md`
-- os scripts `scripts/spec/auditar.mjs`, `scripts/spec/registrar.mjs`, `scripts/spec/index.mjs` e `scripts/spec/lib.mjs`
-- o manifesto `spec/09 automacao-spec/manifesto.json`
-- a área temporária `.codex/spec/`
-
-## Objetivo do fluxo
-
-O fluxo separa duas etapas:
-
-- **auditar**: descobrir quais specs de `estado_atual` foram impactados pelas mudanças analisadas
-- **registrar**: aplicar em `spec/` apenas um plano explícito, com conteúdo final já aprovado
-
-`spec/` não deve funcionar como changelog. O texto gravado deve descrever apenas como o sistema funciona agora.
-
-## Comandos disponíveis
-
-| Comando | Papel |
+| Comando | Implementacao |
 |---|---|
-| `npm run spec` | atalho para a auditoria padrão baseada no diff atual mais o último commit |
-| `npm run spec:auditar` | gera o relatório `/spec` e os artefatos temporários da auditoria |
-| `npm run spec:registrar` | aplica um plano aprovado de escrita em `spec/` |
+| `npm run spec` | `node scripts/spec/index.mjs` |
+| `npm run spec:auditar` | `node scripts/spec/auditar.mjs` |
+| `npm run spec:registrar` | `node scripts/spec/registrar.mjs` |
 
-## Modos de auditoria
+O fluxo continua apoiado em:
 
-A skill roda `npm run spec:auditar -- --modo recente` por padrão. Quando o usuário pedir outro escopo, a auditoria aceita:
+- `.agents/skills/spec/SKILL.md`
+- `scripts/spec/auditar.mjs`
+- `scripts/spec/registrar.mjs`
+- `scripts/spec/lib.mjs`
+- `spec/09 automacao-spec/manifesto.json`
 
-- recente: `npm run spec:auditar -- --modo recente`
-- diff atual: `npm run spec:auditar -- --modo diff`
-- último commit: `npm run spec:auditar -- --modo ultimo-commit`
-- total: `npm run spec:auditar -- --modo total`
-- focado: `npm run spec:auditar -- --modo focado --alvo "<subdiretorio>"`
+## Auditoria
 
-O modo `recente` combina os arquivos não commitados do worktree com os arquivos alterados em `HEAD~1..HEAD`, removendo duplicidades antes do mapeamento por globs. O modo `diff` preserva a auditoria estrita contra o `HEAD`; o modo `ultimo-commit` audita apenas o último commit já gravado.
+`executarAuditoria()` em `lib.mjs`:
 
-O script filtra artefatos irrelevantes como `.codex/`, `dist/`, `build/`, `release/`, `node_modules/` e também ignora specs já existentes, exceto `spec/09 automacao-spec/manifesto.json`.
+1. carrega o manifesto
+2. resolve a base de arquivos pelo modo escolhido
+3. filtra ruido (`.codex/`, `dist/`, `build/`, `node_modules/`, `graphify-out/`, specs existentes etc.)
+4. cruza os arquivos com os globs dos specs de `estado_atual`
+5. produz:
+   - `specsQuePrecisam`
+   - `specsSemMudanca`
+   - `sugestoesNovoSpec`
+   - `avisos`
 
-## Manifesto e cobertura
+Modos atuais:
 
-`spec/09 automacao-spec/manifesto.json` é a fonte de verdade da automação. Ele define:
+- `diff`
+- `ultimo-commit`
+- `recente`
+- `total`
+- `focado`
 
-- quais specs existem
-- o tipo de cada spec
-- os globs de código cobertos por cada arquivo
-- os grupos usados para sugerir novos specs
-- os caminhos dos artefatos temporários do fluxo
+`recente` continua sendo o modo padrao da skill.
 
-Na automação padrão, apenas specs com tipo `estado_atual` entram na auditoria e no registro.
+## Artefatos operacionais
 
-## Artefatos temporários
+Gerados em `.codex/spec/`:
 
-`.codex/spec/` é uma área operacional temporária. A documentação oficial continua sendo apenas o conteúdo sob `spec/`.
+- `ultima-auditoria.json`
+- `ultimo-relatorio.md`
+- `plano-registrar.json`
 
-Rascunhos de conteúdo final não devem ser materializados como arquivos Markdown fora de `spec/`. Em `.codex/spec/`, a automação deve manter apenas os artefatos operacionais previstos pelo fluxo.
+O relatorio markdown ja sai no formato `/spec` exigido pelo projeto.
 
-Arquivos usados no fluxo:
+## Registro
 
-| Arquivo | Papel |
-|---|---|
-| `.codex/spec/ultima-auditoria.json` | resultado estruturado da última auditoria |
-| `.codex/spec/ultimo-relatorio.md` | relatório em Markdown no formato `/spec` |
-| `.codex/spec/plano-registrar.json` | plano aprovado com o conteúdo final a ser gravado |
+`executarRegistro()` em `lib.mjs`:
 
-Fora esses artefatos, a skill não deve criar novos `.md` temporários em `.codex/spec/` nem em qualquer outro diretório fora de `spec/`.
+1. le o plano JSON
+2. valida se `instrucoes` existe e nao esta vazia
+3. compara `headAuditado` com o `HEAD` atual
+4. rejeita qualquer caminho fora de `spec/`
+5. escreve apenas arquivos cujo conteudo mudou
 
-## Papel da skill `/spec`
+Saidas contabilizadas:
 
-A skill orquestra a conversa e o uso dos scripts neste fluxo:
+- `criados`
+- `atualizados`
+- `inalterados`
 
-1. roda `npm run spec:auditar -- --modo recente`
-2. lê `.codex/spec/ultimo-relatorio.md` e `.codex/spec/ultima-auditoria.json`
-3. apresenta o relatório no formato definido em `AGENTS.md`
-4. se não houver mudança relevante, informa isso em uma linha e encerra
-5. se houver impacto, espera aprovação humana antes de montar o plano
-6. após aprovação, grava `.codex/spec/plano-registrar.json`, sem criar arquivos `.md` temporários com o conteúdo final
-7. roda `npm run spec:registrar`
-8. informa o resultado com arquivos criados, atualizados ou mantidos inalterados
+## Comportamento relevante do registro
 
-## Aprovação humana
+Pontos praticos do estado atual:
 
-A skill não deve gravar nada em `spec/` antes da aprovação do usuário.
+- o campo `acao` do plano nao controla a escrita; o registro deriva `criado` vs `atualizado` comparando o filesystem
+- se o conteudo final for identico ao arquivo atual, o item entra como `inalterado`
+- todo conteudo e normalizado para terminar com quebra de linha
 
-Quando a auditoria encontra impacto, a resposta precisa separar:
+## Papel da skill
 
-- specs que precisam de atualização
-- specs sem alterações necessárias
-- sugestão de novo spec, quando houver
+A skill continua com a responsabilidade de conversa:
 
-A recomendação é sempre preferir atualizar um spec existente antes de propor um novo arquivo.
+1. rodar `spec:auditar`
+2. apresentar o relatorio
+3. esperar aprovacao humana
+4. montar `plano-registrar.json`
+5. rodar `spec:registrar`
 
-## Contrato do plano de registro
-
-`spec:registrar` espera um JSON com este formato:
-
-```json
-{
-  "headAuditado": "abcdef123456",
-  "instrucoes": [
-    {
-      "acao": "atualizar",
-      "arquivo": "spec/03 laudo/menu_contexto.md",
-      "conteudo": "# Conteudo final..."
-    }
-  ]
-}
-```
-
-Regras do registro:
-
-- apenas caminhos sob `spec/` são aceitos
-- o `HEAD` atual precisa bater com `headAuditado`
-- se o `HEAD` divergir, é obrigatório rodar nova auditoria antes de registrar
-- se o conteúdo final for igual ao já existente, o arquivo é marcado como `inalterado`
-
-
-## Integração com `AGENTS.md`
-
-`AGENTS.md` é o guia operacional lido pelos agentes antes de alterar o projeto. Ele lista os comandos essenciais, as regras de validação e as referências de spec que devem ser consultadas durante manutenção.
-
-A tabela de comandos do `AGENTS.md` deve refletir o estado atual dos gates de qualidade. No estado atual, `npm run test:coverage` roda o Vitest com cobertura e usa o gate progressivo definido em `vitest.config.ts`, não um percentual global fixo documentado fora da configuração.
-
-## Relatório `/spec`
-
-O relatório gerado por `spec:auditar` segue o formato exigido em `AGENTS.md`:
-
-- modo da auditoria
-- modelo IA
-- base de arquivos analisados
-- specs que precisam de atualização
-- specs sem alterações necessárias
-- sugestão de novo spec
-
-Se `graphify-out/GRAPH_REPORT.md` estiver ausente ou desatualizado em relação ao `HEAD`, a auditoria registra apenas um aviso e prossegue normalmente.
+Ela nao deve escrever markdown temporario fora de `spec/`, nem pular a verificacao de `HEAD`.

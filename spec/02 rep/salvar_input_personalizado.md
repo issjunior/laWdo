@@ -1,150 +1,103 @@
-# Salvar e Recuperar Inputs Personalizados (REP B-602 e outros)
+# Persistencia dos campos especificos da REP
 
-## Problema
+## Visao geral
 
-Ao criar ou editar uma REP (Requisição de Exame Pericial), os campos dinâmicos dos tipos de exame — como Cartuchos, Estojos e Material Encaminhado do B-602 — não eram salvos ou recuperados corretamente.
+O estado atual separa os dados da REP em dois grupos:
 
-**Sintomas:**
+- colunas nativas da tabela `reps`
+- JSON de `campos_especificos`
 
-| Bloco | Salvamento | Edição (recuperação) |
-|-------|-----------|----------------------|
-| Dados da Solicitação | OK | OK |
-| Envolvidos (0-9) | OK | OK (só o primeiro visível) |
-| Material Encaminhado | Salvava com defaults (`Arma`, `Pistola`, `01`) | Exibia defaults, não os valores originais |
-| Cartuchos | Salvava strings vazias | Toggle ligado mas todos campos em branco |
-| Estojos | Salvava strings vazias | Toggle ligado mas todos campos em branco |
+O renderer decide para qual grupo cada valor vai antes do envio ao IPC.
 
-Efeito colateral no **Stepper**: passos sem `requiredFields` (Material Encaminhado, Cartuchos, Estojos) nunca apareciam como concluídos no stepper lateral, mesmo sem campos obrigatórios para validar.
+## Onde a logica mora
 
----
+O ponto central e `src/renderer/components/rep/exam-fields/index.ts`.
 
-## Causa Raiz
-
-### Causa 1: Zod `.strip()` removendo campos não declarados
-
-**Arquivo:** `src/renderer/pages/REPsPage.tsx` ~linha 280
-
-O schema de validação do formulário (`repFormSchema`) declara explicitamente apenas os campos fixos da REP e os toggles:
+Funcoes publicas:
 
 ```ts
-z.object({
-  numero: z.string().min(1),
-  b602_envolvidos_0: z.string().optional(),
-  b602_cartuchos_toggle: z.string().optional(),
-  b602_estojos_toggle: z.string().optional(),
-  // ...
-}).superRefine((data, ctx) => { ... })
+serializeCamposEspecificos(codigo, data)
+deserializeCamposEspecificos(codigo, json)
 ```
 
-Campos com nomes dinâmicos indexados **não** estão declarados:
+## Regras atuais de serializacao
 
-- `b602_cartuchos_0_calibre`
-- `b602_cartuchos_0_quantidade`
-- `b602_material_enc_0_natureza`
-- `b602_estojos_0_calibre`
-- etc.
+### Exames com service
 
-O Zod, por padrão, aplica `.strip()` ao objeto — qualquer campo não listado no schema é **removido silenciosamente** durante o `parse()`.
+Hoje dois codigos usam service dedicado:
 
-O fluxo do problema:
+- `I-801`
+- `B-602`
 
-```
-Usuário preenche o form
-  → React Hook Form tem campos como b602_cartuchos_0_calibre = ".380 AUTO"
-  → form.handleSubmit chama zodResolver
-  → zodResolver faz schema.parse(data)
-  → Zod strip remove b602_cartuchos_0_calibre (não declarado)
-  → data chega ao serialize sem os campos indexados
-  → b602Service.serialize lê valores vazios/undefined
-  → Material Encaminhado: fieldDefaults preenchem com 'Arma', 'Pistola', '01'
-  → Cartuchos/Estojos: salvos como strings vazias
-  → Na edição, deserialize restaura toggle='on' mas campos vazios
-```
+Fluxo:
 
-### Causa 2: Stepper ignorando passos sem `requiredFields`
+1. o codigo do tipo de exame resolve um service em `EXAM_SERVICE_REGISTRY`
+2. o helper copia `data` para `dataWithDefaults`
+3. aplica `fieldDefaults` quando houver campo vazio
+4. chama `service.serialize(...)`
+5. persiste `JSON.stringify(...)`
 
-**Arquivo:** `src/renderer/components/rep/useRepStepper.ts` ~linha 56
+### Exames sem service
 
-```ts
-const checkStep = (requiredFields: string[], stepId: string) => {
-  if (requiredFields.length === 0) return; // ← retorna sem adicionar ao Set
-  // ...
-  if (allFilled) completed.add(stepId);
-};
-```
+`LOC` nao grava `campos_especificos`.
+Os campos de local e acionamento continuam em colunas nativas da REP.
 
-Passos como `section-cartuchos`, `section-estojos`, `section-material_enc` têm `requiredFields: []`. A função retornava imediatamente sem adicioná-los a `completedSteps`, fazendo-os aparecer como "não concluídos" permanentemente.
+## Regras atuais de leitura
 
-### Causa 3: `form.reset()` não espalhava `campos_especificos` completos
+`deserializeCamposEspecificos(codigo, json)` segue este comportamento:
 
-**Arquivo:** `src/renderer/pages/REPsPage.tsx` ~linha 533
+- sem JSON -> retorna `{}`
+- sem service -> retorna `{}`
+- JSON invalido -> retorna `{}`
+- JSON valido -> delega para `service.deserialize(...)`
 
-O `handleEditar` restaurava manualmente apenas os campos de numeração (`numeracao_veiculo`, `numeracao_placa`, etc.), ignorando todos os campos B-602 retornados por `deserializeCamposEspecificos`.
+Isso evita quebrar a edicao de REPs antigas quando o payload esta incompleto ou malformado.
 
----
+## Papel do `REPFormData`
 
-## Soluções Aplicadas
+`REPFormData` usa assinatura indexada (`[key: string]: string`) para acomodar nomes dinamicos.
 
-### 1. Adicionar `.passthrough()` ao schema Zod
+Isso permite restaurar diretamente campos como:
 
-**Arquivo:** `src/renderer/pages/REPsPage.tsx:280`
+- `b602_envolvidos_0`
+- `b602_local_uf`
+- `b602_armas_toggle`
 
-```diff
-- }).superRefine((data, ctx) => {
-+ }).passthrough().superRefine((data, ctx) => {
-```
+sem precisar criar um tipo fechado por linha do formulario.
 
-`.passthrough()` instrui o Zod a **manter** campos desconhecidos no objeto de saída, em vez de removê-los. Campos dinâmicos como `b602_cartuchos_0_calibre` agora passam intactos pelo `zodResolver` até o `serialize`.
+## Papel do `rep.service.ts`
 
-> **Importante:** `.passthrough()` deve vir **antes** de `.superRefine()` para que o `superRefine` também tenha acesso aos campos dinâmicos, caso futuramente seja necessário validá-los condicionalmente.
+`src/main/services/rep.service.ts` nao conhece a estrutura interna de `campos_especificos`.
+O service trabalha no nivel da linha persistida:
 
-### 2. Corrigir stepper para passos sem campos obrigatórios
+- `findAllOrdered()`
+- `findByStatus(status)`
+- `findByNumero(numero)`
+- `updateStatus(id, status)`
 
-**Arquivo:** `src/renderer/components/rep/useRepStepper.ts:56`
+Toda a montagem e desmontagem do JSON segue no renderer e nos handlers de REP.
 
-```diff
-- if (requiredFields.length === 0) return;
-+ if (requiredFields.length === 0) { completed.add(stepId); return; }
-```
+## B-602
 
-Passos sem `requiredFields` são considerados automaticamente concluídos. Isso é semanticamente correto: se não há nada para validar, o passo está completo.
+No estado atual, o B-602 e o caso mais completo de persistencia:
 
-### 3. Espalhar `especificos` no `form.reset()`
+- listas (`envolvidos`, `material_enc`, `cartuchos`, `estojos`, `armas`)
+- toggles de colecao
+- toggles por arma (`func_toggle`, `coleta_toggle`)
+- local quebrado em `bairro`, `cidade`, `uf`
 
-**Arquivo:** `src/renderer/pages/REPsPage.tsx:533-535`
+Esse conjunto e serializado sob a chave `b602` no JSON.
 
-```diff
-  form.reset({
-    ...emptyForm(),
-+   ...especificos,
-    numero: rep.numero,
-```
+## I-801
 
-Removeu também 9 linhas redundantes que copiavam manualmente `numeracao_*` do objeto `especificos`, já cobertas pelo spread.
+O I-801 usa o mesmo pipeline, mas com payload menor e focado em numeracao.
+Ele continua sendo a referencia de exame com poucos campos, enquanto o B-602 cobre o caso de multiplas linhas e grupos.
 
----
+## Regra pratica de manutencao
 
-## Impacto para Novos Tipos de Exame
+Quando um campo especifico novo nao esta salvando ou restaurando:
 
-O uso de `.passthrough()` no schema Zod é a abordagem **genérica** correta. Qualquer novo tipo de exame cadastrado com campos personalizados indexados (`B-999_0_campo`, `X-001_5_atributo`, etc.) será salvo e recuperado corretamente, desde que:
-
-1. O `ExamService` correspondente declare `serialize` → `deserialize` simétricos
-2. Os nomes dos campos no formulário sigam a convenção de prefixo (`prefixo_tipo_índice_sufixo`)
-3. O `EXAM_SERVICE_REGISTRY` e `EXAM_FIELD_MAP` estejam configurados para o código do exame
-
-Não é necessário declarar cada campo indexado no schema Zod — `.passthrough()` garante a passagem.
-
----
-
-## Arquivos Alterados
-
-| Arquivo | Mudança | Linha |
-|---------|---------|-------|
-| `src/renderer/pages/REPsPage.tsx` | Adicionado `...especificos` ao `form.reset()` | 535 |
-| `src/renderer/pages/REPsPage.tsx` | Removidas 9 linhas redundantes de `numeracao_*` | — |
-| `src/renderer/pages/REPsPage.tsx` | Adicionado `.passthrough()` ao schema Zod | 280 |
-| `src/renderer/components/rep/useRepStepper.ts` | Corrigido `checkStep` para passos sem requiredFields | 56 |
-
-## Data
-
-2026-06-09
+1. verificar se o codigo do exame esta em `EXAM_SERVICE_REGISTRY`
+2. conferir `serialize()` e `deserialize()` do service
+3. confirmar se o nome do campo no formulario bate com a chave que o service espera
+4. validar se o exame deveria usar JSON ou coluna nativa

@@ -1,45 +1,29 @@
-# Dashboard Operacional
+# Dashboard operacional
 
-## Resumo
+## Papel da pagina
 
-A dashboard deixou de ser placeholder e hoje é a home operacional carregada na rota `/`.
-Ela combina agregações do banco no `main`, contratos tipados no `preload` e uma página única no `renderer` que concentra fetch, normalização defensiva, layout responsivo e subcomponentes locais.
+`src/renderer/pages/DashboardPage.tsx` e hoje a home operacional da aplicacao.
+Ela combina:
 
-A feature cobre:
+- resumo carregado no mount
+- layout adaptativo por viewport
+- subcomponentes locais na propria pagina
+- projecoes carregadas sob demanda
 
-- KPIs de REPs e laudos
-- alertas de prazo
-- listas de REPs recentes e laudos recentes
-- tempo médio de ciclo por tipo de exame
-- projeções mensais e anuais abertas sob demanda em modal
+## Contratos consumidos
 
-## Arquivos principais
+O renderer fala com:
 
-```text
-src/renderer/pages/DashboardPage.tsx
-src/main/services/dashboard.service.ts
-src/main/ipc/handlers/dashboard.handlers.ts
-src/main/ipc/index.ts
-src/preload/index.ts
-src/preload/types.ts
-src/types/dashboard.d.ts
-src/renderer/App.tsx
-src/renderer/lib/menu-config.ts
-src/__tests__/main/dashboard.service.test.ts
-src/__tests__/pages/dashboard-page.test.tsx
-```
+- `window.ipcAPI.dashboard.resumo()`
+- `window.ipcAPI.dashboard.projecoes()`
 
-## Entrada da feature
+E trata as respostas como fronteira insegura, normalizando payloads com helpers locais antes de alimentar estado tipado.
 
-- a rota `/` renderiza `DashboardPage` via lazy loading em `src/renderer/App.tsx`
-- o item `Dashboard` é a primeira entrada do menu lateral em `src/renderer/lib/menu-config.ts`
-- a página usa `window.ipcAPI.dashboard` para buscar resumo e projeções
+## Estruturas principais
 
-## Contratos entre camadas
+### Resumo
 
-### `DashboardResumo`
-
-O resumo carregado no mount da página contém:
+O resumo inclui:
 
 - `repsPorStatus`
 - `repsPrazoProximo`
@@ -49,9 +33,9 @@ O resumo carregado no mount da página contém:
 - `repsRecentes`
 - `laudosRecentes`
 
-### `DashboardProjecoes`
+### Projecoes
 
-O modal de projeções consome:
+As projecoes incluem:
 
 - `historicoMensal`
 - `resumoAnual`
@@ -60,226 +44,90 @@ O modal de projeções consome:
 - `baseHistoricaAnalisada`
 - `indicadorConfiabilidade`
 
-### Resposta IPC
+## Modos de layout
 
-Os canais retornam o envelope:
+`DashboardPage` calcula um modo interno:
 
-```ts
-interface DashboardResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-}
-```
-
-No renderer, a resposta é tratada como fronteira insegura: a página normaliza payloads com `unknown`, descarta itens malformados e aplica fallbacks antes de alimentar estado tipado.
-
-## Comportamento visual da tela
-
-### Cabeçalho
-
-O topo mostra:
-
-- selo `Painel operacional`
-- saudação contextual por horário
-- nome lido de `sessionStorage` na chave `lawdo_auth_user`
-- fallback `Perito` quando não existe nome válido
-- botão manual de atualização
-- botão `Projeções`
-
-A leitura do usuário aceita tanto `nome` quanto `name` no objeto persistido da sessão.
-
-### KPIs
-
-Os KPIs são montados a partir de uma régua fixa de status.
-
-REPs:
-
-- `Pendente`
-- `Em Andamento`
-- `Concluído`
-
-Laudos:
-
-- `Em andamento`
-- `Concluído`
-- `Entregue`
-
-O backend completa status ausentes com `0`, então a UI não depende de o banco retornar todas as combinações.
-
-### Alertas de prazo
-
-Os cards de prazo usam:
-
-- `repsPrazoProximo`
-- `repsPrazoVencido`
+- `compacto`
+- `padrao`
+- `amplo`
 
 Regras atuais:
 
-- `Prazo próximo`: REPs com status `Pendente` ou `Em Andamento` e prazo entre hoje e os próximos 7 dias
-- `Prazo vencido`: REPs com status `Pendente` ou `Em Andamento` e prazo anterior a hoje
+- `amplo`: largura >= `1680` e altura >= `920`
+- `compacto`: largura < `1360` ou altura < `860`
+- restante: `padrao`
 
-Se ambos os totais forem zero, o bloco não é renderizado.
+Esse modo muda principalmente:
 
-### Recentes
+- densidade visual
+- quantidade de itens recentes
+- quantidade de linhas em tempo medio
 
-A dashboard exibe duas listas independentes:
+## Estados de tela
 
-- REPs recentes
-- laudos recentes
+Estados visuais atuais:
 
-As duas listas:
+- `DashboardSkeleton`
+- `DashboardErro`
+- `DashboardVazio`
 
-- são ordenadas por `updated_at DESC` no backend
-- exibem status, identificação principal e data relativa
-- navegam para `/reps` ou `/laudos` ao clique
-- não fazem deep-link para item específico nesta versão
+Quando ha dados, os blocos principais ainda passam por `ErrorBoundary`, entao uma falha localizada nao derruba toda a home.
 
-### Tempo médio de ciclo
+## Projecoes no estado atual
 
-O bloco `Tempo médio de ciclo` usa apenas laudos com:
+As projecoes nao abrem mais em modal.
+Elas ficam em um `Collapsible` dentro da propria pagina (`CardProjecoes`).
 
-- `data_inicio` preenchida
-- `data_conclusao` preenchida
-- intervalo válido (`data_conclusao >= data_inicio`)
+Comportamento:
 
-A média é exibida em dias, com uma casa decimal quando necessário.
+1. o estado `projecoesExpandidas` e persistido em `localStorage` na chave `dashboard_projecoes_expandido`
+2. o fetch de projecoes so dispara na primeira expansao
+3. enquanto a pagina permanecer montada, o resultado fica em cache local
 
-### Estados visuais e resiliência
+## Atualizacao dos dados
 
-A página tem três estados principais:
+O resumo e recarregado quando:
 
-- `DashboardSkeleton` durante o carregamento inicial
-- `DashboardErro` quando o resumo falha antes do primeiro dado válido
-- `DashboardVazio` quando não há indicadores, recentes nem tempo médio calculável
+- a pagina monta
+- a janela volta a ter foco
+- o documento fica visivel de novo
+- o usuario aciona a atualizacao manual
 
-Os blocos principais são encapsulados por `ErrorBoundary`, então uma falha localizada não derruba a tela inteira.
+Nao existe polling por intervalo.
 
-## Atualização dos dados
+## Blocos principais
 
-### Resumo
+Os blocos exibidos hoje sao:
 
-O resumo é recarregado:
-
-- no mount da página
-- quando a rota da página é renderizada novamente
-- quando a janela recupera foco
-- quando o documento volta a ficar visível
-- quando o usuário clica em atualizar
-
-Não existe polling por intervalo.
-
-### Projeções
-
-As projeções são lazy-loaded:
-
-- o fetch só começa na primeira abertura do modal
-- o resultado fica em estado local da página
-- aberturas seguintes reutilizam o cache enquanto a página permanecer montada
-
-## Responsividade
-
-A página calcula um modo de layout interno com base em `window.innerWidth` e `window.innerHeight`.
-
-Regras atuais:
-
-- `compacto`: largura menor que `1360` ou altura menor que `860`
-- `amplo`: largura maior ou igual a `1680` e altura maior ou igual a `920`
-- `padrao`: qualquer cenário intermediário
-
-Esse modo altera principalmente:
-
-- densidade dos cards
-- quantidade de itens exibidos nas listas recentes
-- quantidade de linhas mostradas em `Tempo médio de ciclo`
-
-Limites atuais:
-
-- recentes: `2` no compacto, `3` no padrão, `4` no amplo
-- tempo médio: `3` no compacto, `4` no padrão, `6` no amplo
+- `KpiCards`
+- `AlertaPrazo`
+- `RepsRecentes`
+- `LaudosRecentes`
+- `TempoMedioCiclo`
+- `CardProjecoes`
 
 ## Backend
 
-### `dashboard:resumo`
+`DashboardService` continua dividindo a carga em dois metodos:
 
-`DashboardService.obterResumo()` consolida em paralelo:
+- `obterResumo()`
+- `obterProjecoes()`
 
-- contagem de REPs por status
-- total de REPs com prazo próximo
-- total de REPs com prazo vencido
-- contagem de laudos por status
-- tempo médio de ciclo por tipo de exame
-- até 6 REPs recentes
-- até 6 laudos recentes
+O resumo agrega em paralelo dados de status, prazos, recentes e tempo medio.
+As projecoes usam laudos concluidos e montam:
 
-Consultas relevantes:
+- serie mensal observada
+- consolidado anual
+- estimativa mensal
+- estimativa anual
+- indicador textual de confiabilidade
 
-- agrupamentos por status feitos em SQL
-- prazos calculados com `date('now', 'localtime')`
-- tempo médio calculado com `julianday(data_conclusao) - julianday(data_inicio)`
-- tipos de exame resolvidos com `LEFT JOIN` para manter fallback textual
+## Regra pratica
 
-### `dashboard:projecoes`
+Qualquer manutencao na dashboard precisa distinguir duas coisas:
 
-`DashboardService.obterProjecoes()` usa apenas laudos com `data_conclusao`.
+1. o contrato vindo do main
+2. a normalizacao defensiva feita no renderer
 
-Fluxo atual:
-
-1. agrupa laudos concluídos por mês
-2. monta o histórico mensal observado
-3. completa meses faltantes entre o primeiro e o último mês com zero
-4. resume a série por ano
-5. calcula confiabilidade da base histórica
-6. estima projeções pela média da janela final
-
-### Critério de projeção
-
-A projeção usa a média dos últimos até 6 meses da série completa.
-
-Saídas:
-
-- `projecaoMensalEstimada`
-- `projecaoAnualEstimada`
-
-Se não houver histórico, ambas retornam `null`.
-
-### Critério de confiabilidade
-
-A régua atual é:
-
-- `alta`: pelo menos 12 meses com dados e cobertura histórica >= 85%
-- `moderada`: pelo menos 6 meses com dados, pelo menos 9 meses históricos e cobertura >= 70%
-- `baixa`: pelo menos 3 meses com dados e cobertura >= 45%, ainda com `dadosInsuficientes: true`
-- `insuficiente`: qualquer cenário abaixo disso
-
-A mensagem já sai pronta do backend e a UI apenas apresenta o texto.
-
-## Canais IPC
-
-Os canais expostos são:
-
-- `dashboard:resumo`
-- `dashboard:projecoes`
-
-Eles aparecem em conjunto em:
-
-- `src/main/ipc/handlers/dashboard.handlers.ts`
-- `src/main/ipc/index.ts`
-- `src/preload/index.ts`
-- `src/preload/types.ts`
-
-## Testes e estado atual
-
-Cobertura existente:
-
-- `src/__tests__/main/dashboard.service.test.ts`
-- `src/__tests__/pages/dashboard-page.test.tsx`
-
-Como estado atual do repositório em `03/07/2026`:
-
-- os testes da página da dashboard passam
-- a suíte do service também passa com o contrato atual do resumo
-- a fixture do service agora mocka separadamente `repsRecentes` e `laudosRecentes`, acompanhando a ordem real das consultas em `DashboardService.obterResumo()`
-- a cobertura automatizada da feature está verde
-
-Essa correção foi de suíte/fixture; o contrato funcional da dashboard permaneceu o mesmo.
+Grande parte da resiliencia da pagina depende dessa segunda camada, nao apenas das queries do backend.
