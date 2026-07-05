@@ -5,7 +5,7 @@ import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { randomUUID } from 'crypto'
 const log = getLogger('template');
 
-export class TemplateService extends BaseService<TemplateRow> {
+class TemplateService extends BaseService<TemplateRow> {
   constructor() {
     super('templates', 'id');
   }

@@ -7,7 +7,7 @@ const log = getLogger('solicitante')
 /**
  * Serviço para gerenciamento de solicitantes (órgãos, varas, delegacias)
  */
-export class SolicitanteService extends BaseService<SolicitanteRow> {
+class SolicitanteService extends BaseService<SolicitanteRow> {
   constructor() {
     super('solicitantes', 'id')
   }

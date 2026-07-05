@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip/schema.json",
+  "entry": [
+    "src/preload/index.ts",
+    "src/renderer/index.html",
+    "scripts/*.mjs"
+  ],
+  "project": [
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts",
+    "src/renderer/**/*.{ts,tsx}",
+    "src/types/**/*.d.ts",
+    "scripts/**/*.mjs",
+    "*.config.{js,ts}",
+    "vite.*.ts"
+  ],
+  "ignore": [
+    "src/renderer/types/assets.d.ts"
+  ],
+  "rules": {
+    "files": "warn",
+    "exports": "warn",
+    "types": "warn",
+    "dependencies": "warn",
+    "devDependencies": "warn",
+    "unlisted": "warn",
+    "duplicates": "warn"
+  },
+  "typescript": {
+    "config": [
+      "tsconfig.main.json",
+      "tsconfig.preload.json",
+      "tsconfig.renderer.json"
+    ]
+  }
+}

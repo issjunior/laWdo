@@ -383,4 +383,3 @@ export const CabecalhoPage: React.FC = () => {
   );
 };
 
-export default CabecalhoPage;

@@ -3,7 +3,7 @@ import { PecaRow } from '../types/database.js';
 import { executeQuery } from '../database/sqlite.js';
 import { categoriaPecaService } from './categoria-peca.service.js';
 
-export class PecaService extends BaseService<PecaRow> {
+class PecaService extends BaseService<PecaRow> {
   constructor() {
     super('pecas', 'id');
   }

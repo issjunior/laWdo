@@ -28,7 +28,7 @@ type LaudoComRepRow = LaudoRow & {
   numero_documento?: string;
 };
 
-export class LaudoService extends BaseService<LaudoRow> {
+class LaudoService extends BaseService<LaudoRow> {
   constructor() {
     super('laudos', 'id');
   }

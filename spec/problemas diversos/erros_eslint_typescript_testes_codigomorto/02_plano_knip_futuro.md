@@ -1,32 +1,32 @@
 # Plano: Deteccao Automatizada de Codigo Morto com Knip
 
-> **Ultima atualizacao:** 03/07/2026
+> **Ultima atualizacao:** 05/07/2026
 >
-> **Status:** plano executavel em modo observacional. Os pre-requisitos
-> principais foram atingidos, mas o Knip ainda nao deve entrar como gate do
-> `lint` antes da primeira auditoria sem bloqueio.
+> **Status:** tranche observacional concluida e relatorio zerado. O Knip
+> continua fora do `lint` e fora do CI como gate nesta etapa.
 >
 > **Fonte de decisao atual:** `00_saude_do_sistema.md`
 
-Este documento substitui o plano futuro condicionado de 22/06/2026. Naquela
+Este documento substituiu o plano futuro condicionado de 22/06/2026. Naquela
 data, o projeto nao tinha cobertura minima nem CI. Em 03/07/2026, a situacao
-mudou: lint, type-check, testes e coverage estao verdes e protegidos por
-GitHub Actions em `main`.
+mudou: lint, type-check, testes e coverage ficaram verdes e protegidos por
+GitHub Actions em `main`. Em 05/07/2026, a tranche observacional foi concluida
+com o Knip zerado, sem regressao em `type-check`, `lint` ou `test`.
 
-O proximo passo nao e instalar Knip diretamente no `lint`. A configuracao deve
-entrar primeiro como ferramenta de relatorio para medir ruido, falsos positivos
-e beneficio real no contexto Electron multi-target do projeto.
+O proximo passo deixou de ser "instalar e medir". Agora a decisao real e de
+estrategia: manter o Knip como comando manual observacional ou promover a
+ferramenta para algum gate futuro depois de uma janela de estabilizacao.
 
 ## Decisao Atual
 
-Knip pode ser iniciado em branch propria, mas em **modo observacional**:
+Knip foi introduzido em branch propria e executado em **modo observacional**:
 
-- adicionar `knip` como devDependency
-- criar `knip.json` explicito para main, preload e renderer
-- adicionar script `knip`
-- rodar `npm run knip -- --no-exit-code` ou equivalente na primeira auditoria
-- triar resultados antes de promover qualquer regra a gate
-- manter `npm run lint` sem Knip ate a triagem inicial estabilizar
+- `knip` adicionado como `devDependency`
+- `knip.json` criado com escopo explicito para main, preload e renderer
+- script `npm run knip` adicionado
+- auditoria executada com `npm run knip -- --no-exit-code`
+- quatro rodadas de triagem concluidas
+- `npm run lint` mantido sem Knip
 
 Racional:
 
@@ -49,23 +49,50 @@ Racional:
 | Projeto com > 400 fontes TS | Nao atendido (~212) | Nao atendido: 169 fontes TS/TSX em `src` | Ainda pesa contra gate imediato |
 | `verbatimModuleSyntax` ou `isolatedModules` | Nao atendido | Nao atendido | Nao bloqueia relatorio, mas aumenta chance de ruido |
 
-Conclusao: os bloqueios principais foram removidos, mas ainda nao ha justificativa
-para acoplar Knip ao `lint` no primeiro commit. A instalacao deve medir o ruido
-antes de bloquear a pipeline.
+Conclusao: os bloqueios principais foram removidos e a auditoria observacional
+provou valor pratico, mas ainda nao ha justificativa suficiente para acoplar
+Knip ao `lint` ou ao CI como gate nesta mesma tranche.
+
+## Resultado da Tranche Observacional
+
+Resumo consolidado apos quatro rodadas de triagem em 05/07/2026:
+
+| Categoria | Linha de base | Estado atual |
+|---|---:|---:|
+| Arquivos nao usados | 0 | 0 |
+| Dependencias nao usadas | 4 | 0 |
+| DevDependencies nao usadas | 1 | 0 |
+| Exports nao usados | 73 | 0 |
+| Tipos exportados nao usados | 39 | 0 |
+| Exports duplicados | 8 | 0 |
+
+Beneficios ja materializados:
+
+- remocao de dependencias sem uso real
+- reducao da superficie publica desnecessaria no `main`, `renderer/shared` e `ui`
+- linha de base zerada para detectar regressao futura com muito menos ruido
+- manutencao da estabilidade do projeto durante toda a limpeza
+
+Validacao mantida verde ao final da tranche:
+
+- `npm run type-check`
+- `npm run lint`
+- `npm test`
+- `npm run knip -- --no-exit-code`
 
 ## Escopo da Primeira Tranche
 
-Branch sugerida: `codex/knip-observacional`
+Branch usada: `codex/knip-observacional`
 
-Commit sugerido: `add_knip_observacional`
+Commit sugerido para fechamento desta rodada: `update_knip_observacional_zerado`
 
-Objetivo:
+Objetivo executado:
 
 - instalar e configurar Knip
-- gerar o primeiro relatorio
+- gerar a linha de base inicial
 - documentar os achados por categoria
-- nao remover codigo automaticamente
-- nao alterar `npm run lint`
+- triar em rodadas separadas os achados reais
+- manter `npm run lint` inalterado
 - nao colocar Knip no workflow de CI como gate
 
 Fora do escopo:
@@ -75,7 +102,7 @@ Fora do escopo:
 - transformar Knip em erro de CI
 - reestruturar tsconfig, aliases ou module resolution
 
-## Configuracao Inicial Proposta
+## Configuracao Inicial Aplicada
 
 Arquivo: `knip.json`
 
@@ -83,9 +110,7 @@ Arquivo: `knip.json`
 {
   "$schema": "https://unpkg.com/knip/schema.json",
   "entry": [
-    "src/main/index.ts",
     "src/preload/index.ts",
-    "src/renderer/index.tsx",
     "src/renderer/index.html",
     "scripts/*.mjs"
   ],
@@ -96,22 +121,10 @@ Arquivo: `knip.json`
     "src/types/**/*.d.ts",
     "scripts/**/*.mjs",
     "*.config.{js,ts}",
-    "vite.*.ts",
-    "vitest.config.ts",
-    "tailwind.config.js",
-    "postcss.config.js"
+    "vite.*.ts"
   ],
   "ignore": [
-    "out/**",
-    "dist/**",
-    "coverage/**",
-    "src/renderer/public/**"
-  ],
-  "ignoreDependencies": [
-    "electron-squirrel-startup"
-  ],
-  "ignoreBinaries": [
-    "electron-builder"
+    "src/renderer/types/assets.d.ts"
   ],
   "rules": {
     "files": "warn",
@@ -131,6 +144,9 @@ Arquivo: `knip.json`
   }
 }
 ```
+
+A primeira execucao indicou hints de configuracao redundante. A configuracao
+acima ja reflete o ajuste para reduzir ruido sem ocultar achados de codigo morto.
 
 Script inicial:
 
@@ -181,10 +197,11 @@ forem atendidos:
 
 Promocao recomendada:
 
-1. manter `knip` como comando manual
-2. depois adicionar job separado no CI com `continue-on-error: true` ou comando
-   sem exit code, se o relatorio ainda tiver ruido
-3. apenas no fim incluir Knip no `lint` ou remover `--no-exit-code`
+1. manter `knip` como comando manual por enquanto
+2. se houver interesse em observacao continua, adicionar job separado no CI com
+   `continue-on-error: true` ou comando sem exit code
+3. apenas depois decidir se faz sentido incluir Knip no `lint` ou remover
+   `--no-exit-code`
 
 ## Relacao com ts-prune
 
@@ -206,7 +223,7 @@ Motivo:
 
 ## Verificacao da Tranche Observacional
 
-Ao implementar a primeira tranche:
+Verificacao usada para fechar a tranche:
 
 ```bash
 npm run knip -- --no-exit-code
@@ -219,21 +236,22 @@ npm run build
 
 No GitHub:
 
-- publicar branch propria
-- observar o CI existente
-- nao exigir que Knip passe como gate nessa primeira etapa
+- branch propria publicada
+- issue `#1` atualizada com o progresso da implementacao
+- Knip mantido sem gate nessa primeira etapa
 
-## Entregaveis Esperados
+Primeira linha de base registrada em:
+
+- `05_auditoria_knip_2026-07-03.md`
+
+## Entregaveis Entregues
 
 - `knip` instalado em `devDependencies`
 - `knip.json` criado na raiz
 - script `npm run knip` adicionado
-- primeiro relatorio de achados registrado em spec ou comentario da issue `#1`
-- decisao documentada sobre o proximo passo:
-  - remover achados reais
-  - registrar excecoes
-  - manter observacional
-  - promover para gate
+- linha de base e rodadas de triagem registradas em spec
+- comentario publicado na issue `#1`
+- decisao atual documentada: manter observacional e decidir gate separadamente
 
 ## Referencias
 

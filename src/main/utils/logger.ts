@@ -22,7 +22,7 @@ export type LogModule =
   | 'ipc' | 'security' | 'wizard' | 'peca' | 'regra-wizard'
   | 'gdl' | 'exportacao' | 'secao-builder';
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LEVEL_RANK: Record<LogLevel, number> = {
   debug: 0,

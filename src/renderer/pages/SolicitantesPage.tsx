@@ -548,4 +548,3 @@ export const SolicitantesPage: React.FC = () => {
   );
 };
 
-export default SolicitantesPage;

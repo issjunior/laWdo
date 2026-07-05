@@ -7,7 +7,7 @@ const log = getLogger('rep')
 /**
  * Serviço para gerenciamento de REPs (Requisições de Exame Pericial)
  */
-export class RepService extends BaseService<REPRow> {
+class RepService extends BaseService<REPRow> {
   constructor() {
     super('reps', 'id')
   }

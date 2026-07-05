@@ -3,7 +3,7 @@ import { executeNonQuery, executeQuery } from '../database/sqlite.js';
 
 const log = getLogger('sistema');
 
-export interface CreateAuditInput {
+interface CreateAuditInput {
   usuario_id?: string | null;
   acao: string;
   tipo_acao: string;

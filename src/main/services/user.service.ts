@@ -18,7 +18,7 @@ interface RelatorioAtividadeUsuario {
   atividades: unknown[]
 }
 
-export class UserService extends BaseService<UserRow> {
+class UserService extends BaseService<UserRow> {
   constructor() {
     super('users', 'id')
   }

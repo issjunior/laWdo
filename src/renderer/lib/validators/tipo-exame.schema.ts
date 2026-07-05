@@ -4,7 +4,7 @@ import { z } from "zod"
  * Schema de validação para entidade TipoExame
  * Tabela: tipos_exame
  */
-export const tipoExameSchema = z.object({
+const tipoExameSchema = z.object({
   id: z.string().uuid("ID deve ser um UUID válido"),
   codigo: z.string()
     .min(1, "Código é obrigatório")
@@ -24,7 +24,7 @@ export const tipoExameSchema = z.object({
 /**
  * Schema para criação de tipo de exame
  */
-export const createTipoExameSchema = tipoExameSchema.omit({
+const createTipoExameSchema = tipoExameSchema.omit({
   id: true,
   data_criacao: true,
   data_atualizacao: true,

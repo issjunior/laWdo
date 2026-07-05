@@ -65,7 +65,7 @@ export interface ExamSection {
   requiredFields: string[];
 }
 
-export interface MenuField {
+interface MenuField {
   name: string;
   label: string;
 }
@@ -83,7 +83,7 @@ export interface MenuEntry {
   label: string;
 }
 
-export type MenuSectionItem = MenuEntry | MenuGroup;
+type MenuSectionItem = MenuEntry | MenuGroup;
 
 export interface MenuSection {
   id: string;

@@ -6,7 +6,7 @@ const log = getLogger('tipo_exame')
 /**
  * Serviço para gerenciamento de tipos de exame
  */
-export class TipoExameService extends BaseService<TipoExameRow> {
+class TipoExameService extends BaseService<TipoExameRow> {
   constructor() {
     super('tipos_exame', 'id')
   }

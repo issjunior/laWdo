@@ -118,19 +118,19 @@ function avaliarToggleSecao(toggleId: string, camposEspecificos: Record<string, 
   return Array.isArray(valorColecao) && valorColecao.length > 0;
 }
 
-export function substituirIndicePlaceholders(html: string, idx: number): string {
+function substituirIndicePlaceholders(html: string, idx: number): string {
   return html.replace(/\{\{([^}]+)\}\}/g, (_match, chave: string) => {
     return '{{' + chave.replace(/_1_/g, `_${idx}_`) + '}}';
   });
 }
 
-export function normalizarCondicaoPorArma(toggleId: string, idx: number): string {
+function normalizarCondicaoPorArma(toggleId: string, idx: number): string {
   return toggleId
     .replace(/b602_arma_N_func_toggle/g, `b602_arma_${idx}_func_toggle`)
     .replace(/b602_arma_N_coleta_toggle/g, `b602_arma_${idx}_coleta_toggle`);
 }
 
-export function avaliarCondicaoBloco(
+function avaliarCondicaoBloco(
   toggleId: string,
   camposEspecificos: Record<string, unknown>,
   contexto: ContextoCondicionalArma = {}

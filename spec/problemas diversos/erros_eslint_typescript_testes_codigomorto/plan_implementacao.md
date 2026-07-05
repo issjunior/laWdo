@@ -1,6 +1,6 @@
 # Plano de Implementacao - Saude de Codigo
 
-> Ultima atualizacao: 03/07/2026
+> Ultima atualizacao: 05/07/2026
 > Status da iniciativa: concluida
 > Fonte de verdade do estado atual: `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md`
 > Escopo deste arquivo: registrar a estrategia usada, a sequencia das tranches e o fechamento operacional da iniciativa. Nao usar este arquivo como painel corrente de metricas.
@@ -99,3 +99,24 @@ A partir deste fechamento:
   escopo diferente
 - este arquivo deve permanecer estavel, salvo se for necessario corrigir o
   registro historico ou a forma de encerramento
+
+## Saldo final apos a implementacao total do plano
+
+Em 05/07/2026, a ultima frente derivada deste plano foi concluida com a rodada
+observacional do Knip zerada e posteriormente promovida para `main`.
+
+Saldo consolidado da iniciativa inteira:
+
+- build, type-check, lint e testes estabilizados
+- coverage medida e protegida por gate progressivo inicial
+- CI minimo validado no GitHub Actions
+- triagem principal de `ts-prune` concluida no renderer
+- falsos positivos conhecidos do `main` documentados
+- Knip instalado, triado e encerrado com relatorio zerado em modo observacional
+- automacao complementar de dependencias habilitada com `Dependency graph` e `Dependabot`
+
+Decisao de encerramento:
+
+- nao ha nova tranche de qualidade aberta neste plano
+- qualquer retomada futura deve nascer como iniciativa separada
+- o estado corrente deve continuar sendo consultado apenas pelo painel de saude e pelos specs especificos da frente

@@ -1,6 +1,6 @@
 # Painel de Saúde do Sistema
 
-> **Última medição:** 03/07/2026
+> **Última medição:** 05/07/2026
 > **Propósito:** registrar o estado atual de build, tipagem, lint, testes e auditoria de código morto.
 
 ---
@@ -15,6 +15,8 @@
 | **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após ajuste do setup para runner Linux |
 | **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real; CI validado |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
+| **Knip** (`npm run knip -- --no-exit-code`) | ✅ Observacional zerado | 0 deps, 0 devDep, 0 exports, 0 tipos, 0 duplicatas | quatro rodadas de triagem concluídas; relatório observacional ficou sem apontamentos |
+| **GitHub dependencies** (`Dependency graph` + `Dependabot`) | 🟡 Ativo | monitoramento semanal em `main` | visibilidade de supply chain ligada no GitHub; `dependabot.yml` publicado |
 
 Leitura prática do estado atual:
 
@@ -26,6 +28,9 @@ Leitura prática do estado atual:
 - a suíte automatizada voltou a ficar verde
 - a auditoria de código morto foi reexecutada e a frente do renderer ficou sem candidatos reais
 - a cobertura passou a ser mensurável com `@vitest/coverage-v8`
+- o GitHub agora monitora dependências e actions com `Dependency graph` e `Dependabot`
+- a primeira rodada do Knip removeu pacotes ociosos e duplicatas de export sem abrir regressão
+- a frente observacional do Knip foi encerrada com relatório zerado sem regressão em type-check, lint ou testes
 
 ---
 
@@ -38,6 +43,7 @@ npm test
 npm run build
 npm run prune:all
 npm run test:coverage
+npm run knip -- --no-exit-code
 ```
 
 ## Evolução recente
@@ -52,6 +58,12 @@ npm run test:coverage
 | **03/07/2026 (fechamento planejamento)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | `prune:all` reavaliado; coverage desbloqueado e medido |
 | **03/07/2026 (triagem código morto)** | ✅* | 0 | 0 / 0 | 43 pass, 1 skip* | vendor TinyMCE excluído da análise; barrel morto de validadores removido; renderer sem candidatos reais |
 | **03/07/2026 (CI mínimo)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | workflow GitHub Actions publicado e validado em `main` |
+| **03/07/2026 (Knip observacional)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | Knip instalado como comando manual e primeira linha de base registrada |
+| **03/07/2026 (monitoramento GitHub de dependências)** | ✅* | 0* | 0 / 0* | 43 pass, 1 skip* | `Dependency graph` e `Dependabot` habilitados; `dependabot.yml` publicado com agenda semanal |
+| **05/07/2026 (Knip rodada 1)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | dependências/devDependency ociosas removidas, duplicatas zeradas e exports do `main` reduzidos |
+| **05/07/2026 (Knip rodada 2)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | tipos exportados ociosos do `main` removidos; frente remanescente ficou concentrada em renderer/shared |
+| **05/07/2026 (Knip rodada 3)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | utilitários, validadores e tipos de parser do renderer/shared triados; sobra concentrou em `ui` |
+| **05/07/2026 (Knip rodada 4)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | exports de `ui` triados; relatório do Knip zerado em modo observacional |
 
 ---
 
@@ -209,7 +221,7 @@ Primeira execução validada:
 - o mock passou a usar `os.tmpdir()`
 - o CI passou em `main` com instalação, type-check, lint, testes e coverage
 
-Recomendação atual: **implementar Knip primeiro em modo observacional**.
+Recomendação atual: **manter Knip em modo observacional e iniciar triagem curta por dependências**.
 
 Motivos:
 
@@ -220,12 +232,79 @@ Motivos:
 - as diferenças iniciais do runner Linux já foram corrigidas
 - `02_plano_knip_futuro.md` foi revisado para refletir os pré-requisitos atuais
 
-Sequência fechada:
+Sequência já executada:
 
-1. criar branch `codex/knip-observacional`
-2. instalar e configurar Knip sem alterar `npm run lint`
-3. gerar o primeiro relatório com `--no-exit-code`
-4. triar achados antes de decidir se Knip entra como gate
+1. branch `codex/knip-observacional` criada
+2. `knip` instalado como `devDependency`
+3. `knip.json` criado sem alterar `npm run lint`
+4. script `npm run knip` adicionado
+5. primeiro relatório gerado com `--no-exit-code`
+6. linha de base registrada em `05_auditoria_knip_2026-07-03.md`
+
+Primeira linha de base Knip:
+
+- **4** dependências apontadas: `@dnd-kit/modifiers`, `groq`, `react-icons`, `sqlite`
+- **1** devDependency apontada: `@types/sqlite3`
+- **73** exports apontados
+- **39** tipos exportados apontados
+- **8** exports duplicados
+- **0** arquivos não usados após registrar `src/renderer/types/assets.d.ts` como declaração ambiente esperada
+
+Resultado após a primeira rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **57** exports apontados
+- **39** tipos exportados apontados
+- **0** exports duplicados
+
+Limpezas aplicadas nesta rodada:
+
+- remoção das dependências `@dnd-kit/modifiers`, `groq`, `react-icons` e `sqlite`
+- remoção da devDependency `@types/sqlite3`
+- remoção de `default exports` redundantes em páginas lazy-loaded e em `safe-storage.service.ts`
+- remoção de `export` em helpers internos de `sqlite.ts` usados apenas no próprio módulo
+- remoção de `export` em classes de services do `main` consumidas apenas pelos singletons públicos
+
+Resultado após a segunda rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **57** exports apontados
+- **15** tipos exportados apontados
+- **0** exports duplicados
+
+Resultado após a terceira rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **41** exports apontados
+- **3** tipos exportados apontados
+- **0** exports duplicados
+
+Resultado após a quarta rodada de triagem em 05/07/2026:
+
+- **0** dependências apontadas
+- **0** devDependencies apontadas
+- **0** exports apontados
+- **0** tipos exportados apontados
+- **0** exports duplicados
+
+Limpezas aplicadas nas rodadas 3 e 4:
+
+- recolhimento de exports sem consumidor em `forms`, `exam-fields`, utilitários de template, `tree-utils`, parser de exportação e schemas de validação
+- recolhimento dos helpers internos remanescentes de `secao-builder.service.ts`
+- triagem conservadora dos exports do design system local em `src/renderer/components/ui/**`
+- remoção dos aliases locais que ficaram órfãos após a redução de superfície pública
+
+Próximo passo recomendado à época da tranche: manter Knip em modo observacional, registrar este estado zerado e decidir em tranche separada se vale ou não promover a ferramenta a gate futuro.
+
+Automação complementar já ativada no GitHub:
+
+- `Dependency graph` habilitado para expor a árvore de dependências do repositório
+- `Dependabot` habilitado com `version updates` para `npm` e `github-actions`
+- agenda semanal na branch `main`, com limite baixo de PRs e agrupamento para reduzir ruído
+- essa automação complementa o Knip: o GitHub monitora versões e segurança; o Knip continua apontando possível sobra de dependências no código
 
 ## Notas desta tranche
 
@@ -240,8 +319,38 @@ Sequência fechada:
 - o threshold de cobertura foi convertido de 70% global para gate progressivo inicial
 - os hooks do renderer foram ajustados sem supressões de ESLint
 - `.github/workflows/ci.yml` foi criado com gate mínimo de type-check, lint, testes e coverage
+- `.github/dependabot.yml` foi criado para atualizações automáticas semanais de `npm` e `github-actions`
 - a primeira execução verde do CI em `main` foi confirmada após alinhar Node.js 24 e corrigir o mock global de path do Electron em testes
 - `02_plano_knip_futuro.md` foi atualizado de plano futuro condicionado para plano observacional executável
+- `npm uninstall` removeu 5 pacotes sem impacto em `type-check`, `lint`, `test` ou `knip`
+- a contagem do Knip caiu de `73` para `57` exports após a limpeza segura do `main`
+- dependências/devDependencies ociosas e duplicatas foram zeradas no relatório observacional
+- os tipos exportados ociosos caíram de `39` para `15` após recolher tipagem interna do `main`
+- os exports remanescentes caíram de `57` para `0` após triagem de `renderer/shared` e `components/ui`
+- os tipos exportados remanescentes caíram de `15` para `0`
+- o `npm run knip -- --no-exit-code` terminou sem apontamentos mantendo `type-check`, `lint` e `test` verdes
+
+## Saldo final da implementacao do plano
+
+Com o merge da branch `codex/knip-observacional` em `main` em 05/07/2026, esta
+frente deixa de ter passos operacionais abertos.
+
+Saldo consolidado da iniciativa:
+
+- `npm run build` verde
+- `npm run type-check` verde
+- `npm run lint` verde com `0` erros e `0` warnings
+- `npm test` verde com `43` pass e `1` skip
+- `npm run test:coverage` ativo com gate progressivo
+- `npm run prune:all` triado no renderer, com remanescentes do `main` documentados como falsos positivos conhecidos
+- `npm run knip -- --no-exit-code` zerado em modo observacional
+- `Dependency graph` e `Dependabot` ativos no GitHub
+
+Decisao de encerramento:
+
+- nao iniciar novas buscas de qualidade nesta frente agora
+- manter Knip como ferramenta manual/observacional
+- tratar apenas regressao futura ou nova iniciativa de qualidade em branch propria
 
 ## Referências úteis
 

@@ -8,8 +8,7 @@ import { b602Service } from './services/b602.service';
 import type { ExamSection, MenuSection } from './types';
 import type { ExamService } from './services/types';
 
-export type { ExamSection, REPFormData } from './types';
-export type { ExamService } from './services/types';
+export type { ExamSection } from './types';
 
 export interface ExamToggle {
   id: string;
@@ -108,12 +107,11 @@ export const EXAM_FIELD_MAP: Record<string, string[]> = {
   'B-602': ['dados_investigacao', 'material_enc', 'cartuchos', 'estojos', 'armas'],
 };
 
-export const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
+const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
   'I-801': numeracaoService,
   'B-602': b602Service,
 };
 
-export { B602_MENU_STRUCTURE };
 export type { MenuSection } from './types';
 
 export const EXAM_MENU_REGISTRY: Record<string, MenuSection[]> = {
