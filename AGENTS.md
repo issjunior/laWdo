@@ -8,7 +8,7 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 
 | Comando | Descrição |
 |---------|-----------|
-| `npm run dev` | Desenvolvimento (Vite + Electron com hot reload) |
+| `npm run dev` | Desenvolvimento local (`npm run build` + `electron .`) |
 | `npm run build` | Build completo (prebuild → main/preload/renderer → postbuild) |
 | `npm run lint` | ESLint |
 | `npm run lint:fix` | ESLint com autocorreção |
@@ -19,18 +19,31 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm test` | Vitest (single run) |
 | `npm run test:watch` | Vitest em watch mode |
 | `npm run test:coverage` | Vitest com coverage (gate progressivo em `vitest.config.ts`) |
-| `npm run package` | Empacotar com electron-builder |
+| `npm run pack` | Empacotar diretório com electron-builder (`--dir`) |
+| `npm run dist` | Gerar pacote final com electron-builder |
 | `npm run prune` | ts-prune (renderer) — exports não usados |
 | `npm run prune:all` | ts-prune nos 3 tsconfigs (renderer + main + preload) |
 | `npm run dead-code:check` | Aliás de `prune:all` |
+| `npm run knip` | Auditoria observacional de dependências, exports e tipos órfãos |
 | `/graphify` | Consultar o knowledge graph do projeto (skill) |
 | `/check-dead-code` | Skill de auditoria de código morto |
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
+`npm run test:coverage` e `npm run knip -- --no-exit-code` continuam comandos de verificação manual/observacional importantes quando a mudança toca testes, cobertura, dependências, exports públicos ou limpeza estrutural.
+
 Para documentação de estado atual, use o fluxo `/spec` ou os scripts `npm run spec`, `npm run spec:auditar` e `npm run spec:registrar`. A classificação e cobertura dos specs ficam em `spec/09 automacao-spec/manifesto.json`.
 
 O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções. Análises curadas (LLM) do grafo ficam em `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md`.
+
+No GitHub, `Dependency graph` e `Dependabot` estão ativos para `npm` e `github-actions`.
+
+Ao revisar PRs abertos, especialmente os automáticos:
+
+- diferencie se o PR mexe em dependências da aplicação (`package.json` / `package-lock.json`) ou só em workflows de CI (`.github/workflows/**`)
+- resuma a intenção real do PR pelo diff e pelos arquivos alterados, não apenas pelo título
+- trate bumps major de `github-actions` como mudança de infraestrutura de CI, mesmo quando não houver impacto direto no código da aplicação
+- valide `type-check`, `lint`, `test` e, quando aplicável, `test:coverage` antes de misturar PR automático com feature work
 
 ---
 
@@ -194,9 +207,9 @@ SQLite via pacote `sqlite3`. Arquivo: `laudopericial.db` em `app.getPath('userDa
 **Serviços**: herdam de `BaseService<T>` (`src/main/services/base.service.ts`) com CRUD genérico.
 
 **Para criar uma nova migration**:
-1. Adicionar função `migrateV25()` em `src/main/database/index.ts`
+1. Adicionar o bloco da migration `vXX` em `src/main/database/index.ts`
 2. Incrementar `CURRENT_SCHEMA_VERSION`
-3. Registrar a nova migration na chain de `applyMigrations()`
+3. Garantir que a nova migration entre no fluxo de `checkAndApplyMigrations()`
 
 Consultas usam SQL bruto (strings template), não há ORM.
 
@@ -236,7 +249,7 @@ Quando o schema Zod usa `.passthrough()` para aceitar campos dinâmicos, ver got
 
 ## AI / LLM
 
-Providers: Groq SDK + Google Gemini. Chaves de API são configuráveis na UI e armazenadas criptografadas localmente. **Não** usar `.env` nem hardcodar chaves.
+Providers: Groq e Google Gemini via endpoints OpenAI-compatíveis. Chaves de API são configuráveis na UI e armazenadas localmente com `safeStorage` quando disponível, com fallback controlado. **Não** usar `.env` nem hardcodar chaves.
 
 ## Commits
 
