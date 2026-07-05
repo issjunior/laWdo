@@ -300,3 +300,30 @@ decisao de estrategia:
 1. registrar o estado zerado no painel de saude do sistema
 2. decidir separadamente se Knip continua apenas observacional ou se entra em gate futuro
 3. se houver nova rodada, tratar apenas regressao nova em vez de nova limpeza ampla
+
+## Fechamento da Frente - 05/07/2026
+
+Com o estado zerado registrado e a branch `codex/knip-observacional` promovida
+para `main`, a frente observacional do Knip foi considerada concluida.
+
+Saldo final desta auditoria:
+
+- dependencias nao usadas: `4 -> 0`
+- devDependencies nao usadas: `1 -> 0`
+- exports nao usados: `73 -> 0`
+- tipos exportados nao usados: `39 -> 0`
+- exports duplicados: `8 -> 0`
+- arquivos nao usados: `0 -> 0`
+
+Beneficios consolidados:
+
+- remocao de pacote ocioso sem regressao funcional
+- reducao da superficie publica desnecessaria no `main`, `renderer/shared` e `ui`
+- baseline limpa para detectar regressao nova com muito menos ruido
+- manutencao do Knip fora do `lint` e do CI como gate nesta etapa
+
+Decisao final desta issue para a frente do Knip:
+
+1. encerrar a limpeza ampla
+2. nao abrir nova rodada imediata
+3. manter o uso do Knip como auditoria manual/observacional

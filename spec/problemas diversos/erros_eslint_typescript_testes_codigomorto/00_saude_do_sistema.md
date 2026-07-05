@@ -297,7 +297,7 @@ Limpezas aplicadas nas rodadas 3 e 4:
 - triagem conservadora dos exports do design system local em `src/renderer/components/ui/**`
 - remoção dos aliases locais que ficaram órfãos após a redução de superfície pública
 
-Próximo passo recomendado: manter Knip em modo observacional, registrar este estado zerado e decidir em tranche separada se vale ou não promover a ferramenta a gate futuro.
+Próximo passo recomendado à época da tranche: manter Knip em modo observacional, registrar este estado zerado e decidir em tranche separada se vale ou não promover a ferramenta a gate futuro.
 
 Automação complementar já ativada no GitHub:
 
@@ -329,6 +329,28 @@ Automação complementar já ativada no GitHub:
 - os exports remanescentes caíram de `57` para `0` após triagem de `renderer/shared` e `components/ui`
 - os tipos exportados remanescentes caíram de `15` para `0`
 - o `npm run knip -- --no-exit-code` terminou sem apontamentos mantendo `type-check`, `lint` e `test` verdes
+
+## Saldo final da implementacao do plano
+
+Com o merge da branch `codex/knip-observacional` em `main` em 05/07/2026, esta
+frente deixa de ter passos operacionais abertos.
+
+Saldo consolidado da iniciativa:
+
+- `npm run build` verde
+- `npm run type-check` verde
+- `npm run lint` verde com `0` erros e `0` warnings
+- `npm test` verde com `43` pass e `1` skip
+- `npm run test:coverage` ativo com gate progressivo
+- `npm run prune:all` triado no renderer, com remanescentes do `main` documentados como falsos positivos conhecidos
+- `npm run knip -- --no-exit-code` zerado em modo observacional
+- `Dependency graph` e `Dependabot` ativos no GitHub
+
+Decisao de encerramento:
+
+- nao iniciar novas buscas de qualidade nesta frente agora
+- manter Knip como ferramenta manual/observacional
+- tratar apenas regressao futura ou nova iniciativa de qualidade em branch propria
 
 ## Referências úteis
 
