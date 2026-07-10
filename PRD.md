@@ -100,7 +100,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Linguagem:** TypeScript
 - **Frontend:** React
 - **Estilização:** Tailwind CSS + Shadcn/ui
-- **Banco de Dados:** SQLite (com better-sqlite3)
+- **Banco de Dados:** SQLite (com sqlite3)
 - **Editor:** TinyMCE (com Bridge para React)
 - **Exportação:** Playwright (PDF) e Docx.js (Word)
 - **IA:** Google Generative AI (Gemini) + OpenAI-compatible (Groq)
@@ -125,4 +125,4 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Backup/Restauração:** Exportação/importação ZIP com banco + imagens, exclusão automática de auditoria e chaves de IA dos backups, agendamento de backup automático com periodicidade configurável.
 - **Configuração de Impressão:** Páginas de Cabeçalho PDF (texto, imagem brasão/logo, alinhamento) e Margens (superior, inferior, esquerda, direita).
 - **Dashboard:** Indicadores de REPs pendentes/em andamento/concluídas, produtividade e tabelas com colunas fixas (sticky) para referência.
-- **Em desenvolvimento:** Geração de PDF final persistente, exportação DOCX/ODT, apêndice automático de figuras, sincronização com Google Drive.
+- **Em desenvolvimento:** persistência/validação do fluxo final de exportação, apêndice automático de figuras e sincronização com Google Drive.
