@@ -746,11 +746,20 @@ Para cada etapa:
 
 ## 19. Branch e validação técnica
 
-Branch sugerida:
+A implementação deste plano deve ocorrer obrigatoriamente em branch exclusiva, criada antes da primeira alteração de código:
 
 ```bash
 git switch -c codex/gdl-b602
 ```
+
+Regras da branch:
+
+- conter somente mudanças relacionadas à integração GDL/B602 e às adaptações estruturais necessárias para suportá-la;
+- não misturar correções ou funcionalidades sem relação com este plano;
+- preservar alterações locais preexistentes do usuário antes de criar ou trocar de branch;
+- implementar e validar as etapas em incrementos revisáveis, evitando uma única alteração monolítica;
+- somente integrar à branch principal depois que os critérios de aceitação, testes automatizados e validação exploratória em homologação estiverem concluídos;
+- validações de produção permanecem posteriores à aprovação em homologação e não impedem que a implementação seja revisada em pull request.
 
 Após cada etapa:
 
