@@ -133,12 +133,6 @@
   ],
   "specs": [
     {
-      "arquivo": "spec/01 planejamento/planejamento_migracao_checklist.md",
-      "tipo": "planejamento",
-      "autoAtualizavel": false,
-      "descricao": "Checklist e marco de migracao."
-    },
-    {
       "arquivo": "spec/02 rep/criar_input_personalizados_exame.md",
       "tipo": "estado_atual",
       "autoAtualizavel": true,

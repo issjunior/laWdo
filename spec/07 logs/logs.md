@@ -84,6 +84,16 @@ Tambem fornece a camada de consulta:
 
 `insertAuditLog()` faz `executeNonQuery(...).catch(...)`, entao a auditoria nao bloqueia a operacao principal.
 
+## Snapshots de erros fatais
+
+`diagnostico-state.service.ts` complementa os logs com snapshots locais apenas quando ocorre erro fatal no main ou no renderer. Os arquivos sao gravados em `userData/diagnostico-state-dumps` com sufixo `_estado-snapshot.json`.
+
+Cada snapshot inclui o erro, contexto seguro mais recente do renderer, informacoes do processo e do sistema operacional. A serializacao remove campos sensiveis por chave, limita strings a 500 caracteres, colecoes a 20 itens e profundidade a cinco niveis.
+
+O renderer atualiza rota, hash, titulo da janela, estado do painel de ilustracoes e dados minimizados do usuario via `DiagnosticoBridge`; erros globais e rejeicoes nao tratadas sao enviados ao main. O main tambem registra `uncaughtException` e `unhandledRejection`.
+
+Este mecanismo nao registra uma trilha de sessao, nao gera `eventos.ndjson` e nao possui controles de inicio ou parada na interface.
+
 ## `LogsPage`
 
 A pagina do renderer hoje tem tres abas:
@@ -117,6 +127,7 @@ No estado atual, qualquer manutencao em log precisa perguntar em qual trilha ela
 
 - log tecnico em arquivo
 - auditoria em banco
+- snapshots de erros fatais
 - timeline que agrega eventos de REP e laudo
 
-As tres compartilham a pagina de logs, mas nao compartilham a mesma persistencia nem o mesmo criterio de limpeza.
+As trilhas compartilham a pagina de logs apenas parcialmente; elas nao compartilham a mesma persistencia nem o mesmo criterio de limpeza.
