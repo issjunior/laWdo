@@ -1,222 +1,568 @@
-# Plano: Integracao B602 com API GDL
+# Plano: integração B602 com peças da API GDL
 
-## Objetivo
+## 1. Objetivo
 
-Padronizar os inputs de pecas do formulario B602 do laWdo com a fonte de verdade do GDL, evitando mapear manualmente todas as informacoes da API e todas as opcoes possiveis no codigo local.
+Reproduzir no cadastro de REP B602 do laWdo o fluxo de peças do GDL, incluindo:
 
-O laWdo deve continuar sendo apenas um sistema auxiliar para elaboracao do laudo. O GDL permanece como sistema oficial de origem dos dados e destino final do envio manual.
+- os inputs comuns a todas as peças;
+- os inputs personalizados de cada um dos 17 tipos de item observados;
+- criação manual de peças no laWdo;
+- preenchimento automático por consulta somente leitura à API GDL;
+- edição e exclusão local de qualquer peça, inclusive após importação do GDL;
+- persistência estruturada em `campos_especificos.b602`, sem despejar peças em `observacoes`.
 
-## Branch planejada
+O GDL continua sendo o sistema oficial. O laWdo não criará, atualizará ou excluirá peças no GDL nesta entrega.
 
-Criar a branch:
+Como o laWdo ainda está em desenvolvimento, não haverá compatibilidade nem migração de dados B602 de versões anteriores. O modelo novo deve ser implementado de forma coerente no schema inicial, nos tipos, na serialização e nos consumidores do laudo.
 
-```bash
-git switch -c feat/gdl-b602
+## 2. Evidências confirmadas em homologação
+
+Os testes foram realizados no GDL web de homologação e com a REP B602 `190/2026`.
+
+### 2.1 GDL web
+
+- O formulário de REP é uma página ASP.NET Web Forms.
+- A seleção de `Tipo do Item` dispara `__doPostBack` e o servidor renderiza os campos personalizados.
+- O DOM expõe label, tipo de controle, obrigatoriedade visual e códigos das opções.
+- O DOM não expõe identificador semântico estável dos campos personalizados; os controles são indexados por posição no repeater.
+- Não foi identificado endpoint de metadados capaz de reconstruir sozinho o formulário.
+
+### 2.2 API `/rep/obter`
+
+A API devolveu três peças e preservou propriedades dinâmicas diretamente no objeto de cada peça.
+
+Campos comuns observados no retorno:
+
+- `codPeca`
+- `tipoPeca`
+- `identificacao`
+- `quantidade`
+- `unidadeMedida`
+- `numeroAnalises`
+- `examinadoInLoco`
+- `dataEntrada`
+- `lacreEntrada`
+- `lacreSaida`
+- `consumida`
+
+Campos personalizados confirmados:
+
+| Tipo | Código do tipo | Campo | Controle no GDL web | Obrigatório | Opções confirmadas |
+|---|---:|---|---|---|---|
+| `CARABINA(S)` | `476` | `Nº Série` | texto | não | — |
+| `CARABINA(S)` | `476` | `Marca` | texto | não | — |
+| `CARABINA(S)` | `476` | `Modelo` | texto | não | — |
+| `CARABINA(S)` | `476` | `Arma é Institucional?` | lista de seleção | sim | `Indeterminado=60`, `NÃO=98`, `SIM=97` |
+| `ESTOJO(S)` | `101` | `ORIGEM/COLETA` | select | sim | `DELEGACIA=95`, `LOCAL DE CRIME=93`, `NECRÓPSIA=94`, `Outro=11` |
+
+A peça `ARMA(S) DE PRESSÃO` retornou apenas campos comuns na amostra. Isso não prova ausência definitiva de campos personalizados; seu formulário ainda precisa ser auditado isoladamente.
+
+### 2.3 Problema atual do laWdo
+
+Na importação da REP `190/2026`:
+
+- as três peças foram convertidas em três linhas de `observacoes`;
+- `campos_especificos` permaneceu vazio;
+- os campos personalizados devolvidos pela API não foram aplicados ao formulário;
+- o usuário não recebeu estrutura local para editar ou excluir individualmente as peças importadas.
+
+## 3. Decisão arquitetural
+
+A solução será híbrida.
+
+### 3.1 O que será genérico
+
+- validação dos campos comuns do payload;
+- separação automática entre propriedades comuns e personalizadas;
+- preservação de campos personalizados desconhecidos;
+- renderização de inputs a partir de um catálogo local de metadados;
+- CRUD local de peças;
+- importação, revisão e persistência estruturada.
+
+### 3.2 O que será explícito
+
+- catálogo dos 17 tipos e seus códigos;
+- definição de label, controle, obrigatoriedade e opções de cada campo personalizado;
+- aliases para labels que possam variar no GDL;
+- mapeamentos semânticos para campos técnicos já usados pelo laudo, placeholders e seções repetíveis.
+
+### 3.3 O que não será feito
+
+- scraping do GDL web em tempo de execução;
+- criação automática de input apenas pelo nome de uma propriedade recebida;
+- cast direto de `JSON.parse` para um tipo confiável;
+- equivalência por aproximação textual quando os significados forem diferentes;
+- armazenamento indefinido do JSON bruto da REP;
+- escrita na API GDL.
+
+## 4. Catálogo dos 17 tipos de item
+
+O valor `0` (`Selecione um Tipo`) não integra o catálogo.
+
+| Ordem | Código | Tipo no GDL | Família inicial | Status do schema | Etapa |
+|---:|---:|---|---|---|---:|
+| 1 | `289` | `ARMA(S) DE CHOQUE` | arma | pendente de descoberta | 3 |
+| 2 | `613` | `ARMA(S) DE PRESSÃO` | arma | retorno API observado; formulário pendente | 3 |
+| 3 | `476` | `CARABINA(S)` | arma | campos e retorno API confirmados | 2 |
+| 4 | `272` | `CARREGADOR(ES)` | componente | pendente de descoberta | 4 |
+| 5 | `472` | `ESPINGARDA(S)` | arma | pendente de descoberta | 3 |
+| 6 | `473` | `ESPOLETA(S)` | componente | pendente de descoberta | 4 |
+| 7 | `101` | `ESTOJO(S)` | componente balístico | campos e retorno API confirmados | 2 |
+| 8 | `477` | `FUZIL(IS)` | arma | pendente de descoberta | 3 |
+| 9 | `475` | `GARRUCHA(S)` | arma | pendente de descoberta | 3 |
+| 10 | `178` | `OUTROS` | genérico | pendente de descoberta | 5 |
+| 11 | `771` | `PEÇA TESTE` | técnico/homologação | pendente; confirmar presença em produção | 5 |
+| 12 | `104` | `PISTOLA(S)` | arma | pendente de descoberta | 3 |
+| 13 | `478` | `PISTOLETE(S)` | arma | pendente de descoberta | 3 |
+| 14 | `572` | `PÓLVORA` | componente balístico | pendente de descoberta | 4 |
+| 15 | `105` | `PROJÉTEIS` | componente balístico | pendente de descoberta | 4 |
+| 16 | `106` | `REVÓLVER(ES)` | arma | pendente de descoberta | 3 |
+| 17 | `479` | `SUBMETRALHADORA(S)` | arma | pendente de descoberta | 3 |
+
+O catálogo local deve conter exatamente esses 17 códigos enquanto esse for o conjunto apresentado pelo GDL para B602. Alteração futura do catálogo deve ser detectada por teste de contrato, não absorvida silenciosamente.
+
+## 5. Inputs comuns das peças
+
+O editor local deve reproduzir todos os inputs comuns observados no GDL web, mesmo quando alguns não forem devolvidos por `/rep/obter`.
+
+| Campo local canônico | Label observado no GDL | Retorno API confirmado | Observação |
+|---|---|---|---|
+| `tipoCodigo` / `tipoPeca` | Tipo do Item | somente `tipoPeca` | código vem do catálogo local |
+| `identificacao` | Identificação | sim | texto |
+| `numeroAnalises` | Nº Análises | sim | validar regra real de obrigatoriedade |
+| `quantidade` | Quantidade | sim | número positivo |
+| `unidadeMedida` | Medida | sim | select com catálogo próprio |
+| `quantidadeDescricao` | Quant. Descrição | não confirmado | texto local preservado |
+| `examinadoInLoco` | Examinado In Loco | sim | booleano normalizado |
+| `dataEntrada` | Data de Entrada | sim | data |
+| `lacreEntrada` | Lacre Entrada | sim | texto |
+| `lacreSaida` | Lacre Saída | sim | texto |
+| `dataLiberacao` | Data de Liberação | não confirmado | data local preservada |
+| `codigoVestigio` | Código do Vestígio | não confirmado | texto local preservado |
+| `consumida` | Consumido/Liberado no Exame? | sim | `Sim`, `Não` ou `Parcialmente` |
+| `observacao` | Observação | não confirmado | observação da peça, não da REP inteira |
+
+A obrigatoriedade deve ser armazenada como metadado booleano e validada localmente. Durante a descoberta, não basta copiar a quantidade de asteriscos do label: deve-se confirmar também o comportamento de validação do GDL.
+
+## 6. Modelo de dados canônico
+
+Peças manuais e importadas devem usar o mesmo modelo.
+
+```ts
+type OrigemPecaB602 = 'manual' | 'gdl'
+
+interface OpcaoCampoPecaB602 {
+  codigo: string
+  label: string
+}
+
+interface DefinicaoCampoPecaB602 {
+  id: string
+  chaveGdl: string
+  aliasesGdl: string[]
+  label: string
+  controle: 'texto' | 'numero' | 'data' | 'booleano' | 'select' | 'multiselect'
+  obrigatorio: boolean
+  opcoes?: OpcaoCampoPecaB602[]
+}
+
+interface PecaB602 {
+  idLocal: string
+  origem: OrigemPecaB602
+  alteradaLocalmente: boolean
+  codPecaGdl?: number
+  tipoCodigo: string
+  tipoPeca: string
+  comuns: {
+    identificacao: string
+    numeroAnalises: string
+    quantidade: number
+    unidadeMedida: string
+    quantidadeDescricao: string
+    examinadoInLoco: boolean
+    dataEntrada: string
+    lacreEntrada: string
+    lacreSaida: string
+    dataLiberacao: string
+    codigoVestigio: string
+    consumida: 'S' | 'N' | 'P' | ''
+    observacao: string
+  }
+  personalizados: Record<string, unknown>
+  extrasGdl: Record<string, unknown>
+}
 ```
 
-Motivo: a implementacao deve repercutir em banco local, IPC, servico GDL, formulario REP/B602, cache offline e documentacao posterior.
+### Regras do modelo
 
-## Estrategia geral
+- `idLocal` identifica o item no CRUD do laWdo.
+- `codPecaGdl` é referência externa e nunca deve ser usado como chave primária local.
+- `tipoCodigo` vem do catálogo de 17 tipos.
+- `personalizados` usa IDs canônicos definidos no catálogo local.
+- `extrasGdl` preserva propriedades ainda desconhecidas com a chave original do GDL.
+- `alteradaLocalmente` registra que uma peça importada foi modificada no laWdo.
+- exclusão local nunca dispara exclusão no GDL.
 
-1. Usar exclusivamente o ambiente de homologacao da API/GDL web para testes.
-2. Descobrir os inputs possiveis das pecas B602 observando o comportamento real do GDL:
-   - abrir o GDL web em homologacao;
-   - acessar o fluxo de "Adicionar Peca";
-   - selecionar tipos de item, por exemplo `CARABINA(S)`;
-   - capturar requests e respostas que montam campos, opcoes e dependencias.
-3. Complementar a descoberta com REPs B602 reais de homologacao fornecidas pelo usuario:
-   - consultar a REP via API;
-   - armazenar o JSON bruto;
-   - validar como as pecas ja preenchidas aparecem no retorno.
-4. Persistir localmente catalogos, metadados e payloads brutos para permitir funcionamento offline.
-5. Renderizar o formulario B602 usando os metadados/cache quando existirem, mantendo fallback local para quando o cache nao estiver disponivel.
+## 7. Contrato e normalização da API
 
-## Escopo inicial
+O payload deve entrar como `unknown` e ser validado antes de alcançar o renderer.
 
-- Foco apenas em B602.
-- Foco nos inputs das pecas da REP.
-- Comecar por tipos de peca presentes nas amostras de homologacao, especialmente `CARABINA(S)`.
-- Nao implementar escrita no GDL.
-- Nao enviar ou atualizar REP pela API GDL.
-- Nao remover o preenchimento manual.
+### 7.1 Schema da peça
 
-## Descoberta dos dados no GDL
+O schema deve validar os campos comuns e aceitar propriedades adicionais com `catchall`/`passthrough` controlado. O tipo resultante precisa manter index signature compatível com os campos dinâmicos.
 
-A descoberta deve combinar duas fontes:
+### 7.2 Separação de campos
 
-| Fonte | Papel |
+1. validar campos comuns;
+2. remover do objeto as chaves comuns conhecidas;
+3. resolver o tipo pelo label e aliases do catálogo;
+4. mapear as chaves restantes para os IDs canônicos de campos personalizados;
+5. colocar chaves não reconhecidas em `extrasGdl`;
+6. nunca descartar campo apenas por não existir no catálogo atual.
+
+### 7.3 Labels não são identidade suficiente
+
+Como `/rep/obter` devolve propriedades como `Marca` e `ORIGEM/COLETA`, o catálogo deve manter:
+
+- chave original confirmada;
+- aliases normalizados;
+- ID local estável, por exemplo `476:marca` e `101:origem_coleta`.
+
+Normalização de caixa, acentos e espaços serve apenas para localizar aliases conhecidos. Ela não autoriza mapear campos semanticamente diferentes.
+
+## 8. Catálogo local de metadados
+
+Enquanto não existir endpoint oficial de metadados, as definições dos 17 tipos ficarão versionadas no código, validadas por Zod e disponíveis offline.
+
+Estrutura sugerida:
+
+```text
+src/shared/types/b602-gdl.types.ts
+src/renderer/components/rep/exam-fields/catalogos/b602-gdl.catalogo.ts
+src/main/services/gdl-b602-normalizador.service.ts
+```
+
+Cada tipo deve registrar:
+
+- código e label exatos do GDL;
+- família local;
+- aliases do tipo;
+- lista ordenada de campos personalizados;
+- controle de cada campo;
+- obrigatoriedade;
+- opções com códigos e labels;
+- data e ambiente da última verificação;
+- referência da fixture anonimizada usada no teste.
+
+Não criar `gdl_catalogos` ou sincronização automática nesta primeira implementação. As opções de endpoints oficiais já existentes, como unidades de medida, podem ganhar cache separado depois. O formulário dos 17 tipos não deve depender de scraping em produção.
+
+Também não criar `gdl_reps_cache` nesta fase. Após o usuário aplicar a consulta, o dado normalizado já ficará persistido na REP local. O payload bruto deve existir apenas em memória durante revisão/importação.
+
+## 9. Formulário e CRUD local
+
+Criar um editor de peças B602 baseado em coleção tipada, substituindo a multiplicação de chaves planas por tipo de peça.
+
+### 9.1 Lista de peças
+
+Cada card/linha deve exibir:
+
+- tipo;
+- identificação;
+- quantidade e unidade;
+- origem (`Manual` ou `Importada do GDL`);
+- indicador de alteração local;
+- ações `Editar` e `Excluir`.
+
+### 9.2 Inclusão manual
+
+1. usuário escolhe um dos 17 tipos;
+2. laWdo renderiza os inputs comuns;
+3. laWdo renderiza os inputs personalizados do catálogo daquele tipo;
+4. valida obrigatórios e tipos;
+5. adiciona a peça à coleção local;
+6. usuário pode reabrir, alterar ou excluir antes e depois de salvar a REP.
+
+### 9.3 Importação do GDL
+
+1. consultar REP;
+2. normalizar todas as peças;
+3. exibir revisão individual por peça;
+4. destacar campos mapeados, extras e ambiguidades;
+5. permitir selecionar quais peças importar;
+6. aplicar as peças selecionadas à mesma coleção usada no cadastro manual;
+7. manter edição e exclusão local disponíveis.
+
+### 9.4 Mesclar e substituir
+
+`Mesclar`:
+
+- preenche apenas campos vazios da REP;
+- adiciona peça cujo `codPecaGdl` ainda não exista localmente;
+- para peça já importada, preenche somente valores vazios;
+- preserva alterações locais.
+
+`Substituir dados do GDL`:
+
+- substitui campos gerais mapeados;
+- substitui peças já importadas que tenham o mesmo `codPecaGdl`;
+- não exclui peças de origem manual;
+- antes de remover peça importada ausente na nova consulta, exige confirmação explícita.
+
+O texto atual `Substituir tudo` deve ser revisto para deixar esse limite claro.
+
+## 10. Persistência e integração com o laudo
+
+`campos_especificos.b602.pecas` será a fonte canônica das peças.
+
+Não persistir cópias divergentes da mesma peça em `material_enc`, `armas`, `estojos` e outros arrays. Criar seletores/adaptadores derivados para os consumidores atuais:
+
+- material encaminhado;
+- tabelas de armas, estojos e demais famílias;
+- placeholders simples e indexados;
+- seções repetíveis por arma;
+- toggles `func_toggle` e `coleta_toggle` quando aplicáveis;
+- PDF da REP;
+- sincronização de seções do laudo.
+
+O mapeamento de família não deve inventar equivalências. Exemplos:
+
+- `Marca`, `Modelo` e `Nº Série` de arma podem alimentar campos técnicos locais equivalentes;
+- `ORIGEM/COLETA` de `ESTOJO(S)` não equivale ao campo local `origem` que representa país;
+- campos técnicos próprios do laWdo podem coexistir com os campos reproduzidos do GDL.
+
+## 11. Etapas de execução
+
+### Etapa 1 — Fundação e correções do contrato
+
+- criar tipos compartilhados da REP e das peças GDL;
+- criar schemas Zod para resposta, origem, andamento e peça dinâmica;
+- remover casts diretos após `JSON.parse`;
+- centralizar os tipos hoje duplicados entre main e renderer;
+- criar normalizador comum/personalizado/extras;
+- corrigir o schema inicial para garantir `campos_especificos` em banco novo;
+- substituir o envio de peças para `observacoes` por revisão estruturada;
+- criar fixtures anonimizadas do formato confirmado em `190/2026`.
+
+### Etapa 2 — Editor genérico + tipos já confirmados
+
+- implementar coleção canônica e CRUD manual;
+- implementar renderer dos inputs comuns;
+- cadastrar metadados completos de `CARABINA(S)` e `ESTOJO(S)`;
+- importar ambas pela API;
+- permitir editar e excluir localmente;
+- persistir e reabrir sem perda;
+- validar comportamento offline.
+
+### Etapa 3 — Família de armas
+
+Auditar e implementar, um por vez:
+
+1. `ARMA(S) DE CHOQUE` (`289`)
+2. `ARMA(S) DE PRESSÃO` (`613`)
+3. `ESPINGARDA(S)` (`472`)
+4. `FUZIL(IS)` (`477`)
+5. `GARRUCHA(S)` (`475`)
+6. `PISTOLA(S)` (`104`)
+7. `PISTOLETE(S)` (`478`)
+8. `REVÓLVER(ES)` (`106`)
+9. `SUBMETRALHADORA(S)` (`479`)
+
+`CARABINA(S)` já integra a Etapa 2.
+
+Ao final, adaptar seções repetíveis, placeholders e toggles para trabalhar com todas as peças classificadas como arma, não apenas com o formato antigo de `b602.armas`.
+
+### Etapa 4 — Componentes e materiais balísticos
+
+Auditar e implementar:
+
+1. `CARREGADOR(ES)` (`272`)
+2. `ESPOLETA(S)` (`473`)
+3. `PÓLVORA` (`572`)
+4. `PROJÉTEIS` (`105`)
+
+`ESTOJO(S)` já integra a Etapa 2.
+
+Confirmar separadamente o tratamento de `Cartuchos` existente no laWdo, pois `CARTUCHO(S)` não apareceu entre os 17 tipos oferecidos pelo GDL na amostra. Não remover o recurso local sem decisão funcional específica.
+
+### Etapa 5 — Tipos genéricos e de homologação
+
+- auditar `OUTROS` (`178`), incluindo possíveis campos livres;
+- auditar `PEÇA TESTE` (`771`);
+- confirmar se `PEÇA TESTE` existe em produção;
+- manter o tipo disponível por ambiente conforme o catálogo confirmado, sem misturar dados de homologação e produção.
+
+### Etapa 6 — Consolidação dos 17 tipos
+
+- executar teste de contrato do catálogo completo;
+- revisar obrigatoriedade e opções de todos os campos;
+- revisar aliases da API;
+- validar cadastro manual, importação, edição, exclusão e reabertura para os 17 tipos;
+- atualizar placeholders/tabelas do laudo somente onde houver equivalência semântica aprovada;
+- realizar teste exploratório final em homologação.
+
+## 12. Protocolo obrigatório de descoberta por tipo
+
+Nenhum dos 15 schemas pendentes deve ser preenchido por suposição. Para cada tipo:
+
+1. selecionar o tipo no GDL web de homologação;
+2. registrar código e label exatos;
+3. enumerar todos os campos personalizados na ordem exibida;
+4. registrar controle, obrigatoriedade, opções e códigos;
+5. testar validação deixando obrigatórios vazios;
+6. preencher valores distintivos e adicionar a peça a uma REP de teste;
+7. consultar a REP por `/rep/obter`;
+8. comparar chaves e valores devolvidos pela API;
+9. criar fixture anonimizada;
+10. cadastrar/atualizar a definição no catálogo local;
+11. criar testes de cadastro manual e importação;
+12. marcar o tipo como confirmado somente depois do round-trip completo.
+
+## 13. IPC e segurança
+
+Manter a integração somente leitura.
+
+O canal `gdl:consultar-rep` deve devolver contrato validado e normalizado, incluindo peças estruturadas. Não são necessários novos canais de catálogo enquanto os metadados forem locais.
+
+Se o contrato IPC mudar, atualizar em conjunto:
+
+- handler;
+- `ALLOWED_CHANNELS`;
+- `IpcAPI`/preload;
+- tipos compartilhados;
+- consumidor no renderer.
+
+Regras adicionais:
+
+- renderer não acessa HTTP, Electron ou SQLite diretamente;
+- credenciais não entram em logs, fixtures ou payloads do renderer;
+- payload externo sempre cruza schema Zod;
+- campos inesperados são preservados, não executados nem renderizados como HTML;
+- revisar `rejectUnauthorized: false` antes de habilitar produção, preferindo instalar/confiar explicitamente na cadeia de certificados do GDL.
+
+## 14. Arquivos e responsabilidades previstas
+
+| Área | Responsabilidade |
 |---|---|
-| GDL web homologacao | Revelar quais requests definem campos, opcoes e dependencias ao adicionar uma peca |
-| REP B602 real homologacao | Validar como pecas preenchidas retornam em `/rep/obter` |
+| `src/shared/types/` | contratos GDL/B602 compartilhados |
+| `src/main/services/gdl.service.ts` | transporte e autenticação |
+| `src/main/services/gdl-b602-normalizador.service.ts` | validação e normalização das peças |
+| `src/main/ipc/handlers/gdl.handlers.ts` | fronteira IPC somente leitura |
+| `src/preload/index.ts` e tipos | exposição segura e tipada |
+| `GdlConsultaModal.tsx` | revisão e seleção das peças a aplicar |
+| `exam-fields/catalogos/b602-gdl.catalogo.ts` | catálogo versionado dos 17 tipos |
+| `exam-fields/b602.tsx` ou componentes extraídos | lista e editor de peças |
+| `exam-fields/services/b602.service.ts` | serialização da coleção canônica |
+| `REPsPage.tsx` | orquestração, validação e aplicação da consulta |
+| `secao-builder.service.ts` | projeções para seções/toggles derivados |
+| exportação e placeholders | projeções aprovadas da coleção canônica |
 
-Se o GDL web expuser endpoint de metadados dos inputs, o laWdo deve usar esse endpoint como fonte principal.
+Extrair componentes e hooks por responsabilidade quando o editor crescer; não concentrar catálogo, normalização, UI e persistência em `b602.tsx` ou `REPsPage.tsx`.
 
-Se nao houver endpoint claro de metadados, o laWdo deve:
+## 15. Testes automatizados
 
-- armazenar o JSON bruto das REPs consultadas;
-- mapear incrementalmente os tipos de peca encontrados;
-- evitar inventar campos sem evidencia no GDL;
-- manter campos desconhecidos preservados em payload bruto para auditoria futura.
+### Contrato GDL
 
-## Banco local
+- rejeitar payload estruturalmente inválido;
+- aceitar propriedades personalizadas adicionais;
+- preservar campo desconhecido em `extrasGdl`;
+- garantir que credenciais e valores brutos não sejam logados;
+- fixture de `CARABINA(S)` contém os quatro campos personalizados confirmados;
+- fixture de `ESTOJO(S)` contém `ORIGEM/COLETA`;
+- peça sem campo personalizado continua válida.
 
-Adicionar cache SQLite para dados GDL. Estrutura sugerida:
+### Catálogo
 
-### `gdl_catalogos`
+- possuir exatamente 17 códigos únicos;
+- não aceitar código `0`;
+- garantir label, família e aliases únicos;
+- validar IDs canônicos de campos;
+- validar opções sem códigos duplicados;
+- falhar enquanto algum tipo marcado como concluído não tiver fixture de round-trip.
 
-Armazena listas e metadados vindos do GDL.
+### CRUD local
 
-Campos sugeridos:
+- criar manualmente cada tipo;
+- validar campos obrigatórios;
+- editar campos comuns e personalizados;
+- excluir somente a peça selecionada;
+- persistir e reabrir a coleção;
+- preservar campos técnicos exclusivos do laWdo.
 
-- `id`
-- `ambiente`
-- `catalogo`
-- `codigo`
-- `nome`
-- `filtro_chave`
-- `filtro_valor`
-- `payload_json`
-- `sincronizado_em`
+### Importação
 
-Catalogos iniciais:
+- não colocar peças em `observacoes`;
+- importar todas as peças selecionadas;
+- deduplicar por `codPecaGdl`;
+- mesclar sem sobrescrever alteração local;
+- substituir somente dados originados do GDL;
+- preservar peças manuais;
+- permitir editar e excluir peça importada;
+- preservar propriedade desconhecida da API.
 
-- `naturezasExames`
-- `tiposPecas`
-- `unidadesMedida`
-- metadados de inputs de peca, se descobertos no GDL web
+### Integração com laudo
 
-### `gdl_reps_cache`
+- projetar corretamente peças da família arma;
+- manter seções repetíveis e toggles por arma;
+- gerar tabelas e placeholders sem duplicar dados persistidos;
+- não tratar `ORIGEM/COLETA` como país de origem;
+- sincronizar o laudo após alteração ou exclusão local de peça.
 
-Armazena o retorno bruto de REPs consultadas.
+## 16. Validação manual
 
-Campos sugeridos:
+Para cada etapa:
 
-- `id`
-- `ambiente`
-- `cod_rep`
-- `numero`
-- `ano`
-- `dados_json`
-- `consultado_em`
+1. cadastrar peça manualmente;
+2. salvar e reabrir a REP local;
+3. importar peça equivalente do GDL;
+4. testar `Mesclar`;
+5. testar `Substituir dados do GDL`;
+6. editar a peça importada;
+7. excluir a peça localmente;
+8. confirmar que nenhuma operação alterou o GDL;
+9. desligar a VPN e validar cadastro/edição offline;
+10. gerar/sincronizar laudo quando o tipo possuir projeção aprovada.
 
-## IPC e servico GDL
+## 17. Critérios de aceitação
 
-Adicionar canais somente leitura:
+- Os 17 tipos do catálogo podem ser selecionados no laWdo.
+- Todos os campos comuns do formulário GDL estão disponíveis localmente.
+- Todos os campos personalizados confirmados de cada tipo são reproduzidos com controle, obrigatoriedade e opções corretos.
+- O usuário pode criar, editar e excluir qualquer peça localmente.
+- A consulta GDL preenche automaticamente campos comuns e personalizados devolvidos pela API.
+- Peças importadas e manuais usam a mesma estrutura e o mesmo editor.
+- Campos desconhecidos da API são preservados e apresentados como não mapeados, sem perda silenciosa.
+- Peças não são gravadas em `observacoes`.
+- `campos_especificos.b602.pecas` é a única fonte persistida das peças.
+- Mesclar preserva dados e alterações locais.
+- Substituir não remove peça manual sem confirmação explícita.
+- O laWdo funciona offline para cadastro, edição, exclusão e reabertura.
+- Nenhuma ação do fluxo realiza escrita no GDL.
+- TypeScript, lint e testes ficam verdes sem aumentar warnings.
 
-- `gdl:sincronizar-catalogos-b602`
-  - consulta homologacao;
-  - salva catalogos/metadados no banco local;
-  - retorna contagens e data da sincronizacao.
+## 18. Fora do escopo
 
-- `gdl:listar-opcoes-b602`
-  - retorna opcoes cacheadas por grupo/campo do formulario.
+- criar, atualizar ou excluir peça no GDL;
+- enviar REP ou laudo ao GDL;
+- sincronização bidirecional;
+- scraping do GDL web em produção;
+- geração automática de metadados confiáveis somente a partir dos nomes das propriedades;
+- sincronizar tipos de item de outras naturezas de exame;
+- compatibilidade com o formato B602 persistido antes desta implementação.
 
-- `gdl:consultar-rep`
-  - manter comportamento atual de consulta;
-  - adicionar persistencia do JSON bruto em `gdl_reps_cache`.
+## 19. Branch e validação técnica
 
-Todos os novos canais devem ser registrados no preload e manter a regra de seguranca atual: renderer nunca acessa `electron`, `http`, `https` ou banco diretamente.
+Branch sugerida:
 
-## Formulario B602
+```bash
+git switch -c codex/gdl-b602
+```
 
-Substituir listas fixas locais por opcoes vindas do cache GDL quando disponiveis.
+Após cada etapa:
 
-Fallbacks:
+```bash
+npm run type-check
+npm run lint
+npm test
+```
 
-- se nao houver cache, usar as listas locais atuais;
-- se uma opcao salva em REP antiga nao existir no cache, exibir o valor salvo sem descarta-lo;
-- se o GDL retornar campo desconhecido, preservar no JSON bruto e nao renderizar input especulativo.
-
-Areas iniciais:
-
-- Material Encaminhado
-- Armas
-- Cartuchos
-- Estojos
-
-Para cada peca mapeada com seguranca, o formulario deve preencher `campos_especificos.b602` em vez de jogar dados em `observacoes`.
-
-## Correcao de mapeamento da REP GDL
-
-Problema atual: em homologacao, `tipo_solicitacao` pode ser preenchido com `MOVIMENTACAO`, valor que nao representa corretamente o tipo da solicitacao.
-
-Regra proposta:
-
-- nao preencher `tipo_solicitacao` com valores ambiguos de andamento/movimentacao;
-- mapear apenas origens reconhecidas como oficios, BOs ou equivalentes;
-- quando houver ambiguidade, mostrar na revisao da consulta GDL e deixar o campo para preenchimento manual;
-- nao colocar `pecas[*]` em `observacoes`;
-- pecas devem alimentar estrutura propria de B602 apenas quando houver correspondencia segura.
-
-## UX
-
-Na pagina de configuracao GDL:
-
-- adicionar acao "Sincronizar catalogos B602";
-- exibir ambiente usado;
-- exibir data da ultima sincronizacao;
-- exibir quantidade de itens sincronizados;
-- deixar claro quando o formulario esta usando fallback local.
-
-No modal de consulta GDL:
-
-- revisar campos que serao aplicados;
-- destacar campos ignorados por ambiguidade;
-- listar pecas encontradas na REP;
-- indicar quais pecas foram mapeadas automaticamente e quais ficaram apenas preservadas no JSON bruto.
-
-## Testes
-
-### Automatizados
-
-- Normalizacao de nomes GDL:
-  - `CARABINA(S)` deve casar com tipo local quando houver mapeamento.
-  - acentos, caixa e pluralizacao nao devem quebrar comparacao.
-
-- Mapeamento de origem:
-  - `MOVIMENTACAO` nao preenche `tipo_solicitacao`.
-  - origem reconhecida como oficio preenche `Oficio` ou valor equivalente aprovado.
-
-- Cache:
-  - sincronizacao faz upsert sem duplicar catalogos;
-  - leitura offline retorna dados salvos;
-  - ausencia de cache ativa fallback local.
-
-- B602:
-  - opcoes cacheadas aparecem nos selects;
-  - valores antigos continuam abrindo corretamente;
-  - `campos_especificos.b602` serializa pecas mapeadas.
-
-### Manuais em homologacao
-
-1. Criar branch `feat/gdl-b602`.
-2. Configurar credenciais de homologacao.
-3. Sincronizar catalogos B602.
-4. Abrir GDL web em homologacao e capturar fluxo de "Adicionar Peca".
-5. Selecionar `CARABINA(S)` e registrar requests/respostas relevantes.
-6. Consultar REP B602 real fornecida pelo usuario.
-7. Aplicar dados ao formulario local.
-8. Salvar REP local.
-9. Reabrir REP e validar persistencia.
-10. Confirmar funcionamento sem acesso ao GDL usando cache local.
-
-## Criterios de aceitacao
-
-- O formulario B602 usa opcoes do GDL quando sincronizadas.
-- O sistema continua funcionando offline com cache ou fallback local.
-- `MOVIMENTACAO` nao e aplicado como `Tipo de Solicitacao`.
-- Pecas do GDL deixam de ser despejadas em `observacoes`.
-- O JSON bruto de REPs consultadas fica preservado para auditoria e evolucao do mapeamento.
-- A implementacao nao realiza escrita na API GDL.
-
-## Fora do escopo inicial
-
-- Enviar laudo pelo GDL.
-- Criar, atualizar ou excluir REP no GDL.
-- Sincronizar todos os tipos de exame.
-- Mapear todos os tipos de peca existentes no GDL sem amostra ou metadado.
-- Criar tela completa de edicao manual de schema dinamico.
-
-## Observacoes
-
-Este plano e intencionalmente incremental. A primeira entrega deve criar a infraestrutura para descobrir, cachear e consumir dados do GDL, reduzindo a necessidade de codificacao manual. O mapeamento especifico por tipo de peca deve crescer conforme forem capturados metadados reais ou REPs de homologacao representativas.
+Executar também `npm run test:coverage` quando forem adicionadas as fixtures e a nova camada de normalização.
