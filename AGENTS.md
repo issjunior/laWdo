@@ -92,14 +92,14 @@ Regra prática: ao cruzar uma fronteira insegura, não use `any` nem cast direto
 
 ## Arquitetura
 
-A aplicação segue o modelo de 3 camadas do Electron com `shared/` para tipos comuns:
+A aplicação segue o modelo de 3 camadas do Electron com `shared/` para contratos e metadados puros usados por mais de uma camada:
 
 ```
 src/
 ├── main/         # Processo principal (Node.js)
 ├── preload/      # Ponte de segurança (contextBridge)
 ├── renderer/     # Interface React
-└── shared/       # Tipos compartilhados
+└── shared/       # Tipos, contratos e metadados puros compartilhados
 ```
 
 **Fluxo IPC** (toda comunicação renderer ↔ main):
@@ -136,7 +136,7 @@ Cada feature deve ter responsabilidade única e clara, com seus próprios servi�
 - **Main ↔ Renderer**: sempre via IPC + preload. Nunca importar módulos do main no renderer.
 - **Dentro do mesmo processo** (ex: entre feature folders do renderer): imports cruzados são aceitáveis apenas para:
   - **Páginas compondo features** — uma página pode importar componentes de múltiplas feature folders.
-  - **Tipos compartilhados** — extraia para `src/shared/types/` se duas features precisam do mesmo tipo.
+  - **Contratos compartilhados** — tipos, schemas e metadados puros usados por mais de uma camada ou feature podem ficar em `src/shared/`, organizados por responsabilidade (`types/`, `catalogos/` etc.).
   - **Componentes genéricos reutilizáveis** — extraia para `src/renderer/components/ui/`.
 
 **Evitar**:
@@ -149,8 +149,9 @@ Cada feature deve ter responsabilidade única e clara, com seus próprios servi�
 
 - Nem toda feature precisa ter todas as camadas; crie service, handler, hook ou componente apenas quando houver responsabilidade real.
 - Páginas podem compor múltiplas features, mas componentes/hooks internos de uma feature não devem depender de detalhes internos de outra.
-- Extraia para `src/shared/types/` apenas tipos usados por mais de uma camada ou feature e com contrato estável.
-- Evite transformar `shared/` em depósito genérico. Se algo pertence ao domínio de uma feature, mantenha junto da feature.
+- Extraia para `src/shared/` apenas contratos ou metadados puros usados por mais de uma camada ou feature e com formato estável.
+- Arquivos em `shared/` não podem depender de React, DOM, Electron ou módulos Node. Schemas usados somente por uma fronteira do main devem permanecer no main; componentes e regras exclusivamente visuais permanecem no renderer.
+- Evite transformar `shared/` em depósito genérico. Se algo pertence exclusivamente ao domínio interno de uma feature ou camada, mantenha junto dela.
 - Para fluxos grandes, prefira página como orquestradora e extraia componentes/hooks por responsabilidade clara.
 - Ao adicionar IPC de uma feature, mantenha juntos: handler, canal permitido, tipo no preload e chamada tipada no renderer.
 - Antes de criar uma nova abstração, verifique se ela reduz duplicação real ou melhora clareza; não criar arquivos pequenos apenas por simetria.
