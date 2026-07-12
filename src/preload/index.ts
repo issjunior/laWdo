@@ -16,6 +16,7 @@ import type {
   TipoExameUpdateData
 } from './types.js';
 import type { DashboardProjecoes, DashboardResumo } from '../types/dashboard.js';
+import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
 
 // Tipo para entrada de log do sistema
 interface LogEntry {
@@ -143,7 +144,7 @@ export interface IpcAPI {
     obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
-    consultarRep: (numero: string, ano: string) => Promise<UserResponse>;
+    consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
   };
 
   // Placeholder para outras APIs que serão implementadas

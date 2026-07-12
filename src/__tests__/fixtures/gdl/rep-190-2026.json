@@ -1,0 +1,98 @@
+{
+  "codRep": 1902026,
+  "numero": 190,
+  "ano": 2026,
+  "origens": [
+    {
+      "tipo": "BO",
+      "numero": "123/2026",
+      "ano": 2026,
+      "cidade": "LONDRINA",
+      "orgaoOrigem": "ÓRGÃO TESTE",
+      "responsavel": "RESPONSÁVEL TESTE"
+    },
+    {
+      "tipo": "BO/PM",
+      "numero": "123",
+      "ano": 2026,
+      "cidade": "LONDRINA"
+    },
+    {
+      "tipo": "IP/APFD",
+      "numero": "456",
+      "ano": 2026,
+      "cidade": "LONDRINA"
+    },
+    {
+      "tipo": "IP/PM",
+      "numero": "456",
+      "ano": 2026,
+      "cidade": "LONDRINA"
+    }
+  ],
+  "dadosComplementares": {
+    "pessoas": {
+      "involvedFacts": [
+        { "involvedType": "VÍTIMA", "txtNameInvolvedFact": "ENVOLVIDO TESTE" },
+        { "involvedType": "AUTOR", "nameInvolvedFact": "OUTRO ENVOLVIDO" }
+      ]
+    }
+  },
+  "andamentos": [
+    { "dataHora": "2026-07-10T09:00:00", "nomeUsuario": "USUÁRIO ANONIMIZADO", "descricao": "Recebimento" }
+  ],
+  "nomeAutoridadeSolicitante": "AUTORIDADE TESTE",
+  "pecas": [
+    {
+      "codPeca": 1001,
+      "tipoPeca": "CARABINA(S)",
+      "identificacao": "ITEM A",
+      "quantidade": 1,
+      "unidadeMedida": "UNIDADE",
+      "numeroAnalises": "1",
+      "examinadoInLoco": "Não",
+      "dataEntrada": "2026-07-10",
+      "lacreEntrada": "LE-001",
+      "lacreSaida": "LS-001",
+      "consumida": "Não",
+      "Nº Série": "SERIE-ANONIMIZADA",
+      "Marca": "MARCA TESTE",
+      "Modelo": "MODELO TESTE",
+      "Arma é Institucional?": "97"
+    },
+    {
+      "codPeca": 1002,
+      "tipoPeca": "ESTOJO(S)",
+      "identificacao": "ITEM B",
+      "quantidade": "2",
+      "unidadeMedida": "UNIDADE",
+      "numeroAnalises": "2",
+      "examinadoInLoco": false,
+      "dataEntrada": "2026-07-10",
+      "lacreEntrada": "",
+      "lacreSaida": "",
+      "consumida": "Parcialmente",
+      "ORIGEM/COLETA": "93",
+      "Campo Futuro": "preservar"
+    },
+    {
+      "codPeca": 1003,
+      "tipoPeca": "REVÓLVER(ES)",
+      "identificacao": "TAURUS XX .38SPL",
+      "quantidade": 1,
+      "unidadeMedida": "UNIDADES",
+      "numeroAnalises": "1",
+      "examinadoInLoco": false,
+      "dataEntrada": "2026-07-12",
+      "lacreEntrada": "",
+      "lacreSaida": "",
+      "consumida": "Não",
+      "Nº Série": "DHGEHY54",
+      "Marca": "TAURUS",
+      "Modelo": "XX",
+      "Fabricação da Arma": "brasileira",
+      "Arma é Institucional?": "NÃO",
+      "Funcionamento": "Eficiente"
+    }
+  ]
+}

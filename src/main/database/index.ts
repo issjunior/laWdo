@@ -147,6 +147,7 @@ const createDatabaseSchema = async (): Promise<void> => {
         numero_bo TEXT,
         numero_ip TEXT,
         observacoes TEXT,
+        campos_especificos TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (solicitante_id) REFERENCES solicitantes(id),

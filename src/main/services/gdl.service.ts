@@ -5,6 +5,8 @@ import http from 'http';
 import { app } from 'electron';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
+import { interpretarGdlRepJson } from './gdl.schema.js';
+import type { GdlRepValidada } from './gdl.schema.js';
 
 const log = getLogger('gdl');
 
@@ -40,41 +42,10 @@ interface GdlTesteEtapa {
   erro?: string;
 }
 
-interface GdlOrigem {
-  tipo: string;
-  numero: string;
-}
-
-interface GdlPeca {
-  codPeca: number;
-  tipoPeca: string;
-  identificacao: string;
-  quantidade: number;
-  unidadeMedida: string;
-  examinadoInLoco: string;
-  numeroAnalises: string;
-  dataEntrada: string;
-  consumida: string;
-}
-
-interface GdlAndamento {
-  dataHora: string;
-  nomeUsuario: string;
-  descricao: string;
-}
-
-interface GdlRepData {
-  codRep: number;
-  numero: number;
-  ano: number;
-  origens: GdlOrigem[];
-  pecas: GdlPeca[];
-  andamentos: GdlAndamento[];
-}
-
 export interface GdlConsultaResultado {
   sucesso: boolean;
-  dados: GdlRepData | null;
+  dados: GdlRepValidada | null;
+  ambiente?: AmbienteGdl;
   erro?: string;
 }
 
@@ -86,7 +57,7 @@ export interface GdlValidacaoSessao {
   dataHora?: string;
 }
 
-type AmbienteGdl = 'homologacao' | 'producao';
+export type AmbienteGdl = 'homologacao' | 'producao';
 
 const GDL_ESTADO_DIR = path.join(app.getPath('userData'), 'gdl');
 const GDL_ESTADO_FILE = path.join(GDL_ESTADO_DIR, 'validacao-sessao.json');
@@ -358,14 +329,14 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
     const { statusCode, data } = await httpsRequest(url, 'GET', headers, undefined, 15000);
 
     if (statusCode === 200) {
-      const parsed = JSON.parse(data) as GdlRepData;
+      const parsed = interpretarGdlRepJson(data);
       registrarValidacaoSessao(ambiente, numero, ano);
       log.debug('REP consultada no GDL com sucesso', {
         numero,
         ano,
         codRep: parsed.codRep,
       });
-      return { sucesso: true, dados: parsed };
+      return { sucesso: true, dados: parsed, ambiente };
     }
 
     if (statusCode === 404) {
@@ -421,7 +392,7 @@ export async function validarCredenciais(
     const { statusCode, data } = await httpsRequest(url, 'GET', headers, undefined, 15000);
 
     if (statusCode === 200) {
-      const parsed = JSON.parse(data) as GdlRepData;
+      const parsed = interpretarGdlRepJson(data);
       registrarValidacaoSessao(amb, numero, ano);
       return { sucesso: true, dados: parsed };
     }

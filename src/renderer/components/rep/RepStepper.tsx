@@ -3,6 +3,7 @@ import { Stepper } from '@/components/ui/stepper';
 import { useRepStepper } from './useRepStepper';
 import type { UseFormReturn } from 'react-hook-form';
 import type { REPFormData } from '@/components/rep/exam-fields/types';
+import type { PecaB602 } from '@shared/types/b602-gdl.types';
 
 /* ─── Contexto ─── */
 
@@ -26,6 +27,7 @@ interface RepStepperProps {
   /** Controla se o IntersectionObserver fica ativo */
   showForm: boolean;
   children: React.ReactNode;
+  pecasB602: PecaB602[];
 }
 
 /* ─── Componente ─── */
@@ -44,9 +46,10 @@ export const RepStepper: React.FC<RepStepperProps> = ({
   tipoExameNome,
   showForm,
   children,
+  pecasB602,
 }) => {
   const { steps, activeStep, setActiveStep, completedSteps, collapsed, setCollapsed, onStepClick } =
-    useRepStepper({ form, tipoExameId, tipoExameSelecionado });
+    useRepStepper({ form, tipoExameId, tipoExameSelecionado, pecasB602 });
 
   /* ── Scroll spy via IntersectionObserver ── */
   const observerPausedRef = useRef(false);

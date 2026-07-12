@@ -1,8 +1,11 @@
+import React from 'react';
 import { MapPin, Clock, Hash, Search, Package, CircleDot, Cylinder, Crosshair } from 'lucide-react';
 import { LocalFatoFields } from './local-fato';
 import { AcionamentoFields } from './acionamento';
 import { NumeracaoFields } from './numeracao';
 import { DadosInvestigacaoFields, MaterialEncFields, CartuchosFields, EstojosFields, ArmasFields, B602_MENU_STRUCTURE } from './b602';
+import { PecasB602Fields } from './pecas-b602';
+import { pecaB602EstaCompleta } from '@shared/catalogos/b602-gdl.catalogo';
 import { numeracaoService } from './services/numeracao.service';
 import { b602Service } from './services/b602.service';
 import type { ExamSection, MenuSection } from './types';
@@ -63,6 +66,19 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     group: undefined,
     requiredFields: ['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local_cidade', 'b602_local_uf'],
   },
+  pecas_b602: {
+    id: 'pecas_b602',
+    label: 'Peças',
+    icon: Package,
+    description: 'Peças encaminhadas para o exame, manuais ou importadas do GDL',
+    component: ({ pecasB602 = [], onPecasB602Change }) => React.createElement(PecasB602Fields, {
+      pecas: pecasB602,
+      onChange: onPecasB602Change ?? (() => undefined),
+    }),
+    group: undefined,
+    requiredFields: [],
+    isComplete: (_data, { pecasB602 }) => pecasB602.length > 0 && pecasB602.every(pecaB602EstaCompleta),
+  },
   material_enc: {
     id: 'material_enc',
     label: 'Material Encaminhado',
@@ -104,7 +120,7 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
 export const EXAM_FIELD_MAP: Record<string, string[]> = {
   'LOC':   ['local_fato', 'acionamento'],
   'I-801': ['numeracao'],
-  'B-602': ['dados_investigacao', 'material_enc', 'cartuchos', 'estojos', 'armas'],
+  'B-602': ['dados_investigacao', 'pecas_b602'],
 };
 
 const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
