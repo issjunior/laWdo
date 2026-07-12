@@ -18,6 +18,7 @@ import {
 import { Plus, X } from 'lucide-react';
 import type { Path } from 'react-hook-form';
 import type { ExamSectionProps, MenuSection, REPFormData } from './types';
+import { CIDADES_GDL } from './catalogos/cidades-gdl.catalogo';
 
 type CampoRep = Path<REPFormData>;
 
@@ -69,7 +70,12 @@ const UF_OPTS = [
   'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ] as const;
 
-export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) => {
+export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camposPreenchidosGdl }) => {
+  const obterClasseGdl = (campo: string): string => (
+    camposPreenchidosGdl?.has(campo)
+      ? 'bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-800'
+      : ''
+  )
   const [numEnvolvidos, setNumEnvolvidos] = useState(() => {
     let maxIndex = 0;
     for (let i = 0; i < 10; i++) {
@@ -125,7 +131,7 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
                   render={({ field }) => (
                     <FormItem className="flex-1 space-y-0 min-w-0">
                       <FormControl>
-                        <Input placeholder="Nome do envolvido" {...field} />
+                        <Input placeholder="Nome do envolvido" className={obterClasseGdl(`b602_envolvidos_${i}`)} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -207,9 +213,18 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
               name="b602_local_cidade"
               render={({ field }) => (
                 <FormItem className="flex-1 min-w-0 space-y-0">
-                  <FormControl>
-                    <Input placeholder="Cidade" className="flex-1 min-w-0" {...field} />
-                  </FormControl>
+                  <Select value={field.value || undefined} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className={`flex-1 min-w-0 ${obterClasseGdl('b602_local_cidade')}`}>
+                        <SelectValue placeholder="Cidade" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {CIDADES_GDL.map((cidade) => (
+                        <SelectItem key={cidade} value={cidade}>{cidade}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -253,8 +268,12 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
                   <FormControl>
                     <Input
                       placeholder="2026/123456"
+                      className={obterClasseGdl('b602_numero_bo')}
                       value={field.value || ''}
-                      onChange={(e) => field.onChange(formatarNumeroBO(e.target.value))}
+                      onChange={(e) => {
+                        form.setValue('b602_numero_bo', formatarNumeroBO(e.target.value), { shouldDirty: true });
+                        void form.trigger(['b602_numero_bo', 'b602_numero_ip']);
+                      }}
                     />
                   </FormControl>
                   <FormMessage />
@@ -275,7 +294,15 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form }) =>
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <Input placeholder="Inquérito Policial" {...field} />
+                    <Input
+                      placeholder="Inquérito Policial"
+                      className={obterClasseGdl('b602_numero_ip')}
+                      value={field.value || ''}
+                      onChange={(e) => {
+                        form.setValue('b602_numero_ip', e.target.value, { shouldDirty: true });
+                        void form.trigger(['b602_numero_bo', 'b602_numero_ip']);
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

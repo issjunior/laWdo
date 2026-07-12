@@ -32,6 +32,12 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { z } from 'zod';
+import type {
+  DadosImportacaoB602,
+  PecaB602,
+  ResultadoImportacaoExame,
+} from '@shared/types/b602-gdl.types';
+import { TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
 
@@ -39,6 +45,7 @@ const ANO_ATUAL = new Date().getFullYear();
 const ANOS_OPCOES = Array.from({ length: 10 }, (_, i) => (ANO_ATUAL - i).toString());
 
 interface CampoMapeado {
+  campo: string;
   label: string;
   valor: string;
 }
@@ -46,7 +53,7 @@ interface CampoMapeado {
 interface GdlConsultaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAplicar: (campos: Record<string, string>, modo: 'substituir' | 'mesclar') => void;
+  onAplicar: (resultado: ResultadoImportacaoExame<DadosImportacaoB602>, modo: 'substituir' | 'mesclar') => void | Promise<void>;
   temDadosExistentes: boolean;
 }
 
@@ -80,32 +87,18 @@ interface GdlTesteRespostaApi {
   rede?: PreTesteEtapa;
 }
 
-interface GdlPeca {
-  quantidade?: number | string;
-  tipoPeca?: string;
-  identificacao?: string;
-  unidadeMedida?: string;
-}
-
-interface GdlOrigem {
-  tipo?: string;
-  numero?: string;
-}
-
-interface GdlAndamento {
-  dataHora?: string;
-}
-
-interface GdlRepDados {
-  numero?: string | number;
-  ano?: string | number;
-  origens?: GdlOrigem[];
-  andamentos?: GdlAndamento[];
-  pecas?: GdlPeca[];
-}
-
 const getMensagemErro = (erro: unknown, fallback: string): string =>
   erro instanceof Error ? erro.message : fallback;
+
+function formatarValorRevisao(valor: unknown): string {
+  if (typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean') return String(valor)
+  if (valor === null || valor === undefined) return 'Não informado'
+  return JSON.stringify(valor)
+}
+
+function obterLabelCampoPersonalizado(peca: PecaB602, id: string): string {
+  return TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(campo => campo.id === id)?.label ?? id
+}
 
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   open,
@@ -120,6 +113,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [anoManualValor, setAnoManualValor] = useState('');
   const [anoManualErro, setAnoManualErro] = useState<string | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const [aplicando, setAplicando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [modo, setModo] = useState<'substituir' | 'mesclar'>('mesclar');
 
@@ -127,7 +121,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [preTesteTestando, setPreTesteTestando] = useState(false);
   const [ambiente, setAmbiente] = useState<string>('homologacao');
 
-  const [dadosBrutos, setDadosBrutos] = useState<GdlRepDados | null>(null);
+  const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoExame<DadosImportacaoB602> | null>(null);
+  const [idsPecasSelecionadas, setIdsPecasSelecionadas] = useState<Set<string>>(new Set());
   const [camposMapeados, setCamposMapeados] = useState<CampoMapeado[]>([]);
   const [camposNaoPreenchidos, setCamposNaoPreenchidos] = useState<string[]>([]);
 
@@ -180,7 +175,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       setAnoManualValor('');
       setAnoManualErro(null);
       setErro(null);
-      setDadosBrutos(null);
+      setAplicando(false);
+      setResultadoConsulta(null);
+      setIdsPecasSelecionadas(new Set());
       setCamposMapeados([]);
       setModo('mesclar');
       setPreTeste(null);
@@ -262,61 +259,59 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     try {
       const r = await window.ipcAPI.gdl.consultarRep(numeroRep.trim(), anoRep.trim());
       if (r.success && r.data) {
-        const dados = r.data as GdlRepDados;
-        setDadosBrutos(dados);
+        const resultado: ResultadoImportacaoExame<DadosImportacaoB602> = r.data;
+        setResultadoConsulta(resultado);
+        setIdsPecasSelecionadas(new Set(resultado.camposEspecificos.pecas.map(peca => peca.idLocal)));
 
         const mapeados: CampoMapeado[] = [];
         const naoPreenchidos: string[] = [];
 
-        if (dados.numero && dados.ano) {
-          mapeados.push({ label: 'Nº REP', valor: `${dados.numero}-${dados.ano}` });
+        const tiposBo = [...new Set(resultado.camposEspecificos.dadosInvestigacao.boletinsOcorrencia.map(referencia => referencia.tipo))];
+        const tiposIp = [...new Set(resultado.camposEspecificos.dadosInvestigacao.inqueritosPoliciais.map(referencia => referencia.tipo))];
+        const labelsCampos: Record<string, string> = {
+          numero: 'Nº REP',
+          tipo_solicitacao: 'Tipo de Solicitação',
+          numero_documento: 'Nº da Solicitação',
+          data_requisicao: 'Data de Recebimento',
+          b602_numero_bo: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',
+          b602_numero_ip: tiposIp.length ? `Nº IP (${tiposIp.join(', ')})` : 'Nº IP',
+        };
+        for (const [campo, valor] of Object.entries(resultado.camposGerais)) {
+          if (campo.startsWith('b602_envolvidos_')) continue;
+          if (valor) mapeados.push({ campo, label: labelsCampos[campo] ?? campo, valor });
         }
 
-        const origens = dados.origens ?? [];
-        if (origens.length > 0) {
-          const origem = origens[0];
-          if (origem.tipo) {
-            mapeados.push({ label: 'Tipo de Solicitação', valor: origem.tipo });
-          }
-          if (origem.numero) {
-            mapeados.push({ label: 'Nº da Solicitação', valor: origem.numero });
-          }
-        }
+        const envolvidos = Object.entries(resultado.camposGerais)
+          .filter(([campo, valor]) => campo.startsWith('b602_envolvidos_') && Boolean(valor))
+          .map(([, valor]) => valor)
+          .join('\n');
+        if (envolvidos) mapeados.push({ campo: 'envolvidos', label: 'Envolvidos', valor: envolvidos });
 
-        const andamentos = dados.andamentos ?? [];
-        if (andamentos.length > 0) {
-          const dataHora = andamentos[0].dataHora;
-          if (dataHora) {
-            const data = dataHora.split('T')[0];
-            mapeados.push({ label: 'Data de Recebimento', valor: data });
-          }
-        }
-
-        const pecas = dados.pecas ?? [];
+        const pecas = resultado.camposEspecificos.pecas;
         if (pecas.length > 0) {
           const listaPecas = pecas
-            .map((p) => `${p.quantidade}x ${p.tipoPeca} \u2014 ${p.identificacao || 'sem identificação'} (${p.unidadeMedida || '-'})`)
+            .map((p) => `${p.comuns.quantidade}x ${p.tipoPeca} \u2014 ${p.comuns.identificacao || 'sem identificação'} (${p.comuns.unidadeMedida || '-'})`)
             .join('\n');
-          mapeados.push({ label: 'Observações (peças)', valor: listaPecas });
+          mapeados.push({ campo: 'pecas', label: 'Peças estruturadas', valor: listaPecas });
         }
 
-        const todosLabels = [
-          'Tipo de Exame',
-          'Autoridade Solicitante',
-          'Local do Fato',
-          'Latitude',
-          'Longitude',
-          'Envolvidos',
-          'Nº BO',
-          'Nº IP',
-          'Veículo',
-          'Placa',
-          'Chassi',
-          'Motor',
+        const todosCampos = [
+          { campo: 'tipo_exame', label: 'Tipo de Exame' },
+          { campo: 'autoridade_solicitante', label: 'Autoridade Solicitante' },
+          { campo: 'local_fato', label: 'Local do Fato' },
+          { campo: 'latitude', label: 'Latitude' },
+          { campo: 'longitude', label: 'Longitude' },
+          { campo: 'envolvidos', label: 'Envolvidos' },
+          { campo: 'b602_numero_bo', label: 'Nº BO' },
+          { campo: 'b602_numero_ip', label: 'Nº IP' },
+          { campo: 'veiculo', label: 'Veículo' },
+          { campo: 'placa', label: 'Placa' },
+          { campo: 'chassi', label: 'Chassi' },
+          { campo: 'motor', label: 'Motor' },
         ];
 
-        for (const label of todosLabels) {
-          if (!mapeados.some(m => m.label === label)) {
+        for (const { campo, label } of todosCampos) {
+          if (!mapeados.some(m => m.campo === campo)) {
             naoPreenchidos.push(label);
           }
         }
@@ -334,35 +329,31 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     }
   };
 
-  const handleAplicar = () => {
-    const campos: Record<string, string> = {};
-    if (dadosBrutos) {
-      if (dadosBrutos.numero && dadosBrutos.ano) {
-        campos.numero = `${dadosBrutos.numero}-${dadosBrutos.ano}`;
-      }
-      const origens = dadosBrutos.origens ?? [];
-      if (origens.length > 0) {
-        const origem = origens[0];
-        if (origem.tipo) campos.tipo_solicitacao = origem.tipo;
-        if (origem.numero) campos.numero_documento = origem.numero;
-      }
-      const andamentos = dadosBrutos.andamentos ?? [];
-      if (andamentos.length > 0) {
-        const dataHora = andamentos[0].dataHora;
-        if (dataHora) {
-          campos.data_requisicao = dataHora.split('T')[0];
-        }
-      }
-      const pecas = dadosBrutos.pecas ?? [];
-      if (pecas.length > 0) {
-        campos.observacoes = pecas
-          .map((p) => `${p.quantidade}x ${p.tipoPeca} \u2014 ${p.identificacao || 'sem identificação'} (${p.unidadeMedida || '-'})`)
-          .join('\n');
-      }
+  const handleAplicar = async () => {
+    if (!resultadoConsulta) return;
+    setAplicando(true);
+    try {
+      await onAplicar({
+        ...resultadoConsulta,
+        camposEspecificos: {
+          ...resultadoConsulta.camposEspecificos,
+          pecas: resultadoConsulta.camposEspecificos.pecas.filter(peca => idsPecasSelecionadas.has(peca.idLocal)),
+        },
+      }, modo);
+      onOpenChange(false);
+    } finally {
+      setAplicando(false);
     }
-    onAplicar(campos, modo);
-    onOpenChange(false);
   };
+
+  const alternarSelecaoPeca = (idLocal: string) => {
+    setIdsPecasSelecionadas(atuais => {
+      const proximas = new Set(atuais)
+      if (proximas.has(idLocal)) proximas.delete(idLocal)
+      else proximas.add(idLocal)
+      return proximas
+    })
+  }
 
   const handleClose = () => {
     setPasso('busca');
@@ -533,7 +524,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
             <div className="flex-1 overflow-y-auto min-h-0 space-y-4">
               <Alert>
                 <AlertDescription>
-                  REP <strong>{dadosBrutos?.numero}/{dadosBrutos?.ano}</strong> encontrada.
+                  REP <strong>{resultadoConsulta?.camposGerais.numero}</strong> encontrada.
                   <br />
                   <span className="text-green-600 font-medium">{camposMapeados.length} campos</span> serão preenchidos.
                   <span className="text-muted-foreground"> {camposNaoPreenchidos.length} permanecem vazios.</span>
@@ -557,6 +548,56 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              {!!resultadoConsulta?.avisos.length && (
+                <Alert variant="default" className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription>
+                    {resultadoConsulta.avisos.map(aviso => <p key={`${aviso.codigo}-${aviso.mensagem}`}>{aviso.mensagem}</p>)}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {!!resultadoConsulta?.camposEspecificos.pecas.length && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Peças a importar</Label>
+                  <p className="text-xs text-muted-foreground">Revise os campos e desmarque uma peça caso não queira aplicá-la ao formulário.</p>
+                  <div className="space-y-2">
+                    {resultadoConsulta.camposEspecificos.pecas.map(peca => (
+                      <label key={peca.idLocal} className="block cursor-pointer rounded-md border p-3">
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={idsPecasSelecionadas.has(peca.idLocal)}
+                            onChange={() => alternarSelecaoPeca(peca.idLocal)}
+                            className="mt-1"
+                          />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium">{peca.tipoPeca}</span>
+                              <Badge variant="secondary">{peca.comuns.quantidade} {peca.comuns.unidadeMedida || 'unidade(s)'}</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{peca.comuns.identificacao || 'Sem identificação'}</p>
+                            {!!Object.keys(peca.personalizados).length && (
+                              <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-2">
+                                {Object.entries(peca.personalizados).map(([id, valor]) => (
+                                  <div key={id} className="flex gap-1"><dt className="font-medium">{obterLabelCampoPersonalizado(peca, id)}:</dt><dd>{formatarValorRevisao(valor)}</dd></div>
+                                ))}
+                              </dl>
+                            )}
+                            {!!Object.keys(peca.extrasGdl).length && (
+                              <div className="rounded bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                                <p className="font-medium">Campos não mapeados — serão preservados</p>
+                                {Object.entries(peca.extrasGdl).map(([chave, valor]) => <p key={chave}>{chave}: {formatarValorRevisao(valor)}</p>)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <Label className="text-sm font-medium">Campos que permanecem vazios (preenchimento manual):</Label>
@@ -591,7 +632,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                           onChange={() => setModo('substituir')}
                           className="text-primary"
                         />
-                        <span className="text-sm">Substituir tudo</span>
+                        <span className="text-sm">Substituir dados do GDL</span>
                       </label>
                     </div>
                   </AlertDescription>
@@ -606,8 +647,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
               </Button>
-              <Button onClick={handleAplicar} className="gap-2">
-                Aplicar ao Formulário
+              <Button onClick={handleAplicar} disabled={aplicando} className="gap-2">
+                {temDadosExistentes ? 'Aplicar ao Formulário' : 'Preencher formulário'}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>

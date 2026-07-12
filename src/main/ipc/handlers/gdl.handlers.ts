@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
+import { converterRepB602 } from '../../services/gdl-b602-normalizador.service.js';
 
 export const registerGdlHandlers = (): void => {
   ipcMain.handle('gdl:testar-conexao', async (_event, ambiente: string) => {
@@ -79,11 +80,22 @@ export const registerGdlHandlers = (): void => {
       }
 
       const resultado = await gdlService.consultarRep(sanitizeInput(numero), sanitizeInput(ano));
-      if (!resultado.sucesso) {
+      if (!resultado.sucesso || !resultado.dados) {
         return { success: false, error: resultado.erro || 'Erro ao consultar REP no GDL' };
       }
 
-      return { success: true, data: resultado.dados };
+      return {
+        success: true,
+        data: converterRepB602(resultado.dados, {
+          origemInicial: 'gdl',
+          ultimaConsulta: {
+            ambiente: resultado.ambiente ?? 'homologacao',
+            numeroRep: sanitizeInput(numero),
+            anoRep: sanitizeInput(ano),
+            consultadoEm: new Date().toISOString(),
+          },
+        }),
+      };
     } catch (error) {
       logError(`Falha ao consultar REP ${sanitizeInput(numero)}/${sanitizeInput(ano)} no GDL`, error);
       return {

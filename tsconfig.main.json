@@ -1,11 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "./out/main",
-    "rootDir": "./src/main",
+    "outDir": "./out",
+    "rootDir": "./src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": ["src/main/**/*", "src/types/**/*"],
+  "include": ["src/main/**/*", "src/shared/**/*", "src/types/**/*"],
   "exclude": ["src/main/**/*.test.ts", "src/main/**/*.spec.ts"]
 }

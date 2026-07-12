@@ -1,4 +1,5 @@
 import type { UseFormReturn } from 'react-hook-form';
+import type { PecaB602 } from '@shared/types/b602-gdl.types';
 
 export interface REPFormData {
   [key: string]: string;
@@ -53,6 +54,9 @@ export interface REPFormData {
 export interface ExamSectionProps {
   form: UseFormReturn<REPFormData>;
   mostrarPlaceholders: boolean;
+  pecasB602?: PecaB602[];
+  onPecasB602Change?: (pecas: PecaB602[]) => void;
+  camposPreenchidosGdl?: ReadonlySet<string>;
 }
 
 export interface ExamSection {
@@ -63,6 +67,7 @@ export interface ExamSection {
   component: React.FC<ExamSectionProps>;
   group?: string;
   requiredFields: string[];
+  isComplete?: (data: REPFormData, contexto: { pecasB602: PecaB602[] }) => boolean;
 }
 
 interface MenuField {
