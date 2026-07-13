@@ -55,6 +55,7 @@ interface GdlConsultaModalProps {
   onOpenChange: (open: boolean) => void;
   onAplicar: (resultado: ResultadoImportacaoExame<DadosImportacaoB602>, modo: 'substituir' | 'mesclar') => void | Promise<void>;
   temDadosExistentes: boolean;
+  onConfigurarCredenciais: () => void;
 }
 
 type Passo = 'busca' | 'revisao';
@@ -105,6 +106,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   onOpenChange,
   onAplicar,
   temDadosExistentes,
+  onConfigurarCredenciais,
 }) => {
   const [passo, setPasso] = useState<Passo>('busca');
   const [numeroRep, setNumeroRep] = useState('');
@@ -426,6 +428,17 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                     )}
                     <AlertDescription className="space-y-1">
                       <p>{getPreTesteMensagem()}</p>
+                      {!preTeste.ok && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleTestarConexao}
+                          disabled={preTesteTestando}
+                          className="mt-2"
+                        >
+                          Testar novamente
+                        </Button>
+                      )}
                       {preTeste.rede && (
                         <div className="flex flex-wrap gap-2 pt-1">
                           <Badge variant={preTeste.rede.sucesso ? 'secondary' : 'destructive'} className="text-xs">
@@ -452,7 +465,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                     id="gdl-numero-rep"
                     value={numeroRep}
                     onChange={e => setNumeroRep(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="12345"
                     onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
                   />
                 </div>
@@ -492,7 +504,14 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
               {erro && (
                 <Alert variant="destructive">
-                  <AlertDescription>{erro}</AlertDescription>
+                  <AlertDescription className="space-y-2">
+                    <p>{erro}</p>
+                    {erro.includes('Credenciais não configuradas') && (
+                      <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>
+                        Configurar credenciais
+                      </Button>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
             </div>
