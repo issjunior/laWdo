@@ -1,5 +1,6 @@
 import type { REPFormData } from '../types';
 import type { ExamService } from './types';
+import { combinarEnvolvido, separarEnvolvido } from '@shared/utils/envolvido';
 
 function formatarNumeroBO(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
@@ -34,8 +35,10 @@ export const b602Service: ExamService = {
 
     const envolvidos: string[] = [];
     for (let i = 0; i < 10; i++) {
-      const v = (data as Record<string, string>)[`b602_envolvidos_${i}`];
-      if (v && v.trim()) envolvidos.push(v.trim());
+      const nome = (data as Record<string, string>)[`b602_envolvidos_${i}`] || '';
+      const qualificacao = (data as Record<string, string>)[`b602_envolvidos_qualificacao_${i}`] || '';
+      const envolvido = combinarEnvolvido(qualificacao, nome);
+      if (envolvido) envolvidos.push(envolvido);
     }
 
     result.envolvidos = envolvidos;
@@ -143,7 +146,9 @@ export const b602Service: ExamService = {
 
     const envolvidos = data.envolvidos as string[] | undefined;
     if (envolvidos) {
-      envolvidos.forEach((nome, i) => {
+      envolvidos.forEach((envolvido, i) => {
+        const { qualificacao, nome } = separarEnvolvido(envolvido);
+        result[`b602_envolvidos_qualificacao_${i}`] = qualificacao;
         result[`b602_envolvidos_${i}`] = nome;
       });
     }

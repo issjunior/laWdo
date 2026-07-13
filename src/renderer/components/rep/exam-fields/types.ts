@@ -38,6 +38,16 @@ export interface REPFormData {
   b602_envolvidos_7: string;
   b602_envolvidos_8: string;
   b602_envolvidos_9: string;
+  b602_envolvidos_qualificacao_0: string;
+  b602_envolvidos_qualificacao_1: string;
+  b602_envolvidos_qualificacao_2: string;
+  b602_envolvidos_qualificacao_3: string;
+  b602_envolvidos_qualificacao_4: string;
+  b602_envolvidos_qualificacao_5: string;
+  b602_envolvidos_qualificacao_6: string;
+  b602_envolvidos_qualificacao_7: string;
+  b602_envolvidos_qualificacao_8: string;
+  b602_envolvidos_qualificacao_9: string;
   b602_data_ocorrencia: string;
   b602_local_bairro: string;
   b602_local_cidade: string;

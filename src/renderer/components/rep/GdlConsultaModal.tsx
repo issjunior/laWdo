@@ -38,6 +38,7 @@ import type {
   ResultadoImportacaoExame,
 } from '@shared/types/b602-gdl.types';
 import { TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo';
+import { combinarEnvolvido } from '@shared/utils/envolvido';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
 
@@ -283,9 +284,11 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           if (valor) mapeados.push({ campo, label: labelsCampos[campo] ?? campo, valor });
         }
 
-        const envolvidos = Object.entries(resultado.camposGerais)
-          .filter(([campo, valor]) => campo.startsWith('b602_envolvidos_') && Boolean(valor))
-          .map(([, valor]) => valor)
+        const envolvidos = Array.from({ length: 10 }, (_, indice) => combinarEnvolvido(
+          resultado.camposGerais[`b602_envolvidos_qualificacao_${indice}`] || '',
+          resultado.camposGerais[`b602_envolvidos_${indice}`] || '',
+        ))
+          .filter(Boolean)
           .join('\n');
         if (envolvidos) mapeados.push({ campo: 'envolvidos', label: 'Envolvidos', valor: envolvidos });
 

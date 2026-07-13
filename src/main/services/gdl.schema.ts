@@ -48,8 +48,17 @@ export const gdlRepSchema = z.object({
   andamentos: z.array(gdlAndamentoSchema).default([]),
 }).catchall(z.unknown())
 
+export const gdlRepInvestigacaoSchema = z.object({
+  envolvidos: z.unknown().optional(),
+}).catchall(z.unknown())
+
+export const gdlListaRepsInvestigacaoSchema = z.object({
+  dadosREPs: z.array(gdlRepInvestigacaoSchema).default([]),
+}).catchall(z.unknown())
+
 export type GdlPecaValidada = z.output<typeof gdlPecaSchema>
 export type GdlRepValidada = z.output<typeof gdlRepSchema>
+export type GdlListaRepsInvestigacaoValidada = z.output<typeof gdlListaRepsInvestigacaoSchema>
 
 export function validarGdlRep(payload: unknown): GdlRepValidada {
   return gdlRepSchema.parse(payload)
@@ -63,4 +72,14 @@ export function interpretarGdlRepJson(conteudo: string): GdlRepValidada {
     throw new Error('O GDL retornou JSON inválido.')
   }
   return validarGdlRep(payload)
+}
+
+export function interpretarGdlListaRepsInvestigacaoJson(conteudo: string): GdlListaRepsInvestigacaoValidada {
+  let payload: unknown
+  try {
+    payload = JSON.parse(conteudo)
+  } catch {
+    throw new Error('O GDL retornou JSON inválido ao consultar envolvidos.')
+  }
+  return gdlListaRepsInvestigacaoSchema.parse(payload)
 }

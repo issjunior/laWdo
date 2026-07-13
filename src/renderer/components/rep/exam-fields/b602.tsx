@@ -110,6 +110,33 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
 
   const envolvidos = Array.from({ length: numEnvolvidos }, (_, i) => i);
 
+  const removerEnvolvido = (indice: number): void => {
+    for (let atual = indice; atual < numEnvolvidos - 1; atual++) {
+      const proximo = atual + 1;
+      form.setValue(
+        campoRep(`b602_envolvidos_qualificacao_${atual}`),
+        form.getValues(campoRep(`b602_envolvidos_qualificacao_${proximo}`)) || '',
+        { shouldDirty: true, shouldValidate: true },
+      );
+      form.setValue(
+        campoRep(`b602_envolvidos_${atual}`),
+        form.getValues(campoRep(`b602_envolvidos_${proximo}`)) || '',
+        { shouldDirty: true, shouldValidate: true },
+      );
+    }
+
+    const ultimo = numEnvolvidos - 1;
+    form.setValue(campoRep(`b602_envolvidos_qualificacao_${ultimo}`), '', { shouldDirty: true });
+    form.setValue(campoRep(`b602_envolvidos_${ultimo}`), '', { shouldDirty: true, shouldValidate: true });
+    setNumEnvolvidos((quantidade) => Math.max(1, quantidade - 1));
+  };
+
+  const adicionarEnvolvido = (): void => {
+    form.setValue(campoRep(`b602_envolvidos_qualificacao_${numEnvolvidos}`), '');
+    form.setValue(campoRep(`b602_envolvidos_${numEnvolvidos}`), '');
+    setNumEnvolvidos((quantidade) => Math.min(10, quantidade + 1));
+  };
+
   return (
     <div className="border rounded-lg p-4 bg-muted/30 space-y-4 overflow-hidden">
       <span className="text-xs font-semibold text-muted-foreground block mb-2">Dados da Investigação</span>
@@ -123,15 +150,38 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
           {envolvidos.map((i) => {
             const isLast = i === envolvidos.length - 1;
             return (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-5 shrink-0">{i + 1}.</span>
+              <div key={i} className="flex items-start gap-2">
+                <span className="w-5 shrink-0 pt-2 text-sm text-muted-foreground">{i + 1}.</span>
                 <FormField
                   control={form.control}
-                  name={`b602_envolvidos_${i}`}
+                  name={campoRep(`b602_envolvidos_qualificacao_${i}`)}
+                  render={({ field }) => (
+                    <FormItem className="w-36 sm:w-44 shrink-0 space-y-0">
+                      <FormControl>
+                        <Input
+                          placeholder="Qualificação"
+                          aria-label={`Qualificação do envolvido ${i + 1}`}
+                          list="b602-qualificacoes-envolvido"
+                          className={obterClasseGdl(`b602_envolvidos_qualificacao_${i}`)}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={campoRep(`b602_envolvidos_${i}`)}
                   render={({ field }) => (
                     <FormItem className="flex-1 space-y-0 min-w-0">
                       <FormControl>
-                        <Input placeholder="Nome do envolvido" className={obterClasseGdl(`b602_envolvidos_${i}`)} {...field} />
+                        <Input
+                          placeholder="Nome do envolvido"
+                          aria-label={`Nome do envolvido ${i + 1}`}
+                          className={obterClasseGdl(`b602_envolvidos_${i}`)}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -143,10 +193,8 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => {
-                      form.setValue(`b602_envolvidos_${i}`, '');
-                      setNumEnvolvidos((n) => Math.max(1, n - 1));
-                    }}
+                    aria-label={`Excluir envolvido ${i + 1}`}
+                    onClick={() => removerEnvolvido(i)}
                   >
                     <X size={14} />
                   </Button>
@@ -157,7 +205,8 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 shrink-0"
-                    onClick={() => setNumEnvolvidos((n) => n + 1)}
+                    aria-label="Adicionar envolvido"
+                    onClick={adicionarEnvolvido}
                   >
                     <Plus size={14} />
                   </Button>
@@ -165,6 +214,11 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
               </div>
             );
           })}
+          <datalist id="b602-qualificacoes-envolvido">
+            <option value="EM PODER DE:" />
+            <option value="AUTOR:" />
+            <option value="VÍTIMA:" />
+          </datalist>
         </div>
       </div>
 

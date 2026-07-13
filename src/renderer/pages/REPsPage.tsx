@@ -285,6 +285,11 @@ const emptyForm = (): REPFormData => ({
   b602_envolvidos_3: '', b602_envolvidos_4: '', b602_envolvidos_5: '',
   b602_envolvidos_6: '', b602_envolvidos_7: '', b602_envolvidos_8: '',
   b602_envolvidos_9: '',
+  b602_envolvidos_qualificacao_0: '', b602_envolvidos_qualificacao_1: '',
+  b602_envolvidos_qualificacao_2: '', b602_envolvidos_qualificacao_3: '',
+  b602_envolvidos_qualificacao_4: '', b602_envolvidos_qualificacao_5: '',
+  b602_envolvidos_qualificacao_6: '', b602_envolvidos_qualificacao_7: '',
+  b602_envolvidos_qualificacao_8: '', b602_envolvidos_qualificacao_9: '',
   b602_data_ocorrencia: '', b602_local_bairro: '', b602_local_cidade: '', b602_local_uf: 'PR',
   b602_numero_bo: '', b602_numero_ip: '', b602_solicitante_nome: '',
   b602_material_enc_toggle: 'off', b602_cartuchos_toggle: 'off', b602_estojos_toggle: 'off',
@@ -672,8 +677,18 @@ export const REPsPage: React.FC = () => {
     b602_envolvidos_5: z.string().optional(),
     b602_envolvidos_6: z.string().optional(),
     b602_envolvidos_7: z.string().optional(),
-    b602_envolvidos_8: z.string().optional(),
-    b602_envolvidos_9: z.string().optional(),
+      b602_envolvidos_8: z.string().optional(),
+      b602_envolvidos_9: z.string().optional(),
+      b602_envolvidos_qualificacao_0: z.string().optional(),
+      b602_envolvidos_qualificacao_1: z.string().optional(),
+      b602_envolvidos_qualificacao_2: z.string().optional(),
+      b602_envolvidos_qualificacao_3: z.string().optional(),
+      b602_envolvidos_qualificacao_4: z.string().optional(),
+      b602_envolvidos_qualificacao_5: z.string().optional(),
+      b602_envolvidos_qualificacao_6: z.string().optional(),
+      b602_envolvidos_qualificacao_7: z.string().optional(),
+      b602_envolvidos_qualificacao_8: z.string().optional(),
+      b602_envolvidos_qualificacao_9: z.string().optional(),
     b602_data_ocorrencia: z.string().optional(),
     b602_local_bairro: z.string().optional(),
     b602_local_cidade: z.string().optional(),
@@ -762,7 +777,6 @@ export const REPsPage: React.FC = () => {
   const [camposPreenchidosGdl, setCamposPreenchidosGdl] = useState<Set<string>>(new Set());
   const [origensSolicitacaoGdl, setOrigensSolicitacaoGdl] = useState<ReferenciaOrigemGdl[]>([]);
   const [tipoSolicitacaoOutroManual, setTipoSolicitacaoOutroManual] = useState(false);
-  const [gdlApplied, setGdlApplied] = useState(false);
 
   const carregarREPs = useCallback(async () => {
     try {
@@ -879,7 +893,6 @@ export const REPsPage: React.FC = () => {
     setCamposPreenchidosGdl(new Set());
     setOrigensSolicitacaoGdl([]);
     setTipoSolicitacaoOutroManual(false);
-    setGdlApplied(false);
     setPecasB602([]);
     setMetadadosIntegracaoGdl(null);
     form.reset(emptyForm());
@@ -896,7 +909,6 @@ export const REPsPage: React.FC = () => {
     setCamposPreenchidosGdl(new Set());
     setOrigensSolicitacaoGdl([]);
     setTipoSolicitacaoOutroManual(false);
-    setGdlApplied(false);
     setPecasB602([]);
     setMetadadosIntegracaoGdl(null);
     setError(null);
@@ -1373,13 +1385,13 @@ export const REPsPage: React.FC = () => {
     setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
 
     setCamposPreenchidosGdl(novosPreenchidos);
-    setGdlApplied(true);
     const avisosImportacao = resultado.avisos.map(aviso => aviso.mensagem);
-    setSuccess([
-      'Dados do GDL aplicados ao formulário. Campos com fundo verde foram preenchidos automaticamente.',
-      ...avisosImportacao,
-    ].join(' '));
-    setTimeout(() => setSuccess(null), avisosImportacao.length > 0 ? 12000 : 6000);
+    if (avisosImportacao.length > 0) {
+      setSuccess(avisosImportacao.join(' '));
+      setTimeout(() => setSuccess(null), 12000);
+    } else {
+      setSuccess(null);
+    }
   };
 
   const columnDefs = useMemo<ColumnDef<REP>[]>(() => [
@@ -1796,54 +1808,6 @@ export const REPsPage: React.FC = () => {
                 >
                   {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
                   {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
-                  {gdlApplied && camposPreenchidosGdl.size > 0 && !success && (
-                    <Alert className="bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-800">
-                      <AlertDescription className="text-green-800 dark:text-green-400">
-                        {camposPreenchidosGdl.size} campo(s) preenchido(s) via GDL.
-                        Campos com fundo verde foram preenchidos automaticamente.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  {totalPendencias > 0 && (
-                    <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
-                      <AlertTriangle size={16} />
-                      <AlertDescription className="space-y-3 text-amber-900 dark:text-amber-100">
-                        <p>
-                          Preencha os campos obrigatórios para liberar o botão {editingRep ? 'Atualizar REP' : 'Criar REP'}.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {resumoPendencias.map((pendencia) => (
-                            <Button
-                              key={pendencia.campo}
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="border-amber-300 bg-white/80 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/40"
-                              onClick={() => irParaPendencia(pendencia)}
-                            >
-                              {pendencia.label}
-                            </Button>
-                          ))}
-                          {totalPendencias > resumoPendencias.length && (
-                            <span className="inline-flex items-center rounded-md border border-amber-300 px-3 py-1 text-sm dark:border-amber-700">
-                              +{totalPendencias - resumoPendencias.length} pendente(s)
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <Button
-                            type="button"
-                            variant="link"
-                            className="h-auto p-0 text-amber-900 dark:text-amber-100"
-                            onClick={() => irParaPendencia(camposObrigatoriosPendentes[0])}
-                          >
-                            Ir para o primeiro campo pendente
-                          </Button>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
                   <div className="space-y-8">
                     {/* ============================================ */}
                     {/* SEÇÃO 1: Dados da Solicitação */}
@@ -1851,9 +1815,8 @@ export const REPsPage: React.FC = () => {
                     <RepStepSection stepId="dados-solicitacao">
                       <div className="flex items-center gap-2 mb-2">
                         <FileText size={16} className="text-primary" />
-                        <h3 className="text-base font-semibold">Dados da Solicitação</h3>
+                        <h3 className="text-lg font-semibold">Dados da Solicitação</h3>
                       </div>
-                      <p className="text-xs text-muted-foreground mb-4">Informações principais da requisição.</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="md:col-span-2">
                           <FormField
@@ -2129,9 +2092,8 @@ export const REPsPage: React.FC = () => {
                       <RepStepSection key={s.id} stepId={`section-${s.id}`}>
                         <div className="flex items-center gap-2 mb-2">
                           <s.icon size={16} className="text-primary" />
-                          <h3 className="text-base font-semibold">{s.label}</h3>
+                          <h3 className="text-lg font-semibold">{s.label}</h3>
                         </div>
-                        <p className="text-xs text-muted-foreground mb-4">{s.description}</p>
                         <s.component
                           form={form}
                           mostrarPlaceholders={mostrarPlaceholders}
@@ -2142,6 +2104,46 @@ export const REPsPage: React.FC = () => {
                       </RepStepSection>
                     ))}
                   </div>
+
+                  {totalPendencias > 0 && (
+                    <Alert className="mt-6 border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
+                      <AlertTriangle size={16} />
+                      <AlertDescription className="space-y-3 text-amber-900 dark:text-amber-100">
+                        <p>
+                          Preencha os campos obrigatórios para liberar o botão {editingRep ? 'Atualizar REP' : 'Criar REP'}.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {resumoPendencias.map((pendencia) => (
+                            <Button
+                              key={pendencia.campo}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="border-amber-300 bg-white/80 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/40"
+                              onClick={() => irParaPendencia(pendencia)}
+                            >
+                              {pendencia.label}
+                            </Button>
+                          ))}
+                          {totalPendencias > resumoPendencias.length && (
+                            <span className="inline-flex items-center rounded-md border border-amber-300 px-3 py-1 text-sm dark:border-amber-700">
+                              +{totalPendencias - resumoPendencias.length} pendente(s)
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto p-0 text-amber-900 dark:text-amber-100"
+                            onClick={() => irParaPendencia(camposObrigatoriosPendentes[0])}
+                          >
+                            Ir para o primeiro campo pendente
+                          </Button>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6 mt-4">
                     {totalPendencias > 0 && (

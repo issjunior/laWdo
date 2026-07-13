@@ -14,6 +14,7 @@ import {
   type TipoPecaB602,
 } from '../../shared/catalogos/b602-gdl.catalogo.js'
 import type { GdlPecaValidada, GdlRepValidada } from './gdl.schema.js'
+import { separarEnvolvido } from '../../shared/utils/envolvido.js'
 
 const CHAVES_COMUNS = new Set([
   'codPeca', 'tipoPeca', 'identificacao', 'quantidade', 'unidadeMedida',
@@ -242,7 +243,13 @@ export function converterRepB602(
       b602_local_cidade: rep.origens[0]?.cidade ?? '',
       b602_numero_bo: obterNumeroUnico(boletinsOcorrencia),
       b602_numero_ip: obterNumeroUnico(inqueritosPoliciais),
-      ...Object.fromEntries(envolvidos.slice(0, 10).map((nome, indice) => [`b602_envolvidos_${indice}`, nome])),
+      ...Object.fromEntries(envolvidos.slice(0, 10).flatMap((envolvido, indice) => {
+        const { qualificacao, nome } = separarEnvolvido(envolvido)
+        return [
+          [`b602_envolvidos_qualificacao_${indice}`, qualificacao],
+          [`b602_envolvidos_${indice}`, nome],
+        ]
+      })),
       autoridade_solicitante: dadosSolicitacao.autoridade,
       data_requisicao: rep.andamentos[0]?.dataHora?.split('T')[0] ?? '',
     },

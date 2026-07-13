@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/gdl/rep-190-2026.json'
-import { interpretarGdlRepJson, validarGdlRep } from '../../main/services/gdl.schema'
+import {
+  interpretarGdlListaRepsInvestigacaoJson,
+  interpretarGdlRepJson,
+  validarGdlRep,
+} from '../../main/services/gdl.schema'
 import { converterRepB602 } from '../../main/services/gdl-b602-normalizador.service'
+import { extrairFiltrosParaConsultaInvestigacao } from '../../main/services/gdl.service'
 
 describe('contrato GDL B602', () => {
   it('rejeita payload estruturalmente inválido', () => {
@@ -179,6 +184,33 @@ describe('contrato GDL B602', () => {
     expect(resultado.avisos).toContainEqual(expect.objectContaining({
       codigo: 'ENVOLVIDOS_NAO_RETORNADOS',
     }))
+  })
+
+  it('normaliza envolvidos retornados pela listagem de investigação', () => {
+    const resposta = interpretarGdlListaRepsInvestigacaoJson(JSON.stringify({
+      dadosREPs: [{ envolvidos: ['VÍTIMA: PESSOA TESTE', 'AUTOR: OUTRA PESSOA'] }],
+    }))
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixture,
+      envolvidos: resposta.dadosREPs.map(rep => rep.envolvidos),
+    }))
+
+    expect(resultado.camposGerais.b602_envolvidos_qualificacao_0).toBe('VÍTIMA:')
+    expect(resultado.camposGerais.b602_envolvidos_0).toBe('PESSOA TESTE')
+    expect(resultado.camposGerais.b602_envolvidos_qualificacao_1).toBe('AUTOR:')
+    expect(resultado.camposGerais.b602_envolvidos_1).toBe('OUTRA PESSOA')
+  })
+
+  it('extrai o ano incorporado ao número da origem para consultar envolvidos', () => {
+    const rep = validarGdlRep({
+      ...fixture,
+      numeroCaso: 321312,
+      origens: [{ tipo: 'IP/PM', numero: '212314/2026', ano: '', cidade: 'LONDRINA' }],
+    })
+
+    expect(extrairFiltrosParaConsultaInvestigacao(rep)).toEqual([
+      { numeroOrigem: '212314', anoOrigem: 2026 },
+    ])
   })
 
   it('classifica variantes BO pelo prefixo, sem lista fixa de tipos', () => {
