@@ -5,7 +5,7 @@ import http from 'http';
 import { app } from 'electron';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
-import { interpretarGdlRepJson } from './gdl.schema.js';
+import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
 import type { GdlRepValidada } from './gdl.schema.js';
 
 const log = getLogger('gdl');
@@ -40,6 +40,12 @@ interface GdlTesteEtapa {
   statusCode: number;
   endpointTestado: string;
   erro?: string;
+}
+
+interface FiltroConsultaInvestigacao {
+  numeroCaso?: number;
+  numeroOrigem: string;
+  anoOrigem?: number;
 }
 
 export interface GdlConsultaResultado {
@@ -232,6 +238,97 @@ function httpsRequest(
   });
 }
 
+export function extrairFiltrosParaConsultaInvestigacao(rep: GdlRepValidada): FiltroConsultaInvestigacao[] {
+  const origens = rep.origens.flatMap(origem => {
+    const numeroOriginal = origem.numero.trim();
+    const anoSeparado = origem.ano.trim() ? Number(origem.ano) : Number.NaN;
+    const origemComAno = numeroOriginal.match(/^(.*)\/(\d{4})$/);
+    const numeroOrigem = (origemComAno?.[1] || numeroOriginal).trim();
+    const anoOrigem = Number.isInteger(anoSeparado)
+      ? anoSeparado
+      : Number(origemComAno?.[2]);
+
+    if (numeroOrigem && Number.isInteger(anoOrigem)) {
+      return [{ numeroOrigem, anoOrigem }];
+    }
+    return [];
+  });
+
+  const origensUnicas = origens.filter((origem, indice) => (
+    origens.findIndex(outra => (
+      outra.numeroOrigem === origem.numeroOrigem && outra.anoOrigem === origem.anoOrigem
+    )) === indice
+  ));
+  if (origensUnicas.length > 0) return origensUnicas;
+
+  const numeroCasoBruto = rep.numeroCaso;
+  const numeroCaso = typeof numeroCasoBruto === 'number'
+    ? numeroCasoBruto
+    : typeof numeroCasoBruto === 'string' ? Number(numeroCasoBruto) : Number.NaN;
+  return Number.isInteger(numeroCaso) && numeroCaso > 0
+    ? [{ numeroCaso, numeroOrigem: '' }]
+    : [];
+}
+
+async function consultarEnvolvidosEmHomologacao(
+  baseUrl: string,
+  credenciais: GdlCredenciais,
+  rep: GdlRepValidada,
+): Promise<unknown[]> {
+  const cpfUsuario = credenciais.cpfUsuario?.replace(/\D/g, '') || '';
+  if (!/^\d{11}$/.test(cpfUsuario)) {
+    log.warn('Consulta de envolvidos ignorada: CPF do usuário ausente ou inválido', { codRep: rep.codRep });
+    return [];
+  }
+
+  const filtros = extrairFiltrosParaConsultaInvestigacao(rep);
+  if (filtros.length === 0) {
+    log.debug('Consulta de envolvidos ignorada: REP sem origem consultável', { codRep: rep.codRep });
+    return [];
+  }
+
+  const headers: Record<string, string> = {
+    'Authorization': buildAuthHeader(credenciais.login, credenciais.senha),
+    'Content-Type': 'application/json',
+  };
+  headers.cpfUsuario = cpfUsuario;
+
+  const url = `${baseUrl}/repsInvestigacaoPolicial/listarReps`;
+  const envolvidos: unknown[] = [];
+
+  for (const filtro of filtros) {
+    const corpo = JSON.stringify({
+      ...(filtro.numeroCaso ? { numeroCaso: filtro.numeroCaso } : {
+        numeroOrigem: filtro.numeroOrigem,
+        anoOrigem: filtro.anoOrigem,
+      }),
+      numPagina: 1,
+      tamPagina: 10,
+    });
+    try {
+      const { statusCode, data } = await httpsRequest(url, 'POST', headers, corpo, 15000);
+
+      if (statusCode !== 200) {
+        log.warn('Consulta auxiliar de envolvidos no GDL não retornou sucesso', {
+          codRep: rep.codRep,
+          statusCode,
+        });
+        continue;
+      }
+
+      const resposta = interpretarGdlListaRepsInvestigacaoJson(data);
+      envolvidos.push(...resposta.dadosREPs.flatMap(item => item.envolvidos === undefined ? [] : [item.envolvidos]));
+    } catch (erro) {
+      log.warn('Falha na consulta auxiliar de envolvidos no GDL', {
+        codRep: rep.codRep,
+        erro: erro instanceof Error ? erro.message : 'Erro inesperado',
+      });
+    }
+  }
+
+  return envolvidos;
+}
+
 export async function testarConexao(ambiente: string): Promise<GdlTesteResultado> {
   const inicio = Date.now();
   const amb = normalizarAmbiente(ambiente);
@@ -330,13 +427,20 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
+      const envolvidos = ambiente === 'homologacao'
+        ? await consultarEnvolvidosEmHomologacao(creds.baseUrl, creds, parsed)
+        : [];
+      const dadosComEnvolvidos = envolvidos.length > 0
+        ? { ...parsed, envolvidos: [...parsed.envolvidos, ...envolvidos] }
+        : parsed;
       registrarValidacaoSessao(ambiente, numero, ano);
       log.debug('REP consultada no GDL com sucesso', {
         numero,
         ano,
-        codRep: parsed.codRep,
+        codRep: dadosComEnvolvidos.codRep,
+        envolvidosEncontrados: envolvidos.length,
       });
-      return { sucesso: true, dados: parsed, ambiente };
+      return { sucesso: true, dados: dadosComEnvolvidos, ambiente };
     }
 
     if (statusCode === 404) {
