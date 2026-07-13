@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wireframe — mapa do processo REP para Laudo</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #18181b;
+      --muted: #71717a;
+      --border: #d4d4d8;
+      --rep: #2563eb;
+      --info: #0f766e;
+      --laudo: #7c3aed;
+      --active: #18181b;
+      --active-text: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #09090b;
+        --card: #18181b;
+        --text: #f4f4f5;
+        --muted: #a1a1aa;
+        --border: #3f3f46;
+        --rep: #60a5fa;
+        --info: #5eead4;
+        --laudo: #c4b5fd;
+        --active: #f4f4f5;
+        --active-text: #18181b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif; }
+    main { width: min(960px, calc(100% - 32px)); margin: 32px auto; }
+    header { margin-bottom: 28px; }
+    h1 { margin: 0 0 6px; font-size: 24px; font-weight: 650; }
+    header p { margin: 0; color: var(--muted); }
+    .progress { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0 12px 34px; }
+    .step { position: relative; display: grid; justify-items: center; gap: 5px; text-align: center; color: var(--muted); }
+    .step:not(:last-child)::after { content: ""; position: absolute; top: 15px; left: calc(50% + 17px); right: calc(-50% + 17px); height: 2px; background: var(--border); }
+    .step.done:not(:last-child)::after { background: var(--rep); }
+    .step-number { z-index: 1; display: grid; place-items: center; width: 31px; height: 31px; border: 2px solid var(--border); border-radius: 50%; background: var(--bg); }
+    .done .step-number { border-color: var(--rep); color: var(--text); }
+    .current .step-number { border-color: var(--active); background: var(--active); color: var(--active-text); box-shadow: 0 0 0 4px color-mix(in srgb, var(--active) 15%, transparent); }
+    .step strong { color: var(--text); font-size: 13px; font-weight: 600; }
+    .step small { font-size: 12px; }
+    .timeline { position: relative; display: grid; gap: 10px; padding-left: 46px; }
+    .timeline::before { content: ""; position: absolute; left: 18px; top: 20px; bottom: 20px; width: 2px; background: var(--border); }
+    .event { position: relative; display: grid; grid-template-columns: 116px minmax(180px, 1fr) auto 18px; align-items: center; gap: 12px; width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--text); text-align: left; font: inherit; }
+    button.event { cursor: pointer; }
+    button.event:hover { border-color: var(--muted); }
+    button.event:focus-visible { outline: 2px solid var(--rep); outline-offset: 2px; }
+    .mark { position: absolute; left: -41px; display: grid; place-items: center; width: 30px; height: 30px; border: 2px solid var(--rep); border-radius: 50%; background: var(--bg); font-size: 11px; font-weight: 700; z-index: 1; }
+    .info .mark { border-color: var(--info); }
+    .laudo .mark { border-color: var(--laudo); }
+    .when, .summary small { color: var(--muted); }
+    .when { white-space: nowrap; }
+    .summary { display: grid; gap: 3px; min-width: 0; }
+    .summary strong { font-weight: 650; }
+    .summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status { justify-self: end; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--border) 45%, transparent); color: var(--text); font-size: 12px; white-space: nowrap; }
+    .chevron { color: var(--muted); text-align: center; }
+    .selected { border-color: var(--laudo); }
+    .selected .status { background: var(--active); color: var(--active-text); }
+    .details { display: none; grid-column: 2 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-top: 11px; border-top: 1px solid var(--border); }
+    [aria-expanded="true"] .details { display: grid; }
+    .details span { display: grid; gap: 2px; color: var(--muted); font-size: 13px; }
+    .details b { color: var(--text); font-weight: 600; }
+    .future { border-style: dashed; opacity: .75; }
+    .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 20px 0 0 46px; color: var(--muted); font-size: 12px; }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rep); }
+    .dot.info { background: var(--info); }
+    .dot.laudo { background: var(--laudo); }
+    footer { margin: 28px 0 0 46px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 650px) {
+      main { width: min(100% - 20px, 960px); margin-top: 18px; }
+      .progress { grid-template-columns: 1fr; gap: 10px; margin-left: 0; }
+      .step { grid-template-columns: 36px 1fr auto; justify-items: start; align-items: center; text-align: left; }
+      .step:not(:last-child)::after { top: 30px; bottom: -12px; left: 15px; right: auto; width: 2px; height: auto; }
+      .event { grid-template-columns: 1fr auto 18px; gap: 7px 10px; }
+      .when { grid-column: 1 / -1; }
+      .details { grid-column: 1 / -1; grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Mapa do processo — REP 2026/00418</h1>
+      <p>Referência conceitual para discussão de conteúdo, hierarquia e interação.</p>
+    </header>
+
+    <section class="progress" aria-label="Progresso do processo">
+      <div class="step done"><span class="step-number">1</span><strong>REP criada</strong><small>08/07 · 09:14</small></div>
+      <div class="step done"><span class="step-number">2</span><strong>Em andamento</strong><small>08/07 · 10:02</small></div>
+      <div class="step done"><span class="step-number">3</span><strong>Laudo iniciado</strong><small>09/07 · 14:35</small></div>
+      <div class="step current"><span class="step-number">4</span><strong>Concluído</strong><small>11/07 · 17:42</small></div>
+      <div class="step"><span class="step-number">5</span><strong>Entrega</strong><small>Aguardando</small></div>
+    </section>
+
+    <section class="timeline" aria-label="Linha do tempo da REP e do Laudo">
+      <button class="event rep" type="button" aria-expanded="false">
+        <span class="mark">REP</span><span class="when">08 jul · 09:14</span>
+        <span class="summary"><strong>REP 2026/00418 criada</strong><small>Natureza: exame médico-legal</small></span>
+        <span class="status">Concluído</span><span class="chevron" aria-hidden="true">⌄</span>
+        <span class="details"><span><b>BO</b>2026-001829</span><span><b>Solicitante</b>2ª Delegacia</span><span><b>Periciando</b>João da Silva</span></span>
+      </button>
+
+      <button class="event info" type="button" aria-expanded="false">
+        <span class="mark">ENV</span><span class="when">08 jul · 09:27</span>
+        <span class="summary"><strong>Envolvidos confirmados</strong><small>1 periciando · 1 solicitante</small></span>
+        <span class="status">2 registros</span><span class="chevron" aria-hidden="true">⌄</span>
+        <span class="details"><span><b>Periciando</b>Dados cadastrais validados</span><span><b>Solicitante</b>Autoridade vinculada</span></span>
+      </button>
+
+      <button class="event info" type="button" aria-expanded="false">
+        <span class="mark">DOC</span><span class="when">08 jul · 10:02</span>
+        <span class="summary"><strong>Peças recebidas</strong><small>BO, requisição e documento de identificação</small></span>
+        <span class="status">3 peças</span><span class="chevron" aria-hidden="true">⌄</span>
+        <span class="details"><span><b>BO</b>boletim_ocorrencia.pdf</span><span><b>Requisição</b>requisicao_exame.pdf</span><span><b>Identificação</b>documento.pdf</span></span>
+      </button>
+
+      <button class="event laudo" type="button" aria-expanded="false">
+        <span class="mark">LAU</span><span class="when">09 jul · 14:35</span>
+        <span class="summary"><strong>Laudo iniciado</strong><small>Modelo: exame médico-legal</small></span>
+        <span class="status">Em edição</span><span class="chevron" aria-hidden="true">⌄</span>
+        <span class="details"><span><b>Responsável</b>Perito titular</span><span><b>Versão</b>Rascunho inicial</span><span><b>REP</b>Movida para Em andamento</span></span>
+      </button>
+
+      <button class="event laudo selected" type="button" aria-expanded="true">
+        <span class="mark">OK</span><span class="when">11 jul · 17:42</span>
+        <span class="summary"><strong>Laudo concluído</strong><small>Conteúdo finalizado e bloqueado para edição</small></span>
+        <span class="status">Concluído</span><span class="chevron" aria-hidden="true">⌃</span>
+        <span class="details"><span><b>Conclusão</b>11/07/2026 às 17:42</span><span><b>Documento</b>Laudo nº 2026/00371</span><span><b>Próxima etapa</b>Registrar entrega</span></span>
+      </button>
+
+      <div class="event future">
+        <span class="mark">→</span><span class="when">Próxima etapa</span>
+        <span class="summary"><strong>Entrega do Laudo</strong><small>Data, destinatário e protocolo ainda não registrados</small></span>
+        <span class="status">Pendente</span><span></span>
+      </div>
+    </section>
+
+    <div class="legend" aria-label="Legenda">
+      <span><i class="dot"></i>REP</span><span><i class="dot info"></i>Informações vinculadas</span><span><i class="dot laudo"></i>Laudo</span>
+    </div>
+
+    <footer>Dados fictícios. Este wireframe não define a solução técnica final.</footer>
+  </main>
+  <script>
+    document.querySelectorAll('button.event').forEach((event) => {
+      event.addEventListener('click', () => {
+        const expandido = event.getAttribute('aria-expanded') === 'true';
+        event.setAttribute('aria-expanded', String(!expandido));
+        event.classList.toggle('selected', !expandido);
+        event.querySelector('.chevron').textContent = expandido ? '⌄' : '⌃';
+      });
+    });
+  </script>
+</body>
+</html>
