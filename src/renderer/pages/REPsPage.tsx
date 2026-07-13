@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm, type Path, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/forms/form';
@@ -604,6 +605,7 @@ const RepStepSection: React.FC<{ stepId: string; children: React.ReactNode }> = 
 };
 
 export const REPsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [reps, setReps] = useState<REP[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -2232,6 +2234,10 @@ export const REPsPage: React.FC = () => {
         onOpenChange={setGdlModalOpen}
         onAplicar={handleAplicarGdl}
         temDadosExistentes={formularioTemDadosRelevantesParaGdl(valoresFormulario, pecasB602)}
+        onConfigurarCredenciais={() => {
+          setGdlModalOpen(false);
+          navigate('/gdl-config');
+        }}
       />
       </TooltipProvider>
   );
