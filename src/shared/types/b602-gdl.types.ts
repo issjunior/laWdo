@@ -50,7 +50,7 @@ export interface DadosSolicitacaoGdl {
   orgao: string
   responsavel: string
   autoridade: string
-  origensCandidatasSolicitacao: ReferenciaOrigemGdl[]
+  origensDisponiveis: ReferenciaOrigemGdl[]
 }
 
 export interface ReferenciaOrigemGdl {

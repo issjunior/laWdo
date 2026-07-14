@@ -139,7 +139,11 @@ export function getSectionsForExame(codigo: string): ExamSection[] {
   return ids.map(id => SECTION_REGISTRY[id]).filter(Boolean);
 }
 
-export function serializeCamposEspecificos(codigo: string, data: import('./types').REPFormData): string | undefined {
+export function serializeCamposEspecificos(
+  codigo: string,
+  data: import('./types').REPFormData,
+  contexto?: import('./services/types').ContextoSerializacaoCamposEspecificos,
+): string | undefined {
   const service = EXAM_SERVICE_REGISTRY[codigo];
   if (!service) return undefined;
 
@@ -150,7 +154,7 @@ export function serializeCamposEspecificos(codigo: string, data: import('./types
     }
   }
 
-  return JSON.stringify(service.serialize(dataWithDefaults as import('./types').REPFormData));
+  return JSON.stringify(service.serialize(dataWithDefaults as import('./types').REPFormData, contexto));
 }
 
 export function deserializeCamposEspecificos(codigo: string, json: string | null | undefined): Partial<import('./types').REPFormData> {
