@@ -2,7 +2,7 @@
 
 ## Referência externa
 
-O manual `docs/api/API_GDL.txt` documenta o contrato externo da API. Esta spec descreve somente o comportamento atualmente implementado pela aplicação.
+O manual `docs/api/API_GDL.txt` documenta o contrato externo. Esta spec descreve somente o comportamento implementado pela aplicação.
 
 ## Arquitetura e fluxo
 
@@ -23,57 +23,44 @@ GdlConsultaModal
 | Responsabilidade | Fonte |
 |---|---|
 | HTTP, ambientes e credenciais | `gdl.service.ts` |
-| validação de payload externo | `gdl.schema.ts` |
+| validação do payload externo | `gdl.schema.ts` |
 | conversão para domínio local | `gdl-b602-normalizador.service.ts` |
 | contrato entre camadas | `shared/types/b602-gdl.types.ts` |
-| tipos e campos reconhecidos | `shared/catalogos/b602-gdl.catalogo.ts` |
+| tipos de peça | `shared/catalogos/b602-gdl.catalogo.ts` |
+| tipos de origem | `shared/catalogos/tipos-origem-gdl.catalogo.ts` |
 | revisão e seleção | `GdlConsultaModal.tsx` |
-| merge no formulário | `REPsPage.tsx` e `pecas-b602.utils.ts` |
+| seleção tipo/número | `TipoSolicitacaoSelect.tsx` |
+| aplicação e persistência | `REPsPage.tsx`, `b602.service.ts` e `pecas-b602.utils.ts` |
 
 ## Catálogo de tipos de origem
 
-`src/shared/catalogos/tipos-origem-gdl.catalogo.ts` é a fonte canônica dos códigos e labels do campo externo `Origens > Tipo`. A aplicação persiste o label recebido pela API; códigos e labels não devem ser redefinidos isoladamente em componentes.
+`tipos-origem-gdl.catalogo.ts` é a fonte canônica dos códigos e labels do campo externo `Origens > Tipo`. A aplicação persiste o label recebido pela API; códigos e labels não devem ser redefinidos em componentes.
 
-No estado atual, o consumidor de produção desse catálogo é `TipoSolicitacaoSelect.tsx`, no renderer. Sua permanência em `shared/` é uma exceção deliberada ao critério geral de compartilhamento já efetivo: a integração GDL será estendida a outros tipos de exame que consultam a mesma lista externa de origens. A exceção não autoriza mover outros catálogos para `shared/` apenas por reutilização hipotética.
+O consumidor de produção atual é `TipoSolicitacaoSelect.tsx`. A permanência em `shared/` antecipa uso pela mesma integração em outros exames. Se não surgir segundo consumidor real, o catálogo deve ser relocalizado para a feature REP. Subconjuntos e regras específicas continuam fora do catálogo base.
 
-Critério de validação da decisão:
-
-- ao implementar o próximo tipo de exame com origem GDL, reutilizar este catálogo e confirmar que códigos, labels e semântica são realmente comuns
-- se não surgir um segundo consumidor de produção, relocalizar o catálogo para a feature REP no renderer
-- se os exames exigirem subconjuntos ou regras diferentes, manter a base externa comum e separar as regras específicas por feature
-- preservar o teste de unicidade de códigos e labels ao atualizar a lista
+O teste do catálogo protege unicidade de códigos e labels.
 
 ## Ambientes e credenciais
 
 Ambientes: `homologacao` e `producao`. Cada um possui URL, login, senha e CPF. Senhas passam por `configuracao.service.ts`; o renderer recebe apenas operações específicas via preload.
 
-`normalizarAmbiente()` usa homologação como fallback para qualquer valor diferente de `producao`.
-
-As requests usam Basic Auth e `cpfUsuario` sem pontuação. `httpsRequest()` aceita HTTP ou HTTPS e atualmente configura `rejectUnauthorized: false`. Portanto, o certificado TLS não é validado; isso é uma característica de segurança atual que não deve ser replicada em novas integrações sem necessidade comprovada.
+`normalizarAmbiente()` usa homologação como fallback. Requests usam Basic Auth e CPF sem pontuação. `httpsRequest()` configura `rejectUnauthorized: false`; o certificado TLS não é validado.
 
 ## Validação de sessão local
 
-`{userData}/gdl/validacao-sessao.json` guarda por ambiente:
+`{userData}/gdl/validacao-sessao.json` guarda, por ambiente, estado validado, REP/ano usados e data/hora. É memória de UX, não token nem prova de sessão remota.
 
-- `validado`
-- REP e ano usados
-- data/hora
-
-Essa informação é memória de UX, não token nem prova de sessão no servidor. Falhas de leitura ou escrita geram `warn` e não bloqueiam a operação.
-
-401 e 403 limpam o estado do ambiente. Falhas genéricas, timeout e 404 não o limpam automaticamente.
+Falhas de leitura ou escrita geram `warn` e não bloqueiam. 401/403 limpam o estado; falhas genéricas, timeout e 404 não.
 
 ## Teste e validação de credenciais
 
-`testarConexao()` consulta `GET /unidadesMedida` com timeout de 5 segundos e não autentica. O retorno diferencia etapa de rede, latência e status.
-
-`validarCredenciais()` faz uma consulta real de REP com timeout de 15 segundos usando as credenciais informadas, sem exigir que elas já estejam salvas.
+`testarConexao()` consulta `GET /unidadesMedida` com timeout de 5 segundos e não autentica. `validarCredenciais()` faz consulta real de REP com timeout de 15 segundos usando as credenciais informadas.
 
 ## Consulta principal
 
 `consultarRep(numero, ano)`:
 
-1. carrega ambiente e credenciais persistidos
+1. carrega ambiente e credenciais
 2. exige login e senha
 3. chama `GET /rep/obter` com timeout de 15 segundos
 4. interpreta JSON como `unknown`
@@ -81,105 +68,82 @@ Essa informação é memória de UX, não token nem prova de sessão no servidor
 6. em homologação, tenta complementar envolvidos
 7. registra validação local
 
-Status tratados:
-
-- `200`: valida e retorna
-- `404`: REP não encontrada
-- `401/403`: autenticação rejeitada e validação limpa
-- demais: erro do servidor
-- erro de rede/timeout/schema: mensagem do erro e log
-
-Não há retry ou backoff automático.
+200 retorna dados validados; 404 indica ausência; 401/403 indicam autenticação rejeitada e limpam validação. Não há retry ou backoff.
 
 ## Consulta auxiliar de envolvidos
 
 Somente em homologação, o service chama sequencialmente `POST /repsInvestigacaoPolicial/listarReps` para cada filtro único.
 
-Filtros:
+Prefere número/ano das origens, aceita ano em campo separado ou no sufixo `/AAAA`, deduplica pares e usa `numeroCaso` positivo como fallback. A chamada exige CPF de 11 dígitos, página 1, tamanho 10 e timeout de 15 segundos.
 
-- prefere número e ano das origens
-- aceita ano no campo separado ou sufixo `/AAAA`
-- deduplica pares número/ano
-- usa `numeroCaso` positivo como fallback
-
-A consulta exige CPF com 11 dígitos, envia página 1 e tamanho 10, e tem timeout de 15 segundos por filtro.
-
-Falhas são toleradas: CPF inválido, ausência de filtro, status não 200, JSON inválido e timeout geram log e preservam o resultado principal.
-
-Implicação de desempenho: como os filtros são processados em série e não há limite explícito de origens antes da deduplicação, o tempo total pode somar 15 segundos por filtro em cenário de timeout. Paralelizar exige limite de concorrência para não sobrecarregar o GDL.
+Falhas são toleradas e preservam o resultado principal. Como filtros são processados em série e não há limite explícito antes da deduplicação, o tempo total pode somar 15 segundos por filtro.
 
 ## Schemas e fronteira insegura
 
 `gdl.schema.ts` normaliza strings nulas, números em string e campos opcionais. Schemas usam `passthrough()` ou `catchall(z.unknown())` para preservar propriedades dinâmicas.
 
-Regras:
-
-- nunca alimentar o formulário diretamente com o JSON bruto
-- campos estruturais conhecidos precisam passar por Zod
-- propriedades extras permanecem `unknown` até normalização
-- erros de parse usam mensagens específicas
-
-O schema de investigação aceita `envolvidos` como `unknown`, pois a API retorna formatos heterogêneos. A interpretação semântica ocorre no normalizador.
+Nunca alimentar o formulário com JSON bruto. Campos conhecidos passam por Zod; extras permanecem `unknown` até normalização. A investigação aceita `envolvidos` como `unknown` porque o formato externo é heterogêneo.
 
 ## Normalização B-602
 
-`converterRepB602()` separa transporte externo do domínio local. Ele produz campos gerais, peças, dados de solicitação, dados de investigação, metadados e avisos.
+`converterRepB602()` produz campos gerais, peças, dados de solicitação, dados de investigação, metadados e avisos.
 
 Peças:
 
 - tipo resolvido por label ou alias normalizado
 - campos comuns normalizados
-- somente chaves com mapeamento confirmado vão para `personalizados`
-- outras propriedades vão para `extrasGdl`
-- tipo desconhecido permanece sem `tipoCodigo` e gera aviso
+- somente mapeamentos confirmados vão para `personalizados`
+- demais propriedades vão para `extrasGdl`
+- tipo desconhecido fica sem `tipoCodigo` e gera aviso
 
-Envolvidos:
+Envolvidos passam por extração recursiva limitada, deduplicação e separação entre qualificação e nome. BO e IP são classificados por prefixo normalizado. Números múltiplos deixam o campo correspondente vazio e geram aviso.
 
-- extração recursiva limitada em profundidade
-- reconhecimento por aliases e contexto
-- deduplicação por texto normalizado
-- separação em qualificação e nome no limite do formulário
+## Origens da solicitação
 
-BO e IP são classificados por prefixo normalizado. Múltiplos números não são escolhidos arbitrariamente; o campo fica vazio e o usuário recebe aviso.
+Todas as origens com tipo não vazio são normalizadas para `ReferenciaOrigemGdl { tipo, numero }`. O número incorpora o ano quando necessário.
+
+A deduplicação considera tipo normalizado e número. Portanto:
+
+- repetição exata é removida
+- mesmo tipo com números diferentes é preservado
+- tipos fora das famílias BO/IP/OFÍCIO também são preservados para seleção
+
+A sugestão inicial usa a primeira origem cuja família normalizada começa por BO, IP ou OFÍCIO; se não houver, usa a primeira origem disponível. Tipo e número são sempre escolhidos como par.
+
+O contrato atual chama a lista de `origensDisponiveis`. Na leitura de metadados persistidos, o renderer aceita `origensCandidatasSolicitacao` e a converte para o nome atual.
 
 ## Revisão e aplicação
 
-O modal:
+O modal executa pré-teste, busca número/ano, mostra mapeados e ausentes, permite desmarcar peças e oferece `mesclar` e `substituir`.
 
-- executa pré-teste ao abrir
-- busca por número e ano
-- mostra mapeados e não preenchidos
-- permite desmarcar peças
-- oferece `mesclar` e `substituir`
+`mesclar` preserva campos locais não vazios. `substituir` aplica os retornados, mas na coleção substitui somente correspondências por `codPecaGdl`; peças manuais permanecem.
 
-`mesclar` preserva campos locais não vazios. `substituir` aplica campos retornados, mas na coleção de peças substitui apenas correspondências por `codPecaGdl`; peças manuais permanecem.
+`TipoSolicitacaoSelect` mostra origens da REP separadas do preenchimento manual. Selecionar origem atualiza tipo e número; selecionar tipo manual ou `Outros` limpa o número anterior. O par exato evita confundir duas origens do mesmo tipo.
 
-Uma peça GDL editada localmente é protegida no modo mesclar. Campos importados recebem destaque verde somente durante a sessão.
+O catálogo GDL e tipos locais legados permanecem disponíveis manualmente. Valor livre usa `Outros`; valor não catalogado recebido do GDL é preservado como opção enquanto a origem inicial for GDL.
 
-Avisos não bloqueiam aplicação ou salvamento. O usuário continua responsável por ambiguidades.
+Peça GDL editada localmente é protegida no modo mesclar. Campos importados recebem destaque verde somente durante a sessão. Avisos não bloqueiam aplicação ou salvamento.
+
+## Persistência e reabertura
+
+`REPsPage` passa peças e metadados ao `b602Service` pelo contexto de serialização. O service grava `b602.pecas`, `b602.solicitante_nome` e `integracaoGdl` no formato canônico, sem arrays legados.
+
+Na reabertura, peças e metadados são validados separadamente. Metadados inválidos retornam `null`; JSON inválido não é forçado por cast. O órgão GDL persistido tem precedência sobre o solicitante local para a unidade policial.
 
 ## Resiliência e idempotência
 
-A API não é alterada. Consultar novamente pode acrescentar peças novas e reconciliar peças com mesmo `codPecaGdl`. Peças recebidas sem `codPecaGdl` não têm identidade externa e podem ser adicionadas novamente.
+A API não é alterada. Nova consulta pode acrescentar peças e reconciliar aquelas com o mesmo `codPecaGdl`. Peças sem identidade externa podem ser adicionadas novamente.
 
-Não existe cancelamento explícito da request ao fechar o modal, limite de tamanho do corpo da resposta ou retry. Novas melhorias devem considerar timeout, cancelamento e limite de concorrência antes de adicionar paralelismo.
+Não existe cancelamento explícito ao fechar o modal, limite de corpo ou retry. Paralelismo futuro precisa de limite de concorrência.
 
 ## Compatibilidade com o laudo
 
-O resultado GDL alimenta `PecaB602[]`, persistido em `b602.pecas`. Consumidores legados do laudo ainda leem arrays antigos. A importação bem-sucedida não garante, por si só, que placeholders e seções antigas recebam os dados de peças.
+O resultado alimenta `PecaB602[]`, persistido em `b602.pecas`. Consumidores legados do laudo ainda leem arrays antigos; importação bem-sucedida não garante preenchimento de placeholders e seções antigas.
 
 ## Testes e impacto
 
-`gdl-b602-normalizador.service.test.ts` cobre payload inválido, propriedades dinâmicas, peças, origens, metadados, envolvidos, ambiguidades e filtros. Testes de catálogo e merge cobrem completude e precedência local.
+Testes cobrem payload inválido, propriedades dinâmicas, peças, origens completas, preservação de mesmo tipo com números diferentes, sugestão inicial, metadados, envolvidos, ambiguidades, catálogo e comportamento do seletor.
 
-Não há teste de rede real nem teste end-to-end atravessando IPC, persistência e laudo.
+Não há teste de rede real nem end-to-end atravessando IPC, persistência e laudo.
 
-Alterações precisam manter alinhados:
-
-1. schema e normalizador do main
-2. contrato shared
-3. handler e preload
-4. modal de revisão
-5. merge e persistência
-6. catálogo e testes
-7. consumidores do laudo quando o formato persistido mudar
+Alterações precisam manter alinhados schema, normalizador, contrato shared, handler/preload, modal, seletor, persistência, catálogo e consumidores do laudo.

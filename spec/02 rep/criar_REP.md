@@ -15,27 +15,17 @@ O renderer valida e monta o payload. O preload restringe os canais. O handler sa
 
 ## Fontes de validação
 
-O renderer combina:
+O renderer combina schema Zod, `react-hook-form`, pendências específicas por exame e validação estrutural das peças B-602.
 
-- schema Zod e `react-hook-form`
-- pendências específicas por tipo de exame
-- validação estrutural das peças B-602
+O handler do main não repete todo o schema. Na criação ele exige número, verifica duplicidade e sanitiza campos conhecidos. Na atualização aceita payload parcial e sanitiza somente os campos presentes.
 
-O handler do main não repete todo o schema. Na criação ele exige número, verifica duplicidade e sanitiza campos conhecidos. Na atualização ele aceita um payload parcial e sanitiza somente os campos presentes.
-
-Consequência: o renderer é a principal barreira de domínio, mas o IPC continua sendo fronteira insegura. Novas chamadas ou novos campos precisam manter payload, handler, preload e tipos alinhados.
+Consequência: o renderer é a principal barreira de domínio, mas o IPC continua sendo fronteira insegura. Novas chamadas ou campos precisam manter payload, handler, preload e tipos alinhados.
 
 ## Montagem do payload
 
-`prepareForApi()` separa:
+`prepareForApi()` separa colunas comuns, ids opcionais, coordenadas numéricas, template/perito e `campos_especificos`.
 
-- colunas comuns da REP
-- ids opcionais
-- coordenadas convertidas para número
-- `campos_especificos` serializado conforme o tipo
-- `template_id` e `perito_id` quando há template selecionado
-
-Para B-602, a composição final inclui dados de investigação, `b602.pecas` e metadados GDL.
+Para B-602, a página passa `PecaB602[]` e `MetadadosIntegracaoGdl | null` como contexto de `serializeCamposEspecificos()`. O `b602Service` produz diretamente o JSON canônico com investigação, `solicitante_nome`, `b602.pecas` e `integracaoGdl` opcional.
 
 ## Criação
 
@@ -49,29 +39,24 @@ Para B-602, a composição final inclui dados de investigação, `b602.pecas` e 
 6. registra auditoria
 7. tenta criar laudo se template e perito forem enviados e o template não for `tpl-nao-definido`
 
-A criação de REP e laudo não é transacional. Se o laudo falhar, a REP permanece criada, o erro é registrado e a resposta da REP continua sendo sucesso. Uma solução futura não deve assumir atomicidade sem introduzir transação ou compensação explícita.
+REP e laudo não são criados em uma transação. Se o laudo falhar, a REP permanece criada, o erro é registrado e a resposta da REP continua sendo sucesso.
 
 ## Edição
 
 Na abertura:
 
 1. resolve tipo, template e laudo vinculado
-2. desserializa campos específicos
-3. extrai peças e metadados B-602
-4. combina dados persistidos com `emptyForm()`
-5. preserva snapshots legados de toggles e armas para avisos
+2. desserializa campos escalares específicos
+3. valida e extrai peças e metadados B-602
+4. restaura `origensDisponiveis` para o seletor de solicitação
+5. combina dados persistidos com `emptyForm()`
+6. preserva snapshots legados de toggles e armas para avisos
 
-Na atualização, o handler persiste a REP primeiro. Depois:
-
-- cria laudo se ainda não existe e há template/perito
-- troca o template quando ele mudou
-- sincroniza seções condicionais quando o template permanece igual
-
-Falhas de criação, troca ou sincronização do laudo são registradas, mas não desfazem a atualização da REP. O retorno pode indicar sucesso da REP mesmo com o laudo desatualizado.
+Na atualização, o handler persiste a REP primeiro. Depois cria laudo ausente, troca template ou sincroniza seções condicionais. Falhas dessas etapas são registradas, mas não desfazem a atualização da REP.
 
 ## Exclusão
 
-`rep:delete` remove primeiro o laudo vinculado e depois a REP para respeitar a chave estrangeira. As duas operações não estão numa transação visível. Se a segunda falhar após a primeira, pode restar uma REP sem o laudo anterior.
+`rep:delete` remove primeiro o laudo vinculado e depois a REP. As duas operações não estão numa transação visível. Se a segunda falhar após a primeira, pode restar uma REP sem o laudo anterior.
 
 ## B-602
 
@@ -82,11 +67,13 @@ Seções ativas:
 
 O salvamento exige dados fixos, ao menos uma peça completa, primeiro envolvido, data da ocorrência, cidade, UF e BO ou IP.
 
-Peças ficam em estado separado de `react-hook-form`. A validade usa o catálogo compartilhado. O JSON novo não é equivalente aos arrays legados ainda usados por parte do laudo.
+Peças ficam fora de `react-hook-form`. A validade usa o catálogo compartilhado. O JSON novo não é equivalente aos arrays legados ainda usados por parte do laudo.
+
+`b602_solicitante_nome` usa o órgão dos metadados GDL quando disponível; caso contrário acompanha o solicitante local. O valor é persistido dentro do bloco B-602.
 
 ## Aplicação do GDL
 
-A consulta produz um contrato B-602 tipado. Ao aplicar:
+A consulta produz contrato B-602 tipado. Ao aplicar:
 
 - sem tipo selecionado, a página seleciona B-602
 - com outro tipo, interrompe e exige confirmação da troca
@@ -94,32 +81,33 @@ A consulta produz um contrato B-602 tipado. Ao aplicar:
 - `substituir` aplica os valores retornados
 - formulário sem dados relevantes é tratado como substituição
 - peças são reconciliadas por `codPecaGdl`
+- todas as origens válidas retornadas ficam disponíveis para escolha posterior
 
-O destaque verde é estado de sessão da página; não é persistido como estilo. Avisos do normalizador são mostrados, mas não bloqueiam salvar.
+O normalizador sugere inicialmente a primeira origem cuja família começa por BO, IP ou OFÍCIO; se não houver, usa a primeira origem disponível. Tipo e número são aplicados como par.
+
+`TipoSolicitacaoSelect` separa origens da REP e opções de preenchimento manual. Selecionar uma origem GDL altera conjuntamente `tipo_solicitacao` e `numero_documento`. Selecionar tipo manual ou `Outros` limpa o número para evitar associação acidental a outra origem. O par exato tipo+número identifica origens repetidas do mesmo tipo.
+
+Valores do catálogo GDL e tipos legados aparecem como opções manuais. Valor livre permanece em `Outros`; valor desconhecido recebido do GDL é preservado como opção enquanto os metadados indicarem origem GDL.
+
+O destaque verde é estado de sessão e não é persistido. Avisos do normalizador não bloqueiam salvamento.
 
 ## Acoplamento legado com o laudo
 
-`handleSalvar` ainda verifica toggles e snapshots de armas do modelo antigo para alertar sobre laudo vinculado. Como as seções legadas não estão ativas e a composição final remove seus arrays, esse caminho não representa o estado canônico novo das peças.
+`handleSalvar` ainda verifica toggles e snapshots de armas do modelo antigo para alertar sobre laudo vinculado. Como as seções legadas não estão ativas e a escrita canônica remove seus arrays, esse caminho não representa as peças atuais.
 
-Antes de reutilizar esse código para `PecaB602`, é necessário definir conversão ou migrar os consumidores. Não associar automaticamente uma peça da família arma a `b602.armas` sem regra explícita de mapeamento.
+Antes de reutilizá-lo para `PecaB602`, é necessário definir conversão ou migrar consumidores. Não associar automaticamente uma peça da família arma a `b602.armas` sem regra explícita.
 
 ## Desempenho e concorrência
 
-- a página carrega listas e templates por IPC e mantém o formulário localmente
+- listas e templates são carregados por IPC; o formulário fica local
 - salvamento é uma chamada por REP, seguida de recarga da lista
-- não há controle otimista por `updated_at`; duas edições concorrentes podem sobrescrever campos
-- criação automática e sincronização do laudo acrescentam operações sequenciais após persistir a REP
+- não há controle otimista por `updated_at`; edições concorrentes podem sobrescrever campos
+- criação automática e sincronização do laudo acrescentam operações sequenciais
 
-Evitar novas consultas por campo ou por peça durante renderização. Dados derivados devem ser calculados localmente ou carregados em lote.
+Evitar consultas por campo ou peça durante renderização. Dados derivados devem ser calculados localmente ou carregados em lote.
 
 ## Verificação e lacunas
 
-Não há teste automatizado direto dos handlers `rep:create` e `rep:update` cobrindo persistência mais laudo. Mudanças no ciclo devem validar:
+Testes do seletor cobrem aplicação programática sem apagar tipo/número, seleção manual, valores catalogados, valor livre e origens repetidas. Testes do service cobrem persistência canônica.
 
-1. criação sem template
-2. criação com template e falha de laudo
-3. edição com e sem troca de template
-4. sincronização de seções
-5. exclusão com laudo vinculado
-6. round-trip de `campos_especificos`
-7. edição concorrente quando a solução alterar controle de versão
+Não há teste automatizado direto dos handlers `rep:create` e `rep:update` atravessando persistência e laudo, nem teste end-to-end de reabertura pelo IPC.

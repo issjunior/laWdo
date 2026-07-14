@@ -2,24 +2,42 @@
 
 ## Visão arquitetural
 
-O fluxo ativo usa um único formulário para dados manuais e importados. O GDL não possui formulário paralelo: ele normaliza dados para o mesmo contrato local.
+O fluxo ativo usa um único formulário para dados manuais e importados. O GDL normaliza dados para o mesmo contrato local.
 
 | Dado | Fonte de verdade durante a edição | Persistência |
 |---|---|---|
 | investigação | `REPFormData` | propriedades escalares de `b602` |
 | envolvidos | pares qualificação/nome em `REPFormData` | strings em `b602.envolvidos` |
+| unidade policial | `b602_solicitante_nome` | `b602.solicitante_nome` |
 | peças | `PecaB602[]` em `REPsPage` | `b602.pecas` |
+| origens para solicitação | `ReferenciaOrigemGdl[]` restaurado dos metadados | `integracaoGdl.dadosSolicitacao.origensDisponiveis` |
 | marcação visual GDL | `Set<string>` local | não persistida |
 | origem e última consulta | `MetadadosIntegracaoGdl` | `integracaoGdl` |
 
 ## Seções ativas e legado
 
-`EXAM_FIELD_MAP['B-602']` contém somente:
+`EXAM_FIELD_MAP['B-602']` contém somente `dados_investigacao` e `pecas_b602`.
 
-- `dados_investigacao`
-- `pecas_b602`
+`SECTION_REGISTRY`, `b602.tsx` e `b602Service` ainda contêm campos legados de material, cartuchos, estojos e armas. Eles não são renderizados pelo fluxo ativo e não devem virar segunda fonte de edição.
 
-`SECTION_REGISTRY`, `b602.tsx` e `b602Service` ainda contêm editores e campos legados de material encaminhado, cartuchos, estojos e armas. Eles não são renderizados pelo fluxo ativo e não devem ser usados como segunda fonte de edição.
+## Dados da solicitação
+
+O normalizador conserva todas as origens GDL com tipo não vazio. A deduplicação usa o par tipo normalizado+número; origens do mesmo tipo e números diferentes permanecem distintas.
+
+Para o preenchimento inicial, escolhe a primeira origem cuja família normalizada começa por BO, IP ou OFÍCIO. Se nenhuma pertencer a essas famílias, usa a primeira origem disponível. O tipo e o número escolhidos alimentam `tipo_solicitacao` e `numero_documento`.
+
+`TipoSolicitacaoSelect` apresenta dois grupos:
+
+- origens cadastradas na REP, exibidas como tipo e número
+- preenchimento manual com catálogo GDL, tipos locais legados e `Outros`
+
+Uma origem é identificada pelo par exato tipo+número. Selecioná-la altera ambos os campos. Selecionar um tipo manual ou `Outros` limpa o número anterior. Valores livres ficam no modo `Outros`; valor desconhecido proveniente do GDL é preservado enquanto `origemInicial === 'gdl'`.
+
+Na reabertura, as origens são restauradas de `integracaoGdl`. O leitor converte o nome legado `origensCandidatasSolicitacao` para `origensDisponiveis`.
+
+## Unidade policial
+
+O órgão retornado pelo GDL tem precedência para `b602_solicitante_nome`. Sem órgão GDL, o campo deriva do solicitante local escolhido. O valor é persistido para manter o texto usado na REP mesmo após a sessão.
 
 ## Dados da investigação
 
@@ -30,105 +48,63 @@ Campos:
 - bairro, cidade e UF
 - número do BO
 - número do IP
-- solicitante derivado da seleção da REP
+- unidade policial derivada
 
-Cada envolvido tem qualificação e nome separados. O datalist sugere `EM PODER DE:`, `AUTOR:` e `VÍTIMA:`, mas aceita texto livre.
-
-A lista mantém ao menos uma linha. Adição para em dez. Exclusão compacta os pares seguintes e limpa o último, evitando lacunas que alterariam a ordem persistida.
+Cada envolvido tem qualificação e nome separados. A lista mantém ao menos uma linha, limita a dez e compacta os pares após exclusão.
 
 A completude do stepper exige primeiro envolvido, data, cidade e UF. O bloqueio de salvamento acrescenta BO-ou-IP.
 
 ## Contrato de peça
 
-`PecaB602` separa:
+`PecaB602` separa identidade local, origem manual/GDL, identidade externa, marca de alteração local, tipo, campos comuns, personalizados e extras desconhecidos.
 
-- `idLocal`: identidade estável na sessão e na persistência local
-- `origem`: `manual` ou `gdl`
-- `codPecaGdl`: identidade externa quando disponível
-- `alteradaLocalmente`: protege edição local durante nova mesclagem
-- `tipoCodigo` e `tipoPeca`
-- `comuns`: campos compartilhados por todos os tipos
-- `personalizados`: campos definidos pelo catálogo
-- `extrasGdl`: propriedades externas sem mapeamento confirmado
-
-`extrasGdl` preserva informação desconhecida sem alimentar automaticamente campos de domínio.
+`extrasGdl` preserva informação externa sem alimentar automaticamente campos de domínio.
 
 ## Catálogo e completude
 
-`b602-gdl.catalogo.ts` é a fonte dos tipos, aliases, campos e opções. Atualmente existem 17 códigos; somente CARABINA e ESTOJO têm round-trip confirmado.
+`b602-gdl.catalogo.ts` é a fonte dos tipos, aliases, campos e opções. `pecaB602EstaCompleta()` exige:
 
-`pecaB602EstaCompleta()` exige:
-
-1. `tipoCodigo` reconhecido pelo catálogo
+1. `tipoCodigo` reconhecido
 2. quantidade maior que zero
-3. todos os campos personalizados marcados como obrigatórios
+3. campos personalizados obrigatórios preenchidos
 
-Identificação, lacres e outros campos comuns não são obrigatórios por essa função, salvo regra adicional no catálogo. Um tipo importado sem correspondência fica com código vazio, gera aviso e impede a completude.
+Um tipo importado sem correspondência fica com código vazio, gera aviso e impede completude.
 
-## Edição manual
+## Edição e mesclagem
 
-Uma peça nova recebe UUID, origem manual, quantidade 1 e objetos vazios. Ao trocar o tipo, campos personalizados existentes são descartados somente após confirmação.
+Peça nova recebe UUID, origem manual, quantidade 1 e objetos vazios. Trocar o tipo descarta personalizados somente após confirmação. Editar peça GDL marca `alteradaLocalmente = true`. Excluir não escreve na API.
 
-Editar peça importada marca `alteradaLocalmente = true`. Excluir item GDL afeta apenas o laWdo; nenhuma escrita é enviada à API externa.
+`mesclarPecasB602DoGdl()` usa `codPecaGdl` e preserva `idLocal`. No modo mesclar, alterações locais e valores não vazios vencem. No modo substituir, correspondências recebem a resposta nova, mas peças manuais e peças GDL antigas não retornadas permanecem.
 
-Não há limite explícito para quantidade de peças. O editor trabalha todo em memória e não faz I/O por campo.
-
-## Mesclagem com nova consulta GDL
-
-`mesclarPecasB602DoGdl()` usa `codPecaGdl` para localizar equivalência externa e preserva `idLocal`.
-
-| Situação | Modo mesclar | Modo substituir |
-|---|---|---|
-| peça GDL nova | adiciona | adiciona |
-| peça existente alterada localmente | preserva inteira | substitui dados, preservando `idLocal` |
-| campos comuns existentes | preenche apenas vazios | usa resposta nova |
-| personalizados existentes | valores locais não vazios vencem | usa resposta nova |
-| extras GDL | combina, com local vencendo | usa resposta nova |
-| peças manuais | permanecem | permanecem |
-
-`substituir` não significa limpar toda a coleção: peças manuais e peças GDL antigas não retornadas não são removidas pelo helper atual. Ele substitui apenas correspondências encontradas.
-
-A busca inicial usa `Map` por `codPecaGdl`, mas a substituição localiza `idLocal` com `findIndex` para cada correspondência. O volume esperado é pequeno; em coleções grandes o trecho pode se aproximar de custo quadrático.
+Peças sem `codPecaGdl` não têm identidade externa estável e podem ser adicionadas novamente em consultas futuras.
 
 ## Normalização do GDL
 
-O main valida o payload antes de converter. Tipos são encontrados por label ou alias normalizado. Apenas chaves com mapeamento confirmado entram em `personalizados`; as demais vão para `extrasGdl`.
+O main valida o payload por Zod antes de converter. Tipos de peça são encontrados por label ou alias normalizado. Apenas chaves com mapeamento confirmado entram em `personalizados`; as demais vão para `extrasGdl`.
 
-Envolvidos são extraídos de estruturas heterogêneas, deduplicados e separados em qualificação e nome. Mais de dez, ausência, múltiplos BO/IP e tipo de peça não confirmado geram avisos sem bloquear aplicação.
+Envolvidos são extraídos de estruturas heterogêneas, deduplicados e separados em qualificação e nome. Mais de dez envolvidos, ausência, múltiplos BO/IP e tipo de peça não confirmado geram avisos sem bloquear aplicação.
 
 ## Persistência e compatibilidade
 
-O formato escrito pelo fluxo ativo usa `b602.pecas`. Na leitura, peças passam por validação estrutural mínima antes de entrar no estado.
+`prepareForApi()` passa peças e metadados no contexto de `serializeCamposEspecificos()`. O `b602Service` produz diretamente o formato canônico, remove arrays legados e grava `b602.pecas` e `integracaoGdl`.
 
-Os arrays legados ainda são entendidos pelo `b602Service`, mas a composição final da página os remove. Isso preserva abertura de parte dos registros antigos, mas não cria equivalência entre arrays legados e `PecaB602[]`.
+Na leitura:
+
+- escalares passam por `b602Service.deserialize()`
+- peças passam por validação estrutural mínima
+- metadados passam por schema Zod
+- `origensCandidatasSolicitacao` é aceito apenas como compatibilidade de leitura
+
+Chamada do service sem contexto ainda produz arrays legados, mas não é o caminho canônico de persistência da página.
 
 ## Relação atual com laudo e placeholders
 
-Há uma assimetria importante:
+O editor grava `b602.pecas`, enquanto preview da REP, `LaudosPage`, `exportacao-placeholders.ts` e `secao-builder.service.ts` ainda consultam arrays antigos. Não há adaptador geral.
 
-- o editor atual grava `b602.pecas`
-- preview da REP, `LaudosPage`, `exportacao-placeholders.ts` e `secao-builder.service.ts` ainda consultam `material_enc`, `cartuchos`, `estojos`, `armas` e toggles
-- não há adaptador geral de `PecaB602` para essas estruturas
+Assim, peças novas não garantem preenchimento dos placeholders ou ativação das seções legadas. A solução consistente precisa tornar `pecas` a fonte única ou gerar uma visão legada determinística num único adaptador. Não escrever os dois formatos independentemente.
 
-Assim, peças do formato novo não garantem preenchimento dos placeholders ou ativação das seções legadas. Essa limitação deve ser considerada antes de alterar laudo, exportação ou templates.
+## Desempenho e testes
 
-A solução consistente precisa escolher entre:
+Não há limite explícito de peças. A busca inicial do merge usa `Map`, mas a substituição usa `findIndex` por correspondência; o volume esperado é pequeno.
 
-1. tornar `b602.pecas` a fonte única e migrar consumidores
-2. gerar uma visão legada determinística a partir de `pecas` em um único adaptador
-
-Não escrever e editar os dois formatos independentemente.
-
-## Impacto e testes
-
-Alterações em peças precisam conferir:
-
-- tipos e catálogo shared
-- normalizador GDL
-- editor e merge
-- completude e pendências
-- persistência e restauração
-- preview da REP
-- placeholders, seções condicionais e repetição por arma
-
-Testes atuais cobrem catálogo, completude, normalização e merge. Não cobrem o round-trip completo no banco nem o consumo de `b602.pecas` pelo laudo.
+Testes cobrem catálogo, completude, normalização, merge, serialização canônica, reidratação de metadados, compatibilidade do nome legado e seletor de origem. Não cobrem o round-trip completo no banco nem o consumo de `b602.pecas` pelo laudo.
