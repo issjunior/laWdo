@@ -1,5 +1,5 @@
 import type { REPFormData } from '../types';
-import type { ExamService } from './types';
+import type { ContextoSerializacaoCamposEspecificos, ExamService } from './types';
 import { combinarEnvolvido, separarEnvolvido } from '@shared/utils/envolvido';
 
 function formatarNumeroBO(raw: string): string {
@@ -30,7 +30,10 @@ const ARMA_CAMPOS_MATERIAL = [
 export const b602Service: ExamService = {
   codigo: 'B-602',
 
-  serialize(data: REPFormData): Record<string, unknown> {
+  serialize(
+    data: REPFormData,
+    contexto?: ContextoSerializacaoCamposEspecificos,
+  ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
 
     const envolvidos: string[] = [];
@@ -49,6 +52,7 @@ export const b602Service: ExamService = {
     result.local = { bairro: localBairro, cidade: localCidade, uf: localUf };
     result.numero_bo = (data as Record<string, string>)['b602_numero_bo'] || '';
     result.numero_ip = (data as Record<string, string>)['b602_numero_ip'] || '';
+    result.solicitante_nome = (data as Record<string, string>)['b602_solicitante_nome'] || '';
 
 
     const items: Record<string, string>[] = [];
@@ -133,7 +137,22 @@ export const b602Service: ExamService = {
       if (items.length > 0) result.armas = items;
     }
 
-    return { b602: result };
+    const contextoB602 = contexto?.b602;
+    if (!contextoB602) return { b602: result };
+
+    delete result.material_enc;
+    delete result.cartuchos;
+    delete result.estojos;
+    delete result.armas;
+    delete result.armas_toggle;
+    result.pecas = contextoB602.pecas;
+
+    return {
+      b602: result,
+      ...(contextoB602.metadadosIntegracaoGdl
+        ? { integracaoGdl: contextoB602.metadadosIntegracaoGdl }
+        : {}),
+    };
   },
 
   deserialize(json: unknown): Partial<REPFormData> {
@@ -175,6 +194,7 @@ export const b602Service: ExamService = {
     }
     if (data.numero_bo) result['b602_numero_bo'] = String(data.numero_bo);
     if (data.numero_ip) result['b602_numero_ip'] = String(data.numero_ip);
+    if (data.solicitante_nome) result['b602_solicitante_nome'] = String(data.solicitante_nome);
 
 
     const material = data.material_enc as Record<string, string>[] | undefined;

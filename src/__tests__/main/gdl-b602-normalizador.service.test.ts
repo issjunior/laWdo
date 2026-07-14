@@ -58,13 +58,14 @@ describe('contrato GDL B602', () => {
     expect(resultado.camposGerais.autoridade_solicitante).toBe('AUTORIDADE TESTE')
     expect(resultado.camposGerais.b602_numero_bo).toBe('123/2026')
     expect(resultado.camposGerais.b602_numero_ip).toBe('456/2026')
+    expect(resultado.camposGerais.b602_solicitante_nome).toBe('ÓRGÃO TESTE')
     expect(resultado.camposGerais.b602_envolvidos_0).toBe('ENVOLVIDO TESTE')
     expect(resultado.camposGerais.b602_envolvidos_1).toBe('OUTRO ENVOLVIDO')
     expect(resultado.camposEspecificos.dadosSolicitacao).toEqual({
       orgao: 'ÓRGÃO TESTE',
       responsavel: 'RESPONSÁVEL TESTE',
       autoridade: 'AUTORIDADE TESTE',
-      origensCandidatasSolicitacao: [
+      origensDisponiveis: [
         { tipo: 'BO', numero: '123/2026' },
         { tipo: 'BO/PM', numero: '123/2026' },
         { tipo: 'IP/APFD', numero: '456/2026' },
@@ -81,7 +82,7 @@ describe('contrato GDL B602', () => {
     ])
   })
 
-  it('seleciona a primeira origem das famílias BO, IP ou OFÍCIO e preserva as demais opções', () => {
+  it('sugere a primeira origem das famílias BO, IP ou OFÍCIO e preserva todas as demais opções', () => {
     const rep = validarGdlRep({
       ...fixture,
       origens: [
@@ -96,7 +97,8 @@ describe('contrato GDL B602', () => {
 
     expect(resultado.camposGerais.tipo_solicitacao).toBe('IP/PM')
     expect(resultado.camposGerais.numero_documento).toBe('2/2026')
-    expect(resultado.camposEspecificos.dadosSolicitacao.origensCandidatasSolicitacao).toEqual([
+    expect(resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis).toEqual([
+      { tipo: 'PROCESSO', numero: '1/2026' },
       { tipo: 'IP/PM', numero: '2/2026' },
       { tipo: 'OFÍCIO REQUISITANTE', numero: '3/2026' },
       { tipo: 'BO/PM', numero: '4/2026' },
@@ -110,7 +112,7 @@ describe('contrato GDL B602', () => {
         orgao: 'ÓRGÃO TESTE',
         responsavel: 'RESPONSÁVEL TESTE',
         autoridade: 'AUTORIDADE TESTE',
-        origensCandidatasSolicitacao: [
+        origensDisponiveis: [
           { tipo: 'BO', numero: '123/2026' },
           { tipo: 'BO/PM', numero: '123/2026' },
           { tipo: 'IP/APFD', numero: '456/2026' },
@@ -131,7 +133,7 @@ describe('contrato GDL B602', () => {
         orgao: 'ÓRGÃO TESTE',
         responsavel: 'RESPONSÁVEL TESTE',
         autoridade: 'AUTORIDADE TESTE',
-        origensCandidatasSolicitacao: [
+        origensDisponiveis: [
           { tipo: 'BO', numero: '123/2026' },
           { tipo: 'BO/PM', numero: '123/2026' },
           { tipo: 'IP/APFD', numero: '456/2026' },
@@ -223,6 +225,23 @@ describe('contrato GDL B602', () => {
     expect(resultado.camposGerais.b602_numero_bo).toBe('777/2026')
     expect(resultado.camposEspecificos.dadosInvestigacao.boletinsOcorrencia).toEqual([
       { tipo: 'BOC', numero: '777/2026' },
+    ])
+  })
+
+  it('preserva origens de mesmo tipo quando possuem números diferentes', () => {
+    const rep = validarGdlRep({
+      ...fixture,
+      origens: [
+        { tipo: 'BO', numero: '100', ano: 2026, cidade: 'LONDRINA' },
+        { tipo: 'BO', numero: '200', ano: 2026, cidade: 'LONDRINA' },
+      ],
+    })
+
+    const resultado = converterRepB602(rep)
+
+    expect(resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis).toEqual([
+      { tipo: 'BO', numero: '100/2026' },
+      { tipo: 'BO', numero: '200/2026' },
     ])
   })
 })

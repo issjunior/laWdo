@@ -30,6 +30,19 @@ GdlConsultaModal
 | revisão e seleção | `GdlConsultaModal.tsx` |
 | merge no formulário | `REPsPage.tsx` e `pecas-b602.utils.ts` |
 
+## Catálogo de tipos de origem
+
+`src/shared/catalogos/tipos-origem-gdl.catalogo.ts` é a fonte canônica dos códigos e labels do campo externo `Origens > Tipo`. A aplicação persiste o label recebido pela API; códigos e labels não devem ser redefinidos isoladamente em componentes.
+
+No estado atual, o consumidor de produção desse catálogo é `TipoSolicitacaoSelect.tsx`, no renderer. Sua permanência em `shared/` é uma exceção deliberada ao critério geral de compartilhamento já efetivo: a integração GDL será estendida a outros tipos de exame que consultam a mesma lista externa de origens. A exceção não autoriza mover outros catálogos para `shared/` apenas por reutilização hipotética.
+
+Critério de validação da decisão:
+
+- ao implementar o próximo tipo de exame com origem GDL, reutilizar este catálogo e confirmar que códigos, labels e semântica são realmente comuns
+- se não surgir um segundo consumidor de produção, relocalizar o catálogo para a feature REP no renderer
+- se os exames exigirem subconjuntos ou regras diferentes, manter a base externa comum e separar as regras específicas por feature
+- preservar o teste de unicidade de códigos e labels ao atualizar a lista
+
 ## Ambientes e credenciais
 
 Ambientes: `homologacao` e `producao`. Cada um possui URL, login, senha e CPF. Senhas passam por `configuracao.service.ts`; o renderer recebe apenas operações específicas via preload.

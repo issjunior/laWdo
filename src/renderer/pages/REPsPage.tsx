@@ -57,6 +57,11 @@ import type {
 } from '@shared/types/b602-gdl.types';
 import { pecaB602EstaCompleta } from '@shared/catalogos/b602-gdl.catalogo';
 import { mesclarPecasB602DoGdl } from '@/components/rep/exam-fields/pecas-b602.utils';
+import {
+  extrairMetadadosIntegracaoGdl,
+  extrairPecasB602,
+} from '@/components/rep/exam-fields/integracao-gdl-b602.utils';
+import { TipoSolicitacaoSelect } from '@/components/rep/TipoSolicitacaoSelect';
 
 /* ─── HELPERS para PDF da REP ─── */
 
@@ -306,8 +311,6 @@ function formularioTemDadosRelevantesParaGdl(data: REPFormData, pecas: PecaB602[
   })
 }
 
-const TIPOS_SOLICITACAO_CONFIRMADOS_GDL = ['BO'] as const;
-
 const FIELD_PLACEHOLDER: Record<string, string> = {
   numero: 'numero_rep',
   solicitante_id: 'solicitante_nome',
@@ -372,89 +375,6 @@ function getLoggedUserId(): string | undefined {
   }
 }
 
-function incluirPecasB602(
-  serializado: string | undefined,
-  pecas: PecaB602[],
-  metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null,
-): string | null {
-  if (!serializado) return null;
-  const raiz: unknown = JSON.parse(serializado);
-  if (typeof raiz !== 'object' || raiz === null) return serializado;
-  const objeto = raiz as Record<string, unknown>;
-  const b602Atual = typeof objeto.b602 === 'object' && objeto.b602 !== null
-    ? objeto.b602 as Record<string, unknown>
-    : {};
-  const dadosB602 = { ...b602Atual };
-  delete dadosB602.material_enc;
-  delete dadosB602.cartuchos;
-  delete dadosB602.estojos;
-  delete dadosB602.armas;
-  delete dadosB602.armas_toggle;
-  return JSON.stringify({
-    ...objeto,
-    b602: { ...dadosB602, pecas },
-    ...(metadadosIntegracaoGdl ? { integracaoGdl: metadadosIntegracaoGdl } : {}),
-  });
-}
-
-function extrairPecasB602(serializado: string | null | undefined): PecaB602[] {
-  if (!serializado) return [];
-  try {
-    const raiz: unknown = JSON.parse(serializado);
-    if (typeof raiz !== 'object' || raiz === null) return [];
-    const b602 = (raiz as Record<string, unknown>).b602;
-    if (typeof b602 !== 'object' || b602 === null) return [];
-    const pecas = (b602 as Record<string, unknown>).pecas;
-    if (!Array.isArray(pecas)) return [];
-    return pecas.filter((peca): peca is PecaB602 => {
-      if (typeof peca !== 'object' || peca === null) return false;
-      const candidata = peca as Record<string, unknown>;
-      return typeof candidata.idLocal === 'string'
-        && (candidata.origem === 'manual' || candidata.origem === 'gdl')
-        && typeof candidata.tipoPeca === 'string'
-        && typeof candidata.comuns === 'object'
-        && candidata.comuns !== null
-        && typeof candidata.personalizados === 'object'
-        && candidata.personalizados !== null
-        && typeof candidata.extrasGdl === 'object'
-        && candidata.extrasGdl !== null;
-    });
-  } catch {
-    return [];
-  }
-}
-
-function extrairMetadadosIntegracaoGdl(serializado: string | null | undefined): MetadadosIntegracaoGdl | null {
-  if (!serializado) return null
-  try {
-    const raiz: unknown = JSON.parse(serializado)
-    if (typeof raiz !== 'object' || raiz === null) return null
-    const metadados = (raiz as Record<string, unknown>).integracaoGdl
-    if (typeof metadados !== 'object' || metadados === null) return null
-    const candidata = metadados as Record<string, unknown>
-    if (candidata.origemInicial !== 'manual' && candidata.origemInicial !== 'gdl') return null
-    const ultimaConsulta = candidata.ultimaConsulta
-    if (ultimaConsulta === undefined) return { origemInicial: candidata.origemInicial }
-    if (typeof ultimaConsulta !== 'object' || ultimaConsulta === null) return null
-    const consulta = ultimaConsulta as Record<string, unknown>
-    if ((consulta.ambiente !== 'homologacao' && consulta.ambiente !== 'producao')
-      || typeof consulta.numeroRep !== 'string'
-      || typeof consulta.anoRep !== 'string'
-      || typeof consulta.consultadoEm !== 'string') return null
-    return {
-      origemInicial: candidata.origemInicial,
-      ultimaConsulta: {
-        ambiente: consulta.ambiente,
-        numeroRep: consulta.numeroRep,
-        anoRep: consulta.anoRep,
-        consultadoEm: consulta.consultadoEm,
-      },
-    }
-  } catch {
-    return null
-  }
-}
-
 function prepareForApi(
   data: REPFormData,
   codigo: string | undefined,
@@ -486,10 +406,14 @@ function prepareForApi(
   if (data.observacoes) payload.observacoes = data.observacoes;
 
   if (codigo) {
-    const serializado = serializeCamposEspecificos(codigo, data);
-    payload.campos_especificos = codigo === 'B-602'
-      ? incluirPecasB602(serializado, pecasB602, metadadosIntegracaoGdl)
-      : serializado || null;
+    const serializado = serializeCamposEspecificos(
+      codigo,
+      data,
+      codigo === 'B-602'
+        ? { b602: { pecas: pecasB602, metadadosIntegracaoGdl } }
+        : undefined,
+    );
+    payload.campos_especificos = serializado || null;
   }
 
   return payload;
@@ -776,7 +700,6 @@ export const REPsPage: React.FC = () => {
   const [gdlModalOpen, setGdlModalOpen] = useState(false);
   const [camposPreenchidosGdl, setCamposPreenchidosGdl] = useState<Set<string>>(new Set());
   const [origensSolicitacaoGdl, setOrigensSolicitacaoGdl] = useState<ReferenciaOrigemGdl[]>([]);
-  const [tipoSolicitacaoOutroManual, setTipoSolicitacaoOutroManual] = useState(false);
 
   const carregarREPs = useCallback(async () => {
     try {
@@ -871,13 +794,24 @@ export const REPsPage: React.FC = () => {
   const solicitanteId = form.watch('solicitante_id');
   const b602LocalUf = form.watch('b602_local_uf');
   useEffect(() => {
-    if (solicitanteId) {
-      const solicitante = solicitantes.find(s => s.id === solicitanteId);
-      if (solicitante) {
-        form.setValue('b602_solicitante_nome', solicitante.nome, { shouldValidate: false });
-      }
+    if (tipoExameSelecionado?.codigo !== 'B-602') return;
+
+    const orgaoGdl = metadadosIntegracaoGdl?.dadosSolicitacao?.orgao.trim();
+    if (orgaoGdl) {
+      form.setValue('b602_solicitante_nome', orgaoGdl, { shouldValidate: false });
+      return;
     }
-  }, [form, solicitanteId, solicitantes]);
+
+    if (!solicitanteId) {
+      form.setValue('b602_solicitante_nome', '', { shouldValidate: false });
+      return;
+    }
+
+    const solicitante = solicitantes.find(s => s.id === solicitanteId);
+    if (solicitante) {
+      form.setValue('b602_solicitante_nome', solicitante.nome, { shouldValidate: false });
+    }
+  }, [form, metadadosIntegracaoGdl, solicitanteId, solicitantes, tipoExameSelecionado?.codigo]);
 
   useEffect(() => {
     if (tipoExameSelecionado?.codigo !== 'B-602') return;
@@ -892,7 +826,6 @@ export const REPsPage: React.FC = () => {
     setTemplatesVinculados([]);
     setCamposPreenchidosGdl(new Set());
     setOrigensSolicitacaoGdl([]);
-    setTipoSolicitacaoOutroManual(false);
     setPecasB602([]);
     setMetadadosIntegracaoGdl(null);
     form.reset(emptyForm());
@@ -908,7 +841,6 @@ export const REPsPage: React.FC = () => {
     setTemplatesVinculados([]);
     setCamposPreenchidosGdl(new Set());
     setOrigensSolicitacaoGdl([]);
-    setTipoSolicitacaoOutroManual(false);
     setPecasB602([]);
     setMetadadosIntegracaoGdl(null);
     setError(null);
@@ -954,8 +886,7 @@ export const REPsPage: React.FC = () => {
     setPecasB602(tipo?.codigo === 'B-602' ? extrairPecasB602(rep.campos_especificos) : []);
     const metadadosGdl = tipo?.codigo === 'B-602' ? extrairMetadadosIntegracaoGdl(rep.campos_especificos) : null;
     setMetadadosIntegracaoGdl(metadadosGdl);
-    setOrigensSolicitacaoGdl(metadadosGdl?.dadosSolicitacao?.origensCandidatasSolicitacao ?? []);
-    setTipoSolicitacaoOutroManual(false);
+    setOrigensSolicitacaoGdl(metadadosGdl?.dadosSolicitacao?.origensDisponiveis ?? []);
 
     editLoadRef.current = true;
 
@@ -1341,8 +1272,6 @@ export const REPsPage: React.FC = () => {
     const novosPreenchidos = new Set<string>();
     const substituirDadosGdl = modo === 'substituir'
       || !formularioTemDadosRelevantesParaGdl(form.getValues(), pecasB602);
-    setTipoSolicitacaoOutroManual(false);
-
     if (resultado.codigoExame !== 'B-602') {
       setError(`O exame ${resultado.codigoExame} ainda não possui adaptador de formulário.`);
       return;
@@ -1362,7 +1291,7 @@ export const REPsPage: React.FC = () => {
     }
 
     const valoresPadrao = emptyForm();
-    setOrigensSolicitacaoGdl(resultado.camposEspecificos.dadosSolicitacao.origensCandidatasSolicitacao);
+    setOrigensSolicitacaoGdl(resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis);
     for (const [key, value] of Object.entries(resultado.camposGerais)) {
       const campo = key as CampoRep;
       const valorAtual = form.getValues(campo);
@@ -1918,65 +1847,23 @@ export const REPsPage: React.FC = () => {
                           <FormField
                             control={form.control}
                             name="tipo_solicitacao"
-                            render={({ field }) => {
-                              const tiposLocais = ['BOU', 'BO PM', 'BO PC', 'Ofício', 'CECOMP'];
-                              const tipoConfirmadoGdl = TIPOS_SOLICITACAO_CONFIRMADOS_GDL.includes(field.value as 'BO');
-                              const valorNaoCatalogado = Boolean(field.value) && !tiposLocais.includes(field.value) && !tipoConfirmadoGdl;
-                              const opcoesAdicionaisGdl = [...origensSolicitacaoGdl];
-                              if (valorNaoCatalogado && !opcoesAdicionaisGdl.some(origem => origem.tipo === field.value)) {
-                                opcoesAdicionaisGdl.unshift({ tipo: field.value, numero: form.getValues('numero_documento') });
-                              }
-                              const opcoesAdicionaisNaoCatalogadas = opcoesAdicionaisGdl.filter(origem => (
-                                origem.tipo !== 'BO' && !tiposLocais.includes(origem.tipo)
-                              ));
-                              return (
+                            render={({ field }) => (
                                 <FormItem>
-                                  <LabelWithPlaceholder field="tipo_solicitacao" mostrar={mostrarPlaceholders}>Tipo de Solicitação *<HelpIcon text="Ex: Ofício, BOU, BO PM, BO PC, CECOMP" /></LabelWithPlaceholder>
-                                  <Select
-                                    value={tipoSolicitacaoOutroManual || !field.value ? 'Outros' : field.value}
-                                    onValueChange={(v) => {
-                                      if (v === 'Outros') {
-                                        setTipoSolicitacaoOutroManual(true);
-                                        field.onChange('');
-                                      } else {
-                                        setTipoSolicitacaoOutroManual(false);
-                                        field.onChange(v);
-                                        const origemSelecionada = origensSolicitacaoGdl.find(origem => origem.tipo === v);
-                                        if (origemSelecionada?.numero) {
-                                          form.setValue('numero_documento', origemSelecionada.numero, { shouldValidate: true, shouldDirty: true });
-                                        }
-                                      }
+                                  <LabelWithPlaceholder field="tipo_solicitacao" mostrar={mostrarPlaceholders}>Tipo de Solicitação *<HelpIcon text="Selecione uma origem cadastrada na REP ou escolha um tipo para preenchimento manual." /></LabelWithPlaceholder>
+                                  <TipoSolicitacaoSelect
+                                    valor={field.value}
+                                    numeroDocumento={valoresFormulario.numero_documento}
+                                    origensGdl={origensSolicitacaoGdl}
+                                    valorVeioDoGdl={metadadosIntegracaoGdl?.origemInicial === 'gdl'}
+                                    className={getGdlFieldStyle('tipo_solicitacao')}
+                                    onValorChange={field.onChange}
+                                    onNumeroDocumentoChange={numero => {
+                                      form.setValue('numero_documento', numero, { shouldValidate: true, shouldDirty: true });
                                     }}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger className={getGdlFieldStyle('tipo_solicitacao')}><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      <SelectItem value="BO">BO</SelectItem>
-                                      <SelectItem value="BOU">BOU</SelectItem>
-                                      <SelectItem value="BO PM">BO PM</SelectItem>
-                                      <SelectItem value="BO PC">BO PC</SelectItem>
-                                      <SelectItem value="Ofício">Ofício</SelectItem>
-                                      <SelectItem value="CECOMP">CECOMP</SelectItem>
-                                      {opcoesAdicionaisNaoCatalogadas.map(origem => (
-                                        <SelectItem key={origem.tipo} value={origem.tipo}>{origem.tipo}</SelectItem>
-                                      ))}
-                                      <SelectItem value="Outros">Outros</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  {tipoSolicitacaoOutroManual && (
-                                    <Input
-                                      className="mt-2"
-                                      placeholder="Especifique o tipo..."
-                                      value={field.value}
-                                      onChange={(e) => field.onChange(e.target.value)}
-                                      maxLength={50}
-                                    />
-                                  )}
+                                  />
                                   <FormMessage />
                                 </FormItem>
-                              );
-                            }}
+                              )}
                           />
                         </div>
                         <div>

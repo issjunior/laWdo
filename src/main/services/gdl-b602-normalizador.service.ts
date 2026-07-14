@@ -49,22 +49,29 @@ function obterTextoPorAlias(fonte: unknown, aliases: string[]): string {
   return ''
 }
 
-function extrairOrigensCandidatasSolicitacao(rep: GdlRepValidada): ReferenciaOrigemGdl[] {
-  const candidatos = rep.origens
-    .filter(origem => {
-      const normalizado = normalizarChave(origem.tipo).replace(/[\s/_-]/g, '')
-      return normalizado.startsWith('bo')
-        || normalizado.startsWith('ip')
-        || normalizado.startsWith('oficio')
-    })
+function extrairOrigensDisponiveis(rep: GdlRepValidada): ReferenciaOrigemGdl[] {
+  const origens = rep.origens
     .map(origem => ({
       tipo: origem.tipo.trim(),
       numero: formatarNumeroOrigem(origem.numero, origem.ano),
     }))
+    .filter(origem => Boolean(origem.tipo))
 
-  return candidatos.filter((origem, indice) => (
-    candidatos.findIndex(outra => normalizarChave(outra.tipo) === normalizarChave(origem.tipo)) === indice
+  return origens.filter((origem, indice) => (
+    origens.findIndex(outra => (
+      normalizarChave(outra.tipo) === normalizarChave(origem.tipo)
+      && outra.numero === origem.numero
+    )) === indice
   ))
+}
+
+function origemPertenceFamiliaPreferencial(origem: ReferenciaOrigemGdl): boolean {
+  const tipo = normalizarChave(origem.tipo).replace(/[\s/_-]/g, '')
+  return tipo.startsWith('bo') || tipo.startsWith('ip') || tipo.startsWith('oficio')
+}
+
+function selecionarOrigemInicial(origens: ReferenciaOrigemGdl[]): ReferenciaOrigemGdl | undefined {
+  return origens.find(origemPertenceFamiliaPreferencial) ?? origens[0]
 }
 
 function extrairDadosSolicitacao(rep: GdlRepValidada): DadosSolicitacaoGdl {
@@ -85,7 +92,7 @@ function extrairDadosSolicitacao(rep: GdlRepValidada): DadosSolicitacaoGdl {
     orgao,
     responsavel,
     autoridade,
-    origensCandidatasSolicitacao: extrairOrigensCandidatasSolicitacao(rep),
+    origensDisponiveis: extrairOrigensDisponiveis(rep),
   }
 }
 
@@ -234,15 +241,17 @@ export function converterRepB602(
   const dadosSolicitacao = extrairDadosSolicitacao(rep)
   const dadosInvestigacao = extrairDadosInvestigacao(rep)
   const { envolvidos, boletinsOcorrencia, inqueritosPoliciais } = dadosInvestigacao
+  const origemInicial = selecionarOrigemInicial(dadosSolicitacao.origensDisponiveis)
   return {
     codigoExame: 'B-602',
     camposGerais: {
       numero: `${rep.numero}-${rep.ano}`,
-      tipo_solicitacao: dadosSolicitacao.origensCandidatasSolicitacao[0]?.tipo ?? rep.origens[0]?.tipo ?? '',
-      numero_documento: dadosSolicitacao.origensCandidatasSolicitacao[0]?.numero ?? rep.origens[0]?.numero ?? '',
+      tipo_solicitacao: origemInicial?.tipo ?? '',
+      numero_documento: origemInicial?.numero ?? '',
       b602_local_cidade: rep.origens[0]?.cidade ?? '',
       b602_numero_bo: obterNumeroUnico(boletinsOcorrencia),
       b602_numero_ip: obterNumeroUnico(inqueritosPoliciais),
+      b602_solicitante_nome: dadosSolicitacao.orgao,
       ...Object.fromEntries(envolvidos.slice(0, 10).flatMap((envolvido, indice) => {
         const { qualificacao, nome } = separarEnvolvido(envolvido)
         return [
