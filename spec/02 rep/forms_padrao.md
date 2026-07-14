@@ -1,60 +1,40 @@
-# Padrao atual dos formularios do renderer
+# Padrão atual dos formulários do renderer
 
-## Base tecnica
+## Base técnica
 
-O renderer usa como pilha padrao:
+Os formulários usam `react-hook-form`, Zod, wrappers de `src/renderer/components/forms/form.tsx` e componentes do design system local.
 
-- `react-hook-form`
-- `zod`
-- wrappers de `src/renderer/components/forms/form.tsx`
-- componentes `ui/` do design system local
+O contrato normal de campo é `FormField` dentro de `FormItem`, com `FormLabel`, `FormControl` e `FormMessage`. Isso mantém ids, descrição, estado inválido e mensagens ligados ao controle.
 
-O arquivo `form.tsx` hoje fornece o contrato minimo para qualquer formulario com acessibilidade consistente:
+## Formulário de REP
 
-- `FormField` para ligar `Controller` ao contexto
-- `FormItem` para gerar ids estaveis
-- `FormLabel`, `FormControl` e `FormMessage` para amarrar rotulo, controle e erro
+A REP combina um passo fixo com seções dinâmicas por tipo de exame. Os títulos das seções são exibidos como cabeçalhos principais do bloco; as descrições registradas permanecem como metadados, mas não são renderizadas abaixo dos títulos na página.
 
-## Como os campos basicos sao tratados
+`RepStepSection` fornece o alvo de rolagem e o destaque do passo ativo.
 
-### Inputs textuais
+## Obrigatórios e salvamento
 
-Entram dentro de `FormControl` e herdaram:
+A página calcula pendências continuamente. Se houver campos obrigatórios ausentes:
 
-- `id`
-- `aria-describedby`
-- `aria-invalid`
+- o alerta aparece depois das seções do formulário
+- até quatro pendências viram botões de navegação
+- o excedente é resumido numericamente
+- é possível ir ao primeiro campo pendente
+- o botão de criar ou atualizar fica desabilitado
 
-### Selects
+A navegação rola até a seção e tenta focar o campo após a transição.
 
-O padrao do projeto e colocar `SelectTrigger` dentro de `FormControl`.
-Isso garante o mesmo encadeamento de ids e mensagens usado pelos inputs comuns.
+## Dados importados do GDL
 
-### Mensagens
+Campos preenchidos pela importação são acompanhados em um `Set<string>` e recebem fundo e borda verdes durante a sessão do formulário. Não existe alerta persistente apenas para contar campos importados.
 
-O erro visivel vem de `FormMessage`.
-Quando o campo nao possui erro do `react-hook-form`, ele pode exibir `children` como mensagem auxiliar.
+Depois de aplicar o GDL, a página exibe mensagem de sucesso somente quando a importação trouxe avisos; sem avisos, nenhum banner genérico é mantido.
 
-## Contrato implicito do projeto
+## Regra de uso
 
-Hoje, qualquer formulario novo que queira seguir o padrao da base precisa:
+Novos formulários devem:
 
-1. usar `FormProvider` via `Form`
-2. renderizar cada campo com `FormField`
-3. manter `FormLabel`, `FormControl` e `FormMessage` no mesmo `FormItem`
-
-Esse contrato evita:
-
-- ids duplicados
-- labels sem `htmlFor`
-- mensagens de erro soltas fora da relacao com o controle
-
-## Ligacao com a REP
-
-No fluxo de REP, esse padrao se combina com:
-
-- `REPFormData` dinamico
-- componentes de `exam-fields/`
-- stepper com `requiredFields`
-
-Ou seja: o formulario principal pode variar por tipo de exame, mas o contrato de campo continua sendo o mesmo.
+1. usar os wrappers de `form.tsx`
+2. validar dados externos antes de alimentar o estado
+3. manter o critério visual de conclusão alinhado ao bloqueio real de salvamento
+4. usar classes Tailwind e tokens globais, sem estilos inline

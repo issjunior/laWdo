@@ -86,7 +86,6 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
     }
     return Math.max(1, maxIndex + 1);
   });
-
   const envolvidosValores = form.watch(camposRep([
     'b602_envolvidos_0', 'b602_envolvidos_1', 'b602_envolvidos_2',
     'b602_envolvidos_3', 'b602_envolvidos_4', 'b602_envolvidos_5',
@@ -148,7 +147,6 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
         </label>
         <div className="flex-1 space-y-2 min-w-0 w-full">
           {envolvidos.map((i) => {
-            const isLast = i === envolvidos.length - 1;
             return (
               <div key={i} className="flex items-start gap-2">
                 <span className="w-5 shrink-0 pt-2 text-sm text-muted-foreground">{i + 1}.</span>
@@ -162,7 +160,7 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
                           placeholder="Qualificação"
                           aria-label={`Qualificação do envolvido ${i + 1}`}
                           list="b602-qualificacoes-envolvido"
-                          className={obterClasseGdl(`b602_envolvidos_qualificacao_${i}`)}
+                          className={`text-sm font-normal ${obterClasseGdl(`b602_envolvidos_qualificacao_${i}`)}`}
                           {...field}
                         />
                       </FormControl>
@@ -187,33 +185,37 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
                     </FormItem>
                   )}
                 />
-                {envolvidos.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label={`Excluir envolvido ${i + 1}`}
-                    onClick={() => removerEnvolvido(i)}
-                  >
-                    <X size={14} />
-                  </Button>
-                )}
-                {isLast && numEnvolvidos < 10 && (
+                <div className="flex w-8 shrink-0">
+                  {envolvidos.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      aria-label={`Excluir envolvido ${i + 1}`}
+                      onClick={() => removerEnvolvido(i)}
+                    >
+                      <X size={14} />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {numEnvolvidos < 10 && (
+            <div className="flex justify-end">
                   <Button
                     type="button"
                     variant="outline"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
+                    className="gap-2"
                     aria-label="Adicionar envolvido"
                     onClick={adicionarEnvolvido}
                   >
                     <Plus size={14} />
+                    Adicionar envolvido
                   </Button>
-                )}
-              </div>
-            );
-          })}
+            </div>
+          )}
           <datalist id="b602-qualificacoes-envolvido">
             <option value="EM PODER DE:" />
             <option value="AUTOR:" />

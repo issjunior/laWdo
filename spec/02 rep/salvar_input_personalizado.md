@@ -1,103 +1,106 @@
-# Persistencia dos campos especificos da REP
+# Persistência dos campos específicos da REP
 
-## Visao geral
+## Responsabilidade e fluxo
 
-O estado atual separa os dados da REP em dois grupos:
+A tabela `reps` guarda campos comuns em colunas e o restante em `campos_especificos`, uma string JSON. A responsabilidade pelo formato interno é do renderer; `rep.handlers.ts` e `rep.service.ts` persistem a string sem validar sua estrutura de domínio.
 
-- colunas nativas da tabela `reps`
-- JSON de `campos_especificos`
+Fluxo atual:
 
-O renderer decide para qual grupo cada valor vai antes do envio ao IPC.
+`formulário → serializeCamposEspecificos() → composição em REPsPage → preload/IPC → rep.handlers → BaseService → SQLite`
 
-## Onde a logica mora
+Na leitura:
 
-O ponto central e `src/renderer/components/rep/exam-fields/index.ts`.
+`SQLite → IPC → deserializeCamposEspecificos() + extratores B-602 → formulário e estado de peças`
 
-Funcoes publicas:
+## Formato por exame
 
-```ts
-serializeCamposEspecificos(codigo, data)
-deserializeCamposEspecificos(codigo, json)
+| Código | Escrita | Leitura |
+|---|---|---|
+| `LOC` | colunas nativas | colunas nativas |
+| `I-801` | `numeracaoService` | `numeracaoService` |
+| `B-602` | `b602Service` e `incluirPecasB602()` | `b602Service`, `extrairPecasB602()` e `extrairMetadadosIntegracaoGdl()` |
+
+## Formato final atual do B-602
+
+Forma conceitual:
+
+```json
+{
+  "b602": {
+    "envolvidos": ["VÍTIMA: NOME"],
+    "data_ocorrencia": "2026-07-14",
+    "local": { "bairro": "", "cidade": "LONDRINA", "uf": "PR" },
+    "numero_bo": "",
+    "numero_ip": "",
+    "pecas": []
+  },
+  "integracaoGdl": {}
+}
 ```
 
-## Regras atuais de serializacao
+`integracaoGdl` só existe quando há metadados. `b602_solicitante_nome` é derivado na UI e não é gravado pelo `b602Service` atual.
 
-### Exames com service
+## Composição em duas etapas
 
-Hoje dois codigos usam service dedicado:
+`b602Service.serialize()` ainda monta arrays legados de material, cartuchos, estojos e armas a partir dos campos antigos. Em seguida, `incluirPecasB602()`:
 
-- `I-801`
-- `B-602`
+1. faz parse do JSON produzido internamente
+2. remove `material_enc`, `cartuchos`, `estojos`, `armas` e `armas_toggle`
+3. adiciona `b602.pecas`
+4. adiciona `integracaoGdl` na raiz quando presente
 
-Fluxo:
+O parse dessa etapa recebe saída do próprio serializer, não dado externo. Se a origem mudar, precisa ganhar validação ou `try/catch`.
 
-1. o codigo do tipo de exame resolve um service em `EXAM_SERVICE_REGISTRY`
-2. o helper copia `data` para `dataWithDefaults`
-3. aplica `fieldDefaults` quando houver campo vazio
-4. chama `service.serialize(...)`
-5. persiste `JSON.stringify(...)`
+## Compatibilidade de leitura e escrita
 
-### Exames sem service
+| Estrutura | Escrita atual | Leitura atual | Consumidores conhecidos |
+|---|---|---|---|
+| `b602.envolvidos`, local, BO e IP | sim | sim | formulário e placeholders de investigação |
+| `b602.pecas` | sim | sim, por extrator separado | editor de peças e merge GDL |
+| `integracaoGdl` | quando disponível | validação estrutural parcial | formulário e nova consulta |
+| `material_enc`, `cartuchos`, `estojos`, `armas` | removidos na escrita final | ainda aceitos pelo service legado | preview, placeholders e seções legadas |
 
-`LOC` nao grava `campos_especificos`.
-Os campos de local e acionamento continuam em colunas nativas da REP.
+Esse é um limite arquitetural atual: o editor novo persiste `b602.pecas`, mas `LaudosPage`, `exportacao-placeholders.ts` e `secao-builder.service.ts` ainda consultam arrays legados. Não existe no fluxo atual um adaptador geral de `pecas` para esses arrays.
 
-## Regras atuais de leitura
+Consequência: dados de peças persistidos no formato novo podem não alimentar placeholders, tabelas e seções condicionais que dependem exclusivamente do formato legado. Uma correção deve escolher uma fonte canônica e adaptar os consumidores; manter duas escritas independentes aumenta risco de divergência.
 
-`deserializeCamposEspecificos(codigo, json)` segue este comportamento:
+## Envolvidos
 
-- sem JSON -> retorna `{}`
-- sem service -> retorna `{}`
-- JSON invalido -> retorna `{}`
-- JSON valido -> delega para `service.deserialize(...)`
+O formulário mantém qualificação e nome separados. `combinarEnvolvido()` e `separarEnvolvido()` definem a fronteira:
 
-Isso evita quebrar a edicao de REPs antigas quando o payload esta incompleto ou malformado.
+- nome vazio não gera item
+- qualificação vazia preserva o nome
+- qualificação sem `:` recebe o separador
+- texto legado sem `:` volta integralmente como nome
+- no máximo dez itens são serializados pelo formulário
 
-## Papel do `REPFormData`
+Esses helpers ficam em `shared` porque são usados pelo main e pelo renderer.
 
-`REPFormData` usa assinatura indexada (`[key: string]: string`) para acomodar nomes dinamicos.
+## Validação na leitura
 
-Isso permite restaurar diretamente campos como:
+`deserializeCamposEspecificos()` retorna `{}` para JSON ausente ou inválido. `extrairPecasB602()` aceita apenas objetos com identidade, origem e blocos mínimos; `extrairMetadadosIntegracaoGdl()` normaliza somente a estrutura reconhecida.
 
-- `b602_envolvidos_0`
-- `b602_local_uf`
-- `b602_armas_toggle`
+Falhas são toleradas para permitir abrir REPs antigas, mas há uma consequência: ao salvar uma REP cujo JSON inválido foi ignorado, o conteúdo anterior pode ser substituído pelo formato reconstruído a partir do formulário.
 
-sem precisar criar um tipo fechado por linha do formulario.
+O main não revalida `campos_especificos`. Portanto, chamadas IPC externas ao fluxo normal precisam validar o contrato antes de enviar.
 
-## Papel do `rep.service.ts`
+## Critérios para evolução
 
-`src/main/services/rep.service.ts` nao conhece a estrutura interna de `campos_especificos`.
-O service trabalha no nivel da linha persistida:
+- ampliar o mesmo JSON quando o dado pertence exclusivamente ao exame
+- criar coluna ou tabela quando o dado precisa de consulta, integridade ou ciclo de vida próprio no main
+- evitar serializar o mesmo conceito em `pecas` e arrays legados sem adaptador determinístico
+- preservar leitura de formatos antigos antes de remover código legado
+- versionar ou migrar quando não for possível inferir o formato com segurança
 
-- `findAllOrdered()`
-- `findByStatus(status)`
-- `findByNumero(numero)`
-- `updateStatus(id, status)`
+## Verificação
 
-Toda a montagem e desmontagem do JSON segue no renderer e nos handlers de REP.
+Há testes para normalização GDL, catálogo e merge de peças, mas não existe teste direto do round-trip completo `prepareForApi → IPC → edição`, nem teste que garanta consumo de `b602.pecas` pelo laudo.
 
-## B-602
+Qualquer mudança no formato deve verificar:
 
-No estado atual, o B-602 e o caso mais completo de persistencia:
-
-- listas (`envolvidos`, `material_enc`, `cartuchos`, `estojos`, `armas`)
-- toggles de colecao
-- toggles por arma (`func_toggle`, `coleta_toggle`)
-- local quebrado em `bairro`, `cidade`, `uf`
-
-Esse conjunto e serializado sob a chave `b602` no JSON.
-
-## I-801
-
-O I-801 usa o mesmo pipeline, mas com payload menor e focado em numeracao.
-Ele continua sendo a referencia de exame com poucos campos, enquanto o B-602 cobre o caso de multiplas linhas e grupos.
-
-## Regra pratica de manutencao
-
-Quando um campo especifico novo nao esta salvando ou restaurando:
-
-1. verificar se o codigo do exame esta em `EXAM_SERVICE_REGISTRY`
-2. conferir `serialize()` e `deserialize()` do service
-3. confirmar se o nome do campo no formulario bate com a chave que o service espera
-4. validar se o exame deveria usar JSON ou coluna nativa
+1. criação e edição da REP
+2. round-trip de envolvidos e peças
+3. merge e substituição GDL
+4. preview da REP
+5. placeholders e seções do laudo
+6. abertura de JSON legado e inválido

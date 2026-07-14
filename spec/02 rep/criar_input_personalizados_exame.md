@@ -1,141 +1,102 @@
-# Campos especificos por tipo de exame
+# Campos específicos por tipo de exame
 
-## Visao geral
+## Finalidade e fontes de verdade
 
-O renderer concentra a extensao de formularios de REP em `src/renderer/components/rep/exam-fields/`.
-O ponto de entrada atual e `index.ts`, que mantem quatro registros:
+O mecanismo de campos específicos permite variar o formulário de REP sem levar detalhes de cada exame para o service genérico do main. A configuração ativa fica em `src/renderer/components/rep/exam-fields/index.ts`.
 
-- `SECTION_REGISTRY`: metadados visuais e de validacao de cada secao
-- `EXAM_FIELD_MAP`: codigo do tipo de exame -> ids de secao
-- `EXAM_SERVICE_REGISTRY`: codigo do tipo de exame -> serializacao/desserializacao
-- `EXAM_MENU_REGISTRY`: estruturas de menu de placeholders por exame
-
-Hoje o projeto ja entrega tres familias de campos:
-
-| Codigo | Secoes |
+| Responsabilidade | Fonte atual |
 |---|---|
-| `LOC` | `local_fato`, `acionamento` |
-| `I-801` | `numeracao` |
-| `B-602` | `dados_investigacao`, `material_enc`, `cartuchos`, `estojos`, `armas` |
+| seções disponíveis | `SECTION_REGISTRY` |
+| seções exibidas por exame | `EXAM_FIELD_MAP` |
+| serialização por exame | `EXAM_SERVICE_REGISTRY` |
+| menu de placeholders | `EXAM_MENU_REGISTRY` |
+| contrato textual do formulário | `REPFormData` |
+| coleção estruturada de peças B-602 | `PecaB602[]` mantido por `REPsPage` |
 
-## Contrato das secoes
+`SECTION_REGISTRY` é um catálogo, não a lista de funcionalidades ativas. Uma seção só aparece no formulário e no stepper quando seu id também está em `EXAM_FIELD_MAP`.
 
-Cada entrada de `SECTION_REGISTRY` usa a interface `ExamSection`:
+## Mapeamento ativo
 
-```ts
-interface ExamSection {
-  id: string
-  label: string
-  icon: React.ComponentType<{ size?: number | string; className?: string }>
-  description: string
-  component: React.FC<ExamSectionProps>
-  group?: string
-  requiredFields: string[]
-}
-```
+| Código | Seções renderizadas | Persistência específica |
+|---|---|---|
+| `LOC` | `local_fato`, `acionamento` | colunas nativas de `reps` |
+| `I-801` | `numeracao` | JSON por `numeracaoService` |
+| `B-602` | `dados_investigacao`, `pecas_b602` | JSON por `b602Service` mais composição de `PecaB602[]` |
 
-Pontos importantes do estado atual:
+As seções `material_enc`, `cartuchos`, `estojos` e `armas` permanecem registradas por compatibilidade, mas não são editadas pelo fluxo ativo do B-602.
 
-- `requiredFields` e usado pelo stepper para marcar o passo como concluido
-- `group` ainda existe para organizacao visual, mas o fluxo do stepper usa cada secao como passo independente
-- `ExamSectionProps` recebe `form` (`UseFormReturn<REPFormData>`) e `mostrarPlaceholders`
+## Critério para escolher onde um dado deve viver
 
-## Contrato dos dados
+| Natureza do dado | Local preferido no estado atual | Motivo |
+|---|---|---|
+| campo comum à REP, consultado pelo main | coluna nativa de `reps` | consulta, ordenação e ciclo de vida independem do tipo de exame |
+| campo escalar específico de um exame | `REPFormData` + service do exame | integra-se ao formulário e ao JSON sem alterar o banco |
+| coleção indexada simples e limitada | chaves dinâmicas em `REPFormData` | compatibilidade com `react-hook-form` e placeholders existentes |
+| coleção heterogênea com objetos e metadados | estado tipado separado, como `PecaB602[]` | `REPFormData` aceita somente strings e não representa objetos com segurança |
+| contrato puro usado em mais de uma camada | `src/shared/` | evita dependência entre renderer e main |
 
-`REPFormData` fica em `exam-fields/types.ts` e hoje funciona como objeto dinamico:
+Não mover um dado para `shared/` apenas para facilitar import. Ele deve ser puro, estável e realmente compartilhado.
 
-```ts
-export interface REPFormData {
-  [key: string]: string
-  numero: string
-  solicitante_id: string
-  tipo_exame_id: string
-  ...
-}
-```
+## Contrato das seções
 
-Essa assinatura indexada e intencional. Ela permite que formularios com colecoes dinamicas, como B-602, usem chaves como:
+`ExamSection` define:
 
-- `b602_envolvidos_0`
-- `b602_cartuchos_toggle`
-- `b602_arma_1_func_toggle`
+- identidade, rótulo, ícone e componente
+- `requiredFields` para completude simples
+- `isComplete(data, contexto)` quando a completude depende de estado externo ao formulário
 
-sem precisar criar uma interface fixa para cada combinacao de linhas.
+`ExamSectionProps` fornece o formulário, controle de placeholders e, quando necessário, peças B-602, callback de alteração e campos marcados como importados do GDL.
 
-## Serializacao por tipo
+Invariantes:
 
-`EXAM_SERVICE_REGISTRY` concentra a logica de persistencia de `campos_especificos`.
+- `isComplete` deve ser pura e barata, pois é recalculada durante alterações do formulário
+- ids de seção devem ser estáveis: o stepper e os alvos `step-*` dependem deles
+- campos usados por `requiredFields` precisam existir nos defaults e na validação da página
+- estado externo precisa participar de renderização, completude, salvamento e restauração
 
-Estado atual:
+## Dados dinâmicos e fronteiras
 
-- `I-801` usa `numeracaoService`
-- `B-602` usa `b602Service`
-- `LOC` nao usa service, porque seus campos continuam em colunas nativas da tabela `reps`
+`REPFormData` possui assinatura `[key: string]: string` para chaves indexadas. Isso não elimina a necessidade de validação: IPC, JSON, storage e API continuam sendo fronteiras inseguras.
 
-Os helpers publicos de `index.ts` sao:
+No B-602, cada envolvido ocupa um par:
 
-```ts
-serializeCamposEspecificos(codigo, data): string | undefined
-deserializeCamposEspecificos(codigo, json): Partial<REPFormData>
-```
+- `b602_envolvidos_qualificacao_N`
+- `b602_envolvidos_N`
 
-Regras atuais:
+A UI mantém as partes separadas; a persistência combina e separa na fronteira. As peças usam contrato próprio porque contêm números, booleanos, objetos dinâmicos e metadados de origem.
 
-1. `serializeCamposEspecificos` aplica `fieldDefaults` do service antes de chamar `serialize()`
-2. o retorno persistido sempre e `JSON.stringify(...)`
-3. `deserializeCamposEspecificos` faz `JSON.parse` protegido por `try/catch`
-4. se nao houver service para o codigo, o helper retorna `undefined` no save e `{}` na leitura
+## Pipeline de persistência
 
-## Como adicionar um novo tipo hoje
+`serializeCamposEspecificos()` aplica defaults e delega ao service. `deserializeCamposEspecificos()` protege o parse e retorna `{}` quando o conteúdo é ausente, inválido ou não possui service.
 
-### 1. Criar a secao visual
+O B-602 tem uma segunda etapa em `REPsPage`: o JSON produzido pelo service é recomposto para incluir `b602.pecas` e `integracaoGdl`. Portanto, o service isolado não representa sozinho o formato final persistido.
 
-Adicionar um componente em `exam-fields/` que receba `ExamSectionProps` e use `FormField`, `FormControl` e `FormMessage`.
+## Inclusão ou alteração de exame
 
-### 2. Registrar a secao
+Antes de criar abstração nova, verificar se o dado cabe em um dos padrões existentes. Para uma nova seção:
 
-Adicionar a entrada em `SECTION_REGISTRY` com:
+1. criar o componente com `ExamSectionProps`
+2. adicionar defaults e validação ao contrato do formulário
+3. registrar a seção em `SECTION_REGISTRY`
+4. ativá-la no `EXAM_FIELD_MAP`
+5. definir `requiredFields` ou `isComplete`
+6. alinhar o bloqueio final de salvamento em `REPsPage`
+7. registrar serialização e desserialização se houver JSON
+8. conferir preload, IPC e consumidores do JSON quando o formato cruzar camadas
+9. adicionar placeholders somente quando existir consumidor atual
 
-- `id`
-- `label`
-- `description`
-- `component`
-- `requiredFields`
+## Desempenho e resiliência
 
-### 3. Mapear o codigo do exame
+O stepper observa o formulário e recalcula completude a cada alteração. Evitar consultas, parses grandes ou mutações dentro de `isComplete`. Coleções maiores devem permanecer em estado próprio e usar atualizações imutáveis.
 
-Adicionar o codigo em `EXAM_FIELD_MAP`.
+JSON inválido é tolerado na leitura, mas pode resultar em formulário vazio. Uma edição posterior pode substituir o conteúdo inválido pelo formato atual; por isso mudanças de contrato precisam preservar leitura legada ou oferecer migração explícita.
 
-Exemplo conceitual:
+## Matriz mínima de impacto
 
-```ts
-EXAM_FIELD_MAP['MEU-COD'] = ['minha_secao']
-```
-
-### 4. Criar o service do exame
-
-Se o exame nao usar apenas colunas nativas:
-
-- criar `exam-fields/services/meu-exame.service.ts`
-- implementar `serialize()` e `deserialize()`
-- opcionalmente expor `fieldDefaults`
-- registrar em `EXAM_SERVICE_REGISTRY`
-
-### 5. Registrar menu e placeholders
-
-Se o tipo precisar de placeholders especificos:
-
-- adicionar a categoria e os campos em `exam-fields/placeholders.ts`
-- expor uma estrutura em `EXAM_MENU_REGISTRY` quando houver menu customizado, como o B-602
-
-## Diferenca entre B-602 e os demais
-
-O B-602 hoje e o unico tipo que usa ao mesmo tempo:
-
-- secoes dinamicas multiplas
-- toggles por grupo
-- menu proprio (`B602_MENU_STRUCTURE`)
-- serializacao de listas em `b602Service`
-- integracao com laudo para blocos condicionais e repeticao por arma
-
-Por isso ele serve como referencia real para novos tipos complexos.
+| Mudança | Verificar junto |
+|---|---|
+| nova seção | registry, map, stepper, pendências e renderização |
+| novo campo textual | defaults, schema, service, placeholders e edição |
+| nova coleção estruturada | tipo shared, editor, completude, persistência, restauração e merge |
+| mudança no JSON | leitores legados, laudo, exportação, testes e compatibilidade |
+| dado vindo do GDL | schema do main, normalizador, contrato shared, modal e aplicação no formulário |
