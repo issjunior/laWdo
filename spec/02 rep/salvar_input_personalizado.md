@@ -2,15 +2,15 @@
 
 ## Responsabilidade e fluxo
 
-A tabela `reps` guarda campos comuns em colunas e o restante em `campos_especificos`, uma string JSON. A responsabilidade pelo formato interno é do renderer; `rep.handlers.ts` e `rep.service.ts` persistem a string sem validar sua estrutura de domínio.
+A tabela `reps` guarda campos comuns em colunas e o restante em `campos_especificos`, uma string JSON. O formato interno pertence ao renderer; `rep.handlers.ts` e `rep.service.ts` persistem a string sem validar sua estrutura de domínio.
 
-Fluxo atual:
+Escrita atual:
 
-`formulário → serializeCamposEspecificos() → composição em REPsPage → preload/IPC → rep.handlers → BaseService → SQLite`
+`formulário + estado externo → serializeCamposEspecificos() → preload/IPC → rep.handlers → BaseService → SQLite`
 
-Na leitura:
+Leitura atual:
 
-`SQLite → IPC → deserializeCamposEspecificos() + extratores B-602 → formulário e estado de peças`
+`SQLite → IPC → deserializeCamposEspecificos() + extratores B-602 → formulário, peças e metadados`
 
 ## Formato por exame
 
@@ -18,7 +18,7 @@ Na leitura:
 |---|---|---|
 | `LOC` | colunas nativas | colunas nativas |
 | `I-801` | `numeracaoService` | `numeracaoService` |
-| `B-602` | `b602Service` e `incluirPecasB602()` | `b602Service`, `extrairPecasB602()` e `extrairMetadadosIntegracaoGdl()` |
+| `B-602` | `b602Service` com contexto de peças/metadados | `b602Service`, `extrairPecasB602()` e `extrairMetadadosIntegracaoGdl()` |
 
 ## Formato final atual do B-602
 
@@ -32,37 +32,53 @@ Forma conceitual:
     "local": { "bairro": "", "cidade": "LONDRINA", "uf": "PR" },
     "numero_bo": "",
     "numero_ip": "",
+    "solicitante_nome": "UNIDADE POLICIAL",
     "pecas": []
   },
   "integracaoGdl": {}
 }
 ```
 
-`integracaoGdl` só existe quando há metadados. `b602_solicitante_nome` é derivado na UI e não é gravado pelo `b602Service` atual.
+`integracaoGdl` só existe quando há metadados. `solicitante_nome` é gravado no bloco B-602 e reidratado como `b602_solicitante_nome`.
 
-## Composição em duas etapas
+## Composição canônica
 
-`b602Service.serialize()` ainda monta arrays legados de material, cartuchos, estojos e armas a partir dos campos antigos. Em seguida, `incluirPecasB602()`:
+`prepareForApi()` chama `serializeCamposEspecificos()` com o contexto:
 
-1. faz parse do JSON produzido internamente
-2. remove `material_enc`, `cartuchos`, `estojos`, `armas` e `armas_toggle`
-3. adiciona `b602.pecas`
-4. adiciona `integracaoGdl` na raiz quando presente
+```text
+b602.pecas
+b602.metadadosIntegracaoGdl
+```
 
-O parse dessa etapa recebe saída do próprio serializer, não dado externo. Se a origem mudar, precisa ganhar validação ou `try/catch`.
+O `b602Service.serialize()` monta os campos escalares, recebe esse contexto e então:
+
+1. remove `material_enc`, `cartuchos`, `estojos`, `armas` e `armas_toggle`
+2. grava `b602.pecas`
+3. grava `integracaoGdl` na raiz quando presente
+4. devolve o objeto final, que o registry converte para JSON
+
+Não há mais uma recomposição posterior em `REPsPage`. O contexto é obrigatório para que a criação/edição B-602 produza o formato canônico. Uma chamada sem contexto continua produzindo a visão legada e é usada apenas por verificações antigas.
 
 ## Compatibilidade de leitura e escrita
 
-| Estrutura | Escrita atual | Leitura atual | Consumidores conhecidos |
+| Estrutura | Escrita canônica | Leitura atual | Consumidores conhecidos |
 |---|---|---|---|
-| `b602.envolvidos`, local, BO e IP | sim | sim | formulário e placeholders de investigação |
-| `b602.pecas` | sim | sim, por extrator separado | editor de peças e merge GDL |
-| `integracaoGdl` | quando disponível | validação estrutural parcial | formulário e nova consulta |
-| `material_enc`, `cartuchos`, `estojos`, `armas` | removidos na escrita final | ainda aceitos pelo service legado | preview, placeholders e seções legadas |
+| investigação, local, BO, IP e solicitante | sim | sim | formulário e placeholders de investigação |
+| `b602.pecas` | sim | validação estrutural mínima | editor de peças e merge GDL |
+| `integracaoGdl` | quando disponível | schema Zod | formulário e nova consulta |
+| `origensDisponiveis` | sim | sim | seletor tipo/número |
+| `origensCandidatasSolicitacao` | não | convertida para `origensDisponiveis` | compatibilidade de metadados antigos |
+| arrays legados de material/armas | não | ainda aceitos pelo service | preview, placeholders e seções legadas |
 
-Esse é um limite arquitetural atual: o editor novo persiste `b602.pecas`, mas `LaudosPage`, `exportacao-placeholders.ts` e `secao-builder.service.ts` ainda consultam arrays legados. Não existe no fluxo atual um adaptador geral de `pecas` para esses arrays.
+O editor novo persiste `b602.pecas`, mas `LaudosPage`, `exportacao-placeholders.ts` e `secao-builder.service.ts` ainda consultam arrays legados. Não existe adaptador geral de peças para esses arrays.
 
-Consequência: dados de peças persistidos no formato novo podem não alimentar placeholders, tabelas e seções condicionais que dependem exclusivamente do formato legado. Uma correção deve escolher uma fonte canônica e adaptar os consumidores; manter duas escritas independentes aumenta risco de divergência.
+Consequência: peças persistidas no formato novo podem não alimentar placeholders, tabelas e seções condicionais legadas. Uma correção deve escolher fonte canônica e adaptar consumidores; duas escritas independentes aumentariam o risco de divergência.
+
+## Solicitante e origens GDL
+
+Durante a edição B-602, `b602_solicitante_nome` usa primeiro o órgão persistido nos metadados GDL. Sem órgão GDL, deriva do solicitante local escolhido. O valor final é serializado para preservar o texto usado pela REP.
+
+`extrairMetadadosIntegracaoGdl()` aceita a lista atual `origensDisponiveis` e o nome legado `origensCandidatasSolicitacao`. Payload inválido ou JSON quebrado retorna `null`; não há cast direto do conteúdo persistido.
 
 ## Envolvidos
 
@@ -72,35 +88,27 @@ O formulário mantém qualificação e nome separados. `combinarEnvolvido()` e `
 - qualificação vazia preserva o nome
 - qualificação sem `:` recebe o separador
 - texto legado sem `:` volta integralmente como nome
-- no máximo dez itens são serializados pelo formulário
+- no máximo dez itens são serializados
 
-Esses helpers ficam em `shared` porque são usados pelo main e pelo renderer.
+## Falhas na leitura
 
-## Validação na leitura
+`deserializeCamposEspecificos()` retorna `{}` para JSON ausente ou inválido. `extrairPecasB602()` filtra objetos sem identidade, origem ou blocos mínimos. `extrairMetadadosIntegracaoGdl()` rejeita a estrutura inteira quando um campo tipado é inválido.
 
-`deserializeCamposEspecificos()` retorna `{}` para JSON ausente ou inválido. `extrairPecasB602()` aceita apenas objetos com identidade, origem e blocos mínimos; `extrairMetadadosIntegracaoGdl()` normaliza somente a estrutura reconhecida.
+Essas falhas são toleradas para abrir REPs antigas. Ao salvar uma REP cujo JSON foi ignorado, o conteúdo anterior pode ser substituído pelo formato reconstruído.
 
-Falhas são toleradas para permitir abrir REPs antigas, mas há uma consequência: ao salvar uma REP cujo JSON inválido foi ignorado, o conteúdo anterior pode ser substituído pelo formato reconstruído a partir do formulário.
-
-O main não revalida `campos_especificos`. Portanto, chamadas IPC externas ao fluxo normal precisam validar o contrato antes de enviar.
+O main não revalida `campos_especificos`; chamadas IPC externas ao fluxo normal precisam validar o contrato antes de enviar.
 
 ## Critérios para evolução
 
-- ampliar o mesmo JSON quando o dado pertence exclusivamente ao exame
+- ampliar o JSON quando o dado pertence exclusivamente ao exame
 - criar coluna ou tabela quando o dado precisa de consulta, integridade ou ciclo de vida próprio no main
+- passar coleções tipadas pelo contexto do service, não por casts em `REPFormData`
+- preservar leitura de nomes antigos antes de remover compatibilidade
 - evitar serializar o mesmo conceito em `pecas` e arrays legados sem adaptador determinístico
-- preservar leitura de formatos antigos antes de remover código legado
 - versionar ou migrar quando não for possível inferir o formato com segurança
 
 ## Verificação
 
-Há testes para normalização GDL, catálogo e merge de peças, mas não existe teste direto do round-trip completo `prepareForApi → IPC → edição`, nem teste que garanta consumo de `b602.pecas` pelo laudo.
+`b602.service.test.ts` cobre o round-trip canônico de peças, metadados e solicitante. `integracao-gdl-b602.utils.test.ts` cobre reidratação, compatibilidade do nome legado e rejeição de payload inválido.
 
-Qualquer mudança no formato deve verificar:
-
-1. criação e edição da REP
-2. round-trip de envolvidos e peças
-3. merge e substituição GDL
-4. preview da REP
-5. placeholders e seções do laudo
-6. abertura de JSON legado e inválido
+Ainda não existe teste end-to-end `prepareForApi → IPC → SQLite → edição`, nem garantia de consumo de `b602.pecas` pelo laudo.
