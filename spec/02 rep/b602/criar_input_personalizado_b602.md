@@ -1,97 +1,134 @@
-# B-602 no formulario de REP
+# B-602 no formulário de REP
 
-## Visao geral
+## Visão arquitetural
 
-O B-602 e o tipo de exame mais completo do projeto em termos de campos especificos.
-Hoje ele aparece no renderer por meio de cinco secoes dinamicas registradas em `SECTION_REGISTRY`:
+O fluxo ativo usa um único formulário para dados manuais e importados. O GDL não possui formulário paralelo: ele normaliza dados para o mesmo contrato local.
+
+| Dado | Fonte de verdade durante a edição | Persistência |
+|---|---|---|
+| investigação | `REPFormData` | propriedades escalares de `b602` |
+| envolvidos | pares qualificação/nome em `REPFormData` | strings em `b602.envolvidos` |
+| peças | `PecaB602[]` em `REPsPage` | `b602.pecas` |
+| marcação visual GDL | `Set<string>` local | não persistida |
+| origem e última consulta | `MetadadosIntegracaoGdl` | `integracaoGdl` |
+
+## Seções ativas e legado
+
+`EXAM_FIELD_MAP['B-602']` contém somente:
 
 - `dados_investigacao`
-- `material_enc`
-- `cartuchos`
-- `estojos`
-- `armas`
+- `pecas_b602`
 
-O codigo do exame aponta para essas secoes via:
+`SECTION_REGISTRY`, `b602.tsx` e `b602Service` ainda contêm editores e campos legados de material encaminhado, cartuchos, estojos e armas. Eles não são renderizados pelo fluxo ativo e não devem ser usados como segunda fonte de edição.
 
-```ts
-EXAM_FIELD_MAP['B-602'] = [
-  'dados_investigacao',
-  'material_enc',
-  'cartuchos',
-  'estojos',
-  'armas',
-]
-```
+## Dados da investigação
 
-## Contrato visual minimo
+Campos:
 
-### Dados da investigacao
+- até dez envolvidos
+- data da ocorrência
+- bairro, cidade e UF
+- número do BO
+- número do IP
+- solicitante derivado da seleção da REP
 
-E a secao base do B-602.
-Ela centraliza:
+Cada envolvido tem qualificação e nome separados. O datalist sugere `EM PODER DE:`, `AUTOR:` e `VÍTIMA:`, mas aceita texto livre.
 
-- envolvidos indexados (`b602_envolvidos_0` ... `b602_envolvidos_9`)
-- `b602_data_ocorrencia`
-- `b602_local_bairro`
-- `b602_local_cidade`
-- `b602_local_uf`
-- `b602_numero_bo`
-- `b602_numero_ip`
-- `b602_solicitante_nome`
+A lista mantém ao menos uma linha. Adição para em dez. Exclusão compacta os pares seguintes e limpa o último, evitando lacunas que alterariam a ordem persistida.
 
-No registro da secao, os campos obrigatorios atuais sao:
+A completude do stepper exige primeiro envolvido, data, cidade e UF. O bloqueio de salvamento acrescenta BO-ou-IP.
 
-```ts
-['b602_envolvidos_0', 'b602_data_ocorrencia', 'b602_local_cidade', 'b602_local_uf']
-```
+## Contrato de peça
 
-### Material encaminhado, cartuchos, estojos e armas
+`PecaB602` separa:
 
-Essas secoes entram no stepper como passos independentes, mas sem `requiredFields`.
-Por isso o stepper as marca como concluidas por definicao quando o usuario chega a esse fluxo.
+- `idLocal`: identidade estável na sessão e na persistência local
+- `origem`: `manual` ou `gdl`
+- `codPecaGdl`: identidade externa quando disponível
+- `alteradaLocalmente`: protege edição local durante nova mesclagem
+- `tipoCodigo` e `tipoPeca`
+- `comuns`: campos compartilhados por todos os tipos
+- `personalizados`: campos definidos pelo catálogo
+- `extrasGdl`: propriedades externas sem mapeamento confirmado
 
-## Toggles topo do exame
+`extrasGdl` preserva informação desconhecida sem alimentar automaticamente campos de domínio.
 
-`EXAM_TOGGLES` registra hoje tres toggles de primeiro nivel para o B-602:
+## Catálogo e completude
 
-- `b602_cartuchos_toggle`
-- `b602_estojos_toggle`
-- `b602_armas_toggle`
+`b602-gdl.catalogo.ts` é a fonte dos tipos, aliases, campos e opções. Atualmente existem 17 códigos; somente CARABINA e ESTOJO têm round-trip confirmado.
 
-Eles servem tanto para UI quanto para o pipeline do editor de laudo.
+`pecaB602EstaCompleta()` exige:
 
-## Menu de placeholders
+1. `tipoCodigo` reconhecido pelo catálogo
+2. quantidade maior que zero
+3. todos os campos personalizados marcados como obrigatórios
 
-O B-602 tambem e o unico exame com menu proprio registrado em `EXAM_MENU_REGISTRY`.
+Identificação, lacres e outros campos comuns não são obrigatórios por essa função, salvo regra adicional no catálogo. Um tipo importado sem correspondência fica com código vazio, gera aviso e impede a completude.
 
-```ts
-EXAM_MENU_REGISTRY['B-602'] = B602_MENU_STRUCTURE
-```
+## Edição manual
 
-Isso alimenta:
+Uma peça nova recebe UUID, origem manual, quantidade 1 e objetos vazios. Ao trocar o tipo, campos personalizados existentes são descartados somente após confirmação.
 
-- o menu de contexto do editor
-- os placeholders indexados por grupo
-- as tabelas completas do exame na exportacao
+Editar peça importada marca `alteradaLocalmente = true`. Excluir item GDL afeta apenas o laWdo; nenhuma escrita é enviada à API externa.
 
-## Persistencia
+Não há limite explícito para quantidade de peças. O editor trabalha todo em memória e não faz I/O por campo.
 
-O exame usa `b602Service`, registrado em `EXAM_SERVICE_REGISTRY`.
-O JSON persistido fica sob a chave `b602` e inclui:
+## Mesclagem com nova consulta GDL
 
-- dados de investigacao
-- arrays de `material_enc`
-- arrays de `cartuchos`
-- arrays de `estojos`
-- arrays de `armas`
+`mesclarPecasB602DoGdl()` usa `codPecaGdl` para localizar equivalência externa e preserva `idLocal`.
 
-## Relacao com o laudo
+| Situação | Modo mesclar | Modo substituir |
+|---|---|---|
+| peça GDL nova | adiciona | adiciona |
+| peça existente alterada localmente | preserva inteira | substitui dados, preservando `idLocal` |
+| campos comuns existentes | preenche apenas vazios | usa resposta nova |
+| personalizados existentes | valores locais não vazios vencem | usa resposta nova |
+| extras GDL | combina, com local vencendo | usa resposta nova |
+| peças manuais | permanecem | permanecem |
 
-O B-602 nao termina no formulario.
-Seus dados sao reutilizados em tres frentes:
+`substituir` não significa limpar toda a coleção: peças manuais e peças GDL antigas não retornadas não são removidas pelo helper atual. Ele substitui apenas correspondências encontradas.
 
-1. placeholders simples e tabelas do laudo
-2. blocos condicionais por toggle
-3. secoes repetiveis por arma
+A busca inicial usa `Map` por `codPecaGdl`, mas a substituição localiza `idLocal` com `findIndex` para cada correspondência. O volume esperado é pequeno; em coleções grandes o trecho pode se aproximar de custo quadrático.
 
-Por isso qualquer alteracao estrutural no B-602 precisa considerar renderer, service de serializacao e builder do laudo ao mesmo tempo.
+## Normalização do GDL
+
+O main valida o payload antes de converter. Tipos são encontrados por label ou alias normalizado. Apenas chaves com mapeamento confirmado entram em `personalizados`; as demais vão para `extrasGdl`.
+
+Envolvidos são extraídos de estruturas heterogêneas, deduplicados e separados em qualificação e nome. Mais de dez, ausência, múltiplos BO/IP e tipo de peça não confirmado geram avisos sem bloquear aplicação.
+
+## Persistência e compatibilidade
+
+O formato escrito pelo fluxo ativo usa `b602.pecas`. Na leitura, peças passam por validação estrutural mínima antes de entrar no estado.
+
+Os arrays legados ainda são entendidos pelo `b602Service`, mas a composição final da página os remove. Isso preserva abertura de parte dos registros antigos, mas não cria equivalência entre arrays legados e `PecaB602[]`.
+
+## Relação atual com laudo e placeholders
+
+Há uma assimetria importante:
+
+- o editor atual grava `b602.pecas`
+- preview da REP, `LaudosPage`, `exportacao-placeholders.ts` e `secao-builder.service.ts` ainda consultam `material_enc`, `cartuchos`, `estojos`, `armas` e toggles
+- não há adaptador geral de `PecaB602` para essas estruturas
+
+Assim, peças do formato novo não garantem preenchimento dos placeholders ou ativação das seções legadas. Essa limitação deve ser considerada antes de alterar laudo, exportação ou templates.
+
+A solução consistente precisa escolher entre:
+
+1. tornar `b602.pecas` a fonte única e migrar consumidores
+2. gerar uma visão legada determinística a partir de `pecas` em um único adaptador
+
+Não escrever e editar os dois formatos independentemente.
+
+## Impacto e testes
+
+Alterações em peças precisam conferir:
+
+- tipos e catálogo shared
+- normalizador GDL
+- editor e merge
+- completude e pendências
+- persistência e restauração
+- preview da REP
+- placeholders, seções condicionais e repetição por arma
+
+Testes atuais cobrem catálogo, completude, normalização e merge. Não cobrem o round-trip completo no banco nem o consumo de `b602.pecas` pelo laudo.

@@ -1,82 +1,79 @@
-# Seccoes repetiveis por arma no B-602
+# Seções repetíveis por arma no B-602
 
-## Onde a repeticao acontece
+## Escopo atual
 
-O comportamento atual depende de duas camadas do main:
+A repetição por arma pertence ao pipeline legado do laudo. Ela consome `b602.armas` e os toggles associados; não consome diretamente `b602.pecas`.
 
-- `src/main/services/secao-builder.service.ts`
-- `src/main/services/laudo.service.ts`
+Componentes envolvidos:
 
-O formulario grava as armas no JSON do B-602.
-O builder do laudo usa esse JSON para expandir secoes marcadas com `repetir_para = 'armas'`.
+- `b602Service`: leitura e escrita do array legado quando esses campos existem
+- `secao-builder.service.ts`: filtragem, condições e expansão
+- `laudo.service.ts`: sincronização e reconciliação do HTML
 
-## Pipeline atual
+## Pré-condições
 
-### 1. Filtragem das secoes
+Uma seção com `repetir_para = 'armas'` só permanece quando `campos_especificos.b602.armas` é um array não vazio.
 
-`filtrarSecoesAtivas()` remove secoes derivadas da REP que nao tenham dados suficientes.
+Seções condicionais por arma usam:
 
-No caso de armas:
-
-- uma secao com `repetir_para === 'armas'` so permanece se houver itens em `b602.armas`
-- blocos associados a armas tambem respeitam os toggles por item
-
-### 2. Expansao
-
-`expandirSecoesRepetiveis()` percorre as secoes filtradas e, para cada secao repetivel:
-
-1. le `b602.armas`
-2. cria um bloco `<div data-repeat-group="armas" ...>`
-3. injeta um `<h4 data-repeat-item="arma" data-arma-indice="N">`
-4. reindexa placeholders do padrao `_1_` para `_{N}_`
-5. processa blocos condicionais no contexto daquela arma
-
-## Titulos por item
-
-O titulo de cada arma vem de:
-
-- `secao.repetir_titulo`, quando definido
-- fallback para `secao.nome`
-
-Antes de renderizar o heading, o builder substitui os placeholders indexados para o indice atual.
-
-## Toggles por arma
-
-`processarBlocosCondicionais()` entende dois toggles especiais por item:
-
+- `b602.armas_toggle`
 - `b602_arma_N_func_toggle`
 - `b602_arma_N_coleta_toggle`
 
-Quando a expansao esta no contexto da arma `N`, o builder normaliza o padrao para o indice real e remove o bloco se a chave nao estiver em `on`.
+A presença de uma peça cuja família seja `arma` em `b602.pecas` não satisfaz essas condições no código atual.
 
-## Estrutura preservada no laudo
+## Expansão
 
-Os headings estruturais recebem atributos como:
+`expandirSecoesRepetiveis()`:
 
-- `data-secao-id`
-- `data-parent-id`
-- `data-estrutura-nivel`
-- `data-titulo-base`
-- `data-repeat-section`
+1. lê o array `b602.armas`
+2. cria um grupo `data-repeat-group="armas"`
+3. gera um item por arma com índice estável na renderização
+4. reindexa placeholders `_1_` para o índice atual
+5. processa condições no contexto da arma
 
-Esses marcadores sao usados por `laudo.service.ts` para reconciliar o HTML atual com a base recalculada.
+O título vem de `repetir_titulo` ou do nome da seção e também recebe substituição indexada.
 
-## Sincronizacao depois da edicao da REP
+## Reconciliação do laudo
 
-`laudoService.sincronizarSecoesCondicionais(laudoId)`:
+Headings e blocos carregam atributos estruturais como `data-secao-id`, `data-parent-id`, `data-estrutura-nivel`, `data-titulo-base` e marcadores de repetição.
 
-1. recarrega as secoes do template
-2. relanca `filtrarSecoesAtivas()`
-3. relanca `expandirSecoesRepetiveis()`
-4. monta novo HTML base com `buildHtml()`
-5. reconcilia com o conteudo salvo
+`laudoService.sincronizarSecoesCondicionais()` recalcula a base e reconcilia com o conteúdo salvo para preservar edições manuais fora das áreas derivadas.
 
-O objetivo e atualizar o bloco derivado da REP sem perder conteudo manual fora dessas areas derivadas.
+Criação/atualização da REP e sincronização do laudo não são uma transação única. Falha de sincronização é registrada sem desfazer a REP.
 
-## Regra pratica
+## Fronteira com o editor atual de peças
 
-Qualquer alteracao nos campos da arma do B-602 precisa considerar tres pontos:
+O fluxo ativo do B-602 grava `b602.pecas` e remove `b602.armas` na composição final. Não existe conversão geral de `PecaB602` para o contrato legado de arma.
 
-1. serializacao em `b602Service`
-2. placeholders indexados do grupo `b602_arma_*`
-3. expansao do laudo em `secao-builder.service.ts`
+Consequência atual: uma arma cadastrada no editor novo pode não gerar seção repetível, bloco condicional ou placeholder legado.
+
+Essa diferença não deve ser corrigida copiando dados em vários pontos. A opção resiliente é:
+
+- migrar o builder e os placeholders para `b602.pecas`; ou
+- criar um adaptador único e determinístico de peças para a visão legada
+
+Qualquer adaptador precisa definir explicitamente:
+
+- quais `tipoCodigo` representam arma
+- mapeamento de campos comuns e personalizados
+- identidade e ordem das armas
+- equivalência dos toggles de funcionamento e coleta
+- comportamento para tipos sem round-trip confirmado
+
+## Desempenho
+
+A expansão é feita em memória durante construção ou sincronização do laudo. O custo cresce com quantidade de seções e armas. Evitar consultas por arma ou parse repetido de `campos_especificos` dentro do loop.
+
+## Verificação
+
+`secao-builder.service.test.ts` cobre expansão repetível com o formato legado. Não há teste equivalente usando `b602.pecas`.
+
+Uma mudança nessa fronteira precisa testar:
+
+1. zero, uma e várias armas
+2. reindexação de placeholders
+3. toggles por item
+4. sincronização sem perda de conteúdo manual
+5. peças manuais e GDL
+6. tipos sem mapeamento confirmado
