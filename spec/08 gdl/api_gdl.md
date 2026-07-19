@@ -9,7 +9,7 @@ O manual `docs/api/API_GDL.txt` documenta o contrato externo. Esta spec descreve
 A integração é somente leitura no sistema externo.
 
 ```text
-GdlConsultaModal
+GdlConsultaModal ou GdlPecasModal
   → preload
   → gdl.handlers
   → gdl.service
@@ -28,7 +28,8 @@ GdlConsultaModal
 | contrato entre camadas | `shared/types/b602-gdl.types.ts` |
 | tipos de peça | `shared/catalogos/b602-gdl.catalogo.ts` |
 | tipos de origem | `shared/catalogos/tipos-origem-gdl.catalogo.ts` |
-| revisão e seleção | `GdlConsultaModal.tsx` |
+| busca geral e revisão de dados | `GdlConsultaModal.tsx` |
+| revisão exclusiva das peças atuais | `GdlPecasModal.tsx` |
 | seleção tipo/número | `TipoSolicitacaoSelect.tsx` |
 | aplicação e persistência | `REPsPage.tsx`, `b602.service.ts` e `pecas-b602.utils.ts` |
 
@@ -114,9 +115,11 @@ O contrato atual chama a lista de `origensDisponiveis`. Na leitura de metadados 
 
 ## Revisão e aplicação
 
-O modal executa pré-teste, busca número/ano, mostra mapeados e ausentes, permite desmarcar peças e oferece `mesclar` e `substituir`.
+A consulta geral usa `GdlConsultaModal`: executa pré-teste, recebe número/ano, mostra dados mapeados e ausentes e inicia todas as peças retornadas marcadas. O usuário pode desmarcar peças antes de aplicar e escolhe `mesclar` ou `substituir` quando já existem dados relevantes.
 
-`mesclar` preserva campos locais não vazios. `substituir` aplica os retornados, mas na coleção substitui somente correspondências por `codPecaGdl`; peças manuais permanecem.
+A seção B-602 oferece `Selecionar peças do GDL`, que abre `GdlPecasModal`. Esse modal usa a REP já preenchida, consulta automaticamente e não reaplica campos gerais. Seus checkboxes refletem a coleção atual: peça GDL presente fica marcada; peça nova ou removida anteriormente fica desmarcada; peça importada que não retornou permanece listada com aviso.
+
+`mesclar` preserva campos locais não vazios e alterações locais. `substituir` atualiza correspondências por `codPecaGdl`, remove localmente peças GDL desmarcadas ou ausentes da seleção e preserva peças manuais. A revisão exclusiva aplica essa reconciliação somente à coleção de peças.
 
 `TipoSolicitacaoSelect` mostra origens da REP separadas do preenchimento manual. Selecionar origem atualiza tipo e número; selecionar tipo manual ou `Outros` limpa o número anterior. O par exato evita confundir duas origens do mesmo tipo.
 
@@ -132,7 +135,7 @@ Na reabertura, peças e metadados são validados separadamente. Metadados invál
 
 ## Resiliência e idempotência
 
-A API não é alterada. Nova consulta pode acrescentar peças e reconciliar aquelas com o mesmo `codPecaGdl`. Peças sem identidade externa podem ser adicionadas novamente.
+A API não é alterada. Nova consulta pode acrescentar peças e reconciliar aquelas com o mesmo `codPecaGdl`. A remoção decorrente de checkbox desmarcado ocorre apenas no estado local. Peças sem identidade externa podem ser adicionadas novamente.
 
 Não existe cancelamento explícito ao fechar o modal, limite de corpo ou retry. Paralelismo futuro precisa de limite de concorrência.
 
@@ -142,8 +145,8 @@ O resultado alimenta `PecaB602[]`, persistido em `b602.pecas`. Consumidores lega
 
 ## Testes e impacto
 
-Testes cobrem payload inválido, propriedades dinâmicas, peças, origens completas, preservação de mesmo tipo com números diferentes, sugestão inicial, metadados, envolvidos, ambiguidades, catálogo e comportamento do seletor.
+Testes cobrem payload inválido, propriedades dinâmicas, peças, origens completas, preservação de mesmo tipo com números diferentes, sugestão inicial, metadados, envolvidos, ambiguidades, catálogo, comportamento do seletor, reconciliação e o estado inicial/aplicação do `GdlPecasModal`.
 
 Não há teste de rede real nem end-to-end atravessando IPC, persistência e laudo.
 
-Alterações precisam manter alinhados schema, normalizador, contrato shared, handler/preload, modal, seletor, persistência, catálogo e consumidores do laudo.
+Alterações precisam manter alinhados schema, normalizador, contrato shared, handler/preload, os dois modais, seletor, persistência, catálogo e consumidores do laudo.

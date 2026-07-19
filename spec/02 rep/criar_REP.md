@@ -80,6 +80,8 @@ A consulta produz contrato B-602 tipado. Ao aplicar:
 - `mesclar` preserva valores locais não vazios
 - `substituir` aplica os valores retornados
 - formulário sem dados relevantes é tratado como substituição
+- na primeira consulta geral, todas as peças retornadas começam marcadas
+- no modo substituir, peças GDL desmarcadas são removidas localmente e peças manuais permanecem
 - peças são reconciliadas por `codPecaGdl`
 - todas as origens válidas retornadas ficam disponíveis para escolha posterior
 
@@ -89,7 +91,9 @@ O normalizador sugere inicialmente a primeira origem cuja família começa por B
 
 Valores do catálogo GDL e tipos legados aparecem como opções manuais. Valor livre permanece em `Outros`; valor desconhecido recebido do GDL é preservado como opção enquanto os metadados indicarem origem GDL.
 
-O destaque verde é estado de sessão e não é persistido. Avisos do normalizador não bloqueiam salvamento.
+O botão `Selecionar peças do GDL`, exibido na seção B-602, abre um fluxo separado da consulta geral. Ele usa o número da REP já preenchido, consulta automaticamente e altera somente `PecaB602[]` e os metadados da última consulta. O checkbox inicia marcado apenas para peças GDL ainda presentes no formulário; peça nova ou removida anteriormente inicia desmarcada. Aplicar a seleção remove localmente as importadas desmarcadas e preserva todas as peças manuais.
+
+O destaque verde é estado de sessão e não é persistido. Avisos do normalizador não bloqueiam salvamento. A revisão exclusiva mostra uma mensagem de sucesso por cinco segundos após aplicar a seleção.
 
 ## Acoplamento legado com o laudo
 
@@ -108,6 +112,6 @@ Evitar consultas por campo ou peça durante renderização. Dados derivados deve
 
 ## Verificação e lacunas
 
-Testes do seletor cobrem aplicação programática sem apagar tipo/número, seleção manual, valores catalogados, valor livre e origens repetidas. Testes do service cobrem persistência canônica.
+Testes do seletor cobrem aplicação programática sem apagar tipo/número, seleção manual, valores catalogados, valor livre e origens repetidas. Testes do service cobrem persistência canônica. O teste de `GdlPecasModal` cobre consulta automática, peça nova desmarcada, peça já importada marcada e aplicação da seleção; helpers cobrem reconciliação e preservação de peças manuais.
 
 Não há teste automatizado direto dos handlers `rep:create` e `rep:update` atravessando persistência e laudo, nem teste end-to-end de reabertura pelo IPC.

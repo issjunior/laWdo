@@ -61,12 +61,24 @@ const getDatabase = async (): Promise<sqlite3.Database> => {
  */
 export const closeDatabase = async (): Promise<void> => {
   if (dbInstance) {
+    const database = dbInstance;
     try {
-      await dbInstance.close();
-      dbInstance = null;
+      await new Promise<void>((resolve, reject) => {
+        database.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+      if (dbInstance === database) {
+        dbInstance = null;
+      }
       log.debug('Conexão com banco de dados fechada');
     } catch (error) {
       log.error('Erro ao fechar conexão com banco de dados', error);
+      throw error;
     }
   }
 };
