@@ -69,7 +69,6 @@ function criarPeca(
     tipoPeca: 'CARABINA(S)',
     comuns: {
       identificacao,
-      numeroAnalises: '',
       quantidade: 1,
       unidadeMedida: 'UNIDADE',
       quantidadeDescricao: '',

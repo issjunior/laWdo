@@ -46,7 +46,6 @@ describe('b602Service', () => {
       tipoPeca: 'CARABINA(S)',
       comuns: {
         identificacao: 'CARABINA TESTE',
-        numeroAnalises: '',
         quantidade: 1,
         unidadeMedida: 'UNIDADE',
         quantidadeDescricao: '',

@@ -31,11 +31,15 @@ export const gdlPecaSchema = z.object({
   quantidade: numeroFlexivel,
   unidadeMedida: textoOpcional,
   numeroAnalises: textoOpcional,
+  quantidadeDescricao: textoOpcional,
   examinadoInLoco: z.union([z.string(), z.boolean()]).nullish().transform(valor => valor ?? false),
   dataEntrada: textoOpcional,
   lacreEntrada: textoOpcional,
   lacreSaida: textoOpcional,
+  dataLiberacao: textoOpcional,
+  codigoVestigio: textoOpcional,
   consumida: textoOpcional,
+  observacao: textoOpcional,
 }).catchall(z.unknown())
 
 export const gdlRepSchema = z.object({
