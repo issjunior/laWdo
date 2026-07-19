@@ -66,6 +66,7 @@ export interface ExamSectionProps {
   mostrarPlaceholders: boolean;
   pecasB602?: PecaB602[];
   onPecasB602Change?: (pecas: PecaB602[]) => void;
+  onRevisarPecasGdl?: () => void;
   camposPreenchidosGdl?: ReadonlySet<string>;
 }
 

@@ -43,6 +43,7 @@ import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteForm
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 import { RepStepper, useRepStepperContext } from '@/components/rep/RepStepper';
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal';
+import { GdlPecasModal } from '@/components/rep/GdlPecasModal';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import type { CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
 import { buildHeaderTemplate } from '@/lib/pdf-header';
@@ -56,7 +57,9 @@ import type {
   ResultadoImportacaoExame,
 } from '@shared/types/b602-gdl.types';
 import { pecaB602EstaCompleta } from '@shared/catalogos/b602-gdl.catalogo';
-import { mesclarPecasB602DoGdl } from '@/components/rep/exam-fields/pecas-b602.utils';
+import {
+  mesclarPecasB602DoGdl,
+} from '@/components/rep/exam-fields/pecas-b602.utils';
 import {
   extrairMetadadosIntegracaoGdl,
   extrairPecasB602,
@@ -698,6 +701,7 @@ export const REPsPage: React.FC = () => {
   const [tipoExameQCSubmitting, setTipoExameQCSubmitting] = useState(false);
 
   const [gdlModalOpen, setGdlModalOpen] = useState(false);
+  const [gdlPecasModalOpen, setGdlPecasModalOpen] = useState(false);
   const [camposPreenchidosGdl, setCamposPreenchidosGdl] = useState<Set<string>>(new Set());
   const [origensSolicitacaoGdl, setOrigensSolicitacaoGdl] = useState<ReferenciaOrigemGdl[]>([]);
 
@@ -1268,6 +1272,7 @@ export const REPsPage: React.FC = () => {
   const handleAplicarGdl = async (
     resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
     modo: 'substituir' | 'mesclar',
+    pecasImportadasSelecionadas: PecaB602[],
   ) => {
     const novosPreenchidos = new Set<string>();
     const substituirDadosGdl = modo === 'substituir'
@@ -1310,6 +1315,8 @@ export const REPsPage: React.FC = () => {
       atuais,
       resultado.camposEspecificos.pecas,
       substituirDadosGdl,
+      modo === 'substituir',
+      pecasImportadasSelecionadas,
     ));
     setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
 
@@ -1321,6 +1328,23 @@ export const REPsPage: React.FC = () => {
     } else {
       setSuccess(null);
     }
+  };
+
+  const handleAplicarPecasGdl = (
+    resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
+    pecasRetornadasSelecionadas: PecaB602[],
+    pecasImportadasSelecionadas: PecaB602[],
+  ): void => {
+    setPecasB602(atuais => mesclarPecasB602DoGdl(
+      atuais,
+      pecasRetornadasSelecionadas,
+      true,
+      true,
+      pecasImportadasSelecionadas,
+    ));
+    setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
+    setSuccess('Seleção de peças do GDL aplicada ao formulário.');
+    setTimeout(() => setSuccess(null), 5000);
   };
 
   const columnDefs = useMemo<ColumnDef<REP>[]>(() => [
@@ -1986,6 +2010,7 @@ export const REPsPage: React.FC = () => {
                           mostrarPlaceholders={mostrarPlaceholders}
                           pecasB602={pecasB602}
                           onPecasB602Change={setPecasB602}
+                          onRevisarPecasGdl={() => setGdlPecasModalOpen(true)}
                           camposPreenchidosGdl={camposPreenchidosGdl}
                         />
                       </RepStepSection>
@@ -2123,10 +2148,18 @@ export const REPsPage: React.FC = () => {
         onOpenChange={setGdlModalOpen}
         onAplicar={handleAplicarGdl}
         temDadosExistentes={formularioTemDadosRelevantesParaGdl(valoresFormulario, pecasB602)}
+        pecasB602={pecasB602}
         onConfigurarCredenciais={() => {
           setGdlModalOpen(false);
           navigate('/gdl-config');
         }}
+      />
+      <GdlPecasModal
+        open={gdlPecasModalOpen}
+        onOpenChange={setGdlPecasModalOpen}
+        numeroRepCompleto={valoresFormulario.numero}
+        pecasAtuais={pecasB602}
+        onAplicar={handleAplicarPecasGdl}
       />
       </TooltipProvider>
   );

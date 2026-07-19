@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import {
   Select,
@@ -39,6 +40,7 @@ import type {
 } from '@shared/types/b602-gdl.types';
 import { TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo';
 import { combinarEnvolvido } from '@shared/utils/envolvido';
+import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
 
@@ -54,8 +56,13 @@ interface CampoMapeado {
 interface GdlConsultaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAplicar: (resultado: ResultadoImportacaoExame<DadosImportacaoB602>, modo: 'substituir' | 'mesclar') => void | Promise<void>;
+  onAplicar: (
+    resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
+    modo: 'substituir' | 'mesclar',
+    pecasImportadasSelecionadas: PecaB602[],
+  ) => void | Promise<void>;
   temDadosExistentes: boolean;
+  pecasB602: PecaB602[];
   onConfigurarCredenciais: () => void;
 }
 
@@ -107,6 +114,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   onOpenChange,
   onAplicar,
   temDadosExistentes,
+  pecasB602,
   onConfigurarCredenciais,
 }) => {
   const [passo, setPasso] = useState<Passo>('busca');
@@ -264,7 +272,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       if (r.success && r.data) {
         const resultado: ResultadoImportacaoExame<DadosImportacaoB602> = r.data;
         setResultadoConsulta(resultado);
-        setIdsPecasSelecionadas(new Set(resultado.camposEspecificos.pecas.map(peca => peca.idLocal)));
+        setIdsPecasSelecionadas(new Set(
+          resultado.camposEspecificos.pecas.map(peca => `gdl-${peca.codPecaGdl ?? peca.idLocal}`),
+        ));
 
         const mapeados: CampoMapeado[] = [];
         const naoPreenchidos: string[] = [];
@@ -338,13 +348,21 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     if (!resultadoConsulta) return;
     setAplicando(true);
     try {
+      const itensReconciliacao = montarItensReconciliacaoPecasB602(
+        pecasB602,
+        resultadoConsulta.camposEspecificos.pecas,
+      );
+      const pecasImportadasSelecionadas = itensReconciliacao
+        .filter(item => idsPecasSelecionadas.has(item.chave))
+        .map(item => item.peca);
+
       await onAplicar({
         ...resultadoConsulta,
         camposEspecificos: {
           ...resultadoConsulta.camposEspecificos,
-          pecas: resultadoConsulta.camposEspecificos.pecas.filter(peca => idsPecasSelecionadas.has(peca.idLocal)),
+          pecas: resultadoConsulta.camposEspecificos.pecas.filter(peca => idsPecasSelecionadas.has(`gdl-${peca.codPecaGdl ?? peca.idLocal}`)),
         },
-      }, modo);
+      }, modo, pecasImportadasSelecionadas);
       onOpenChange(false);
     } finally {
       setAplicando(false);
@@ -367,6 +385,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   };
 
   const ambienteLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
+  const itensReconciliacao = resultadoConsulta
+    ? montarItensReconciliacaoPecasB602(pecasB602, resultadoConsulta.camposEspecificos.pecas)
+    : [];
 
   const getPreTesteMensagem = (): string => {
     if (!preTeste) return 'Verificando conexão...';
@@ -580,24 +601,25 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                 </Alert>
               )}
 
-              {!!resultadoConsulta?.camposEspecificos.pecas.length && (
+              {!!itensReconciliacao.length && (
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Peças a importar</Label>
-                  <p className="text-xs text-muted-foreground">Revise os campos e desmarque uma peça caso não queira aplicá-la ao formulário.</p>
+                  <Label className="text-sm font-medium">Revisão das peças do GDL</Label>
+                  <p className="text-xs text-muted-foreground">Todas as peças retornadas pelo GDL começam marcadas. Em “Substituir”, desmarcar uma peça importada a remove apenas do laWdo.</p>
                   <div className="space-y-2">
-                    {resultadoConsulta.camposEspecificos.pecas.map(peca => (
-                      <label key={peca.idLocal} className="block cursor-pointer rounded-md border p-3">
+                    {itensReconciliacao.map(({ chave, peca, jaImportada, retornadaPeloGdl }) => (
+                      <label key={chave} className="block cursor-pointer rounded-md border border-border bg-card p-3 transition-colors hover:bg-muted/50">
                         <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={idsPecasSelecionadas.has(peca.idLocal)}
-                            onChange={() => alternarSelecaoPeca(peca.idLocal)}
+                          <Checkbox
+                            checked={idsPecasSelecionadas.has(chave)}
+                            onCheckedChange={() => alternarSelecaoPeca(chave)}
                             className="mt-1"
                           />
                           <div className="min-w-0 flex-1 space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-medium">{peca.tipoPeca}</span>
                               <Badge variant="secondary">{peca.comuns.quantidade} {peca.comuns.unidadeMedida || 'unidade(s)'}</Badge>
+                              {jaImportada && <Badge variant="outline">Já importada</Badge>}
+                              {!retornadaPeloGdl && <Badge variant="destructive">Não retornou nesta consulta</Badge>}
                             </div>
                             <p className="text-sm text-muted-foreground">{peca.comuns.identificacao || 'Sem identificação'}</p>
                             {!!Object.keys(peca.personalizados).length && (

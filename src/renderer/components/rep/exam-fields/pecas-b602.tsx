@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Edit, Plus, Trash2, X } from 'lucide-react'
+import { Edit, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,7 @@ import { CATALOGO_TIPOS_PECA_B602, TIPOS_PECA_B602_POR_CODIGO } from '@shared/ca
 interface PecasB602FieldsProps {
   pecas: PecaB602[]
   onChange: (pecas: PecaB602[]) => void
+  onRevisarPecasGdl?: () => void
 }
 
 function criarPecaVazia(): PecaB602 {
@@ -27,7 +28,7 @@ function criarPecaVazia(): PecaB602 {
   }
 }
 
-export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChange }) => {
+export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChange, onRevisarPecasGdl }) => {
   const [editando, setEditando] = useState<PecaB602 | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const definicao = useMemo(
@@ -115,6 +116,9 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
       <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{peca.tipoPeca}</span><Badge variant="secondary">{peca.origem === 'gdl' ? 'Importada do GDL' : 'Manual'}</Badge>{peca.alteradaLocalmente && <Badge variant="outline">Alterada localmente</Badge>}</div><p className="truncate text-sm text-muted-foreground">{peca.comuns.identificacao || 'Sem identificação'} · {peca.comuns.quantidade} {peca.comuns.unidadeMedida}</p></div>
       <div className="flex shrink-0 gap-1"><Button type="button" variant="ghost" size="icon" onClick={() => setEditando(structuredClone(peca))} title="Editar"><Edit size={16} /></Button><Button type="button" variant="ghost" size="icon" onClick={() => excluir(peca)} title="Excluir"><Trash2 size={16} /></Button></div>
     </div>)}
-    <Button type="button" variant="outline" className="gap-2" onClick={() => setEditando(criarPecaVazia())}><Plus size={16} />Adicionar peça</Button>
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" variant="outline" className="gap-2" onClick={() => setEditando(criarPecaVazia())}><Plus size={16} />Adicionar peça</Button>
+      {onRevisarPecasGdl && <Button type="button" variant="outline" className="gap-2" onClick={onRevisarPecasGdl}><RefreshCw size={16} />Selecionar peças do GDL</Button>}
+    </div>
   </div>
 }

@@ -71,9 +71,10 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     label: 'Peças',
     icon: Package,
     description: 'Peças encaminhadas para o exame, manuais ou importadas do GDL',
-    component: ({ pecasB602 = [], onPecasB602Change }) => React.createElement(PecasB602Fields, {
+    component: ({ pecasB602 = [], onPecasB602Change, onRevisarPecasGdl }) => React.createElement(PecasB602Fields, {
       pecas: pecasB602,
       onChange: onPecasB602Change ?? (() => undefined),
+      onRevisarPecasGdl,
     }),
     group: undefined,
     requiredFields: [],
