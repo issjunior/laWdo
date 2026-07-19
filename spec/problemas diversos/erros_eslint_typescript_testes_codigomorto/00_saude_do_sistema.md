@@ -1,7 +1,8 @@
 # Painel de Saúde do Sistema
 
-> **Última medição:** 05/07/2026
+> **Última consolidação:** 19/07/2026
 > **Propósito:** registrar o estado atual de build, tipagem, lint, testes e auditoria de código morto.
+> **Escopo:** testes e CI foram revalidados; cobertura, build e auditorias estruturais mantêm a última medição indicada em suas seções.
 
 ---
 
@@ -12,8 +13,8 @@
 | **Build** (`npm run build`) | ✅ OK | 0 erros bloqueantes | build completo reexecutado após limpeza de lint |
 | **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | main + preload + renderer passam; CI validado |
 | **ESLint** (`npm run lint`) | ✅ OK | 0 erros, 0 warnings | frente de lint zerada após revisão dos hooks restantes; CI validado |
-| **Testes** (`npm test`) | ✅ OK | 43 pass, 1 skip | suíte verde após ajuste do setup para runner Linux |
-| **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | linhas 54,86%; funções 64,76%; statements 51,77%; branches 39,48% | provider instalado; threshold inicial ajustado ao estado real; CI validado |
+| **Testes** (`npm test`) | ✅ OK | 119 pass, 1 skip em 19 arquivos | suíte verde após ampliação dos testes B-602/GDL e utilitários |
+| **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | última medição: linhas 58,92%; funções 71,72%; statements 56,7%; branches 45,7% | medição de 12/07/2026; não recalculada após os testes mais recentes |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
 | **Knip** (`npm run knip -- --no-exit-code`) | ✅ Observacional zerado | 0 deps, 0 devDep, 0 exports, 0 tipos, 0 duplicatas | quatro rodadas de triagem concluídas; relatório observacional ficou sem apontamentos |
 | **GitHub dependencies** (`Dependency graph` + `Dependabot`) | 🟡 Ativo | monitoramento semanal em `main` | visibilidade de supply chain ligada no GitHub; `dependabot.yml` publicado |
@@ -34,7 +35,7 @@ Leitura prática do estado atual:
 
 ---
 
-## Comandos executados nesta medição
+## Comandos da medição geral de 05/07/2026
 
 ```bash
 npm run type-check
@@ -64,6 +65,7 @@ npm run knip -- --no-exit-code
 | **05/07/2026 (Knip rodada 2)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | tipos exportados ociosos do `main` removidos; frente remanescente ficou concentrada em renderer/shared |
 | **05/07/2026 (Knip rodada 3)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | utilitários, validadores e tipos de parser do renderer/shared triados; sobra concentrou em `ui` |
 | **05/07/2026 (Knip rodada 4)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | exports de `ui` triados; relatório do Knip zerado em modo observacional |
+| **19/07/2026 (B-602/GDL e utilitários)** | — | 0 | 0 / 0 | 119 pass, 1 skip | 19 arquivos; suíte ampliada e modal de peças protegido por teste de componente |
 
 ---
 
@@ -120,20 +122,14 @@ Avanço confirmado nesta tranche:
 
 ### Testes
 
-`npm test` passa em 03/07/2026 após a limpeza dos hooks do renderer.
+`npm test` passa em 19/07/2026.
 
 Resumo atual:
 
-- **arquivos de teste:** 5 passando
-- **testes:** 43 passando, 1 skip
+- **arquivos de teste:** 19 passando
+- **testes:** 119 passando, 1 skip
 
-A regressão pontual da dashboard foi resolvida ao alinhar a fixture de `src/__tests__/main/dashboard.service.test.ts` ao contrato atual de `DashboardService.obterResumo()`.
-
-Correção aplicada:
-
-- o teste passou a mockar separadamente a consulta de `repsRecentes`
-- a consulta de `laudosRecentes` voltou a receber o payload esperado
-- a suíte do service e a suíte da página da dashboard ficaram verdes no mesmo estado do repositório
+A ampliação recente cobre B-602/GDL, reconciliação de peças, `GdlPecasModal` e utilitários de documentos, estrutura, placeholders e árvore. O teste do modal protege a consulta automática e o estado inicial dos checkboxes.
 
 ### Cobertura
 
@@ -210,7 +206,6 @@ Comandos executados pelo workflow:
 
 - `npm run type-check`
 - `npm run lint`
-- `npm test`
 - `npm run test:coverage`
 
 Primeira execução validada:
@@ -219,7 +214,7 @@ Primeira execução validada:
 - o workflow foi alinhado para Node.js 24
 - a execução seguinte expôs um path Linux inválido no mock global do Electron em `src/test-setup.ts`
 - o mock passou a usar `os.tmpdir()`
-- o CI passou em `main` com instalação, type-check, lint, testes e coverage
+- o CI passou em `main` com instalação, type-check, lint e `test:coverage`; esse último executa testes e cobertura na mesma etapa
 
 Recomendação atual: **manter Knip em modo observacional e iniciar triagem curta por dependências**.
 
@@ -318,7 +313,7 @@ Automação complementar já ativada no GitHub:
 - `@vitest/coverage-v8` foi instalado e `npm run test:coverage` passou a medir cobertura
 - o threshold de cobertura foi convertido de 70% global para gate progressivo inicial
 - os hooks do renderer foram ajustados sem supressões de ESLint
-- `.github/workflows/ci.yml` foi criado com gate mínimo de type-check, lint, testes e coverage
+- `.github/workflows/ci.yml` mantém gate de type-check e lint; testes e cobertura foram consolidados em `npm run test:coverage`
 - `.github/dependabot.yml` foi criado para atualizações automáticas semanais de `npm` e `github-actions`
 - a primeira execução verde do CI em `main` foi confirmada após alinhar Node.js 24 e corrigir o mock global de path do Electron em testes
 - `02_plano_knip_futuro.md` foi atualizado de plano futuro condicionado para plano observacional executável
@@ -340,7 +335,7 @@ Saldo consolidado da iniciativa:
 - `npm run build` verde
 - `npm run type-check` verde
 - `npm run lint` verde com `0` erros e `0` warnings
-- `npm test` verde com `43` pass e `1` skip
+- `npm test` verde com `119` pass e `1` skip em 19 arquivos
 - `npm run test:coverage` ativo com gate progressivo
 - `npm run prune:all` triado no renderer, com remanescentes do `main` documentados como falsos positivos conhecidos
 - `npm run knip -- --no-exit-code` zerado em modo observacional

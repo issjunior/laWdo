@@ -30,7 +30,8 @@ O preenchimento vindo do GDL não salva automaticamente a REP. Ele apenas prepar
 
 Implementado no código e coberto pelas validações locais descritas na seção 19:
 
-- consulta somente leitura pelo modal, revisão e aplicação no mesmo formulário de REP;
+- consulta geral somente leitura por `GdlConsultaModal`, com revisão de dados e peças antes da aplicação no mesmo formulário de REP;
+- revisão exclusiva de peças por `GdlPecasModal`, acionada dentro da seção `Peças` e consultando automaticamente o número/ano já preenchido;
 - validação Zod da resposta e normalização no processo principal;
 - catálogo local dos 17 tipos, editor estruturado de peças e persistência em `campos_especificos.b602.pecas`;
 - criação, edição e exclusão local de peças manuais ou importadas, sem escrita no GDL;
@@ -42,15 +43,16 @@ Implementado no código e coberto pelas validações locais descritas na seção
 - preservação de campos da API ainda não mapeados, sem perda silenciosa;
 - consulta auxiliar de envolvidos em homologação, com falha tolerada e aviso quando nenhum nome reconhecível for retornado;
 - serialização canônica de peças e metadados pelo contexto tipado do `b602Service`;
-- reidratação validada de `dadosSolicitacao`, `dadosInvestigacao` e `ultimaConsulta`, incluindo leitura do nome legado `origensCandidatasSolicitacao`.
+- reidratação validada de `dadosSolicitacao`, `dadosInvestigacao` e `ultimaConsulta`, incluindo leitura do nome legado `origensCandidatasSolicitacao`;
+- reconciliação por `codPecaGdl`: a consulta geral inicia com todas as peças retornadas marcadas, enquanto a revisão exclusiva marca somente as peças GDL ainda presentes no formulário e mantém desmarcadas as removidas anteriormente.
 
 Limitações e pendências confirmadas na auditoria do código:
 
 - campos adicionais de `REVÓLVER(ES)` e `incinerado` de `ESTOJO(S)` permanecem apenas preservados;
 - a conversão B602 ainda é chamada diretamente por `gdl.handlers.ts`; o registro genérico de adaptadores por exame ainda não existe;
 - a consulta auxiliar de envolvidos existe apenas em homologação, é sequencial e pode somar até 15 segundos por filtro em caso de timeout;
-- `Substituir dados do GDL` atualiza peças coincidentes por `codPecaGdl`, mas ainda mantém peças importadas ausentes na nova consulta e não implementa o fluxo de confirmação para removê-las;
-- os testes automatizados cobrem normalização, catálogo, reconciliação, serialização canônica, reidratação e seletor de tipo de solicitação, mas não cobrem ainda o componente completo do editor, o fluxo IPC/banco de salvar e reabrir, o modal integrado nem as projeções para o laudo;
+- o modo `Substituir dados do GDL` e o modal exclusivo removem da coleção local peças GDL desmarcadas, inclusive as que deixaram de aparecer na consulta; peças manuais permanecem;
+- os testes automatizados cobrem normalização, catálogo, reconciliação, serialização canônica, reidratação, seletor de tipo de solicitação, editor completo, `GdlPecasModal`, consulta geral e aplicação integrada à `REPsPage`; permanecem sem cobertura o fluxo IPC/banco de salvar e reabrir e as projeções para o laudo;
 - round-trip completo dos demais tipos e validação em produção permanecem pendentes.
 
 ### 1.3 Problemas encontrados e resolvidos
@@ -147,9 +149,14 @@ Em `10/07/2026`, todos os 17 tipos foram selecionados individualmente no GDL web
 
 ### 2.3 Comportamento atual do laWdo
 
-As peças retornadas pela API são normalizadas em uma coleção estruturada, revisadas no modal e aplicadas a `campos_especificos.b602.pecas`. Elas não são convertidas em linhas de `observacoes`. Peças manuais e importadas usam o mesmo editor local e podem ser alteradas ou excluídas sem modificar o GDL.
+As peças retornadas pela API são normalizadas em uma coleção estruturada e aplicadas a `campos_especificos.b602.pecas`. Elas não são convertidas em linhas de `observacoes`. Peças manuais e importadas usam o mesmo editor local e podem ser alteradas ou excluídas sem modificar o GDL.
 
-Propriedades reconhecidas pelo catálogo alimentam campos personalizados; propriedades ainda não mapeadas ficam em `extrasGdl` e são apresentadas como preservadas. A aplicação dos dados não salva a REP automaticamente.
+Há dois comportamentos de seleção:
+
+- na consulta geral por `GdlConsultaModal`, todas as peças retornadas vêm marcadas por padrão na primeira importação;
+- no botão `Selecionar peças do GDL`, `GdlPecasModal` consulta automaticamente a REP já informada e reflete a coleção atual: peça GDL presente fica marcada, peça nova ou removida anteriormente fica desmarcada e peça local que não retornou continua visível com essa indicação.
+
+Ao aplicar a revisão exclusiva, peças GDL desmarcadas são removidas localmente e as marcadas são reconciliadas por `codPecaGdl`; peças manuais não participam da remoção. Propriedades reconhecidas pelo catálogo alimentam campos personalizados; propriedades ainda não mapeadas ficam em `extrasGdl`. Nenhum dos fluxos salva a REP automaticamente.
 
 ### 2.4 Limite da evidência atual
 
@@ -531,7 +538,7 @@ Na tela de REPs, manter duas ações de entrada claras:
 - `Nova REP`: inicia o fluxo manual com formulário vazio;
 - `Consultar GDL`: inicia o fluxo dinâmico antes do cadastro local.
 
-O botão de consulta também pode permanecer dentro de uma REP aberta para complementar ou reconsultar dados. Nas duas posições ele reutiliza o mesmo modal e o mesmo método tipado de aplicação.
+Dentro de uma REP B602 aberta, a seção `Peças` oferece `Selecionar peças do GDL`. Essa ação não reabre a busca geral: usa o número completo já preenchido, consulta automaticamente a mesma API e apresenta somente a seleção de peças. A aplicação altera `PecaB602[]` e os metadados da última consulta, sem reaplicar os demais campos gerais.
 
 Fluxo visual obrigatório da seção `Peças`:
 
@@ -607,7 +614,7 @@ Se o tipo de exame retornado pelo GDL for reconhecido, selecionar o tipo local p
 
 O rótulo foi corrigido para `Substituir dados do GDL`, deixando explícito que peças manuais não são apagadas.
 
-Estado atual: a implementação substitui campos gerais mapeados e peças importadas coincidentes, preserva peças manuais e não remove automaticamente nenhuma peça ausente. A confirmação e remoção opcional de peças importadas que deixaram de vir na consulta continuam pendentes.
+Estado atual: no modo substituir, a lista selecionada é a referência para as peças GDL. Correspondências são atualizadas, peças GDL desmarcadas ou ausentes da seleção são removidas localmente e peças manuais permanecem. No modal exclusivo, essa mesma reconciliação é aplicada sem substituir campos gerais.
 
 Para uma REP local ainda vazia, não exibir a escolha entre mesclar e substituir: a ação única é `Preencher formulário`. A escolha só aparece quando existem dados locais relevantes.
 
@@ -666,7 +673,7 @@ O mapeamento de família não deve inventar equivalências. Exemplos:
 
 ### Ordem de retomada a partir do estado atual
 
-1. fechar a Etapa 2 com testes do editor completo, modal integrado e round-trip por IPC/banco;
+1. fechar a Etapa 2 com o round-trip integrado de salvar e reabrir por IPC/banco;
 2. adaptar os consumidores do laudo para derivar placeholders, tabelas e seções repetíveis de `b602.pecas`, sem reintroduzir escrita duplicada;
 3. executar os round-trips restantes da família de armas, registrando um tipo por vez;
 4. validar componentes e materiais balísticos;
@@ -699,7 +706,7 @@ Pendências desta etapa:
 - criar o registro mínimo de adaptadores por exame; hoje o handler instancia diretamente o conversor B602;
 - adicionar validação estrutural do catálogo local e seus aliases, separada do schema Zod do payload da API;
 
-### Etapa 2 — Editor genérico + tipos já confirmados — núcleo implementado, validação integrada pendente
+### Etapa 2 — Editor genérico + tipos já confirmados — round-trip IPC/banco pendente
 
 - implementar coleção canônica e CRUD manual;
 - integrar a seção `pecas_b602` ao `SECTION_REGISTRY` e ao `EXAM_FIELD_MAP['B-602']` consumidos por `REPsPage.tsx`;
@@ -716,9 +723,8 @@ Pendências desta etapa:
 
 Pendências desta etapa:
 
-- cobrir com testes de componente o CRUD, a troca de tipo, os obrigatórios e a preservação de campos comuns;
-- cobrir o ciclo integrado de importar, selecionar peças, salvar, reabrir, mesclar e substituir;
-- cobrir o modal de consulta/aplicação integrado à página e ao IPC.
+- cobrir o ciclo integrado de importar, selecionar peças, salvar e reabrir por IPC/SQLite, confirmando peças, metadados e ausência dos arrays legados;
+- estender o round-trip persistido para os cenários de Mesclar e Substituir.
 
 Concluído após a auditoria inicial:
 
@@ -726,6 +732,9 @@ Concluído após a auditoria inicial:
 - round-trip canônico de peças, metadados e unidade policial;
 - teste garantindo que a escrita canônica não recria arrays legados;
 - testes de helper e componente do seletor de tipo de solicitação.
+- testes de componente do editor cobrindo CRUD, troca de tipo, obrigatórios, campos comuns e edição/exclusão de peça GDL;
+- testes do `GdlConsultaModal` cobrindo seleção inicial, Mesclar, Substituir, desmarcação e cancelamento;
+- teste integrado `GdlConsultaModal` → `REPsPage`, confirmando preenchimento do formulário, importação das peças e ausência de salvamento automático.
 
 ### Etapa 3 — Família de armas — em andamento
 
@@ -829,7 +838,7 @@ Regras adicionais:
 - campos inesperados são preservados, não executados nem renderizados como HTML;
 - revisar `rejectUnauthorized: false` antes de habilitar produção, preferindo instalar/confiar explicitamente na cadeia de certificados do GDL.
 
-## 14. Arquivos e responsabilidades previstas
+## 14. Arquivos e responsabilidades atuais
 
 | Área | Responsabilidade |
 |---|---|
@@ -840,7 +849,8 @@ Regras adicionais:
 | `src/main/services/gdl-b602-normalizador.service.ts` | normalização da REP, peças, origens, envolvidos e avisos após a validação Zod, consumindo o catálogo compartilhado |
 | `src/main/ipc/handlers/gdl.handlers.ts` | fronteira IPC somente leitura |
 | `src/preload/index.ts` e tipos | exposição segura e tipada |
-| `GdlConsultaModal.tsx` | revisão e seleção das peças a aplicar |
+| `GdlConsultaModal.tsx` | busca geral, revisão de campos e seleção inicial de peças, todas marcadas por padrão |
+| `GdlPecasModal.tsx` | consulta automática e revisão exclusiva das peças conforme a coleção atual do formulário |
 | `TipoSolicitacaoSelect.tsx` | seleção controlada de origem GDL ou tipo manual, mantendo tipo e número coerentes |
 | `src/shared/catalogos/tipos-origem-gdl.catalogo.ts` | códigos e labels observados no campo de origem do GDL |
 | registro/adaptadores de importação | pendente; converter o resultado validado pelo exame sem acoplar `gdl.handlers.ts` diretamente ao B602 |
@@ -859,7 +869,7 @@ Extrair componentes e hooks por responsabilidade quando o editor crescer; não c
 
 ## 15. Testes automatizados
 
-Estado em `14/07/2026`: além da cobertura inicial de schema/normalizador, catálogo B602, reconciliação e cidades, existem testes para catálogo de tipos de origem, serialização canônica, reidratação compatível de metadados e seletor controlado de tipo de solicitação. As listas abaixo continuam sendo a cobertura-alvo; editor completo, persistência integrada via IPC/banco, modal integrado e laudo ainda não estão cobertos ponta a ponta.
+Estado em `19/07/2026`: além de schema/normalizador, catálogo B602, reconciliação, cidades, serialização, reidratação e seletor de solicitação, existem testes de componente para o editor, `GdlPecasModal` e `GdlConsultaModal`, além de integração da consulta geral com `REPsPage`. A persistência integrada via IPC/banco e o consumo pelo laudo ainda não estão cobertos ponta a ponta.
 
 ### Contrato GDL
 
@@ -898,7 +908,9 @@ Estado em `14/07/2026`: além da cobertura inicial de schema/normalizador, catá
 - não salvar automaticamente após aplicar a consulta;
 - selecionar automaticamente B602 apenas quando o código retornado for compatível;
 - não colocar peças em `observacoes`;
-- importar todas as peças selecionadas;
+- iniciar a primeira consulta geral com todas as peças retornadas marcadas;
+- refletir no modal exclusivo a coleção atual, sem remarcar peça removida anteriormente;
+- importar todas as peças selecionadas e remover localmente as peças GDL desmarcadas no modo substituir;
 - deduplicar por `codPecaGdl`;
 - mesclar sem sobrescrever alteração local;
 - substituir somente dados originados do GDL;
@@ -937,7 +949,7 @@ Para cada etapa:
 
 ## 17. Critérios de aceitação
 
-Os itens abaixo são critérios globais de conclusão e não representam, por si só, estado concluído. Permanecem abertos principalmente a semântica completa de substituição, o registro de adaptadores, as projeções para o laudo, os testes integrados, os round-trips restantes e a validação de produção. Reidratação integral, serialização canônica e seleção `IP/PM` já foram concluídas.
+Os itens abaixo combinam invariantes já implementadas e validações ainda abertas. Permanecem pendentes o registro de adaptadores, as projeções para o laudo, o round-trip persistido por IPC/SQLite, os round-trips dos tipos restantes e a validação de produção. A substituição baseada na seleção, a reidratação integral, a serialização canônica e a seleção `IP/PM` estão implementadas.
 
 - Os 17 tipos do catálogo podem ser selecionados no laWdo.
 - `Nova REP` inicia o formulário vazio e `Consultar GDL` inicia o mesmo formulário com carga revisada da API.
@@ -954,7 +966,8 @@ Os itens abaixo são critérios globais de conclusão e não representam, por si
 - Peças não são gravadas em `observacoes`.
 - `campos_especificos.b602.pecas` é a única fonte persistida das peças.
 - Mesclar preserva dados e alterações locais.
-- Substituir não remove peça manual sem confirmação explícita.
+- Substituir usa a seleção atual para reconciliar peças GDL e nunca remove peças manuais.
+- A consulta geral marca todas as peças por padrão; a revisão exclusiva reflete as peças ainda presentes no formulário.
 - O laWdo funciona offline para cadastro, edição, exclusão e reabertura.
 - Nenhuma ação do fluxo realiza escrita no GDL.
 - Produção é liberada somente após validação de equivalência com homologação ou registro explícito das divergências aprovadas.
@@ -973,48 +986,18 @@ Os itens abaixo são critérios globais de conclusão e não representam, por si
 - sincronizar tipos de item de outras naturezas de exame;
 - migração destrutiva ou reescrita em lote do formato B602 anterior; a leitura compatível existente deve ser preservada enquanto houver consumidores legados.
 
-## 19. Branch e validação técnica
+## 19. Verificação atual
 
-A implementação está na branch exclusiva `codex/gdl-b602`.
-
-Regras da branch:
-
-- conter somente mudanças relacionadas à integração GDL/B602 e às adaptações estruturais necessárias para suportá-la;
-- não misturar correções ou funcionalidades sem relação com este plano;
-- preservar alterações locais preexistentes do usuário antes de criar ou trocar de branch;
-- implementar e validar as etapas em incrementos revisáveis, evitando uma única alteração monolítica;
-- somente integrar à branch principal depois que os critérios de aceitação, testes automatizados e validação exploratória em homologação estiverem concluídos;
-- validações de produção permanecem posteriores à aprovação em homologação e não impedem que a implementação seja revisada em pull request.
-
-Após cada etapa:
-
-```bash
-npm run type-check
-npm run lint
-npm test
-```
-
-Executar também `npm run test:coverage` quando forem adicionadas as fixtures e a nova camada de normalização.
-
-### Histórico de validações locais
-
-Em `12/07/2026`, sobre a árvore de trabalho auditada:
+Em `19/07/2026`, após os testes do editor e da consulta geral integrada:
 
 - `npm run type-check`: aprovado;
 - `npm run lint`: aprovado;
-- `npm run build`: aprovado;
-- testes focados de schema/normalizador, catálogo, cidades e reconciliação: 17 aprovados em 4 arquivos;
-- `npm test`: 9 arquivos aprovados, 60 testes aprovados e 1 ignorado;
-- `npm run test:coverage`: aprovado com 56,7% de statements, 45,7% de branches, 71,72% de functions e 58,92% de lines no conjunto instrumentado.
+- `npm test`: 22 arquivos aprovados, 128 testes aprovados e 1 ignorado;
+- `pecas-b602.component.test.tsx` protege acionamento da revisão GDL, validações, inclusão manual, troca de tipo, preservação de campos comuns e edição/exclusão local;
+- `gdl-pecas-modal.component.test.tsx` protege consulta automática, estado inicial dos checkboxes e aplicação da seleção;
+- `gdl-consulta-modal.component.test.tsx` protege seleção inicial, Mesclar, Substituir, desmarcação de peças e cancelamento;
+- `reps-gdl-integration.test.tsx` protege a aplicação no mesmo formulário da `REPsPage`, a importação estruturada e a ausência de chamada automática a `rep.create`;
+- testes de reconciliação protegem remoção opcional de peças GDL ausentes ou desmarcadas e preservação das peças manuais.
+- smoke manual da consulta, revisão, Mesclar, Substituir, persistência visual e falha de rede executado sem problemas observados.
 
-Os avisos emitidos pelo Vite durante os testes referem-se à depreciação das opções `esbuild` do plugin React e não causaram falha nas validações.
-
-Em `14/07/2026`, após as correções de serialização, metadados, origens e `TipoSolicitacaoSelect`:
-
-- `npm run type-check`: aprovado;
-- `npm run lint`: aprovado;
-- `npm test`: 18 arquivos aprovados, 113 testes aprovados e 1 ignorado;
-- `gdl-b602-normalizador.service.test.ts`: 13 testes;
-- novos focos confirmados: serialização B602, reidratação de metadados, catálogo de tipos de origem e seletor controlado de solicitação.
-
-O build e a cobertura não foram repetidos nessa validação documental. Os avisos do Vite sobre `esbuild`/`oxc` permaneceram não bloqueantes.
+A cobertura não foi recalculada nesta atualização documental. Permanecem sem teste automatizado ponta a ponta a rede real, o fluxo completo por IPC/SQLite e o consumo de `b602.pecas` pelo laudo.

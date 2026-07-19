@@ -74,9 +74,22 @@ Um tipo importado sem correspondência fica com código vazio, gera aviso e impe
 
 Peça nova recebe UUID, origem manual, quantidade 1 e objetos vazios. Trocar o tipo descarta personalizados somente após confirmação. Editar peça GDL marca `alteradaLocalmente = true`. Excluir não escreve na API.
 
-`mesclarPecasB602DoGdl()` usa `codPecaGdl` e preserva `idLocal`. No modo mesclar, alterações locais e valores não vazios vencem. No modo substituir, correspondências recebem a resposta nova, mas peças manuais e peças GDL antigas não retornadas permanecem.
+`mesclarPecasB602DoGdl()` usa `codPecaGdl` e preserva `idLocal`. No modo mesclar, alterações locais e valores não vazios vencem. No modo substituir, correspondências recebem a resposta nova; peças GDL desmarcadas ou ausentes da seleção podem ser removidas, enquanto peças manuais permanecem.
 
 Peças sem `codPecaGdl` não têm identidade externa estável e podem ser adicionadas novamente em consultas futuras.
+
+## Revisão exclusiva das peças do GDL
+
+A seção `Peças` expõe o botão `Selecionar peças do GDL`. `GdlPecasModal` usa o campo `numero` no formato `número-AAAA`, consulta a REP automaticamente e rejeita retorno que não seja B-602.
+
+`montarItensReconciliacaoPecasB602()` combina o retorno com as peças atuais:
+
+- peça GDL presente no formulário inicia marcada;
+- peça retornada mas ausente do formulário inicia desmarcada, inclusive após exclusão anterior;
+- peça importada que não retornou continua visível e marcada enquanto permanecer no formulário;
+- peças manuais não entram na lista nem são removidas ao aplicar.
+
+A aplicação reconcilia somente `PecaB602[]`, atualiza os metadados e não reaplica campos gerais. Reabrir o modal reflete a decisão local mais recente.
 
 ## Normalização do GDL
 
@@ -107,4 +120,4 @@ Assim, peças novas não garantem preenchimento dos placeholders ou ativação d
 
 Não há limite explícito de peças. A busca inicial do merge usa `Map`, mas a substituição usa `findIndex` por correspondência; o volume esperado é pequeno.
 
-Testes cobrem catálogo, completude, normalização, merge, serialização canônica, reidratação de metadados, compatibilidade do nome legado e seletor de origem. Não cobrem o round-trip completo no banco nem o consumo de `b602.pecas` pelo laudo.
+Testes cobrem catálogo, completude, normalização, merge, remoção opcional de peças GDL ausentes, preservação de peças manuais, serialização canônica, reidratação de metadados, compatibilidade do nome legado, seletor de origem e o estado inicial/aplicação do `GdlPecasModal`. Não cobrem o round-trip completo no banco nem o consumo de `b602.pecas` pelo laudo.

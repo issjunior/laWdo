@@ -28,7 +28,9 @@ A navegação rola até a seção e tenta focar o campo após a transição.
 
 Campos preenchidos pela importação são acompanhados em um `Set<string>` e recebem fundo e borda verdes durante a sessão do formulário. Não existe alerta persistente apenas para contar campos importados.
 
-Depois de aplicar o GDL, a página exibe mensagem de sucesso somente quando a importação trouxe avisos; sem avisos, nenhum banner genérico é mantido.
+Na consulta geral, todas as peças retornadas começam marcadas. Depois de aplicar seus dados, a página exibe mensagem de sucesso somente quando a importação trouxe avisos; sem avisos, nenhum banner genérico é mantido.
+
+Na seção B-602, `Selecionar peças do GDL` abre a revisão exclusiva. Os checkboxes refletem a coleção atual do formulário, e a aplicação mostra `Seleção de peças do GDL aplicada ao formulário.` por cinco segundos. O modal e o botão usam classes Tailwind e tokens do tema definidos em `globals.css`.
 
 ## Regra de uso
 
