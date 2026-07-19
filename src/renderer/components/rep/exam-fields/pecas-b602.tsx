@@ -5,9 +5,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { PecaB602 } from '@shared/types/b602-gdl.types'
-import { CATALOGO_TIPOS_PECA_B602, TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo'
+import {
+  CATALOGO_TIPOS_PECA_B602,
+  OPCOES_UNIDADE_MEDIDA_B602,
+  TIPOS_PECA_B602_POR_CODIGO,
+  UNIDADE_MEDIDA_PADRAO_B602,
+} from '@shared/catalogos/b602-gdl.catalogo'
 
 interface PecasB602FieldsProps {
   pecas: PecaB602[]
@@ -20,9 +26,9 @@ function criarPecaVazia(): PecaB602 {
     idLocal: crypto.randomUUID(), origem: 'manual', alteradaLocalmente: false,
     tipoCodigo: '', tipoPeca: '',
     comuns: {
-      identificacao: '', numeroAnalises: '', quantidade: 1, unidadeMedida: '', quantidadeDescricao: '',
+      identificacao: '', quantidade: 1, unidadeMedida: UNIDADE_MEDIDA_PADRAO_B602, quantidadeDescricao: '',
       examinadoInLoco: false, dataEntrada: '', lacreEntrada: '', lacreSaida: '', dataLiberacao: '',
-      codigoVestigio: '', consumida: '', observacao: '',
+      codigoVestigio: '', consumida: 'N', observacao: '',
     },
     personalizados: {}, extrasGdl: {},
   }
@@ -70,6 +76,9 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
   }
 
   if (editando) {
+    const campoArmaInstitucional = definicao?.campos.find(campo => campo.chaveGdl === 'Arma é Institucional?')
+    const camposPersonalizadosPrincipais = definicao?.campos.filter(campo => campo !== campoArmaInstitucional) ?? []
+
     return <div className="space-y-4 rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <h4 className="font-medium">{pecas.some(p => p.idLocal === editando.idLocal) ? 'Editar peça' : 'Adicionar peça'}</h4>
@@ -87,24 +96,32 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
         {!definicao.roundTripConfirmado && <Alert><AlertDescription>Schema visual confirmado; round-trip da API ainda pendente.</AlertDescription></Alert>}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2"><Label>Identificação</Label><Input value={editando.comuns.identificacao} onChange={e => atualizarComum('identificacao', e.target.value)} /></div>
-          <div className="space-y-2"><Label>Nº Análises</Label><Input value={editando.comuns.numeroAnalises} onChange={e => atualizarComum('numeroAnalises', e.target.value)} /></div>
           <div className="space-y-2"><Label>Quantidade</Label><Input type="number" min={1} value={editando.comuns.quantidade} onChange={e => atualizarComum('quantidade', Number(e.target.value))} /></div>
-          <div className="space-y-2"><Label>Medida</Label><Input value={editando.comuns.unidadeMedida} onChange={e => atualizarComum('unidadeMedida', e.target.value)} /></div>
+          <div className="space-y-2"><Label>Medida</Label><Select value={editando.comuns.unidadeMedida} onValueChange={valor => atualizarComum('unidadeMedida', valor)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{editando.comuns.unidadeMedida && !OPCOES_UNIDADE_MEDIDA_B602.some(opcao => opcao.label === editando.comuns.unidadeMedida) && <SelectItem value={editando.comuns.unidadeMedida}>{editando.comuns.unidadeMedida}</SelectItem>}{OPCOES_UNIDADE_MEDIDA_B602.map(opcao => <SelectItem key={opcao.codigo} value={opcao.label}>{opcao.label}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-2"><Label>Quant. Descrição</Label><Input value={editando.comuns.quantidadeDescricao} onChange={e => atualizarComum('quantidadeDescricao', e.target.value)} /></div>
           <div className="space-y-2"><Label>Data de Entrada</Label><Input type="date" value={editando.comuns.dataEntrada} onChange={e => atualizarComum('dataEntrada', e.target.value)} /></div>
           <div className="space-y-2"><Label>Lacre Entrada</Label><Input value={editando.comuns.lacreEntrada} onChange={e => atualizarComum('lacreEntrada', e.target.value)} /></div>
           <div className="space-y-2"><Label>Lacre Saída</Label><Input value={editando.comuns.lacreSaida} onChange={e => atualizarComum('lacreSaida', e.target.value)} /></div>
           <div className="space-y-2"><Label>Data de Liberação</Label><Input type="date" value={editando.comuns.dataLiberacao} onChange={e => atualizarComum('dataLiberacao', e.target.value)} /></div>
           <div className="space-y-2"><Label>Código do Vestígio</Label><Input value={editando.comuns.codigoVestigio} onChange={e => atualizarComum('codigoVestigio', e.target.value)} /></div>
-          <div className="space-y-2"><Label>Examinado In Loco</Label><Select value={editando.comuns.examinadoInLoco ? 'sim' : 'nao'} onValueChange={v => atualizarComum('examinadoInLoco', v === 'sim')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="nao">Não</SelectItem><SelectItem value="sim">Sim</SelectItem></SelectContent></Select></div>
-          <div className="space-y-2"><Label>Consumido/Liberado no Exame?</Label><Select value={editando.comuns.consumida || 'vazio'} onValueChange={v => atualizarComum('consumida', v === 'vazio' ? '' : v as 'S' | 'N' | 'P')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vazio">Não informado</SelectItem><SelectItem value="S">Sim</SelectItem><SelectItem value="N">Não</SelectItem><SelectItem value="P">Parcialmente</SelectItem></SelectContent></Select></div>
         </div>
-        {definicao.campos.length > 0 && <div className="grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2">
-          {definicao.campos.map(campo => <div className="space-y-2" key={campo.id}><Label>{campo.label}{campo.obrigatorio ? ' *' : ''}</Label>{campo.controle === 'select'
-            ? <Select value={String(editando.personalizados[campo.id] ?? '') || undefined} onValueChange={valor => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: valor } })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{campo.opcoes?.map(opcao => <SelectItem key={opcao.codigo} value={opcao.codigo}>{opcao.label}</SelectItem>)}</SelectContent></Select>
-            : <Input value={String(editando.personalizados[campo.id] ?? '')} onChange={e => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: e.target.value } })} />}</div>)}
+        {camposPersonalizadosPrincipais.length > 0 && <div className="grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2">
+          {camposPersonalizadosPrincipais.map(campo => <div className="space-y-2" key={campo.id}><Label>{campo.label}{campo.obrigatorio ? ' *' : ''}</Label>{campo.controle === 'combobox'
+            ? <><Input role="combobox" aria-autocomplete="list" list={`opcoes-${campo.id}`} placeholder="Selecione ou digite..." value={String(editando.personalizados[campo.id] ?? '')} onChange={e => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: e.target.value } })} /><datalist id={`opcoes-${campo.id}`}>{campo.opcoes?.map(opcao => <option key={opcao.codigo} value={opcao.label} />)}</datalist></>
+            : campo.controle === 'select'
+              ? <Select value={String(editando.personalizados[campo.id] ?? '') || undefined} onValueChange={valor => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: valor } })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{campo.opcoes?.map(opcao => <SelectItem key={opcao.codigo} value={opcao.codigo}>{opcao.label}</SelectItem>)}</SelectContent></Select>
+            : campo.controle === 'checkbox'
+              ? <div className="flex flex-wrap gap-4" role="group" aria-label={campo.label}>{campo.opcoes?.map(opcao => <label className="flex cursor-pointer items-center gap-2" key={opcao.codigo}><Checkbox checked={editando.personalizados[campo.id] === opcao.codigo} onCheckedChange={marcado => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: marcado === true ? opcao.codigo : '' } })} /><span className="text-sm">{opcao.label}</span></label>)}</div>
+              : <Input type="text" maxLength={campo.maxLength} value={String(editando.personalizados[campo.id] ?? '')} onChange={e => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: e.target.value } })} />}</div>)}
         </div>}
         <div className="space-y-2"><Label>Observação</Label><Input value={editando.comuns.observacao} onChange={e => atualizarComum('observacao', e.target.value)} /></div>
+        <div className="grid grid-cols-1 items-end gap-4 border-t pt-4 md:grid-cols-3">
+          <label className="flex cursor-pointer items-center gap-2 py-2"><Checkbox checked={editando.comuns.examinadoInLoco} onCheckedChange={valor => atualizarComum('examinadoInLoco', valor === true)} /><span className="text-sm font-medium">Examinado In Loco</span></label>
+          {campoArmaInstitucional
+            ? <div className="space-y-2"><Label>{campoArmaInstitucional.label}{campoArmaInstitucional.obrigatorio ? ' *' : ''}</Label><div className="flex flex-wrap gap-4" role="group" aria-label={campoArmaInstitucional.label}>{campoArmaInstitucional.opcoes?.map(opcao => <label className="flex cursor-pointer items-center gap-2" key={opcao.codigo}><Checkbox checked={editando.personalizados[campoArmaInstitucional.id] === opcao.codigo} onCheckedChange={marcado => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campoArmaInstitucional.id]: marcado === true ? opcao.codigo : '' } })} /><span className="text-sm">{opcao.label}</span></label>)}</div></div>
+            : <div className="hidden md:block" aria-hidden="true" />}
+          <div className="space-y-2"><Label>Consumido/Liberado no Exame?</Label><Select value={editando.comuns.consumida} onValueChange={v => atualizarComum('consumida', v as 'S' | 'N' | 'P')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="S">Sim</SelectItem><SelectItem value="N">Não</SelectItem><SelectItem value="P">Parcialmente</SelectItem></SelectContent></Select></div>
+        </div>
       </>}
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setEditando(null)}>Cancelar</Button><Button type="button" onClick={salvar}>Confirmar peça</Button></div>
     </div>

@@ -13,7 +13,6 @@ function criarPeca(codigo: number, identificacao: string): PecaB602 {
     tipoPeca: 'CARABINA(S)',
     comuns: {
       identificacao,
-      numeroAnalises: '',
       quantidade: 1,
       unidadeMedida: 'UNIDADE',
       quantidadeDescricao: '',
@@ -23,7 +22,7 @@ function criarPeca(codigo: number, identificacao: string): PecaB602 {
       lacreSaida: '',
       dataLiberacao: '',
       codigoVestigio: '',
-      consumida: '',
+      consumida: 'N',
       observacao: '',
     },
     personalizados: { '476:arma_institucional': '98' },

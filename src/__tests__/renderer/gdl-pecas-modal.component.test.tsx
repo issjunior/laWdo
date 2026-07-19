@@ -8,9 +8,9 @@ function criarPeca(): PecaB602 {
     idLocal: 'peca-gdl-1001', origem: 'gdl', alteradaLocalmente: false, codPecaGdl: 1001,
     tipoCodigo: '476', tipoPeca: 'CARABINA(S)',
     comuns: {
-      identificacao: 'CARABINA TESTE', numeroAnalises: '', quantidade: 1, unidadeMedida: 'UNIDADE',
+      identificacao: 'CARABINA TESTE', quantidade: 1, unidadeMedida: 'UNIDADE',
       quantidadeDescricao: '', examinadoInLoco: false, dataEntrada: '', lacreEntrada: '', lacreSaida: '',
-      dataLiberacao: '', codigoVestigio: '', consumida: '', observacao: '',
+      dataLiberacao: '', codigoVestigio: '', consumida: 'N', observacao: '',
     },
     personalizados: {}, extrasGdl: {},
   }

@@ -98,6 +98,8 @@ Campos comuns observados no retorno:
 - `lacreSaida`
 - `consumida`
 
+`numeroAnalises` pertence ao contrato bruto da API e continua sendo aceito na validação de entrada, mas não deve ser mapeado para o modelo, o formulário nem a persistência nova do laWdo. O campo não é relevante para a confecção do laudo e também não deve ser reclassificado como `extrasGdl`.
+
 Campos personalizados confirmados:
 
 | Tipo | Código do tipo | Campo | Controle no GDL web | Obrigatório | Opções confirmadas |
@@ -123,29 +125,31 @@ A peça `ARMA(S) DE PRESSÃO` retornou apenas campos comuns na amostra. O seu fo
 
 ### 2.2.1 Catálogo visual integral confirmado
 
-Em `10/07/2026`, todos os 17 tipos foram selecionados individualmente no GDL web de homologação. A tabela a seguir é a fonte para reproduzir a interface local; ela confirma o schema visual, mas não substitui a validação de round-trip pela API descrita na seção 12.
+Todos os 17 tipos foram selecionados individualmente no GDL web de homologação. A família de armas foi reinspecionada em `19/07/2026`; as linhas correspondentes abaixo substituem o levantamento inicial de `10/07/2026`. A tabela confirma o schema visual, mas não substitui a validação de round-trip pela API descrita na seção 12.
 
 | Código | Tipo | Campos personalizados visíveis no GDL web | Status de API |
 |---:|---|---|---|
-| `289` | `ARMA(S) DE CHOQUE` | `Nº Série`, `Marca`, `Modelo` — texto, opcionais | round-trip pendente |
-| `613` | `ARMA(S) DE PRESSÃO` | `Nº Série`, `Marca`, `Modelo` — texto, opcionais | resposta observada sem esses valores; round-trip pendente |
+| `289` | `ARMA(S) DE CHOQUE` | `Nº Série`, `Marca`, `Modelo` — texto, opcionais | chaves mapeadas após confirmação na peça de teste; repetir importação para concluir o round-trip |
+| `613` | `ARMA(S) DE PRESSÃO` | `Nº Série` (`text`, 25), `Marca` (`text`, 50), `Modelo` (`text`, 50) — opcionais | resposta observada sem esses valores; round-trip pendente |
 | `476` | `CARABINA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório (`Indeterminado=60`, `NÃO=98`, `SIM=97`) | confirmado |
 | `272` | `CARREGADOR(ES)` | `Nº Série`, `Marca`, `Modelo` — texto, opcionais | round-trip pendente |
-| `472` | `ESPINGARDA(S)` | nenhum | round-trip pendente |
+| `472` | `ESPINGARDA(S)` | 12 campos: três textos básicos, `Capacidade`, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação e institucional | round-trip pendente; catálogo extenso de marcas exige controle pesquisável |
 | `473` | `ESPOLETA(S)` | nenhum | round-trip pendente |
 | `101` | `ESTOJO(S)` | `ORIGEM/COLETA` obrigatório (`DELEGACIA=95`, `LOCAL DE CRIME=93`, `NECRÓPSIA=94`, `Outro=11`); API também retornou `incinerado` | confirmado para `ORIGEM/COLETA`; contrato de `incinerado` pendente |
-| `477` | `FUZIL(IS)` | nenhum | round-trip pendente |
-| `475` | `GARRUCHA(S)` | nenhum | round-trip pendente |
+| `477` | `FUZIL(IS)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório | round-trip pendente |
+| `475` | `GARRUCHA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente |
 | `178` | `OUTROS` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente |
 | `771` | `PEÇA TESTE` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente; confirmar em produção |
-| `104` | `PISTOLA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente |
-| `478` | `PISTOLETE(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente |
+| `104` | `PISTOLA(S)` | 11 campos locais: `Nº Série`, `Modelo`, `Capacidade`, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação e institucional; o texto livre `Marca` do GDL não é mapeado por decisão funcional | round-trip pendente; `Marca da Arma` usa as 1.379 opções observadas e também aceita marca digitada fora do catálogo; demais selects copiam opções e códigos do GDL |
+| `478` | `PISTOLETE(S)` | nenhum campo personalizado na reinspeção | round-trip pendente |
 | `572` | `PÓLVORA` | nenhum | round-trip pendente |
 | `105` | `PROJÉTEIS` | nenhum | round-trip pendente |
-| `106` | `REVÓLVER(ES)` | `Nº Série`, `Marca`, `Modelo`, `Status do Número de Série`, `Calibre Nominal Revolver`, `Estado Geral da Arma`, `Funcionamento`, `Fabricação da Arma`, `Tambor`, `Arma é Institucional?` | retorno API confirmado na REP `191/2026`; opções e códigos dos campos enumerados ainda pendentes |
-| `479` | `SUBMETRALHADORA(S)` | nenhum | round-trip pendente |
+| `106` | `REVÓLVER(ES)` | 12 campos: três textos básicos, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação, `Tambor` e institucional | retorno API confirmado na REP `191/2026`; catálogo extenso de marcas exige controle pesquisável |
+| `479` | `SUBMETRALHADORA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório | round-trip pendente |
 
 `Fabricação da Arma` possui as opções: `argentina=61`, `austríaca=62`, `brasileira=63`, `canadense=64`, `czechoslovakia=66`, `espanhola=67`, `filipena=68`, `finlandesa=69`, `italiana=70`, `mexicana=71`, `Não Aparente=10` e `sul-coreana=65`; o placeholder `Selecione=0` não é valor persistível.
+
+`Arma é Institucional?` é exibido pelo GDL como três checkboxes (`Indeterminado=60`, `NÃO=98`, `SIM=97`), embora represente uma escolha única obrigatória. O laWdo deve conservar a aparência de checkbox e impor exclusividade no estado para impedir múltiplos valores simultâneos.
 
 ### 2.3 Comportamento atual do laWdo
 
@@ -313,7 +317,7 @@ O valor `0` (`Selecione um Tipo`) não integra o catálogo.
 | 9 | `475` | `GARRUCHA(S)` | arma | web confirmado; round-trip pendente | 3 |
 | 10 | `178` | `OUTROS` | genérico | web confirmado; round-trip pendente | 5 |
 | 11 | `771` | `PEÇA TESTE` | técnico/homologação | web confirmado; round-trip pendente e presença em produção a confirmar | 5 |
-| 12 | `104` | `PISTOLA(S)` | arma | web confirmado; round-trip pendente | 3 |
+| 12 | `104` | `PISTOLA(S)` | arma | web confirmado na REP `192/2026`; 11 campos locais e opções cadastrados; round-trip da API pendente | 3 |
 | 13 | `478` | `PISTOLETE(S)` | arma | web confirmado; round-trip pendente | 3 |
 | 14 | `572` | `PÓLVORA` | componente balístico | web confirmado; round-trip pendente | 4 |
 | 15 | `105` | `PROJÉTEIS` | componente balístico | web confirmado; round-trip pendente | 4 |
@@ -324,24 +328,24 @@ O catálogo local deve conter exatamente esses 17 códigos enquanto esse for o c
 
 ## 5. Inputs comuns das peças
 
-O editor local deve reproduzir todos os inputs comuns observados no GDL web, mesmo quando alguns não forem devolvidos por `/rep/obter`.
+O editor local deve reproduzir os inputs comuns relevantes para a confecção do laudo, mesmo quando alguns não forem devolvidos por `/rep/obter`. Campos administrativos sem uso pericial podem ser descartados explicitamente conforme decisão registrada neste plano.
 
 | Campo local canônico | Label observado no GDL | Retorno API confirmado | Observação |
 |---|---|---|---|
 | `tipoCodigo` / `tipoPeca` | Tipo do Item | somente `tipoPeca` | código vem do catálogo local |
 | `identificacao` | Identificação | sim | texto |
-| `numeroAnalises` | Nº Análises | sim | validar regra real de obrigatoriedade |
+| — | Nº Análises | sim | não mapear; dado administrativo sem relevância para a confecção do laudo |
 | `quantidade` | Quantidade | sim | número positivo |
-| `unidadeMedida` | Medida | sim | select com catálogo próprio |
-| `quantidadeDescricao` | Quant. Descrição | não confirmado | texto local preservado |
-| `examinadoInLoco` | Examinado In Loco | sim | booleano normalizado |
-| `dataEntrada` | Data de Entrada | sim | data |
+| `unidadeMedida` | Medida | sim | select preenchido por padrão com `UNIDADES`; opções copiadas do catálogo visual do GDL |
+| `quantidadeDescricao` | Quant. Descrição | não confirmado | texto local preservado e preenchido quando a API devolver a chave canônica ou o label visual |
+| `examinadoInLoco` | Examinado In Loco | sim | checkbox, booleano normalizado |
+| `dataEntrada` | Data de Entrada | sim | regra comum aos 17 tipos: normalizar `DD/MM/AAAA`, data brasileira com horário ou ISO para `AAAA-MM-DD`, formato do input local |
 | `lacreEntrada` | Lacre Entrada | sim | texto |
 | `lacreSaida` | Lacre Saída | sim | texto |
-| `dataLiberacao` | Data de Liberação | não confirmado | data local preservada |
-| `codigoVestigio` | Código do Vestígio | não confirmado | texto local preservado |
-| `consumida` | Consumido/Liberado no Exame? | sim | `Sim`, `Não` ou `Parcialmente` |
-| `observacao` | Observação | não confirmado | observação da peça, não da REP inteira |
+| `dataLiberacao` | Data de Liberação | sim | regra comum aos 17 tipos: normalizar data brasileira, com horário, ou ISO para `AAAA-MM-DD` |
+| `codigoVestigio` | Código do Vestígio | não confirmado | texto local preservado e preenchido quando a API devolver a chave canônica ou o label visual |
+| `consumida` | Consumido/Liberado no Exame? | sim | `Sim`, `Não` ou `Parcialmente`; padrão `Não`, sem opção vazia |
+| `observacao` | Observação | não confirmado | observação da peça, não da REP inteira; preencher quando a API devolver a chave canônica ou o label visual |
 
 ### 5.1 Campos gerais compartilhados com o GDL
 
@@ -402,7 +406,6 @@ interface PecaB602 {
   tipoPeca: string
   comuns: {
     identificacao: string
-    numeroAnalises: string
     quantidade: number
     unidadeMedida: string
     quantidadeDescricao: string
@@ -412,7 +415,7 @@ interface PecaB602 {
     lacreSaida: string
     dataLiberacao: string
     codigoVestigio: string
-    consumida: 'S' | 'N' | 'P' | ''
+    consumida: 'S' | 'N' | 'P'
     observacao: string
   }
   personalizados: Record<string, unknown>
@@ -740,6 +743,8 @@ Concluído após a auditoria inicial:
 
 Implementar o schema web já confirmado e executar o round-trip de API, um por vez:
 
+Decisão transversal registrada em `19/07/2026`: `Nº Análises` não integra o modelo local; `Medida` deve usar o mesmo catálogo visual do select do GDL, com `UNIDADES` como padrão; `Examinado In Loco` deve ser reproduzido como checkbox. A API pode continuar devolvendo `numeroAnalises`, mas o normalizador o descarta deliberadamente.
+
 1. `ARMA(S) DE CHOQUE` (`289`)
 2. `ARMA(S) DE PRESSÃO` (`613`)
 3. `ESPINGARDA(S)` (`472`)
@@ -956,7 +961,7 @@ Os itens abaixo combinam invariantes já implementadas e validações ainda aber
 - Aplicar dados do GDL nunca salva a REP automaticamente.
 - A seção `Peças` é exibida no cadastro e na edição da REP B602 dentro de `REPsPage.tsx`/`RepStepper`.
 - Ao selecionar `Tipo do Item`, o mesmo editor exibe imediatamente os inputs comuns e os personalizados daquele tipo, sem consultar o GDL.
-- Todos os campos comuns do formulário GDL estão disponíveis localmente.
+- Todos os campos comuns relevantes para a confecção do laudo estão disponíveis localmente; `Nº Análises` é descartado por decisão funcional explícita.
 - Todos os campos personalizados confirmados de cada tipo são reproduzidos com controle, obrigatoriedade e opções corretos.
 - O usuário pode criar, editar e excluir qualquer peça localmente.
 - A consulta GDL preenche automaticamente campos comuns e personalizados devolvidos pela API.

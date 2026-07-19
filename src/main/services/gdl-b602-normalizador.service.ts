@@ -11,40 +11,70 @@ import type {
 } from '../../shared/types/b602-gdl.types.js'
 import {
   obterTipoPecaB602PorLabel,
+  type CampoPersonalizadoB602,
   type TipoPecaB602,
 } from '../../shared/catalogos/b602-gdl.catalogo.js'
 import type { GdlPecaValidada, GdlRepValidada } from './gdl.schema.js'
 import { separarEnvolvido } from '../../shared/utils/envolvido.js'
 
-const CHAVES_COMUNS = new Set([
-  'codPeca', 'tipoPeca', 'identificacao', 'quantidade', 'unidadeMedida',
-  'numeroAnalises', 'examinadoInLoco', 'dataEntrada', 'lacreEntrada',
-  'lacreSaida', 'consumida',
-])
-
 function normalizarChave(valor: string): string {
   return valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
 }
 
-function obterIdCampoPersonalizado(
+function normalizarNomeCampo(valor: string): string {
+  return normalizarChave(valor).replace(/[^a-z0-9]/g, '')
+}
+
+const ALIASES_CAMPOS_COMUNS = {
+  quantidadeDescricao: ['quantidadeDescricao', 'Quant. Descrição', 'Quantidade Descrição', 'Descrição da Quantidade'],
+  dataLiberacao: ['dataLiberacao', 'Data de Liberação', 'Data Liberação'],
+  codigoVestigio: ['codigoVestigio', 'Código do Vestígio', 'Cod. Vestígio'],
+  observacao: ['observacao', 'Observação'],
+} as const
+
+const CHAVES_COMUNS = new Set([
+  'codPeca', 'tipoPeca', 'identificacao', 'quantidade', 'unidadeMedida',
+  'numeroAnalises', 'examinadoInLoco', 'dataEntrada', 'lacreEntrada',
+  'lacreSaida', 'consumida',
+  ...Object.values(ALIASES_CAMPOS_COMUNS).flat(),
+].map(normalizarNomeCampo))
+
+function obterCampoPersonalizado(
   tipo: TipoPecaB602 | undefined,
   chaveGdl: string,
-): string | undefined {
+): CampoPersonalizadoB602 | undefined {
   const chaveNormalizada = normalizarChave(chaveGdl)
   return tipo?.campos.find(campo => (
     campo.mapeamentoApiConfirmado
     && [campo.chaveGdl, ...(campo.aliasesGdl ?? [])]
       .some(alias => normalizarChave(alias) === chaveNormalizada)
-  ))?.id
+  ))
+}
+
+function normalizarValorCampoPersonalizado(
+  campo: CampoPersonalizadoB602,
+  valor: unknown,
+): unknown {
+  if (!campo.opcoes || (typeof valor !== 'string' && typeof valor !== 'number')) return valor
+
+  const texto = String(valor).trim()
+  const opcao = campo.opcoes.find(item => (
+    item.codigo === texto || normalizarChave(item.label) === normalizarChave(texto)
+  ))
+
+  if (!opcao) return valor
+  return campo.controle === 'combobox' ? opcao.label : opcao.codigo
 }
 
 function obterTextoPorAlias(fonte: unknown, aliases: string[]): string {
   if (typeof fonte !== 'object' || fonte === null) return ''
-  const normalizarAlias = (valor: string) => normalizarChave(valor).replace(/[\s_-]/g, '')
-  const aliasesNormalizados = new Set(aliases.map(normalizarAlias))
+  const aliasesNormalizados = new Set(aliases.map(normalizarNomeCampo))
   for (const [chave, valor] of Object.entries(fonte)) {
-    if (!aliasesNormalizados.has(normalizarAlias(chave))) continue
-    if (typeof valor === 'string' || typeof valor === 'number') return String(valor).trim()
+    if (!aliasesNormalizados.has(normalizarNomeCampo(chave))) continue
+    if (typeof valor === 'string' || typeof valor === 'number') {
+      const texto = String(valor).trim()
+      if (texto) return texto
+    }
   }
   return ''
 }
@@ -181,29 +211,43 @@ function normalizarBooleano(valor: string | boolean): boolean {
   return ['s', 'sim', 'true', '1'].includes(normalizarChave(valor))
 }
 
-function normalizarConsumida(valor: string): 'S' | 'N' | 'P' | '' {
+function normalizarConsumida(valor: string): 'S' | 'N' | 'P' {
   const normalizado = normalizarChave(valor)
   if (['s', 'sim'].includes(normalizado)) return 'S'
   if (['n', 'nao'].includes(normalizado)) return 'N'
   if (['p', 'parcialmente'].includes(normalizado)) return 'P'
+  return 'N'
+}
+
+function normalizarDataParaInput(valor: string): string {
+  const dataIso = valor.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (dataIso) return `${dataIso[1]}-${dataIso[2]}-${dataIso[3]}`
+
+  const dataBrasileira = valor.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s|$)/)
+  if (dataBrasileira) return `${dataBrasileira[3]}-${dataBrasileira[2]}-${dataBrasileira[1]}`
+
   return ''
 }
 
 function criarCamposComuns(peca: GdlPecaValidada): CamposComunsPecaB602 {
+  const quantidadeDescricao = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.quantidadeDescricao])
+  const dataLiberacao = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.dataLiberacao])
+  const codigoVestigio = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.codigoVestigio])
+  const observacao = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.observacao])
+
   return {
     identificacao: peca.identificacao,
-    numeroAnalises: peca.numeroAnalises,
     quantidade: peca.quantidade,
     unidadeMedida: peca.unidadeMedida,
-    quantidadeDescricao: '',
+    quantidadeDescricao,
     examinadoInLoco: normalizarBooleano(peca.examinadoInLoco),
-    dataEntrada: peca.dataEntrada,
+    dataEntrada: normalizarDataParaInput(peca.dataEntrada),
     lacreEntrada: peca.lacreEntrada,
     lacreSaida: peca.lacreSaida,
-    dataLiberacao: '',
-    codigoVestigio: '',
+    dataLiberacao: normalizarDataParaInput(dataLiberacao),
+    codigoVestigio,
     consumida: normalizarConsumida(peca.consumida),
-    observacao: '',
+    observacao,
   }
 }
 
@@ -213,9 +257,9 @@ export function normalizarPecaB602(peca: GdlPecaValidada): PecaB602 {
   const extrasGdl: Record<string, unknown> = {}
 
   for (const [chave, valor] of Object.entries(peca)) {
-    if (CHAVES_COMUNS.has(chave)) continue
-    const idCanonico = obterIdCampoPersonalizado(definicao, chave)
-    if (idCanonico) personalizados[idCanonico] = valor
+    if (CHAVES_COMUNS.has(normalizarNomeCampo(chave))) continue
+    const campo = obterCampoPersonalizado(definicao, chave)
+    if (campo) personalizados[campo.id] = normalizarValorCampoPersonalizado(campo, valor)
     else extrasGdl[chave] = valor
   }
 

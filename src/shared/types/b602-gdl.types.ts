@@ -2,7 +2,6 @@ export type OrigemPecaB602 = 'manual' | 'gdl'
 
 export interface CamposComunsPecaB602 {
   identificacao: string
-  numeroAnalises: string
   quantidade: number
   unidadeMedida: string
   quantidadeDescricao: string
@@ -12,7 +11,7 @@ export interface CamposComunsPecaB602 {
   lacreSaida: string
   dataLiberacao: string
   codigoVestigio: string
-  consumida: 'S' | 'N' | 'P' | ''
+  consumida: 'S' | 'N' | 'P'
   observacao: string
 }
 
