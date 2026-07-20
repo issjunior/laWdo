@@ -34,6 +34,7 @@ Implementado no código e coberto pelas validações locais descritas na seção
 - revisão exclusiva de peças por `GdlPecasModal`, acionada dentro da seção `Peças` e consultando automaticamente o número/ano já preenchido;
 - validação Zod da resposta e normalização no processo principal;
 - catálogo local dos 17 tipos, editor estruturado de peças e persistência em `campos_especificos.b602.pecas`;
+- catálogo completo de `PISTOLA(S)`, com 11 campos locais, selects copiados do GDL e `Marca da Arma` pesquisável entre 1.379 opções ou por texto livre;
 - criação, edição e exclusão local de peças manuais ou importadas, sem escrita no GDL;
 - preenchimento de número/ano da REP, data de recebimento, tipo e número da solicitação, cidade, órgão/unidade policial, autoridade solicitante, BO, IP e envolvidos quando disponíveis;
 - classificação resiliente das famílias BO e IP, com preservação do tipo exato e aviso para números conflitantes;
@@ -43,6 +44,8 @@ Implementado no código e coberto pelas validações locais descritas na seção
 - preservação de campos da API ainda não mapeados, sem perda silenciosa;
 - consulta auxiliar de envolvidos em homologação, com falha tolerada e aviso quando nenhum nome reconhecível for retornado;
 - serialização canônica de peças e metadados pelo contexto tipado do `b602Service`;
+- round-trip por handlers IPC e SQLite temporário, cobrindo criação, Mesclar, Substituir e reabertura sem recriar arrays legados;
+- normalização comum aos 17 tipos de Data de Entrada, Data de Liberação, Quant. Descrição, Código do Vestígio e Observação, aceitando chaves canônicas ou labels visuais;
 - reidratação validada de `dadosSolicitacao`, `dadosInvestigacao` e `ultimaConsulta`, incluindo leitura do nome legado `origensCandidatasSolicitacao`;
 - reconciliação por `codPecaGdl`: a consulta geral inicia com todas as peças retornadas marcadas, enquanto a revisão exclusiva marca somente as peças GDL ainda presentes no formulário e mantém desmarcadas as removidas anteriormente.
 
@@ -52,7 +55,7 @@ Limitações e pendências confirmadas na auditoria do código:
 - a conversão B602 ainda é chamada diretamente por `gdl.handlers.ts`; o registro genérico de adaptadores por exame ainda não existe;
 - a consulta auxiliar de envolvidos existe apenas em homologação, é sequencial e pode somar até 15 segundos por filtro em caso de timeout;
 - o modo `Substituir dados do GDL` e o modal exclusivo removem da coleção local peças GDL desmarcadas, inclusive as que deixaram de aparecer na consulta; peças manuais permanecem;
-- os testes automatizados cobrem normalização, catálogo, reconciliação, serialização canônica, reidratação, seletor de tipo de solicitação, editor completo, `GdlPecasModal`, consulta geral e aplicação integrada à `REPsPage`; permanecem sem cobertura o fluxo IPC/banco de salvar e reabrir e as projeções para o laudo;
+- os testes automatizados cobrem normalização, catálogo, reconciliação, serialização canônica, reidratação, seletor de tipo de solicitação, editor completo, `GdlPecasModal`, consulta geral, aplicação integrada à `REPsPage` e persistência por IPC/SQLite; permanecem sem cobertura a rede GDL real e as projeções para o laudo;
 - round-trip completo dos demais tipos e validação em produção permanecem pendentes.
 
 ### 1.3 Problemas encontrados e resolvidos
@@ -67,10 +70,13 @@ Os itens abaixo permanecem no plano como contexto de manutenção. Eles não dev
 | `REPsPage` recompunha o JSON após o serializer | resolvido | `ContextoSerializacaoCamposEspecificos` leva peças e metadados ao `b602Service`, que produz diretamente o formato canônico |
 | unidade policial derivada do GDL desaparecia na reabertura | resolvido | `b602.solicitante_nome` participa da escrita e leitura; órgão GDL tem precedência sobre solicitante local |
 | `/rep/obter` não fornecia envolvidos reconhecíveis | parcialmente resolvido | homologação consulta também `/repsInvestigacaoPolicial/listarReps`; produção ainda não usa essa complementação |
+| campos comuns existentes na API eram inicializados vazios | resolvido | Data de Liberação, Quant. Descrição, Código do Vestígio e Observação são resolvidos por chave canônica ou label; datas brasileiras/ISO são normalizadas para o input local |
+| `PISTOLA(S)` expunha somente parte dos campos e mantinha `Marca` redundante | resolvido no schema local | o editor usa 11 campos confirmados visualmente; `Marca` fica em `extrasGdl` e `Marca da Arma` aceita catálogo ou texto livre |
+| persistência B602 não tinha prova integrada por IPC/banco | resolvido | `rep-b602-persistencia.integration.test.ts` atravessa handlers reais e SQLite temporário nos cenários Criar, Mesclar e Substituir |
 
 ## 2. Evidências confirmadas em homologação
 
-Os testes foram realizados no GDL de homologação com as REPs B602 `190/2026` e `191/2026`.
+Os testes foram realizados no GDL de homologação com as REPs B602 `190/2026`, `191/2026` e `192/2026`.
 
 ### 2.1 GDL web
 
@@ -528,13 +534,13 @@ O formulário usa um editor de peças B602 baseado em coleção tipada, comparti
 
 O editor faz parte do formulário B602 já orquestrado por `REPsPage.tsx`; não será uma página, janela ou cadastro paralelo.
 
-Hoje, `REPsPage.tsx` obtém as seções por `getSectionsForExame()` e renderiza cada componente registrado em `SECTION_REGISTRY`. Para B602, a implementação deve:
+`REPsPage.tsx` obtém as seções por `getSectionsForExame()` e renderiza cada componente registrado em `SECTION_REGISTRY`. Para B602, a implementação atual:
 
-1. criar uma seção canônica `pecas_b602` no registro de campos do exame;
-2. renderizá-la dentro do mesmo `<Form>`/`RepStepper` usado para criar e editar a REP;
-3. substituir no `EXAM_FIELD_MAP['B-602']` as seções persistentes separadas `material_enc`, `cartuchos`, `estojos` e `armas` pela seção `pecas_b602`;
-4. manter `dados_investigacao` e os demais campos gerais da REP no fluxo atual;
-5. tratar dados técnicos exclusivos do laWdo como sub-blocos opcionais da própria peça ou como projeções derivadas, nunca como uma segunda cópia persistida.
+1. registra a seção canônica `pecas_b602` no mapa do exame;
+2. renderiza a seção dentro do mesmo `<Form>`/`RepStepper` usado para criar e editar a REP;
+3. deixa `material_enc`, `cartuchos`, `estojos` e `armas` fora do fluxo persistente ativo;
+4. mantém `dados_investigacao` e os demais campos gerais no fluxo atual;
+5. mantém dados técnicos exclusivos do laWdo fora de uma segunda cópia persistida; projeções downstream ainda precisam de adaptador derivado.
 
 Na tela de REPs, manter duas ações de entrada claras:
 
@@ -557,9 +563,9 @@ Ao trocar o tipo durante a edição, os campos comuns compatíveis devem ser pre
 
 Peças vindas da API devem entrar na mesma coleção e abrir exatamente no mesmo editor. A origem não pode criar um formulário alternativo nem impedir alteração ou exclusão local.
 
-O estado do formulário precisa representar `b602.pecas` como coleção tipada. A interface atual `REPFormData`, limitada por `[key: string]: string`, deve ser ajustada ou separada em um tipo de formulário que aceite a coleção sem casts artificiais. A integração pode usar `useFieldArray` ou componente controlado equivalente, desde que criação, edição, remoção, validação e reordenação não dependam de índices fixos ou de chaves planas como `b602_armas_0_*`.
+O estado atual representa `b602.pecas` como `PecaB602[]` controlado separadamente do mapa string de `REPFormData`. A página passa a coleção pelo `ContextoSerializacaoCamposEspecificos`; criação, edição, remoção e validação não dependem de chaves planas como `b602_armas_0_*`.
 
-O stepper atual considera apenas `requiredFields: string[]`; isso não representa corretamente a completude de uma coleção dinâmica. `ExamSection`/`useRepStepper` deve aceitar uma regra tipada de completude, por exemplo `isComplete(data)`, ou consultar o estado de validação da seção. A seção `Peças` só pode aparecer concluída quando cada peça adicionada for válida; não deve ser concluída automaticamente apenas por ter `requiredFields: []`.
+`ExamSection` aceita `isComplete`, e a seção `Peças` usa `pecaB602EstaCompleta()` sobre a coleção controlada. O stepper só marca a seção como concluída quando existe peça e todas atendem ao catálogo; o bloqueio final de salvamento continua sendo a autoridade.
 
 ### 9.1 Lista de peças
 
@@ -676,12 +682,12 @@ O mapeamento de família não deve inventar equivalências. Exemplos:
 
 ### Ordem de retomada a partir do estado atual
 
-1. fechar a Etapa 2 com o round-trip integrado de salvar e reabrir por IPC/banco;
+1. repetir a importação da REP `192/2026` no laWdo e fechar o round-trip funcional de `PISTOLA(S)`, confirmando os 11 campos, Data de Entrada, Data de Liberação, salvamento e reabertura;
 2. adaptar os consumidores do laudo para derivar placeholders, tabelas e seções repetíveis de `b602.pecas`, sem reintroduzir escrita duplicada;
-3. executar os round-trips restantes da família de armas, registrando um tipo por vez;
-4. validar componentes e materiais balísticos;
+3. continuar os round-trips da família de armas, priorizando `REVÓLVER(ES)` por já possuir retorno rico da API e depois `ESPINGARDA(S)` pelo schema visual amplo ainda não implementado localmente;
+4. validar os demais tipos da família de armas, componentes e materiais balísticos;
 5. validar tipos genéricos e exclusivos de homologação;
-6. consolidar catálogo, aliases, obrigatoriedade e cobertura dos 17 tipos;
+6. consolidar aliases, obrigatoriedade, fixtures e cobertura dos 17 tipos;
 7. executar a validação somente leitura em produção.
 
 O registro genérico de adaptadores pode ser implementado antes da inclusão de outro tipo de exame GDL, mas não deve bloquear os testes integrados nem as projeções B602 para o laudo.
@@ -709,7 +715,7 @@ Pendências desta etapa:
 - criar o registro mínimo de adaptadores por exame; hoje o handler instancia diretamente o conversor B602;
 - adicionar validação estrutural do catálogo local e seus aliases, separada do schema Zod do payload da API;
 
-### Etapa 2 — Editor genérico + tipos já confirmados — round-trip IPC/banco pendente
+### Etapa 2 — Editor genérico + tipos já confirmados — concluída
 
 - implementar coleção canônica e CRUD manual;
 - integrar a seção `pecas_b602` ao `SECTION_REGISTRY` e ao `EXAM_FIELD_MAP['B-602']` consumidos por `REPsPage.tsx`;
@@ -724,12 +730,7 @@ Pendências desta etapa:
 - persistir e reabrir sem perda;
 - validar comportamento offline.
 
-Pendências desta etapa:
-
-- cobrir o ciclo integrado de importar, selecionar peças, salvar e reabrir por IPC/SQLite, confirmando peças, metadados e ausência dos arrays legados;
-- estender o round-trip persistido para os cenários de Mesclar e Substituir.
-
-Concluído após a auditoria inicial:
+Concluído:
 
 - reidratação integral de solicitação e investigação;
 - round-trip canônico de peças, metadados e unidade policial;
@@ -738,22 +739,26 @@ Concluído após a auditoria inicial:
 - testes de componente do editor cobrindo CRUD, troca de tipo, obrigatórios, campos comuns e edição/exclusão de peça GDL;
 - testes do `GdlConsultaModal` cobrindo seleção inicial, Mesclar, Substituir, desmarcação e cancelamento;
 - teste integrado `GdlConsultaModal` → `REPsPage`, confirmando preenchimento do formulário, importação das peças e ausência de salvamento automático.
+- teste integrado por handlers IPC e SQLite temporário, confirmando criação, atualização, reabertura, metadados e ausência dos arrays legados;
+- round-trip persistido dos cenários Mesclar e Substituir, preservando peças manuais.
 
 ### Etapa 3 — Família de armas — em andamento
 
-Implementar o schema web já confirmado e executar o round-trip de API, um por vez:
+O schema visual foi coletado para toda a família. A implementação local e o round-trip de API avançam um tipo por vez:
 
 Decisão transversal registrada em `19/07/2026`: `Nº Análises` não integra o modelo local; `Medida` deve usar o mesmo catálogo visual do select do GDL, com `UNIDADES` como padrão; `Examinado In Loco` deve ser reproduzido como checkbox. A API pode continuar devolvendo `numeroAnalises`, mas o normalizador o descarta deliberadamente.
 
-1. `ARMA(S) DE CHOQUE` (`289`)
-2. `ARMA(S) DE PRESSÃO` (`613`)
-3. `ESPINGARDA(S)` (`472`)
-4. `FUZIL(IS)` (`477`)
-5. `GARRUCHA(S)` (`475`)
-6. `PISTOLA(S)` (`104`)
-7. `PISTOLETE(S)` (`478`)
-8. `REVÓLVER(ES)` (`106`)
-9. `SUBMETRALHADORA(S)` (`479`)
+| Tipo | Estado local atual | Próxima confirmação |
+|---|---|---|
+| `ARMA(S) DE CHOQUE` (`289`) | textos básicos e importação de chaves implementados | repetir importação preenchida e marcar round-trip somente após reabertura |
+| `ARMA(S) DE PRESSÃO` (`613`) | três textos básicos implementados | obter retorno preenchido da API |
+| `ESPINGARDA(S)` (`472`) | schema visual de 12 campos conhecido; catálogo local específico ainda vazio | implementar controles/opções e executar round-trip |
+| `FUZIL(IS)` (`477`) | textos básicos e institucional implementados | executar round-trip preenchido |
+| `GARRUCHA(S)` (`475`) | textos básicos e fabricação implementados | executar round-trip preenchido |
+| `PISTOLA(S)` (`104`) | 11 campos, opções, marca editável e normalização implementados | repetir REP `192/2026`, salvar e reabrir; este é o próximo teste imediato |
+| `PISTOLETE(S)` (`478`) | reinspeção sem campos personalizados | confirmar round-trip dos campos comuns |
+| `REVÓLVER(ES)` (`106`) | API rica confirmada; apenas Nº Série mapeado | implementar os campos já observados e comparar com a REP `191/2026` |
+| `SUBMETRALHADORA(S)` (`479`) | textos básicos e institucional implementados | executar round-trip preenchido |
 
 `CARABINA(S)` já integra a Etapa 2.
 
@@ -783,7 +788,7 @@ Confirmar separadamente o tratamento de `Cartuchos` existente no laWdo, pois `CA
 
 ### Etapa 6 — Consolidação dos 17 tipos — pendente
 
-- executar teste de contrato do catálogo completo;
+- manter o teste que protege os 17 códigos únicos e ampliar a validação estrutural de aliases, IDs e códigos de opções;
 - revisar obrigatoriedade e opções de todos os campos;
 - revisar aliases da API;
 - validar cadastro manual, importação, edição, exclusão e reabertura para os 17 tipos;
@@ -849,6 +854,7 @@ Regras adicionais:
 |---|---|
 | `src/shared/types/b602-gdl.types.ts` | contratos normalizados GDL/B602 compartilhados entre main, preload e renderer |
 | `src/shared/catalogos/b602-gdl.catalogo.ts` | fonte canônica dos 17 tipos, campos, opções, aliases e mapeamentos de API confirmados |
+| `src/shared/catalogos/b602-marcas-armas.catalogo.ts` | 1.379 opções observadas para `Marca da Arma`, usadas pelo combobox com fallback de texto livre |
 | `src/main/services/gdl.schema.ts` | validação Zod da fronteira externa, interpretação segura do JSON e derivação dos tipos crus validados |
 | `src/main/services/gdl.service.ts` | transporte e autenticação |
 | `src/main/services/gdl-b602-normalizador.service.ts` | normalização da REP, peças, origens, envolvidos e avisos após a validação Zod, consumindo o catálogo compartilhado |
@@ -874,7 +880,7 @@ Extrair componentes e hooks por responsabilidade quando o editor crescer; não c
 
 ## 15. Testes automatizados
 
-Estado em `19/07/2026`: além de schema/normalizador, catálogo B602, reconciliação, cidades, serialização, reidratação e seletor de solicitação, existem testes de componente para o editor, `GdlPecasModal` e `GdlConsultaModal`, além de integração da consulta geral com `REPsPage`. A persistência integrada via IPC/banco e o consumo pelo laudo ainda não estão cobertos ponta a ponta.
+Estado em `19/07/2026`: além de schema/normalizador, catálogo B602, reconciliação, cidades, serialização, reidratação e seletor de solicitação, existem testes de componente para o editor, `GdlPecasModal` e `GdlConsultaModal`, integração da consulta geral com `REPsPage` e persistência por handlers IPC/SQLite. O consumo pelo laudo e a rede GDL real ainda não estão cobertos ponta a ponta.
 
 ### Contrato GDL
 
@@ -954,7 +960,7 @@ Para cada etapa:
 
 ## 17. Critérios de aceitação
 
-Os itens abaixo combinam invariantes já implementadas e validações ainda abertas. Permanecem pendentes o registro de adaptadores, as projeções para o laudo, o round-trip persistido por IPC/SQLite, os round-trips dos tipos restantes e a validação de produção. A substituição baseada na seleção, a reidratação integral, a serialização canônica e a seleção `IP/PM` estão implementadas.
+Os itens abaixo combinam invariantes já implementadas e validações ainda abertas. Permanecem pendentes o registro de adaptadores, as projeções para o laudo, os round-trips funcionais dos tipos restantes e a validação de produção. A persistência por IPC/SQLite, a substituição baseada na seleção, a reidratação integral, a serialização canônica e a seleção `IP/PM` estão implementadas.
 
 - Os 17 tipos do catálogo podem ser selecionados no laWdo.
 - `Nova REP` inicia o formulário vazio e `Consultar GDL` inicia o mesmo formulário com carga revisada da API.
@@ -993,16 +999,18 @@ Os itens abaixo combinam invariantes já implementadas e validações ainda aber
 
 ## 19. Verificação atual
 
-Em `19/07/2026`, após os testes do editor e da consulta geral integrada:
+Em `19/07/2026`, após os testes do editor, da consulta geral e da persistência integrada:
 
 - `npm run type-check`: aprovado;
 - `npm run lint`: aprovado;
-- `npm test`: 22 arquivos aprovados, 128 testes aprovados e 1 ignorado;
+- `npm test`: 23 arquivos aprovados, 148 testes aprovados e 1 ignorado;
 - `pecas-b602.component.test.tsx` protege acionamento da revisão GDL, validações, inclusão manual, troca de tipo, preservação de campos comuns e edição/exclusão local;
 - `gdl-pecas-modal.component.test.tsx` protege consulta automática, estado inicial dos checkboxes e aplicação da seleção;
 - `gdl-consulta-modal.component.test.tsx` protege seleção inicial, Mesclar, Substituir, desmarcação de peças e cancelamento;
 - `reps-gdl-integration.test.tsx` protege a aplicação no mesmo formulário da `REPsPage`, a importação estruturada e a ausência de chamada automática a `rep.create`;
-- testes de reconciliação protegem remoção opcional de peças GDL ausentes ou desmarcadas e preservação das peças manuais.
+- testes de reconciliação protegem remoção opcional de peças GDL ausentes ou desmarcadas e preservação das peças manuais;
+- `rep-b602-persistencia.integration.test.ts` protege criação, atualização e reabertura por handlers IPC e SQLite temporário nos cenários Mesclar e Substituir;
+- testes do normalizador cobrem os campos comuns dos 17 tipos, aliases visuais, datas e o mapeamento completo de `PISTOLA(S)`.
 - smoke manual da consulta, revisão, Mesclar, Substituir, persistência visual e falha de rede executado sem problemas observados.
 
-A cobertura não foi recalculada nesta atualização documental. Permanecem sem teste automatizado ponta a ponta a rede real, o fluxo completo por IPC/SQLite e o consumo de `b602.pecas` pelo laudo.
+A cobertura não foi recalculada nesta atualização documental. Permanecem sem teste automatizado ponta a ponta a rede GDL real e o consumo de `b602.pecas` pelo laudo.

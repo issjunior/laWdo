@@ -27,6 +27,7 @@ GdlConsultaModal ou GdlPecasModal
 | conversão para domínio local | `gdl-b602-normalizador.service.ts` |
 | contrato entre camadas | `shared/types/b602-gdl.types.ts` |
 | tipos de peça | `shared/catalogos/b602-gdl.catalogo.ts` |
+| marcas de arma | `shared/catalogos/b602-marcas-armas.catalogo.ts` |
 | tipos de origem | `shared/catalogos/tipos-origem-gdl.catalogo.ts` |
 | busca geral e revisão de dados | `GdlConsultaModal.tsx` |
 | revisão exclusiva das peças atuais | `GdlPecasModal.tsx` |
@@ -83,7 +84,7 @@ Falhas são toleradas e preservam o resultado principal. Como filtros são proce
 
 `gdl.schema.ts` normaliza strings nulas, números em string e campos opcionais. Schemas usam `passthrough()` ou `catchall(z.unknown())` para preservar propriedades dinâmicas.
 
-Nunca alimentar o formulário com JSON bruto. Campos conhecidos passam por Zod; extras permanecem `unknown` até normalização. A investigação aceita `envolvidos` como `unknown` porque o formato externo é heterogêneo.
+Nunca alimentar o formulário com JSON bruto. Campos conhecidos passam por Zod; extras permanecem `unknown` até normalização. O schema de peça inclui os campos comuns retornáveis, entre eles descrição da quantidade, datas, código do vestígio e observação, e preserva propriedades personalizadas por `catchall(z.unknown())`. A investigação aceita `envolvidos` como `unknown` porque o formato externo é heterogêneo.
 
 ## Normalização B-602
 
@@ -92,7 +93,12 @@ Nunca alimentar o formulário com JSON bruto. Campos conhecidos passam por Zod; 
 Peças:
 
 - tipo resolvido por label ou alias normalizado
-- campos comuns normalizados
+- campos comuns resolvidos por chave canônica ou label visual normalizado
+- Data de Entrada e Data de Liberação aceitam formato brasileiro, brasileiro com horário ou ISO e chegam ao renderer como `AAAA-MM-DD`
+- `Nº Análises` não é mapeado por ser administrativo
+- campos com opções aceitam código ou label; selects e checkboxes viram código local
+- o combobox `Marca da Arma` usa label, oferece as 1.379 opções observadas e aceita texto livre
+- em `PISTOLA(S)`, `Marca` permanece em `extrasGdl` por decisão funcional
 - somente mapeamentos confirmados vão para `personalizados`
 - demais propriedades vão para `extrasGdl`
 - tipo desconhecido fica sem `tipoCodigo` e gera aviso
@@ -145,8 +151,8 @@ O resultado alimenta `PecaB602[]`, persistido em `b602.pecas`. Consumidores lega
 
 ## Testes e impacto
 
-Testes cobrem payload inválido, propriedades dinâmicas, peças, origens completas, preservação de mesmo tipo com números diferentes, sugestão inicial, metadados, envolvidos, ambiguidades, catálogo, comportamento do seletor, reconciliação e o estado inicial/aplicação do `GdlPecasModal`.
+Testes cobrem payload inválido, propriedades dinâmicas, campos comuns dos 17 tipos, aliases visuais, catálogo e opções de `PISTOLA(S)`, origens completas, preservação de mesmo tipo com números diferentes, sugestão inicial, metadados, envolvidos, ambiguidades, comportamento do seletor, reconciliação e o estado inicial/aplicação do `GdlPecasModal`.
 
-Não há teste de rede real nem end-to-end atravessando IPC, persistência e laudo.
+`rep-b602-persistencia.integration.test.ts` atravessa serialização, handlers e SQLite temporário até a reabertura. Não há teste de rede GDL real; o serviço de laudo é mockado no teste de persistência.
 
 Alterações precisam manter alinhados schema, normalizador, contrato shared, handler/preload, os dois modais, seletor, persistência, catálogo e consumidores do laudo.

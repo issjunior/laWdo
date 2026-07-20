@@ -114,4 +114,4 @@ Evitar consultas por campo ou peça durante renderização. Dados derivados deve
 
 Testes do seletor cobrem aplicação programática sem apagar tipo/número, seleção manual, valores catalogados, valor livre e origens repetidas. Testes do service cobrem persistência canônica. O teste de `GdlPecasModal` cobre consulta automática, peça nova desmarcada, peça já importada marcada e aplicação da seleção; helpers cobrem reconciliação e preservação de peças manuais.
 
-Não há teste automatizado direto dos handlers `rep:create` e `rep:update` atravessando persistência e laudo, nem teste end-to-end de reabertura pelo IPC.
+`rep-b602-persistencia.integration.test.ts` cobre diretamente `rep:create`, `rep:update` e `rep:findById` com SQLite temporário, incluindo reabertura após Mesclar e Substituir. O serviço de laudo é mockado; sincronização de laudo e consumo downstream continuam fora desse teste.

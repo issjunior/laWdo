@@ -218,7 +218,14 @@
         "src/renderer/components/rep/exam-fields/index.ts",
         "src/renderer/components/rep/exam-fields/placeholders.ts",
         "src/renderer/pages/REPsPage.tsx",
-        "src/main/services/placeholder.service.ts"
+        "src/main/services/placeholder.service.ts",
+        "src/renderer/components/rep/exam-fields/pecas-b602.tsx",
+        "src/renderer/components/rep/exam-fields/pecas-b602.utils.ts",
+        "src/renderer/components/rep/exam-fields/integracao-gdl-b602.utils.ts",
+        "src/renderer/components/rep/exam-fields/services/b602.service.ts",
+        "src/shared/types/b602-gdl.types.ts",
+        "src/shared/catalogos/b602-gdl.catalogo.ts",
+        "src/shared/catalogos/b602-marcas-armas.catalogo.ts"
       ]
     },
     {
@@ -468,7 +475,15 @@
         "src/renderer/pages/GdlConfigPage.tsx",
         "src/renderer/components/rep/GdlConsultaModal.tsx",
         "src/renderer/pages/REPsPage.tsx",
-        "docs/api/**"
+        "docs/api/**",
+        "src/main/services/gdl.schema.ts",
+        "src/main/services/gdl-b602-normalizador.service.ts",
+        "src/shared/types/b602-gdl.types.ts",
+        "src/shared/catalogos/b602-gdl.catalogo.ts",
+        "src/shared/catalogos/b602-marcas-armas.catalogo.ts",
+        "src/renderer/components/rep/GdlPecasModal.tsx",
+        "src/renderer/components/rep/TipoSolicitacaoSelect.tsx",
+        "src/renderer/components/rep/exam-fields/pecas-b602.utils.ts"
       ]
     },
     {

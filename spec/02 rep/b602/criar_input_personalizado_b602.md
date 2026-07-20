@@ -58,11 +58,17 @@ A completude do stepper exige primeiro envolvido, data, cidade e UF. O bloqueio 
 
 `PecaB602` separa identidade local, origem manual/GDL, identidade externa, marca de alteração local, tipo, campos comuns, personalizados e extras desconhecidos.
 
-`extrasGdl` preserva informação externa sem alimentar automaticamente campos de domínio.
+Os campos comuns canônicos são identificação, quantidade, medida, descrição da quantidade, exame in loco, datas de entrada e liberação, lacres, código do vestígio, consumo/liberação e observação. `Nº Análises` é administrativo e não entra no modelo local. As duas datas são armazenadas como `AAAA-MM-DD`; o normalizador aceita data brasileira, inclusive com horário, e ISO.
+
+`extrasGdl` preserva informação externa sem alimentar automaticamente campos de domínio. Em `PISTOLA(S)`, o campo livre `Marca` permanece deliberadamente em `extrasGdl`; o formulário usa `Marca da Arma`.
 
 ## Catálogo e completude
 
-`b602-gdl.catalogo.ts` é a fonte dos tipos, aliases, campos e opções. `pecaB602EstaCompleta()` exige:
+`b602-gdl.catalogo.ts` é a fonte dos tipos, aliases, campos e opções. Os controles disponíveis são `texto`, `select`, `checkbox` exclusivo e `combobox`. O catálogo extenso de `Marca da Arma` fica isolado em `b602-marcas-armas.catalogo.ts`.
+
+`PISTOLA(S)` possui 11 campos locais: Nº Série, Modelo, Capacidade, Marca da Arma, status do número de série, calibre nominal, acabamento, estado geral, Funcionamento, fabricação e arma institucional. `Marca da Arma` oferece as 1.379 opções observadas no GDL por `datalist`, mas aceita texto livre; os demais selects armazenam o código canônico. Funcionamento e arma institucional são obrigatórios.
+
+`pecaB602EstaCompleta()` exige:
 
 1. `tipoCodigo` reconhecido
 2. quantidade maior que zero
@@ -95,6 +101,8 @@ A aplicação reconcilia somente `PecaB602[]`, atualiza os metadados e não reap
 
 O main valida o payload por Zod antes de converter. Tipos de peça são encontrados por label ou alias normalizado. Apenas chaves com mapeamento confirmado entram em `personalizados`; as demais vão para `extrasGdl`.
 
+Campos com opções aceitam código ou label vindo da API. Selects e checkboxes são convertidos para o código local; o combobox de marca é convertido para o label e preserva texto livre desconhecido. Quant. Descrição, Data de Liberação, Código do Vestígio e Observação reconhecem tanto chaves camelCase quanto labels visuais e não são duplicados em `extrasGdl`. Essa regra comum cobre os 17 tipos.
+
 Envolvidos são extraídos de estruturas heterogêneas, deduplicados e separados em qualificação e nome. Mais de dez envolvidos, ausência, múltiplos BO/IP e tipo de peça não confirmado geram avisos sem bloquear aplicação.
 
 ## Persistência e compatibilidade
@@ -120,4 +128,6 @@ Assim, peças novas não garantem preenchimento dos placeholders ou ativação d
 
 Não há limite explícito de peças. A busca inicial do merge usa `Map`, mas a substituição usa `findIndex` por correspondência; o volume esperado é pequeno.
 
-Testes cobrem catálogo, completude, normalização, merge, remoção opcional de peças GDL ausentes, preservação de peças manuais, serialização canônica, reidratação de metadados, compatibilidade do nome legado, seletor de origem e o estado inicial/aplicação do `GdlPecasModal`. Não cobrem o round-trip completo no banco nem o consumo de `b602.pecas` pelo laudo.
+Testes cobrem catálogo, completude, normalização dos 17 tipos, campos e opções de `PISTOLA(S)`, merge, remoção opcional de peças GDL ausentes, preservação de peças manuais, serialização canônica, reidratação de metadados, compatibilidade do nome legado, seletor de origem e o estado inicial/aplicação do `GdlPecasModal`.
+
+`rep-b602-persistencia.integration.test.ts` atravessa serialização, handlers `rep:create`/`rep:update`/`rep:findById` e SQLite real temporário, cobrindo reabertura após Mesclar e Substituir. Permanecem sem cobertura a rede GDL real e o consumo de `b602.pecas` pelo laudo.

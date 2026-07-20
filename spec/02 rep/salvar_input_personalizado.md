@@ -111,4 +111,4 @@ O main não revalida `campos_especificos`; chamadas IPC externas ao fluxo normal
 
 `b602.service.test.ts` cobre o round-trip canônico de peças, metadados e solicitante. `integracao-gdl-b602.utils.test.ts` cobre reidratação, compatibilidade do nome legado e rejeição de payload inválido.
 
-Ainda não existe teste end-to-end `prepareForApi → IPC → SQLite → edição`, nem garantia de consumo de `b602.pecas` pelo laudo.
+`rep-b602-persistencia.integration.test.ts` registra handlers reais em um SQLite temporário e atravessa serialização, `rep:create`, `rep:update`, `rep:findById`, Mesclar, Substituir e reabertura. O serviço de laudo é isolado por mock, portanto o teste não garante o consumo de `b602.pecas` pelo laudo nem cobre a API GDL real.

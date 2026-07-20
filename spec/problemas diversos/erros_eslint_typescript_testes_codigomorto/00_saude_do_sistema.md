@@ -13,7 +13,7 @@
 | **Build** (`npm run build`) | ✅ OK | 0 erros bloqueantes | build completo reexecutado após limpeza de lint |
 | **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros | main + preload + renderer passam; CI validado |
 | **ESLint** (`npm run lint`) | ✅ OK | 0 erros, 0 warnings | frente de lint zerada após revisão dos hooks restantes; CI validado |
-| **Testes** (`npm test`) | ✅ OK | 119 pass, 1 skip em 19 arquivos | suíte verde após ampliação dos testes B-602/GDL e utilitários |
+| **Testes** (`npm test`) | ✅ OK | 148 pass, 1 skip em 23 arquivos | suíte verde após ampliação dos testes B-602/GDL e utilitários |
 | **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | última medição: linhas 58,92%; funções 71,72%; statements 56,7%; branches 45,7% | medição de 12/07/2026; não recalculada após os testes mais recentes |
 | **Código morto** (`npm run prune:all`) | 🟡 Renderer triado | 178 apontamentos brutos; 23 candidatos fora de `(used in module)` | candidatos remanescentes estão no main e foram documentados como falsos positivos conhecidos |
 | **Knip** (`npm run knip -- --no-exit-code`) | ✅ Observacional zerado | 0 deps, 0 devDep, 0 exports, 0 tipos, 0 duplicatas | quatro rodadas de triagem concluídas; relatório observacional ficou sem apontamentos |
@@ -65,7 +65,7 @@ npm run knip -- --no-exit-code
 | **05/07/2026 (Knip rodada 2)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | tipos exportados ociosos do `main` removidos; frente remanescente ficou concentrada em renderer/shared |
 | **05/07/2026 (Knip rodada 3)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | utilitários, validadores e tipos de parser do renderer/shared triados; sobra concentrou em `ui` |
 | **05/07/2026 (Knip rodada 4)** | ✅ | 0 | 0 / 0 | 43 pass, 1 skip | exports de `ui` triados; relatório do Knip zerado em modo observacional |
-| **19/07/2026 (B-602/GDL e utilitários)** | — | 0 | 0 / 0 | 119 pass, 1 skip | 19 arquivos; suíte ampliada e modal de peças protegido por teste de componente |
+| **19/07/2026 (B-602/GDL e utilitários)** | — | 0 | 0 / 0 | 148 pass, 1 skip | 23 arquivos; suíte ampliada e modal de peças protegido por teste de componente |
 
 ---
 
@@ -126,8 +126,8 @@ Avanço confirmado nesta tranche:
 
 Resumo atual:
 
-- **arquivos de teste:** 19 passando
-- **testes:** 119 passando, 1 skip
+- **arquivos de teste:** 23 passando
+- **testes:** 148 passando, 1 skip
 
 A ampliação recente cobre B-602/GDL, reconciliação de peças, `GdlPecasModal` e utilitários de documentos, estrutura, placeholders e árvore. O teste do modal protege a consulta automática e o estado inicial dos checkboxes.
 
@@ -335,7 +335,7 @@ Saldo consolidado da iniciativa:
 - `npm run build` verde
 - `npm run type-check` verde
 - `npm run lint` verde com `0` erros e `0` warnings
-- `npm test` verde com `119` pass e `1` skip em 19 arquivos
+- `npm test` verde com `148` pass e `1` skip em 23 arquivos
 - `npm run test:coverage` ativo com gate progressivo
 - `npm run prune:all` triado no renderer, com remanescentes do `main` documentados como falsos positivos conhecidos
 - `npm run knip -- --no-exit-code` zerado em modo observacional
