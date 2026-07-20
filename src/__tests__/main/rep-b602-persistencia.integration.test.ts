@@ -195,7 +195,10 @@ describe('persistência B602 por IPC e SQLite', () => {
     expect(criacao).toMatchObject({ success: true })
     expect(reaberta).toMatchObject({ success: true })
     expect(pecasReabertas).toEqual(importacao.camposEspecificos.pecas)
-    expect(pecasReabertas.map(peca => peca.tipoCodigo)).toEqual(['106', '613', '477', '479', '475', '472', '105'])
+    expect(pecasReabertas.map(peca => peca.tipoCodigo)).toEqual([
+      '106', '613', '477', '479', '475', '472', '105',
+      '289', '272', '473', '178', '478', '572',
+    ])
     expect(pecasReabertas.filter(peca => peca.tipoCodigo !== '106').every(peca => (
       Object.keys(peca.extrasGdl).length === 0
     ))).toBe(true)
@@ -204,8 +207,10 @@ describe('persistência B602 por IPC e SQLite', () => {
       '106:numero_serie': 'DHGEHY54',
       '106:marca': 'TAURUS',
       '106:modelo': 'XX',
+      '106:marca_arma': 'Taurus',
       '106:status_numero_serie': '20',
       '106:calibre_nominal': '26',
+      '106:tipo_acabamento': '44',
       '106:estado_geral': '53',
       '106:funcionamento': '57',
       '106:fabricacao_arma': '63',
@@ -213,6 +218,11 @@ describe('persistência B602 por IPC e SQLite', () => {
       '106:arma_institucional': '98',
     })
     expect(revolverReaberto?.extrasGdl).toEqual({})
+    expect(pecasReabertas.find(peca => peca.tipoCodigo === '289')?.personalizados).toEqual({
+      '289:numero_serie': 'SERIE-289',
+      '289:marca': 'MARCA 289',
+      '289:modelo': 'MODELO 289',
+    })
   })
 
   it('persiste e reabre as reconciliações Mesclar e Substituir no formato canônico', async () => {

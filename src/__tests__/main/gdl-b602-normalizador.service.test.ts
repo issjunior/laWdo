@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fixture from '../fixtures/gdl/rep-190-2026.json'
+import fixtureRevolver from '../fixtures/gdl/rep-191-2026.json'
 import {
   interpretarGdlListaRepsInvestigacaoJson,
   interpretarGdlRepJson,
@@ -42,6 +43,8 @@ describe('contrato GDL B602', () => {
     expect(estojo.personalizados['101:origem_coleta']).toBe('93')
     expect(estojo.extrasGdl['Campo Futuro']).toBe('preservar')
     expect(estojo.comuns.consumida).toBe('P')
+    expect(estojo.comuns.materialIncinerado).toBe('N')
+    expect(estojo.extrasGdl).not.toHaveProperty('incinerado')
     expect(revolver.personalizados).toEqual({
       '106:numero_serie': 'DHGEHY54',
       '106:marca': 'TAURUS',
@@ -55,6 +58,17 @@ describe('contrato GDL B602', () => {
       '106:arma_institucional': '98',
     })
     expect(revolver.extrasGdl).toEqual({})
+  })
+
+  it('mapeia Marca da Arma e Tipo Acabamento confirmados na REP 191/2026', () => {
+    const revolver = converterRepB602(validarGdlRep(fixtureRevolver)).camposEspecificos.pecas[0]
+
+    expect(revolver.personalizados).toMatchObject({
+      '106:marca_arma': 'Taurus',
+      '106:tipo_acabamento': '44',
+    })
+    expect(revolver.extrasGdl).not.toHaveProperty('Marca da Arma')
+    expect(revolver.extrasGdl).not.toHaveProperty('Tipo Acabamento')
   })
 
   it('normaliza consumida vazia como Não, seguindo o padrão do GDL', () => {
