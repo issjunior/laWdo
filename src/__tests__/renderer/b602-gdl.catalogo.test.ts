@@ -26,7 +26,10 @@ describe('catálogo B602', () => {
 
   it('marca como round-trip confirmado somente os tipos validados por API, persistência e reabertura', () => {
     const confirmados = CATALOGO_TIPOS_PECA_B602.filter(tipo => tipo.roundTripConfirmado).map(tipo => tipo.codigo)
-    expect(confirmados).toEqual(['613', '476', '472', '101', '477', '475', '104', '105', '106', '479'])
+    expect(confirmados).toEqual([
+      '289', '613', '476', '272', '472', '473', '101', '477',
+      '475', '178', '104', '478', '572', '105', '106', '479',
+    ])
   })
 
   it('reproduz os controles de texto e limites visuais de ARMA(S) DE CHOQUE', () => {
@@ -147,7 +150,11 @@ describe('catálogo B602', () => {
     ])
     expect(revolver?.campos.slice(0, 3).map(campo => campo.maxLength)).toEqual([25, 50, 50])
     expect(revolver?.campos.find(campo => campo.id === '106:marca_arma')).toMatchObject({
-      controle: 'combobox', obrigatorio: false,
+      controle: 'combobox', obrigatorio: false, mapeamentoApiConfirmado: true,
+    })
+    expect(revolver?.campos.find(campo => campo.id === '106:tipo_acabamento')).toMatchObject({
+      controle: 'select', obrigatorio: false, mapeamentoApiConfirmado: true,
+      opcoes: expect.arrayContaining([{ codigo: '44', label: 'Cromado' }]),
     })
     expect(revolver?.campos.find(campo => campo.id === '106:calibre_nominal')?.opcoes).toEqual([
       { codigo: '24', label: '.22 Curto' },
@@ -208,5 +215,32 @@ describe('catálogo B602', () => {
   it('exige os campos personalizados obrigatórios na completude', () => {
     expect(pecaB602EstaCompleta({ tipoCodigo: '476', comuns: { quantidade: 1 }, personalizados: {} })).toBe(false)
     expect(pecaB602EstaCompleta({ tipoCodigo: '476', comuns: { quantidade: 1 }, personalizados: { '476:arma_institucional': '60' } })).toBe(true)
+  })
+
+  it('permite concluir manualmente cada um dos 16 tipos com seus obrigatórios preenchidos', () => {
+    for (const tipo of CATALOGO_TIPOS_PECA_B602) {
+      const obrigatorios = tipo.campos.filter(campo => campo.obrigatorio)
+      const personalizados = Object.fromEntries(obrigatorios.map(campo => [
+        campo.id,
+        campo.opcoes?.[0]?.codigo ?? 'VALOR TESTE',
+      ]))
+
+      expect(pecaB602EstaCompleta({
+        tipoCodigo: tipo.codigo,
+        comuns: { quantidade: 1 },
+        personalizados,
+      }), tipo.label).toBe(true)
+
+      for (const campoOmitido of obrigatorios) {
+        const semObrigatorio = { ...personalizados }
+        delete semObrigatorio[campoOmitido.id]
+
+        expect(pecaB602EstaCompleta({
+          tipoCodigo: tipo.codigo,
+          comuns: { quantidade: 1 },
+          personalizados: semObrigatorio,
+        }), `${tipo.label}: ${campoOmitido.label}`).toBe(false)
+      }
+    }
   })
 })

@@ -255,7 +255,7 @@ const camposRevolver = (): CampoPersonalizadoB602[] => [
   ...camposArmaBasicos('106', true, [25, 50, 50]),
   {
     id: '106:marca_arma', chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
-    obrigatorio: false, opcoes: [...OPCOES_MARCA_ARMA_B602],
+    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: [...OPCOES_MARCA_ARMA_B602],
   },
   {
     id: '106:status_numero_serie', chaveGdl: 'Status do Número de Série',
@@ -269,7 +269,7 @@ const camposRevolver = (): CampoPersonalizadoB602[] => [
   },
   {
     id: '106:tipo_acabamento', chaveGdl: 'Tipo Acabamento', label: 'Tipo Acabamento',
-    controle: 'select', obrigatorio: false, opcoes: opcoesTipoAcabamento,
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: opcoesTipoAcabamento,
   },
   {
     id: '106:estado_geral', chaveGdl: 'Estado Geral da Arma', label: 'Estado Geral da Arma',
@@ -337,25 +337,25 @@ const camposEspingarda = (): CampoPersonalizadoB602[] => [
 ]
 
 export const CATALOGO_TIPOS_PECA_B602: TipoPecaB602[] = [
-  { codigo: '289', label: 'ARMA(S) DE CHOQUE', familia: 'arma', roundTripConfirmado: false, campos: camposArmaBasicos('289', true, [25, 50, 50]) },
+  { codigo: '289', label: 'ARMA(S) DE CHOQUE', familia: 'arma', roundTripConfirmado: true, campos: camposArmaBasicos('289', true, [25, 50, 50]) },
   { codigo: '613', label: 'ARMA(S) DE PRESSÃO', familia: 'arma', roundTripConfirmado: true, campos: camposArmaBasicos('613', true, [25, 50, 50]) },
   {
     codigo: '476', label: 'CARABINA(S)', familia: 'arma', roundTripConfirmado: true,
     campos: camposComInstitucional('476', true),
   },
-  { codigo: '272', label: 'CARREGADOR(ES)', familia: 'componente', roundTripConfirmado: false, campos: [] },
+  { codigo: '272', label: 'CARREGADOR(ES)', familia: 'componente', roundTripConfirmado: true, campos: [] },
   { codigo: '472', label: 'ESPINGARDA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposEspingarda() },
-  { codigo: '473', label: 'ESPOLETA(S)', familia: 'componente', roundTripConfirmado: false, campos: [] },
+  { codigo: '473', label: 'ESPOLETA(S)', familia: 'componente', roundTripConfirmado: true, campos: [] },
   {
     codigo: '101', label: 'ESTOJO(S)', familia: 'componente_balistico', roundTripConfirmado: true,
     campos: [campoOrigemColeta('101', true)],
   },
   { codigo: '477', label: 'FUZIL(IS)', familia: 'arma', roundTripConfirmado: true, campos: camposComInstitucional('477', true) },
   { codigo: '475', label: 'GARRUCHA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposComFabricacao('475', [25, 50, 50], true) },
-  { codigo: '178', label: 'OUTROS', familia: 'generico', roundTripConfirmado: false, campos: [] },
+  { codigo: '178', label: 'OUTROS', familia: 'generico', roundTripConfirmado: true, campos: [] },
   { codigo: '104', label: 'PISTOLA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposPistola() },
-  { codigo: '478', label: 'PISTOLETE(S)', familia: 'arma', roundTripConfirmado: false, campos: [] },
-  { codigo: '572', label: 'PÓLVORA', familia: 'componente_balistico', roundTripConfirmado: false, campos: [] },
+  { codigo: '478', label: 'PISTOLETE(S)', familia: 'arma', roundTripConfirmado: true, campos: [] },
+  { codigo: '572', label: 'PÓLVORA', familia: 'componente_balistico', roundTripConfirmado: true, campos: [] },
   { codigo: '105', label: 'PROJÉTEIS', familia: 'componente_balistico', roundTripConfirmado: true, campos: [campoOrigemColeta('105', true)] },
   {
     codigo: '106', label: 'REVÓLVER(ES)', familia: 'arma', roundTripConfirmado: true,
