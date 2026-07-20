@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { MetadadosIntegracaoGdl } from '../../shared/types/b602-gdl.types'
-import { extrairMetadadosIntegracaoGdl } from '../../renderer/components/rep/exam-fields/integracao-gdl-b602.utils'
+import {
+  extrairMetadadosIntegracaoGdl,
+  extrairPecasB602,
+} from '../../renderer/components/rep/exam-fields/integracao-gdl-b602.utils'
 
 const metadadosCompletos: MetadadosIntegracaoGdl = {
   origemInicial: 'gdl',
@@ -72,5 +75,24 @@ describe('extrairMetadadosIntegracaoGdl', () => {
 
     expect(extrairMetadadosIntegracaoGdl(persistido)).toBeNull()
     expect(extrairMetadadosIntegracaoGdl('{json inválido')).toBeNull()
+  })
+})
+
+describe('extrairPecasB602', () => {
+  it('normaliza Mat. Incinerado? como Não ao reabrir uma peça legada', () => {
+    const persistido = JSON.stringify({
+      b602: {
+        pecas: [{
+          idLocal: 'peca-legada',
+          origem: 'manual',
+          tipoPeca: 'PISTOLA(S)',
+          comuns: {},
+          personalizados: {},
+          extrasGdl: {},
+        }],
+      },
+    })
+
+    expect(extrairPecasB602(persistido)[0]?.comuns.materialIncinerado).toBe('N')
   })
 })

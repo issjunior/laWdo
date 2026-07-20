@@ -16,7 +16,7 @@ function criarPeca(parcial: Partial<PecaB602> = {}): PecaB602 {
     tipoPeca: 'CARABINA(S)',
     comuns: {
       identificacao: '', quantidade: 1, unidadeMedida: '', quantidadeDescricao: '',
-      examinadoInLoco: false, dataEntrada: '', lacreEntrada: '', lacreSaida: '', dataLiberacao: '',
+      examinadoInLoco: false, materialIncinerado: 'N', dataEntrada: '', lacreEntrada: '', lacreSaida: '', dataLiberacao: '',
       codigoVestigio: '', consumida: 'N', observacao: '',
     },
     personalizados: {},

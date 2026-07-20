@@ -1,8 +1,10 @@
+import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
+
 const TABLE_STYLES = {
   table:  { borderCollapse: 'collapse', width: '100%', margin: '8px 0' },
   title:  { background: '#d9d9d9', color: '#000', fontWeight: 'bold', textAlign: 'center' as const },
   th:     { border: '1px solid #000', padding: '6px 10px', textAlign: 'center' as const, fontWeight: '600', background: '#e8e8e8', color: '#000', fontSize: '12px' },
-  td:     { border: '1px solid #000', padding: '6px 10px', fontSize: '12px', color: '#000' },
+  td:     { border: '1px solid #000', padding: '6px 10px', textAlign: 'center' as const, fontSize: '12px', color: '#000' },
   item:   { width: '50px', textAlign: 'center' as const },
 } as const;
 
@@ -10,18 +12,41 @@ function style(obj: Record<string, string>): string {
   return Object.entries(obj).map(([k, v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';');
 }
 
+function formatarDataBrasileira(valor: unknown): string {
+  const data = String(valor || '').trim();
+  if (!data) return '-';
+
+  const correspondencia = data.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  if (!correspondencia) return data;
+
+  const [, ano, mes, dia] = correspondencia;
+  const dataValidada = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+  const dataEhValida = dataValidada.getUTCFullYear() === Number(ano)
+    && dataValidada.getUTCMonth() === Number(mes) - 1
+    && dataValidada.getUTCDate() === Number(dia);
+
+  return dataEhValida ? `${dia}/${mes}/${ano}` : data;
+}
+
+function formatarQuantidade(valor: string): string {
+  const quantidade = valor.trim();
+  return /^\d+$/.test(quantidade) ? quantidade.padStart(2, '0') : quantidade;
+}
+
 export function buildNumberedTable(titulo: string, headers: string[], rows: string[][]): string {
   if (rows.length === 0) return '';
 
   const allHeaders = ['Item', ...headers];
+  const indiceQuantidade = headers.findIndex(header => /^(qtd|quantidade)$/i.test(header.trim()));
   const colCount = allHeaders.length;
   const theadRow = `<tr>${allHeaders.map(h => `<th style="${style(TABLE_STYLES.th)}">${h}</th>`).join('')}</tr>`;
 
   const tbodyRows = rows.map((row, i) => {
     const cells = [
       `<td style="${style({ ...TABLE_STYLES.td, ...TABLE_STYLES.item })};">${i + 1}</td>`,
-      ...row.map(cell => {
-        const val = (cell ?? '').trim() === '' ? '-' : cell;
+      ...row.map((cell, indice) => {
+        const valorFormatado = indice === indiceQuantidade ? formatarQuantidade(cell ?? '') : cell;
+        const val = (valorFormatado ?? '').trim() === '' ? '-' : valorFormatado;
         return `<td style="${style(TABLE_STYLES.td)}">${val}</td>`;
       }),
     ].join('');
@@ -35,7 +60,7 @@ export function buildNumberedTable(titulo: string, headers: string[], rows: stri
 
 export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solicitanteNome?: string): string {
   const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean) ?? [];
-  const dataOcorrencia = String(b602.data_ocorrencia || '-');
+  const dataOcorrencia = formatarDataBrasileira(b602.data_ocorrencia);
   const localObj = (b602.local && typeof b602.local === 'object' ? b602.local : null) as Record<string, string> | null;
   const local = localObj
     ? [localObj.bairro, localObj.cidade, localObj.uf].filter(Boolean).join(' / ') || '-'
@@ -68,7 +93,7 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solic
 }
 
 export function buildArmasTabela(b602: Record<string, unknown>, _solicitanteNome?: string): string {
-  const armas = (b602.armas as Record<string, unknown>[] | undefined) ?? [];
+  const armas = projetarB602ParaLaudo(b602).armas;
   if (armas.length === 0) return '';
 
   const s = TABLE_STYLES;
@@ -99,7 +124,7 @@ export function buildArmasTabela(b602: Record<string, unknown>, _solicitanteNome
       celula(String(arma.acabamento || '-')),
       celula(String(arma.funcionamento || '-')),
       celula(String(arma.estado_conservacao || '-')),
-      celula(String(arma.quantidade || '-')),
+      celula(formatarQuantidade(String(arma.quantidade || '')) || '-'),
       celula(String(arma.dito_oficio || '-')),
       celula(String(arma.numero_lacre || '-')),
     ].join('');

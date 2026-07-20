@@ -17,6 +17,7 @@ function criarPeca(codigo: number, identificacao: string): PecaB602 {
       unidadeMedida: 'UNIDADE',
       quantidadeDescricao: '',
       examinadoInLoco: false,
+      materialIncinerado: 'N',
       dataEntrada: '',
       lacreEntrada: '',
       lacreSaida: '',

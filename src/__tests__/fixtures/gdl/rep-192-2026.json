@@ -1,0 +1,35 @@
+{
+  "codRep": 1922026,
+  "numero": 192,
+  "ano": 2026,
+  "origens": [],
+  "pecas": [
+    {
+      "codPeca": 1127750,
+      "tipoPeca": "PISTOLA(S)",
+      "identificacao": "TAURUS PT99-D",
+      "quantidade": 2,
+      "unidadeMedida": "UNIDADES",
+      "numeroAnalises": "1",
+      "examinadoInLoco": false,
+      "dataEntrada": "13/07/2026",
+      "lacreEntrada": "L2312313",
+      "lacreSaida": "L789789",
+      "dataLiberacao": "18/07/2026",
+      "consumida": "Não",
+      "Mat. Incinerado?": "Sim",
+      "Nº Série": "SA56FG4SA5",
+      "Marca": "TAURUS",
+      "Modelo": "PT99-D",
+      "Capacidade": "",
+      "Marca da Arma": "1316",
+      "Status do Número de Série": "Legível",
+      "Calibre Nominal Pistola": "9mm Luger",
+      "Tipo Acabamento": "Cromado",
+      "Estado Geral da Arma": "Regular",
+      "Funcionamento": "Eficiente",
+      "Fabricação da Arma": "brasileira",
+      "Arma é Institucional?": "NÃO"
+    }
+  ]
+}

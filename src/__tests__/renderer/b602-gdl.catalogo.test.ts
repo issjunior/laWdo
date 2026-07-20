@@ -4,19 +4,29 @@ import {
   OPCOES_UNIDADE_MEDIDA_B602,
   pecaB602EstaCompleta,
   UNIDADE_MEDIDA_PADRAO_B602,
+  validarCatalogoTiposPecaB602,
 } from '../../shared/catalogos/b602-gdl.catalogo'
 
 describe('catálogo B602', () => {
-  it('possui exatamente os 17 códigos únicos e não contém zero', () => {
+  it('possui exatamente os 16 códigos mapeados, sem PEÇA TESTE nem código zero', () => {
     const codigos = CATALOGO_TIPOS_PECA_B602.map(tipo => tipo.codigo)
-    expect(codigos).toHaveLength(17)
-    expect(new Set(codigos).size).toBe(17)
+    expect(codigos).toHaveLength(16)
+    expect(new Set(codigos).size).toBe(16)
     expect(codigos).not.toContain('0')
+    expect(codigos).not.toContain('771')
+    expect(() => validarCatalogoTiposPecaB602()).not.toThrow()
   })
 
-  it('mantém somente CARABINA e ESTOJO como round-trip confirmado', () => {
+  it('rejeita IDs e opções duplicados na validação estrutural', () => {
+    const catalogoInvalido = structuredClone(CATALOGO_TIPOS_PECA_B602)
+    catalogoInvalido[0].campos[1].id = catalogoInvalido[0].campos[0].id
+
+    expect(() => validarCatalogoTiposPecaB602(catalogoInvalido)).toThrow('ID de campo B602 inválido ou duplicado')
+  })
+
+  it('marca como round-trip confirmado somente os tipos validados por API, persistência e reabertura', () => {
     const confirmados = CATALOGO_TIPOS_PECA_B602.filter(tipo => tipo.roundTripConfirmado).map(tipo => tipo.codigo)
-    expect(confirmados).toEqual(['476', '101'])
+    expect(confirmados).toEqual(['613', '476', '472', '101', '477', '475', '104', '105', '106', '479'])
   })
 
   it('reproduz os controles de texto e limites visuais de ARMA(S) DE CHOQUE', () => {
@@ -64,6 +74,30 @@ describe('catálogo B602', () => {
     expect(pistolete?.campos).toEqual([])
   })
 
+  it('reflete a reinspeção visual de CARREGADOR, OUTROS e PROJÉTEIS', () => {
+    const carregador = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '272')
+    const outros = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '178')
+    const projeteis = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '105')
+
+    expect(carregador?.campos).toEqual([])
+    expect(outros?.campos).toEqual([])
+    expect(projeteis?.campos).toEqual([
+      expect.objectContaining({
+        id: '105:origem_coleta',
+        label: 'ORIGEM/COLETA',
+        controle: 'select',
+        obrigatorio: true,
+        mapeamentoApiConfirmado: true,
+        opcoes: [
+          { codigo: '95', label: 'DELEGACIA' },
+          { codigo: '93', label: 'LOCAL DE CRIME' },
+          { codigo: '94', label: 'NECRÓPSIA' },
+          { codigo: '11', label: 'Outro' },
+        ],
+      }),
+    ])
+  })
+
   it('reproduz todos os campos e opções observados de PISTOLA sem mapear Marca', () => {
     const pistola = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '104')
 
@@ -103,8 +137,58 @@ describe('catálogo B602', () => {
     })
   })
 
+  it('reproduz os 12 campos e opções observados de REVÓLVER', () => {
+    const revolver = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '106')
+
+    expect(revolver?.campos.map(campo => campo.label)).toEqual([
+      'Nº Série', 'Marca', 'Modelo', 'Marca da Arma', 'Status do Número de Série',
+      'Calibre Nominal Revolver', 'Tipo Acabamento', 'Estado Geral da Arma',
+      'Funcionamento', 'Fabricação da Arma', 'Tambor', 'Arma é Institucional?',
+    ])
+    expect(revolver?.campos.slice(0, 3).map(campo => campo.maxLength)).toEqual([25, 50, 50])
+    expect(revolver?.campos.find(campo => campo.id === '106:marca_arma')).toMatchObject({
+      controle: 'combobox', obrigatorio: false,
+    })
+    expect(revolver?.campos.find(campo => campo.id === '106:calibre_nominal')?.opcoes).toEqual([
+      { codigo: '24', label: '.22 Curto' },
+      { codigo: '23', label: '.22LR' },
+      { codigo: '25', label: '.32S&W' },
+      { codigo: '28', label: '.357 Magnum' },
+      { codigo: '26', label: '.38SPL' },
+      { codigo: '27', label: '38 Curto' },
+    ])
+    expect(revolver?.campos.find(campo => campo.id === '106:tambor')?.opcoes).toEqual([
+      { codigo: '72', label: 'reversível para a direita' },
+      { codigo: '73', label: 'reversível para a esquerda' },
+    ])
+  })
+
+  it('reproduz os 12 campos e calibres observados de ESPINGARDA', () => {
+    const espingarda = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '472')
+
+    expect(espingarda?.campos.map(campo => campo.label)).toEqual([
+      'Nº Série', 'Marca', 'Modelo', 'Capacidade', 'Marca da Arma',
+      'Status do Número de Série', 'Calibre Nominal Espingarda', 'Tipo Acabamento',
+      'Estado Geral da Arma', 'Funcionamento', 'Fabricação da Arma', 'Arma é Institucional?',
+    ])
+    expect(espingarda?.campos.slice(0, 4).map(campo => campo.maxLength)).toEqual([25, 50, 50, 50])
+    expect(espingarda?.campos.find(campo => campo.id === '472:marca_arma')).toMatchObject({
+      controle: 'combobox', obrigatorio: false,
+    })
+    expect(espingarda?.campos.find(campo => campo.id === '472:calibre_nominal')?.opcoes).toEqual([
+      { codigo: '29', label: '12GA' },
+      { codigo: '30', label: '16GA' },
+      { codigo: '31', label: '20GA' },
+      { codigo: '32', label: '24GA' },
+      { codigo: '33', label: '28GA' },
+      { codigo: '34', label: '32GA' },
+      { codigo: '35', label: '36GA' },
+      { codigo: '36', label: '40GA' },
+    ])
+  })
+
   it('reproduz os checkboxes exclusivos de arma institucional', () => {
-    for (const codigo of ['104', '476', '477', '479']) {
+    for (const codigo of ['104', '106', '472', '476', '477', '479']) {
       const campo = CATALOGO_TIPOS_PECA_B602
         .find(tipo => tipo.codigo === codigo)?.campos
         .find(item => item.id === `${codigo}:arma_institucional`)
@@ -114,8 +198,8 @@ describe('catálogo B602', () => {
         obrigatorio: true,
         opcoes: [
           { codigo: '60', label: 'Indeterminado' },
-          { codigo: '98', label: 'NÃO' },
-          { codigo: '97', label: 'SIM' },
+          { codigo: '98', label: 'Não' },
+          { codigo: '97', label: 'Sim' },
         ],
       })
     }

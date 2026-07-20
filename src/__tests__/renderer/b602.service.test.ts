@@ -50,6 +50,7 @@ describe('b602Service', () => {
         unidadeMedida: 'UNIDADE',
         quantidadeDescricao: '',
         examinadoInLoco: false,
+        materialIncinerado: 'N',
         dataEntrada: '',
         lacreEntrada: '',
         lacreSaida: '',

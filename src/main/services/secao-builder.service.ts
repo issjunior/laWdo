@@ -1,4 +1,5 @@
 import { SecaoTemplateRow } from '../types/database.js';
+import { projetarB602ParaLaudo } from '../../shared/utils/b602-pecas-projecao.js';
 
 interface ContextoCondicionalArma {
   indiceArma?: number;
@@ -49,26 +50,23 @@ function isSecaoDerivadaRep(secao: SecaoTemplateRow): boolean {
 function possuiDadosDerivados(secao: SecaoTemplateRow, camposEspecificos: Record<string, unknown>): boolean {
   const b602 = camposEspecificos?.b602 as Record<string, unknown> | undefined;
   if (!b602) return false;
+  const projecaoB602 = projetarB602ParaLaudo(b602);
 
   if (secao.repetir_para === 'armas') {
-    const armas = b602.armas;
-    return Array.isArray(armas) && armas.length > 0;
+    return projecaoB602.armas.length > 0;
   }
 
   const nome = normalizarNomeSecao(secao.nome);
   if (nome.includes('CARTUCHO')) {
-    const cartuchos = b602.cartuchos;
-    return b602.cartuchos_toggle === 'on' || (Array.isArray(cartuchos) && cartuchos.length > 0);
+    return b602.cartuchos_toggle === 'on' || projecaoB602.cartuchos.length > 0;
   }
 
   if (nome.includes('ESTOJO')) {
-    const estojos = b602.estojos;
-    return b602.estojos_toggle === 'on' || (Array.isArray(estojos) && estojos.length > 0);
+    return b602.estojos_toggle === 'on' || projecaoB602.estojos.length > 0;
   }
 
   if (nome.includes('ARMA')) {
-    const armas = b602.armas;
-    return b602.armas_toggle === 'on' || (Array.isArray(armas) && armas.length > 0);
+    return b602.armas_toggle === 'on' || projecaoB602.armas.length > 0;
   }
 
   return true;
@@ -105,8 +103,7 @@ function avaliarToggleSecao(toggleId: string, camposEspecificos: Record<string, 
   const armaMatch = toggleId.match(/^b602_arma_(\d+)_(func|coleta)_toggle$/);
   if (armaMatch) {
     const idx = Number(armaMatch[1]) - 1;
-    const armas = b602.armas as Record<string, unknown>[] | undefined;
-    const arma = armas?.[idx];
+    const arma = projetarB602ParaLaudo(b602).armas[idx];
     return arma?.[`${armaMatch[2]}_toggle`] === 'on';
   }
 
@@ -114,6 +111,10 @@ function avaliarToggleSecao(toggleId: string, camposEspecificos: Record<string, 
   if (b602[chave] === 'on') return true;
 
   const chaveColecao = chave.replace(/_toggle$/, '');
+  const projecaoB602 = projetarB602ParaLaudo(b602);
+  if (chaveColecao === 'armas') return projecaoB602.armas.length > 0;
+  if (chaveColecao === 'cartuchos') return projecaoB602.cartuchos.length > 0;
+  if (chaveColecao === 'estojos') return projecaoB602.estojos.length > 0;
   const valorColecao = b602[chaveColecao];
   return Array.isArray(valorColecao) && valorColecao.length > 0;
 }
@@ -145,9 +146,7 @@ function avaliarCondicaoBloco(
     const armaAtual =
       contexto.arma && contexto.indiceArma === idx + 1
         ? contexto.arma
-        : Array.isArray(b602.armas)
-          ? (b602.armas[idx] as Record<string, unknown> | undefined)
-          : undefined;
+        : projetarB602ParaLaudo(b602).armas[idx];
 
     return armaAtual?.[chaveArma] === 'on';
   }
@@ -266,9 +265,9 @@ export function expandirSecoesRepetiveis(
     if (secao.repetir_para !== 'armas') continue;
 
     const b602 = camposEspecificos?.b602 as Record<string, unknown> | undefined;
-    const armas = b602?.armas as Record<string, unknown>[] | undefined;
+    const armas = projetarB602ParaLaudo(b602).armas;
 
-    if (!armas || armas.length === 0) {
+    if (armas.length === 0) {
       resultado.set('armas', '');
       continue;
     }

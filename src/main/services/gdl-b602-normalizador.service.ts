@@ -27,6 +27,7 @@ function normalizarNomeCampo(valor: string): string {
 
 const ALIASES_CAMPOS_COMUNS = {
   quantidadeDescricao: ['quantidadeDescricao', 'Quant. Descrição', 'Quantidade Descrição', 'Descrição da Quantidade'],
+  materialIncinerado: ['incinerado', 'matIncinerado', 'materialIncinerado', 'Mat. Incinerado?', 'Material Incinerado?'],
   dataLiberacao: ['dataLiberacao', 'Data de Liberação', 'Data Liberação'],
   codigoVestigio: ['codigoVestigio', 'Código do Vestígio', 'Cod. Vestígio'],
   observacao: ['observacao', 'Observação'],
@@ -219,6 +220,10 @@ function normalizarConsumida(valor: string): 'S' | 'N' | 'P' {
   return 'N'
 }
 
+function normalizarSimNao(valor: string): 'S' | 'N' {
+  return ['s', 'sim', 'true', '1'].includes(normalizarChave(valor)) ? 'S' : 'N'
+}
+
 function normalizarDataParaInput(valor: string): string {
   const dataIso = valor.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (dataIso) return `${dataIso[1]}-${dataIso[2]}-${dataIso[3]}`
@@ -231,6 +236,7 @@ function normalizarDataParaInput(valor: string): string {
 
 function criarCamposComuns(peca: GdlPecaValidada): CamposComunsPecaB602 {
   const quantidadeDescricao = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.quantidadeDescricao])
+  const materialIncinerado = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.materialIncinerado])
   const dataLiberacao = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.dataLiberacao])
   const codigoVestigio = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.codigoVestigio])
   const observacao = obterTextoPorAlias(peca, [...ALIASES_CAMPOS_COMUNS.observacao])
@@ -241,6 +247,7 @@ function criarCamposComuns(peca: GdlPecaValidada): CamposComunsPecaB602 {
     unidadeMedida: peca.unidadeMedida,
     quantidadeDescricao,
     examinadoInLoco: normalizarBooleano(peca.examinadoInLoco),
+    materialIncinerado: normalizarSimNao(materialIncinerado),
     dataEntrada: normalizarDataParaInput(peca.dataEntrada),
     lacreEntrada: peca.lacreEntrada,
     lacreSaida: peca.lacreSaida,
@@ -280,7 +287,9 @@ export function converterRepB602(
   rep: GdlRepValidada,
   metadadosIntegracaoGdl?: MetadadosIntegracaoGdl,
 ): ResultadoImportacaoExame<DadosImportacaoB602> {
-  const pecas = rep.pecas.map(normalizarPecaB602)
+  const pecas = rep.pecas
+    .filter(peca => normalizarChave(peca.tipoPeca) !== 'peca teste')
+    .map(normalizarPecaB602)
   const desconhecidas = pecas.filter(peca => !peca.tipoCodigo)
   const dadosSolicitacao = extrairDadosSolicitacao(rep)
   const dadosInvestigacao = extrairDadosInvestigacao(rep)

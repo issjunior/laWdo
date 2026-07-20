@@ -90,7 +90,11 @@
       "Nº Série": "DHGEHY54",
       "Marca": "TAURUS",
       "Modelo": "XX",
+      "Status do Número de Série": "Legível",
+      "Calibre Nominal Revolver": ".38SPL",
+      "Estado Geral da Arma": "Regular",
       "Fabricação da Arma": "brasileira",
+      "Tambor": "reversível para a direita",
       "Arma é Institucional?": "NÃO",
       "Funcionamento": "Eficiente"
     }

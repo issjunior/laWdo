@@ -42,14 +42,19 @@ describe('contrato GDL B602', () => {
     expect(estojo.personalizados['101:origem_coleta']).toBe('93')
     expect(estojo.extrasGdl['Campo Futuro']).toBe('preservar')
     expect(estojo.comuns.consumida).toBe('P')
-    expect(revolver.personalizados).toEqual({ '106:numero_serie': 'DHGEHY54' })
-    expect(revolver.extrasGdl).toMatchObject({
-      Marca: 'TAURUS',
-      Modelo: 'XX',
-      'Fabricação da Arma': 'brasileira',
-      'Arma é Institucional?': 'NÃO',
+    expect(revolver.personalizados).toEqual({
+      '106:numero_serie': 'DHGEHY54',
+      '106:marca': 'TAURUS',
+      '106:modelo': 'XX',
+      '106:status_numero_serie': '20',
+      '106:calibre_nominal': '26',
+      '106:estado_geral': '53',
+      '106:funcionamento': '57',
+      '106:fabricacao_arma': '63',
+      '106:tambor': '72',
+      '106:arma_institucional': '98',
     })
-    expect(revolver.extrasGdl.Funcionamento).toBe('Eficiente')
+    expect(revolver.extrasGdl).toEqual({})
   })
 
   it('normaliza consumida vazia como Não, seguindo o padrão do GDL', () => {
@@ -94,6 +99,113 @@ describe('contrato GDL B602', () => {
     expect(armaChoque.extrasGdl).toEqual({})
   })
 
+  it('ignora PEÇA TESTE e mapeia ORIGEM/COLETA de PROJÉTEIS confirmada pela API', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1912026,
+      numero: 191,
+      ano: 2026,
+      pecas: [{
+        codPeca: 77101,
+        tipoPeca: 'PEÇA TESTE',
+        identificacao: 'NÃO IMPORTAR',
+        quantidade: 1,
+        unidadeMedida: 'UNIDADES',
+        numeroAnalises: '1',
+        examinadoInLoco: false,
+        dataEntrada: '20/07/2026',
+        lacreEntrada: '',
+        lacreSaida: '',
+        consumida: 'Não',
+        Marca: 'TESTE',
+        Modelo: 'TESTE',
+        NOVA: true,
+      }, {
+        codPeca: 10501,
+        tipoPeca: 'PROJÉTEIS',
+        identificacao: 'T105-20260720',
+        quantidade: 1,
+        unidadeMedida: 'UNIDADES',
+        numeroAnalises: '1',
+        examinadoInLoco: false,
+        dataEntrada: '20/07/2026',
+        lacreEntrada: '',
+        lacreSaida: '',
+        consumida: 'Não',
+        'ORIGEM/COLETA': 'DELEGACIA',
+      }],
+    }))
+
+    expect(resultado.camposEspecificos.pecas).toHaveLength(1)
+    expect(resultado.camposEspecificos.pecas[0]).toMatchObject({
+      tipoCodigo: '105',
+      tipoPeca: 'PROJÉTEIS',
+      personalizados: { '105:origem_coleta': '95' },
+      extrasGdl: {},
+    })
+  })
+
+  it('mapeia os seis tipos confirmados na consulta da REP 191/2026', () => {
+    const dadosComuns = {
+      quantidade: 1,
+      unidadeMedida: 'UNIDADES',
+      numeroAnalises: '1',
+      examinadoInLoco: false,
+      dataEntrada: '20/07/2026',
+      lacreEntrada: '',
+      lacreSaida: '',
+      consumida: 'Não',
+    }
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1912026,
+      numero: 191,
+      ano: 2026,
+      pecas: [{
+        ...dadosComuns, codPeca: 61301, tipoPeca: 'ARMA(S) DE PRESSÃO', identificacao: 'T613-20260720',
+        'Nº Série': 'SERIE-613', Marca: 'MARCA 613', Modelo: 'MODELO 613',
+      }, {
+        ...dadosComuns, codPeca: 47701, tipoPeca: 'FUZIL(IS)', identificacao: 'T477-20260720',
+        'Nº Série': 'SERIE-477', Marca: 'MARCA 477', Modelo: 'MODELO 477', 'Arma é Institucional?': 'NÃO',
+      }, {
+        ...dadosComuns, codPeca: 47901, tipoPeca: 'SUBMETRALHADORA(S)', identificacao: 'T479-20260720',
+        'Nº Série': 'SERIE-479', Marca: 'MARCA 479', Modelo: 'MODELO 479', 'Arma é Institucional?': 'NÃO',
+      }, {
+        ...dadosComuns, codPeca: 47501, tipoPeca: 'GARRUCHA(S)', identificacao: 'T475-20260720',
+        'Nº Série': 'SERIE-475', Marca: 'MARCA 475', Modelo: 'MODELO 475', 'Fabricação da Arma': 'brasileira',
+      }, {
+        ...dadosComuns, codPeca: 47201, tipoPeca: 'ESPINGARDA(S)', identificacao: 'T472-20260720',
+        'Nº Série': 'SERIE-472', Marca: 'MARCA 472', Modelo: 'MODELO 472', Capacidade: '5',
+        'Marca da Arma': '(Fabricante Desconhecido)', 'Status do Número de Série': 'Legível',
+        'Calibre Nominal Espingarda': '12GA', 'Tipo Acabamento': 'Oxidado', 'Estado Geral da Arma': 'Bom',
+        Funcionamento: 'NÃO TESTADO', 'Fabricação da Arma': 'brasileira', 'Arma é Institucional?': 'NÃO',
+      }, {
+        ...dadosComuns, codPeca: 10501, tipoPeca: 'PROJÉTEIS', identificacao: 'T105-20260720',
+        'ORIGEM/COLETA': 'DELEGACIA',
+      }],
+    }))
+
+    expect(resultado.camposEspecificos.pecas.map(peca => ({
+      codigo: peca.tipoCodigo,
+      personalizados: peca.personalizados,
+      extras: peca.extrasGdl,
+    }))).toEqual([
+      { codigo: '613', personalizados: { '613:numero_serie': 'SERIE-613', '613:marca': 'MARCA 613', '613:modelo': 'MODELO 613' }, extras: {} },
+      { codigo: '477', personalizados: { '477:numero_serie': 'SERIE-477', '477:marca': 'MARCA 477', '477:modelo': 'MODELO 477', '477:arma_institucional': '98' }, extras: {} },
+      { codigo: '479', personalizados: { '479:numero_serie': 'SERIE-479', '479:marca': 'MARCA 479', '479:modelo': 'MODELO 479', '479:arma_institucional': '98' }, extras: {} },
+      { codigo: '475', personalizados: { '475:numero_serie': 'SERIE-475', '475:marca': 'MARCA 475', '475:modelo': 'MODELO 475', '475:fabricacao_arma': '63' }, extras: {} },
+      {
+        codigo: '472',
+        personalizados: {
+          '472:numero_serie': 'SERIE-472', '472:marca': 'MARCA 472', '472:modelo': 'MODELO 472',
+          '472:capacidade': '5', '472:marca_arma': '(Fabricante Desconhecido)', '472:status_numero_serie': '20',
+          '472:calibre_nominal': '29', '472:tipo_acabamento': '47', '472:estado_geral': '54',
+          '472:funcionamento': '100', '472:fabricacao_arma': '63', '472:arma_institucional': '98',
+        },
+        extras: {},
+      },
+      { codigo: '105', personalizados: { '105:origem_coleta': '95' }, extras: {} },
+    ])
+  })
+
   it('mapeia os campos de PISTOLA e mantém Marca fora do formulário do laWdo', () => {
     const resultado = converterRepB602(validarGdlRep({
       codRep: 1922026,
@@ -112,6 +224,7 @@ describe('contrato GDL B602', () => {
         lacreSaida: 'L789789',
         dataLiberacao: '18/07/2026',
         consumida: 'Não',
+        'Mat. Incinerado?': 'Sim',
         'Nº Série': 'SA56FG4SA5',
         Marca: 'TAURUS',
         Modelo: 'PT99-D',
@@ -130,6 +243,7 @@ describe('contrato GDL B602', () => {
 
     expect(pistola.comuns.dataEntrada).toBe('2026-07-13')
     expect(pistola.comuns.dataLiberacao).toBe('2026-07-18')
+    expect(pistola.comuns.materialIncinerado).toBe('S')
     expect(pistola.personalizados).toEqual({
       '104:numero_serie': 'SA56FG4SA5',
       '104:modelo': 'PT99-D',
