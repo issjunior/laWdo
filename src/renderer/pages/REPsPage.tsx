@@ -43,6 +43,7 @@ import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteForm
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 import { RepStepper, useRepStepperContext } from '@/components/rep/RepStepper';
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal';
+import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { GdlPecasModal } from '@/components/rep/GdlPecasModal';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
 import type { CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
@@ -193,6 +194,7 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
       // B-602
       const b602 = ce.b602;
       if (b602) {
+        const projecaoB602 = projetarB602ParaLaudo(b602);
         const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean);
         if (envolvidos?.length) {
           let envolvidosHtml = `<table style="${REP_TABLE_STYLES.table}">`;
@@ -210,14 +212,14 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
           html += envolvidosHtml;
         }
 
-        const material = b602.material_enc as Record<string, string>[] | undefined;
+        const material = projecaoB602.materialEncaminhado as Record<string, string>[];
         if (material?.length) {
           html += buildRepNumberedTable('MATERIAL ENCAMINHADO',
             ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
             material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || '']));
         }
 
-        const cartuchos = b602.cartuchos as Record<string, unknown>[] | undefined;
+        const cartuchos = projecaoB602.cartuchos;
         if (cartuchos?.length) {
           html += buildRepNumberedTable('CARTUCHOS',
             ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Projétil', 'Observação'],
@@ -226,7 +228,7 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
               String(c.projetil || ''), Array.isArray(c.observacao) ? (c.observacao as string[]).join(', ') : String(c.observacao || '')]));
         }
 
-        const estojos = b602.estojos as Record<string, unknown>[] | undefined;
+        const estojos = projecaoB602.estojos;
         if (estojos?.length) {
           html += buildRepNumberedTable('ESTOJOS',
             ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Observação'],
@@ -235,7 +237,7 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
               Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : String(e.observacao || '')]));
         }
 
-        const armas = b602.armas as Record<string, unknown>[] | undefined;
+        const armas = projecaoB602.armas;
         if (armas?.length) {
           html += `<table style="${REP_TABLE_STYLES.table}">`;
           html += buildRepTableTitle('ARMAS', 1);

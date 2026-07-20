@@ -2,7 +2,7 @@ import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
-import { converterRepB602 } from '../../services/gdl-b602-normalizador.service.js';
+import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
 
 export const registerGdlHandlers = (): void => {
   ipcMain.handle('gdl:testar-conexao', async (_event, ambiente: string) => {
@@ -86,7 +86,7 @@ export const registerGdlHandlers = (): void => {
 
       return {
         success: true,
-        data: converterRepB602(resultado.dados, {
+        data: converterRepGdl('B-602', resultado.dados, {
           origemInicial: 'gdl',
           ultimaConsulta: {
             ambiente: resultado.ambiente ?? 'homologacao',

@@ -33,6 +33,7 @@ export const gdlPecaSchema = z.object({
   numeroAnalises: textoOpcional,
   quantidadeDescricao: textoOpcional,
   examinadoInLoco: z.union([z.string(), z.boolean()]).nullish().transform(valor => valor ?? false),
+  incinerado: z.union([z.string(), z.boolean()]).nullish().transform(valor => valor == null ? '' : String(valor)),
   dataEntrada: textoOpcional,
   lacreEntrada: textoOpcional,
   lacreSaida: textoOpcional,

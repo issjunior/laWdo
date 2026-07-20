@@ -58,7 +58,13 @@ export function extrairPecasB602(serializado: string | null | undefined): PecaB6
         && candidata.personalizados !== null
         && typeof candidata.extrasGdl === 'object'
         && candidata.extrasGdl !== null
-    })
+    }).map(peca => ({
+      ...peca,
+      comuns: {
+        ...peca.comuns,
+        materialIncinerado: peca.comuns.materialIncinerado === 'S' ? 'S' : 'N',
+      },
+    }))
   } catch {
     return []
   }

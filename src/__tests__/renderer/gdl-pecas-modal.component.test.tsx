@@ -9,7 +9,7 @@ function criarPeca(): PecaB602 {
     tipoCodigo: '476', tipoPeca: 'CARABINA(S)',
     comuns: {
       identificacao: 'CARABINA TESTE', quantidade: 1, unidadeMedida: 'UNIDADE',
-      quantidadeDescricao: '', examinadoInLoco: false, dataEntrada: '', lacreEntrada: '', lacreSaida: '',
+      quantidadeDescricao: '', examinadoInLoco: false, materialIncinerado: 'N', dataEntrada: '', lacreEntrada: '', lacreSaida: '',
       dataLiberacao: '', codigoVestigio: '', consumida: 'N', observacao: '',
     },
     personalizados: {}, extrasGdl: {},

@@ -6,6 +6,7 @@ export interface CamposComunsPecaB602 {
   unidadeMedida: string
   quantidadeDescricao: string
   examinadoInLoco: boolean
+  materialIncinerado: 'S' | 'N'
   dataEntrada: string
   lacreEntrada: string
   lacreSaida: string

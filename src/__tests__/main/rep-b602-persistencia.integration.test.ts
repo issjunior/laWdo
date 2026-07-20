@@ -3,6 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { app, ipcMain } from 'electron'
+import fixtureRevolver from '../fixtures/gdl/rep-191-2026.json'
+import fixturePistola from '../fixtures/gdl/rep-192-2026.json'
 import type { MetadadosIntegracaoGdl, PecaB602 } from '../../shared/types/b602-gdl.types'
 import type { REPFormData } from '../../renderer/components/rep/exam-fields/types'
 import {
@@ -14,6 +16,8 @@ import {
   extrairPecasB602,
 } from '../../renderer/components/rep/exam-fields/integracao-gdl-b602.utils'
 import { mesclarPecasB602DoGdl } from '../../renderer/components/rep/exam-fields/pecas-b602.utils'
+import { validarGdlRep } from '../../main/services/gdl.schema'
+import { converterRepB602 } from '../../main/services/gdl-b602-normalizador.service'
 
 vi.mock('../../main/services/audit-log.service.js', () => ({
   auditCicloVida: vi.fn(),
@@ -73,6 +77,7 @@ function criarPeca(
       unidadeMedida: 'UNIDADE',
       quantidadeDescricao: '',
       examinadoInLoco: false,
+      materialIncinerado: 'N',
       dataEntrada: '',
       lacreEntrada: '',
       lacreSaida: '',
@@ -127,6 +132,89 @@ afterAll(async () => {
 })
 
 describe('persistência B602 por IPC e SQLite', () => {
+  it('normaliza, persiste e reabre a PISTOLA da REP 192/2026 sem perder campos', async () => {
+    const importacao = converterRepB602(validarGdlRep(fixturePistola))
+    const pistolaImportada = importacao.camposEspecificos.pecas[0]
+    const camposEspecificos = serializeCamposEspecificos(
+      'B-602',
+      criarFormulario(importacao.camposGerais),
+      { b602: { pecas: importacao.camposEspecificos.pecas, metadadosIntegracaoGdl: null } },
+    )
+    const criar = handlers.get('rep:create')
+    const buscar = handlers.get('rep:findById')
+
+    const criacao = await criar?.({}, {
+      numero: 'B602-IPC-PISTOLA-192/2026',
+      data_requisicao: '2026-07-13',
+      campos_especificos: camposEspecificos,
+    })
+    const reaberta = await buscar?.({}, criacao?.data?.id)
+    const pistolaReaberta = extrairPecasB602(reaberta?.data?.campos_especificos)[0]
+
+    expect(criacao).toMatchObject({ success: true })
+    expect(reaberta).toMatchObject({ success: true })
+    expect(pistolaReaberta).toEqual(pistolaImportada)
+    expect(pistolaReaberta.comuns).toMatchObject({
+      dataEntrada: '2026-07-13',
+      dataLiberacao: '2026-07-18',
+      materialIncinerado: 'S',
+    })
+    expect(pistolaReaberta.personalizados).toMatchObject({
+      '104:marca_arma': 'Taurus',
+      '104:status_numero_serie': '20',
+      '104:calibre_nominal': '39',
+      '104:tipo_acabamento': '44',
+      '104:estado_geral': '53',
+      '104:funcionamento': '57',
+      '104:fabricacao_arma': '63',
+      '104:arma_institucional': '98',
+    })
+    expect(pistolaReaberta.extrasGdl).toEqual({ Marca: 'TAURUS' })
+  })
+
+  it('normaliza, persiste e reabre as peças confirmadas da REP 191/2026 sem perder campos', async () => {
+    const importacao = converterRepB602(validarGdlRep(fixtureRevolver))
+    const revolverImportado = importacao.camposEspecificos.pecas[0]
+    const camposEspecificos = serializeCamposEspecificos(
+      'B-602',
+      criarFormulario(importacao.camposGerais),
+      { b602: { pecas: importacao.camposEspecificos.pecas, metadadosIntegracaoGdl: null } },
+    )
+    const criar = handlers.get('rep:create')
+    const buscar = handlers.get('rep:findById')
+
+    const criacao = await criar?.({}, {
+      numero: 'B602-IPC-REVOLVER-191/2026',
+      data_requisicao: '2026-07-12',
+      campos_especificos: camposEspecificos,
+    })
+    const reaberta = await buscar?.({}, criacao?.data?.id)
+    const pecasReabertas = extrairPecasB602(reaberta?.data?.campos_especificos)
+    const revolverReaberto = pecasReabertas.find(peca => peca.tipoCodigo === '106')
+
+    expect(criacao).toMatchObject({ success: true })
+    expect(reaberta).toMatchObject({ success: true })
+    expect(pecasReabertas).toEqual(importacao.camposEspecificos.pecas)
+    expect(pecasReabertas.map(peca => peca.tipoCodigo)).toEqual(['106', '613', '477', '479', '475', '472', '105'])
+    expect(pecasReabertas.filter(peca => peca.tipoCodigo !== '106').every(peca => (
+      Object.keys(peca.extrasGdl).length === 0
+    ))).toBe(true)
+    expect(revolverReaberto).toEqual(revolverImportado)
+    expect(revolverReaberto?.personalizados).toEqual({
+      '106:numero_serie': 'DHGEHY54',
+      '106:marca': 'TAURUS',
+      '106:modelo': 'XX',
+      '106:status_numero_serie': '20',
+      '106:calibre_nominal': '26',
+      '106:estado_geral': '53',
+      '106:funcionamento': '57',
+      '106:fabricacao_arma': '63',
+      '106:tambor': '72',
+      '106:arma_institucional': '98',
+    })
+    expect(revolverReaberto?.extrasGdl).toEqual({})
+  })
+
   it('persiste e reabre as reconciliações Mesclar e Substituir no formato canônico', async () => {
     const pecaEditadaLocalmente = criarPeca('peca-gdl-1', 1001, 'CARABINA EDITADA LOCALMENTE')
     pecaEditadaLocalmente.alteradaLocalmente = true

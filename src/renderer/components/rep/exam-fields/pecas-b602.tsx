@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MarcaArmaCombobox } from './marca-arma-combobox'
 import type { PecaB602 } from '@shared/types/b602-gdl.types'
 import {
   CATALOGO_TIPOS_PECA_B602,
@@ -27,7 +28,7 @@ function criarPecaVazia(): PecaB602 {
     tipoCodigo: '', tipoPeca: '',
     comuns: {
       identificacao: '', quantidade: 1, unidadeMedida: UNIDADE_MEDIDA_PADRAO_B602, quantidadeDescricao: '',
-      examinadoInLoco: false, dataEntrada: '', lacreEntrada: '', lacreSaida: '', dataLiberacao: '',
+      examinadoInLoco: false, materialIncinerado: 'N', dataEntrada: '', lacreEntrada: '', lacreSaida: '', dataLiberacao: '',
       codigoVestigio: '', consumida: 'N', observacao: '',
     },
     personalizados: {}, extrasGdl: {},
@@ -107,7 +108,7 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
         </div>
         {camposPersonalizadosPrincipais.length > 0 && <div className="grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2">
           {camposPersonalizadosPrincipais.map(campo => <div className="space-y-2" key={campo.id}><Label>{campo.label}{campo.obrigatorio ? ' *' : ''}</Label>{campo.controle === 'combobox'
-            ? <><Input role="combobox" aria-autocomplete="list" list={`opcoes-${campo.id}`} placeholder="Selecione ou digite..." value={String(editando.personalizados[campo.id] ?? '')} onChange={e => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: e.target.value } })} /><datalist id={`opcoes-${campo.id}`}>{campo.opcoes?.map(opcao => <option key={opcao.codigo} value={opcao.label} />)}</datalist></>
+            ? <MarcaArmaCombobox opcoes={campo.opcoes ?? []} value={String(editando.personalizados[campo.id] ?? '')} onChange={valor => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: valor } })} />
             : campo.controle === 'select'
               ? <Select value={String(editando.personalizados[campo.id] ?? '') || undefined} onValueChange={valor => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: valor } })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{campo.opcoes?.map(opcao => <SelectItem key={opcao.codigo} value={opcao.codigo}>{opcao.label}</SelectItem>)}</SelectContent></Select>
             : campo.controle === 'checkbox'
@@ -115,11 +116,12 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
               : <Input type="text" maxLength={campo.maxLength} value={String(editando.personalizados[campo.id] ?? '')} onChange={e => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campo.id]: e.target.value } })} />}</div>)}
         </div>}
         <div className="space-y-2"><Label>Observação</Label><Input value={editando.comuns.observacao} onChange={e => atualizarComum('observacao', e.target.value)} /></div>
-        <div className="grid grid-cols-1 items-end gap-4 border-t pt-4 md:grid-cols-3">
-          <label className="flex cursor-pointer items-center gap-2 py-2"><Checkbox checked={editando.comuns.examinadoInLoco} onCheckedChange={valor => atualizarComum('examinadoInLoco', valor === true)} /><span className="text-sm font-medium">Examinado In Loco</span></label>
+        <div className="grid grid-cols-1 items-end gap-4 border-t pt-4 md:grid-cols-4">
+          <div className="space-y-2"><Label>Examinado In Loco</Label><Select value={editando.comuns.examinadoInLoco ? 'S' : 'N'} onValueChange={valor => atualizarComum('examinadoInLoco', valor === 'S')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="S">Sim</SelectItem><SelectItem value="N">Não</SelectItem></SelectContent></Select></div>
           {campoArmaInstitucional
-            ? <div className="space-y-2"><Label>{campoArmaInstitucional.label}{campoArmaInstitucional.obrigatorio ? ' *' : ''}</Label><div className="flex flex-wrap gap-4" role="group" aria-label={campoArmaInstitucional.label}>{campoArmaInstitucional.opcoes?.map(opcao => <label className="flex cursor-pointer items-center gap-2" key={opcao.codigo}><Checkbox checked={editando.personalizados[campoArmaInstitucional.id] === opcao.codigo} onCheckedChange={marcado => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campoArmaInstitucional.id]: marcado === true ? opcao.codigo : '' } })} /><span className="text-sm">{opcao.label}</span></label>)}</div></div>
+            ? <div className="space-y-2"><Label>{campoArmaInstitucional.label}{campoArmaInstitucional.obrigatorio ? ' *' : ''}</Label><Select value={String(editando.personalizados[campoArmaInstitucional.id] ?? '') || undefined} onValueChange={valor => setEditando({ ...editando, personalizados: { ...editando.personalizados, [campoArmaInstitucional.id]: valor } })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{campoArmaInstitucional.opcoes?.map(opcao => <SelectItem key={opcao.codigo} value={opcao.codigo}>{opcao.label}</SelectItem>)}</SelectContent></Select></div>
             : <div className="hidden md:block" aria-hidden="true" />}
+          <div className="space-y-2"><Label>Mat. Incinerado?</Label><Select value={editando.comuns.materialIncinerado} onValueChange={valor => atualizarComum('materialIncinerado', valor as 'S' | 'N')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="S">Sim</SelectItem><SelectItem value="N">Não</SelectItem></SelectContent></Select></div>
           <div className="space-y-2"><Label>Consumido/Liberado no Exame?</Label><Select value={editando.comuns.consumida} onValueChange={v => atualizarComum('consumida', v as 'S' | 'N' | 'P')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="S">Sim</SelectItem><SelectItem value="N">Não</SelectItem><SelectItem value="P">Parcialmente</SelectItem></SelectContent></Select></div>
         </div>
       </>}

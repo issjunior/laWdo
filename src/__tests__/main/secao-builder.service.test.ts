@@ -129,4 +129,50 @@ describe('secao-builder.service', () => {
     expect(html).toContain('data-cond-bloco="b602_arma_1_func_toggle"');
     expect(html).not.toContain('data-cond-bloco="b602_arma_2_func_toggle"');
   });
+
+  it('expande armas derivadas da coleção canônica de peças', () => {
+    const secoes = [
+      {
+        id: 'sec-canonica',
+        template_id: 'tpl-1',
+        nome: 'DA ARMA',
+        ordem: 0,
+        repetir_para: 'armas',
+        repetir_titulo: 'ARMA {{b602_arma_1_tipo}}',
+        conteudo: `
+          <div data-cond-bloco="b602_armas_toggle">
+            <p>{{b602_arma_1_marca}}</p>
+            <div data-cond-bloco="b602_arma_N_func_toggle">
+              <p>Funcionamento confirmado</p>
+            </div>
+          </div>
+        `,
+        created_at: '',
+        updated_at: '',
+      },
+    ];
+
+    const resultado = expandirSecoesRepetiveis(secoes, {
+      b602: {
+        pecas: [{
+          idLocal: 'arma-1',
+          origem: 'gdl',
+          alteradaLocalmente: false,
+          tipoCodigo: '104',
+          tipoPeca: 'PISTOLA(S)',
+          comuns: { quantidade: 1, identificacao: 'Pistola', lacreEntrada: 'L1' },
+          personalizados: {
+            '104:marca_arma': 'Taurus',
+            '104:funcionamento': 'Eficiente',
+          },
+          extrasGdl: {},
+        }],
+      },
+    });
+
+    const html = resultado.get('armas') || '';
+    expect(html).toContain('ARMA {{b602_arma_1_tipo}}');
+    expect(html).toContain('Funcionamento confirmado');
+    expect(html).toContain('data-cond-bloco="b602_arma_1_func_toggle"');
+  });
 });

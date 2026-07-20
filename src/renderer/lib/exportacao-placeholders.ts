@@ -1,5 +1,6 @@
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
+import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 
 function numToLetra(n: number): string {
   if (n < 26) return String.fromCharCode(65 + n);
@@ -184,6 +185,20 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
 
       const b602 = especificos.b602 as Record<string, unknown> | undefined;
       if (b602) {
+        const projecaoB602 = projetarB602ParaLaudo(b602);
+        const integracaoGdl = isRecord(especificos.integracaoGdl) ? especificos.integracaoGdl : undefined;
+        const dadosSolicitacao = isRecord(integracaoGdl?.dadosSolicitacao)
+          ? integracaoGdl.dadosSolicitacao
+          : undefined;
+        const solicitanteB602 = String(b602.solicitante_nome || '').trim();
+        const orgaoGdl = String(dadosSolicitacao?.orgao || '').trim();
+        const autoridadeGdl = String(dadosSolicitacao?.autoridade || '').trim();
+        if (!mapping['solicitante_nome']) {
+          mapping['solicitante_nome'] = solicitanteB602 || orgaoGdl;
+        }
+        if (!mapping['autoridade_solicitante_rep'] && autoridadeGdl) {
+          mapping['autoridade_solicitante_rep'] = autoridadeGdl;
+        }
         const envolvidos = b602.envolvidos as string[] | undefined;
         if (envolvidos && envolvidos.length > 0) {
           mapping['b602_envolvidos'] = envolvidos.filter(Boolean).join(', ');
@@ -202,7 +217,7 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
 
         mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602, ctx.solicitanteNome);
 
-        const material = b602.material_enc as Record<string, string>[] | undefined;
+        const material = projecaoB602.materialEncaminhado as Record<string, string>[];
         if (material && material.length > 0) {
           mapping['b602_tabela_material_enc'] = buildNumberedTable(
             'TABELA 2 – MATERIAL ENCAMINHADO',
@@ -211,7 +226,7 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
           );
         }
 
-        const cartuchos = b602.cartuchos as Record<string, unknown>[] | undefined;
+        const cartuchos = projecaoB602.cartuchos;
         if (cartuchos && cartuchos.length > 0) {
           mapping['b602_tabela_cartuchos'] = buildNumberedTable(
             'TABELA 3 – CARTUCHOS',
@@ -229,7 +244,7 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
           );
         }
 
-        const estojos = b602.estojos as Record<string, unknown>[] | undefined;
+        const estojos = projecaoB602.estojos;
         if (estojos && estojos.length > 0) {
           mapping['b602_tabela_estojos'] = buildNumberedTable(
             'TABELA 4 – ESTOJOS',
@@ -250,7 +265,7 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
         mapping['b602_tabela_armas'] = buildArmasTabela(b602);
 
         // Totais
-        const materialEnc = b602.material_enc as Record<string, string>[] | undefined;
+        const materialEnc = projecaoB602.materialEncaminhado;
         if (materialEnc) {
           mapping['b602_total_material_enc'] = String(
             materialEnc.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
@@ -266,7 +281,7 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
             estojos.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
           );
         }
-        const armas = b602.armas as Record<string, string>[] | undefined;
+        const armas = projecaoB602.armas as Record<string, string>[];
         if (armas) {
           mapping['b602_total_armas'] = String(
             armas.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)

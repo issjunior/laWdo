@@ -93,6 +93,17 @@ Object.defineProperty(globalThis, 'crypto', {
   writable: true,
 })
 
+class ResizeObserverMock implements ResizeObserver {
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+}
+
+Object.defineProperty(globalThis, 'ResizeObserver', {
+  value: ResizeObserverMock,
+  writable: true,
+})
+
 // Limpar mocks após cada teste
 afterEach(() => {
   vi.clearAllMocks()

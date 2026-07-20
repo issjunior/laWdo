@@ -5,7 +5,7 @@
 Reproduzir no cadastro de REP B602 do laWdo o fluxo de peças do GDL, incluindo:
 
 - os inputs comuns a todas as peças;
-- os inputs personalizados de cada um dos 17 tipos de item observados;
+- os inputs personalizados dos 16 tipos de item mapeados; `PEÇA TESTE` é ignorada por decisão funcional;
 - criação manual de peças no laWdo;
 - preenchimento automático por consulta somente leitura à API GDL;
 - edição e exclusão local de qualquer peça, inclusive após importação do GDL;
@@ -33,26 +33,25 @@ Implementado no código e coberto pelas validações locais descritas na seção
 - consulta geral somente leitura por `GdlConsultaModal`, com revisão de dados e peças antes da aplicação no mesmo formulário de REP;
 - revisão exclusiva de peças por `GdlPecasModal`, acionada dentro da seção `Peças` e consultando automaticamente o número/ano já preenchido;
 - validação Zod da resposta e normalização no processo principal;
-- catálogo local dos 17 tipos, editor estruturado de peças e persistência em `campos_especificos.b602.pecas`;
-- catálogo completo de `PISTOLA(S)`, com 11 campos locais, selects copiados do GDL e `Marca da Arma` pesquisável entre 1.379 opções ou por texto livre;
+- catálogo local dos 16 tipos suportados, editor estruturado de peças e persistência em `campos_especificos.b602.pecas`;
+- catálogos completos de `PISTOLA(S)` e `REVÓLVER(ES)`, com selects copiados do GDL e `Marca da Arma` pesquisável entre 1.379 opções ou por texto livre;
 - criação, edição e exclusão local de peças manuais ou importadas, sem escrita no GDL;
 - preenchimento de número/ano da REP, data de recebimento, tipo e número da solicitação, cidade, órgão/unidade policial, autoridade solicitante, BO, IP e envolvidos quando disponíveis;
 - classificação resiliente das famílias BO e IP, com preservação do tipo exato e aviso para números conflitantes;
 - catálogo compartilhado dos tipos de origem do GDL e seletor controlado que trata tipo+número como um par;
 - preenchimento da cidade por select editável com o catálogo do Paraná;
-- mapeamento confirmado de `CARABINA(S)`, `ESTOJO(S)` e, para `REVÓLVER(ES)`, somente `Nº Série`;
+- round-trip confirmado de `ARMA(S) DE PRESSÃO`, `CARABINA(S)`, `ESPINGARDA(S)`, `ESTOJO(S)`, `FUZIL(IS)`, `GARRUCHA(S)`, `PISTOLA(S)`, `PROJÉTEIS`, `REVÓLVER(ES)` e `SUBMETRALHADORA(S)`, com fixtures anonimizadas e reabertura por IPC/SQLite para as REPs `191/2026` e `192/2026`;
 - preservação de campos da API ainda não mapeados, sem perda silenciosa;
 - consulta auxiliar de envolvidos em homologação, com falha tolerada e aviso quando nenhum nome reconhecível for retornado;
 - serialização canônica de peças e metadados pelo contexto tipado do `b602Service`;
 - round-trip por handlers IPC e SQLite temporário, cobrindo criação, Mesclar, Substituir e reabertura sem recriar arrays legados;
-- normalização comum aos 17 tipos de Data de Entrada, Data de Liberação, Quant. Descrição, Código do Vestígio e Observação, aceitando chaves canônicas ou labels visuais;
+- normalização comum aos 16 tipos mapeados de Data de Entrada, Data de Liberação, Quant. Descrição, Código do Vestígio e Observação, aceitando chaves canônicas ou labels visuais;
 - reidratação validada de `dadosSolicitacao`, `dadosInvestigacao` e `ultimaConsulta`, incluindo leitura do nome legado `origensCandidatasSolicitacao`;
 - reconciliação por `codPecaGdl`: a consulta geral inicia com todas as peças retornadas marcadas, enquanto a revisão exclusiva marca somente as peças GDL ainda presentes no formulário e mantém desmarcadas as removidas anteriormente.
 
 Limitações e pendências confirmadas na auditoria do código:
 
-- campos adicionais de `REVÓLVER(ES)` e `incinerado` de `ESTOJO(S)` permanecem apenas preservados;
-- a conversão B602 ainda é chamada diretamente por `gdl.handlers.ts`; o registro genérico de adaptadores por exame ainda não existe;
+- `Marca da Arma` e `Tipo Acabamento` de `REVÓLVER(ES)` estão implementados pelo contrato visual, mas ainda não tiveram valor não vazio confirmado pela API; `incinerado` de `ESTOJO(S)` permanece pendente de contrato visual específico;
 - a consulta auxiliar de envolvidos existe apenas em homologação, é sequencial e pode somar até 15 segundos por filtro em caso de timeout;
 - o modo `Substituir dados do GDL` e o modal exclusivo removem da coleção local peças GDL desmarcadas, inclusive as que deixaram de aparecer na consulta; peças manuais permanecem;
 - os testes automatizados cobrem normalização, catálogo, reconciliação, serialização canônica, reidratação, seletor de tipo de solicitação, editor completo, `GdlPecasModal`, consulta geral, aplicação integrada à `REPsPage` e persistência por IPC/SQLite; permanecem sem cobertura a rede GDL real e as projeções para o laudo;
@@ -117,41 +116,43 @@ Campos personalizados confirmados:
 | `ESTOJO(S)` | `101` | `ORIGEM/COLETA` | select | sim | `DELEGACIA=95`, `LOCAL DE CRIME=93`, `NECRÓPSIA=94`, `Outro=11` |
 | `ESTOJO(S)` | `101` | `incinerado` | contrato visual pendente | pendente | valor `NÃO` observado pela API na REP `191/2026` |
 | `REVÓLVER(ES)` | `106` | `Nº Série` | texto | não | valor observado pela API |
-| `REVÓLVER(ES)` | `106` | `Marca` | texto | não | valor observado pela API; preservado como extra, sem campo local específico |
-| `REVÓLVER(ES)` | `106` | `Modelo` | texto | não | valor observado pela API; preservado como extra, sem campo local específico |
-| `REVÓLVER(ES)` | `106` | `Status do Número de Série` | contrato visual pendente | pendente | `Legível` observado pela API |
-| `REVÓLVER(ES)` | `106` | `Calibre Nominal Revolver` | contrato visual pendente | pendente | `.38SPL` observado pela API |
-| `REVÓLVER(ES)` | `106` | `Estado Geral da Arma` | contrato visual pendente | pendente | `Regular` observado pela API |
-| `REVÓLVER(ES)` | `106` | `Funcionamento` | contrato visual pendente | pendente | `Eficiente` observado pela API |
-| `REVÓLVER(ES)` | `106` | `Fabricação da Arma` | select | não | preservado como extra, sem campo local específico |
-| `REVÓLVER(ES)` | `106` | `Tambor` | contrato visual pendente | pendente | `reversível para a direita` observado pela API |
-| `REVÓLVER(ES)` | `106` | `Arma é Institucional?` | lista de seleção | pendente | preservado como extra, sem campo local específico |
+| `REVÓLVER(ES)` | `106` | `Marca` | texto, 50 | não | valor observado e mapeado pela API |
+| `REVÓLVER(ES)` | `106` | `Modelo` | texto, 50 | não | valor observado e mapeado pela API |
+| `REVÓLVER(ES)` | `106` | `Marca da Arma` | combobox pesquisável | não | 1.379 opções; nenhum valor persistido na amostra |
+| `REVÓLVER(ES)` | `106` | `Status do Número de Série` | select | não | `Ilegível=19`, `Legível=20`, `Não Aparente=10`, `Revelado=22`, `Suprimido intencionalmente=21` |
+| `REVÓLVER(ES)` | `106` | `Calibre Nominal Revolver` | select | não | `.22 Curto=24`, `.22LR=23`, `.32S&W=25`, `.357 Magnum=28`, `.38SPL=26`, `38 Curto=27` |
+| `REVÓLVER(ES)` | `106` | `Tipo Acabamento` | select | não | mesmos cinco valores confirmados de `PISTOLA(S)`; nenhum valor persistido na amostra |
+| `REVÓLVER(ES)` | `106` | `Estado Geral da Arma` | select | não | `Bom=54`, `Regular=53`, `Ruim=55` |
+| `REVÓLVER(ES)` | `106` | `Funcionamento` | select | sim | `Eficiente=57`, `Ineficiente=56`, `NÃO TESTADO=100` |
+| `REVÓLVER(ES)` | `106` | `Fabricação da Arma` | select | não | valor observado e mapeado pela API |
+| `REVÓLVER(ES)` | `106` | `Tambor` | select | não | `reversível para a direita=72`, `reversível para a esquerda=73` |
+| `REVÓLVER(ES)` | `106` | `Arma é Institucional?` | lista de seleção exclusiva | sim | `Indeterminado=60`, `NÃO=98`, `SIM=97` |
 
 A peça `ARMA(S) DE PRESSÃO` retornou apenas campos comuns na amostra. O seu formulário foi posteriormente observado e tem campos personalizados; por isso, a amostra da API não substitui o round-trip com valores preenchidos.
 
 ### 2.2.1 Catálogo visual integral confirmado
 
-Todos os 17 tipos foram selecionados individualmente no GDL web de homologação. A família de armas foi reinspecionada em `19/07/2026`; as linhas correspondentes abaixo substituem o levantamento inicial de `10/07/2026`. A tabela confirma o schema visual, mas não substitui a validação de round-trip pela API descrita na seção 12.
+Todos os 17 tipos oferecidos pelo GDL foram selecionados individualmente em homologação. Somente 16 integram o catálogo do laWdo: `PEÇA TESTE` foi excluída por decisão funcional em `20/07/2026` e deve ser ignorada na importação. A tabela confirma o schema visual, mas não substitui a validação de round-trip pela API descrita na seção 12.
 
 | Código | Tipo | Campos personalizados visíveis no GDL web | Status de API |
 |---:|---|---|---|
 | `289` | `ARMA(S) DE CHOQUE` | `Nº Série`, `Marca`, `Modelo` — texto, opcionais | chaves mapeadas após confirmação na peça de teste; repetir importação para concluir o round-trip |
-| `613` | `ARMA(S) DE PRESSÃO` | `Nº Série` (`text`, 25), `Marca` (`text`, 50), `Modelo` (`text`, 50) — opcionais | resposta observada sem esses valores; round-trip pendente |
+| `613` | `ARMA(S) DE PRESSÃO` | `Nº Série` (`text`, 25), `Marca` (`text`, 50), `Modelo` (`text`, 50) — opcionais | retorno API com valores preenchidos, importação e reabertura confirmados |
 | `476` | `CARABINA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório (`Indeterminado=60`, `NÃO=98`, `SIM=97`) | confirmado |
-| `272` | `CARREGADOR(ES)` | `Nº Série`, `Marca`, `Modelo` — texto, opcionais | round-trip pendente |
-| `472` | `ESPINGARDA(S)` | 12 campos: três textos básicos, `Capacidade`, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação e institucional | round-trip pendente; catálogo extenso de marcas exige controle pesquisável |
+| `272` | `CARREGADOR(ES)` | nenhum campo personalizado na reinspeção e no cadastro da amostra `T272-20260720` | round-trip da API pendente |
+| `472` | `ESPINGARDA(S)` | 12 campos: três textos básicos, `Capacidade`, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação e institucional | retorno API preenchido, importação e reabertura confirmados |
 | `473` | `ESPOLETA(S)` | nenhum | round-trip pendente |
 | `101` | `ESTOJO(S)` | `ORIGEM/COLETA` obrigatório (`DELEGACIA=95`, `LOCAL DE CRIME=93`, `NECRÓPSIA=94`, `Outro=11`); API também retornou `incinerado` | confirmado para `ORIGEM/COLETA`; contrato de `incinerado` pendente |
-| `477` | `FUZIL(IS)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório | round-trip pendente |
-| `475` | `GARRUCHA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente |
-| `178` | `OUTROS` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente |
-| `771` | `PEÇA TESTE` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | round-trip pendente; confirmar em produção |
-| `104` | `PISTOLA(S)` | 11 campos locais: `Nº Série`, `Modelo`, `Capacidade`, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação e institucional; o texto livre `Marca` do GDL não é mapeado por decisão funcional | round-trip pendente; `Marca da Arma` usa as 1.379 opções observadas e também aceita marca digitada fora do catálogo; demais selects copiam opções e códigos do GDL |
+| `477` | `FUZIL(IS)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório | retorno API preenchido, importação e reabertura confirmados |
+| `475` | `GARRUCHA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Fabricação da Arma` select opcional | retorno API preenchido, importação e reabertura confirmados |
+| `178` | `OUTROS` | nenhum campo personalizado na reinspeção e no cadastro da amostra `T178-20260720` | round-trip da API pendente |
+| `771` | `PEÇA TESTE` | observado apenas para diagnosticar o formulário | excluído do catálogo e ignorado pela importação do laWdo por decisão funcional |
+| `104` | `PISTOLA(S)` | 11 campos locais: `Nº Série`, `Modelo`, `Capacidade`, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação e institucional; o texto livre `Marca` do GDL não é mapeado por decisão funcional | round-trip confirmado com a fixture anonimizada da REP `192/2026`; `Marca da Arma` aceita catálogo ou texto livre |
 | `478` | `PISTOLETE(S)` | nenhum campo personalizado na reinspeção | round-trip pendente |
 | `572` | `PÓLVORA` | nenhum | round-trip pendente |
-| `105` | `PROJÉTEIS` | nenhum | round-trip pendente |
+| `105` | `PROJÉTEIS` | `ORIGEM/COLETA` obrigatório, com as mesmas quatro opções e códigos de `ESTOJO(S)` | retorno API preenchido, importação e reabertura confirmados |
 | `106` | `REVÓLVER(ES)` | 12 campos: três textos básicos, `Marca da Arma`, status do número, calibre, acabamento, estado geral, `Funcionamento`, fabricação, `Tambor` e institucional | retorno API confirmado na REP `191/2026`; catálogo extenso de marcas exige controle pesquisável |
-| `479` | `SUBMETRALHADORA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório | round-trip pendente |
+| `479` | `SUBMETRALHADORA(S)` | `Nº Série`, `Marca`, `Modelo` opcionais; `Arma é Institucional?` obrigatório | retorno API preenchido, importação e reabertura confirmados |
 
 `Fabricação da Arma` possui as opções: `argentina=61`, `austríaca=62`, `brasileira=63`, `canadense=64`, `czechoslovakia=66`, `espanhola=67`, `filipena=68`, `finlandesa=69`, `italiana=70`, `mexicana=71`, `Não Aparente=10` e `sul-coreana=65`; o placeholder `Selecione=0` não é valor persistível.
 
@@ -229,7 +230,7 @@ A solução é híbrida.
 
 ### 3.2 O que é explícito
 
-- catálogo dos 17 tipos e seus códigos;
+- catálogo dos 16 tipos mapeados e seus códigos;
 - definição de label, controle, obrigatoriedade e opções de cada campo personalizado;
 - aliases para labels que possam variar no GDL;
 - mapeamentos semânticos para campos técnicos já usados pelo laudo, placeholders e seções repetíveis.
@@ -295,7 +296,7 @@ interface AdaptadorImportacaoExame<TPayload, TDados> {
 }
 ```
 
-Um registro como `EXAM_IMPORT_REGISTRY` resolve o adaptador pelo código ou natureza do exame. B602 será a primeira implementação. Um novo exame poderá fornecer seu catálogo, schema e adaptador sem alterar o transporte GDL nem duplicar o modal de busca.
+O registro em `gdl-adaptadores.service.ts` resolve o adaptador pelo código do exame. B602 é a primeira implementação; um código sem adaptador produz erro explícito. Um novo exame poderá fornecer seu catálogo, schema e adaptador sem alterar o transporte GDL nem duplicar o modal de busca.
 
 Separação de responsabilidades:
 
@@ -306,31 +307,30 @@ Separação de responsabilidades:
 - formulário do exame: edição e validação do modelo local;
 - service do exame: serialização e desserialização.
 
-## 4. Catálogo dos 17 tipos de item
+## 4. Catálogo dos 16 tipos mapeados
 
 O valor `0` (`Selecione um Tipo`) não integra o catálogo.
 
 | Ordem | Código | Tipo no GDL | Família inicial | Status do schema | Etapa |
 |---:|---:|---|---|---|---:|
 | 1 | `289` | `ARMA(S) DE CHOQUE` | arma | web confirmado; round-trip pendente | 3 |
-| 2 | `613` | `ARMA(S) DE PRESSÃO` | arma | web confirmado; round-trip pendente | 3 |
+| 2 | `613` | `ARMA(S) DE PRESSÃO` | arma | round-trip confirmado | 3 |
 | 3 | `476` | `CARABINA(S)` | arma | campos e retorno API confirmados | 2 |
-| 4 | `272` | `CARREGADOR(ES)` | componente | web confirmado; round-trip pendente | 4 |
-| 5 | `472` | `ESPINGARDA(S)` | arma | web confirmado; round-trip pendente | 3 |
+| 4 | `272` | `CARREGADOR(ES)` | componente | sem personalizados na reinspeção; round-trip pendente | 4 |
+| 5 | `472` | `ESPINGARDA(S)` | arma | round-trip confirmado | 3 |
 | 6 | `473` | `ESPOLETA(S)` | componente | web confirmado; round-trip pendente | 4 |
 | 7 | `101` | `ESTOJO(S)` | componente balístico | campos e retorno API confirmados | 2 |
-| 8 | `477` | `FUZIL(IS)` | arma | web confirmado; round-trip pendente | 3 |
-| 9 | `475` | `GARRUCHA(S)` | arma | web confirmado; round-trip pendente | 3 |
-| 10 | `178` | `OUTROS` | genérico | web confirmado; round-trip pendente | 5 |
-| 11 | `771` | `PEÇA TESTE` | técnico/homologação | web confirmado; round-trip pendente e presença em produção a confirmar | 5 |
-| 12 | `104` | `PISTOLA(S)` | arma | web confirmado na REP `192/2026`; 11 campos locais e opções cadastrados; round-trip da API pendente | 3 |
-| 13 | `478` | `PISTOLETE(S)` | arma | web confirmado; round-trip pendente | 3 |
-| 14 | `572` | `PÓLVORA` | componente balístico | web confirmado; round-trip pendente | 4 |
-| 15 | `105` | `PROJÉTEIS` | componente balístico | web confirmado; round-trip pendente | 4 |
-| 16 | `106` | `REVÓLVER(ES)` | arma | retorno API confirmado; somente `Nº Série` mapeado, demais propriedades preservadas | 3 |
-| 17 | `479` | `SUBMETRALHADORA(S)` | arma | web confirmado; round-trip pendente | 3 |
+| 8 | `477` | `FUZIL(IS)` | arma | round-trip confirmado | 3 |
+| 9 | `475` | `GARRUCHA(S)` | arma | round-trip confirmado | 3 |
+| 10 | `178` | `OUTROS` | genérico | sem personalizados na reinspeção; round-trip pendente | 5 |
+| 11 | `104` | `PISTOLA(S)` | arma | round-trip confirmado pela fixture da REP `192/2026`, incluindo persistência e reabertura por IPC/SQLite | 3 |
+| 12 | `478` | `PISTOLETE(S)` | arma | web confirmado; round-trip pendente | 3 |
+| 13 | `572` | `PÓLVORA` | componente balístico | web confirmado; round-trip pendente | 4 |
+| 14 | `105` | `PROJÉTEIS` | componente balístico | round-trip confirmado | 4 |
+| 15 | `106` | `REVÓLVER(ES)` | arma | round-trip confirmado pela fixture da REP `191/2026`, incluindo os dez campos preenchidos e reabertura por IPC/SQLite | 3 |
+| 16 | `479` | `SUBMETRALHADORA(S)` | arma | round-trip confirmado | 3 |
 
-O catálogo local deve conter exatamente esses 17 códigos enquanto esse for o conjunto apresentado pelo GDL para B602. Alteração futura do catálogo deve ser detectada por teste de contrato, não absorvida silenciosamente.
+O catálogo local deve conter exatamente esses 16 códigos. O GDL oferece também `PEÇA TESTE` (`771`), mas o normalizador deve descartá-la antes de montar `b602.pecas`. Alteração futura do catálogo deve ser detectada por teste de contrato, não absorvida silenciosamente.
 
 ## 5. Inputs comuns das peças
 
@@ -345,10 +345,10 @@ O editor local deve reproduzir os inputs comuns relevantes para a confecção do
 | `unidadeMedida` | Medida | sim | select preenchido por padrão com `UNIDADES`; opções copiadas do catálogo visual do GDL |
 | `quantidadeDescricao` | Quant. Descrição | não confirmado | texto local preservado e preenchido quando a API devolver a chave canônica ou o label visual |
 | `examinadoInLoco` | Examinado In Loco | sim | checkbox, booleano normalizado |
-| `dataEntrada` | Data de Entrada | sim | regra comum aos 17 tipos: normalizar `DD/MM/AAAA`, data brasileira com horário ou ISO para `AAAA-MM-DD`, formato do input local |
+| `dataEntrada` | Data de Entrada | sim | regra comum aos 16 tipos mapeados: normalizar `DD/MM/AAAA`, data brasileira com horário ou ISO para `AAAA-MM-DD`, formato do input local |
 | `lacreEntrada` | Lacre Entrada | sim | texto |
 | `lacreSaida` | Lacre Saída | sim | texto |
-| `dataLiberacao` | Data de Liberação | sim | regra comum aos 17 tipos: normalizar data brasileira, com horário, ou ISO para `AAAA-MM-DD` |
+| `dataLiberacao` | Data de Liberação | sim | regra comum aos 16 tipos mapeados: normalizar data brasileira, com horário, ou ISO para `AAAA-MM-DD` |
 | `codigoVestigio` | Código do Vestígio | não confirmado | texto local preservado e preenchido quando a API devolver a chave canônica ou o label visual |
 | `consumida` | Consumido/Liberado no Exame? | sim | `Sim`, `Não` ou `Parcialmente`; padrão `Não`, sem opção vazia |
 | `observacao` | Observação | não confirmado | observação da peça, não da REP inteira; preencher quando a API devolver a chave canônica ou o label visual |
@@ -454,7 +454,7 @@ interface MetadadosIntegracaoGdl {
 
 - `idLocal` identifica o item no CRUD do laWdo.
 - `codPecaGdl` é referência externa e nunca deve ser usado como chave primária local.
-- `tipoCodigo` vem do catálogo de 17 tipos.
+- `tipoCodigo` vem do catálogo dos 16 tipos mapeados.
 - `personalizados` usa IDs canônicos definidos no catálogo local.
 - `extrasGdl` preserva propriedades ainda desconhecidas com a chave original do GDL.
 - `alteradaLocalmente` registra que uma peça importada foi modificada no laWdo.
@@ -493,7 +493,7 @@ Essa regra também vale para valores enumerados dos campos gerais. Um valor não
 
 ## 8. Catálogo local de metadados
 
-Enquanto não existir endpoint oficial de metadados, as definições dos 17 tipos ficam versionadas no código e disponíveis offline. Os payloads externos são validados por Zod no processo principal; o catálogo canônico é uma constante TypeScript pura e compartilhada entre main e renderer, sem dependência de React e ainda sem schema Zod próprio.
+Enquanto não existir endpoint oficial de metadados, as definições dos 16 tipos mapeados ficam versionadas no código e disponíveis offline. Os payloads externos são validados por Zod no processo principal; o catálogo canônico é uma constante TypeScript pura e compartilhada entre main e renderer, sem dependência de React e ainda sem schema Zod próprio.
 
 Estrutura atual:
 
@@ -520,9 +520,9 @@ Cada tipo deve registrar:
 - data e ambiente da última verificação;
 - referência da fixture anonimizada usada no teste.
 
-Estado atual do catálogo: os 17 códigos possuem label, família, status de round-trip e campos visuais conhecidos. A estrutura aceita aliases de tipo/campo e distingue mapeamentos de API confirmados, mas ainda faltam aliases efetivamente cadastrados, data e ambiente da última verificação, referência de fixture por tipo e validação estrutural independente. Somente `CARABINA(S)` e `ESTOJO(S)` estão marcados como `roundTripConfirmado`; `REVÓLVER(ES)` permanece não confirmado apesar do mapeamento parcial de `Nº Série`.
+Estado atual do catálogo: os 16 códigos suportados possuem label, família, status de round-trip e campos visuais conhecidos. A validação estrutural independente rejeita quantidade de tipos incorreta, códigos zero/duplicados, labels ou aliases duplicados, IDs de campos fora do prefixo do tipo e códigos de opções zero/duplicados. `PEÇA TESTE` não integra o catálogo e é filtrada na conversão. As amostras da REP `191/2026` confirmaram o contrato preenchido de `613`, `472`, `477`, `475`, `105` e `479`; com `476`, `101`, `104` e `106`, são dez tipos marcados como `roundTripConfirmado`.
 
-Não criar `gdl_catalogos` ou sincronização automática nesta primeira implementação. As opções de endpoints oficiais já existentes, como unidades de medida, podem ganhar cache separado depois. O formulário dos 17 tipos não pode depender de scraping em nenhum ambiente.
+Não criar `gdl_catalogos` ou sincronização automática nesta primeira implementação. As opções de endpoints oficiais já existentes, como unidades de medida, podem ganhar cache separado depois. O formulário dos 16 tipos mapeados não pode depender de scraping em nenhum ambiente.
 
 Também não criar `gdl_reps_cache` nesta fase. Após o usuário aplicar a consulta, o dado normalizado já ficará persistido na REP local. O payload bruto deve existir apenas em memória durante revisão/importação.
 
@@ -553,7 +553,7 @@ Fluxo visual obrigatório da seção `Peças`:
 
 1. exibir a lista das peças já adicionadas ou importadas;
 2. ao clicar em `Adicionar peça`, abrir o editor local inicialmente com `Tipo do Item`;
-3. ao selecionar um dos 17 tipos, resolver imediatamente sua definição no catálogo local;
+3. ao selecionar um dos 16 tipos mapeados, resolver imediatamente sua definição no catálogo local;
 4. renderizar, no mesmo editor, primeiro todos os inputs comuns e depois os inputs personalizados daquele tipo;
 5. não exigir consulta ao GDL nem VPN para montar os campos, pois o catálogo é local;
 6. validar os obrigatórios conforme o catálogo antes de adicionar/atualizar a peça na coleção;
@@ -581,7 +581,7 @@ Cada card/linha deve exibir:
 ### 9.2 Inclusão manual
 
 1. usuário abre `Adicionar peça` na seção `Peças` do formulário da REP;
-2. usuário escolhe um dos 17 tipos em `Tipo do Item`;
+2. usuário escolhe um dos 16 tipos suportados em `Tipo do Item`;
 3. laWdo renderiza imediatamente os inputs comuns;
 4. laWdo renderiza em seguida os inputs personalizados do catálogo daquele tipo;
 5. valida obrigatórios e tipos;
@@ -645,7 +645,7 @@ Na persistência atual, o objeto completo é gravado em `campos_especificos.inte
 Regras de desempenho e renderização:
 
 - carregar o catálogo local uma vez e indexar tipos/campos por código;
-- renderizar somente o editor da peça ativa, não os formulários dos 17 tipos simultaneamente;
+- renderizar somente o editor da peça ativa, não os formulários dos 16 tipos simultaneamente;
 - exibir as demais peças como cards/resumos leves;
 - usar `useWatch` apenas nos campos necessários ao tipo ativo e à completude, evitando observar toda a REP em cada card;
 - estabilizar callbacks e definições de catálogo para evitar remontagem dos inputs;
@@ -687,12 +687,12 @@ O mapeamento de família não deve inventar equivalências. Exemplos:
 3. continuar os round-trips da família de armas, priorizando `REVÓLVER(ES)` por já possuir retorno rico da API e depois `ESPINGARDA(S)` pelo schema visual amplo ainda não implementado localmente;
 4. validar os demais tipos da família de armas, componentes e materiais balísticos;
 5. validar tipos genéricos e exclusivos de homologação;
-6. consolidar aliases, obrigatoriedade, fixtures e cobertura dos 17 tipos;
+6. consolidar aliases, obrigatoriedade, fixtures e cobertura dos 16 tipos mapeados;
 7. executar a validação somente leitura em produção.
 
-O registro genérico de adaptadores pode ser implementado antes da inclusão de outro tipo de exame GDL, mas não deve bloquear os testes integrados nem as projeções B602 para o laudo.
+O registro genérico de adaptadores está implementado com B602 como primeira entrada e rejeição explícita de exames não registrados.
 
-### Etapa 1 — Fundação e correções do contrato — implementada, com uma abstração pendente
+### Etapa 1 — Fundação e correções do contrato — concluída
 
 - criar tipos compartilhados da REP e das peças GDL;
 - criar schemas Zod para resposta, origem, andamento e peça dinâmica;
@@ -710,10 +710,10 @@ O registro genérico de adaptadores pode ser implementado antes da inclusão de 
 - reidratar metadados completos e manter leitura do nome legado das origens;
 - criar catálogo compartilhado de tipos de origem e corrigir o fluxo `IP/PM`.
 
-Pendências desta etapa:
+Concluído em `20/07/2026`:
 
-- criar o registro mínimo de adaptadores por exame; hoje o handler instancia diretamente o conversor B602;
-- adicionar validação estrutural do catálogo local e seus aliases, separada do schema Zod do payload da API;
+- registro mínimo de adaptadores por exame entre o handler e o conversor B602;
+- validação estrutural do catálogo local separada do schema Zod do payload da API.
 
 ### Etapa 2 — Editor genérico + tipos já confirmados — concluída
 
@@ -751,47 +751,46 @@ Decisão transversal registrada em `19/07/2026`: `Nº Análises` não integra o 
 | Tipo | Estado local atual | Próxima confirmação |
 |---|---|---|
 | `ARMA(S) DE CHOQUE` (`289`) | textos básicos e importação de chaves implementados | repetir importação preenchida e marcar round-trip somente após reabertura |
-| `ARMA(S) DE PRESSÃO` (`613`) | três textos básicos implementados | obter retorno preenchido da API |
-| `ESPINGARDA(S)` (`472`) | schema visual de 12 campos conhecido; catálogo local específico ainda vazio | implementar controles/opções e executar round-trip |
-| `FUZIL(IS)` (`477`) | textos básicos e institucional implementados | executar round-trip preenchido |
-| `GARRUCHA(S)` (`475`) | textos básicos e fabricação implementados | executar round-trip preenchido |
-| `PISTOLA(S)` (`104`) | 11 campos, opções, marca editável e normalização implementados | repetir REP `192/2026`, salvar e reabrir; este é o próximo teste imediato |
+| `ARMA(S) DE PRESSÃO` (`613`) | retorno preenchido, importação e reabertura confirmados | concluído |
+| `ESPINGARDA(S)` (`472`) | 12 campos, retorno preenchido, importação e reabertura confirmados | concluído |
+| `FUZIL(IS)` (`477`) | retorno preenchido, importação e reabertura confirmados | concluído |
+| `GARRUCHA(S)` (`475`) | retorno preenchido, importação e reabertura confirmados | concluído |
+| `PISTOLA(S)` (`104`) | round-trip confirmado com a fixture da REP `192/2026` e reabertura por IPC/SQLite | concluído |
 | `PISTOLETE(S)` (`478`) | reinspeção sem campos personalizados | confirmar round-trip dos campos comuns |
-| `REVÓLVER(ES)` (`106`) | API rica confirmada; apenas Nº Série mapeado | implementar os campos já observados e comparar com a REP `191/2026` |
-| `SUBMETRALHADORA(S)` (`479`) | textos básicos e institucional implementados | executar round-trip preenchido |
+| `REVÓLVER(ES)` (`106`) | round-trip confirmado com a fixture da REP `191/2026` e reabertura por IPC/SQLite | confirmar separadamente `Marca da Arma` e `Tipo Acabamento` quando houver amostra com valores não vazios |
+| `SUBMETRALHADORA(S)` (`479`) | retorno preenchido, importação e reabertura confirmados | concluído |
 
 `CARABINA(S)` já integra a Etapa 2.
 
-`REVÓLVER(ES)` possui retorno de API confirmado na REP `191/2026`, mas somente `Nº Série` está mapeado no laWdo. Os demais atributos retornados permanecem preservados como extras por decisão funcional.
+`PISTOLA(S)` possui fixture anonimizada da REP `192/2026`. A fixture da REP `191/2026` passou a incluir as amostras preenchidas de `613`, `472`, `477`, `475`, `105` e `479`; todas passaram pelo fluxo integrado de normalização, serialização canônica, criação por handler IPC, SQLite e reabertura sem perda.
 
 Ao final, adaptar seções repetíveis, placeholders e toggles para trabalhar com todas as peças classificadas como arma, não apenas com o formato antigo de `b602.armas`.
 
-### Etapa 4 — Componentes e materiais balísticos — pendente
+### Etapa 4 — Componentes e materiais balísticos — em andamento
 
-Implementar o schema web já confirmado e executar o round-trip de API:
+Os schemas visuais foram reinspecionados e amostras distintivas foram salvas na REP `191/2026`. Falta consultar a API e concluir o round-trip:
 
-1. `CARREGADOR(ES)` (`272`)
-2. `ESPOLETA(S)` (`473`)
-3. `PÓLVORA` (`572`)
-4. `PROJÉTEIS` (`105`)
+1. `CARREGADOR(ES)` (`272`): somente campos comuns;
+2. `ESPOLETA(S)` (`473`): somente campos comuns;
+3. `PÓLVORA` (`572`): somente campos comuns;
+4. `PROJÉTEIS` (`105`): `ORIGEM/COLETA` obrigatório, com as opções `95`, `93`, `94` e `11`; retorno API, importação e reabertura confirmados.
 
 `ESTOJO(S)` já integra a Etapa 2.
 
-Confirmar separadamente o tratamento de `Cartuchos` existente no laWdo, pois `CARTUCHO(S)` não apareceu entre os 17 tipos oferecidos pelo GDL na amostra. Não remover o recurso local sem decisão funcional específica.
+Confirmar separadamente o tratamento de `Cartuchos` existente no laWdo, pois `CARTUCHO(S)` não apareceu entre os tipos oferecidos pelo GDL na amostra. Não remover o recurso local sem decisão funcional específica.
 
-### Etapa 5 — Tipos genéricos e de homologação — pendente
+### Etapa 5 — Tipo genérico — em andamento
 
-- implementar e validar por API `OUTROS` (`178`), incluindo seus campos livres confirmados;
-- implementar e validar por API `PEÇA TESTE` (`771`);
-- confirmar se `PEÇA TESTE` existe em produção;
-- manter o tipo disponível por ambiente conforme o catálogo confirmado, sem misturar dados de homologação e produção.
+- manter `OUTROS` (`178`) sem campos personalizados, conforme reinspeção e cadastro da amostra `T178-20260720`;
+- validar por API e executar round-trip dos campos comuns de `OUTROS`;
+- ignorar `PEÇA TESTE` (`771`) na conversão e não disponibilizá-la no editor do laWdo.
 
-### Etapa 6 — Consolidação dos 17 tipos — pendente
+### Etapa 6 — Consolidação dos 16 tipos — pendente
 
-- manter o teste que protege os 17 códigos únicos e ampliar a validação estrutural de aliases, IDs e códigos de opções;
+- manter os testes que protegem os 16 códigos e a exclusão de `771`, além da validação estrutural de aliases, IDs e códigos de opções;
 - revisar obrigatoriedade e opções de todos os campos;
 - revisar aliases da API;
-- validar cadastro manual, importação, edição, exclusão e reabertura para os 17 tipos;
+- validar cadastro manual, importação, edição, exclusão e reabertura para os 16 tipos mapeados;
 - atualizar placeholders/tabelas do laudo somente onde houver equivalência semântica aprovada;
 - realizar teste exploratório final em homologação.
 
@@ -811,7 +810,7 @@ Se produção divergir de homologação, o catálogo não deve ser atualizado si
 
 ## 12. Protocolo obrigatório de confirmação por tipo
 
-Os 17 schemas visuais já foram coletados em homologação; os 15 tipos sem retorno de API confirmado não devem ser considerados concluídos por suposição. Para cada um deles:
+Os 16 schemas mapeados foram coletados em homologação; os 6 tipos sem round-trip confirmado não devem ser considerados concluídos por suposição. Para cada um deles:
 
 1. selecionar o tipo no GDL web de homologação;
 2. registrar código e label exatos;
@@ -853,18 +852,18 @@ Regras adicionais:
 | Área | Responsabilidade |
 |---|---|
 | `src/shared/types/b602-gdl.types.ts` | contratos normalizados GDL/B602 compartilhados entre main, preload e renderer |
-| `src/shared/catalogos/b602-gdl.catalogo.ts` | fonte canônica dos 17 tipos, campos, opções, aliases e mapeamentos de API confirmados |
+| `src/shared/catalogos/b602-gdl.catalogo.ts` | fonte canônica dos 16 tipos mapeados, campos, opções, aliases e mapeamentos de API confirmados |
 | `src/shared/catalogos/b602-marcas-armas.catalogo.ts` | 1.379 opções observadas para `Marca da Arma`, usadas pelo combobox com fallback de texto livre |
 | `src/main/services/gdl.schema.ts` | validação Zod da fronteira externa, interpretação segura do JSON e derivação dos tipos crus validados |
 | `src/main/services/gdl.service.ts` | transporte e autenticação |
 | `src/main/services/gdl-b602-normalizador.service.ts` | normalização da REP, peças, origens, envolvidos e avisos após a validação Zod, consumindo o catálogo compartilhado |
+| `src/main/services/gdl-adaptadores.service.ts` | registro dos conversores por código de exame; B602 é a primeira entrada e exames desconhecidos são rejeitados |
 | `src/main/ipc/handlers/gdl.handlers.ts` | fronteira IPC somente leitura |
 | `src/preload/index.ts` e tipos | exposição segura e tipada |
 | `GdlConsultaModal.tsx` | busca geral, revisão de campos e seleção inicial de peças, todas marcadas por padrão |
 | `GdlPecasModal.tsx` | consulta automática e revisão exclusiva das peças conforme a coleção atual do formulário |
 | `TipoSolicitacaoSelect.tsx` | seleção controlada de origem GDL ou tipo manual, mantendo tipo e número coerentes |
 | `src/shared/catalogos/tipos-origem-gdl.catalogo.ts` | códigos e labels observados no campo de origem do GDL |
-| registro/adaptadores de importação | pendente; converter o resultado validado pelo exame sem acoplar `gdl.handlers.ts` diretamente ao B602 |
 | `exam-fields/index.ts` | registrar `pecas_b602` e substituir as seções B602 persistentes antigas no mapa do formulário |
 | `exam-fields/pecas-b602.tsx` | seção `Peças`, lista, seleção do tipo e editor dinâmico de campos comuns/personalizados |
 | `exam-fields/pecas-b602.utils.ts` | mesclagem e substituição por `codPecaGdl`, preservando alterações locais e peças manuais |
@@ -894,7 +893,7 @@ Estado em `19/07/2026`: além de schema/normalizador, catálogo B602, reconcilia
 
 ### Catálogo
 
-- possuir exatamente 17 códigos únicos;
+- possuir exatamente 16 códigos únicos e não incluir `771`;
 - não aceitar código `0`;
 - garantir label, família e aliases únicos;
 - validar IDs canônicos de campos;
@@ -960,9 +959,9 @@ Para cada etapa:
 
 ## 17. Critérios de aceitação
 
-Os itens abaixo combinam invariantes já implementadas e validações ainda abertas. Permanecem pendentes o registro de adaptadores, as projeções para o laudo, os round-trips funcionais dos tipos restantes e a validação de produção. A persistência por IPC/SQLite, a substituição baseada na seleção, a reidratação integral, a serialização canônica e a seleção `IP/PM` estão implementadas.
+Os itens abaixo combinam invariantes já implementadas e validações ainda abertas. Permanecem pendentes os round-trips funcionais dos tipos restantes e a validação de produção. Registro de adaptadores, validação estrutural, persistência por IPC/SQLite, substituição baseada na seleção, reidratação integral, serialização canônica, seleção `IP/PM` e projeções canônicas para o laudo estão implementados. A ampliação da cobertura de placeholders será planejada separadamente após a conclusão deste plano.
 
-- Os 17 tipos do catálogo podem ser selecionados no laWdo.
+- Os 16 tipos do catálogo podem ser selecionados no laWdo; `PEÇA TESTE` não é oferecida nem importada.
 - `Nova REP` inicia o formulário vazio e `Consultar GDL` inicia o mesmo formulário com carga revisada da API.
 - Aplicar dados do GDL nunca salva a REP automaticamente.
 - A seção `Peças` é exibida no cadastro e na edição da REP B602 dentro de `REPsPage.tsx`/`RepStepper`.
@@ -999,18 +998,20 @@ Os itens abaixo combinam invariantes já implementadas e validações ainda aber
 
 ## 19. Verificação atual
 
-Em `19/07/2026`, após os testes do editor, da consulta geral e da persistência integrada:
+Em `20/07/2026`, após a reinspeção dos tipos pendentes, a exclusão funcional de `PEÇA TESTE` e os testes do editor, da consulta geral e da persistência integrada:
 
 - `npm run type-check`: aprovado;
 - `npm run lint`: aprovado;
-- `npm test`: 23 arquivos aprovados, 148 testes aprovados e 1 ignorado;
+- `npm test`: 26 arquivos aprovados, 169 testes aprovados e 1 ignorado;
 - `pecas-b602.component.test.tsx` protege acionamento da revisão GDL, validações, inclusão manual, troca de tipo, preservação de campos comuns e edição/exclusão local;
 - `gdl-pecas-modal.component.test.tsx` protege consulta automática, estado inicial dos checkboxes e aplicação da seleção;
 - `gdl-consulta-modal.component.test.tsx` protege seleção inicial, Mesclar, Substituir, desmarcação de peças e cancelamento;
 - `reps-gdl-integration.test.tsx` protege a aplicação no mesmo formulário da `REPsPage`, a importação estruturada e a ausência de chamada automática a `rep.create`;
 - testes de reconciliação protegem remoção opcional de peças GDL ausentes ou desmarcadas e preservação das peças manuais;
-- `rep-b602-persistencia.integration.test.ts` protege criação, atualização e reabertura por handlers IPC e SQLite temporário nos cenários Mesclar e Substituir;
-- testes do normalizador cobrem os campos comuns dos 17 tipos, aliases visuais, datas e o mapeamento completo de `PISTOLA(S)`.
-- smoke manual da consulta, revisão, Mesclar, Substituir, persistência visual e falha de rede executado sem problemas observados.
+- `rep-b602-persistencia.integration.test.ts` protege criação, atualização e reabertura por handlers IPC e SQLite temporário nos cenários Mesclar e Substituir, além dos round-trips completos das fixtures de `PISTOLA(S)` e `REVÓLVER(ES)`;
+- testes do normalizador cobrem os campos comuns dos tipos mapeados, aliases visuais, datas, a exclusão de `PEÇA TESTE` e o mapeamento completo de `PISTOLA(S)` e dos valores preenchidos de `REVÓLVER(ES)` na fixture da REP `191/2026`;
+- testes de catálogo e componente protegem os 16 tipos suportados, a ausência de `771`, `ORIGEM/COLETA` obrigatório de `PROJÉTEIS` e a ordem, controles, limites e opções dos 12 campos de `REVÓLVER(ES)` e `ESPINGARDA(S)` observados no GDL web.
+- testes do registro de adaptadores protegem a seleção de B602 e a rejeição explícita de exames ainda não registrados.
+- a consulta pelo modal do laWdo retornou e confirmou os valores preenchidos de `613`, `472`, `477`, `475`, `105` e `479`; esses campos foram integrados ao normalizador, à fixture da REP `191/2026` e ao round-trip de persistência. Permanecem pendentes os seis tipos sem retorno preenchido da API.
 
 A cobertura não foi recalculada nesta atualização documental. Permanecem sem teste automatizado ponta a ponta a rede GDL real e o consumo de `b602.pecas` pelo laudo.
