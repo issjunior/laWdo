@@ -1,57 +1,22 @@
-# Exportacao do laudo e relacao com o conteudo salvo
+# Exportação do laudo e resolução de placeholders
 
-## Principio atual
+## Resolução
 
-O laudo exportado parte sempre do HTML salvo em `laudos.conteudo`.
-Esse HTML nao e estatico: ele nasce e pode ser recalculado a partir de template + dados da REP.
+A exportação resolve placeholders a partir dos dados da REP e do contexto adicional. Para B-602, o estado persistido continua em `campos_especificos.b602.pecas`; antes de montar tabelas, totais e placeholders individuais de armas, os consumidores chamam `projetarB602ParaLaudo()`.
 
-## Papel de `laudo.service.ts`
+A projeção fornece a visão de material encaminhado, cartuchos, estojos e armas consumida por `exportacao-placeholders.ts`, `LaudosPage.tsx`, `tabelas-placeholder.ts` e pelo preview da REP. Ela prioriza `b602.pecas` e só usa arrays legados como fallback de leitura. Não criar mapeamentos paralelos desses dados em cada exportador.
 
-`src/main/services/laudo.service.ts` prepara o conteudo base em dois momentos centrais:
+## Placeholders e tabelas B-602
 
-### Criacao inicial
+As tabelas `b602_tabela_material_enc`, `b602_tabela_cartuchos`, `b602_tabela_estojos` e `b602_tabela_armas`, seus totais e placeholders indexados de armas passam a refletir a projeção canônica. Quantidades numéricas são apresentadas com dois dígitos e datas ISO válidas são formatadas em padrão brasileiro nas tabelas.
 
-`criarLaudoInicial()`:
+Para dados de solicitação, `solicitante_nome` preserva valor já existente e, quando vazio, usa `b602.solicitante_nome` ou o órgão vindo de `integracaoGdl.dadosSolicitacao`. `autoridade_solicitante_rep` usa a autoridade da REP e, quando ausente, a recebida pela integração GDL.
 
-1. busca as secoes do template
-2. le `reps.campos_especificos`
-3. executa `filtrarSecoesAtivas(secoes, especificos)`
-4. executa `expandirSecoesRepetiveis(secoesAtivas, especificos)`
-5. monta o HTML com `buildHtml(secoesAtivas, expansoes, especificos)`
-6. salva o resultado em `laudos.conteudo`
+## Invariantes
 
-### Sincronizacao posterior
+- A projeção é derivada; não cria uma segunda persistência.
+- Dados desconhecidos do GDL não são promovidos a placeholders automaticamente.
+- A compatibilidade legada é somente de leitura; novas gravações B-602 usam `pecas`.
+- A ausência de peças gera tabela/placeholder vazio, sem falha de exportação.
 
-`sincronizarSecoesCondicionais(laudoId)` repete esse pipeline para manter o laudo alinhado quando a REP muda.
-
-## O que isso significa para exportacao
-
-Antes do preview PDF, do DOCX ou do ODT, o sistema parte de um HTML que ja pode conter:
-
-- secoes filtradas por condicao
-- grupos repetidos por arma
-- titulos estruturais com `data-secao-id`
-- blocos derivados de `campos_especificos`
-
-Ou seja: a exportacao nao resolve apenas placeholders simples; ela tambem consome um laudo cujo corpo ja foi moldado pelo builder.
-
-## Campos vindos da REP
-
-As partes mais sensiveis para exportacao sao:
-
-- placeholders simples de REP
-- placeholders do B-602
-- tabelas completas do B-602
-- headings reindexados de secoes repetiveis
-
-Se o conteudo salvo estiver desatualizado em relacao a REP, a exportacao vai refletir esse descompasso. Por isso a sincronizacao condicional e parte do ciclo real do laudo exportavel.
-
-## Regra pratica
-
-Ao mexer em:
-
-- `secao-builder.service.ts`
-- `campos_especificos` do B-602
-- logica de sincronizacao em `laudo.service.ts`
-
-e obrigatorio revisar o impacto no HTML que segue para preview e exportacao.
+Testes de exportação protegem a projeção de B-602 e a resolução de órgão/autoridade. A geração visual completa de PDF continua dependente do fluxo de preview.
