@@ -14,9 +14,11 @@ updates:
       npm-producao:
         applies-to: "version-updates"
         dependency-type: "production"
+        update-types: ["minor", "patch"]
       npm-desenvolvimento:
         applies-to: "version-updates"
         dependency-type: "development"
+        update-types: ["minor", "patch"]
       npm-seguranca:
         applies-to: "security-updates"
         patterns:
@@ -36,6 +38,7 @@ updates:
         applies-to: "version-updates"
         patterns:
           - "*"
+        update-types: ["minor", "patch"]
       github-actions-seguranca:
         applies-to: "security-updates"
         patterns:
