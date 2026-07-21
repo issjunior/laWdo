@@ -1209,7 +1209,7 @@ export const REPsPage: React.FC = () => {
     const validation = createSolicitanteSchema.safeParse(solicitanteQCFormData);
     if (!validation.success) {
       const fieldErrors: Partial<Record<keyof CreateSolicitanteInput, string>> = {};
-      validation.error.errors.forEach((err) => {
+      validation.error.issues.forEach((err) => {
         const field = err.path[0] as keyof CreateSolicitanteInput;
         fieldErrors[field] = err.message;
       });
