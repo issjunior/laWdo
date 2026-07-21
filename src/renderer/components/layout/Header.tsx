@@ -6,7 +6,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import {
   Info,
   LogOut,
-  Github,
+  Code2,
   Mail,
   Moon,
   Sun,
@@ -175,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                       className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors group"
                     >
                       <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20">
-                        <Github className="h-4 w-4 text-primary" />
+                        <Code2 className="h-4 w-4 text-primary" />
                       </div>
                       <div className="flex flex-col">
                         <span className="text-xs font-medium">Repositório GitHub</span>
