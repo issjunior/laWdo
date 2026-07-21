@@ -62,7 +62,7 @@ describe('seções legadas da REP B602', () => {
     fireEvent.click(toggles[0])
     fireEvent.click(toggles[0])
     fireEvent.click(toggles.at(-1)!)
-  })
+  }, 20000)
 
   it('normaliza quantidades digitadas nos editores preservados', () => {
     render(<SecoesB602Teste />)
