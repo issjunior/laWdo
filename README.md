@@ -19,7 +19,7 @@ O laWdo auxilia peritos forenses no preenchimento de laudos, **reduzindo o retra
 
 ## Pré-requisitos
 
-- [Node.js](https://nodejs.org/) versão 18 ou superior
+- [Node.js](https://nodejs.org/) versão 24 ou superior
 - npm (incluído no Node.js)
 
 ## Instalação e Execução

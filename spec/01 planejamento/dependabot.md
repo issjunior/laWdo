@@ -127,6 +127,14 @@
 - Criada a issue [#30](https://github.com/issjunior/laWdo/issues/30) para rastrear a migração e a regressão visual corrigida.
 - Commit `update_tailwind_4` publicado na branch `dependabot/tailwind-4`; PR [#31](https://github.com/issjunior/laWdo/pull/31) aberta como rascunho. Próximo passo: acompanhar a CI e realizar squash-merge apenas após o check `Qualidade` verde.
 
+### 21/07/2026 — Tranche 8: Node 24 em validação
+
+- PR #31 mesclada por squash no commit `384a1e42dabcd9de8305497a9070074657546385`; a CI da `main` foi concluída com sucesso e a issue #30 foi encerrada.
+- Criada a branch `dependabot/node-24` a partir da `main` validada.
+- O contrato de desenvolvimento foi alinhado a Node 24: `package.json` e `package-lock.json` exigem `node >=24.0.0`, o README informa o novo pré-requisito e `.nvmrc` permite que usuários do NVM selecionem `24`.
+- Ambiente local validado em Node `24.14.1` e npm `11.17.0`. Validações aprovadas: `npm run type-check`, `npm run lint`, `npm run test:coverage` (188 aprovados, 1 ignorado) e `npm run build`.
+- Não há alteração de interface ou runtime empacotado; smoke visual não é necessário. Criada a issue [#32](https://github.com/issjunior/laWdo/issues/32); próximo passo: publicar a PR e condicionar o squash-merge à CI verde.
+
 ## Diagnóstico atual
 
 ### PR #13 — GitHub Actions
