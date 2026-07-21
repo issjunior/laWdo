@@ -193,7 +193,7 @@ class LaudoService extends BaseService<LaudoRow> {
       const laudos = await executeQuery<LaudoRow>('SELECT id FROM laudos WHERE rep_id = ?', [repId]);
       for (const laudo of laudos) {
         await executeNonQuery('DELETE FROM imagens_laudo WHERE laudo_id = ?', [laudo.id]);
-        const laudoDir = path.join(app.getPath('userData'), 'laudos', laudo.id);
+        const laudoDir = path.join(app.getPath('userData'), 'imagens', 'laudos', laudo.id);
         if (fs.existsSync(laudoDir)) {
           fs.rmSync(laudoDir, { recursive: true, force: true });
         }
@@ -210,7 +210,7 @@ class LaudoService extends BaseService<LaudoRow> {
       const laudo = await this.findById(laudoId);
       if (!laudo) throw new Error('Laudo não encontrado');
 
-      const laudoDir = path.join(app.getPath('userData'), 'laudos', laudoId);
+      const laudoDir = path.join(app.getPath('userData'), 'imagens', 'laudos', laudoId);
       if (fs.existsSync(laudoDir)) {
         fs.rmSync(laudoDir, { recursive: true, force: true });
       }

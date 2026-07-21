@@ -1462,9 +1462,10 @@ export const LaudosPage: React.FC = () => {
   }, [panelPoppedOut]);
 
   const handlePopOut = () => {
+    if (!editando?.id) return;
     setIlustracoesPanelOpen(false);
     setPanelPoppedOut(true);
-    window.ipcAPI.ilustracoes.openPanel();
+    window.ipcAPI.ilustracoes.openPanel(editando.id);
 
     panelCallbacksRef.current.syncCurrentState();
     setTimeout(() => panelCallbacksRef.current.syncCurrentState(), 300);

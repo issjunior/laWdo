@@ -11,6 +11,21 @@ const numeroFlexivel = z.union([z.number(), z.string()]).transform((valor, conte
   return numero
 })
 
+function normalizarChaveGdl(chave: string): string {
+  return chave.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+}
+
+function aplicarAliasesDeCapitalizacao(payload: unknown, aliases: Record<string, string>): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload
+  const entrada = payload as Record<string, unknown>
+  const saida = { ...entrada }
+  for (const [chave, valor] of Object.entries(entrada)) {
+    const destino = aliases[normalizarChaveGdl(chave)]
+    if (destino && saida[destino] === undefined) saida[destino] = valor
+  }
+  return saida
+}
+
 export const gdlOrigemSchema = z.object({
   tipo: textoOpcional,
   numero: textoOpcional,
@@ -23,6 +38,24 @@ export const gdlAndamentoSchema = z.object({
   nomeUsuario: textoOpcional,
   descricao: textoOpcional,
 }).passthrough()
+
+const gdlArquivoRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(payload, {
+  nomearquivo: 'nomeArquivo',
+  tamanho: 'tamanho',
+  hash: 'hash',
+  dataupload: 'dataUpload',
+  fileid: 'fileId',
+}), z.object({
+  nomeArquivo: textoOpcional,
+  tamanho: z.union([z.number(), z.string()]).nullish().transform(valor => {
+    if (valor == null || valor === '') return null
+    const numero = Number(valor)
+    return Number.isFinite(numero) && numero >= 0 ? numero : null
+  }),
+  hash: z.string().nullish().transform(valor => valor ?? null),
+  dataUpload: textoOpcional.transform(valor => valor || null),
+  fileId: textoOpcional.transform(valor => valor || null),
+}).catchall(z.unknown()))
 
 export const gdlPecaSchema = z.object({
   codPeca: numeroFlexivel,
@@ -43,7 +76,12 @@ export const gdlPecaSchema = z.object({
   observacao: textoOpcional,
 }).catchall(z.unknown())
 
-export const gdlRepSchema = z.object({
+export const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(payload, {
+  anexoseletronicos: 'anexosEletronicos',
+  arquivosadicionais: 'arquivosAdicionais',
+  anexoeletronico: 'anexoEletronico',
+  tipoanexoeletronico: 'tipoAnexoEletronico',
+}), z.object({
   codRep: numeroFlexivel,
   numero: numeroFlexivel,
   ano: numeroFlexivel,
@@ -51,7 +89,11 @@ export const gdlRepSchema = z.object({
   envolvidos: z.array(z.unknown()).default([]),
   pecas: z.array(gdlPecaSchema).default([]),
   andamentos: z.array(gdlAndamentoSchema).default([]),
-}).catchall(z.unknown())
+  anexoEletronico: z.union([z.boolean(), z.string(), z.number()]).nullish().transform(valor => valor ?? false),
+  tipoAnexoEletronico: z.union([z.string(), z.number()]).nullish().transform(valor => valor == null ? null : String(valor)),
+  anexosEletronicos: z.array(gdlArquivoRepSchema).default([]),
+  arquivosAdicionais: z.array(gdlArquivoRepSchema).default([]),
+}).catchall(z.unknown()))
 
 export const gdlRepInvestigacaoSchema = z.object({
   envolvidos: z.unknown().optional(),

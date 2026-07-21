@@ -2,6 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.js';
 import './styles/globals.css';
+import type {
+  AtualizarOrdemImagemLaudoEntrada,
+  ImagemLaudoPersistida,
+  SalvarImagemLaudoEntrada,
+} from '@shared/types/imagem-laudo.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -35,7 +40,13 @@ interface IpcGrupoLegado {
 }
 
 interface IpcIlustracoesLegado {
-  openPanel: () => void;
+  listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida[]; error?: string }>;
+  salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+  excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
+  arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
+  atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => Promise<{ success: boolean; error?: string }>;
+  atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => Promise<{ success: boolean; error?: string }>;
+  openPanel: (laudoId: string) => void;
   closePanel: () => void;
   syncToPanel: (data: Record<string, unknown>) => void;
   sendAction: (action: string, ...args: unknown[]) => void;

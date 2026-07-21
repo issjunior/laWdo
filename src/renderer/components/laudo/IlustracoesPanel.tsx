@@ -30,6 +30,7 @@ import {
   Minus,
   Search,
   SearchX,
+  ImageDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +50,9 @@ import "yet-another-react-lightbox/plugins/captions.css";
 import "yet-another-react-lightbox/plugins/counter.css";
 import { toast } from 'sonner';
 import { Lens } from '@/components/ui/lens';
+import { GdlImagensRepModal } from '@/components/laudo/GdlImagensRepModal';
+import type { ImagemRepGdlCapturada } from '@shared/types/gdl-arquivos.types';
+import type { ImagemLaudoPersistida } from '@shared/types/imagem-laudo.types';
 
 function readFileAsDataUri(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -86,6 +90,27 @@ export interface ImagemLaudo {
   sequencia: number;
   created_at: string;
   dummy?: boolean;
+  origem?: 'gdl';
+  sha256?: string;
+  nomeArquivo?: string;
+}
+
+export async function criarImagemLaudo(
+  dataUri: string,
+  legenda = '',
+  origem?: 'gdl',
+  sha256?: string,
+  id: string = crypto.randomUUID(),
+  nomeArquivo = 'imagem',
+): Promise<ImagemLaudo> {
+  return {
+    id, url: dataUri, thumbnailUrl: await generateThumbnail(dataUri, 300), legenda,
+    numero_figura: 0, sequencia: 0, created_at: new Date().toISOString(), origem, sha256, nomeArquivo,
+  };
+}
+
+function sugerirLegenda(nomeArquivo: string): string {
+  return nomeArquivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
 }
 
 interface IlustracoesPanelProps {
@@ -182,6 +207,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
                     className="h-8 text-xs bg-transparent border-transparent hover:border-input focus:bg-background pr-7"
                     placeholder="Descreva a figura..."
                   />
+                  {imagem.origem === 'gdl' && <Badge variant="secondary" className="absolute right-1 top-1 h-5 text-[9px]">GDL</Badge>}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-[200px] text-xs">
@@ -366,6 +392,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalGdlAberto, setModalGdlAberto] = useState(false);
+  const hashesGdlCapturados = useRef(new Set<string>());
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [lightboxEditorIndex, setLightboxEditorIndex] = useState(-1);
@@ -379,13 +407,38 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const carregarImagens = () => {
-    setImagens([]);
-    setLoading(false);
-  };
-
   useEffect(() => {
-    carregarImagens();
+    let cancelado = false;
+    setLoading(true);
+    void window.ipcAPI.ilustracoes.listarImagens(laudoId).then(async resultado => {
+      if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível carregar as imagens do laudo.');
+      const carregadas = await Promise.all(resultado.data.map((imagem: ImagemLaudoPersistida) => criarImagemLaudo(
+        imagem.dataUri,
+        imagem.legenda,
+        imagem.origem === 'gdl' ? 'gdl' : undefined,
+        imagem.sha256,
+        imagem.id,
+        imagem.nomeArquivo,
+      ).then(preparada => ({
+        ...preparada,
+        sequencia: imagem.sequencia,
+        numero_figura: imagem.sequencia,
+        created_at: imagem.createdAt,
+      }))));
+      if (cancelado) return;
+      setImagens(carregadas);
+      hashesGdlCapturados.current = new Set(
+        carregadas.flatMap(imagem => imagem.origem === 'gdl' && imagem.sha256 ? [imagem.sha256] : []),
+      );
+    }).catch((error: unknown) => {
+      if (cancelado) return;
+      setImagens([]);
+      hashesGdlCapturados.current.clear();
+      toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as imagens do laudo.');
+    }).finally(() => {
+      if (!cancelado) setLoading(false);
+    });
+    return () => { cancelado = true; };
   }, [laudoId]);
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -396,6 +449,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       const newArray = arrayMove(imagens, oldIndex, newIndex);
       const reindexed = newArray.map((img, idx) => ({ ...img, sequencia: idx + 1, numero_figura: idx + 1 }));
       setImagens(reindexed);
+      void window.ipcAPI.ilustracoes.atualizarOrdem(laudoId, reindexed.map(imagem => ({ id: imagem.id, sequencia: imagem.sequencia })));
       onReorder?.(reindexed);
       onRefreshHtml();
     }
@@ -405,44 +459,111 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     const files = e.target.files;
     if (!files) return;
 
+    let proximaSequencia = imagens.length + 1;
+    const novasImagens: ImagemLaudo[] = [];
     for (const file of Array.from(files)) {
       try {
         const dataUri = await readFileAsDataUri(file);
-        const thumbnailDataUri = await generateThumbnail(dataUri, 300);
-        setImagens(prev => {
-          const newImg: ImagemLaudo = {
-            id: crypto.randomUUID(),
-            url: dataUri,
-            thumbnailUrl: thumbnailDataUri,
-            legenda: '',
-            numero_figura: 0,
-            sequencia: 0,
-            created_at: new Date().toISOString(),
-          };
-          const updated = [...prev, newImg];
-          return updated.map((img, idx) => ({ ...img, numero_figura: idx + 1, sequencia: idx + 1 }));
+        const novaImagem = await criarImagemLaudo(dataUri, '', undefined, undefined, undefined, file.name);
+        novaImagem.numero_figura = proximaSequencia;
+        novaImagem.sequencia = proximaSequencia;
+        const resultado = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
+          id: novaImagem.id,
+          nomeArquivo: file.name,
+          dataUri,
+          legenda: novaImagem.legenda,
+          origem: 'local',
+          sequencia: proximaSequencia,
         });
-      } catch {
-        toast.error(`Erro ao carregar ${file.name}`);
+        if (!resultado.success) throw new Error(resultado.error || 'Não foi possível armazenar a imagem.');
+        novasImagens.push(novaImagem);
+        proximaSequencia += 1;
+      } catch (error) {
+        toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `Erro ao carregar ${file.name}`);
       }
     }
+    if (novasImagens.length > 0) setImagens(prev => [...prev, ...novasImagens]);
     e.target.value = '';
+  };
+
+  const handleImagensGdlCapturadas = async (capturadas: ImagemRepGdlCapturada[]) => {
+    const novasImagens: ImagemLaudo[] = [];
+    let proximaSequencia = imagens.length + 1;
+    for (const capturada of capturadas) {
+      if (hashesGdlCapturados.current.has(capturada.sha256)) continue;
+      try {
+        const novaImagem = await criarImagemLaudo(
+          capturada.dataUri,
+          sugerirLegenda(capturada.nomeArquivo),
+          'gdl',
+          capturada.sha256,
+          undefined,
+          capturada.nomeArquivo,
+        );
+        novaImagem.numero_figura = proximaSequencia;
+        novaImagem.sequencia = proximaSequencia;
+        const resultado = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
+          id: novaImagem.id,
+          nomeArquivo: capturada.nomeArquivo,
+          dataUri: capturada.dataUri,
+          legenda: novaImagem.legenda,
+          origem: 'gdl',
+          sequencia: proximaSequencia,
+        });
+        if (!resultado.success) throw new Error(resultado.error || 'Não foi possível armazenar a imagem.');
+        novasImagens.push(novaImagem);
+        hashesGdlCapturados.current.add(capturada.sha256);
+        proximaSequencia += 1;
+      } catch (error) {
+        toast.error(error instanceof Error ? `${capturada.nomeArquivo}: ${error.message}` : `Erro ao preparar ${capturada.nomeArquivo}`);
+      }
+    }
+    if (novasImagens.length === 0 && capturadas.length > 0) {
+      toast.info('As imagens selecionadas já foram adicionadas neste painel.');
+      return;
+    }
+    setImagens(prev => [...prev, ...novasImagens]);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja excluir permanentemente esta imagem?')) return;
-    setImagens(prev =>
-      prev.filter(img => img.id !== id).map((img, idx) => ({ ...img, sequencia: idx + 1, numero_figura: idx + 1 }))
-    );
+    const removida = imagens.find(imagem => imagem.id === id);
+    const resultado = await window.ipcAPI.ilustracoes.excluirImagem(laudoId, id);
+    if (!resultado.success) {
+      toast.error(resultado.error || 'Não foi possível excluir a imagem.');
+      return;
+    }
+    const restantes = imagens
+      .filter(img => img.id !== id)
+      .map((img, idx) => ({ ...img, sequencia: idx + 1, numero_figura: idx + 1 }));
+    setImagens(restantes);
+    if (removida?.origem === 'gdl' && removida.sha256) hashesGdlCapturados.current.delete(removida.sha256);
+    void window.ipcAPI.ilustracoes.atualizarOrdem(laudoId, restantes.map(imagem => ({ id: imagem.id, sequencia: imagem.sequencia })));
     onDeleteImage?.(id);
   };
 
   const handleUpdateLegenda = (id: string, legenda: string) => {
     setImagens(prev => prev.map(img => img.id === id ? { ...img, legenda } : img));
+    void window.ipcAPI.ilustracoes.atualizarLegenda(laudoId, id, legenda).then(resultado => {
+      if (!resultado.success) toast.error(resultado.error || 'Não foi possível salvar a legenda.');
+    });
+  };
+
+  const arquivarImagensInseridas = async (ids: string[]) => {
+    const resultados = await Promise.all(ids.map(id => window.ipcAPI.ilustracoes.arquivarImagem(laudoId, id)));
+    const falha = resultados.find(resultado => !resultado.success);
+    if (falha) toast.error(falha.error || 'Não foi possível arquivar as imagens inseridas.');
+  };
+
+  const handleDeleteFiguraEditor = (id: string) => {
+    void window.ipcAPI.ilustracoes.excluirImagem(laudoId, id).then(resultado => {
+      if (!resultado.success) toast.error(resultado.error || 'Não foi possível excluir o arquivo da figura.');
+    });
+    onDeleteImage?.(id);
   };
 
   const filteredImagens = [...imagens]
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    .sort((a, b) => a.sequencia - b.sequencia);
 
   return (
     <div className="flex flex-col h-full bg-muted/20">
@@ -485,9 +606,13 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
             <input type="file" multiple accept="image/*" className="hidden" onChange={handleUpload} />
           </label>
         </Button>
+        <Button className="w-full gap-2" variant="outline" onClick={() => setModalGdlAberto(true)}>
+          <ImageDown size={16} /> Buscar imagens da REP
+        </Button>
         {onInsertAll && imagens.length > 0 && (
           <Button variant="secondary" className="w-full gap-2" onClick={() => {
             onInsertAll(imagens);
+            void arquivarImagensInseridas(imagens.map(imagem => imagem.id));
             setImagens([]);
           }}>
             <ImageIcon size={16} /> Inserir Todas no Laudo
@@ -525,6 +650,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                       onUpdateLegenda={handleUpdateLegenda}
                       onInsert={img => {
                         onInsertImage(img.url, img.id, img.legenda);
+                        void arquivarImagensInseridas([img.id]);
+                        if (img.origem === 'gdl' && img.sha256) hashesGdlCapturados.current.delete(img.sha256);
                         setImagens(prev =>
                           prev.filter(i => i.id !== img.id).map((i, idx) => ({ ...i, sequencia: idx + 1, numero_figura: idx + 1 }))
                         );
@@ -571,7 +698,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                 imagem={fig}
                 index={idx}
                 ativo={fig.id === figuraAtivaId}
-                onDelete={onDeleteImage ? onDeleteImage : () => {}}
+                onDelete={handleDeleteFiguraEditor}
                 onUpdateLegenda={onUpdateLegendaInEditor || (() => {})}
                 onPreview={() => setLightboxEditorIndex(idx)}
                 onScrollToFigure={onScrollToFigure}
@@ -588,6 +715,13 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         close={() => setLightboxIndex(-1)}
         slides={filteredImagens.map(img => ({ src: img.url, title: img.legenda }))}
         plugins={[Zoom]}
+      />
+
+      <GdlImagensRepModal
+        aberto={modalGdlAberto}
+        laudoId={laudoId}
+        onAbertoChange={setModalGdlAberto}
+        onCapturadas={imagensCapturadas => { void handleImagensGdlCapturadas(imagensCapturadas); }}
       />
 
       {figurasNoEditor && figurasNoEditor.length > 0 && (
