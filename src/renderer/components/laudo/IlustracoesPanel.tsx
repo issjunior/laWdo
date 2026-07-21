@@ -51,6 +51,8 @@ import "yet-another-react-lightbox/plugins/counter.css";
 import { toast } from 'sonner';
 import { Lens } from '@/components/ui/lens';
 import { GdlImagensRepModal } from '@/components/laudo/GdlImagensRepModal';
+import { SeletorFiguraDialog } from '@/components/laudo/SeletorFiguraDialog';
+import { PreencherDummiesDialog } from '@/components/laudo/PreencherDummiesDialog';
 import type { ImagemRepGdlCapturada } from '@shared/types/gdl-arquivos.types';
 import type { ImagemLaudoPersistida } from '@shared/types/imagem-laudo.types';
 
@@ -129,7 +131,9 @@ interface IlustracoesPanelProps {
   onSyncToggle?: (enabled: boolean) => void;
   onScrollToFigure?: (imageId: string) => void;
   onPopOut?: () => void;
-  onReplaceImage?: (imageId: string) => void;
+  onReplaceImage?: (imageId: string, imagem: ImagemLaudo) => void;
+  figuraSubstituicaoSolicitada?: string | null;
+  onFiguraSubstituicaoSolicitadaConsumida?: () => void;
 }
 
 interface SortableItemProps {
@@ -347,13 +351,13 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
       >
         <Maximize2 size={14} />
       </Button>
-      {imagem.dummy && onReplaceImage && (
+      {onReplaceImage && (
         <Button
           variant="ghost"
           size="icon"
           className="h-7 w-7 shrink-0 text-primary hover:text-primary"
           onClick={() => onReplaceImage(imagem.id)}
-          title="Substituir imagem placeholder"
+          title="Substituir figura"
         >
           <RefreshCw size={14} />
         </Button>
@@ -389,10 +393,24 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onScrollToFigure,
   onPopOut,
   onReplaceImage,
+  figuraSubstituicaoSolicitada,
+  onFiguraSubstituicaoSolicitadaConsumida,
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalGdlAberto, setModalGdlAberto] = useState(false);
+  const [figuraSubstituicaoId, setFiguraSubstituicaoId] = useState<string | null>(null);
+  const [imagemSubstituicaoId, setImagemSubstituicaoId] = useState<string | null>(null);
+  const [seletorSubstituicaoAberto, setSeletorSubstituicaoAberto] = useState(false);
+  const [preenchimentoDummiesAberto, setPreenchimentoDummiesAberto] = useState(false);
+
+  useEffect(() => {
+    if (!figuraSubstituicaoSolicitada) return;
+    setImagemSubstituicaoId(null);
+    setFiguraSubstituicaoId(figuraSubstituicaoSolicitada);
+    setSeletorSubstituicaoAberto(true);
+    onFiguraSubstituicaoSolicitadaConsumida?.();
+  }, [figuraSubstituicaoSolicitada, onFiguraSubstituicaoSolicitadaConsumida]);
   const hashesGdlCapturados = useRef(new Set<string>());
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
@@ -523,6 +541,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       return;
     }
     setImagens(prev => [...prev, ...novasImagens]);
+    if (figuraSubstituicaoId && novasImagens[0]) {
+      setImagemSubstituicaoId(novasImagens[0].id);
+      setSeletorSubstituicaoAberto(true);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -684,6 +706,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
             </TooltipProvider>
           </div>
           <div className="px-4 mb-3">
+            {figurasNoEditor.some(figura => figura.dummy) && filteredImagens.length > 0 && (
+              <Button variant="secondary" className="mb-2 w-full gap-2" onClick={() => setPreenchimentoDummiesAberto(true)}>
+                <ListChecks size={16} /> Preencher figuras do template
+              </Button>
+            )}
             <Button variant="outline" className="w-full gap-2" onClick={() => {
               onRefreshHtml();
               toast.success('Figuras atualizadas e renumeradas');
@@ -702,7 +729,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                 onUpdateLegenda={onUpdateLegendaInEditor || (() => {})}
                 onPreview={() => setLightboxEditorIndex(idx)}
                 onScrollToFigure={onScrollToFigure}
-                onReplaceImage={onReplaceImage}
+                onReplaceImage={(id) => {
+                  setImagemSubstituicaoId(null);
+                  setFiguraSubstituicaoId(id);
+                  setSeletorSubstituicaoAberto(true);
+                }}
               />
             ))}
           </div>
@@ -722,6 +753,52 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         laudoId={laudoId}
         onAbertoChange={setModalGdlAberto}
         onCapturadas={imagensCapturadas => { void handleImagensGdlCapturadas(imagensCapturadas); }}
+      />
+
+      <SeletorFiguraDialog
+        aberto={seletorSubstituicaoAberto}
+        figuraAlvo={figurasNoEditor?.find(figura => figura.id === figuraSubstituicaoId) || null}
+        imagens={filteredImagens}
+        imagemSelecionadaId={imagemSubstituicaoId}
+        onAbertoChange={(aberto) => { setSeletorSubstituicaoAberto(aberto); if (!aberto) { setFiguraSubstituicaoId(null); setImagemSubstituicaoId(null); } }}
+        onSelecionar={setImagemSubstituicaoId}
+        onBuscarGdl={() => { setSeletorSubstituicaoAberto(false); setModalGdlAberto(true); }}
+        onConfirmar={(legenda) => {
+          const imagem = filteredImagens.find(item => item.id === imagemSubstituicaoId);
+          if (!figuraSubstituicaoId || !imagem) return;
+          onReplaceImage?.(figuraSubstituicaoId, imagem);
+          onUpdateLegendaInEditor?.(imagem.id, legenda);
+          void window.ipcAPI.ilustracoes.atualizarLegenda(laudoId, imagem.id, legenda).then(resultado => {
+            if (!resultado.success) toast.error(resultado.error || 'Não foi possível salvar a legenda da figura.');
+          });
+          void arquivarImagensInseridas([imagem.id]);
+          if (imagem.origem === 'gdl' && imagem.sha256) hashesGdlCapturados.current.delete(imagem.sha256);
+          setImagens(prev => prev.filter(item => item.id !== imagem.id).map((item, indice) => ({ ...item, sequencia: indice + 1, numero_figura: indice + 1 })));
+          setFiguraSubstituicaoId(null);
+          setImagemSubstituicaoId(null);
+          setSeletorSubstituicaoAberto(false);
+        }}
+      />
+
+      <PreencherDummiesDialog
+        aberto={preenchimentoDummiesAberto}
+        dummies={(figurasNoEditor || []).filter(figura => figura.dummy)}
+        imagens={filteredImagens}
+        onAbertoChange={setPreenchimentoDummiesAberto}
+        onConfirmar={(associacoes) => {
+          const imagensPorId = new Map(filteredImagens.map(imagem => [imagem.id, imagem]));
+          const usadas = associacoes.flatMap(associacao => {
+            const imagem = imagensPorId.get(associacao.imagemId);
+            if (!imagem) return [];
+            onReplaceImage?.(associacao.figuraId, imagem);
+            return [imagem];
+          });
+          if (usadas.length === 0) return;
+          void arquivarImagensInseridas(usadas.map(imagem => imagem.id));
+          setImagens(prev => prev.filter(imagem => !usadas.some(usada => usada.id === imagem.id)).map((imagem, indice) => ({ ...imagem, sequencia: indice + 1, numero_figura: indice + 1 })));
+          setPreenchimentoDummiesAberto(false);
+          toast.success(`${usadas.length} figura(s) substituída(s)`);
+        }}
       />
 
       {figurasNoEditor && figurasNoEditor.length > 0 && (

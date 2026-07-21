@@ -4,6 +4,7 @@ import {
   atualizarLegendaImagemLaudo,
   atualizarOrdemImagensLaudo,
   arquivarImagemLaudo,
+  disponibilizarImagemLaudo,
   excluirImagemLaudo,
   listarImagensLaudo,
   salvarImagemLaudo,
@@ -65,6 +66,16 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
+  ipcMain.handle('ilustracoes:disponibilizar-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
+      await disponibilizarImagemLaudo(laudoId, imagemId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao disponibilizar imagem do laudo.' }
+    }
+  })
+
   ipcMain.handle('ilustracoes:atualizar-legenda', async (_event, laudoId: unknown, imagemId: unknown, legenda: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string' || typeof legenda !== 'string') throw new Error('Legenda inválida.')
@@ -87,7 +98,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.on('ilustracoes:open-panel', (event, laudoId: unknown) => {
+  ipcMain.on('ilustracoes:open-panel', (event, laudoId: unknown, tituloLaudo: unknown) => {
     if (panelWindow && !panelWindow.isDestroyed()) {
       panelWindow.focus();
       return;
@@ -116,9 +127,11 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         show: false,
       });
 
+      const titulo = typeof tituloLaudo === 'string' ? tituloLaudo.trim() : '';
+      const parametros = `laudoId=${encodeURIComponent(laudoId)}${titulo ? `&titulo=${encodeURIComponent(titulo)}` : ''}`;
       const targetUrl = isDev
-        ? `http://localhost:3000#/panel-ilustracoes?laudoId=${encodeURIComponent(laudoId)}`
-        : `file://${rendererHtmlPath}#/panel-ilustracoes?laudoId=${encodeURIComponent(laudoId)}`;
+        ? `http://localhost:3000#/panel-ilustracoes?${parametros}`
+        : `file://${rendererHtmlPath}#/panel-ilustracoes?${parametros}`;
 
       panelWindow.loadURL(targetUrl);
 

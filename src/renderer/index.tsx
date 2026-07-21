@@ -44,9 +44,10 @@ interface IpcIlustracoesLegado {
   salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
   excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
   arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
+  disponibilizarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
   atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => Promise<{ success: boolean; error?: string }>;
   atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => Promise<{ success: boolean; error?: string }>;
-  openPanel: (laudoId: string) => void;
+  openPanel: (laudoId: string, tituloLaudo?: string) => void;
   closePanel: () => void;
   syncToPanel: (data: Record<string, unknown>) => void;
   sendAction: (action: string, ...args: unknown[]) => void;

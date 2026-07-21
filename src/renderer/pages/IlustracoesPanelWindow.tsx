@@ -15,6 +15,7 @@ interface SyncState {
 const IlustracoesPanelWindow: React.FC = () => {
   const [searchParams] = useSearchParams();
   const laudoId = searchParams.get('laudoId') || '';
+  const tituloLaudo = searchParams.get('titulo') || '';
 
   const [figurasNoEditor, setFigurasNoEditor] = useState<ImagemLaudo[]>([]);
   const [syncEnabled, setSyncEnabled] = useState(true);
@@ -76,21 +77,9 @@ const IlustracoesPanelWindow: React.FC = () => {
     sendAction('scrollToFigure', imageId);
   }, [sendAction]);
 
-  const handleReplaceImage = useCallback((imageId: string) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        sendAction('replaceImage', imageId, reader.result as string);
-        toast.success('Imagem placeholder substituída');
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
+  const handleReplaceImage = useCallback((imageId: string, imagem: ImagemLaudo) => {
+    sendAction('replaceImage', imageId, imagem);
+    toast.success('Figura enviada para substituição');
   }, [sendAction]);
 
   const handleVoltarAoEditor = () => {
@@ -103,8 +92,8 @@ const IlustracoesPanelWindow: React.FC = () => {
       <header className="flex items-center justify-between px-4 py-3 border-b bg-card flex-shrink-0">
         <div>
           <h1 className="text-sm font-semibold">Painel de Ilustrações</h1>
-          {laudoId && (
-            <p className="text-[10px] text-muted-foreground">Laudo #{laudoId.slice(0, 8)}</p>
+          {tituloLaudo && (
+            <p className="text-[10px] text-muted-foreground">Laudo {tituloLaudo}</p>
           )}
         </div>
         <Button

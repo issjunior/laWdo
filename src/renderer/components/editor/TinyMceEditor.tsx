@@ -120,6 +120,8 @@ interface TinyMceEditorProps {
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
   onEditorInit?: (editor: TinyMceEditorInstance) => void;
+  /** Solicita a substituição de uma figura dummy pelo fluxo de ilustrações do laudo. */
+  onDummyFigureClick?: (imageId: string) => void;
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
@@ -153,6 +155,7 @@ interface RemoverImagemPayload {
 
 interface SubstituirImagemPayload {
   imageId?: string;
+  newImageId?: string;
   figureElement?: HTMLElement;
   newUrl: string;
 }
@@ -264,6 +267,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   onImageInserted,
   placeholderChaves,
   onEditorInit,
+  onDummyFigureClick,
   autoConverterReservados = false,
   condToggles,
   ...rest
@@ -583,6 +587,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (img) {
                   editor.dom.setAttrib(img, 'src', data.newUrl);
                 }
+                if (data.newImageId) {
+                  figure.setAttribute('data-image-id', data.newImageId);
+                }
                 figure.removeAttribute('data-dummy');
                 figure.style.cursor = '';
               });
@@ -687,6 +694,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   if (figure) {
                     e.preventDefault();
                     e.stopPropagation();
+                    const imageId = figure.getAttribute('data-image-id');
+                    if (imageId && onDummyFigureClick) {
+                      onDummyFigureClick(imageId);
+                      return;
+                    }
                     const input = document.createElement('input');
                     input.type = 'file';
                     input.accept = 'image/*';

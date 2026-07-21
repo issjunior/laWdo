@@ -8,6 +8,7 @@ export interface ArquivoRepGdl {
   dataUpload: string | null
   provavelImagem: boolean
   status: string | null
+  thumbnailDataUri?: string
 }
 
 export interface ImagemRepGdlCapturada {

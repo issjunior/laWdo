@@ -287,9 +287,10 @@ export interface IpcAPI {
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
       excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
       arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
+      disponibilizarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
     atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => Promise<{ success: boolean; error?: string }>;
     atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => Promise<{ success: boolean; error?: string }>;
-    openPanel: (laudoId: string) => void;
+    openPanel: (laudoId: string, tituloLaudo?: string) => void;
     closePanel: () => void;
     syncToPanel: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => void;
     sendAction: (action: string, ...args: unknown[]) => void;
@@ -489,6 +490,7 @@ const ALLOWED_CHANNELS = new Set([
   'ilustracoes:salvar-imagem',
     'ilustracoes:excluir-imagem',
     'ilustracoes:arquivar-imagem',
+    'ilustracoes:disponibilizar-imagem',
   'ilustracoes:atualizar-legenda',
   'ilustracoes:atualizar-ordem',
   'ilustracoes:close-panel',
@@ -1016,11 +1018,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => ipcRenderer.invoke('ilustracoes:salvar-imagem', laudoId, imagem),
     excluirImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:excluir-imagem', laudoId, imagemId),
     arquivarImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:arquivar-imagem', laudoId, imagemId),
+    disponibilizarImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:disponibilizar-imagem', laudoId, imagemId),
     atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => ipcRenderer.invoke('ilustracoes:atualizar-legenda', laudoId, imagemId, legenda),
     atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => ipcRenderer.invoke('ilustracoes:atualizar-ordem', laudoId, ordem),
-    openPanel: (laudoId: string) => {
+    openPanel: (laudoId: string, tituloLaudo?: string) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
-      ipcRenderer.send('ilustracoes:open-panel', laudoId);
+      ipcRenderer.send('ilustracoes:open-panel', laudoId, tituloLaudo);
     },
     closePanel: () => ipcRenderer.send('ilustracoes:close-panel'),
     syncToPanel: (data) => ipcRenderer.send('ilustracoes:sync-to-panel', data),

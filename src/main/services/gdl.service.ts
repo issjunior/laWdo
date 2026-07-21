@@ -5,7 +5,7 @@ import http from 'http';
 import { createHash } from 'crypto';
 import { Buffer } from 'node:buffer';
 import { inflateRawSync } from 'node:zlib';
-import { app } from 'electron';
+import { app, nativeImage } from 'electron';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
@@ -314,6 +314,23 @@ function paraArquivoPublico(arquivo: ArquivoRepInterno): ArquivoRepGdl {
     provavelImagem: arquivo.provavelImagem,
     status: arquivo.status,
   };
+}
+
+function gerarThumbnailImagem(bytes: Buffer): string | undefined {
+  const imagem = nativeImage.createFromBuffer(bytes);
+  if (imagem.isEmpty()) return undefined;
+
+  const tamanho = imagem.getSize();
+  if (!tamanho.width || !tamanho.height) return undefined;
+  const escala = Math.min(1, 320 / Math.max(tamanho.width, tamanho.height));
+  const redimensionada = escala === 1
+    ? imagem
+    : imagem.resize({
+      width: Math.max(1, Math.round(tamanho.width * escala)),
+      height: Math.max(1, Math.round(tamanho.height * escala)),
+      quality: 'best',
+    });
+  return `data:image/jpeg;base64,${redimensionada.toJPEG(72).toString('base64')}`;
 }
 
 export function listarFotosDoArquivoZip(bytesZip: Buffer, codRep: number): ArquivoRepInterno[] {
@@ -706,8 +723,21 @@ async function baixarListaFotosRep(numero: string, ano: string): Promise<{ arqui
 }
 
 export async function listarImagensRepGdl(numero: string, ano: string): Promise<ArquivoRepGdl[]> {
-  const { arquivos } = await baixarListaFotosRep(numero, ano);
-  return arquivos.map(paraArquivoPublico);
+  const { arquivos, bytesZip } = await baixarListaFotosRep(numero, ano);
+  const entradasZip = lerEntradasZip(bytesZip);
+  return arquivos.map(arquivo => {
+    const publico = paraArquivoPublico(arquivo);
+    if (!arquivo.provavelImagem || arquivo.status) return publico;
+    try {
+      const entrada = entradasZip[arquivo.indiceEntradaZip];
+      if (!entrada) return publico;
+      const bytes = extrairEntradaZip(bytesZip, entrada);
+      if (!detectarMimeImagem(bytes)) return publico;
+      return { ...publico, thumbnailDataUri: gerarThumbnailImagem(bytes) };
+    } catch {
+      return publico;
+    }
+  });
 }
 
 export async function capturarImagensRepGdl(
