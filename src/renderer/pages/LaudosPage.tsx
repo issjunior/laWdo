@@ -177,6 +177,14 @@ const isBoolean = (valor: unknown): valor is boolean => typeof valor === 'boolea
 
 const isImagemLaudoArray = (valor: unknown): valor is ImagemLaudo[] => Array.isArray(valor);
 
+const isImagemLaudo = (valor: unknown): valor is ImagemLaudo => (
+  isRecord(valor)
+  && isString(valor.id)
+  && isString(valor.url)
+  && isString(valor.thumbnailUrl)
+  && isString(valor.legenda)
+);
+
 const lerPeritoSessao = (): PeritoSessaoData | null => {
   try {
     const userJson = sessionStorage.getItem('lawdo_auth_user');
@@ -548,6 +556,7 @@ export const LaudosPage: React.FC = () => {
   const [iluminacoesPanelOpen, setIlustracoesPanelOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
+  const [figuraSubstituicaoSolicitada, setFiguraSubstituicaoSolicitada] = useState<string | null>(null);
 
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineLaudo, setTimelineLaudo] = useState<LaudoItem | null>(null);
@@ -1083,7 +1092,7 @@ export const LaudosPage: React.FC = () => {
     onInsertAll: (imagens: ImagemLaudo[]) => void;
     onSyncToggle: (enabled: boolean) => void;
     onScrollToFigure: (imageId: string) => void;
-    onReplaceImage: (imageId: string, dataUri?: string) => void;
+    onReplaceImage: (imageId: string, imagem: ImagemLaudo) => void;
     syncCurrentState: () => void;
   }>({
     onInsertImage: () => {},
@@ -1346,12 +1355,12 @@ export const LaudosPage: React.FC = () => {
     },
     onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
     onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
-    onReplaceImage: (imageId, dataUri?) => {
-      const executarReplace = (dataUrl: string) => {
+    onReplaceImage: (imageId, imagem) => {
+      const executarReplace = () => {
         if (editorMode === 'single') {
           const editor = obterEditorTinyMce('laudo-single-editor');
           if (editor) {
-            editor.execCommand('replaceLaudoImage', false, { imageId, newUrl: dataUrl });
+            editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: imagem.url });
             const novoHtml = editor.getContent();
             setSingleEditorHtml(novoHtml);
             setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
@@ -1362,32 +1371,19 @@ export const LaudosPage: React.FC = () => {
             if (editor) {
               const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
               if (figure) {
-                editor.execCommand('replaceLaudoImage', false, { imageId, newUrl: dataUrl });
+                editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: imagem.url });
                 atualizarConteudoSecao(idx, editor.getContent());
                 break;
               }
             }
           }
         }
-        toast.success('Imagem placeholder substituída');
+        if (editando?.id) {
+          void window.ipcAPI.ilustracoes.disponibilizarImagem(editando.id, imageId);
+        }
+        toast.success('Figura substituída');
       };
-
-      if (dataUri) {
-        executarReplace(dataUri);
-        return;
-      }
-
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => executarReplace(reader.result as string);
-        reader.readAsDataURL(file);
-      };
-      input.click();
+      executarReplace();
     },
     syncCurrentState: () => {
       window.ipcAPI.ilustracoes.syncToPanel({
@@ -1440,7 +1436,7 @@ export const LaudosPage: React.FC = () => {
           if (isString(args[0])) cbs.onScrollToFigure(args[0]);
           break;
         case 'replaceImage':
-          if (isString(args[0]) && (args[1] === undefined || isString(args[1]))) cbs.onReplaceImage(args[0], args[1]);
+          if (isString(args[0]) && isImagemLaudo(args[1])) cbs.onReplaceImage(args[0], args[1]);
           break;
         case 'ready': cbs.syncCurrentState(); break;
         case 'popIn':
@@ -1465,7 +1461,7 @@ export const LaudosPage: React.FC = () => {
     if (!editando?.id) return;
     setIlustracoesPanelOpen(false);
     setPanelPoppedOut(true);
-    window.ipcAPI.ilustracoes.openPanel(editando.id);
+    window.ipcAPI.ilustracoes.openPanel(editando.id, editando.rep_numero);
 
     panelCallbacksRef.current.syncCurrentState();
     setTimeout(() => panelCallbacksRef.current.syncCurrentState(), 300);
@@ -2737,6 +2733,11 @@ export const LaudosPage: React.FC = () => {
                         laudoId={editando.id}
                         placeholderChaves={placeholderChaves}
                         condToggles={exameToggles}
+                        onDummyFigureClick={(imageId) => {
+                          setFiguraSubstituicaoSolicitada(imageId);
+                          setIlustracoesPanelOpen(true);
+                          setPanelCollapsed(false);
+                        }}
                       />
                     </PlaceholderContextMenu>
                   </div>
@@ -2793,6 +2794,11 @@ export const LaudosPage: React.FC = () => {
                                 placeholderChaves={placeholderChaves}
                                 onEditorInit={isIlustracoes ? handleIlustracoesEditorInit : undefined}
                                 condToggles={exameToggles}
+                                onDummyFigureClick={(imageId) => {
+                                  setFiguraSubstituicaoSolicitada(imageId);
+                                  setIlustracoesPanelOpen(true);
+                                  setPanelCollapsed(false);
+                                }}
                               />
 
                               {isIlustracoes && ilustracoesRemounting && (
@@ -2854,6 +2860,8 @@ export const LaudosPage: React.FC = () => {
                         onScrollToFigure={panelCallbacksRef.current.onScrollToFigure}
                         onPopOut={handlePopOut}
                         onReplaceImage={panelCallbacksRef.current.onReplaceImage}
+                        figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
+                        onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
                       />
                     </div>
                   </div>

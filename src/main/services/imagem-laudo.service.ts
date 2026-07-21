@@ -171,6 +171,15 @@ export async function arquivarImagemLaudo(laudoIdEntrada: string, imagemIdEntrad
   )
 }
 
+export async function disponibilizarImagemLaudo(laudoIdEntrada: string, imagemIdEntrada: string): Promise<void> {
+  const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
+  const imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
+  await executeNonQuery(
+    'UPDATE imagens_laudo SET disponivel_painel = 1 WHERE id = ? AND laudo_id = ?',
+    [imagemId, laudoId],
+  )
+}
+
 export async function atualizarOrdemImagensLaudo(laudoIdEntrada: string, ordem: AtualizarOrdemImagemLaudoEntrada[]): Promise<void> {
   const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
   await withTransaction(async () => {

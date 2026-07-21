@@ -12,7 +12,7 @@ describe('GdlImagensRepModal', () => {
     listarImagensLaudo.mockResolvedValue({
       success: true,
       data: [
-        { idSelecao, origem: 'lista_fotos', nomeArquivo: 'fotografia.png', tamanho: 1024, dataUpload: null, provavelImagem: true, status: null },
+        { idSelecao, origem: 'lista_fotos', nomeArquivo: 'fotografia.png', tamanho: 1024, dataUpload: null, provavelImagem: true, status: null, thumbnailDataUri: 'data:image/jpeg;base64,AA==' },
         { idSelecao: 'b'.repeat(64), origem: 'lista_fotos', nomeArquivo: 'foto.tiff', tamanho: 1024, dataUpload: null, provavelImagem: false, status: 'Formato não compatível para captura' },
       ],
     })
@@ -34,6 +34,7 @@ describe('GdlImagensRepModal', () => {
     render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={onAbertoChange} onCapturadas={onCapturadas} />)
 
     expect(await screen.findByText('fotografia.png')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Prévia de fotografia.png' })).toHaveAttribute('src', 'data:image/jpeg;base64,AA==')
     expect(screen.getByText('foto.tiff')).toBeInTheDocument()
     expect(screen.getAllByText('Lista de Fotos')).toHaveLength(2)
     const caixas = screen.getAllByRole('checkbox')
@@ -45,5 +46,20 @@ describe('GdlImagensRepModal', () => {
     await waitFor(() => expect(capturarImagensLaudo).toHaveBeenCalledWith('laudo-1', [idSelecao]))
     expect(onCapturadas).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ idSelecao })]))
     expect(onAbertoChange).toHaveBeenCalledWith(false)
+  })
+
+  it('seleciona e desmarca apenas as imagens elegíveis de uma vez', async () => {
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    await screen.findByText('fotografia.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar todas' }))
+    expect(screen.getByRole('button', { name: 'Capturar imagens (1)' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
+
+    const caixas = screen.getAllByRole('checkbox')
+    expect(caixas[0]).toBeChecked()
+    expect(caixas[1]).not.toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Desmarcar todas' }))
+    expect(screen.getByRole('button', { name: 'Capturar imagens (0)' })).toBeDisabled()
   })
 })

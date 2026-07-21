@@ -2,47 +2,37 @@
 
 ## Estado e responsabilidades
 
-O HTML do laudo é a fonte das figuras já inseridas no editor. A fila de imagens ainda disponíveis no Painel de Ilustrações é persistida separadamente em `imagens_laudo`: arquivo local, metadados, legenda, origem e sequência. Ela permite reabrir o painel sem depender do conteúdo em memória ou da conexão com o GDL.
+O HTML do laudo é a fonte das figuras já inseridas no editor. A fila de imagens disponíveis no Painel de Ilustrações é persistida separadamente em `imagens_laudo`: arquivo local, metadados, legenda, origem e sequência. Ela permite reabrir o painel sem depender do conteúdo em memória ou da conexão com o GDL.
 
 | Estado | Fonte canônica | Consumidor principal |
 |---|---|---|
 | figura inserida | HTML do laudo (`<figure class="laudo-figure">`) | editor, preview e exportação |
 | imagem disponível no painel | `imagens_laudo` + arquivo sob `userData/imagens/laudos/<laudoId>` | `IlustracoesPanel` |
 | imagem arquivada após inserção | linha em `imagens_laudo` com `disponivel_painel = 0` | backup; não reaparece no painel |
+| thumbnail da Lista de Fotos | resposta temporária do GDL | seletor visual antes da captura |
 
-`imagem-laudo.service.ts` é responsável por validar IDs e data URIs, limitar os MIME aceitos a JPEG/PNG/GIF/BMP/WebP, calcular SHA-256, gravar o arquivo por hash e expor imagens novamente como data URI. O renderer não recebe caminho local.
+`imagem-laudo.service.ts` valida IDs e data URIs, limita MIME, calcula SHA-256, grava por hash e expõe imagens como data URI; o renderer nunca recebe caminho local.
 
-## Persistência, compatibilidade e backup
+## Painel, seleção e substituição
 
-A tabela atual contém `nome_arquivo`, `caminho_relativo`, MIME, tamanho, hash, legenda, origem (`local` ou `gdl`), sequência e disponibilidade. A migration v30 converte a estrutura legada: ignora registro sem arquivo ou com formato não reconhecido, detecta o MIME pelos bytes, copia o arquivo para o diretório canônico e preserva ID, sequência, legenda e origem quando válidos. Cada linha não migrável é registrada em log, sem impedir a inicialização.
+Upload local e captura GDL entram primeiro na fila persistida. O painel mostra thumbnails das imagens disponíveis e permite inserir, excluir, reordenar ou escolher uma imagem para substituir uma figura existente.
 
-Arquivos são referenciados por caminho relativo sob `userData/imagens`; leituras fora dessa raiz são rejeitadas. A exclusão remove a linha e só apaga o arquivo quando não há outra referência. A alteração de ordem usa transação SQLite; salvar imagem e gravar arquivo não formam uma transação única, portanto uma falha entre essas etapas pode deixar arquivo não referenciado, mas nunca deve expor caminho arbitrário.
+O clique em um dummy do editor abre o seletor visual. A comparação mostra a figura original à esquerda e a nova figura à direita; o campo da nova legenda inicia com a legenda original, pode ser editado e é salvo no registro da imagem escolhida. Ao confirmar, o editor troca `src` e `data-image-id`, remove `data-dummy`, atualiza a legenda e registra uma única operação de undo. A nova imagem é arquivada da fila. Ao substituir uma figura real persistida, seu ID volta a ficar disponível no painel.
 
-Backup cria manifesto v2 a partir de `imagens_laudo`, inclui cada arquivo referenciado uma vez e valida caminho, tamanho e SHA-256 na restauração antes de substituir o estado local.
-
-## Entradas e ciclo do painel
-
-1. Upload local lê o arquivo como data URI, salva-o no main e o adiciona à fila.
-2. `Buscar imagens da REP` abre `GdlImagensRepModal`; a seleção e a captura ocorrem pelo GDL, mas o resultado segue o mesmo salvamento local.
-3. O painel carrega somente linhas com `disponivel_painel = 1`, ordenadas por sequência. Reordenação atualiza a sequência no banco; legenda é persistida de forma assíncrona.
-4. Inserir uma ou todas as imagens chama os callbacks existentes do editor e arquiva as linhas; em seguida elas deixam a fila. Excluir pela fila remove linha e arquivo; excluir uma figura do editor também solicita a remoção persistida pelo mesmo ID.
-
-Arquivamento em lote usa operações independentes: pode haver sucesso parcial e o painel mostra erro, sem desfazer as figuras já inseridas no HTML.
+O preenchimento em lote lista apenas dummies, propõe imagens por ordem e permite revisar cada associação. Uma imagem só pode ser selecionada para um dummy; associações vazias deixam o dummy intacto. As atualizações de HTML e disponibilidade ainda usam operações independentes, portanto uma falha de arquivamento pode exigir correção pelo painel sem desfazer a figura já aplicada.
 
 ## Imagens da REP no GDL
 
-O modal recebe apenas `laudoId`. O main resolve `laudo → rep_id → rep.numero`, exige formato inequívoco `número/ano` e nunca confia em número, URL, caminho ou hash enviados pelo renderer. `gdl:listar-imagens-laudo` mostra metadados da Lista de Fotos; `gdl:capturar-imagens-laudo` aceita somente IDs de seleção SHA-256 válidos e reobtém o ZIP antes de extrair os itens selecionados.
+O modal recebe somente `laudoId`. O main resolve `laudo → rep_id → rep.numero`, exige `número/ano` e não aceita número, URL, caminho ou hash do renderer. `gdl:listar-imagens-laudo` baixa a Lista de Fotos ZIP, devolve metadados e, quando decodificável, `thumbnailDataUri`: JPEG leve, com maior dimensão de 320 px, gerado no main. Falha de prévia não torna a foto inelegível e a interface mostra fallback.
 
-A captura devolve sucessos e falhas por item. Arquivo não elegível, ausente, corrompido, criptografado ou com formato incompatível não bloqueia as demais imagens. O painel deduplica capturas GDL da sessão por SHA-256; após exclusão da fila, o hash pode ser capturado novamente.
+`gdl:capturar-imagens-laudo` aceita somente IDs SHA-256 e reobtém o ZIP antes de extrair os itens selecionados. A captura devolve sucessos e falhas por item. Arquivo ausente, corrompido, criptografado ou incompatível não bloqueia os demais. A thumbnail nunca é persistida, enviada à exportação ou usada como arquivo final; após captura, a cópia validada segue o fluxo local e entra em backup.
 
-A origem GDL não cria dependência de rede depois da captura: a cópia validada passa a ser uma imagem local, entra em backup e é inserida no editor como as demais. Nenhuma operação altera arquivos ou dados no GDL.
+## Editor e janela destacada
 
-## Editor, preview e janela destacada
+As imagens são encapsuladas como `figure.laudo-figure`, recebem ID estável e são reindexadas antes de salvar ou gerar preview. O ciclo preserva single/multisseção, seção `ILUSTRAÇÕES`, legenda e ordenação.
 
-As imagens inseridas são encapsuladas como `figure.laudo-figure`, recebem ID estável e são reindexadas antes de salvar ou gerar preview. O ciclo preserva os modos single e multisseção, a criação/remoção automática da seção `ILUSTRAÇÕES`, a sincronização de figuras, a edição de legenda e a ordenação.
-
-A janela destacada usa a ponte IPC existente para relatar ações e sincronizar estado com `LaudosPage`. Operações de persistência continuam no painel renderizado e atravessam o preload por wrappers específicos; módulos Node/Electron não são expostos ao renderer.
+A janela destacada reutiliza o painel e comunica inserção, exclusão, reordenação e substituição pela ponte IPC existente. Persistência continua em wrappers específicos do preload; módulos Node/Electron não são expostos ao renderer.
 
 ## Verificação
 
-`migracao-imagens-laudo.integration.test.ts` protege a conversão da tabela antiga e a integridade básica da imagem migrada. `gdl-imagens-rep-modal.component.test.tsx` cobre a seleção/captura no modal. Alterações que afetem schema, handlers ou contratos compartilhados devem manter alinhados migration, serviço, handler, `ALLOWED_CHANNELS`, preload, tipos e os dois fluxos de painel.
+`migracao-imagens-laudo.integration.test.ts` protege a tabela legada. `gdl-imagens-rep-modal.component.test.tsx` cobre seleção/captura e renderização de thumbnail retornada pelo GDL. `seletor-figura-dialog.component.test.tsx` cobre a cópia e edição da legenda antes da substituição. Mudanças em contratos exigem alinhar serviço, handler, `ALLOWED_CHANNELS`, preload, tipos e os dois modos do painel.
