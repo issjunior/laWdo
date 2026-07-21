@@ -17,6 +17,12 @@ import type {
 } from './types.js';
 import type { DashboardProjecoes, DashboardResumo } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
+import type { ArquivoRepGdl, ResultadoCapturaImagensRepGdl } from '../shared/types/gdl-arquivos.types.js';
+import type {
+  AtualizarOrdemImagemLaudoEntrada,
+  ImagemLaudoPersistida,
+  SalvarImagemLaudoEntrada,
+} from '../shared/types/imagem-laudo.types.js';
 
 // Tipo para entrada de log do sistema
 interface LogEntry {
@@ -145,6 +151,8 @@ export interface IpcAPI {
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
     consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
+    listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ArquivoRepGdl[]>>;
+    capturarImagensLaudo: (laudoId: string, idsSelecao: string[]) => Promise<UserResponse<ResultadoCapturaImagensRepGdl>>;
   };
 
   // Placeholder para outras APIs que serão implementadas
@@ -275,7 +283,13 @@ export interface IpcAPI {
 
   // Painel de Ilustrações (janela separada)
   ilustracoes: {
-    openPanel: () => void;
+    listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida[]; error?: string }>;
+    salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+      excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
+      arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
+    atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => Promise<{ success: boolean; error?: string }>;
+    atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => Promise<{ success: boolean; error?: string }>;
+    openPanel: (laudoId: string) => void;
     closePanel: () => void;
     syncToPanel: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => void;
     sendAction: (action: string, ...args: unknown[]) => void;
@@ -354,6 +368,8 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:limpar-validacao-sessao',
   'gdl:validar-credenciais',
   'gdl:consultar-rep',
+  'gdl:listar-imagens-laudo',
+  'gdl:capturar-imagens-laudo',
   'rep:create',
   'rep:findAll',
   'rep:findById',
@@ -469,6 +485,12 @@ const ALLOWED_CHANNELS = new Set([
 
   // Painel de Ilustrações
   'ilustracoes:open-panel',
+  'ilustracoes:listar-imagens',
+  'ilustracoes:salvar-imagem',
+    'ilustracoes:excluir-imagem',
+    'ilustracoes:arquivar-imagem',
+  'ilustracoes:atualizar-legenda',
+  'ilustracoes:atualizar-ordem',
   'ilustracoes:close-panel',
   'ilustracoes:sync-to-panel',
   'ilustracoes:panel-action',
@@ -830,6 +852,17 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       }
       return ipcRenderer.invoke('gdl:consultar-rep', numero.trim(), ano.trim());
     },
+    listarImagensLaudo: (laudoId: string) => {
+      if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
+      return ipcRenderer.invoke('gdl:listar-imagens-laudo', laudoId);
+    },
+    capturarImagensLaudo: (laudoId: string, idsSelecao: string[]) => {
+      if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
+      if (!Array.isArray(idsSelecao) || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
+        throw new Error('Seleção de imagens inválida');
+      }
+      return ipcRenderer.invoke('gdl:capturar-imagens-laudo', laudoId, idsSelecao);
+    },
   },
 
   rep: {
@@ -979,7 +1012,16 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   ilustracoes: {
-    openPanel: () => ipcRenderer.send('ilustracoes:open-panel'),
+    listarImagens: (laudoId: string) => ipcRenderer.invoke('ilustracoes:listar-imagens', laudoId),
+    salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => ipcRenderer.invoke('ilustracoes:salvar-imagem', laudoId, imagem),
+    excluirImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:excluir-imagem', laudoId, imagemId),
+    arquivarImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:arquivar-imagem', laudoId, imagemId),
+    atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => ipcRenderer.invoke('ilustracoes:atualizar-legenda', laudoId, imagemId, legenda),
+    atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => ipcRenderer.invoke('ilustracoes:atualizar-ordem', laudoId, ordem),
+    openPanel: (laudoId: string) => {
+      if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
+      ipcRenderer.send('ilustracoes:open-panel', laudoId);
+    },
     closePanel: () => ipcRenderer.send('ilustracoes:close-panel'),
     syncToPanel: (data) => ipcRenderer.send('ilustracoes:sync-to-panel', data),
     sendAction: (action, ...args) => ipcRenderer.send('ilustracoes:panel-action', action, ...args),

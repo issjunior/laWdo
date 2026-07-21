@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { Buffer } from 'node:buffer'
 import fixture from '../fixtures/gdl/rep-190-2026.json'
 import fixtureRevolver from '../fixtures/gdl/rep-191-2026.json'
 import {
@@ -7,10 +8,74 @@ import {
   validarGdlRep,
 } from '../../main/services/gdl.schema'
 import { converterRepB602 } from '../../main/services/gdl-b602-normalizador.service'
-import { extrairFiltrosParaConsultaInvestigacao } from '../../main/services/gdl.service'
+import { extrairFiltrosParaConsultaInvestigacao, listarFotosDoArquivoZip } from '../../main/services/gdl.service'
 import { CATALOGO_TIPOS_PECA_B602 } from '../../shared/catalogos/b602-gdl.catalogo'
 
+function criarZipComMetadadosZip64(): Buffer {
+  const nome = Buffer.from('foto-zip64.jpg')
+  const conteudo = Buffer.from([0xff, 0xd8, 0xff, 0xd9])
+  const local = Buffer.alloc(30 + nome.length + conteudo.length)
+  local.writeUInt32LE(0x04034b50, 0)
+  local.writeUInt16LE(45, 4)
+  local.writeUInt32LE(conteudo.length, 18)
+  local.writeUInt32LE(conteudo.length, 22)
+  local.writeUInt16LE(nome.length, 26)
+  nome.copy(local, 30)
+  conteudo.copy(local, 30 + nome.length)
+
+  const extraZip64 = Buffer.alloc(20)
+  extraZip64.writeUInt16LE(0x0001, 0)
+  extraZip64.writeUInt16LE(16, 2)
+  extraZip64.writeBigUInt64LE(BigInt(conteudo.length), 4)
+  extraZip64.writeBigUInt64LE(BigInt(conteudo.length), 12)
+  const central = Buffer.alloc(46 + nome.length + extraZip64.length)
+  central.writeUInt32LE(0x02014b50, 0)
+  central.writeUInt16LE(45, 4)
+  central.writeUInt16LE(45, 6)
+  central.writeUInt32LE(0xffffffff, 20)
+  central.writeUInt32LE(0xffffffff, 24)
+  central.writeUInt16LE(nome.length, 28)
+  central.writeUInt16LE(extraZip64.length, 30)
+  nome.copy(central, 46)
+  extraZip64.copy(central, 46 + nome.length)
+
+  const eocd = Buffer.alloc(22)
+  eocd.writeUInt32LE(0x06054b50, 0)
+  eocd.writeUInt16LE(1, 8)
+  eocd.writeUInt16LE(1, 10)
+  eocd.writeUInt32LE(central.length, 12)
+  eocd.writeUInt32LE(local.length, 16)
+  return Buffer.concat([local, central, eocd])
+}
+
 describe('contrato GDL B602', () => {
+  it('lista somente as entradas do ZIP da Lista de Fotos', () => {
+    const bytesZip = Buffer.from('UEsDBBQAAAgIABen9FxnKvAQBgAAAAQAAAAKAAAAZm90by0xLmpwZ/t/4/9NAFBLAwQUAAAICAAXp/RczLJ41wYAAAAEAAAACQAAAGZvdG8udGlmZvP01GIAAFBLAwQUAAAICAAXp/Rcpb7rWwYAAAAEAAAAEAAAAHBhc3RhL2ZvdG8tMi5wbmfrDPBzBwBQSwECFAoUAAAICAAXp/RcZyrwEAYAAAAEAAAACgAAAAAAAAAAAAAApIEAAAAAZm90by0xLmpwZ1BLAQIUChQAAAgIABen9FzMsnjXBgAAAAQAAAAJAAAAAAAAAAAAAACkgS4AAABmb3RvLnRpZmZQSwECFAoUAAAICAAXp/Rcpb7rWwYAAAAEAAAAEAAAAAAAAAAAAAAApIFbAAAAcGFzdGEvZm90by0yLnBuZ1BLBQYAAAAAAwADAK0AAACPAAAAAAA=', 'base64')
+    const arquivos = listarFotosDoArquivoZip(bytesZip, 1127748)
+
+    expect(arquivos).toEqual([
+      expect.objectContaining({ origem: 'lista_fotos', nomeArquivo: 'foto-1.jpg', tamanho: 4, provavelImagem: true, status: null }),
+      expect.objectContaining({ origem: 'lista_fotos', nomeArquivo: 'foto.tiff', provavelImagem: false, status: 'Formato não compatível para captura' }),
+      expect.objectContaining({ origem: 'lista_fotos', nomeArquivo: 'foto-2.png', tamanho: 4, provavelImagem: true, status: null }),
+    ])
+    expect(arquivos.every(arquivo => /^[a-f0-9]{64}$/.test(arquivo.idSelecao))).toBe(true)
+  })
+
+  it('rejeita resposta que não seja o ZIP da Lista de Fotos', () => {
+    expect(() => listarFotosDoArquivoZip(Buffer.from('erro'), 1127748)).toThrow('ZIP válido')
+  })
+
+  it('interpreta os tamanhos ZIP64 sem confundir o marcador com 4 GB', () => {
+    const [arquivo] = listarFotosDoArquivoZip(criarZipComMetadadosZip64(), 1127748)
+
+    expect(arquivo).toMatchObject({
+      nomeArquivo: 'foto-zip64.jpg',
+      tamanho: 4,
+      provavelImagem: true,
+      status: null,
+    })
+  })
+
   it('rejeita payload estruturalmente inválido', () => {
     expect(() => validarGdlRep({ numero: 190, ano: 2026, pecas: 'inválido' })).toThrow()
   })

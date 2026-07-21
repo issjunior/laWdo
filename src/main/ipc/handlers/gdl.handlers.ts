@@ -3,6 +3,24 @@ import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
 import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
+import { laudoService } from '../../services/laudo.service.js';
+import { repService } from '../../services/rep.service.js';
+
+function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string } | null {
+  const correspondencia = numero.trim().match(/^(\d+)\s*[/\\-]\s*(\d{4})$/);
+  return correspondencia ? { numero: correspondencia[1], ano: correspondencia[2] } : null;
+}
+
+async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; ano: string }> {
+  if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido.');
+  const laudo = await laudoService.findById(laudoId);
+  if (!laudo) throw new Error('Laudo não encontrado.');
+  const rep = await repService.findById(laudo.rep_id);
+  if (!rep) throw new Error('REP associada ao laudo não encontrada.');
+  const identificacao = extrairNumeroEAnoDaRep(rep.numero);
+  if (!identificacao) throw new Error('O número da REP deve estar no formato número/ano para consultar imagens no GDL.');
+  return identificacao;
+}
 
 export const registerGdlHandlers = (): void => {
   ipcMain.handle('gdl:testar-conexao', async (_event, ambiente: string) => {
@@ -102,6 +120,29 @@ export const registerGdlHandlers = (): void => {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido ao consultar REP',
       };
+    }
+  });
+
+  ipcMain.handle('gdl:listar-imagens-laudo', async (_event, laudoId: unknown) => {
+    try {
+      const { numero, ano } = await resolverRepDoLaudo(laudoId);
+      const arquivos = await gdlService.listarImagensRepGdl(numero, ano);
+      return { success: true, data: arquivos };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao listar imagens da REP.' };
+    }
+  });
+
+  ipcMain.handle('gdl:capturar-imagens-laudo', async (_event, laudoId: unknown, idsSelecao: unknown) => {
+    try {
+      if (!Array.isArray(idsSelecao) || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
+        return { success: false, error: 'Seleção de imagens inválida.' };
+      }
+      const { numero, ano } = await resolverRepDoLaudo(laudoId);
+      const resultado = await gdlService.capturarImagensRepGdl(numero, ano, idsSelecao);
+      return { success: true, data: resultado };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao capturar imagens da REP.' };
     }
   });
 };

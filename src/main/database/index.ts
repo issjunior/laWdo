@@ -2,6 +2,7 @@ import { getLogger } from '../utils/logger.js';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
+import { createHash } from 'crypto';
 import {
   executeQuery,
   executeNonQuery,
@@ -14,7 +15,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 28;
+const CURRENT_SCHEMA_VERSION = 30;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -176,6 +177,26 @@ const createDatabaseSchema = async (): Promise<void> => {
         FOREIGN KEY (template_id) REFERENCES templates(id)
       )
     `);
+
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS imagens_laudo (
+        id TEXT PRIMARY KEY,
+        laudo_id TEXT NOT NULL,
+        nome_arquivo TEXT NOT NULL,
+        caminho_relativo TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        tamanho INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        legenda TEXT NOT NULL DEFAULT '',
+        origem TEXT NOT NULL DEFAULT 'local',
+        sequencia INTEGER NOT NULL DEFAULT 0,
+        disponivel_painel INTEGER NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (laudo_id) REFERENCES laudos(id) ON DELETE CASCADE
+      )
+    `);
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo_laudo ON imagens_laudo(laudo_id, sequencia)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo_caminho ON imagens_laudo(caminho_relativo)');
 
     // Tabela de categorias de placeholders
     await executeNonQuery(`
@@ -344,6 +365,121 @@ const checkAndApplyMigrations = async (): Promise<void> => {
 /**
  * Aplica migrations específicas
  */
+interface ImagemLaudoLegada {
+  id?: unknown;
+  laudo_id?: unknown;
+  caminho?: unknown;
+  caminho_relativo?: unknown;
+  nome_arquivo?: unknown;
+  mime_type?: unknown;
+  sha256?: unknown;
+  tamanho?: unknown;
+  legenda?: unknown;
+  origem?: unknown;
+  sequencia?: unknown;
+  numero_figura?: unknown;
+  created_at?: unknown;
+}
+
+function detectarMimeImagemLegada(bytes: Buffer): { mimeType: string; extensao: string } | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mimeType: 'image/jpeg', extensao: 'jpg' };
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { mimeType: 'image/png', extensao: 'png' };
+  if (bytes.length >= 6 && (bytes.subarray(0, 6).toString('ascii') === 'GIF87a' || bytes.subarray(0, 6).toString('ascii') === 'GIF89a')) return { mimeType: 'image/gif', extensao: 'gif' };
+  if (bytes.length >= 2 && bytes.subarray(0, 2).toString('ascii') === 'BM') return { mimeType: 'image/bmp', extensao: 'bmp' };
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') return { mimeType: 'image/webp', extensao: 'webp' };
+  return null;
+}
+
+async function criarTabelaImagensLaudoAtual(): Promise<void> {
+  await executeNonQuery(`
+    CREATE TABLE IF NOT EXISTS imagens_laudo (
+      id TEXT PRIMARY KEY,
+      laudo_id TEXT NOT NULL,
+      nome_arquivo TEXT NOT NULL,
+      caminho_relativo TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      tamanho INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      legenda TEXT NOT NULL DEFAULT '',
+      origem TEXT NOT NULL DEFAULT 'local',
+      sequencia INTEGER NOT NULL DEFAULT 0,
+      disponivel_painel INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (laudo_id) REFERENCES laudos(id) ON DELETE CASCADE
+    )
+  `);
+  await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo_laudo ON imagens_laudo(laudo_id, sequencia)');
+  await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_imagens_laudo_caminho ON imagens_laudo(caminho_relativo)');
+}
+
+async function migrarTabelaImagensLaudoLegada(): Promise<void> {
+  const colunas = await executeQuery<{ name: string }>('PRAGMA table_info(imagens_laudo)');
+  const nomes = new Set(colunas.map(coluna => coluna.name));
+  const colunasAtuais = ['id', 'laudo_id', 'nome_arquivo', 'caminho_relativo', 'mime_type', 'tamanho', 'sha256', 'legenda', 'origem', 'sequencia', 'disponivel_painel', 'created_at'];
+  if (colunasAtuais.every(coluna => nomes.has(coluna))) {
+    await criarTabelaImagensLaudoAtual();
+    return;
+  }
+
+  if (colunas.length === 0) {
+    await criarTabelaImagensLaudoAtual();
+    return;
+  }
+
+  await executeNonQuery('ALTER TABLE imagens_laudo RENAME TO imagens_laudo_legado_v30');
+  await criarTabelaImagensLaudoAtual();
+  const imagensLegadas = await executeQuery<ImagemLaudoLegada>('SELECT * FROM imagens_laudo_legado_v30');
+  let migradas = 0;
+  let ignoradas = 0;
+
+  for (const imagem of imagensLegadas) {
+    if (typeof imagem.id !== 'string' || typeof imagem.laudo_id !== 'string') {
+      ignoradas += 1;
+      continue;
+    }
+    const caminhoSalvo = typeof imagem.caminho_relativo === 'string'
+      ? path.resolve(DB_DIR, imagem.caminho_relativo)
+      : typeof imagem.caminho === 'string' ? imagem.caminho : '';
+    if (!caminhoSalvo || !fs.existsSync(caminhoSalvo)) {
+      log.warn('Imagem legada ignorada porque o arquivo não existe', { imagemId: imagem.id, caminho: caminhoSalvo });
+      ignoradas += 1;
+      continue;
+    }
+
+    const bytes = fs.readFileSync(caminhoSalvo);
+    const detectada = detectarMimeImagemLegada(bytes);
+    if (!detectada) {
+      log.warn('Imagem legada ignorada porque o formato não é compatível', { imagemId: imagem.id, caminho: caminhoSalvo });
+      ignoradas += 1;
+      continue;
+    }
+
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const diretorioLaudo = path.join(DB_DIR, 'imagens', 'laudos', imagem.laudo_id);
+    const destino = path.join(diretorioLaudo, `${sha256}.${detectada.extensao}`);
+    fs.mkdirSync(diretorioLaudo, { recursive: true });
+    if (!fs.existsSync(destino)) fs.copyFileSync(caminhoSalvo, destino);
+    const sequencia = typeof imagem.sequencia === 'number'
+      ? imagem.sequencia
+      : typeof imagem.numero_figura === 'number' ? imagem.numero_figura : migradas + 1;
+    const origem = imagem.origem === 'gdl' ? 'gdl' : 'local';
+    const legenda = typeof imagem.legenda === 'string' ? imagem.legenda : '';
+    const nomeArquivo = typeof imagem.nome_arquivo === 'string' && imagem.nome_arquivo.trim()
+      ? path.basename(imagem.nome_arquivo) : path.basename(caminhoSalvo);
+    const caminhoRelativo = path.relative(DB_DIR, destino).replace(/\\/g, '/');
+    await executeNonQuery(
+      `INSERT INTO imagens_laudo
+        (id, laudo_id, nome_arquivo, caminho_relativo, mime_type, tamanho, sha256, legenda, origem, sequencia, disponivel_painel, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, COALESCE(?, CURRENT_TIMESTAMP))`,
+      [imagem.id, imagem.laudo_id, nomeArquivo, caminhoRelativo, detectada.mimeType, bytes.length, sha256, legenda, origem, sequencia, imagem.created_at],
+    );
+    migradas += 1;
+  }
+
+  await executeNonQuery('DROP TABLE imagens_laudo_legado_v30');
+  log.info('Migration v30: tabela de imagens legada convertida', { migradas, ignoradas });
+}
+
 const applyMigrations = async (fromVersion: number): Promise<void> => {
   // Implementar migrations específicas conforme necessário
 
@@ -1719,6 +1855,28 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       );
     } catch (error) {
       log.error('Erro ao aplicar migration versão 28', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 29: persistir metadados das imagens do painel de ilustrações
+  if (fromVersion < 29) {
+    try {
+      await migrarTabelaImagensLaudoLegada();
+      log.debug('Migration v29: armazenamento organizado das imagens dos laudos criado');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 29', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 30: converter a tabela legada de imagens para o armazenamento por arquivo
+  if (fromVersion < 30) {
+    try {
+      await migrarTabelaImagensLaudoLegada();
+      log.debug('Migration v30: estrutura de imagens validada');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 30', error);
       throw error;
     }
   }
