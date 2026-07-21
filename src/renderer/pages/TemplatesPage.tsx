@@ -1030,7 +1030,7 @@ export const TemplatesPage: React.FC = () => {
       const result = templateFormSchema.safeParse(templateForm);
       if (!result.success) {
         const fErrors: Partial<Record<keyof TemplateForm, string>> = {};
-        result.error.errors.forEach(err => {
+        result.error.issues.forEach(err => {
           const f = err.path[0] as keyof TemplateForm;
           if (!fErrors[f]) fErrors[f] = err.message;
         });

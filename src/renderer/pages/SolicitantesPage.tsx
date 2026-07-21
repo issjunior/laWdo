@@ -136,7 +136,7 @@ export const SolicitantesPage: React.FC = () => {
 
       if (!validationResult.success) {
         const zodErrors: Partial<Solicitante> = {};
-        validationResult.error.errors.forEach((err) => {
+        validationResult.error.issues.forEach((err) => {
           // Mapear corretamente os erros para os campos
           if (err.path[0] === 'nome') {
             zodErrors.nome = err.message;

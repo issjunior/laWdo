@@ -84,7 +84,7 @@
     "unpdf": "^1.6.2",
     "winston": "^3.11.0",
     "yet-another-react-lightbox": "^3.32.0",
-    "zod": "^3.22.4"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

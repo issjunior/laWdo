@@ -252,7 +252,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
         setAnoManualErro(null);
         setAnoRep(digits);
       } else {
-        setAnoManualErro(result.error.errors[0].message);
+        setAnoManualErro(result.error.issues[0].message);
         setAnoRep('');
       }
     } else if (digits.length > 0) {
