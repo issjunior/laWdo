@@ -320,4 +320,3 @@ A ideia estará pronta para planejamento de implementação quando:
 - estimativas e cronograma de desenvolvimento;
 - implementação do fluxo;
 - substituição imediata da timeline atual.
-
