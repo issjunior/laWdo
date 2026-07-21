@@ -125,7 +125,7 @@
 - Smoke visual aprovado em tema claro e escuro: login, sidebar, cabeçalho, dashboard, formulários, tabelas e diálogos, sem erros observados.
 - Validação final aprovada em instalação limpa: `npm ci`, `npm run type-check`, `npm run lint`, `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run dead-code:check` e `git diff --check`. `npm run knip -- --no-exit-code` não identificou dependências ou arquivos novos sem uso; os exports históricos já reportados permanecem observacionais.
 - Criada a issue [#30](https://github.com/issjunior/laWdo/issues/30) para rastrear a migração e a regressão visual corrigida.
-- Commit local `update_tailwind_4` criado na branch. Próximo passo: publicar a branch, abrir PR e realizar squash-merge apenas após a CI verde.
+- Commit `update_tailwind_4` publicado na branch `dependabot/tailwind-4`; PR [#31](https://github.com/issjunior/laWdo/pull/31) aberta como rascunho. Próximo passo: acompanhar a CI e realizar squash-merge apenas após o check `Qualidade` verde.
 
 ## Diagnóstico atual
 
