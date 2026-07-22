@@ -78,7 +78,7 @@
     "react-router-dom": "^7.14.2",
     "sanitize-html": "2.17.5",
     "sonner": "^2.0.7",
-    "sqlite3": "^5.1.7",
+    "sqlite3": "^6.0.1",
     "tailwind-merge": "^3.6.0",
     "tinymce": "^8.5.0",
     "unpdf": "^1.6.2",
@@ -119,5 +119,10 @@
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "allowScripts": {
+    "sqlite3@6.0.1": true,
+    "bcrypt@6.0.0": true,
+    "electron@29.4.6": true
   }
 }

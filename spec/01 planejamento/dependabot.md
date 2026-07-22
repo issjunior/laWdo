@@ -181,7 +181,16 @@
 - Atualizado `bcrypt` de 5.1.1 para 6.0.0. A nova versão usa binários N-API pré-compilados e mantém compatibilidade com hashes existentes.
 - Validação aprovada em instalação limpa: `npm ci`, `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
 - Smoke de autenticação e build aprovados pelo usuário em 22/07/2026.
-- A issue [#46](https://github.com/issjunior/laWdo/issues/46) e a PR em rascunho [#47](https://github.com/issjunior/laWdo/pull/47) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
+- A issue [#46](https://github.com/issjunior/laWdo/issues/46) e a PR [#47](https://github.com/issjunior/laWdo/pull/47) foram abertas; após o check `Qualidade` verde, o squash-merge foi concluído no commit `ac8928d`. A CI da `main` também foi aprovada.
+
+### 22/07/2026 — Tranche 15: sqlite3 6 em preparação
+
+- Criada a branch `dependabot/sqlite3` a partir da `main` validada após bcrypt 6 e a issue [#48](https://github.com/issjunior/laWdo/issues/48).
+- A atualização isolada será de `sqlite3` 5.1.7 para 6.0.1. Os testes de banco, IPC, reabertura de base existente e empacotamento aguardam a conclusão da instalação das Build Tools C++.
+- As Build Tools C++ foram instaladas e o `sqlite3` 6.0.1 foi reconstruído com sucesso. `type-check`, lint (14 warnings históricos), build, os testes de integração de SQLite/IPC e `test:coverage` (188 aprovados, 1 ignorado) foram aprovados.
+- O primeiro `npm run pack` foi bloqueado antes da montagem final por permissão do Windows para criar links simbólicos ao extrair o pacote auxiliar `winCodeSign` do electron-builder. Após habilitar o Modo de Desenvolvedor, o empacotamento foi aprovado e o Electron reconstruiu `sqlite3` 6.0.1 a partir do código-fonte para o alvo Windows x64. Restam a abertura do pacote e a reabertura manual de uma base existente no Windows.
+- O instalador NSIS `dist/laWdo Setup 0.1.0.exe` também foi gerado com sucesso e instalado sem falhas em outro computador Windows. A restauração completa e a importação de configuração apresentaram `EBUSY`; o problema foi registrado na issue [#49](https://github.com/issjunior/laWdo/issues/49) e ficará fora desta tranche por decisão do usuário.
+- Em instalação limpa, `npm ci`, `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build e `git diff --check` foram aprovados. `dead-code:check` manteve somente os apontamentos observacionais conhecidos; `knip` não concluiu por falha de alocação de memória no `oxc-parser`, sem diagnóstico de código.
 
 ## Diagnóstico atual
 
