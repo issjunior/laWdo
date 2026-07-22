@@ -135,6 +135,14 @@
 - Ambiente local validado em Node `24.14.1` e npm `11.17.0`. Validações aprovadas: `npm run type-check`, `npm run lint`, `npm run test:coverage` (188 aprovados, 1 ignorado) e `npm run build`.
 - Não há alteração de interface ou runtime empacotado; smoke visual não é necessário. Criada a issue [#32](https://github.com/issjunior/laWdo/issues/32); próximo passo: publicar a PR e condicionar o squash-merge à CI verde.
 
+### 21/07/2026 — Tranche 9: ESLint 9 em validação
+
+- A migração substitui `.eslintrc.json` e `.eslintignore` por `eslint.config.js`, com `@eslint/js`, `typescript-eslint`, plugins React e hooks no formato flat. O TinyMCE vendor e `.opencode/` permanecem fora do lint; scripts JavaScript recebem os globais Node.
+- O primeiro lint revelou quatro regras novas não aplicadas no ESLint 8 (`no-constant-binary-expression`, `@typescript-eslint/no-empty-object-type` e `@typescript-eslint/no-unused-expressions`). Elas foram desativadas para preservar a equivalência de regras nesta tranche.
+- Permanecem 14 warnings históricos de variáveis capturadas sem uso em `catch` e schemas usados como tipos. Não serão corrigidos junto da atualização de ferramenta; devem ser tratados em tarefa própria de redução de warnings após a migração.
+- Validação local concluída em instalação limpa: `npm ci`, `npm run type-check`, `npm run lint`, `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`. Knip e ts-prune mantêm somente apontamentos observacionais já conhecidos.
+- Não é necessário smoke visual. O commit `0ff9fdf` (`update_eslint_9`) foi publicado na branch `dependabot/eslint-9`; a issue [#34](https://github.com/issjunior/laWdo/issues/34) e a PR em rascunho [#35](https://github.com/issjunior/laWdo/pull/35) foram abertas em 22/07/2026. O check `Qualidade` está em execução; o squash-merge permanece condicionado à CI verde.
+
 ## Diagnóstico atual
 
 ### PR #13 — GitHub Actions
