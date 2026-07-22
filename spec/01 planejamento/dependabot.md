@@ -157,7 +157,7 @@
 - Atualizados `vite` para 8.1.5 e `@vitejs/plugin-react` para 6.0.4. Node 24 e Vitest 4.1.10 permanecem compatíveis.
 - Rolldown não aceita o formato-objeto de `manualChunks` usado pelo Rollup. A configuração foi migrada para uma função equivalente, preservando os chunks `vendor-react` e `vendor-tinymce`.
 - Validação aprovada em instalação limpa: `npm ci`, `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
-- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. Próximo passo: publicar a branch, criar a issue e abrir a PR em rascunho, condicionando o squash-merge ao check `Qualidade` verde.
+- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. A issue [#39](https://github.com/issjunior/laWdo/issues/39) e a PR em rascunho [#40](https://github.com/issjunior/laWdo/pull/40) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
 
 ## Diagnóstico atual
 
