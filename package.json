@@ -60,7 +60,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-table": "^8.21.3",
     "@tinymce/tinymce-react": "^6.3.0",
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.6.0",
     "bcrypt": "^5.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.0",
