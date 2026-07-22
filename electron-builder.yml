@@ -23,7 +23,6 @@ win:
       arch:
         - x64
   icon: build/icon.ico
-  publisherName: Polícia Científica do Paraná
 
 nsis:
   oneClick: false
