@@ -3,6 +3,7 @@
 **Data de referência:** 21/07/2026
 **Repositório:** `issjunior/laWdo`
 **Objetivo:** resolver as três PRs abertas do Dependabot sem misturar atualizações seguras de infraestrutura com migrações grandes de runtime e toolchain.
+**Status:** concluído em 22/07/2026.
 
 ## Resumo executivo
 
@@ -225,6 +226,13 @@
 - `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build, `npm run pack`, `npm run dist` e `git diff --check` foram aprovados. O empacotamento reconstruiu `bcrypt` e `sqlite3` para Electron 43.2.0 e gerou o instalador NSIS.
 - O smoke manual de `npm run build` e `npm run dev`, bem como a instalação do pacote no Windows, foram aprovados pelo usuário. A restauração de backup identificou um problema separado, registrado e mantido aberto na issue #49.
 
+### 22/07/2026 — Plano concluído
+
+- A tranche final foi mesclada pela PR [#58](https://github.com/issjunior/laWdo/pull/58), com CI verde, smoke do aplicativo e instalação do pacote no Windows aprovados.
+- As PRs originais #11 e #14 foram substituídas pelas tranches isoladas, e todas as tranches previstas foram mescladas.
+- A PR automática [#45](https://github.com/issjunior/laWdo/pull/45) confirmou o funcionamento posterior da política de agrupamento de patches e minors do Dependabot.
+- Os problemas de restauração de backup e de pré-visualização de PDF permanecem registrados separadamente nas issues [#49](https://github.com/issjunior/laWdo/issues/49) e [#60](https://github.com/issjunior/laWdo/issues/60); ambos estão fora do escopo concluído deste plano.
+
 ## Diagnóstico atual
 
 ### PR #13 — GitHub Actions
@@ -399,14 +407,14 @@ As tranches de React e Tailwind também exigem smoke visual em:
 
 ## Critérios de conclusão
 
-A rodada estará concluída quando:
+A rodada foi concluída em 22/07/2026, com os seguintes critérios atendidos:
 
-- a PR #13 estiver mesclada;
-- as PRs #11 e #14 estiverem fechadas e substituídas;
-- todas as tranches criadas estiverem mescladas com CI verde;
-- o aplicativo empacotado passar pelo smoke test no Windows;
-- uma execução posterior do Dependabot agrupar apenas patches e minors;
-- atualizações major futuras aparecerem isoladas ou em famílias explicitamente compatíveis.
+- [x] a PR #13 foi mesclada;
+- [x] as PRs #11 e #14 foram fechadas e substituídas;
+- [x] todas as tranches criadas foram mescladas com CI verde;
+- [x] o aplicativo empacotado passou pelo smoke test no Windows;
+- [x] uma execução posterior do Dependabot agrupou apenas patches e minors;
+- [x] atualizações major foram tratadas isoladamente ou em famílias explicitamente compatíveis.
 
 ## Premissas
 
