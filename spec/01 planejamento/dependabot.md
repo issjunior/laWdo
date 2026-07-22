@@ -208,6 +208,14 @@
 - `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build, `npm run pack`, `npm run dist` e `git diff --check` foram aprovados. O empacotamento reconstruiu `bcrypt` e `sqlite3` para Electron 35.7.5 e gerou o instalador NSIS.
 - Pendente antes do merge: smoke manual do app e, quando o LibreOffice estiver instalado, uma exportação ODT para confirmar o fluxo completo sem o aviso no terminal.
 
+### 22/07/2026 — Tranche 18: Electron 39 em validação
+
+- A tranche Electron 35 foi mesclada pela PR [#54](https://github.com/issjunior/laWdo/pull/54) no commit `96cfe885`; a CI da `main` foi aprovada e a issue #53 foi encerrada após smoke sem o aviso `DEP0174` e com exportação ODT bem-sucedida.
+- Criada a branch `dependabot/electron-39` e a issue [#55](https://github.com/issjunior/laWdo/issues/55). O Electron foi atualizado de 35.7.5 para 39.8.10.
+- A revisão do intervalo 36–39 não identificou breaking change aplicável aos usos atuais de preload, IPC, `safeStorage` ou arquivos locais. `contextIsolation: true`, `nodeIntegration: false` e `sandbox: true` continuam preservados nas janelas com preload; o preview temporário não possui preload e usa o sandbox padrão.
+- `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build, `npm run pack`, `npm run dist` e `git diff --check` foram aprovados. O empacotamento reconstruiu `bcrypt` e `sqlite3` para Electron 39.8.10 e gerou o instalador NSIS.
+- Pendente antes do merge: smoke manual do app, incluindo preload/IPC, `safeStorage`, arquivos locais e instalação do pacote no Windows.
+
 ## Diagnóstico atual
 
 ### PR #13 — GitHub Actions
