@@ -225,7 +225,7 @@ export const registerTemplateHandlers = (): void => {
         width: 800,
         height: 600,
         show: false,
-        webPreferences: { nodeIntegration: false, contextIsolation: true },
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
       });
 
       tmpPath = path.join(app.getPath('temp'), `preview-${Date.now()}.html`);

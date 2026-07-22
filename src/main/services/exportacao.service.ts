@@ -168,7 +168,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
 
     win = new BrowserWindow({
       width: 800, height: 600, show: false,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
     });
 
     tmpPath = path.join(app.getPath('temp'), `export-pdf-${Date.now()}.html`);
