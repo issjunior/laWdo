@@ -141,7 +141,15 @@
 - O primeiro lint revelou quatro regras novas não aplicadas no ESLint 8 (`no-constant-binary-expression`, `@typescript-eslint/no-empty-object-type` e `@typescript-eslint/no-unused-expressions`). Elas foram desativadas para preservar a equivalência de regras nesta tranche.
 - Permanecem 14 warnings históricos de variáveis capturadas sem uso em `catch` e schemas usados como tipos. Não serão corrigidos junto da atualização de ferramenta; devem ser tratados em tarefa própria de redução de warnings após a migração.
 - Validação local concluída em instalação limpa: `npm ci`, `npm run type-check`, `npm run lint`, `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`. Knip e ts-prune mantêm somente apontamentos observacionais já conhecidos.
-- Não é necessário smoke visual. O commit `0ff9fdf` (`update_eslint_9`) foi publicado na branch `dependabot/eslint-9`; a issue [#34](https://github.com/issjunior/laWdo/issues/34) e a PR em rascunho [#35](https://github.com/issjunior/laWdo/pull/35) foram abertas em 22/07/2026. O check `Qualidade` está em execução; o squash-merge permanece condicionado à CI verde.
+- Não é necessário smoke visual. O commit `0ff9fdf` (`update_eslint_9`) foi publicado na branch `dependabot/eslint-9`; a issue [#34](https://github.com/issjunior/laWdo/issues/34) e a PR [#35](https://github.com/issjunior/laWdo/pull/35) foram abertas em 22/07/2026. Após a aprovação do check `Qualidade`, o squash-merge foi concluído no commit `878b6b68b6122452b5323651e7e4ddc141a033f9`; a CI da `main` também foi aprovada.
+
+### 22/07/2026 — Tranche 10: Vite 7 em validação
+
+- Criada a branch `dependabot/vite-7` a partir da `main` validada após ESLint 9.
+- A matriz verificada mantém Node 24, atualiza `vite` de 5.4.21 para 7.3.6 e `@vitejs/plugin-react` de 4.7.0 para 5.2.0; `vitest` 4.1.10 já declara compatibilidade com Vite 7. As versões escolhidas evitam antecipar Vite 8 e `@vitejs/plugin-react` 6.
+- A configuração existente foi preservada sem adaptação: aliases, `base: './'`, `root`, `outDir` e os `manualChunks` de Rollup continuam produzindo a saída esperada para Electron.
+- Validação em instalação limpa aprovada: `npm ci`, `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
+- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. A issue [#37](https://github.com/issjunior/laWdo/issues/37) e a PR em rascunho [#38](https://github.com/issjunior/laWdo/pull/38) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
 
 ## Diagnóstico atual
 
