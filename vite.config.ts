@@ -20,9 +20,14 @@ export default defineConfig({
         main: path.join(__dirname, 'src/renderer/index.html'),
       },
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-tinymce': ['@tinymce/tinymce-react'],
+        manualChunks(id) {
+          if (id.includes('node_modules/@tinymce/tinymce-react')) {
+            return 'vendor-tinymce';
+          }
+
+          if (/node_modules\/(react|react-dom|react-router-dom)\//.test(id)) {
+            return 'vendor-react';
+          }
         },
       },
     },

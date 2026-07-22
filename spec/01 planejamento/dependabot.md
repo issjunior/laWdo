@@ -149,7 +149,15 @@
 - A matriz verificada mantém Node 24, atualiza `vite` de 5.4.21 para 7.3.6 e `@vitejs/plugin-react` de 4.7.0 para 5.2.0; `vitest` 4.1.10 já declara compatibilidade com Vite 7. As versões escolhidas evitam antecipar Vite 8 e `@vitejs/plugin-react` 6.
 - A configuração existente foi preservada sem adaptação: aliases, `base: './'`, `root`, `outDir` e os `manualChunks` de Rollup continuam produzindo a saída esperada para Electron.
 - Validação em instalação limpa aprovada: `npm ci`, `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
-- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. A issue [#37](https://github.com/issjunior/laWdo/issues/37) e a PR em rascunho [#38](https://github.com/issjunior/laWdo/pull/38) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
+- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. A issue [#37](https://github.com/issjunior/laWdo/issues/37) e a PR [#38](https://github.com/issjunior/laWdo/pull/38) foram abertas; após a aprovação do check `Qualidade`, o squash-merge foi concluído no commit `97ebd5ac211e4d3e48310d1fb5655d8fcd972493`. A CI da `main` também foi aprovada.
+
+### 22/07/2026 — Tranche 11: Vite 8 e Rolldown em validação
+
+- Criada a branch `dependabot/vite-8` a partir da `main` validada após Vite 7.
+- Atualizados `vite` para 8.1.5 e `@vitejs/plugin-react` para 6.0.4. Node 24 e Vitest 4.1.10 permanecem compatíveis.
+- Rolldown não aceita o formato-objeto de `manualChunks` usado pelo Rollup. A configuração foi migrada para uma função equivalente, preservando os chunks `vendor-react` e `vendor-tinymce`.
+- Validação aprovada em instalação limpa: `npm ci`, `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
+- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. A issue [#39](https://github.com/issjunior/laWdo/issues/39) e a PR em rascunho [#40](https://github.com/issjunior/laWdo/pull/40) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
 
 ## Diagnóstico atual
 
