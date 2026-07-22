@@ -192,6 +192,14 @@
 - O instalador NSIS `dist/laWdo Setup 0.1.0.exe` também foi gerado com sucesso e instalado sem falhas em outro computador Windows. A restauração completa e a importação de configuração apresentaram `EBUSY`; o problema foi registrado na issue [#49](https://github.com/issjunior/laWdo/issues/49) e ficará fora desta tranche por decisão do usuário.
 - Em instalação limpa, `npm ci`, `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build e `git diff --check` foram aprovados. `dead-code:check` manteve somente os apontamentos observacionais conhecidos; `knip` não concluiu por falha de alocação de memória no `oxc-parser`, sem diagnóstico de código.
 
+### 22/07/2026 — Tranche 16: electron-builder 26 em validação
+
+- A tranche SQLite foi mesclada pela PR [#50](https://github.com/issjunior/laWdo/pull/50) no commit `31b9f1a`; a CI da `main` foi aprovada.
+- Criada a branch `dependabot/electron-builder` e a issue [#51](https://github.com/issjunior/laWdo/issues/51). `electron-builder` foi atualizado de 24.13.3 para 26.15.3.
+- A configuração v26 removeu `publisherName` do bloco `win`; como o projeto não configura assinatura ou atualização automática, a propriedade obsoleta foi removida sem alterar o alvo NSIS ou o ícone.
+- `npm run pack` e `npm run dist` foram aprovados; o instalador NSIS foi gerado. O smoke de `npm run build` e `npm run dev` foi aprovado pelo usuário.
+- `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado) e `git diff --check` foram aprovados. O teste GDL/REP apresentou timeout apenas em uma execução concorrente e passou ao ser repetido isoladamente.
+
 ## Diagnóstico atual
 
 ### PR #13 — GitHub Actions
