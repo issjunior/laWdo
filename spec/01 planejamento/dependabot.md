@@ -223,7 +223,7 @@
 - A depreciação do módulo `electron.clipboard` no renderer foi auditada: o projeto usa exclusivamente `navigator.clipboard`, que é a API web e não exige migração para IPC. Não há importação de `electron` no renderer.
 - `sandbox: true` foi tornado explícito nas janelas temporárias de preview PDF e exportação, preservando a política de segurança junto de `nodeIntegration: false` e `contextIsolation: true`.
 - `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build, `npm run pack`, `npm run dist` e `git diff --check` foram aprovados. O empacotamento reconstruiu `bcrypt` e `sqlite3` para Electron 43.2.0 e gerou o instalador NSIS.
-- Pendente antes do merge: smoke manual do aplicativo e instalação do pacote no Windows.
+- O smoke manual de `npm run build` e `npm run dev`, bem como a instalação do pacote no Windows, foram aprovados pelo usuário. A restauração de backup identificou um problema separado, registrado e mantido aberto na issue #49.
 
 ## Diagnóstico atual
 
