@@ -216,6 +216,15 @@
 - `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build, `npm run pack`, `npm run dist` e `git diff --check` foram aprovados. O empacotamento reconstruiu `bcrypt` e `sqlite3` para Electron 39.8.10 e gerou o instalador NSIS.
 - Pendente antes do merge: smoke manual do app, incluindo preload/IPC, `safeStorage`, arquivos locais e instalação do pacote no Windows.
 
+### 22/07/2026 — Tranche 19: Electron 43 em validação
+
+- A tranche Electron 39 foi mesclada pela PR [#56](https://github.com/issjunior/laWdo/pull/56) no commit `915eb652`; a CI da `main` foi aprovada e a issue #55 foi encerrada.
+- Criada a branch `dependabot/electron-43` e a issue [#57](https://github.com/issjunior/laWdo/issues/57). O Electron foi atualizado de 39.8.10 para 43.2.0.
+- A depreciação do módulo `electron.clipboard` no renderer foi auditada: o projeto usa exclusivamente `navigator.clipboard`, que é a API web e não exige migração para IPC. Não há importação de `electron` no renderer.
+- `sandbox: true` foi tornado explícito nas janelas temporárias de preview PDF e exportação, preservando a política de segurança junto de `nodeIntegration: false` e `contextIsolation: true`.
+- `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build, `npm run pack`, `npm run dist` e `git diff --check` foram aprovados. O empacotamento reconstruiu `bcrypt` e `sqlite3` para Electron 43.2.0 e gerou o instalador NSIS.
+- Pendente antes do merge: smoke manual do aplicativo e instalação do pacote no Windows.
+
 ## Diagnóstico atual
 
 ### PR #13 — GitHub Actions
