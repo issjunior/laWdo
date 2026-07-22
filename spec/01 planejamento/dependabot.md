@@ -173,7 +173,7 @@
 - Atualizado `adm-zip` de 0.5.18 para 0.6.0, compatível com Node 24 e com correções de segurança para arquivos ZIP maliciosos.
 - Validação automática aprovada: `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
 - Smoke manual de criação de backup aprovado em 22/07/2026. A restauração de backup não foi executada por decisão explícita do usuário e permanece fora do critério desta tranche.
-- Próximo passo: publicar a branch, criar a issue e abrir a PR em rascunho, condicionando o squash-merge ao check `Qualidade` verde.
+- A issue [#43](https://github.com/issjunior/laWdo/issues/43) e a PR em rascunho [#44](https://github.com/issjunior/laWdo/pull/44) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
 
 ## Diagnóstico atual
 
