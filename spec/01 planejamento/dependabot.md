@@ -165,7 +165,7 @@
 - Atualizado `concurrently` de 8.2.2 para 10.0.3; a versão exige Node 22 ou superior e permanece compatível com o baseline Node 24.
 - O script `watch`, que orquestra `watch:main`, `watch:preload` e `watch:renderer`, iniciou sem erro no terminal com a sintaxe atual.
 - Validação em instalação limpa aprovada: `npm ci`, `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
-- Próximo passo: publicar a branch, criar a issue e abrir a PR em rascunho, condicionando o squash-merge ao check `Qualidade` verde.
+- A issue [#41](https://github.com/issjunior/laWdo/issues/41) e a PR em rascunho [#42](https://github.com/issjunior/laWdo/pull/42) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
 
 ## Diagnóstico atual
 
