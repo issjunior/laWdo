@@ -149,7 +149,7 @@
 - A matriz verificada mantém Node 24, atualiza `vite` de 5.4.21 para 7.3.6 e `@vitejs/plugin-react` de 4.7.0 para 5.2.0; `vitest` 4.1.10 já declara compatibilidade com Vite 7. As versões escolhidas evitam antecipar Vite 8 e `@vitejs/plugin-react` 6.
 - A configuração existente foi preservada sem adaptação: aliases, `base: './'`, `root`, `outDir` e os `manualChunks` de Rollup continuam produzindo a saída esperada para Electron.
 - Validação em instalação limpa aprovada: `npm ci`, `npm run type-check`, `npm run lint` (14 warnings históricos), `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`.
-- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. Próximo passo: criar a issue, publicar a branch e abrir a PR em rascunho, condicionando o squash-merge ao check `Qualidade` verde.
+- O Electron foi iniciado com `npm run dev` e permaneceu sem erros no terminal durante o smoke de abertura. A issue [#37](https://github.com/issjunior/laWdo/issues/37) e a PR em rascunho [#38](https://github.com/issjunior/laWdo/pull/38) foram abertas; o squash-merge permanece condicionado ao check `Qualidade` verde.
 
 ## Diagnóstico atual
 
