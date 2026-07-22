@@ -101,7 +101,7 @@
     "@vitest/coverage-v8": "^4.1.5",
     "@vitest/ui": "^4.1.5",
     "concurrently": "^10.0.3",
-    "electron": "^29.0.0",
+    "electron": "^35.7.5",
     "electron-builder": "^26.15.3",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
@@ -123,6 +123,6 @@
   "allowScripts": {
     "sqlite3@6.0.1": true,
     "bcrypt@6.0.0": true,
-    "electron@29.4.6": true
+    "electron@35.7.5": true
   }
 }

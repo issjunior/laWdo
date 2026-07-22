@@ -200,6 +200,14 @@
 - `npm run pack` e `npm run dist` foram aprovados; o instalador NSIS foi gerado. O smoke de `npm run build` e `npm run dev` foi aprovado pelo usuário.
 - `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado) e `git diff --check` foram aprovados. O teste GDL/REP apresentou timeout apenas em uma execução concorrente e passou ao ser repetido isoladamente.
 
+### 22/07/2026 — Tranche 17: Electron 35 em validação
+
+- Criada a branch `dependabot/electron-35` a partir da `main` validada após `electron-builder` 26 e a issue [#53](https://github.com/issjunior/laWdo/issues/53). O Electron foi atualizado de 29.4.6 para 35.7.5.
+- A revisão das mudanças do intervalo confirmou a preservação de `contextIsolation: true`, `nodeIntegration: false` e `sandbox: true`; o projeto não utiliza as APIs de preload deprecadas nesse intervalo.
+- O aviso `DEP0174` observado ao iniciar o app foi rastreado a `promisify(libre.convert)` em `exportacao.service.ts`. A versão instalada de `libreoffice-convert` retorna internamente uma Promise e também exige callback; o adaptador explícito de callback para Promise elimina a dupla promisificação sem mudar a conversão ODT nem a verificação do LibreOffice.
+- `type-check`, lint (14 warnings históricos), `test:coverage` (188 aprovados, 1 ignorado), build, `npm run pack`, `npm run dist` e `git diff --check` foram aprovados. O empacotamento reconstruiu `bcrypt` e `sqlite3` para Electron 35.7.5 e gerou o instalador NSIS.
+- Pendente antes do merge: smoke manual do app e, quando o LibreOffice estiver instalado, uma exportação ODT para confirmar o fluxo completo sem o aviso no terminal.
+
 ## Diagnóstico atual
 
 ### PR #13 — GitHub Actions

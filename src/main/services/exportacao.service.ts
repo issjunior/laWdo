@@ -489,15 +489,30 @@ async function gerarDOCX(
   return await Packer.toBuffer(doc);
 }
 
+async function converterComLibreOffice(
+  documento: Buffer,
+  formato: string,
+  filtro?: string
+): Promise<Buffer> {
+  const libre = await import('libreoffice-convert');
+
+  return new Promise<Buffer>((resolve, reject) => {
+    libre.convert(documento, formato, filtro, (erro, resultado) => {
+      if (erro) {
+        reject(erro);
+        return;
+      }
+
+      resolve(resultado);
+    });
+  });
+}
+
 async function gerarODT(
   html: string,
   estrutura?: EstruturaExportacaoLaudo,
   margens?: ExportarParams['margens']
 ): Promise<Buffer> {
-  const { promisify } = await import('util');
-  const libre = await import('libreoffice-convert');
-  const convertAsync = promisify(libre.convert);
-
   const tmpDir = os.tmpdir();
   const tmpHtmlPath = path.join(tmpDir, `laudo-odt-${Date.now()}.html`);
 
@@ -553,7 +568,7 @@ td, th { background: transparent !important; }`;
 
   try {
     const htmlBuffer = fs.readFileSync(tmpHtmlPath);
-    const odtBuffer: Buffer = await convertAsync(htmlBuffer, 'odt', undefined) as Buffer;
+    const odtBuffer = await converterComLibreOffice(htmlBuffer, 'odt');
 
     log.debug('ODT gerado com sucesso via LibreOffice');
     return odtBuffer;
@@ -567,12 +582,8 @@ td, th { background: transparent !important; }`;
 
 export async function verificarLibreOffice(): Promise<boolean> {
   try {
-    const libre = await import('libreoffice-convert');
-    const { promisify } = await import('util');
-    const convertAsync = promisify(libre.convert);
-
     const testHtml = '<html><body><p>test</p></body></html>';
-    const result = await convertAsync(Buffer.from(testHtml, 'utf-8'), 'odt', undefined);
+    const result = await converterComLibreOffice(Buffer.from(testHtml, 'utf-8'), 'odt');
     return Buffer.isBuffer(result) && result.length > 0;
   } catch {
     return false;
