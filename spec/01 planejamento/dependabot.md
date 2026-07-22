@@ -141,7 +141,7 @@
 - O primeiro lint revelou quatro regras novas não aplicadas no ESLint 8 (`no-constant-binary-expression`, `@typescript-eslint/no-empty-object-type` e `@typescript-eslint/no-unused-expressions`). Elas foram desativadas para preservar a equivalência de regras nesta tranche.
 - Permanecem 14 warnings históricos de variáveis capturadas sem uso em `catch` e schemas usados como tipos. Não serão corrigidos junto da atualização de ferramenta; devem ser tratados em tarefa própria de redução de warnings após a migração.
 - Validação local concluída em instalação limpa: `npm ci`, `npm run type-check`, `npm run lint`, `npm run test:coverage` (188 aprovados, 1 ignorado), `npm run build`, `npm run knip -- --no-exit-code`, `npm run dead-code:check` e `git diff --check`. Knip e ts-prune mantêm somente apontamentos observacionais já conhecidos.
-- Não é necessário smoke visual. O commit local está pronto; a criação da issue, o push e a PR de rascunho aguardam a renovação da autenticação do GitHub CLI (`gh auth refresh -h github.com`).
+- Não é necessário smoke visual. O commit `0ff9fdf` (`update_eslint_9`) foi publicado na branch `dependabot/eslint-9`; a issue [#34](https://github.com/issjunior/laWdo/issues/34) e a PR em rascunho [#35](https://github.com/issjunior/laWdo/pull/35) foram abertas em 22/07/2026. O check `Qualidade` está em execução; o squash-merge permanece condicionado à CI verde.
 
 ## Diagnóstico atual
 
