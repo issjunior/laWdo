@@ -176,13 +176,14 @@ export const criarBackup = async (destino: string): Promise<{ success: boolean; 
     // Gravar arquivo ZIP
     zip.writeZip(destino);
 
-    log.debug('Backup ZIP criado com sucesso', { destino });
+    log.info('Backup completo criado com sucesso', { destino });
     return { success: true, path: destino };
   } catch (error) {
-    log.error('Erro ao criar backup ZIP', error);
+    const motivo = error instanceof Error ? error.message : 'Erro desconhecido ao criar backup';
+    log.error(`Falha ao criar backup completo: ${motivo}`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido ao criar backup',
+      error: motivo,
     };
   } finally {
     if (tempDb) {
@@ -271,16 +272,17 @@ export const restaurarBackup = async (origem: string): Promise<{ success: boolea
     log.debug('Diretório temporário de restauração removido');
 
     // Reiniciar aplicação
-    log.debug('Restauração concluída. Reiniciando aplicação...');
+    log.info('Backup completo restaurado com sucesso', { origem });
     app.relaunch();
     app.exit(0);
 
     return { success: true };
   } catch (error) {
-    log.error('Erro ao restaurar backup', error);
+    const motivo = error instanceof Error ? error.message : 'Erro desconhecido ao restaurar backup';
+    log.error(`Falha ao restaurar backup completo: ${motivo}`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido ao restaurar backup',
+      error: motivo,
     };
   }
 };
