@@ -97,7 +97,7 @@ export interface ImagemLaudo {
   nomeArquivo?: string;
 }
 
-export async function criarImagemLaudo(
+async function criarImagemLaudo(
   dataUri: string,
   legenda = '',
   origem?: 'gdl',

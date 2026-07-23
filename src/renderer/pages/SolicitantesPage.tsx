@@ -213,7 +213,7 @@ export const SolicitantesPage: React.FC = () => {
       } else {
         toast.error(result.error || 'Erro ao desativar solicitante');
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro ao desativar solicitante');
     }
   };
@@ -234,7 +234,7 @@ export const SolicitantesPage: React.FC = () => {
       } else {
         toast.error(result.error || 'Erro ao excluir permanentemente');
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro ao excluir permanentemente');
     }
   }, [mostrarTodos, carregarSolicitantes, carregarTodosSolicitantes]);

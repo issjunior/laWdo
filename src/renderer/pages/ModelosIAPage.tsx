@@ -160,7 +160,7 @@ export const ModelosIAPage: React.FC = () => {
         setSuccess('Configurações salvas com sucesso!');
         setTimeout(() => setSuccess(null), 3000);
       }
-    } catch (_e) {
+    } catch {
       setError('Erro ao salvar configurações');
     } finally {
       setSalvando(false);

@@ -26,14 +26,14 @@ function aplicarAliasesDeCapitalizacao(payload: unknown, aliases: Record<string,
   return saida
 }
 
-export const gdlOrigemSchema = z.object({
+const gdlOrigemSchema = z.object({
   tipo: textoOpcional,
   numero: textoOpcional,
   ano: textoFlexivel,
   cidade: textoOpcional,
 }).passthrough()
 
-export const gdlAndamentoSchema = z.object({
+const gdlAndamentoSchema = z.object({
   dataHora: textoOpcional,
   nomeUsuario: textoOpcional,
   descricao: textoOpcional,
@@ -57,7 +57,7 @@ const gdlArquivoRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizaca
   fileId: textoOpcional.transform(valor => valor || null),
 }).catchall(z.unknown()))
 
-export const gdlPecaSchema = z.object({
+const gdlPecaSchema = z.object({
   codPeca: numeroFlexivel,
   tipoPeca: z.string().min(1),
   identificacao: textoOpcional,
@@ -76,7 +76,7 @@ export const gdlPecaSchema = z.object({
   observacao: textoOpcional,
 }).catchall(z.unknown())
 
-export const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(payload, {
+const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(payload, {
   anexoseletronicos: 'anexosEletronicos',
   arquivosadicionais: 'arquivosAdicionais',
   anexoeletronico: 'anexoEletronico',
@@ -95,11 +95,11 @@ export const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizaca
   arquivosAdicionais: z.array(gdlArquivoRepSchema).default([]),
 }).catchall(z.unknown()))
 
-export const gdlRepInvestigacaoSchema = z.object({
+const gdlRepInvestigacaoSchema = z.object({
   envolvidos: z.unknown().optional(),
 }).catchall(z.unknown())
 
-export const gdlListaRepsInvestigacaoSchema = z.object({
+const gdlListaRepsInvestigacaoSchema = z.object({
   dadosREPs: z.array(gdlRepInvestigacaoSchema).default([]),
 }).catchall(z.unknown())
 
