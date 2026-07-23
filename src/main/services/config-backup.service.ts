@@ -59,21 +59,22 @@ export const exportarConfig = async (
           (r) => typeof r.chave !== 'string' || !CHAVES_IA_EXCLUIDAS.includes(r.chave)
         );
         zip.addFile(`${tabela}.json`, Buffer.from(JSON.stringify(filtrado, null, 2), 'utf-8'));
-        log.info(`Tabela ${tabela} exportada: ${filtrado.length} registros (${rows.length - filtrado.length} IA excluidos)`);
+        log.debug(`Tabela ${tabela} exportada: ${filtrado.length} registros (${rows.length - filtrado.length} IA excluidos)`);
       } else {
         zip.addFile(`${tabela}.json`, Buffer.from(JSON.stringify(rows, null, 2), 'utf-8'));
-        log.info(`Tabela ${tabela} exportada: ${rows.length} registros`);
+        log.debug(`Tabela ${tabela} exportada: ${rows.length} registros`);
       }
     }
 
     zip.writeZip(destino);
-    log.info('Backup de configuracao criado com sucesso', { destino });
+    log.info('Backup de configurações criado com sucesso', { destino });
     return { success: true, path: destino };
   } catch (error) {
-    log.error('Erro ao exportar configuracao', error);
+    const motivo = error instanceof Error ? error.message : 'Erro desconhecido ao criar backup de configurações';
+    log.error(`Falha ao criar backup de configurações: ${motivo}`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro ao exportar configuracao',
+      error: motivo,
     };
   }
 };
@@ -119,13 +120,13 @@ export const importarConfig = async (
       const registrosRaw: unknown = JSON.parse(entry.getData().toString('utf-8'));
 
       if (!Array.isArray(registrosRaw) || registrosRaw.length === 0) {
-        log.info(`Tabela ${tabela}: vazia, nada a importar`);
+        log.debug(`Tabela ${tabela}: vazia, nada a importar`);
         continue;
       }
 
       const registros = registrosRaw.filter(isLinhaConfig);
       if (registros.length === 0) {
-        log.info(`Tabela ${tabela}: sem registros validos, nada a importar`);
+        log.debug(`Tabela ${tabela}: sem registros validos, nada a importar`);
         continue;
       }
 
@@ -144,16 +145,17 @@ export const importarConfig = async (
         }
       });
 
-      log.info(`Tabela ${tabela}: ${registros.length} registros importados`);
+      log.debug(`Tabela ${tabela}: ${registros.length} registros importados`);
     }
 
-    log.info('Configuracao importada com sucesso');
+    log.info('Backup de configurações importado com sucesso', { origem });
     return { success: true };
   } catch (error) {
-    log.error('Erro ao importar configuracao', error);
+    const motivo = error instanceof Error ? error.message : 'Erro desconhecido ao importar backup de configurações';
+    log.error(`Falha ao importar backup de configurações: ${motivo}`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro ao importar configuracao',
+      error: motivo,
     };
   }
 };

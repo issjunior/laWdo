@@ -25,6 +25,44 @@ interface ManifestoBackup {
   imagens: Array<{ caminho: string; sha256: string; tamanho: number }>;
 }
 
+const ERROS_TRANSITORIOS_REMOCAO = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY']);
+
+function aguardar(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fecharBancoTemporario(banco: sqlite3.Database): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    banco.close(erro => {
+      if (erro) {
+        reject(erro);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+async function removerArquivoTemporario(caminho: string): Promise<void> {
+  const tentativasMaximas = 5;
+
+  for (let tentativa = 0; tentativa < tentativasMaximas; tentativa += 1) {
+    try {
+      fs.unlinkSync(caminho);
+      return;
+    } catch (erro) {
+      const codigo = erro instanceof Error && 'code' in erro ? String(erro.code) : undefined;
+      const deveTentarNovamente = codigo !== undefined && ERROS_TRANSITORIOS_REMOCAO.has(codigo);
+
+      if (!deveTentarNovamente || tentativa === tentativasMaximas - 1) {
+        throw erro;
+      }
+
+      await aguardar(100 * (tentativa + 1));
+    }
+  }
+}
+
 function caminhoImagemAbsoluto(caminhoRelativo: string): string {
   const absoluto = path.resolve(DB_DIR, caminhoRelativo);
   const raiz = path.resolve(IMAGES_DIR);
@@ -88,6 +126,7 @@ function validarImagensExtraidas(tempExtractDir: string, manifesto: ManifestoBac
  */
 export const criarBackup = async (destino: string): Promise<{ success: boolean; path?: string; error?: string }> => {
   const tempDbPath = path.join(DB_DIR, `_backup_temp_${Date.now()}.db`);
+  let tempDb: sqlite3.Database | null = null;
   try {
     if (!fs.existsSync(DB_PATH)) {
       throw new Error('Banco de dados não encontrado para backup');
@@ -100,20 +139,22 @@ export const criarBackup = async (destino: string): Promise<{ success: boolean; 
     fs.copyFileSync(DB_PATH, tempDbPath);
     log.debug('Cópia temporária do banco criada para limpeza de auditoria');
 
-    const tempDb = new sqlite3.Database(tempDbPath);
+    const bancoTemporario = new sqlite3.Database(tempDbPath);
+    tempDb = bancoTemporario;
     await new Promise<void>((resolve, reject) => {
-      tempDb.run('DELETE FROM logs_auditoria WHERE modulo NOT IN (\'rep\', \'laudo\')', (err) => {
+      bancoTemporario.run('DELETE FROM logs_auditoria WHERE modulo NOT IN (\'rep\', \'laudo\')', (err) => {
         if (err) { reject(err); } else { resolve(); }
       });
     });
     log.debug('Registros de auditoria (exceto REPs e Laudos) removidos da cópia de backup');
 
     await new Promise<void>((resolve, reject) => {
-      tempDb.run('VACUUM', (err) => {
+      bancoTemporario.run('VACUUM', (err) => {
         if (err) { reject(err); } else { resolve(); }
       });
     });
-    tempDb.close();
+    await fecharBancoTemporario(bancoTemporario);
+    tempDb = null;
 
     zip.addLocalFile(tempDbPath, '', 'laudopericial.db');
     zip.addFile('manifesto.json', Buffer.from(JSON.stringify(manifesto, null, 2), 'utf8'));
@@ -135,16 +176,24 @@ export const criarBackup = async (destino: string): Promise<{ success: boolean; 
     // Gravar arquivo ZIP
     zip.writeZip(destino);
 
-    log.debug('Backup ZIP criado com sucesso', { destino });
+    log.info('Backup completo criado com sucesso', { destino });
     return { success: true, path: destino };
   } catch (error) {
-    log.error('Erro ao criar backup ZIP', error);
+    const motivo = error instanceof Error ? error.message : 'Erro desconhecido ao criar backup';
+    log.error(`Falha ao criar backup completo: ${motivo}`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido ao criar backup',
+      error: motivo,
     };
   } finally {
-    if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
+    if (tempDb) {
+      try {
+        await fecharBancoTemporario(tempDb);
+      } catch (erro) {
+        log.error('Erro ao fechar banco temporário de backup', erro);
+      }
+    }
+    if (fs.existsSync(tempDbPath)) await removerArquivoTemporario(tempDbPath);
   }
 };
 
@@ -223,16 +272,17 @@ export const restaurarBackup = async (origem: string): Promise<{ success: boolea
     log.debug('Diretório temporário de restauração removido');
 
     // Reiniciar aplicação
-    log.debug('Restauração concluída. Reiniciando aplicação...');
+    log.info('Backup completo restaurado com sucesso', { origem });
     app.relaunch();
     app.exit(0);
 
     return { success: true };
   } catch (error) {
-    log.error('Erro ao restaurar backup', error);
+    const motivo = error instanceof Error ? error.message : 'Erro desconhecido ao restaurar backup';
+    log.error(`Falha ao restaurar backup completo: ${motivo}`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido ao restaurar backup',
+      error: motivo,
     };
   }
 };
