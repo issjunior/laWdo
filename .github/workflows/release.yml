@@ -200,3 +200,103 @@ jobs:
           name: release-${{ needs.validar.outputs.versao }}-macos-arm64
           path: dist/**
           if-no-files-found: error
+
+  agregar-release:
+    name: Assinar e criar rascunho
+    needs:
+      - validar
+      - build-windows
+      - build-linux
+      - build-macos-x64
+      - build-macos-arm64
+    if: ${{ always() && needs.validar.result == 'success' && (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') && (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') && (needs.build-macos-x64.result == 'success' || needs.build-macos-x64.result == 'skipped') && (needs.build-macos-arm64.result == 'success' || needs.build-macos-arm64.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Baixar artefatos temporários
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-${{ needs.validar.outputs.versao }}-*
+          path: artefatos
+
+      - name: Criar tag imutável
+        env:
+          VERSAO: ${{ needs.validar.outputs.versao }}
+        run: |
+          git tag "v$VERSAO" "$GITHUB_SHA"
+          git push origin "v$VERSAO"
+
+      - name: Gerar manifesto assinado
+        env:
+          CHAVE_PRIVADA_ASSINATURA: ${{ secrets.CHAVE_PRIVADA_ASSINATURA }}
+          VERSAO: ${{ needs.validar.outputs.versao }}
+        run: |
+          node scripts/release/gerar-manifesto.mjs \
+            --diretorio artefatos \
+            --versao "$VERSAO" \
+            --commit "$GITHUB_SHA" \
+            --versao-schema 30 \
+            --url-release "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSAO" \
+            --saida publicacao/manifesto.json \
+            --assinatura publicacao/manifesto.json.sig
+
+      - name: Gerar rascunho das notas da release
+        env:
+          VERSAO: ${{ needs.validar.outputs.versao }}
+        run: |
+          cat > publicacao/notas-release.md <<EOF
+          # laWdo v$VERSAO
+
+          > Release em rascunho. Complete as notas antes da promoção.
+
+          ## Resumo
+
+          PENDENTE
+
+          ## Alterações
+
+          - PENDENTE
+
+          ## Correções
+
+          - PENDENTE
+
+          ## Dados, backup e compatibilidade
+
+          - Schema: PENDENTE.
+          - Migration: PENDENTE.
+          - Backup: PENDENTE.
+
+          ## Limitações conhecidas
+
+          - PENDENTE
+          EOF
+
+      - name: Criar release em rascunho
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ needs.validar.outputs.versao }}
+        run: |
+          mapfile -t assets < <(find artefatos publicacao -type f)
+          gh release create "v$VERSAO" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --title "laWdo v$VERSAO" \
+            --notes-file publicacao/notas-release.md \
+            "${assets[@]}"
