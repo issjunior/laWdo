@@ -9,7 +9,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Edição Avançada:** Oferecer um editor Rich Text (TinyMCE) modular e segmentado por seções.
 - **Gestão de Mídias:** Otimizar o manuseio de imagens locais, garantindo organização e numeração automática de figuras.
 - **Automação Inteligente:** Integrar modelos de linguagem (LLMs) para revisão de texto e descrição técnica de evidências fotográficas.
-- **Portabilidade de Dados:** Manter a base de dados em SQLite e imagens aparte para fácil backup e eventual sincronização com nuvem.
+- **Portabilidade de Dados:** Manter a base de dados em SQLite e imagens apartadas para backup local. Integrações de sincronização em nuvem permanecem como evolução futura.
 
 ## 3. Público-Alvo
 
@@ -62,7 +62,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Melhoria de Texto:** Revisão gramatical e adequação de tom formal técnico com aprovação expressa do perito (sem substituição silenciosa).
 - **Descrição de Imagens (Vision):** Uso de modelos de visão (Llama 4 Scout via Groq, Gemini 2.5 Flash/Pro via Google) para sugerir descrições técnicas de fotos de evidências, com conversão dinâmica de imagens locais (`laudo-img://`) para Base64 no backend.
 - **Chat IA:** Interface de chat para perguntas livres ao modelo, com respostas inseríveis diretamente na posição do cursor no editor.
-- **Privacidade:** Chaves de API configuráveis pelo usuário, armazenamento seguro via criptografia no SQLite local (nunca expostas ao renderer), uso recomendado de email institucional `@policiacientifica.pr.gov.br` para evitar uso dos dados em treinamento de modelos.
+- **Privacidade:** Chaves de API configuráveis pelo usuário, armazenadas localmente com `safeStorage` quando disponível e fallback controlado (nunca expostas ao renderer), uso recomendado de email institucional `@policiacientifica.pr.gov.br` para evitar uso dos dados em treinamento de modelos.
 
 ### FR8: Exportação e Auditoria
 
@@ -70,7 +70,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Configuração de PDF:** Personalização de cabeçalho institucional (texto, imagem, alinhamento) e margens da página via páginas dedicadas (CabecalhoPage, MargensPage).
 - **Log de Auditoria:** Registro de login, exclusões, backup/restauração e transições de status de REPs e Laudos com snapshot antes/depois na tabela `logs_auditoria`. Logs de sistema em JSON estruturado com filtro por módulo e viewer com abas Sistema/Auditoria.
 - **Backup/Restauração:** Ferramenta para exportar e importar o banco de dados e as imagens em um pacote ZIP, com exclusão automática da auditoria e chaves de IA dos backups. Agendamento de backup automático com periodicidade configurável pelo usuário.
-- **Sincronização com Google Drive:** Envio de backup completo de forma automática por períodos programados pelo usuário.
+- **Sincronização com Google Drive:** Evolução futura para envio automático de backups; não há integração implementada no estado atual.
 
 ### FR9: Wizard de Peças e Laudo Assistido
 
@@ -88,12 +88,12 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 
 ## 5. Requisitos Não Funcionais (NFR)
 
-- **Offline-first:** O sistema deve ser totalmente funcional sem internet (exceto funções de IA e sincronização com google drive).
+- **Offline-first:** O sistema deve ser totalmente funcional sem internet, exceto pelas funções de IA.
 - **Interface Premium:** Design moderno utilizando Shadcn/ui com suporte a Dark Mode.
 - **Performance de Banco:** Queries otimizadas no SQLite para suportar milhares de registros sem lentidão.
 - **Segurança:** Criptografia de dados sensíveis e sanitização de entradas para prevenir SQL Injection.
 
-## 6. Stack Tecnológica Proposta
+## 6. Stack Tecnológica Atual
 
 - **Runtime:** Electron (Desktop)
 - **Bundler:** Vite
@@ -102,8 +102,8 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Estilização:** Tailwind CSS + Shadcn/ui
 - **Banco de Dados:** SQLite (com sqlite3)
 - **Editor:** TinyMCE (com Bridge para React)
-- **Exportação:** Playwright (PDF) e Docx.js (Word)
-- **IA:** Google Generative AI (Gemini) + OpenAI-compatible (Groq)
+- **Exportação:** `webContents.printToPDF` do Electron (PDF), `docx` (Word) e `libreoffice-convert` (ODT, quando o LibreOffice está disponível)
+- **IA:** Google Gemini e Groq por endpoints compatíveis com OpenAI
 - **Gerenciamento de Estado:** React hooks + serviços no main process via IPC
 
 ## 7. Critérios de Aceite
@@ -124,5 +124,6 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Logs e Auditoria:** Sistema modular com JSON estruturado, viewer com abas Sistema/Auditoria/Timeline, filtro por módulo, registro de transições de status com snapshot antes/depois, exclusão autenticada por senha.
 - **Backup/Restauração:** Exportação/importação ZIP com banco + imagens, exclusão automática de auditoria e chaves de IA dos backups, agendamento de backup automático com periodicidade configurável.
 - **Configuração de Impressão:** Páginas de Cabeçalho PDF (texto, imagem brasão/logo, alinhamento) e Margens (superior, inferior, esquerda, direita).
+- **Exportação:** PDF gerado pelo Electron, DOCX e ODT; a exportação ODT é habilitada somente quando o LibreOffice está disponível.
 - **Dashboard:** Indicadores de REPs pendentes/em andamento/concluídas, produtividade e tabelas com colunas fixas (sticky) para referência.
-- **Em desenvolvimento:** persistência/validação do fluxo final de exportação, apêndice automático de figuras e sincronização com Google Drive.
+- **Evolução futura:** sincronização de backups com Google Drive.

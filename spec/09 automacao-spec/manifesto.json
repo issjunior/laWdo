@@ -493,12 +493,6 @@
       "descricao": "Problema pontual de scroll e espacamento."
     },
     {
-      "arquivo": "spec/problemas diversos/migracao_esm/sem_warning_deprecated_build.md",
-      "tipo": "historico",
-      "autoAtualizavel": false,
-      "descricao": "Registro de migracao ESM."
-    },
-    {
       "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md",
       "tipo": "auditoria",
       "autoAtualizavel": false,
