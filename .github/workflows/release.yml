@@ -1,0 +1,202 @@
+name: Preparar release
+
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: Versão SemVer presente no package.json
+        required: true
+        type: string
+      incluir_windows:
+        description: Incluir instalador Windows x64
+        required: true
+        default: true
+        type: boolean
+      incluir_linux:
+        description: Incluir AppImage e DEB Linux x64
+        required: true
+        default: true
+        type: boolean
+      incluir_macos:
+        description: Incluir DMG e ZIP macOS x64 e arm64 experimentais
+        required: true
+        default: true
+        type: boolean
+      confirmacao_plataformas_omitidas:
+        description: Digite CONFIRMO se alguma plataforma for omitida
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-producao
+  cancel-in-progress: false
+
+jobs:
+  validar:
+    name: Validar solicitação
+    runs-on: ubuntu-latest
+    outputs:
+      versao: ${{ steps.solicitacao.outputs.versao }}
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar solicitação
+        id: solicitacao
+        env:
+          VERSAO: ${{ inputs.versao }}
+          INCLUIR_WINDOWS: ${{ inputs.incluir_windows }}
+          INCLUIR_LINUX: ${{ inputs.incluir_linux }}
+          INCLUIR_MACOS: ${{ inputs.incluir_macos }}
+          CONFIRMACAO_PLATAFORMAS_OMITIDAS: ${{ inputs.confirmacao_plataformas_omitidas }}
+        run: |
+          node scripts/release/validar-solicitacao.mjs
+          echo "versao=$VERSAO" >> "$GITHUB_OUTPUT"
+
+      - name: Confirmar ausência de tag e release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSAO" --silent; then
+            echo "A tag v$VERSAO já existe."
+            exit 1
+          fi
+          if gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json id --jq .id; then
+            echo "A release v$VERSAO já existe."
+            exit 1
+          fi
+
+  build-windows:
+    name: Build Windows x64
+    needs: validar
+    if: ${{ inputs.incluir_windows }}
+    runs-on: windows-latest
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar instalador
+        run: npm run build; npx electron-builder --win --x64 --publish never
+
+      - name: Enviar artefatos temporários
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ needs.validar.outputs.versao }}-windows-x64
+          path: dist/**
+          if-no-files-found: error
+
+  build-linux:
+    name: Build Linux x64
+    needs: validar
+    if: ${{ inputs.incluir_linux }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar pacotes
+        run: npm run build && npx electron-builder --linux --x64 --publish never
+
+      - name: Enviar artefatos temporários
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ needs.validar.outputs.versao }}-linux-x64
+          path: dist/**
+          if-no-files-found: error
+
+  build-macos-x64:
+    name: Build macOS x64
+    needs: validar
+    if: ${{ inputs.incluir_macos }}
+    runs-on: macos-latest
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar pacotes
+        run: npm run build && npx electron-builder --mac --x64 --publish never
+
+      - name: Enviar artefatos temporários
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ needs.validar.outputs.versao }}-macos-x64
+          path: dist/**
+          if-no-files-found: error
+
+  build-macos-arm64:
+    name: Build macOS arm64
+    needs: validar
+    if: ${{ inputs.incluir_macos }}
+    runs-on: macos-latest
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar pacotes
+        run: npm run build && npx electron-builder --mac --arm64 --publish never
+
+      - name: Enviar artefatos temporários
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ needs.validar.outputs.versao }}-macos-arm64
+          path: dist/**
+          if-no-files-found: error
