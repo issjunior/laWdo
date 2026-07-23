@@ -60,6 +60,7 @@ function normalizarArtefato(valor) {
   const plataforma = textoObrigatorio(artefato.plataforma, 'artefato.plataforma');
   const arquitetura = textoObrigatorio(artefato.arquitetura, 'artefato.arquitetura');
   const formato = textoObrigatorio(artefato.formato, 'artefato.formato');
+  const canal = textoObrigatorio(artefato.canal, 'artefato.canal');
 
   if (arquitetura !== 'x64' && arquitetura !== 'arm64') {
     falhar('artefato.arquitetura deve ser x64 ou arm64.');
@@ -67,6 +68,10 @@ function normalizarArtefato(valor) {
 
   if (!formatosPorPlataforma[plataforma]?.has(formato)) {
     falhar(`artefato.formato não é suportado para ${plataforma}.`);
+  }
+
+  if (canal !== 'stable' && canal !== 'experimental') {
+    falhar('artefato.canal deve ser stable ou experimental.');
   }
 
   const hashSha256 = textoObrigatorio(artefato.hashSha256, 'artefato.hashSha256').toLowerCase();
@@ -78,6 +83,7 @@ function normalizarArtefato(valor) {
     plataforma,
     arquitetura,
     formato,
+    canal,
     nome: textoObrigatorio(artefato.nome, 'artefato.nome'),
     tamanho: inteiroNaoNegativo(artefato.tamanho, 'artefato.tamanho'),
     hashSha256,
@@ -89,7 +95,6 @@ export function normalizarManifesto(valor) {
   const manifesto = objetoRegistro(valor, 'manifesto');
   const versao = textoObrigatorio(manifesto.versao, 'manifesto.versao');
   const commit = textoObrigatorio(manifesto.commit, 'manifesto.commit').toLowerCase();
-  const canal = textoObrigatorio(manifesto.canal, 'manifesto.canal');
   const dataPublicacao = textoObrigatorio(manifesto.dataPublicacao, 'manifesto.dataPublicacao');
 
   if (!versaoSemVer.test(versao)) {
@@ -100,8 +105,13 @@ export function normalizarManifesto(valor) {
     falhar('manifesto.commit deve ser um SHA Git de 40 ou 64 caracteres hexadecimais.');
   }
 
-  if (canal !== 'stable' && canal !== 'experimental') {
-    falhar('manifesto.canal deve ser stable ou experimental.');
+  if (!Array.isArray(manifesto.canais) || manifesto.canais.length === 0) {
+    falhar('manifesto.canais deve conter ao menos um canal.');
+  }
+
+  const canais = [...new Set(manifesto.canais.map((canal) => textoObrigatorio(canal, 'manifesto.canais')))].sort();
+  if (canais.some((canal) => canal !== 'stable' && canal !== 'experimental')) {
+    falhar('manifesto.canais deve conter apenas stable ou experimental.');
   }
 
   if (Number.isNaN(Date.parse(dataPublicacao))) {
@@ -124,6 +134,10 @@ export function normalizarManifesto(valor) {
       falhar(`manifesto.artefatos possui entrada duplicada para ${chave}.`);
     }
     chaves.add(chave);
+
+    if (!canais.includes(artefato.canal)) {
+      falhar(`artefato.canal deve constar em manifesto.canais: ${artefato.canal}.`);
+    }
   }
 
   return {
@@ -131,13 +145,13 @@ export function normalizarManifesto(valor) {
     versao,
     commit,
     dataPublicacao: new Date(dataPublicacao).toISOString(),
-    canal,
+    canais,
     versaoSchema: inteiroNaoNegativo(manifesto.versaoSchema, 'manifesto.versaoSchema'),
     requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens,
     notas: textoObrigatorio(manifesto.notas, 'manifesto.notas'),
     artefatos: artefatos.sort((primeiro, segundo) => {
-      const chavePrimeiro = `${primeiro.plataforma}/${primeiro.arquitetura}/${primeiro.formato}`;
-      const chaveSegundo = `${segundo.plataforma}/${segundo.arquitetura}/${segundo.formato}`;
+      const chavePrimeiro = `${primeiro.canal}/${primeiro.plataforma}/${primeiro.arquitetura}/${primeiro.formato}`;
+      const chaveSegundo = `${segundo.canal}/${segundo.plataforma}/${segundo.arquitetura}/${segundo.formato}`;
       return chavePrimeiro.localeCompare(chaveSegundo);
     }),
   };
