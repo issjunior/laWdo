@@ -28,6 +28,8 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `/graphify` | Consultar o knowledge graph do projeto (skill) |
 | `/check-dead-code` | Skill de auditoria de código morto |
 
+O ambiente de desenvolvimento requer Node.js 24 ou superior, conforme `package.json`.
+
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
 `npm run test:coverage` e `npm run knip -- --no-exit-code` continuam comandos de verificação manual/observacional importantes quando a mudança toca testes, cobertura, dependências, exports públicos ou limpeza estrutural.
@@ -126,7 +128,7 @@ main/
 
 ### Renderer
 
-React 18 + React Router 7 (HashRouter — obrigatório para Electron com `file://`) + Tailwind CSS + shadcn/ui (New York style). Páginas com lazy loading via `React.lazy`.
+React 19 + React Router 7 (HashRouter — obrigatório para Electron com `file://`) + Tailwind CSS + shadcn/ui (New York style). Páginas com lazy loading via `React.lazy`.
 
 ### Organização de módulos (features)
 
@@ -188,7 +190,7 @@ shadcn/ui (New York, base Zinc, ícones Lucide) com Tailwind CSS e suporte a dar
 | `categorias/` | SortableCategoryTree |
 | `data-table/` | DataTable com paginação |
 | `layout/` | AppSidebar, Header, Footer |
-| `ui/` | 26 componentes shadcn/ui |
+| `ui/` | 28 componentes shadcn/ui |
 | `auth/` | Login, autenticação |
 | `avatar/` | Avatar/foto do periciando |
 | `forms/` | Formulários reutilizáveis |
@@ -252,9 +254,20 @@ Quando o schema Zod usa `.passthrough()` para aceitar campos dinâmicos, ver got
 
 Providers: Groq e Google Gemini via endpoints OpenAI-compatíveis. Chaves de API são configuráveis na UI e armazenadas localmente com `safeStorage` quando disponível, com fallback controlado. **Não** usar `.env` nem hardcodar chaves.
 
-## Commits
+## Git e GitHub
 
-Padrão em português snake_case: `add_*` (features), `ajuste_*` (ajustes), `correcao_*` (fixes), `update_*` (atualizações).
+- **Commits**: use português em snake_case: `add_*` (features), `ajuste_*` (ajustes), `correcao_*` (fixes), `update_*` (atualizações).
+- Mantenha cada commit coeso e não inclua alterações alheias à tarefa.
+- Publique alterações em uma branch de trabalho e prefira pull request para integrá-las à branch-base.
+- **Estratégia de integração**: escolha de acordo com o contexto, priorizando rastreabilidade e clareza. Quando nenhuma estratégia tiver sido definida, prefira merge commit (`--no-ff` ou **Create a merge commit** no GitHub).
+  - Use **merge commit** quando for importante preservar os commits originais e a fronteira da branch ou do PR.
+  - Use **squash merge** quando os commits intermediários forem ruidosos, incompletos ou não tiverem valor isolado; produza uma mensagem final coesa e mantenha a referência ao PR.
+  - Use **rebase and merge** quando os commits já forem coesos, o histórico linear trouxer mais clareza e a perda da topologia original for aceitável.
+  - Use **fast-forward** apenas quando a branch for simples e a ausência de um commit explícito de integração não prejudicar a rastreabilidade.
+- Para atualizar uma branch de trabalho com a branch-base, prefira merge se ela já estiver publicada ou compartilhada. Rebase é aceitável em histórico local ainda não publicado.
+- Não reescreva o histórico de branches compartilhadas. Force-push exige autorização explícita e, quando indispensável, deve usar `--force-with-lease`, nunca `--force`.
+- Escreva título e descrição de pull requests em português do Brasil.
+- Antes da integração, execute as validações exigidas para o escopo da mudança e confirme que os checks obrigatórios do PR passaram.
 
 ---
 

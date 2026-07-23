@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -60,47 +60,57 @@ export const CabecalhoPage: React.FC = () => {
 
   const placeholderChaves = useMemo(() => placeholders.map(p => p.chave), [placeholders]);
 
-  const carregarCabecalho = useCallback(async () => {
-    try {
-      setLoading(true);
-      const result = await window.ipcAPI.configuracao.obter(CHAVE_CONFIG);
-      if (result.success && result.data) {
-        setConteudo(converterPlaceholdersTextuais(result.data, placeholderChaves));
-      }
-    } catch (err: unknown) {
-      console.error('Erro ao carregar cabeçalho:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [placeholderChaves]);
-
-  const carregarCabecalhoPaginas = useCallback(async () => {
-    try {
-      const result = await window.ipcAPI.configuracao.obter(CHAVE_CONFIG_PAGINAS);
-      if (result.success && result.data) {
-        setConteudoPaginas(converterPlaceholdersTextuais(result.data, placeholderChaves));
-      }
-    } catch (err: unknown) {
-      console.error('Erro ao carregar cabeçalho de páginas:', err);
-    }
-  }, [placeholderChaves]);
-
-  const carregarPlaceholders = useCallback(async () => {
-    const rCat = await window.ipcAPI.categoria.findAll();
-    if (rCat.success && rCat.data) {
-      setCategorias(rCat.data);
-    }
-    const r = await window.ipcAPI.placeholder.findAll();
-    if (r.success && r.data) {
-      setPlaceholders(r.data);
-    }
-  }, []);
-
   useEffect(() => {
-    carregarCabecalho();
-    carregarCabecalhoPaginas();
-    carregarPlaceholders();
-  }, [carregarCabecalho, carregarCabecalhoPaginas, carregarPlaceholders]);
+    let cancelado = false;
+
+    const carregarDadosIniciais = async () => {
+      const [cabecalho, cabecalhoPaginas, categoriasResult, placeholdersResult] = await Promise.allSettled([
+        window.ipcAPI.configuracao.obter(CHAVE_CONFIG),
+        window.ipcAPI.configuracao.obter(CHAVE_CONFIG_PAGINAS),
+        window.ipcAPI.categoria.findAll(),
+        window.ipcAPI.placeholder.findAll(),
+      ]);
+
+      if (cancelado) return;
+
+      const novosPlaceholders: Placeholder[] = placeholdersResult.status === 'fulfilled' && placeholdersResult.value.success && placeholdersResult.value.data
+        ? placeholdersResult.value.data
+        : [];
+      const chavesPlaceholders = novosPlaceholders.map(placeholder => placeholder.chave);
+
+      if (categoriasResult.status === 'fulfilled' && categoriasResult.value.success && categoriasResult.value.data) {
+        setCategorias(categoriasResult.value.data);
+      } else if (categoriasResult.status === 'rejected') {
+        console.error('Erro ao carregar categorias:', categoriasResult.reason);
+      }
+
+      if (placeholdersResult.status === 'fulfilled' && placeholdersResult.value.success && placeholdersResult.value.data) {
+        setPlaceholders(novosPlaceholders);
+      } else if (placeholdersResult.status === 'rejected') {
+        console.error('Erro ao carregar placeholders:', placeholdersResult.reason);
+      }
+
+      if (cabecalho.status === 'fulfilled' && cabecalho.value.success && cabecalho.value.data) {
+        setConteudo(converterPlaceholdersTextuais(cabecalho.value.data, chavesPlaceholders));
+      } else if (cabecalho.status === 'rejected') {
+        console.error('Erro ao carregar cabeçalho:', cabecalho.reason);
+      }
+
+      if (cabecalhoPaginas.status === 'fulfilled' && cabecalhoPaginas.value.success && cabecalhoPaginas.value.data) {
+        setConteudoPaginas(converterPlaceholdersTextuais(cabecalhoPaginas.value.data, chavesPlaceholders));
+      } else if (cabecalhoPaginas.status === 'rejected') {
+        console.error('Erro ao carregar cabeçalho de páginas:', cabecalhoPaginas.reason);
+      }
+
+      setLoading(false);
+    };
+
+    void carregarDadosIniciais();
+
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const tinymce = (window as Window & typeof globalThis & { tinymce?: TinyMceGlobal }).tinymce;
