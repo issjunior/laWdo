@@ -40,6 +40,10 @@ O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas se
 
 No GitHub, `Dependency graph` e `Dependabot` estão ativos para `npm` e `github-actions`.
 
+- O Dependabot agrupa apenas atualizações `minor` e `patch`; atualizações de segurança permanecem separadas e atualizações major são avaliadas isoladamente.
+- `.github/dependabot.yml` é a fonte de verdade para agenda, grupos e limites de PRs; `package.json`, `package-lock.json`, `.nvmrc` e CI definem as versões instaladas e o baseline de Node.
+- Atualizações de Electron, módulos nativos ou empacotamento exigem validação proporcional, incluindo `npm run pack` e smoke no Windows quando aplicável.
+
 Ao revisar PRs abertos, especialmente os automáticos:
 
 - diferencie se o PR mexe em dependências da aplicação (`package.json` / `package-lock.json`) ou só em workflows de CI (`.github/workflows/**`)
