@@ -14,52 +14,32 @@ import { app, session } from 'electron'
 export const setupSecurity = (): void => {
   log.info('Configurando medidas de segurança...');
 
-  // 1. Configurar Content Security Policy (CSP)
-  setupContentSecurityPolicy();
-
-  // 2. Configurar permissões da sessão
+  // 1. Configurar permissões da sessão
   setupSessionPermissions();
 
-  // 3. Configurar headers de segurança
+  // 2. Configurar headers de segurança
   setupSecurityHeaders();
 
-  // 4. Configurar proteções adicionais
+  // 3. Configurar proteções adicionais
   setupAdditionalProtections();
 
   log.info('Medidas de segurança configuradas com sucesso');
 };
 
-/**
- * Configura Content Security Policy (CSP)
- * Restringe quais recursos podem ser carregados
- */
-const setupContentSecurityPolicy = (): void => {
-  const csp = `
+const contentSecurityPolicy = `
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' data: https://fonts.gstatic.com;
     img-src 'self' data: blob:;
     connect-src 'self' blob:;
-    frame-src 'self' data: blob:;
+    frame-src 'self' data: blob: chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai;
     object-src 'self' data: blob:;
     base-uri 'self';
     form-action 'self';
   `
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [csp],
-      },
-    });
-  });
-
-  log.info('Content Security Policy configurada');
-};
+  .replace(/\s+/g, ' ')
+  .trim();
 
 /**
  * Configura permissões da sessão
@@ -78,12 +58,7 @@ const setupSessionPermissions = (): void => {
     }
   });
 
-  // Nota: registerSchemesAsPrivileged foi removido no Electron v29+
-  // Para versões 29+, usar protocol.registerSchemesAsPrivileged diretamente
-  // ou implementar lógica personalizada se necessário
-  log.info(
-    'Permissões da sessão configuradas (registerSchemesAsPrivileged não suportado no Electron 29+)'
-  );
+  log.info('Permissões da sessão configuradas');
 };
 
 /**
@@ -91,7 +66,13 @@ const setupSessionPermissions = (): void => {
  */
 const setupSecurityHeaders = (): void => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    if (details.resourceType !== 'mainFrame') {
+      callback({});
+      return;
+    }
+
     const securityHeaders = {
+      'Content-Security-Policy': [contentSecurityPolicy],
       'X-Content-Type-Options': ['nosniff'],
       'X-Frame-Options': ['DENY'],
       'X-XSS-Protection': ['1; mode=block'],
