@@ -14,6 +14,15 @@
 | Manifesto e assinatura | em andamento | Contrato canônico, normalização, serialização determinística, SHA-256 e assinatura/verificação Ed25519 implementados e testados. A chave pública Ed25519 foi incorporada ao aplicativo; o agregador de rascunho baixa artefatos, cria tag, gera manifesto assinado e anexa assets à release em rascunho. Pendente: cadastrar a chave privada no environment `release` e executar o fluxo real. |
 | Demais etapas | pendentes | Promoção, atualizador, interface, backup, fluxo offline e transição permanecem sem implementação. |
 
+### Ponto de retomada — 23/07/2026
+
+- Branch publicada: `codex/implantacao-release-atualizacao`.
+- Pull request em rascunho: [#68](https://github.com/issjunior/laWdo/pull/68), vinculado à issue [#67](https://github.com/issjunior/laWdo/issues/67).
+- Configurações externas concluídas: environments `release` e `github-pages`; secret `CHAVE_PRIVADA_ASSINATURA` cadastrado exclusivamente em `release`.
+- Chave pública Ed25519 incorporada em `src/shared/atualizacao/chave-publica-release.ts`; a chave privada não está no repositório.
+- Último commit funcional: `7236cd3` (`add_chave_publica_de_release`).
+- Próxima entrega: criar `promover-release.yml` para validar o rascunho, bloquear notas incompletas, publicar a release e só depois gerar, assinar e implantar o feed completo no GitHub Pages.
+
 ## 1. Objetivo
 
 Disponibilizar atualizações online e offline do laWdo de forma simples para o desenvolvedor e segura para os usuários, sem instalar código diretamente da branch `main`.
