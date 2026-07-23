@@ -14,9 +14,6 @@
     "*.config.{js,ts}",
     "vite.*.ts"
   ],
-  "ignore": [
-    "src/renderer/types/assets.d.ts"
-  ],
   "rules": {
     "files": "warn",
     "exports": "warn",

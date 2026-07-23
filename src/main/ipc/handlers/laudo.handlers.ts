@@ -300,7 +300,7 @@ export const registerLaudoHandlers = (): void => {
     try {
       const disponivel = await verificarLibreOffice();
       return { success: true, data: disponivel };
-    } catch (error) {
+    } catch {
       return { success: true, data: false };
     }
   });

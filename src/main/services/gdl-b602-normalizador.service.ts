@@ -258,7 +258,7 @@ function criarCamposComuns(peca: GdlPecaValidada): CamposComunsPecaB602 {
   }
 }
 
-export function normalizarPecaB602(peca: GdlPecaValidada): PecaB602 {
+function normalizarPecaB602(peca: GdlPecaValidada): PecaB602 {
   const definicao = obterTipoPecaB602PorLabel(peca.tipoPeca)
   const personalizados: Record<string, unknown> = {}
   const extrasGdl: Record<string, unknown> = {}

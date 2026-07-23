@@ -70,7 +70,7 @@ export const BackupPage: React.FC = () => {
           toast.error('Erro ao criar backup', { description: r.error });
         }
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro inesperado ao criar backup');
     } finally {
       setCriando(false);
@@ -92,7 +92,7 @@ export const BackupPage: React.FC = () => {
         }
         setRestaurando(false);
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro inesperado ao restaurar backup');
       setRestaurando(false);
     }
@@ -113,7 +113,7 @@ export const BackupPage: React.FC = () => {
           toast.error('Erro ao exportar configuracao', { description: r.error });
         }
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro inesperado ao exportar configuracao');
     } finally {
       setExportando(false);
@@ -134,7 +134,7 @@ export const BackupPage: React.FC = () => {
           toast.error('Erro ao importar configuracao', { description: r.error });
         }
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro inesperado ao importar configuracao');
     } finally {
       setImportando(false);

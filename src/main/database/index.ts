@@ -337,7 +337,7 @@ export const getSchemaVersion = async (): Promise<number> => {
       'SELECT MAX(version) as max_version FROM schema_version'
     );
     return result[0]?.max_version || 0;
-  } catch (error) {
+  } catch {
     // Se a tabela não existir, assumir versão 0
     return 0;
   }

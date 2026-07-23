@@ -71,7 +71,7 @@ export interface GdlValidacaoSessao {
   dataHora?: string;
 }
 
-export type AmbienteGdl = 'homologacao' | 'producao';
+type AmbienteGdl = 'homologacao' | 'producao';
 
 const GDL_ESTADO_DIR = path.join(app.getPath('userData'), 'gdl');
 const GDL_ESTADO_FILE = path.join(GDL_ESTADO_DIR, 'validacao-sessao.json');

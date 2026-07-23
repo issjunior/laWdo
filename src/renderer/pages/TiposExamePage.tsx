@@ -111,7 +111,7 @@ export const TiposExamePage: React.FC = () => {
       } else {
         toast.error(result.error || 'Erro ao alterar status');
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro ao alterar status do tipo de exame');
     }
   }, [mostrarTodos, carregarTiposTodos, carregarTiposExame, carregarTodosTipos]);
@@ -214,7 +214,7 @@ export const TiposExamePage: React.FC = () => {
       } else {
         toast.error(result.error || 'Erro ao excluir');
       }
-    } catch (error) {
+    } catch {
       toast.error('Erro ao excluir tipo de exame');
     }
   }, [mostrarTodos, carregarTiposTodos, carregarTiposExame, carregarTodosTipos]);
