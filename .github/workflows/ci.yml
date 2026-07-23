@@ -41,5 +41,8 @@ jobs:
       - name: Executar testes com cobertura
         run: npm run test:coverage
 
+      - name: Executar testes de release
+        run: npm run test:release
+
       - name: Gerar build
         run: npm run build

@@ -11,7 +11,8 @@
 | Base de CI segura | concluída | `6afcd9c`: CI em PRs e `main`, `contents: read`, concorrência, Node 24, tipagem, lint, cobertura e build. Validação local aprovada em 23/07/2026. |
 | Segurança e repositório | em andamento | Ainda requer configuração manual no GitHub: 2FA, proteção da `main`, environments `release` e `github-pages`, releases imutáveis e guarda das chaves fora do repositório. |
 | Build multiplataforma | em andamento | Workflow manual criado nesta entrega: valida branch, SemVer, versão do pacote, seleção/confirmacão de plataformas e ausência prévia de tag/release; produz artefatos temporários para Windows x64, Linux x64 e macOS x64/arm64, sem publicar. Pendente: execução real no GitHub e agregação para rascunho. |
-| Demais etapas | pendentes | Manifestos, promoção, atualizador, interface, backup, fluxo offline e transição permanecem sem implementação. |
+| Manifesto e assinatura | em andamento | Nesta entrega: contrato canônico, normalização, serialização determinística, SHA-256 e assinatura/verificação Ed25519 em scripts versionados, com testes próprios. Pendente: geração a partir dos artefatos, uso do secret e agregação no workflow. |
+| Demais etapas | pendentes | Promoção, atualizador, interface, backup, fluxo offline e transição permanecem sem implementação. |
 
 ## 1. Objetivo
 
