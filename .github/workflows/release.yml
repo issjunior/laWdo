@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       versao: ${{ steps.solicitacao.outputs.versao }}
+      commit: ${{ steps.estado.outputs.commit }}
     steps:
       - name: Obter código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
@@ -77,6 +78,7 @@ jobs:
           echo "versao=$VERSAO" >> "$GITHUB_OUTPUT"
 
       - name: Validar estado da tag e release
+        id: estado
         env:
           GH_TOKEN: ${{ github.token }}
           VERSAO: ${{ inputs.versao }}
@@ -85,11 +87,14 @@ jobs:
           if [ "$MODO" = criar ]; then
             ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSAO" --silent
             ! gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json id --jq .id
+            echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           else
             git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
-            test "$(git rev-list -n 1 "v$VERSAO")" = "$GITHUB_SHA"
+            commit="$(git rev-list -n 1 "v$VERSAO")"
+            test -n "$commit"
             test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
             test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" = 0
+            echo "commit=$commit" >> "$GITHUB_OUTPUT"
           fi
 
   build-windows:
@@ -101,7 +106,7 @@ jobs:
       - name: Obter código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.validar.outputs.commit }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -134,7 +139,7 @@ jobs:
       - name: Obter código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.validar.outputs.commit }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -168,7 +173,7 @@ jobs:
       - name: Obter código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.validar.outputs.commit }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -200,7 +205,7 @@ jobs:
       - name: Obter código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.validar.outputs.commit }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -240,7 +245,7 @@ jobs:
       - name: Obter código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.validar.outputs.commit }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -263,11 +268,11 @@ jobs:
           MODO: ${{ inputs.modo }}
         run: |
           if [ "$MODO" = criar ]; then
-            git tag "v$VERSAO" "$GITHUB_SHA"
+            git tag "v$VERSAO" "${{ needs.validar.outputs.commit }}"
             git push origin "v$VERSAO"
           else
             git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
-            test "$(git rev-list -n 1 "v$VERSAO")" = "$GITHUB_SHA"
+            test "$(git rev-list -n 1 "v$VERSAO")" = "${{ needs.validar.outputs.commit }}"
           fi
 
       - name: Gerar manifesto assinado
@@ -278,7 +283,7 @@ jobs:
           node scripts/release/gerar-manifesto.mjs \
             --diretorio artefatos \
             --versao "$VERSAO" \
-            --commit "$GITHUB_SHA" \
+            --commit "${{ needs.validar.outputs.commit }}" \
             --versao-schema 30 \
             --url-release "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSAO" \
             --saida publicacao/manifesto.json \
