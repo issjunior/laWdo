@@ -11,8 +11,8 @@
 | Base de CI segura | concluída | `6afcd9c`: CI em PRs e `main`, `contents: read`, concorrência, Node 24, tipagem, lint, cobertura e build. Validação local aprovada em 23/07/2026. |
 | Segurança e repositório | em andamento | Ainda requer configuração manual no GitHub: 2FA, proteção da `main`, environments `release` e `github-pages`, releases imutáveis e guarda das chaves fora do repositório. |
 | Build multiplataforma | em andamento | Workflow manual criado nesta entrega: valida branch, SemVer, versão do pacote, seleção/confirmacão de plataformas e ausência prévia de tag/release; produz artefatos temporários para Windows x64, Linux x64 e macOS x64/arm64, sem publicar. Pendente: execução real no GitHub e agregação para rascunho. |
-| Manifesto e assinatura | em andamento | Contrato canônico, normalização, serialização determinística, SHA-256 e assinatura/verificação Ed25519 implementados e testados. A chave pública Ed25519 foi incorporada ao aplicativo; o agregador de rascunho baixa artefatos, cria tag, gera manifesto assinado e anexa assets à release em rascunho. Pendente: cadastrar a chave privada no environment `release` e executar o fluxo real. |
-| Demais etapas | pendentes | Promoção, atualizador, interface, backup, fluxo offline e transição permanecem sem implementação. |
+| Manifesto, promoção e feed | em andamento | Contrato canônico, normalização, serialização determinística, SHA-256 e assinatura/verificação Ed25519 implementados e testados. A chave pública Ed25519 foi incorporada ao aplicativo; o agregador cria a release em rascunho. O workflow de promoção valida manifesto, assets e notas, publica o rascunho e só então regenera e assina o feed completo para o GitHub Pages. Também permite suspender uma release publicada sem removê-la, preservando a última versão compatível no feed. Pendente: primeira execução real. |
+| Demais etapas | pendentes | Atualizador, interface, backup, fluxo offline e transição permanecem sem implementação. |
 
 ### Ponto de retomada — 23/07/2026
 
@@ -21,7 +21,7 @@
 - Configurações externas concluídas: environments `release` e `github-pages`; secret `CHAVE_PRIVADA_ASSINATURA` cadastrado exclusivamente em `release`.
 - Chave pública Ed25519 incorporada em `src/shared/atualizacao/chave-publica-release.ts`; a chave privada não está no repositório.
 - Último commit funcional: `7236cd3` (`add_chave_publica_de_release`).
-- Próxima entrega: criar `promover-release.yml` para validar o rascunho, bloquear notas incompletas, publicar a release e só depois gerar, assinar e implantar o feed completo no GitHub Pages.
+- Próxima entrega: executar o fluxo real sobre uma release em rascunho e validar a promoção, o reprocessamento e a suspensão no GitHub.
 
 ## 1. Objetivo
 

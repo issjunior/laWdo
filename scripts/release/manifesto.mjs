@@ -6,6 +6,11 @@ const versaoSemVer =
 const commitValido = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const hashValido = /^[0-9a-f]{64}$/;
 
+export const chavePublicaReleasePadrao = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAKD6R2QcoSbtiEpp1pytzWbOjxGMOjvA3eGTOonAYNRU=
+-----END PUBLIC KEY-----
+`;
+
 const formatosPorPlataforma = {
   windows: new Set(['nsis']),
   linux: new Set(['AppImage', 'deb']),
