@@ -269,6 +269,19 @@ jobs:
           pattern: release-${{ needs.validar.outputs.versao }}-*
           path: artefatos
 
+      - name: Normalizar nomes dos assets públicos
+        run: |
+          while IFS= read -r -d '' arquivo; do
+            diretorio="$(dirname "$arquivo")"
+            nome="$(basename "$arquivo")"
+            normalizado="${nome// /.}"
+            if [ "$nome" != "$normalizado" ]; then
+              destino="$diretorio/$normalizado"
+              test ! -e "$destino"
+              mv "$arquivo" "$destino"
+            fi
+          done < <(find artefatos -type f -print0)
+
       - name: Criar ou confirmar tag imutável
         env:
           VERSAO: ${{ needs.validar.outputs.versao }}
