@@ -263,6 +263,7 @@ Providers: Groq e Google Gemini via endpoints OpenAI-compatíveis. Chaves de API
 - **Commits**: use português em snake_case: `add_*` (features), `ajuste_*` (ajustes), `correcao_*` (fixes), `update_*` (atualizações).
 - Mantenha cada commit coeso e não inclua alterações alheias à tarefa.
 - Publique alterações em uma branch de trabalho e prefira pull request para integrá-las à branch-base.
+- **Branches por feature**: crie uma única branch principal por feature e reutilize-a para ajustes, correções de CI e retomadas do mesmo escopo, inclusive depois de um PR ser integrado. Para a mesma feature, uma segunda branch só é permitida quando uma correção isolada for urgente por risco de perda catastrófica de dados ou regressão massiva; justifique a exceção no PR. Não abra branches adicionais apenas para correções incrementais do mesmo fluxo.
 - **Estratégia de integração**: escolha de acordo com o contexto, priorizando rastreabilidade e clareza. Quando nenhuma estratégia tiver sido definida, prefira merge commit (`--no-ff` ou **Create a merge commit** no GitHub).
   - Use **merge commit** quando for importante preservar os commits originais e a fronteira da branch ou do PR.
   - Use **squash merge** quando os commits intermediários forem ruidosos, incompletos ou não tiverem valor isolado; produza uma mensagem final coesa e mantenha a referência ao PR.
