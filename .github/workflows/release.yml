@@ -92,8 +92,6 @@ jobs:
             git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
             commit="$(git rev-list -n 1 "v$VERSAO")"
             test -n "$commit"
-            test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
-            test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" = 0
             echo "commit=$commit" >> "$GITHUB_OUTPUT"
           fi
 
@@ -255,6 +253,15 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci
+
+      - name: Confirmar rascunho vazio para retomada
+        if: ${{ inputs.modo == 'retomar' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ needs.validar.outputs.versao }}
+        run: |
+          test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" = 0
 
       - name: Baixar artefatos temporários
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
