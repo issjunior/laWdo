@@ -93,8 +93,11 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   });
   const indiceWindows = JSON.parse(await readFile(join(saida, 'stable', 'windows-x64.json'), 'utf8'));
   const indiceLinux = JSON.parse(await readFile(join(saida, 'stable', 'linux-x64.json'), 'utf8'));
+  const paginaInicial = await readFile(join(saida, 'index.html'), 'utf8');
   assert.equal(indiceWindows.versao, '0.1.2');
   assert.equal(indiceLinux.versao, '0.1.1');
+  assert.match(paginaInicial, /Menos retrabalho/);
+  assert.match(paginaInicial, /Integração com o GDL/);
 });
 
 test('não anuncia uma release suspensa e preserva a versão anterior no feed', async () => {
