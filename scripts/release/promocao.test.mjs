@@ -31,9 +31,49 @@ function criarManifesto(versao, plataforma = 'windows') {
       nome: `${plataforma}-${versao}.${plataforma === 'windows' ? 'exe' : 'AppImage'}`,
       tamanho: 42,
       hashSha256: 'b'.repeat(64),
-      url: `https://github.com/issjunior/laWdo/releases/download/v${versao}/${plataforma}-${versao}`,
+      url: `https://github.com/issjunior/laWdo/releases/download/v${versao}/${plataforma}-${versao}.${plataforma === 'windows' ? 'exe' : 'AppImage'}`,
     }],
   });
+}
+
+function criarNotasValidas(manifesto) {
+  return `# laWdo v${manifesto.versao}
+
+## Resumo
+
+Correções de estabilidade.
+
+## Disponibilidade
+
+windows x64 nsis
+
+## Alterações
+
+Nenhuma alteração adicional.
+
+## Correções
+
+Validação da release.
+
+## Dados, backup e compatibilidade
+
+Sem alteração de compatibilidade.
+
+## Como atualizar
+
+Baixe o instalador correspondente.
+
+## Limitações conhecidas
+
+Nenhuma limitação adicional.
+
+## Integridade e origem
+
+Commit: \`${manifesto.commit}\`
+
+Manifesto: \`manifesto.json\`
+Assinatura: \`manifesto.json.sig\`
+`;
 }
 
 test('gera um feed completo preservando a versão mais recente por plataforma', async () => {
@@ -106,4 +146,32 @@ test('bloqueia notas incompletas antes da promoção', async () => {
     ]),
     /placeholders pendentes/
   );
+});
+
+test('aceita a URL temporária do GitHub enquanto a release está em rascunho', async () => {
+  const raiz = await mkdtemp(join(tmpdir(), 'lawdo-rascunho-'));
+  const manifesto = criarManifesto('0.1.1');
+  const manifestoPath = join(raiz, 'manifesto.json');
+  const assinaturaPath = join(raiz, 'manifesto.json.sig');
+  const chavePath = join(raiz, 'chave-publica.pem');
+  const notasPath = join(raiz, 'notas.md');
+  const assetsPath = join(raiz, 'assets.json');
+  await writeFile(manifestoPath, JSON.stringify(manifesto));
+  await writeFile(assinaturaPath, assinarManifesto(manifesto, chavePrivada));
+  await writeFile(chavePath, chavePublica);
+  await writeFile(notasPath, criarNotasValidas(manifesto));
+  await writeFile(assetsPath, JSON.stringify(manifesto.artefatos.map(artefato => ({
+    name: artefato.nome,
+    size: artefato.tamanho,
+    url: artefato.url.replace(`/v${manifesto.versao}/`, '/untagged-0123456789abcdef/'),
+  }))));
+  await executarArquivo(process.execPath, [
+    'scripts/release/validar-promocao.mjs',
+    '--versao', '0.1.1',
+    '--manifesto', manifestoPath,
+    '--assinatura', assinaturaPath,
+    '--notas', notasPath,
+    '--assets', assetsPath,
+    '--chave-publica', chavePath,
+  ]);
 });
