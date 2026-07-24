@@ -73,9 +73,10 @@ async function gerarManifesto() {
   const versaoSchema = Number(argumentos.get('versao-schema'));
   const urlRelease = argumentos.get('url-release');
   const chavePrivada = process.env.CHAVE_PRIVADA_ASSINATURA;
+  const notas = process.env.NOTAS_ATUALIZACAO?.trim() ?? '';
 
-  if (!versao || !commit || !urlRelease || !chavePrivada) {
-    falhar('Informe --versao, --commit, --url-release e o secret CHAVE_PRIVADA_ASSINATURA.');
+  if (!versao || !commit || !urlRelease || !chavePrivada || !notas) {
+    falhar('Informe --versao, --commit, --url-release, NOTAS_ATUALIZACAO e o secret CHAVE_PRIVADA_ASSINATURA.');
   }
 
   const arquivos = await listarArquivos(diretorioArtefatos);
@@ -119,7 +120,7 @@ async function gerarManifesto() {
     canais,
     versaoSchema,
     requerBackupCompletoImagens: false,
-    notas: 'Notas da release pendentes de revisão antes da promoção.',
+    notas,
     artefatos,
   });
   const assinatura = assinarManifesto(manifesto, chavePrivada);
