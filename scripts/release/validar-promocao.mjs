@@ -44,6 +44,31 @@ function validarNotas(notas, versao, manifesto) {
   }
 }
 
+function urlsDoAssetConferem(artefato, asset) {
+  const urlAsset = asset.browser_download_url ?? asset.url;
+  if (typeof urlAsset !== 'string') return false;
+  if (urlAsset === artefato.url) return true;
+
+  try {
+    const urlEsperada = new URL(artefato.url);
+    const urlTemporaria = new URL(urlAsset);
+    const partesEsperadas = urlEsperada.pathname.split('/');
+    const partesTemporarias = urlTemporaria.pathname.split('/');
+    const indiceTag = partesEsperadas.length - 2;
+
+    return (
+      urlEsperada.origin === urlTemporaria.origin &&
+      partesEsperadas.length === partesTemporarias.length &&
+      partesEsperadas.at(-1) === artefato.nome &&
+      partesTemporarias.at(-1) === artefato.nome &&
+      partesEsperadas.slice(0, indiceTag).every((parte, indice) => parte === partesTemporarias[indice]) &&
+      /^untagged-[0-9a-f]+$/.test(partesTemporarias[indiceTag])
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function executar() {
   const valores = argumentos();
   const caminhoManifesto = valores.get('manifesto');
@@ -69,7 +94,7 @@ async function executar() {
   if (porNome.size !== assets.length) falhar('A release contém nomes de assets duplicados.');
   for (const artefato of manifesto.artefatos) {
     const asset = porNome.get(artefato.nome);
-    if (!asset || asset.size !== artefato.tamanho || asset.browser_download_url !== artefato.url) {
+    if (!asset || asset.size !== artefato.tamanho || !urlsDoAssetConferem(artefato, asset)) {
       falhar(`O asset ${artefato.nome} diverge do manifesto.`);
     }
   }
