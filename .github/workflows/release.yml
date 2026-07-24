@@ -26,6 +26,14 @@ on:
         description: Digite CONFIRMO se alguma plataforma for omitida
         required: false
         type: string
+      modo:
+        description: Criar nova release ou retomar um rascunho limpo da mesma versão
+        required: true
+        default: criar
+        type: choice
+        options:
+          - criar
+          - retomar
 
 permissions:
   contents: read
@@ -42,12 +50,12 @@ jobs:
       versao: ${{ steps.solicitacao.outputs.versao }}
     steps:
       - name: Obter código
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
           ref: ${{ github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -63,22 +71,25 @@ jobs:
           INCLUIR_LINUX: ${{ inputs.incluir_linux }}
           INCLUIR_MACOS: ${{ inputs.incluir_macos }}
           CONFIRMACAO_PLATAFORMAS_OMITIDAS: ${{ inputs.confirmacao_plataformas_omitidas }}
+          MODO: ${{ inputs.modo }}
         run: |
           node scripts/release/validar-solicitacao.mjs
           echo "versao=$VERSAO" >> "$GITHUB_OUTPUT"
 
-      - name: Confirmar ausência de tag e release
+      - name: Validar estado da tag e release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSAO: ${{ inputs.versao }}
+          MODO: ${{ inputs.modo }}
         run: |
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSAO" --silent; then
-            echo "A tag v$VERSAO já existe."
-            exit 1
-          fi
-          if gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json id --jq .id; then
-            echo "A release v$VERSAO já existe."
-            exit 1
+          if [ "$MODO" = criar ]; then
+            ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSAO" --silent
+            ! gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json id --jq .id
+          else
+            git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
+            test "$(git rev-list -n 1 "v$VERSAO")" = "$GITHUB_SHA"
+            test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+            test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" = 0
           fi
 
   build-windows:
@@ -88,12 +99,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Obter código
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
           ref: ${{ github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -105,10 +116,13 @@ jobs:
         run: npm run build; npx electron-builder --win --x64 --publish never
 
       - name: Enviar artefatos temporários
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ needs.validar.outputs.versao }}-windows-x64
-          path: dist/**
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
           if-no-files-found: error
 
   build-linux:
@@ -118,12 +132,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Obter código
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
           ref: ${{ github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -135,10 +149,14 @@ jobs:
         run: npm run build && npx electron-builder --linux --x64 --publish never
 
       - name: Enviar artefatos temporários
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ needs.validar.outputs.versao }}-linux-x64
-          path: dist/**
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.blockmap
+            dist/*.deb
+            dist/latest-linux.yml
           if-no-files-found: error
 
   build-macos-x64:
@@ -148,12 +166,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Obter código
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
           ref: ${{ github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -165,10 +183,12 @@ jobs:
         run: npm run build && npx electron-builder --mac --x64 --publish never
 
       - name: Enviar artefatos temporários
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ needs.validar.outputs.versao }}-macos-x64
-          path: dist/**
+          path: |
+            dist/*.dmg
+            dist/*.zip
           if-no-files-found: error
 
   build-macos-arm64:
@@ -178,12 +198,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Obter código
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
           ref: ${{ github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -195,10 +215,12 @@ jobs:
         run: npm run build && npx electron-builder --mac --arm64 --publish never
 
       - name: Enviar artefatos temporários
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ needs.validar.outputs.versao }}-macos-arm64
-          path: dist/**
+          path: |
+            dist/*.dmg
+            dist/*.zip
           if-no-files-found: error
 
   agregar-release:
@@ -216,12 +238,12 @@ jobs:
       contents: write
     steps:
       - name: Obter código
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
           ref: ${{ github.sha }}
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -230,17 +252,23 @@ jobs:
         run: npm ci
 
       - name: Baixar artefatos temporários
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: release-${{ needs.validar.outputs.versao }}-*
           path: artefatos
 
-      - name: Criar tag imutável
+      - name: Criar ou confirmar tag imutável
         env:
           VERSAO: ${{ needs.validar.outputs.versao }}
+          MODO: ${{ inputs.modo }}
         run: |
-          git tag "v$VERSAO" "$GITHUB_SHA"
-          git push origin "v$VERSAO"
+          if [ "$MODO" = criar ]; then
+            git tag "v$VERSAO" "$GITHUB_SHA"
+            git push origin "v$VERSAO"
+          else
+            git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
+            test "$(git rev-list -n 1 "v$VERSAO")" = "$GITHUB_SHA"
+          fi
 
       - name: Gerar manifesto assinado
         env:
@@ -292,11 +320,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSAO: ${{ needs.validar.outputs.versao }}
+          MODO: ${{ inputs.modo }}
         run: |
-          mapfile -t assets < <(find artefatos publicacao -type f)
-          gh release create "v$VERSAO" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft \
-            --title "laWdo v$VERSAO" \
-            --notes-file publicacao/notas-release.md \
-            "${assets[@]}"
+          mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' -o -name 'latest.yml' -o -name 'latest-linux.yml' \); find publicacao -type f)
+          if [ "$MODO" = criar ]; then
+            gh release create "v$VERSAO" --repo "$GITHUB_REPOSITORY" --draft --title "laWdo v$VERSAO" --notes-file publicacao/notas-release.md "${assets[@]}"
+          else
+            gh release edit "v$VERSAO" --repo "$GITHUB_REPOSITORY" --title "laWdo v$VERSAO" --notes-file publicacao/notas-release.md
+            gh release upload "v$VERSAO" --repo "$GITHUB_REPOSITORY" "${assets[@]}"
+          fi

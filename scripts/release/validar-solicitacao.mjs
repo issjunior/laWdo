@@ -19,6 +19,7 @@ async function validarSolicitacao() {
     macos: obterBooleano('INCLUIR_MACOS'),
   };
   const confirmacao = process.env.CONFIRMACAO_PLATAFORMAS_OMITIDAS?.trim().toUpperCase();
+  const modo = process.env.MODO?.trim();
 
   if (process.env.GITHUB_REF !== 'refs/heads/main') {
     falhar('A criação de release deve ser iniciada exclusivamente a partir da branch main.');
@@ -26,6 +27,10 @@ async function validarSolicitacao() {
 
   if (!versaoSemVer.test(versao)) {
     falhar('A versão informada deve respeitar o formato SemVer.');
+  }
+
+  if (modo !== 'criar' && modo !== 'retomar') {
+    falhar('O modo deve ser criar ou retomar.');
   }
 
   if (!Object.values(plataformas).some(Boolean)) {
