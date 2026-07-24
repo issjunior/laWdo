@@ -10,6 +10,8 @@ dist/
 build/
 coverage/
 release/
+!scripts/release/
+!scripts/release/*.mjs
 *.exe
 *.dmg
 *.AppImage

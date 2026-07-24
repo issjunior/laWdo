@@ -33,7 +33,9 @@ nsis:
   shortcutName: laWdo
 
 mac:
-  target: dmg
+  target:
+    - dmg
+    - zip
   icon: build/icon.icns
   category: public.app-category.productivity
 

@@ -21,6 +21,7 @@
     "watch:preload": "tsc -p tsconfig.preload.json --watch",
     "watch:renderer": "vite build --watch",
     "test": "vitest run",
+    "test:release": "node --test scripts/release/*.test.mjs",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
