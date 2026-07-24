@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
@@ -511,6 +522,10 @@ export const LaudosPage: React.FC = () => {
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
+  const [alteracoesPendentes, setAlteracoesPendentes] = useState(false);
+  const [dialogoSaidaAberto, setDialogoSaidaAberto] = useState(false);
+  const salvarAntesDeVoltarRef = useRef<HTMLButtonElement>(null);
+  useRegistrarAlteracoesPendentes('editor-laudo', Boolean(editando) && alteracoesPendentes);
   const singleTemImagens = useMemo(() => {
     if (!singleEditorHtml) return false;
     try {
@@ -773,6 +788,7 @@ export const LaudosPage: React.FC = () => {
   ), []);
 
   const atualizarConteudoSecao = useCallback((idx: number, novoConteudo: string) => {
+    setAlteracoesPendentes(true);
     setSecoes(prev => {
       const novas = [...prev];
       novas[idx] = { ...novas[idx], conteudo: novoConteudo };
@@ -1781,6 +1797,7 @@ export const LaudosPage: React.FC = () => {
       titulo: normalizarTituloSecao(secao.titulo),
     }));
     setEditando(laudo);
+    setAlteracoesPendentes(false);
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
     setEditorMode('single');
@@ -1810,13 +1827,14 @@ export const LaudosPage: React.FC = () => {
     }
   }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes]);
 
-  const handleVoltar = () => {
+  const finalizarVolta = () => {
     if (panelPoppedOut) {
       window.ipcAPI.ilustracoes.closePanel();
     }
     setEditando(null);
     setSecoes([]);
     setSingleEditorHtml('');
+    setAlteracoesPendentes(false);
     setEditorMode('single');
     setSecoesColapsadas({});
     setError(null);
@@ -1830,8 +1848,16 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleSalvar = async () => {
-    if (!editando) return;
+  const handleVoltar = () => {
+    if (alteracoesPendentes) {
+      setDialogoSaidaAberto(true);
+      return;
+    }
+    finalizarVolta();
+  };
+
+  const handleSalvar = async (): Promise<boolean> => {
+    if (!editando) return false;
     try {
       setSalvando(true);
       setError(null);
@@ -1846,6 +1872,7 @@ export const LaudosPage: React.FC = () => {
 
       const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudoFinal);
       if (r.success) {
+        setAlteracoesPendentes(false);
         const secoesNormalizadas = parsearSecoesEstruturais(conteudoFinal).map(secao => ({
           ...secao,
           titulo: normalizarTituloSecao(secao.titulo),
@@ -1876,11 +1903,14 @@ export const LaudosPage: React.FC = () => {
         }
 
         setTimeout(() => setSuccess(null), 3000);
+        return true;
       } else {
         setError(r.error || 'Erro ao salvar laudo');
+        return false;
       }
     } catch (e: unknown) {
       setError(obterMensagemErro(e, 'Erro ao salvar laudo'));
+      return false;
     } finally {
       setSalvando(false);
     }
@@ -1888,6 +1918,7 @@ export const LaudosPage: React.FC = () => {
 
   const handleReindexarSecoes = useCallback(() => {
     try {
+      setAlteracoesPendentes(true);
       const secoesAtuais = reindexarSecoesEditadas(obterSecoesAtuaisDoEditor());
       setSecoes(secoesAtuais);
 
@@ -2727,7 +2758,10 @@ export const LaudosPage: React.FC = () => {
                       <TinyMceEditor
                         editorId="laudo-single-editor"
                         initialValue={singleEditorHtml}
-                        onChange={(html: string) => setSingleEditorHtml(html)}
+                        onChange={(html: string) => {
+                          setAlteracoesPendentes(true);
+                          setSingleEditorHtml(html);
+                        }}
                         height={560}
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
@@ -2921,6 +2955,37 @@ export const LaudosPage: React.FC = () => {
           loading={iaLoading}
           error={iaError}
         />
+
+        <AlertDialog open={dialogoSaidaAberto} onOpenChange={setDialogoSaidaAberto}>
+        <AlertDialogContent
+          className="max-w-xl"
+          onOpenAutoFocus={evento => {
+            evento.preventDefault();
+            salvarAntesDeVoltarRef.current?.focus();
+          }}
+        >
+            <AlertDialogHeader>
+              <AlertDialogTitle>Salvar antes de voltar?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Há alterações no laudo que ainda não foram salvas.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+            <AlertDialogCancel className="h-11 min-w-40 whitespace-nowrap">Continuar editando</AlertDialogCancel>
+            <AlertDialogAction className="h-11 min-w-40 whitespace-nowrap bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={finalizarVolta}>
+              Voltar sem salvar
+            </AlertDialogAction>
+            <AlertDialogAction ref={salvarAntesDeVoltarRef} className="h-11 min-w-28 whitespace-nowrap" onClick={() => {
+              void handleSalvar().then(salvou => {
+                  if (salvou) finalizarVolta();
+                  else setDialogoSaidaAberto(true);
+                });
+              }}>
+              Salvar
+            </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
       </TooltipProvider>
     );
@@ -3105,6 +3170,7 @@ export const LaudosPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 };

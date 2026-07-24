@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,6 +94,8 @@ const WizardLaudoPage: React.FC = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [visibleEtapas, setVisibleEtapas] = useState<EtapaWizard[]>([]);
   const [mapaExpandido, setMapaExpandido] = useState(true);
+  const [alteracoesPendentes, setAlteracoesPendentes] = useState(false);
+  useRegistrarAlteracoesPendentes(`wizard-laudo-${laudoId ?? 'novo'}`, alteracoesPendentes);
 
   const loadDados = useCallback(async () => {
     if (!laudoId) return;
@@ -177,6 +180,7 @@ const WizardLaudoPage: React.FC = () => {
   }, [calcularPecas]);
 
   const handleResposta = (etapaId: string, valor: string | string[]) => {
+    setAlteracoesPendentes(true);
     setRespostas(prev => {
       const novo = { ...prev, [etapaId]: valor };
       if (arvore) {
@@ -203,7 +207,10 @@ const WizardLaudoPage: React.FC = () => {
     setSaving(true);
     try {
       const res = await window.ipcAPI.laudo.salvarProgressoWizard(laudo.id, respostas);
-      if (res.success) toast.success('Progresso salvo. Você pode continuar depois.');
+      if (res.success) {
+        setAlteracoesPendentes(false);
+        toast.success('Progresso salvo. Você pode continuar depois.');
+      }
       else toast.error(res.error || 'Erro ao salvar');
     } catch (e: unknown) { toast.error(mensagemErro(e) || 'Erro'); }
     finally { setSaving(false); }
@@ -227,6 +234,7 @@ const WizardLaudoPage: React.FC = () => {
         pecas_selecionadas: Array.from(pecasSelecionadas),
       });
       if (res.success) {
+        setAlteracoesPendentes(false);
         toast.success('Laudo preenchido! Você pode continuar editando no editor.');
         navigate('/laudos');
       } else toast.error(res.error || 'Erro ao gerar');
@@ -332,7 +340,10 @@ const WizardLaudoPage: React.FC = () => {
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/laudos')}>
+          <Button variant="ghost" size="sm" onClick={() => {
+            if (alteracoesPendentes && !window.confirm('Há alterações não salvas. Deseja sair mesmo assim?')) return;
+            navigate('/laudos');
+          }}>
             <ArrowLeft size={16} className="mr-1" /> Voltar
           </Button>
           <div>

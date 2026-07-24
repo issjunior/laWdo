@@ -118,6 +118,38 @@ jobs:
       - name: Gerar instalador
         run: npm run build; npx electron-builder --win --x64 --publish never
 
+      - name: Confirmar versão do aplicativo empacotado
+        shell: pwsh
+        env:
+          VERSAO: ${{ needs.validar.outputs.versao }}
+        run: |
+          $diretorioAplicativo = Get-ChildItem -LiteralPath dist -Directory |
+            Where-Object { $_.Name -like 'win-unpacked*' } |
+            Select-Object -First 1
+          if ($null -eq $diretorioAplicativo) {
+            throw 'Diretório win-unpacked não foi produzido pelo electron-builder.'
+          }
+
+          $arquivoAsar = Join-Path $diretorioAplicativo.FullName 'resources\app.asar'
+          if (-not (Test-Path -LiteralPath $arquivoAsar -PathType Leaf)) {
+            throw 'app.asar não foi produzido no aplicativo Windows empacotado.'
+          }
+          $versaoNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; const pacote = JSON.parse(extractFile(process.argv[1], 'package.json').toString('utf8')); process.stdout.write(pacote.version);" $arquivoAsar
+          if ($versaoNoAsar.Trim() -ne $env:VERSAO) {
+            throw "A versão do package.json empacotado ($versaoNoAsar) difere da versão solicitada ($env:VERSAO)."
+          }
+
+          $executavel = Get-ChildItem -LiteralPath $diretorioAplicativo.FullName -Filter '*.exe' -File |
+            Select-Object -First 1
+          if ($null -eq $executavel) {
+            throw 'Executável principal não foi produzido no aplicativo Windows empacotado.'
+          }
+          $versaoProduto = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($executavel.FullName).ProductVersion
+          $padraoVersao = '^' + [regex]::Escape($env:VERSAO) + '(?:\.0)?$'
+          if ($versaoProduto -notmatch $padraoVersao) {
+            throw "A versão interna do executável ($versaoProduto) difere da versão solicitada ($env:VERSAO)."
+          }
+
       - name: Enviar artefatos temporários
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

@@ -6,6 +6,7 @@ import { setupSecurity } from './security/index.js';
 import { setupDatabase } from './database/index.js';
 import { getLogger, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
+import { atualizacaoService } from './services/atualizacao.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +90,7 @@ app.whenReady().then(async () => {
   try {
     // Inicializar sistemas
     setupSecurity();
+    if (await atualizacaoService.processarPendenciaInicializacao()) return;
     await setupDatabase();
     setupLogging();
 
@@ -100,6 +102,11 @@ app.whenReady().then(async () => {
 
     // Criar janela
     createWindow();
+
+    const atrasoVerificacaoAtualizacao = 5_000 + Math.floor(Math.random() * 25_000);
+    setTimeout(() => {
+      void atualizacaoService.verificar().catch(() => undefined);
+    }, atrasoVerificacaoAtualizacao);
 
     // Registrar atalhos de teclado para DevTools
     // Ctrl+Shift+I - Alternar DevTools (padrão Chrome/Electron)
