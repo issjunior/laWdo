@@ -20,7 +20,7 @@ export type LogModule =
   | 'solicitante' | 'tipo_exame' | 'placeholder' | 'backup'
   | 'configuracao' | 'ia' | 'ilustracao' | 'renderer' | 'sistema'
   | 'ipc' | 'security' | 'wizard' | 'peca' | 'regra-wizard'
-  | 'gdl' | 'exportacao' | 'secao-builder';
+  | 'gdl' | 'exportacao' | 'secao-builder' | 'atualizacao';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -53,6 +53,7 @@ const DEFAULT_LEVELS: Partial<Record<LogModule, LogLevel>> = {
   'regra-wizard': 'warn',
   gdl: 'warn',
   exportacao: 'warn',
+  atualizacao: 'info',
 };
 
 const moduleLogLevels: Partial<Record<LogModule, LogLevel>> = { ...DEFAULT_LEVELS };

@@ -10,8 +10,13 @@ import {
   Mail,
   Moon,
   Sun,
+  AlertCircle,
+  Clock3,
+  Download,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { EstadoAtualizacaoResposta } from '@shared/atualizacao/atualizacao.types';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -54,6 +59,8 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     memory: string;
     dbVersion: number;
   } | null>(null);
+  const [atualizacao, setAtualizacao] = useState<EstadoAtualizacaoResposta | null>(null);
+  const [acaoAtualizacao, setAcaoAtualizacao] = useState<'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'offline' | null>(null);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -80,6 +87,20 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     fetchAppInfo();
   }, []);
 
+  const atualizarEstadoAtualizacao = async (manual = false) => {
+    const api = window.ipcAPI.atualizacao;
+    if (!api) return;
+    const resposta = manual ? await api.verificar() : await api.estado();
+    setAtualizacao(resposta.data);
+    if (!resposta.success && resposta.error) toast.error(resposta.error);
+  };
+
+  useEffect(() => {
+    void atualizarEstadoAtualizacao();
+    const intervalo = window.setInterval(() => void atualizarEstadoAtualizacao(), 30_000);
+    return () => window.clearInterval(intervalo);
+  }, []);
+
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
     setIsDarkMode(newMode);
@@ -87,6 +108,33 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   };
 
   const saudacao = formatarSaudacao(extrairNomeUsuario(currentUser));
+  const atualizacaoDisponivel = atualizacao?.estado === 'disponivel' || atualizacao?.estado === 'baixando' || atualizacao?.estado === 'baixada' || atualizacao?.estado === 'aguardando_reinicio';
+  const dadosAtualizacao = atualizacao?.atualizacaoDisponivel;
+
+  const executarAcaoAtualizacao = async (acao: 'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'offline') => {
+    const api = window.ipcAPI.atualizacao;
+    if (!api) {
+      toast.error('Atualizações não estão disponíveis neste ambiente.');
+      return;
+    }
+    setAcaoAtualizacao(acao);
+    try {
+      const resposta = acao === 'verificar' ? await api.verificar()
+        : acao === 'baixar' ? await api.baixar()
+          : acao === 'instalar' ? await api.instalarAgora()
+            : acao === 'agendar' ? await api.agendar()
+              : acao === 'offline' ? await api.selecionarOffline()
+              : await api.adiar();
+      setAtualizacao(resposta.data);
+      if (!resposta.success) toast.error(resposta.error || 'Não foi possível concluir a atualização.');
+      if (resposta.success && acao === 'baixar' && resposta.data.estado === 'baixada') toast.success('Atualização baixada e validada.');
+      if (resposta.success && acao === 'agendar') toast.success('Instalação agendada para a próxima inicialização.');
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível concluir a atualização.');
+    } finally {
+      setAcaoAtualizacao(null);
+    }
+  };
 
   return (
     <header className="header flex min-h-12 shrink-0 items-center border-b border-border px-3 py-2">
@@ -114,22 +162,69 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
             )}
           </Button>
 
-          {/* Informação (Dialog) */}
+          {/* Informações e atualizações */}
           <Dialog>
             <DialogTrigger asChild>
-              <button className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm" title="Sugestão">
-                <Info size={18} className="text-muted-foreground" />
-                <span className="hidden md:inline text-muted-foreground font-medium">Sugestão</span>
+              <button
+                className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
+                title={dadosAtualizacao ? `Nova versão disponível: v${dadosAtualizacao.versao}` : 'Informações e atualizações'}
+                aria-label={dadosAtualizacao ? `Informações e atualizações. Nova versão disponível: ${dadosAtualizacao.versao}` : 'Informações e atualizações'}
+              >
+                <Info size={18} className={atualizacaoDisponivel ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />
+                <span className="hidden md:inline text-muted-foreground font-medium">Informações e atualizações</span>
+                {atualizacaoDisponivel && <Badge className="hidden lg:inline-flex bg-emerald-600 hover:bg-emerald-600">Atualização disponível</Badge>}
               </button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[400px]">
+            <DialogContent className="sm:max-w-[480px]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Info className="h-5 w-5 text-primary" />
-                  Sugestão
+                  Informações e atualizações
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
+                <section className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold">Atualizações</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {dadosAtualizacao ? `Versão v${dadosAtualizacao.versao} disponível.` : 'Seu aplicativo será verificado sem enviar dados pessoais.'}
+                      </p>
+                    </div>
+                    {dadosAtualizacao && <Badge className="bg-emerald-600 hover:bg-emerald-600">Disponível</Badge>}
+                  </div>
+                  {dadosAtualizacao && (
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                      <p><span className="font-medium text-foreground">Publicada:</span> {new Intl.DateTimeFormat('pt-BR').format(new Date(dadosAtualizacao.dataPublicacao))}</p>
+                      <p><span className="font-medium text-foreground">Pacote:</span> {dadosAtualizacao.artefato.formato} · {(dadosAtualizacao.artefato.tamanho / 1024 / 1024).toFixed(1)} MB</p>
+                      <p className="whitespace-pre-wrap"><span className="font-medium text-foreground">Notas:</span> {dadosAtualizacao.notas}</p>
+                    </div>
+                  )}
+                  {atualizacao?.erro && <p className="flex items-center gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" />{atualizacao.erro}</p>}
+                  {atualizacao?.estado === 'baixando' && <p className="text-xs text-muted-foreground">Baixando e validando: {atualizacao.progresso ?? 0}%</p>}
+                  {atualizacao?.estado === 'baixada' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Download className="h-3.5 w-3.5" />Pacote validado. O backup será criado antes da instalação.</p>}
+                  {atualizacao?.estado === 'aguardando_reinicio' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Clock3 className="h-3.5 w-3.5" />Instalação agendada para a próxima inicialização.</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('verificar')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
+                      <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${acaoAtualizacao === 'verificar' ? 'animate-spin' : ''}`} /> Verificar atualizações
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('offline')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Atualização offline
+                    </Button>
+                    {atualizacao?.estado === 'disponivel' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Baixar agora
+                    </Button>}
+                    {atualizacao?.estado === 'baixada' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Instalar agora
+                    </Button>}
+                    {atualizacao?.estado === 'baixada' && (dadosAtualizacao?.artefato.formato === 'nsis' || dadosAtualizacao?.artefato.formato === 'AppImage') && <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('agendar')} disabled={acaoAtualizacao !== null}>
+                      <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Instalar na próxima inicialização
+                    </Button>}
+                    {dadosAtualizacao && atualizacao?.estado !== 'baixada' && <Button size="sm" variant="ghost" onClick={() => void executarAcaoAtualizacao('adiar')} disabled={acaoAtualizacao !== null}>
+                      <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Lembrar depois
+                    </Button>}
+                  </div>
+                </section>
                 {appInfo ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">

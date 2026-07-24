@@ -23,6 +23,7 @@ import { registerCategoriaPecaHandlers } from './handlers/categoria-peca.handler
 import { registerRegraWizardHandlers } from './handlers/regra-wizard.handlers.js';
 import { registerGdlHandlers } from './handlers/gdl.handlers.js';
 import { registerDashboardHandlers } from './handlers/dashboard.handlers.js';
+import { registerAtualizacaoHandlers } from './handlers/atualizacao.handlers.js';
 import { getSchemaVersion } from '../database/index.js';
 import { userService } from '../services/user.service.js';
 import {
@@ -91,6 +92,7 @@ export const registerIpcHandlers = (options: {
   registerRegraWizardHandlers();
   registerGdlHandlers();
   registerDashboardHandlers();
+  registerAtualizacaoHandlers();
 
   log.debug('Handlers IPC registrados com sucesso');
 };
@@ -113,7 +115,7 @@ const registerUtilityHandlers = (): void => {
     const dbVersion = await getSchemaVersion();
 
     return {
-      version: '0.1.0',
+      version: app.getVersion(),
       name: 'laWdo',
       electron: process.versions.electron,
       node: process.versions.node,

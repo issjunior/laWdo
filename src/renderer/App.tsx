@@ -28,6 +28,7 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { DiagnosticoBridge } from '@/components/diagnostico/DiagnosticoBridge';
+import { AlteracoesPendentesProvider } from '@/contexts/AlteracoesPendentesContext';
 import './styles/globals.css';
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
@@ -113,8 +114,9 @@ const App = () => {
         <AuthPage onAuthenticated={handleAuthenticated} />
       ) : (
         <HashRouter>
-          <DiagnosticoBridge currentUser={currentUser} painelIlustracoes={isPanelWindow} />
-          <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
+          <AlteracoesPendentesProvider>
+            <DiagnosticoBridge currentUser={currentUser} painelIlustracoes={isPanelWindow} />
+            <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
             <Routes>
               <Route path="/panel-ilustracoes" element={<IlustracoesPanelWindow />} />
               <Route path="*" element={
@@ -145,7 +147,8 @@ const App = () => {
                 </Layout>
               } />
             </Routes>
-          </Suspense>
+            </Suspense>
+          </AlteracoesPendentesProvider>
         </HashRouter>
       )}
     </ErrorBoundary>

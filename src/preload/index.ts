@@ -23,6 +23,7 @@ import type {
   ImagemLaudoPersistida,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
+import type { RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
 
 // Tipo para entrada de log do sistema
 interface LogEntry {
@@ -266,6 +267,18 @@ export interface IpcAPI {
     configImportar: () => Promise<Omit<BackupResponse, 'path'>>;
   };
 
+  atualizacao: {
+    estado: () => Promise<RespostaAtualizacao>;
+    verificar: () => Promise<RespostaAtualizacao>;
+    baixar: () => Promise<RespostaAtualizacao>;
+    adiar: () => Promise<RespostaAtualizacao>;
+    prepararReinicio: () => Promise<RespostaAtualizacao>;
+    instalarAgora: () => Promise<RespostaAtualizacao>;
+    agendar: () => Promise<RespostaAtualizacao>;
+    selecionarOffline: () => Promise<RespostaAtualizacao>;
+    onSolicitarReinicio: (callback: () => boolean) => () => void;
+  };
+
   // Logs do sistema
   log: {
     listar: (filters?: Record<string, unknown>) => Promise<{ success: boolean; data?: LogEntry[]; error?: string }>;
@@ -471,6 +484,17 @@ const ALLOWED_CHANNELS = new Set([
   'backup:restaurar',
   'backup:config-exportar',
   'backup:config-importar',
+
+  // Atualização
+  'atualizacao:estado',
+  'atualizacao:verificar',
+  'atualizacao:baixar',
+  'atualizacao:adiar',
+  'atualizacao:preparar-reinicio',
+  'atualizacao:instalar-agora',
+  'atualizacao:agendar',
+  'atualizacao:selecionar-offline',
+  'atualizacao:responder-reinicio',
 
   // Logs do sistema
   'log:listar',
@@ -993,6 +1017,31 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     restaurar: () => ipcRenderer.invoke('backup:restaurar'),
     configExportar: () => ipcRenderer.invoke('backup:config-exportar'),
     configImportar: () => ipcRenderer.invoke('backup:config-importar'),
+  },
+
+  atualizacao: {
+    estado: () => invokeSeguro<RespostaAtualizacao>('atualizacao:estado'),
+    verificar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:verificar'),
+    baixar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:baixar'),
+    adiar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:adiar'),
+    prepararReinicio: () => invokeSeguro<RespostaAtualizacao>('atualizacao:preparar-reinicio'),
+    instalarAgora: () => invokeSeguro<RespostaAtualizacao>('atualizacao:instalar-agora'),
+    agendar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:agendar'),
+    selecionarOffline: () => invokeSeguro<RespostaAtualizacao>('atualizacao:selecionar-offline'),
+    onSolicitarReinicio: (callback: () => boolean) => {
+      const listener = (_event: Electron.IpcRendererEvent, id: unknown) => {
+        if (typeof id !== 'string') return;
+        let autorizado = false;
+        try {
+          autorizado = callback();
+        } catch {
+          autorizado = false;
+        }
+        void invokeSeguro('atualizacao:responder-reinicio', id, autorizado);
+      };
+      ipcRenderer.on('atualizacao:solicitar-reinicio', listener);
+      return () => ipcRenderer.removeListener('atualizacao:solicitar-reinicio', listener);
+    },
   },
 
   log: {

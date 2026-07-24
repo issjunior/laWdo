@@ -7,6 +7,7 @@ import type {
   ImagemLaudoPersistida,
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
+import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -85,6 +86,17 @@ interface IpcAPIRendererLegada {
   regraWizard: IpcGrupoLegado;
   ia: IpcGrupoLegado;
   backup: IpcGrupoLegado;
+  atualizacao?: {
+    estado: () => Promise<RespostaAtualizacao>;
+    verificar: () => Promise<RespostaAtualizacao>;
+    baixar: () => Promise<RespostaAtualizacao>;
+    adiar: () => Promise<RespostaAtualizacao>;
+    prepararReinicio: () => Promise<RespostaAtualizacao>;
+    instalarAgora: () => Promise<RespostaAtualizacao>;
+    agendar: () => Promise<RespostaAtualizacao>;
+    selecionarOffline: () => Promise<RespostaAtualizacao>;
+    onSolicitarReinicio: (callback: () => boolean) => () => void;
+  };
   log: IpcGrupoLegado;
   diagnosticoInterno: IpcGrupoLegado;
   ilustracoes: IpcIlustracoesLegado;

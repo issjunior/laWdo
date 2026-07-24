@@ -9,19 +9,27 @@
 | Etapa | Estado | Registro |
 |---|---|---|
 | Base de CI segura | concluída | `6afcd9c`: CI em PRs e `main`, `contents: read`, concorrência, Node 24, tipagem, lint, cobertura e build. Validação local aprovada em 23/07/2026. |
-| Segurança e repositório | em andamento | Ainda requer configuração manual no GitHub: 2FA, proteção da `main`, environments `release` e `github-pages`, releases imutáveis e guarda das chaves fora do repositório. |
-| Build multiplataforma | em andamento | Workflow manual criado nesta entrega: valida branch, SemVer, versão do pacote, seleção/confirmacão de plataformas e ausência prévia de tag/release; produz artefatos temporários para Windows x64, Linux x64 e macOS x64/arm64, sem publicar. Pendente: execução real no GitHub e agregação para rascunho. |
-| Manifesto, promoção e feed | em andamento | Contrato canônico, normalização, serialização determinística, SHA-256 e assinatura/verificação Ed25519 implementados e testados. A chave pública Ed25519 foi incorporada ao aplicativo; o agregador cria a release em rascunho. O workflow de promoção valida manifesto, assets e notas, publica o rascunho e só então regenera e assina o feed completo para o GitHub Pages. Também permite suspender uma release publicada sem removê-la, preservando a última versão compatível no feed. Pendente: primeira execução real. |
-| Demais etapas | pendentes | Atualizador, interface, backup, fluxo offline e transição permanecem sem implementação. |
+| Segurança e repositório | em andamento | Environments `release` e `github-pages` e o secret de assinatura foram configurados e usados na promoção. Permanecem dependentes de confirmação administrativa: 2FA, proteção da `main`, releases imutáveis e guarda offline da chave privada. |
+| Build multiplataforma | concluída | A release `v0.1.1` foi construída no GitHub Actions para Windows x64, Linux x64 e macOS x64/arm64; os 8 instaladores e metadados de integridade foram anexados à release pública. |
+| Manifesto, promoção e feed | concluída | O manifesto Ed25519, a promoção, o reprocessamento idempotente e o feed assinado foram executados em produção. A release `v0.1.1` está pública e o feed é servido pelo GitHub Pages. |
+| Atualizador, interface, backups e fluxo offline | concluída localmente | Verificação assinada, download ou seleção offline, validação de integridade, fechamento seguro, backups, instalação autorizada e agendamento foram implementados e validados localmente. |
+| Transição e homologação em máquinas reais | pendente | Exige uma nova release com versão superior, smoke tests nos instaladores anexados e comprovação do ciclo de atualização online e offline. |
 
-### Ponto de retomada — 23/07/2026
+### Ponto de retomada — 24/07/2026
 
-- Branch publicada: `codex/implantacao-release-atualizacao`.
-- Pull request em rascunho: [#68](https://github.com/issjunior/laWdo/pull/68), vinculado à issue [#67](https://github.com/issjunior/laWdo/issues/67).
-- Configurações externas concluídas: environments `release` e `github-pages`; secret `CHAVE_PRIVADA_ASSINATURA` cadastrado exclusivamente em `release`.
-- Chave pública Ed25519 incorporada em `src/shared/atualizacao/chave-publica-release.ts`; a chave privada não está no repositório.
-- Último commit funcional: `7236cd3` (`add_chave_publica_de_release`).
-- Próxima entrega: executar o fluxo real sobre uma release em rascunho e validar a promoção, o reprocessamento e a suspensão no GitHub.
+- Branch principal da feature: `codex/implantacao-release-atualizacao`; as branches auxiliares de release foram removidas após integração no `main`.
+- A release [v0.1.1](https://github.com/issjunior/laWdo/releases/tag/v0.1.1) foi construída, validada, promovida e publicada com 11 assets; a tag permanece em `fe2311b3104b735042c2979f43ae9c13309dc886`.
+- O manifesto e a assinatura Ed25519 foram validados antes da promoção; o feed assinado foi reprocessado com sucesso e está publicado em `https://issjunior.github.io/laWdo/`.
+- O reprocessamento do feed foi comprovado sem recriar tag, release ou assets. A página institucional do feed também é gerada junto aos índices.
+- Configurações externas usadas: environments `release` e `github-pages`, secret `CHAVE_PRIVADA_ASSINATURA` restrito ao environment `release` e GitHub Pages configurado para GitHub Actions.
+- Etapa 4 iniciada: serviço no processo principal, máquina de estados, verificação diária do feed assinado, seleção por plataforma/arquitetura, download com SHA-256 e IPC tipado foram implementados e validados localmente.
+- Etapa 5 iniciada: a central “Informações e atualizações” foi integrada ao cabeçalho, com indicador acessível, consulta manual, download, adiamento, notas e progresso. Wizard e editor de laudos agora registram alterações pendentes e bloqueiam saída/fechamento não confirmado.
+- Etapa 6 iniciada: snapshots integrais do SQLite pré-atualização agora aplicam checkpoint WAL, validação de integridade, hash, metadados de versão/schema e retenção dos dois mais recentes. Quando o manifesto exige imagens, um backup completo separado copia e valida o banco e todas as imagens com manifesto e hashes.
+- O protocolo main ↔ renderer para reinício autorizado foi criado: o renderer recusa a preparação quando há edições pendentes; somente após a autorização o main cria o backup exigido e deixa a atualização em estado de reinício aguardado.
+- A instalação imediata agora inicia NSIS no Windows e substitui/reabre AppImage no Linux, sempre após autorização e backup. DEB e macOS abrem o pacote para instalação manual assistida. O agendamento validado persiste somente NSIS/AppImage e é processado antes da abertura do banco na inicialização seguinte.
+- Etapa 7 concluída localmente: “Atualização offline” permite selecionar o manifesto e exige a assinatura Ed25519, compatibilidade de plataforma/arquitetura, versão superior, tamanho e SHA-256 do artefato antes de copiá-lo para a área controlada e reutilizar backup e instalação existentes.
+- O workflow de Windows passou a bloquear o upload quando a versão em `package.json` dentro do `app.asar` ou a versão interna do executável divergir da versão solicitada. Essa barreira evita a repetição de uma release cujo nome, tag ou manifesto indique uma versão, mas cujo aplicativo empacotado seja outro.
+- Próxima entrega: executar a transição controlada em uma nova versão, usando os instaladores efetivamente anexados ao rascunho, e registrar os smoke tests manuais em Windows e Linux.
 
 ## 1. Objetivo
 
