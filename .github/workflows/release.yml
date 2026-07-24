@@ -7,6 +7,10 @@ on:
         description: Versão SemVer presente no package.json
         required: true
         type: string
+      notas_atualizacao:
+        description: Resumo final exibido no aplicativo e assinado no manifesto
+        required: true
+        type: string
       incluir_windows:
         description: Incluir instalador Windows x64
         required: true
@@ -73,6 +77,7 @@ jobs:
           INCLUIR_MACOS: ${{ inputs.incluir_macos }}
           CONFIRMACAO_PLATAFORMAS_OMITIDAS: ${{ inputs.confirmacao_plataformas_omitidas }}
           MODO: ${{ inputs.modo }}
+          NOTAS_ATUALIZACAO: ${{ inputs.notas_atualizacao }}
         run: |
           node scripts/release/validar-solicitacao.mjs
           echo "versao=$VERSAO" >> "$GITHUB_OUTPUT"
@@ -331,6 +336,7 @@ jobs:
         env:
           CHAVE_PRIVADA_ASSINATURA: ${{ secrets.CHAVE_PRIVADA_ASSINATURA }}
           VERSAO: ${{ needs.validar.outputs.versao }}
+          NOTAS_ATUALIZACAO: ${{ inputs.notas_atualizacao }}
         run: |
           node scripts/release/gerar-manifesto.mjs \
             --diretorio artefatos \
@@ -344,34 +350,20 @@ jobs:
       - name: Gerar rascunho das notas da release
         env:
           VERSAO: ${{ needs.validar.outputs.versao }}
+          NOTAS_ATUALIZACAO: ${{ inputs.notas_atualizacao }}
         run: |
-          cat > publicacao/notas-release.md <<EOF
-          # laWdo v$VERSAO
-
-          > Release em rascunho. Complete as notas antes da promoção.
-
-          ## Resumo
-
-          PENDENTE
-
-          ## Alterações
-
-          - PENDENTE
-
-          ## Correções
-
-          - PENDENTE
-
-          ## Dados, backup e compatibilidade
-
-          - Schema: PENDENTE.
-          - Migration: PENDENTE.
-          - Backup: PENDENTE.
-
-          ## Limitações conhecidas
-
-          - PENDENTE
-          EOF
+          {
+            printf '# laWdo v%s\n\n' "$VERSAO"
+            printf '> Release em rascunho. Complete as notas antes da promoção.\n\n'
+            printf '## Resumo\n\n%s\n\n' "$NOTAS_ATUALIZACAO"
+            printf '## Disponibilidade\n\nPENDENTE\n\n'
+            printf '## Alterações\n\n- PENDENTE\n\n'
+            printf '## Correções\n\n- PENDENTE\n\n'
+            printf '## Dados, backup e compatibilidade\n\n- Schema: PENDENTE.\n- Migration: PENDENTE.\n- Backup: PENDENTE.\n\n'
+            printf '## Como atualizar\n\nPENDENTE\n\n'
+            printf '## Limitações conhecidas\n\nPENDENTE\n\n'
+            printf '## Integridade e origem\n\nPENDENTE\n'
+          } > publicacao/notas-release.md
 
       - name: Criar release em rascunho
         env:

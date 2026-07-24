@@ -20,6 +20,7 @@ async function validarSolicitacao() {
   };
   const confirmacao = process.env.CONFIRMACAO_PLATAFORMAS_OMITIDAS?.trim().toUpperCase();
   const modo = process.env.MODO?.trim();
+  const notasAtualizacao = process.env.NOTAS_ATUALIZACAO?.trim() ?? '';
 
   if (process.env.GITHUB_REF !== 'refs/heads/main') {
     falhar('A criação de release deve ser iniciada exclusivamente a partir da branch main.');
@@ -31,6 +32,10 @@ async function validarSolicitacao() {
 
   if (modo !== 'criar' && modo !== 'retomar') {
     falhar('O modo deve ser criar ou retomar.');
+  }
+
+  if (notasAtualizacao.length < 10 || /\bPENDENTE\b|<[^>]+>/i.test(notasAtualizacao)) {
+    falhar('Informe um resumo final da atualização, sem placeholders, para o manifesto assinado.');
   }
 
   if (!Object.values(plataformas).some(Boolean)) {
