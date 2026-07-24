@@ -64,7 +64,11 @@ jobs:
           test "$(jq -r .tagName release.json)" = "v$VERSAO"
           test "$(jq -r .isPrerelease release.json)" = false
           git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
-          test "$(git rev-list -n 1 "v$VERSAO")" = "$(jq -r .targetCommitish release.json)"
+          commit_tag="$(git rev-list -n 1 "v$VERSAO")"
+          commit_alvo="$(jq -r .targetCommitish release.json)"
+          if [[ "$commit_alvo" =~ ^[0-9a-f]{40}$ ]]; then
+            test "$commit_tag" = "$commit_alvo"
+          fi
           if [ "$MODO" = promover ]; then test "$(jq -r .isDraft release.json)" = true; fi
           if [ "$MODO" = reprocessar-feed ]; then test "$(jq -r .isDraft release.json)" = false; fi
           if [ "$MODO" = suspender ]; then
