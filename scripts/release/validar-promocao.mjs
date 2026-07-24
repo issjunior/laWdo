@@ -18,6 +18,7 @@ function argumentos() {
 }
 
 function validarNotas(notas, versao, manifesto) {
+  const notasNormalizadas = notas.replace(/\r\n?/g, '\n');
   const secoes = [
     '## Resumo',
     '## Disponibilidade',
@@ -28,17 +29,17 @@ function validarNotas(notas, versao, manifesto) {
     '## Limitações conhecidas',
     '## Integridade e origem',
   ];
-  if (!notas.startsWith(`# laWdo v${versao}\n`)) falhar('As notas devem iniciar com o título da versão promovida.');
-  if (/\bPENDENTE\b|<[^>]+>/i.test(notas)) falhar('As notas ainda possuem placeholders pendentes.');
+  if (!notasNormalizadas.startsWith(`# laWdo v${versao}\n`)) falhar('As notas devem iniciar com o título da versão promovida.');
+  if (/\bPENDENTE\b|<[^>]+>/i.test(notasNormalizadas)) falhar('As notas ainda possuem placeholders pendentes.');
   for (const secao of secoes) {
-    if (!notas.includes(secao)) falhar(`As notas não possuem a seção obrigatória: ${secao}.`);
+    if (!notasNormalizadas.includes(secao)) falhar(`As notas não possuem a seção obrigatória: ${secao}.`);
   }
-  if (!notas.includes(`Commit: \`${manifesto.commit}\``)) falhar('As notas não referenciam o commit do manifesto.');
-  if (!notas.includes('Manifesto: `manifesto.json`') || !notas.includes('Assinatura: `manifesto.json.sig`')) {
+  if (!notasNormalizadas.includes(`Commit: \`${manifesto.commit}\``)) falhar('As notas não referenciam o commit do manifesto.');
+  if (!notasNormalizadas.includes('Manifesto: `manifesto.json`') || !notasNormalizadas.includes('Assinatura: `manifesto.json.sig`')) {
     falhar('As notas devem referenciar manifesto.json e manifesto.json.sig.');
   }
   for (const { plataforma, arquitetura, formato } of manifesto.artefatos) {
-    if (!notas.toLowerCase().includes(plataforma) || !notas.includes(arquitetura) || !notas.includes(formato)) {
+    if (!notasNormalizadas.toLowerCase().includes(plataforma) || !notasNormalizadas.includes(arquitetura) || !notasNormalizadas.includes(formato)) {
       falhar(`A disponibilidade nas notas diverge do manifesto para ${plataforma}/${arquitetura}/${formato}.`);
     }
   }

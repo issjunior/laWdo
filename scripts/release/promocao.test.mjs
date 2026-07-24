@@ -165,7 +165,7 @@ test('aceita a URL temporária do GitHub enquanto a release está em rascunho', 
   await writeFile(manifestoPath, JSON.stringify(manifesto));
   await writeFile(assinaturaPath, assinarManifesto(manifesto, chavePrivada));
   await writeFile(chavePath, chavePublica);
-  await writeFile(notasPath, criarNotasValidas(manifesto));
+  await writeFile(notasPath, criarNotasValidas(manifesto).replace(/\n/g, '\r\n'));
   await writeFile(assetsPath, JSON.stringify(manifesto.artefatos.map(artefato => ({
     name: artefato.nome,
     size: artefato.tamanho,
