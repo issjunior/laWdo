@@ -1,6 +1,6 @@
 {
   "name": "laudo-pericial-electron",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Sistema de Laudos Periciais - Versão Desktop Electron",
   "main": "out/main/index.js",
   "author": "Polícia Científica do Paraná",
