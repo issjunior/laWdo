@@ -1,7 +1,4 @@
-import { readFile } from 'node:fs/promises';
-
-const versaoSemVer =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+import { lerVersaoProjeto } from './versao-projeto.mjs';
 
 function obterBooleano(nome) {
   return process.env[nome] === 'true';
@@ -12,7 +9,6 @@ function falhar(mensagem) {
 }
 
 async function validarSolicitacao() {
-  const versao = process.env.VERSAO?.trim() ?? '';
   const plataformas = {
     windows: obterBooleano('INCLUIR_WINDOWS'),
     linux: obterBooleano('INCLUIR_LINUX'),
@@ -24,10 +20,6 @@ async function validarSolicitacao() {
 
   if (process.env.GITHUB_REF !== 'refs/heads/main') {
     falhar('A criação de release deve ser iniciada exclusivamente a partir da branch main.');
-  }
-
-  if (!versaoSemVer.test(versao)) {
-    falhar('A versão informada deve respeitar o formato SemVer.');
   }
 
   if (modo !== 'criar' && modo !== 'retomar') {
@@ -46,13 +38,10 @@ async function validarSolicitacao() {
     falhar('Para uma release parcial, informe CONFIRMO no campo de confirmação.');
   }
 
-  const pacote = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
-  if (pacote.version !== versao) {
-    falhar(`A versão informada (${versao}) deve coincidir com package.json (${pacote.version}).`);
-  }
+  const versao = await lerVersaoProjeto();
 
   process.stdout.write(
-    `Solicitação válida para v${versao}: ${Object.entries(plataformas)
+    `Solicitação válida sobre a versão atual ${versao}: ${Object.entries(plataformas)
       .filter(([, incluida]) => incluida)
       .map(([plataforma]) => plataforma)
       .join(', ')}.\n`
