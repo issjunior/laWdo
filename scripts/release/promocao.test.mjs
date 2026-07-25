@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import test from 'node:test';
 
 import { assinarManifesto, normalizarManifesto } from './manifesto.mjs';
+import { gerarNotasRelease } from './notas-release.mjs';
 
 const executarArquivo = promisify(execFile);
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
@@ -37,16 +38,7 @@ function criarManifesto(versao, plataforma = 'windows') {
 }
 
 function criarNotasValidas(manifesto) {
-  return `# laWdo v${manifesto.versao}
-
-## Alterações
-
-Correções de estabilidade.
-
-## Correções
-
-Validação da release.
-`;
+  return gerarNotasRelease(manifesto, 'Correções de estabilidade.');
 }
 
 
@@ -159,4 +151,21 @@ test('aceita a URL temporária do GitHub enquanto a release está em rascunho', 
     '--assets', assetsPath,
     '--chave-publica', chavePath,
   ]);
+});
+
+test('gera notas sem título duplicado e organiza instaladores por plataforma', () => {
+  const manifesto = normalizarManifesto({
+    ...criarManifesto('0.1.3'),
+    artefatos: [
+      criarManifesto('0.1.3').artefatos[0],
+      criarManifesto('0.1.3', 'linux').artefatos[0],
+    ],
+  });
+  const notas = gerarNotasRelease(manifesto, 'Nova central de atualizações.');
+
+  assert.doesNotMatch(notas, /^# laWdo/m);
+  assert.match(notas, /\| Plataforma \| Arquitetura \| Formato \| Download \|/);
+  assert.match(notas, /\| Windows \| x64 \| nsis \|/);
+  assert.match(notas, /\| Linux \| x64 \| AppImage \|/);
+  assert.match(notas, /\[windows-0\.1\.3\.exe\]\(https:\/\/github\.com\//);
 });

@@ -87,7 +87,13 @@ jobs:
           elif ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/v$VERSAO/manifesto.json" --output rascunho/manifesto.json \
             || ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/v$VERSAO/manifesto.json.sig" --output rascunho/manifesto.json.sig; then
             rm -f rascunho/manifesto.json rascunho/manifesto.json.sig
-            gh release download "v$VERSAO" --repo "$GITHUB_REPOSITORY" --dir rascunho --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+            artefato_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=manifesto-assinado-$VERSAO" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | last.id')"
+            if [ -n "$artefato_id" ]; then
+              gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artefato_id/zip" > manifesto-assinado.zip
+              unzip -q manifesto-assinado.zip -d rascunho
+            else
+              gh release download "v$VERSAO" --repo "$GITHUB_REPOSITORY" --dir rascunho --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+            fi
           fi
           node scripts/release/validar-promocao.mjs \
             --versao "$VERSAO" \
@@ -120,6 +126,7 @@ jobs:
       - name: Baixar manifestos das releases publicadas
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ inputs.versao }}
         run: |
           mkdir releases-publicadas
           while IFS= read -r tag; do
@@ -129,7 +136,15 @@ jobs:
             elif ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/$tag/manifesto.json" --output "releases-publicadas/$tag/manifesto.json" \
               || ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/$tag/manifesto.json.sig" --output "releases-publicadas/$tag/manifesto.json.sig"; then
               rm -f "releases-publicadas/$tag/manifesto.json" "releases-publicadas/$tag/manifesto.json.sig"
-              gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "releases-publicadas/$tag" --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+              versao_tag="${tag#v}"
+              artefato_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=manifesto-assinado-$versao_tag" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | last.id')"
+              if [ -n "$artefato_id" ]; then
+                arquivo_zip="manifesto-assinado-$versao_tag.zip"
+                gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artefato_id/zip" > "$arquivo_zip"
+                unzip -q "$arquivo_zip" -d "releases-publicadas/$tag"
+              else
+                gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "releases-publicadas/$tag" --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+              fi
             fi
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body | grep --fixed-strings --quiet '<!-- lawdo:suspensa-do-feed -->'; then
               touch "releases-publicadas/$tag/.suspensa"
