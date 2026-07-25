@@ -68,13 +68,25 @@ function rotuloFormato(formato) {
   return { nsis: 'Instalador', AppImage: 'AppImage', deb: 'Pacote DEB', dmg: 'DMG', zip: 'ZIP' }[formato] ?? formato;
 }
 
+function formatarTamanho(tamanho) {
+  if (tamanho < 1024) return `${tamanho} B`;
+  const unidades = ['KB', 'MB', 'GB'];
+  let valor = tamanho / 1024;
+  let indice = 0;
+  while (valor >= 1024 && indice < unidades.length - 1) {
+    valor /= 1024;
+    indice += 1;
+  }
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valor)} ${unidades[indice]}`;
+}
+
 function obterDownloads(candidatos) {
   return [...candidatos.entries()]
     .flatMap(([chave, manifesto]) => {
       const [canal, destino] = chave.split('/');
       const [plataforma, arquitetura] = destino.split('-');
       return manifesto.artefatos
-        .filter(artefato => artefato.canal === canal && artefato.plataforma === plataforma && artefato.arquitetura === arquitetura)
+        .filter(artefato => artefato.canal === canal && artefato.plataforma === plataforma && artefato.arquitetura === arquitetura && artefato.formato !== 'zip')
         .map(artefato => ({ ...artefato, versao: manifesto.versao }));
     })
     .sort((primeiro, segundo) =>
@@ -86,13 +98,19 @@ function obterDownloads(candidatos) {
 
 function botoesDownload(downloads) {
   if (downloads.length === 0) return '';
-  const botoes = downloads.map(artefato => `
-          <a class="download" href="${escaparHtml(artefato.url)}" rel="noopener noreferrer">
-            <span class="download-info"><strong>${escaparHtml(rotuloPlataforma(artefato.plataforma))} ${escaparHtml(artefato.arquitetura)}</strong><small>${escaparHtml(rotuloFormato(artefato.formato))} · v${escaparHtml(artefato.versao)}</small></span>
-            <b aria-hidden="true">↓</b>
-          </a>`).join('');
-  return `<section class="downloads" aria-labelledby="titulo-downloads"><div class="downloads-header"><div><p class="rotulo">Versão disponível</p><h2 id="titulo-downloads">Downloads</h2></div><a class="historico" href="https://github.com/issjunior/laWdo/releases" rel="noopener noreferrer">Histórico de versões <span aria-hidden="true">↗</span></a></div><p class="downloads-introducao">Escolha o instalador compatível com seu sistema operacional.</p><div class="lista-downloads">${botoes}
-        </div></section>`;
+  const ordemPlataformas = ['windows', 'linux', 'macos'];
+  const grupos = ordemPlataformas.map(plataforma => {
+    const artefatos = downloads.filter(artefato => artefato.plataforma === plataforma);
+    if (artefatos.length === 0) return '';
+    const botoes = artefatos.map(artefato => `
+            <a class="download" href="${escaparHtml(artefato.url)}" rel="noopener noreferrer">
+              <span class="download-info"><strong>${escaparHtml(artefato.arquitetura)} · ${escaparHtml(rotuloFormato(artefato.formato))}</strong><small>v${escaparHtml(artefato.versao)} · ${escaparHtml(formatarTamanho(artefato.tamanho))}</small></span>
+              <b aria-hidden="true">↓</b>
+            </a>`).join('');
+    return `<section class="grupo-plataforma" aria-label="Downloads para ${escaparHtml(rotuloPlataforma(plataforma))}"><h3>${escaparHtml(rotuloPlataforma(plataforma))}</h3><div class="lista-downloads">${botoes}
+          </div></section>`;
+  }).join('');
+  return `<section class="downloads" aria-labelledby="titulo-downloads"><div class="downloads-header"><div><p class="rotulo">Versão disponível</p><h2 id="titulo-downloads">Downloads</h2></div><a class="historico" href="https://github.com/issjunior/laWdo/releases" rel="noopener noreferrer">Histórico de versões <span aria-hidden="true">↗</span></a></div><p class="downloads-introducao">Escolha o instalador compatível com seu sistema operacional.</p><div class="grupos-plataforma">${grupos}</div></section>`;
 }
 
 function paginaInicial(downloads) {
@@ -107,15 +125,14 @@ function paginaInicial(downloads) {
     :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #dde5f0; color: #151c2c; }
     * { box-sizing: border-box; } body { min-width: 320px; min-height: 100svh; margin: 0; overflow: hidden; background: linear-gradient(135deg, #e8effc 0%, #dde5f0 46%, #d5e1f1 100%); }
     #flickering-grid { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; mask-image: radial-gradient(ellipse at center, #000, transparent 76%); }
-    main { position: relative; z-index: 1; width: min(1180px, calc(100% - 48px)); height: 100svh; margin: auto; padding: clamp(14px, 2.4vh, 26px) 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
-    header { display: flex; align-items: center; gap: 9px; color: #1a2540; font-weight: 800; font-size: .95rem; letter-spacing: -.035em; } header img { width: 34px; height: 34px; object-fit: contain; } .marca span { color: #1a55e0; }
+    main { position: relative; z-index: 1; width: min(1180px, calc(100% - 48px)); height: 100svh; margin: auto; padding: clamp(14px, 2.4vh, 26px) 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
     .conteudo { min-height: 0; display: grid; grid-template-columns: minmax(300px, .83fr) minmax(510px, 1.17fr); gap: clamp(28px, 5vw, 76px); align-items: center; }
     .apresentacao { display: grid; justify-items: start; align-content: center; } .logo-principal { width: min(76%, 365px); max-height: 39svh; object-fit: contain; filter: drop-shadow(0 18px 20px rgba(26, 85, 224, .16)); }
     .rotulo { margin: 0; color: #1a55e0; font-size: .68rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; } h1 { max-width: 520px; margin: 10px 0 12px; font-size: clamp(2.2rem, 4.1vw, 4.2rem); line-height: .98; letter-spacing: -.07em; } .introducao { max-width: 500px; margin: 0; color: #5d7191; font-size: clamp(.9rem, 1.35vw, 1.05rem); line-height: 1.5; }
     .beneficios { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; } .beneficios span { border: 1px solid #b3c4d9; border-radius: 999px; padding: 5px 9px; background: rgba(255, 255, 255, .58); color: #3a4a62; font-size: .7rem; font-weight: 700; }
     .downloads { align-self: center; border: 1px solid rgba(179, 196, 217, .94); border-radius: 20px; padding: clamp(18px, 2.5vw, 28px); background: rgba(255, 255, 255, .82); box-shadow: 0 18px 45px rgba(25, 65, 124, .12); backdrop-filter: blur(15px); }
     .downloads-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; } h2 { margin: 3px 0 0; font-size: clamp(1.35rem, 2vw, 1.8rem); letter-spacing: -.045em; } .historico { display: inline-flex; align-items: center; gap: 5px; color: #1a55e0; font-size: .75rem; font-weight: 800; text-decoration: none; white-space: nowrap; } .historico:hover { text-decoration: underline; }
-    .downloads-introducao { margin: 9px 0 15px; color: #5d7191; font-size: .82rem; } .lista-downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .downloads-introducao { margin: 9px 0 15px; color: #5d7191; font-size: .82rem; } .grupos-plataforma { display: grid; gap: 13px; } .grupo-plataforma { display: grid; gap: 7px; } .grupo-plataforma h3 { margin: 0; color: #3a4a62; font-size: .76rem; font-weight: 800; letter-spacing: .03em; } .lista-downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
     .download { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid #c4d2e6; border-radius: 11px; padding: 8px 10px 8px 12px; background: rgba(248, 251, 255, .86); color: #151c2c; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease; } .download:hover { border-color: #1a55e0; background: #fff; box-shadow: 0 7px 16px rgba(26, 85, 224, .13); transform: translateY(-1px); }
     .download-info { display: grid; gap: 2px; min-width: 0; } .download strong { font-size: .78rem; } .download small { color: #5d7191; font-size: .67rem; } .download b { width: 25px; height: 25px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: #e8effc; color: #1a55e0; font-size: 1rem; }
     footer { padding-top: 10px; color: #5d7191; font-size: .7rem; } @media (max-width: 900px) { body { overflow: auto; } main { height: auto; min-height: 100svh; padding: 20px 0; } .conteudo { grid-template-columns: 1fr; gap: 24px; padding: 28px 0; } .apresentacao { justify-items: center; text-align: center; } .beneficios { justify-content: center; } .downloads { width: 100%; } } @media (max-width: 560px) { main { width: min(100% - 28px, 1180px); } .lista-downloads { grid-template-columns: 1fr; } .downloads-header { align-items: flex-start; flex-direction: column; gap: 7px; } .logo-principal { width: min(82%, 300px); } }
@@ -124,9 +141,8 @@ function paginaInicial(downloads) {
 <body>
   <canvas id="flickering-grid" aria-hidden="true"></canvas>
   <main>
-    <header><img src="logo.png" alt="Logo do laWdo"><div class="marca">la<span>W</span>do</div></header>
     <section class="conteudo">
-      <div class="apresentacao"><img class="logo-principal" src="logo.png" alt="laWdo"><div class="rotulo">Elaboração de laudos periciais</div><h1>Menos retrabalho.<br>Mais perícia.</h1><p class="introducao">O laWdo organiza o fluxo administrativo para que você dedique mais tempo à análise técnica.</p><div class="beneficios"><span>Dados organizados</span><span>Menos digitação</span><span>Mais foco pericial</span></div></div>
+      <div class="apresentacao"><img class="logo-principal" src="logo.png" alt="laWdo"><h1>Menos retrabalho.<br>Mais perícia.</h1><p class="introducao">O laWdo organiza o fluxo administrativo para que você dedique mais tempo à análise técnica.</p><div class="beneficios"><span>Dados organizados</span><span>Menos digitação</span><span>Mais foco pericial</span></div></div>
       <div>
         ${botoesDownload(downloads)}
       </div>

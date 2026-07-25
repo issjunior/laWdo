@@ -55,7 +55,6 @@ function identificarFormato(caminho, plataforma) {
   if (plataforma === 'linux' && nome.endsWith('.AppImage')) return 'AppImage';
   if (plataforma === 'linux' && nome.endsWith('.deb')) return 'deb';
   if (plataforma === 'macos' && nome.endsWith('.dmg')) return 'dmg';
-  if (plataforma === 'macos' && nome.endsWith('.zip')) return 'zip';
   return null;
 }
 

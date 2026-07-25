@@ -18,7 +18,7 @@ on:
         default: true
         type: boolean
       incluir_macos:
-        description: Incluir DMG e ZIP macOS x64 e arm64 experimentais
+        description: Incluir instaladores DMG macOS x64 e arm64 experimentais
         required: true
         default: true
         type: boolean
@@ -316,7 +316,6 @@ jobs:
           name: release-${{ needs.validar.outputs.versao }}-macos-x64
           path: |
             dist/*.dmg
-            dist/*.zip
           if-no-files-found: error
 
   build-macos-arm64:
@@ -348,7 +347,6 @@ jobs:
           name: release-${{ needs.validar.outputs.versao }}-macos-arm64
           path: |
             dist/*.dmg
-            dist/*.zip
           if-no-files-found: error
 
   agregar-release:
@@ -458,7 +456,7 @@ jobs:
           VERSAO: ${{ needs.validar.outputs.versao }}
           MODO: ${{ inputs.modo }}
         run: |
-          mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*.zip' \))
+          mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' \))
           if [ "$MODO" = criar ]; then
             gh release create "v$VERSAO" --repo "$GITHUB_REPOSITORY" --draft --title "laWdo v$VERSAO" --notes-file publicacao/notas-release.md "${assets[@]}"
           else
