@@ -98,4 +98,17 @@ describe('AtualizacaoService', () => {
     expect(JSON.parse(fs.readFileSync(path.join(diretorio, 'atualizacao-pendente.json'), 'utf8'))).toMatchObject({ nome, hashSha256, versao: '0.1.2' });
     fs.rmSync(diretorio, { recursive: true, force: true });
   });
+
+  it('deve persistir a data da última verificação entre inicializações', () => {
+    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-ultima-verificacao-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    const service = new AtualizacaoService();
+    const interno = service as unknown as { registrarUltimaVerificacao: () => void };
+
+    interno.registrarUltimaVerificacao();
+
+    const reiniciado = new AtualizacaoService();
+    expect(reiniciado.obterEstado().verificadoEm).toBe(service.obterEstado().verificadoEm);
+    fs.rmSync(diretorio, { recursive: true, force: true });
+  });
 });

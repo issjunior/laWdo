@@ -39,42 +39,16 @@ function criarManifesto(versao, plataforma = 'windows') {
 function criarNotasValidas(manifesto) {
   return `# laWdo v${manifesto.versao}
 
-## Resumo
-
-Correções de estabilidade.
-
-## Disponibilidade
-
-windows x64 nsis
-
 ## Alterações
 
-Nenhuma alteração adicional.
+Correções de estabilidade.
 
 ## Correções
 
 Validação da release.
-
-## Dados, backup e compatibilidade
-
-Sem alteração de compatibilidade.
-
-## Como atualizar
-
-Baixe o instalador correspondente.
-
-## Limitações conhecidas
-
-Nenhuma limitação adicional.
-
-## Integridade e origem
-
-Commit: \`${manifesto.commit}\`
-
-Manifesto: \`manifesto.json\`
-Assinatura: \`manifesto.json.sig\`
 `;
 }
+
 
 test('gera um feed completo preservando a versão mais recente por plataforma', async () => {
   const raiz = await mkdtemp(join(tmpdir(), 'lawdo-feed-'));
@@ -99,6 +73,11 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   assert.equal(indiceLinux.versao, '0.1.1');
   assert.match(paginaInicial, /Menos retrabalho/);
   assert.match(paginaInicial, /integração com o GDL/i);
+  assert.match(paginaInicial, /Downloads/);
+  assert.match(paginaInicial, /Windows x64/);
+  assert.match(paginaInicial, /windows-0\.1\.2\.exe/);
+  assert.match(paginaInicial, /Linux x64/);
+  assert.match(paginaInicial, /linux-0\.1\.1\.AppImage/);
   assert.match(paginaInicial, /logo.png/);
   assert.ok(logo.length > 0);
 });
