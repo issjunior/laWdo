@@ -35,6 +35,10 @@ interface PendenciaInstalacao {
   requerBackupCompletoImagens: boolean;
 }
 
+interface RegistroUltimaVerificacao {
+  verificadoEm: string;
+}
+
 function compararVersoes(primeira: string, segunda: string): number {
   const primeiraPartes = primeira.match(SEMVER);
   const segundaPartes = segunda.match(SEMVER);
@@ -117,12 +121,20 @@ export class AtualizacaoService {
   private progresso?: number;
   private verificadoEm?: string;
 
+  constructor() {
+    this.verificadoEm = this.carregarUltimaVerificacao();
+  }
+
   private get diretorioAtualizacoes(): string {
     return path.join(app.getPath('userData'), 'atualizacoes');
   }
 
   private get caminhoPendencia(): string {
     return path.join(app.getPath('userData'), 'atualizacao-pendente.json');
+  }
+
+  private get caminhoUltimaVerificacao(): string {
+    return path.join(app.getPath('userData'), 'atualizacao-ultima-verificacao.json');
   }
 
   obterEstado(): EstadoAtualizacaoResposta {
@@ -146,7 +158,7 @@ export class AtualizacaoService {
       if (!assinaturaValida) throw new Error('Assinatura do índice inválida.');
       const artefato = manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura);
       if (!artefato) throw new Error('Índice não possui artefato compatível com este dispositivo.');
-      this.verificadoEm = new Date().toISOString();
+      this.registrarUltimaVerificacao();
       if (compararVersoes(manifesto.versao, app.getVersion()) <= 0) {
         this.atualizacaoDisponivel = undefined;
         this.caminhoDownload = undefined;
@@ -389,6 +401,33 @@ export class AtualizacaoService {
   private definirEstado(estado: EstadoAtualizacao): void {
     this.estado = estado;
     this.erro = undefined;
+  }
+
+  private carregarUltimaVerificacao(): string | undefined {
+    try {
+      if (!fs.existsSync(this.caminhoUltimaVerificacao)) return undefined;
+      const conteudo = JSON.parse(fs.readFileSync(this.caminhoUltimaVerificacao, 'utf8')) as unknown;
+      if (typeof conteudo !== 'object' || conteudo === null || Array.isArray(conteudo)) return undefined;
+      const { verificadoEm } = conteudo as Partial<RegistroUltimaVerificacao>;
+      if (typeof verificadoEm !== 'string' || Number.isNaN(Date.parse(verificadoEm))) return undefined;
+      return new Date(verificadoEm).toISOString();
+    } catch (erro) {
+      log.warn('Não foi possível carregar a data da última verificação de atualização.', {
+        mensagem: erro instanceof Error ? erro.message : 'Erro inesperado.',
+      });
+      return undefined;
+    }
+  }
+
+  private registrarUltimaVerificacao(): void {
+    this.verificadoEm = new Date().toISOString();
+    try {
+      fs.writeFileSync(this.caminhoUltimaVerificacao, JSON.stringify({ verificadoEm: this.verificadoEm }), 'utf8');
+    } catch (erro) {
+      log.warn('Não foi possível salvar a data da última verificação de atualização.', {
+        mensagem: erro instanceof Error ? erro.message : 'Erro inesperado.',
+      });
+    }
   }
 
   private definirFalha(erro: unknown): void {

@@ -19,6 +19,28 @@
       ]
     },
     {
+      "subdiretorio": "11 github actions",
+      "descricao": "CI, Dependabot e fluxos de preparacao e promocao de releases.",
+      "globsCodigo": [
+        ".github/workflows/**",
+        ".github/dependabot.yml",
+        "scripts/release/**"
+      ]
+    },
+    {
+      "subdiretorio": "12 atualizacao",
+      "descricao": "Consumo de atualizacoes, fechamento seguro, backup e instalacao.",
+      "globsCodigo": [
+        "src/shared/atualizacao/**",
+        "src/main/services/atualizacao.service.ts",
+        "src/main/services/backup-atualizacao.service.ts",
+        "src/main/ipc/handlers/atualizacao.handlers.ts",
+        "src/renderer/contexts/AlteracoesPendentesContext.tsx",
+        "src/__tests__/main/atualizacao.service.test.ts",
+        "src/__tests__/main/backup-atualizacao.service.test.ts"
+      ]
+    },
+    {
       "subdiretorio": "01 planejamento",
       "descricao": "Planejamento e infraestrutura geral do projeto.",
       "globsCodigo": [
@@ -551,6 +573,49 @@
         "src/renderer/index.tsx",
         "src/renderer/lib/menu-config.ts",
         "src/types/dashboard.d.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/11 github actions/workflows_github_actions.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "CI, Dependabot Updates, preparacao e promocao de releases.",
+      "globsCodigo": [
+        ".github/workflows/**",
+        ".github/dependabot.yml",
+        "scripts/release/**",
+        "package.json",
+        "electron-builder.yml"
+      ]
+    },
+    {
+      "arquivo": "spec/12 atualizacao/fluxo_atualizacao.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Verificacao, download, atualizacao offline, IPC, fechamento seguro e instalacao.",
+      "globsCodigo": [
+        "src/shared/atualizacao/**",
+        "src/main/services/atualizacao.service.ts",
+        "src/main/ipc/handlers/atualizacao.handlers.ts",
+        "src/renderer/components/layout/Header.tsx",
+        "src/renderer/contexts/AlteracoesPendentesContext.tsx",
+        "src/__tests__/main/atualizacao.service.test.ts",
+        ".github/workflows/promover-release.yml",
+        "scripts/release/manifesto.mjs",
+        "scripts/release/gerar-feed.mjs"
+      ]
+    },
+    {
+      "arquivo": "spec/12 atualizacao/backup_pre_atualizacao.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Snapshots do banco e backup completo de imagens antes da instalacao.",
+      "globsCodigo": [
+        "src/main/services/backup-atualizacao.service.ts",
+        "src/main/services/atualizacao.service.ts",
+        "src/__tests__/main/backup-atualizacao.service.test.ts",
+        "src/shared/atualizacao/atualizacao.types.ts",
+        "scripts/release/manifesto.mjs"
       ]
     }
   ]

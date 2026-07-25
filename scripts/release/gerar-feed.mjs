@@ -51,7 +51,51 @@ async function estaSuspensa(caminhoManifesto) {
   }
 }
 
-function paginaInicial() {
+function escaparHtml(valor) {
+  return String(valor)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function rotuloPlataforma(plataforma) {
+  return { windows: 'Windows', linux: 'Linux', macos: 'macOS' }[plataforma] ?? plataforma;
+}
+
+function rotuloFormato(formato) {
+  return { nsis: 'Instalador', AppImage: 'AppImage', deb: 'Pacote DEB', dmg: 'DMG', zip: 'ZIP' }[formato] ?? formato;
+}
+
+function obterDownloads(candidatos) {
+  return [...candidatos.entries()]
+    .flatMap(([chave, manifesto]) => {
+      const [canal, destino] = chave.split('/');
+      const [plataforma, arquitetura] = destino.split('-');
+      return manifesto.artefatos
+        .filter(artefato => artefato.canal === canal && artefato.plataforma === plataforma && artefato.arquitetura === arquitetura)
+        .map(artefato => ({ ...artefato, versao: manifesto.versao }));
+    })
+    .sort((primeiro, segundo) =>
+      rotuloPlataforma(primeiro.plataforma).localeCompare(rotuloPlataforma(segundo.plataforma), 'pt-BR')
+      || primeiro.arquitetura.localeCompare(segundo.arquitetura)
+      || primeiro.formato.localeCompare(segundo.formato)
+    );
+}
+
+function botoesDownload(downloads) {
+  if (downloads.length === 0) return '';
+  const botoes = downloads.map(artefato => `
+          <a class="download" href="${escaparHtml(artefato.url)}">
+            <span><strong>${escaparHtml(rotuloPlataforma(artefato.plataforma))} ${escaparHtml(artefato.arquitetura)}</strong><small>${escaparHtml(rotuloFormato(artefato.formato))} · v${escaparHtml(artefato.versao)}</small></span>
+            <b>Baixar</b>
+          </a>`).join('');
+  return `<article class="downloads"><h2>Downloads</h2><p>Escolha o instalador compatível com seu sistema operacional.</p><div class="lista-downloads">${botoes}
+        </div></article>`;
+}
+
+function paginaInicial(downloads) {
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -66,7 +110,7 @@ function paginaInicial() {
     header { display: flex; align-items: center; gap: 13px; padding: 20px 0; } header img { width: 52px; height: 52px; object-fit: contain; } .marca { font-weight: 800; font-size: 1.35rem; letter-spacing: -.05em; } .marca span { color: #63d6cb; }
     .conteudo { display: grid; grid-template-columns: 1.08fr .92fr; gap: 34px; align-items: center; padding: 24px 0; } .rotulo { color: #6ee4d7; font-size: .72rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
     h1 { font-size: clamp(2.5rem, 5vw, 4.65rem); line-height: .98; letter-spacing: -.07em; margin: 13px 0 18px; } .introducao { max-width: 600px; margin: 0; color: #b8ccd9; font-size: clamp(1rem, 1.7vw, 1.16rem); line-height: 1.58; }
-    .painel { display: grid; gap: 12px; } article { border: 1px solid #29485b; background: rgba(11, 31, 45, .78); border-radius: 15px; padding: 20px; } article.proposta { background: linear-gradient(145deg, #124c55, #13324a); border-color: #28616a; } h2 { margin: 0 0 8px; font-size: 1.05rem; } p { margin: 0; color: #afc3d1; line-height: 1.5; } ul { margin: 13px 0 0; padding-left: 18px; color: #d5e3eb; line-height: 1.58; } footer { border-top: 1px solid #203b4d; padding: 18px 0 24px; color: #7f9aab; font-size: .82rem; }
+    .painel { display: grid; gap: 12px; } article { border: 1px solid #29485b; background: rgba(11, 31, 45, .78); border-radius: 15px; padding: 20px; } article.proposta { background: linear-gradient(145deg, #124c55, #13324a); border-color: #28616a; } h2 { margin: 0 0 8px; font-size: 1.05rem; } p { margin: 0; color: #afc3d1; line-height: 1.5; } ul { margin: 13px 0 0; padding-left: 18px; color: #d5e3eb; line-height: 1.58; } .lista-downloads { display: grid; gap: 8px; margin-top: 14px; } .download { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #28616a; border-radius: 10px; padding: 10px 12px; background: #103d4b; color: #edf5fb; text-decoration: none; transition: background .2s ease, transform .2s ease; } .download:hover { background: #155563; transform: translateY(-1px); } .download span { display: grid; gap: 2px; } .download strong { font-size: .86rem; } .download small { color: #b8d8df; font-size: .72rem; } .download b { color: #7aeee2; font-size: .78rem; } footer { border-top: 1px solid #203b4d; padding: 18px 0 24px; color: #7f9aab; font-size: .82rem; }
     @media (max-width: 720px) { main { width: min(100% - 28px, 1050px); } .conteudo { grid-template-columns: 1fr; align-content: center; gap: 20px; padding: 22px 0 30px; } h1 { font-size: 3rem; } }
   </style>
 </head>
@@ -78,6 +122,7 @@ function paginaInicial() {
       <div class="painel">
         <article><h2>O desafio</h2><p>Ofícios, REPs e referências internas circulam por documentos diferentes, exigindo cópias e novas conferências.</p><ul><li>Menos erro humano de digitação.</li><li>Menos rodadas de revisão administrativa.</li></ul></article>
         <article class="proposta"><h2>A proposta</h2><p>A integração com o GDL aproveita os dados na origem. O laWdo auxilia as partes administrativas do laudo e deixa a interpretação, a análise e a conclusão nas mãos humanas.</p></article>
+        ${botoesDownload(downloads)}
       </div>
     </section>
     <footer>laWdo · apoio ao fluxo pericial, sem substituir o julgamento técnico humano.</footer>
@@ -118,8 +163,10 @@ async function executar() {
     }
   }
 
+  const downloads = obterDownloads(candidatos);
+
   await mkdir(saida, { recursive: true });
-  await writeFile(join(saida, 'index.html'), paginaInicial(), 'utf8');
+  await writeFile(join(saida, 'index.html'), paginaInicial(downloads), 'utf8');
   await copyFile(resolve('src/renderer/assets/logo.png'), join(saida, 'logo.png'));
 
   for (const [chave, manifesto] of candidatos) {

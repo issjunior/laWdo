@@ -354,16 +354,19 @@ jobs:
         run: |
           {
             printf '# laWdo v%s\n\n' "$VERSAO"
-            printf '> Release em rascunho. Complete as notas antes da promoção.\n\n'
-            printf '## Resumo\n\n%s\n\n' "$NOTAS_ATUALIZACAO"
-            printf '## Disponibilidade\n\nPENDENTE\n\n'
-            printf '## Alterações\n\n- PENDENTE\n\n'
-            printf '## Correções\n\n- PENDENTE\n\n'
-            printf '## Dados, backup e compatibilidade\n\n- Schema: PENDENTE.\n- Migration: PENDENTE.\n- Backup: PENDENTE.\n\n'
-            printf '## Como atualizar\n\nPENDENTE\n\n'
-            printf '## Limitações conhecidas\n\nPENDENTE\n\n'
-            printf '## Integridade e origem\n\nPENDENTE\n'
+            printf '## Alterações\n\n%s\n\n' "$NOTAS_ATUALIZACAO"
+            printf '## Correções\n\n- Nenhuma correção adicional informada.\n'
           } > publicacao/notas-release.md
+
+      - name: Guardar manifesto assinado para promoção
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: manifesto-assinado-${{ needs.validar.outputs.versao }}
+          path: |
+            publicacao/manifesto.json
+            publicacao/manifesto.json.sig
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Criar release em rascunho
         env:
@@ -371,7 +374,7 @@ jobs:
           VERSAO: ${{ needs.validar.outputs.versao }}
           MODO: ${{ inputs.modo }}
         run: |
-          mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' -o -name 'latest.yml' -o -name 'latest-linux.yml' \); find publicacao -type f)
+          mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*.zip' \))
           if [ "$MODO" = criar ]; then
             gh release create "v$VERSAO" --repo "$GITHUB_REPOSITORY" --draft --title "laWdo v$VERSAO" --notes-file publicacao/notas-release.md "${assets[@]}"
           else

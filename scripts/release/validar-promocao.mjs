@@ -17,31 +17,13 @@ function argumentos() {
   return valores;
 }
 
-function validarNotas(notas, versao, manifesto) {
+function validarNotas(notas, versao) {
   const notasNormalizadas = notas.replace(/\r\n?/g, '\n');
-  const secoes = [
-    '## Resumo',
-    '## Disponibilidade',
-    '## Alterações',
-    '## Correções',
-    '## Dados, backup e compatibilidade',
-    '## Como atualizar',
-    '## Limitações conhecidas',
-    '## Integridade e origem',
-  ];
+  const secoes = [...notasNormalizadas.matchAll(/^## (.+)$/gm)].map(([, secao]) => secao);
   if (!notasNormalizadas.startsWith(`# laWdo v${versao}\n`)) falhar('As notas devem iniciar com o título da versão promovida.');
-  if (/\bPENDENTE\b|<[^>]+>/i.test(notasNormalizadas)) falhar('As notas ainda possuem placeholders pendentes.');
-  for (const secao of secoes) {
-    if (!notasNormalizadas.includes(secao)) falhar(`As notas não possuem a seção obrigatória: ${secao}.`);
-  }
-  if (!notasNormalizadas.includes(`Commit: \`${manifesto.commit}\``)) falhar('As notas não referenciam o commit do manifesto.');
-  if (!notasNormalizadas.includes('Manifesto: `manifesto.json`') || !notasNormalizadas.includes('Assinatura: `manifesto.json.sig`')) {
-    falhar('As notas devem referenciar manifesto.json e manifesto.json.sig.');
-  }
-  for (const { plataforma, arquitetura, formato } of manifesto.artefatos) {
-    if (!notasNormalizadas.toLowerCase().includes(plataforma) || !notasNormalizadas.includes(arquitetura) || !notasNormalizadas.includes(formato)) {
-      falhar(`A disponibilidade nas notas diverge do manifesto para ${plataforma}/${arquitetura}/${formato}.`);
-    }
+  if (/\bPENDENTE\b/i.test(notasNormalizadas)) falhar('As notas ainda possuem placeholders pendentes.');
+  if (secoes.length !== 2 || secoes[0] !== 'Alterações' || secoes[1] !== 'Correções') {
+    falhar('As notas devem conter somente as seções Alterações e Correções.');
   }
 }
 
@@ -93,13 +75,14 @@ async function executar() {
   if (!Array.isArray(assets)) falhar('A lista de assets deve ser um array.');
   const porNome = new Map(assets.map(asset => [asset.name, asset]));
   if (porNome.size !== assets.length) falhar('A release contém nomes de assets duplicados.');
+  if (porNome.size !== manifesto.artefatos.length) falhar('A release deve conter somente os instaladores do manifesto.');
   for (const artefato of manifesto.artefatos) {
     const asset = porNome.get(artefato.nome);
     if (!asset || asset.size !== artefato.tamanho || !urlsDoAssetConferem(artefato, asset)) {
       falhar(`O asset ${artefato.nome} diverge do manifesto.`);
     }
   }
-  validarNotas(await readFile(caminhoNotas, 'utf8'), versao, manifesto);
+  validarNotas(await readFile(caminhoNotas, 'utf8'), versao);
   process.stdout.write(`Rascunho v${versao} validado.\n`);
 }
 

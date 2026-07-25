@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Obter código
@@ -78,7 +79,16 @@ jobs:
           jq .assets release.json > assets.json
           jq -r .body release.json > notas-release.md
           mkdir rascunho
-          gh release download "v$VERSAO" --repo "$GITHUB_REPOSITORY" --dir rascunho --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+          if [ "$MODO" = promover ]; then
+            artefato_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=manifesto-assinado-$VERSAO" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | last.id')"
+            test -n "$artefato_id"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artefato_id/zip" > manifesto-assinado.zip
+            unzip -q manifesto-assinado.zip -d rascunho
+          elif ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/v$VERSAO/manifesto.json" --output rascunho/manifesto.json \
+            || ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/v$VERSAO/manifesto.json.sig" --output rascunho/manifesto.json.sig; then
+            rm -f rascunho/manifesto.json rascunho/manifesto.json.sig
+            gh release download "v$VERSAO" --repo "$GITHUB_REPOSITORY" --dir rascunho --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+          fi
           node scripts/release/validar-promocao.mjs \
             --versao "$VERSAO" \
             --manifesto rascunho/manifesto.json \
@@ -104,12 +114,7 @@ jobs:
             echo "A release v$VERSAO já está suspensa do feed."
             exit 0
           fi
-          {
-            printf '\n\n## Aviso de suspensão do feed\n\n'
-            printf 'Esta release foi suspensa do feed automático em %s.\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            printf 'Motivo: %s\n\n' "$MOTIVO_SUSPENSAO"
-            printf '<!-- lawdo:suspensa-do-feed -->\n'
-          } >> notas-release.md
+          printf '\n<!-- lawdo:suspensa-do-feed: %s -->\n' "$MOTIVO_SUSPENSAO" >> notas-release.md
           gh release edit "v$VERSAO" --repo "$GITHUB_REPOSITORY" --notes-file notas-release.md
 
       - name: Baixar manifestos das releases publicadas
@@ -119,7 +124,13 @@ jobs:
           mkdir releases-publicadas
           while IFS= read -r tag; do
             mkdir "releases-publicadas/$tag"
-            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "releases-publicadas/$tag" --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+            if [ "$tag" = "v$VERSAO" ]; then
+              cp rascunho/manifesto.json rascunho/manifesto.json.sig "releases-publicadas/$tag/"
+            elif ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/$tag/manifesto.json" --output "releases-publicadas/$tag/manifesto.json" \
+              || ! curl --fail --location --retry 4 "https://issjunior.github.io/laWdo/historico/$tag/manifesto.json.sig" --output "releases-publicadas/$tag/manifesto.json.sig"; then
+              rm -f "releases-publicadas/$tag/manifesto.json" "releases-publicadas/$tag/manifesto.json.sig"
+              gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "releases-publicadas/$tag" --pattern 'manifesto.json' --pattern 'manifesto.json.sig'
+            fi
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body | grep --fixed-strings --quiet '<!-- lawdo:suspensa-do-feed -->'; then
               touch "releases-publicadas/$tag/.suspensa"
             fi
@@ -128,7 +139,15 @@ jobs:
       - name: Gerar feed completo assinado
         env:
           CHAVE_PRIVADA_ASSINATURA: ${{ secrets.CHAVE_PRIVADA_ASSINATURA }}
-        run: node scripts/release/gerar-feed.mjs --diretorio releases-publicadas --saida feed
+        run: |
+          node scripts/release/gerar-feed.mjs --diretorio releases-publicadas --saida feed
+          while IFS= read -r manifesto; do
+            diretorio_origem="$(dirname "$manifesto")"
+            tag="$(basename "$diretorio_origem")"
+            diretorio_destino="feed/historico/$tag"
+            mkdir -p "$diretorio_destino"
+            cp "$diretorio_origem/manifesto.json" "$diretorio_origem/manifesto.json.sig" "$diretorio_destino/"
+          done < <(find releases-publicadas -type f -name manifesto.json | sort)
 
       - name: Enviar feed assinado para Pages
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

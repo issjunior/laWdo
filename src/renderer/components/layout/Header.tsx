@@ -162,69 +162,26 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
             )}
           </Button>
 
-          {/* Informações e atualizações */}
+          {/* Informações do aplicativo */}
           <Dialog>
             <DialogTrigger asChild>
               <button
                 className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
-                title={dadosAtualizacao ? `Nova versão disponível: v${dadosAtualizacao.versao}` : 'Informações e atualizações'}
-                aria-label={dadosAtualizacao ? `Informações e atualizações. Nova versão disponível: ${dadosAtualizacao.versao}` : 'Informações e atualizações'}
+                title="Informações"
+                aria-label="Informações"
               >
-                <Info size={18} className={atualizacaoDisponivel ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />
-                <span className="hidden md:inline text-muted-foreground font-medium">Informações e atualizações</span>
-                {atualizacaoDisponivel && <Badge className="hidden lg:inline-flex bg-emerald-600 hover:bg-emerald-600">Atualização disponível</Badge>}
+                <Info size={18} className="text-muted-foreground" />
+                <span className="hidden md:inline text-muted-foreground font-medium">Informações</span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[480px]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Info className="h-5 w-5 text-primary" />
-                  Informações e atualizações
+                  Informações
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
-                <section className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold">Atualizações</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {dadosAtualizacao ? `Versão v${dadosAtualizacao.versao} disponível.` : 'Seu aplicativo será verificado sem enviar dados pessoais.'}
-                      </p>
-                    </div>
-                    {dadosAtualizacao && <Badge className="bg-emerald-600 hover:bg-emerald-600">Disponível</Badge>}
-                  </div>
-                  {dadosAtualizacao && (
-                    <div className="space-y-2 text-xs text-muted-foreground">
-                      <p><span className="font-medium text-foreground">Publicada:</span> {new Intl.DateTimeFormat('pt-BR').format(new Date(dadosAtualizacao.dataPublicacao))}</p>
-                      <p><span className="font-medium text-foreground">Pacote:</span> {dadosAtualizacao.artefato.formato} · {(dadosAtualizacao.artefato.tamanho / 1024 / 1024).toFixed(1)} MB</p>
-                      <p className="whitespace-pre-wrap"><span className="font-medium text-foreground">Notas:</span> {dadosAtualizacao.notas}</p>
-                    </div>
-                  )}
-                  {atualizacao?.erro && <p className="flex items-center gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" />{atualizacao.erro}</p>}
-                  {atualizacao?.estado === 'baixando' && <p className="text-xs text-muted-foreground">Baixando e validando: {atualizacao.progresso ?? 0}%</p>}
-                  {atualizacao?.estado === 'baixada' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Download className="h-3.5 w-3.5" />Pacote validado. O backup será criado antes da instalação.</p>}
-                  {atualizacao?.estado === 'aguardando_reinicio' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Clock3 className="h-3.5 w-3.5" />Instalação agendada para a próxima inicialização.</p>}
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('verificar')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
-                      <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${acaoAtualizacao === 'verificar' ? 'animate-spin' : ''}`} /> Verificar atualizações
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('offline')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
-                      <Download className="mr-1.5 h-3.5 w-3.5" /> Atualização offline
-                    </Button>
-                    {atualizacao?.estado === 'disponivel' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>
-                      <Download className="mr-1.5 h-3.5 w-3.5" /> Baixar agora
-                    </Button>}
-                    {atualizacao?.estado === 'baixada' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
-                      <Download className="mr-1.5 h-3.5 w-3.5" /> Instalar agora
-                    </Button>}
-                    {atualizacao?.estado === 'baixada' && (dadosAtualizacao?.artefato.formato === 'nsis' || dadosAtualizacao?.artefato.formato === 'AppImage') && <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('agendar')} disabled={acaoAtualizacao !== null}>
-                      <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Instalar na próxima inicialização
-                    </Button>}
-                    {dadosAtualizacao && atualizacao?.estado !== 'baixada' && <Button size="sm" variant="ghost" onClick={() => void executarAcaoAtualizacao('adiar')} disabled={acaoAtualizacao !== null}>
-                      <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Lembrar depois
-                    </Button>}
-                  </div>
-                </section>
                 {appInfo ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -298,6 +255,97 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                 <div className="rounded-lg bg-primary/5 p-3 border border-primary/10">
                   <p className="text-[10px] text-center text-muted-foreground italic">
                     Sistema desenvolvido para automatização de laudos periciais.
+                  </p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Atualizações do aplicativo */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <button
+                className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
+                title={dadosAtualizacao ? `Nova versão disponível: v${dadosAtualizacao.versao}` : 'Atualizações'}
+                aria-label={dadosAtualizacao ? `Atualizações. Nova versão disponível: ${dadosAtualizacao.versao}` : 'Atualizações'}
+              >
+                <Download size={18} className={atualizacaoDisponivel ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />
+                {atualizacaoDisponivel && <span className="text-muted-foreground font-medium">Atualização</span>}
+                {atualizacaoDisponivel && <Badge className="bg-emerald-600 hover:bg-emerald-600">Nova versão</Badge>}
+              </button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[480px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Download className="h-5 w-5 text-primary" />
+                  Atualizações
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-muted-foreground">Versão atual do laWdo</span>
+                    <Badge variant="default" className="bg-green-500 hover:bg-green-600">{appInfo ? `v${appInfo.version}` : 'Carregando...'}</Badge>
+                  </div>
+                  {atualizacao?.verificadoEm && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-muted-foreground">Última verificação</span>
+                      <span className="text-xs font-semibold">
+                        {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(atualizacao.verificadoEm))}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
+                    <span className="text-sm font-medium text-muted-foreground">Status</span>
+                    {dadosAtualizacao ? (
+                      <Badge variant="default" className="bg-green-500 hover:bg-green-600">Atualização disponível</Badge>
+                    ) : (
+                      <span className="text-xs font-semibold">Nenhuma atualização disponível</span>
+                    )}
+                  </div>
+                </div>
+                {dadosAtualizacao && (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Detalhes da atualização</h4>
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                    <p><span className="font-medium text-foreground">Publicada:</span> {new Intl.DateTimeFormat('pt-BR').format(new Date(dadosAtualizacao.dataPublicacao))}</p>
+                    <p><span className="font-medium text-foreground">Pacote:</span> {dadosAtualizacao.artefato.formato} · {(dadosAtualizacao.artefato.tamanho / 1024 / 1024).toFixed(1)} MB</p>
+                    <p className="whitespace-pre-wrap"><span className="font-medium text-foreground">Notas:</span> {dadosAtualizacao.notas}</p>
+                    </div>
+                  </div>
+                )}
+                {atualizacao?.erro && <p className="flex items-center gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" />{atualizacao.erro}</p>}
+                {atualizacao?.estado === 'baixando' && <p className="text-xs text-muted-foreground">Baixando e validando: {atualizacao.progresso ?? 0}%</p>}
+                {atualizacao?.estado === 'baixada' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Download className="h-3.5 w-3.5" />Pacote validado. O backup será criado antes da instalação.</p>}
+                {atualizacao?.estado === 'aguardando_reinicio' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Clock3 className="h-3.5 w-3.5" />Instalação agendada para a próxima inicialização.</p>}
+                <div className="space-y-2 pt-2 border-t border-border">
+                  <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Ações</h4>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('verificar')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
+                      <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${acaoAtualizacao === 'verificar' ? 'animate-spin' : ''}`} /> Verificar atualizações
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('offline')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Atualização offline
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {atualizacao?.estado === 'disponivel' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Baixar agora
+                    </Button>}
+                    {atualizacao?.estado === 'baixada' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Instalar agora
+                    </Button>}
+                    {atualizacao?.estado === 'baixada' && (dadosAtualizacao?.artefato.formato === 'nsis' || dadosAtualizacao?.artefato.formato === 'AppImage') && <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('agendar')} disabled={acaoAtualizacao !== null}>
+                      <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Instalar na próxima inicialização
+                    </Button>}
+                    {dadosAtualizacao && atualizacao?.estado !== 'baixada' && <Button size="sm" variant="ghost" onClick={() => void executarAcaoAtualizacao('adiar')} disabled={acaoAtualizacao !== null}>
+                      <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Lembrar depois
+                    </Button>}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-primary/5 p-3 border border-primary/10">
+                  <p className="text-[10px] text-center text-muted-foreground italic">
+                    As atualizações são verificadas sem enviar dados pessoais.
                   </p>
                 </div>
               </div>
