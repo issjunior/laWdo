@@ -3,10 +3,6 @@ name: Preparar release
 on:
   workflow_dispatch:
     inputs:
-      versao:
-        description: Versão SemVer presente no package.json
-        required: true
-        type: string
       notas_atualizacao:
         description: Resumo final exibido no aplicativo e assinado no manifesto
         required: true
@@ -50,14 +46,18 @@ jobs:
   validar:
     name: Validar solicitação
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
-      versao: ${{ steps.solicitacao.outputs.versao }}
+      versao: ${{ steps.planejamento.outputs.versao }}
       commit: ${{ steps.estado.outputs.commit }}
     steps:
       - name: Obter código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -69,36 +69,103 @@ jobs:
         run: npm ci
 
       - name: Validar solicitação
-        id: solicitacao
         env:
-          VERSAO: ${{ inputs.versao }}
           INCLUIR_WINDOWS: ${{ inputs.incluir_windows }}
           INCLUIR_LINUX: ${{ inputs.incluir_linux }}
           INCLUIR_MACOS: ${{ inputs.incluir_macos }}
           CONFIRMACAO_PLATAFORMAS_OMITIDAS: ${{ inputs.confirmacao_plataformas_omitidas }}
           MODO: ${{ inputs.modo }}
           NOTAS_ATUALIZACAO: ${{ inputs.notas_atualizacao }}
-        run: |
-          node scripts/release/validar-solicitacao.mjs
-          echo "versao=$VERSAO" >> "$GITHUB_OUTPUT"
+        run: node scripts/release/validar-solicitacao.mjs
 
-      - name: Validar estado da tag e release
-        id: estado
+      - name: Calcular próxima versão
+        id: planejamento
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSAO: ${{ inputs.versao }}
+          MODO: ${{ inputs.modo }}
+        run: |
+          ultima_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          ULTIMA_VERSAO_PUBLICADA="${ultima_tag#v}" node scripts/release/planejar-versao.mjs
+
+      - name: Validar destino da preparação
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ steps.planejamento.outputs.versao }}
           MODO: ${{ inputs.modo }}
         run: |
           if [ "$MODO" = criar ]; then
             ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSAO" --silent
             ! gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json id --jq .id
-            echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           else
             git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
-            commit="$(git rev-list -n 1 "v$VERSAO")"
-            test -n "$commit"
-            echo "commit=$commit" >> "$GITHUB_OUTPUT"
+            test -n "$(git rev-list -n 1 "v$VERSAO")"
           fi
+
+      - name: Atualizar metadados para o próximo patch
+        if: ${{ steps.planejamento.outputs.incrementar == 'true' }}
+        env:
+          VERSAO: ${{ steps.planejamento.outputs.versao }}
+        run: |
+          npm version patch --no-git-tag-version
+          node --input-type=module -e "import { lerVersaoProjeto } from './scripts/release/versao-projeto.mjs'; const atual = await lerVersaoProjeto(); if (atual !== process.env.VERSAO) throw new Error(\`Versão gerada (\${atual}) difere da planejada (\${process.env.VERSAO}).\`);"
+
+      - name: Verificar tipos
+        run: npm run type-check
+
+      - name: Executar lint
+        run: npm run lint
+
+      - name: Executar testes com cobertura
+        run: npm run test:coverage
+
+      - name: Executar testes de release
+        run: npm run test:release
+
+      - name: Gerar build
+        run: npm run build
+
+      - name: Integrar atualização da versão na main
+        id: integrar
+        if: ${{ steps.planejamento.outputs.incrementar == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ steps.planejamento.outputs.versao }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          ramo="codex/release-v$VERSAO-$GITHUB_RUN_ID"
+          git switch -c "$ramo"
+          git add package.json package-lock.json
+          git commit -m "update_versao_para_${VERSAO//./_}"
+          git push origin "$ramo"
+          url_pr="$(gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$ramo" \
+            --title "Atualizar versão para v$VERSAO" \
+            --body "Atualização automática de package.json e package-lock.json iniciada pelo workflow Preparar release.")"
+          gh pr merge "$url_pr" --repo "$GITHUB_REPOSITORY" --merge
+          git fetch origin main
+          commit="$(git rev-parse origin/main)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Definir commit imutável da release
+        id: estado
+        env:
+          VERSAO: ${{ steps.planejamento.outputs.versao }}
+          MODO: ${{ inputs.modo }}
+          COMMIT_INTEGRADO: ${{ steps.integrar.outputs.commit }}
+        run: |
+          if [ "$MODO" = retomar ]; then
+            commit="$(git rev-list -n 1 "v$VERSAO")"
+          elif [ -n "$COMMIT_INTEGRADO" ]; then
+            commit="$COMMIT_INTEGRADO"
+          else
+            commit="$GITHUB_SHA"
+          fi
+          git checkout --detach "$commit"
+          VERSAO_ESPERADA="$VERSAO" node --input-type=module -e "import { lerVersaoProjeto } from './scripts/release/versao-projeto.mjs'; const atual = await lerVersaoProjeto(); if (atual !== process.env.VERSAO_ESPERADA) throw new Error(\`Versão do commit (\${atual}) difere da release (\${process.env.VERSAO_ESPERADA}).\`);"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
   build-windows:
     name: Build Windows x64

@@ -60,7 +60,7 @@ jobs:
           MOTIVO_SUSPENSAO: ${{ inputs.motivo_suspensao }}
         run: |
           test "$GITHUB_REF" = 'refs/heads/main'
-          test "$(node -p "require('./package.json').version")" = "$VERSAO"
+          VERSAO_ESPERADA="$VERSAO" node --input-type=module -e "import { lerVersaoProjeto } from './scripts/release/versao-projeto.mjs'; const atual = await lerVersaoProjeto(); if (atual !== process.env.VERSAO_ESPERADA) throw new Error(\`Versão do projeto (\${atual}) difere do rascunho (\${process.env.VERSAO_ESPERADA}).\`);"
           gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json tagName,targetCommitish,isDraft,isPrerelease,assets,body > release.json
           test "$(jq -r .tagName release.json)" = "v$VERSAO"
           test "$(jq -r .isPrerelease release.json)" = false
