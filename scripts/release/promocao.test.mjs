@@ -64,8 +64,11 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   assert.equal(indiceWindows.versao, '0.1.2');
   assert.equal(indiceLinux.versao, '0.1.1');
   assert.match(paginaInicial, /Menos retrabalho/);
-  assert.match(paginaInicial, /integração com o GDL/i);
+  assert.match(paginaInicial, /Mais perícia/);
   assert.match(paginaInicial, /Downloads/);
+  assert.match(paginaInicial, /https:\/\/github\.com\/issjunior\/laWdo\/releases/);
+  assert.match(paginaInicial, /flickering-grid/);
+  assert.match(paginaInicial, /prefers-reduced-motion/);
   assert.match(paginaInicial, /Windows x64/);
   assert.match(paginaInicial, /windows-0\.1\.2\.exe/);
   assert.match(paginaInicial, /Linux x64/);
