@@ -18,7 +18,7 @@ on:
         default: true
         type: boolean
       incluir_macos:
-        description: Incluir DMG e ZIP macOS x64 e arm64 experimentais
+        description: Incluir instaladores DMG macOS x64 e arm64 experimentais
         required: true
         default: true
         type: boolean
@@ -47,6 +47,8 @@ jobs:
     name: Validar solicitação
     runs-on: ubuntu-latest
     permissions:
+      actions: read
+      checks: read
       contents: write
       pull-requests: write
     outputs:
@@ -64,9 +66,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
-
-      - name: Instalar dependências
-        run: npm ci
 
       - name: Validar solicitação
         env:
@@ -108,21 +107,6 @@ jobs:
         run: |
           npm version patch --no-git-tag-version
           node --input-type=module -e "import { lerVersaoProjeto } from './scripts/release/versao-projeto.mjs'; const atual = await lerVersaoProjeto(); if (atual !== process.env.VERSAO) throw new Error(\`Versão gerada (\${atual}) difere da planejada (\${process.env.VERSAO}).\`);"
-
-      - name: Verificar tipos
-        run: npm run type-check
-
-      - name: Executar lint
-        run: npm run lint
-
-      - name: Executar testes com cobertura
-        run: npm run test:coverage
-
-      - name: Executar testes de release
-        run: npm run test:release
-
-      - name: Gerar build
-        run: npm run build
 
       - name: Integrar atualização da versão na main
         id: integrar
@@ -166,6 +150,43 @@ jobs:
           git checkout --detach "$commit"
           VERSAO_ESPERADA="$VERSAO" node --input-type=module -e "import { lerVersaoProjeto } from './scripts/release/versao-projeto.mjs'; const atual = await lerVersaoProjeto(); if (atual !== process.env.VERSAO_ESPERADA) throw new Error(\`Versão do commit (\${atual}) difere da release (\${process.env.VERSAO_ESPERADA}).\`);"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Aguardar CI do commit da main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ steps.estado.outputs.commit }}
+        run: |
+          execucao_id=""
+          for tentativa in {1..60}; do
+            execucao_id="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow ci.yml \
+              --commit "$COMMIT" \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId // empty')"
+            if [ -n "$execucao_id" ]; then
+              break
+            fi
+            echo "Aguardando a CI ser registrada para o commit $COMMIT (tentativa $tentativa/60)."
+            sleep 10
+          done
+
+          if [ -z "$execucao_id" ]; then
+            echo "::error::Nenhuma execução da CI foi encontrada para o commit $COMMIT."
+            exit 1
+          fi
+
+          gh run watch "$execucao_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --compact \
+            --exit-status \
+            --interval 10
+
+          gh run view "$execucao_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json headSha,conclusion,url \
+            --jq '"CI confirmada: \(.url) | commit=\(.headSha) | conclusão=\(.conclusion)"'
 
   build-windows:
     name: Build Windows x64
@@ -295,7 +316,6 @@ jobs:
           name: release-${{ needs.validar.outputs.versao }}-macos-x64
           path: |
             dist/*.dmg
-            dist/*.zip
           if-no-files-found: error
 
   build-macos-arm64:
@@ -327,7 +347,6 @@ jobs:
           name: release-${{ needs.validar.outputs.versao }}-macos-arm64
           path: |
             dist/*.dmg
-            dist/*.zip
           if-no-files-found: error
 
   agregar-release:
@@ -437,7 +456,7 @@ jobs:
           VERSAO: ${{ needs.validar.outputs.versao }}
           MODO: ${{ inputs.modo }}
         run: |
-          mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' -o -name '*.zip' \))
+          mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' \))
           if [ "$MODO" = criar ]; then
             gh release create "v$VERSAO" --repo "$GITHUB_REPOSITORY" --draft --title "laWdo v$VERSAO" --notes-file publicacao/notas-release.md "${assets[@]}"
           else

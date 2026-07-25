@@ -68,13 +68,25 @@ function rotuloFormato(formato) {
   return { nsis: 'Instalador', AppImage: 'AppImage', deb: 'Pacote DEB', dmg: 'DMG', zip: 'ZIP' }[formato] ?? formato;
 }
 
+function formatarTamanho(tamanho) {
+  if (tamanho < 1024) return `${tamanho} B`;
+  const unidades = ['KB', 'MB', 'GB'];
+  let valor = tamanho / 1024;
+  let indice = 0;
+  while (valor >= 1024 && indice < unidades.length - 1) {
+    valor /= 1024;
+    indice += 1;
+  }
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valor)} ${unidades[indice]}`;
+}
+
 function obterDownloads(candidatos) {
   return [...candidatos.entries()]
     .flatMap(([chave, manifesto]) => {
       const [canal, destino] = chave.split('/');
       const [plataforma, arquitetura] = destino.split('-');
       return manifesto.artefatos
-        .filter(artefato => artefato.canal === canal && artefato.plataforma === plataforma && artefato.arquitetura === arquitetura)
+        .filter(artefato => artefato.canal === canal && artefato.plataforma === plataforma && artefato.arquitetura === arquitetura && artefato.formato !== 'zip')
         .map(artefato => ({ ...artefato, versao: manifesto.versao }));
     })
     .sort((primeiro, segundo) =>
@@ -86,13 +98,19 @@ function obterDownloads(candidatos) {
 
 function botoesDownload(downloads) {
   if (downloads.length === 0) return '';
-  const botoes = downloads.map(artefato => `
-          <a class="download" href="${escaparHtml(artefato.url)}">
-            <span><strong>${escaparHtml(rotuloPlataforma(artefato.plataforma))} ${escaparHtml(artefato.arquitetura)}</strong><small>${escaparHtml(rotuloFormato(artefato.formato))} · v${escaparHtml(artefato.versao)}</small></span>
-            <b>Baixar</b>
-          </a>`).join('');
-  return `<article class="downloads"><h2>Downloads</h2><p>Escolha o instalador compatível com seu sistema operacional.</p><div class="lista-downloads">${botoes}
-        </div></article>`;
+  const ordemPlataformas = ['windows', 'linux', 'macos'];
+  const grupos = ordemPlataformas.map(plataforma => {
+    const artefatos = downloads.filter(artefato => artefato.plataforma === plataforma);
+    if (artefatos.length === 0) return '';
+    const botoes = artefatos.map(artefato => `
+            <a class="download" href="${escaparHtml(artefato.url)}" rel="noopener noreferrer">
+              <span class="download-info"><strong>${escaparHtml(artefato.arquitetura)} · ${escaparHtml(rotuloFormato(artefato.formato))}</strong><small>v${escaparHtml(artefato.versao)} · ${escaparHtml(formatarTamanho(artefato.tamanho))}</small></span>
+              <b aria-hidden="true">↓</b>
+            </a>`).join('');
+    return `<section class="grupo-plataforma" aria-label="Downloads para ${escaparHtml(rotuloPlataforma(plataforma))}"><h3>${escaparHtml(rotuloPlataforma(plataforma))}</h3><div class="lista-downloads">${botoes}
+          </div></section>`;
+  }).join('');
+  return `<section class="downloads" aria-labelledby="titulo-downloads"><div class="downloads-header"><div><p class="rotulo">Versão disponível</p><h2 id="titulo-downloads">Downloads</h2></div><a class="historico" href="https://github.com/issjunior/laWdo/releases" rel="noopener noreferrer">Histórico de versões <span aria-hidden="true">↗</span></a></div><p class="downloads-introducao">Escolha o instalador compatível com seu sistema operacional.</p><div class="grupos-plataforma">${grupos}</div></section>`;
 }
 
 function paginaInicial(downloads) {
@@ -104,29 +122,79 @@ function paginaInicial(downloads) {
   <meta name="description" content="laWdo reduz retrabalho administrativo na elaboração de laudos periciais.">
   <title>laWdo — elaboração de laudos periciais</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #08131d; color: #edf5fb; }
-    * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: radial-gradient(circle at 10% 8%, #1a5367 0, transparent 28rem), #08131d; }
-    main { width: min(1050px, calc(100% - 40px)); min-height: 100svh; margin: auto; display: grid; grid-template-rows: auto 1fr auto; }
-    header { display: flex; align-items: center; gap: 13px; padding: 20px 0; } header img { width: 52px; height: 52px; object-fit: contain; } .marca { font-weight: 800; font-size: 1.35rem; letter-spacing: -.05em; } .marca span { color: #63d6cb; }
-    .conteudo { display: grid; grid-template-columns: 1.08fr .92fr; gap: 34px; align-items: center; padding: 24px 0; } .rotulo { color: #6ee4d7; font-size: .72rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
-    h1 { font-size: clamp(2.5rem, 5vw, 4.65rem); line-height: .98; letter-spacing: -.07em; margin: 13px 0 18px; } .introducao { max-width: 600px; margin: 0; color: #b8ccd9; font-size: clamp(1rem, 1.7vw, 1.16rem); line-height: 1.58; }
-    .painel { display: grid; gap: 12px; } article { border: 1px solid #29485b; background: rgba(11, 31, 45, .78); border-radius: 15px; padding: 20px; } article.proposta { background: linear-gradient(145deg, #124c55, #13324a); border-color: #28616a; } h2 { margin: 0 0 8px; font-size: 1.05rem; } p { margin: 0; color: #afc3d1; line-height: 1.5; } ul { margin: 13px 0 0; padding-left: 18px; color: #d5e3eb; line-height: 1.58; } .lista-downloads { display: grid; gap: 8px; margin-top: 14px; } .download { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #28616a; border-radius: 10px; padding: 10px 12px; background: #103d4b; color: #edf5fb; text-decoration: none; transition: background .2s ease, transform .2s ease; } .download:hover { background: #155563; transform: translateY(-1px); } .download span { display: grid; gap: 2px; } .download strong { font-size: .86rem; } .download small { color: #b8d8df; font-size: .72rem; } .download b { color: #7aeee2; font-size: .78rem; } footer { border-top: 1px solid #203b4d; padding: 18px 0 24px; color: #7f9aab; font-size: .82rem; }
-    @media (max-width: 720px) { main { width: min(100% - 28px, 1050px); } .conteudo { grid-template-columns: 1fr; align-content: center; gap: 20px; padding: 22px 0 30px; } h1 { font-size: 3rem; } }
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #dde5f0; color: #151c2c; }
+    * { box-sizing: border-box; } body { min-width: 320px; min-height: 100svh; margin: 0; overflow: hidden; background: linear-gradient(135deg, #e8effc 0%, #dde5f0 46%, #d5e1f1 100%); }
+    #flickering-grid { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; mask-image: radial-gradient(ellipse at center, #000, transparent 76%); }
+    main { position: relative; z-index: 1; width: min(1180px, calc(100% - 48px)); height: 100svh; margin: auto; padding: clamp(14px, 2.4vh, 26px) 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+    .conteudo { min-height: 0; display: grid; grid-template-columns: minmax(300px, .83fr) minmax(510px, 1.17fr); gap: clamp(28px, 5vw, 76px); align-items: center; }
+    .apresentacao { display: grid; justify-items: start; align-content: center; } .logo-principal { width: min(76%, 365px); max-height: 39svh; object-fit: contain; filter: drop-shadow(0 18px 20px rgba(26, 85, 224, .16)); }
+    .rotulo { margin: 0; color: #1a55e0; font-size: .68rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; } h1 { max-width: 520px; margin: 10px 0 12px; font-size: clamp(2.2rem, 4.1vw, 4.2rem); line-height: .98; letter-spacing: -.07em; } .introducao { max-width: 500px; margin: 0; color: #5d7191; font-size: clamp(.9rem, 1.35vw, 1.05rem); line-height: 1.5; }
+    .beneficios { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; } .beneficios span { border: 1px solid #b3c4d9; border-radius: 999px; padding: 5px 9px; background: rgba(255, 255, 255, .58); color: #3a4a62; font-size: .7rem; font-weight: 700; }
+    .downloads { align-self: center; border: 1px solid rgba(179, 196, 217, .94); border-radius: 20px; padding: clamp(18px, 2.5vw, 28px); background: rgba(255, 255, 255, .82); box-shadow: 0 18px 45px rgba(25, 65, 124, .12); backdrop-filter: blur(15px); }
+    .downloads-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; } h2 { margin: 3px 0 0; font-size: clamp(1.35rem, 2vw, 1.8rem); letter-spacing: -.045em; } .historico { display: inline-flex; align-items: center; gap: 5px; color: #1a55e0; font-size: .75rem; font-weight: 800; text-decoration: none; white-space: nowrap; } .historico:hover { text-decoration: underline; }
+    .downloads-introducao { margin: 9px 0 15px; color: #5d7191; font-size: .82rem; } .grupos-plataforma { display: grid; gap: 13px; } .grupo-plataforma { display: grid; gap: 7px; } .grupo-plataforma h3 { margin: 0; color: #3a4a62; font-size: .76rem; font-weight: 800; letter-spacing: .03em; } .lista-downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .download { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid #c4d2e6; border-radius: 11px; padding: 8px 10px 8px 12px; background: rgba(248, 251, 255, .86); color: #151c2c; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease; } .download:hover { border-color: #1a55e0; background: #fff; box-shadow: 0 7px 16px rgba(26, 85, 224, .13); transform: translateY(-1px); }
+    .download-info { display: grid; gap: 2px; min-width: 0; } .download strong { font-size: .78rem; } .download small { color: #5d7191; font-size: .67rem; } .download b { width: 25px; height: 25px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: #e8effc; color: #1a55e0; font-size: 1rem; }
+    footer { padding-top: 10px; color: #5d7191; font-size: .7rem; } @media (max-width: 900px) { body { overflow: auto; } main { height: auto; min-height: 100svh; padding: 20px 0; } .conteudo { grid-template-columns: 1fr; gap: 24px; padding: 28px 0; } .apresentacao { justify-items: center; text-align: center; } .beneficios { justify-content: center; } .downloads { width: 100%; } } @media (max-width: 560px) { main { width: min(100% - 28px, 1180px); } .lista-downloads { grid-template-columns: 1fr; } .downloads-header { align-items: flex-start; flex-direction: column; gap: 7px; } .logo-principal { width: min(82%, 300px); } }
   </style>
 </head>
 <body>
+  <canvas id="flickering-grid" aria-hidden="true"></canvas>
   <main>
-    <header><img src="logo.png" alt="Logo do laWdo"><div class="marca">la<span>W</span>do</div></header>
     <section class="conteudo">
-      <div><div class="rotulo">Elaboração de laudos periciais</div><h1>Menos retrabalho.<br>Mais perícia.</h1><p class="introducao">O laWdo organiza dados administrativos para reduzir digitação repetitiva, conferências manuais e erros que afastam o perito da análise técnica.</p></div>
-      <div class="painel">
-        <article><h2>O desafio</h2><p>Ofícios, REPs e referências internas circulam por documentos diferentes, exigindo cópias e novas conferências.</p><ul><li>Menos erro humano de digitação.</li><li>Menos rodadas de revisão administrativa.</li></ul></article>
-        <article class="proposta"><h2>A proposta</h2><p>A integração com o GDL aproveita os dados na origem. O laWdo auxilia as partes administrativas do laudo e deixa a interpretação, a análise e a conclusão nas mãos humanas.</p></article>
+      <div class="apresentacao"><img class="logo-principal" src="logo.png" alt="laWdo"><h1>Menos retrabalho.<br>Mais perícia.</h1><p class="introducao">O laWdo organiza o fluxo administrativo para que você dedique mais tempo à análise técnica.</p><div class="beneficios"><span>Dados organizados</span><span>Menos digitação</span><span>Mais foco pericial</span></div></div>
+      <div>
         ${botoesDownload(downloads)}
       </div>
     </section>
     <footer>laWdo · apoio ao fluxo pericial, sem substituir o julgamento técnico humano.</footer>
   </main>
+  <script>
+    (() => {
+      const canvas = document.getElementById('flickering-grid');
+      const contexto = canvas.getContext('2d');
+      const tamanhoQuadrado = 4;
+      const espaco = 6;
+      const opacidadeMaxima = .25;
+      let colunas = 0;
+      let linhas = 0;
+      let quadrados = new Float32Array();
+      let ultimoQuadro = 0;
+      const reduzirMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function redimensionar() {
+        const proporcao = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * proporcao;
+        canvas.height = window.innerHeight * proporcao;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        colunas = Math.ceil(window.innerWidth / (tamanhoQuadrado + espaco));
+        linhas = Math.ceil(window.innerHeight / (tamanhoQuadrado + espaco));
+        quadrados = new Float32Array(colunas * linhas);
+        for (let indice = 0; indice < quadrados.length; indice += 1) quadrados[indice] = Math.random() * opacidadeMaxima;
+        contexto.setTransform(proporcao, 0, 0, proporcao, 0, 0);
+      }
+
+      function desenhar(tempo) {
+        const delta = (tempo - ultimoQuadro) / 1000;
+        ultimoQuadro = tempo;
+        contexto.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        for (let coluna = 0; coluna < colunas; coluna += 1) {
+          for (let linha = 0; linha < linhas; linha += 1) {
+            const indice = coluna * linhas + linha;
+            if (!reduzirMovimento && Math.random() < .4 * delta) quadrados[indice] = Math.random() * opacidadeMaxima;
+            contexto.fillStyle = 'rgba(107, 114, 128, ' + quadrados[indice] + ')';
+            contexto.fillRect(coluna * (tamanhoQuadrado + espaco), linha * (tamanhoQuadrado + espaco), tamanhoQuadrado, tamanhoQuadrado);
+          }
+        }
+        if (!reduzirMovimento) window.requestAnimationFrame(desenhar);
+      }
+
+      window.addEventListener('resize', redimensionar, { passive: true });
+      redimensionar();
+      window.requestAnimationFrame(desenhar);
+    })();
+  </script>
 </body>
 </html>`;
 }

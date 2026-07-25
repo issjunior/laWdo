@@ -41,6 +41,34 @@ function criarNotasValidas(manifesto) {
   return gerarNotasRelease(manifesto, 'Correções de estabilidade.');
 }
 
+function criarManifestoCompleto(versao) {
+  const windows = criarManifesto(versao).artefatos[0];
+  const linux = criarManifesto(versao, 'linux').artefatos[0];
+  const criarArtefato = (plataforma, arquitetura, formato, canal, nome, tamanho) => ({
+    ...linux,
+    plataforma,
+    arquitetura,
+    formato,
+    canal,
+    nome,
+    tamanho,
+    url: `https://github.com/issjunior/laWdo/releases/download/v${versao}/${nome}`,
+  });
+
+  return normalizarManifesto({
+    ...criarManifesto(versao),
+    canais: ['stable', 'experimental'],
+    artefatos: [
+      { ...windows, tamanho: 86_100_000 },
+      { ...linux, tamanho: 90_200_000 },
+      criarArtefato('linux', 'x64', 'deb', 'stable', `laWdo-${versao}.deb`, 79_600_000),
+      criarArtefato('macos', 'x64', 'dmg', 'experimental', `laWdo-${versao}.dmg`, 93_400_000),
+      criarArtefato('macos', 'x64', 'zip', 'experimental', `laWdo-${versao}-mac.zip`, 91_700_000),
+      criarArtefato('macos', 'arm64', 'dmg', 'experimental', `laWdo-${versao}-arm64.dmg`, 89_900_000),
+    ],
+  });
+}
+
 
 test('gera um feed completo preservando a versão mais recente por plataforma', async () => {
   const raiz = await mkdtemp(join(tmpdir(), 'lawdo-feed-'));
@@ -48,7 +76,7 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   const saida = join(raiz, 'feed');
   const chave = join(raiz, 'chave-publica.pem');
   await writeFile(chave, chavePublica);
-  for (const [nome, manifesto] of [['v0.1.1', criarManifesto('0.1.1')], ['v0.1.2', criarManifesto('0.1.2')], ['linux', criarManifesto('0.1.1', 'linux')]]) {
+  for (const [nome, manifesto] of [['v0.1.1', criarManifesto('0.1.1')], ['v0.1.2', criarManifestoCompleto('0.1.2')]]) {
     const pasta = join(publicacoes, nome);
     await (await import('node:fs/promises')).mkdir(pasta, { recursive: true });
     await writeFile(join(pasta, 'manifesto.json'), JSON.stringify(manifesto));
@@ -62,14 +90,25 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   const paginaInicial = await readFile(join(saida, 'index.html'), 'utf8');
   const logo = await readFile(join(saida, 'logo.png'));
   assert.equal(indiceWindows.versao, '0.1.2');
-  assert.equal(indiceLinux.versao, '0.1.1');
+  assert.equal(indiceLinux.versao, '0.1.2');
   assert.match(paginaInicial, /Menos retrabalho/);
-  assert.match(paginaInicial, /integração com o GDL/i);
+  assert.match(paginaInicial, /Mais perícia/);
   assert.match(paginaInicial, /Downloads/);
-  assert.match(paginaInicial, /Windows x64/);
+  assert.match(paginaInicial, /https:\/\/github\.com\/issjunior\/laWdo\/releases/);
+  assert.match(paginaInicial, /flickering-grid/);
+  assert.match(paginaInicial, /prefers-reduced-motion/);
+  assert.match(paginaInicial, /x64 · Instalador/);
   assert.match(paginaInicial, /windows-0\.1\.2\.exe/);
-  assert.match(paginaInicial, /Linux x64/);
-  assert.match(paginaInicial, /linux-0\.1\.1\.AppImage/);
+  assert.match(paginaInicial, /x64 · AppImage/);
+  assert.match(paginaInicial, /linux-0\.1\.2\.AppImage/);
+  assert.match(paginaInicial, /x64 · DMG/);
+  assert.match(paginaInicial, /arm64 · DMG/);
+  assert.match(paginaInicial, /Windows<\/h3>/);
+  assert.match(paginaInicial, /Linux<\/h3>/);
+  assert.match(paginaInicial, /macOS<\/h3>/);
+  assert.match(paginaInicial, /82,1 MB/);
+  assert.equal((paginaInicial.match(/class="download"/g) ?? []).length, 5);
+  assert.doesNotMatch(paginaInicial, /\.zip/);
   assert.match(paginaInicial, /logo.png/);
   assert.ok(logo.length > 0);
 });

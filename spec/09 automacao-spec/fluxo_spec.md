@@ -52,6 +52,10 @@ Gerados em `.codex/spec/`:
 
 O relatorio markdown ja sai no formato `/spec` exigido pelo projeto.
 
+## Validacao proporcional
+
+Quando todos os arquivos alterados e rastreados estao sob `spec/**`, o fluxo nao executa `type-check`, `lint`, testes, cobertura ou build, pois esses comandos nao validam Markdown. A validacao fica limitada ao registro oficial, releitura, `git diff --check` e conferencia de titulos, cercas, caminhos e consistencia entre specs. A presenca de qualquer arquivo alterado fora de `spec/**` encerra essa excecao.
+
 ## Registro
 
 `executarRegistro()` em `lib.mjs`:
