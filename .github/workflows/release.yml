@@ -416,14 +416,10 @@ jobs:
 
       - name: Gerar rascunho das notas da release
         env:
-          VERSAO: ${{ needs.validar.outputs.versao }}
+          CAMINHO_MANIFESTO: publicacao/manifesto.json
+          CAMINHO_SAIDA: publicacao/notas-release.md
           NOTAS_ATUALIZACAO: ${{ inputs.notas_atualizacao }}
-        run: |
-          {
-            printf '# laWdo v%s\n\n' "$VERSAO"
-            printf '## Alterações\n\n%s\n\n' "$NOTAS_ATUALIZACAO"
-            printf '## Correções\n\n- Nenhuma correção adicional informada.\n'
-          } > publicacao/notas-release.md
+        run: node scripts/release/gerar-notas-release.mjs
 
       - name: Guardar manifesto assinado para promoção
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
