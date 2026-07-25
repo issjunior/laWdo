@@ -283,7 +283,7 @@ O diretório `spec/` documenta o **estado atual** do sistema — não é changel
 
 | Subdiretório | Cobre | Padrões de código |
 |---|---|---|
-| `01 planejamento/` | Planejamento | `PRD.md`, `package.json`, `tsconfig*.json`, `vite.*`, `electron-builder.yml`, `scripts/**` |
+| `01 planejamento/` | Planejamento | `PRD.md`, `package.json`, `tsconfig*.json`, `vite.*`, `electron-builder.yml`, `scripts/copy-tinymce.mjs`, `scripts/fix-imports.mjs` |
 | `02 rep/` | forms e inputs comuns e personalizados | `**/rep/**`, `**/reps/**`, `**/solicitante/**`, `**/tipo*exame/**`, `**/forms/**`, `**/exam-fields/**` |
 | `03 laudo/` | Laudo (ciclo de vida, editor, menu contexto, wizard) | `**/laudo/**`, `**/laudos/**`, `**/editor/**`, `**/wizard/**`, `**/peca/**`, `**/pecas/**`, `**/template/**`, `**/exportacao/**`, `**/importacao/**`, `**/ilustracao/**` |
 | `04 layout/` | Temas e estilos visuais | `**/layout/**`, `**/styles/**`, `**/globals.css`, `**/tailwind.config*`, `**/components/ui/**` |
@@ -292,7 +292,12 @@ O diretório `spec/` documenta o **estado atual** do sistema — não é changel
 | `07 logs/` | Sistema de logs | `**/logs/**`, `**/log*/**`, `**/audit*/**`, `**/logger*` |
 | `08 gdl/` | API GDL | `**/gdl/**`,  `**/api/**`|
 | `09 automacao-spec/` | Skill `/spec`, scripts de auditoria/registro e manifesto de specs | `scripts/spec/**`, `spec/09 automacao-spec/manifesto.json`, `.agents/skills/spec/**`, `AGENTS.md`, `package.json` |
+| `10 dashboard/` | Dashboard operacional | `src/renderer/pages/DashboardPage.tsx`, serviço, handler, IPC e tipos do dashboard |
+| `11 github actions/` | CI, Dependabot e preparação/promoção de releases | `.github/workflows/**`, `.github/dependabot.yml`, `scripts/release/**` |
+| `12 atualizacao/` | Consumo de atualizações, fechamento seguro, backup e instalação | `src/shared/atualizacao/**`, serviços e handlers de atualização, contexto de alterações pendentes e testes associados |
 | `problemas diversos/` | Problemas e edge cases pontuais | (sem padrão — análise de conteúdo) |
+
+As specs `11 github actions` e `12 atualizacao` formam uma cadeia de confiança única. Mudanças em manifesto, serialização canônica, assinatura, chave, canais, plataformas, arquiteturas, formatos, nomes, hashes, URLs ou `requerBackupCompletoImagens` exigem revisão coordenada dos dois domínios.
 
 **Quando o código muda** de forma relevante (alterações que podem confundir a IA em manutenções futuras):
 1. A IA **sugere** atualizar o(s) arquivo(s) de spec correspondente(s).
