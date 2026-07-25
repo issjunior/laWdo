@@ -47,7 +47,7 @@ jobs:
     name: Validar solicitação
     runs-on: ubuntu-latest
     permissions:
-      actions: read
+      actions: write
       checks: read
       contents: write
       pull-requests: write
@@ -151,7 +151,17 @@ jobs:
           VERSAO_ESPERADA="$VERSAO" node --input-type=module -e "import { lerVersaoProjeto } from './scripts/release/versao-projeto.mjs'; const atual = await lerVersaoProjeto(); if (atual !== process.env.VERSAO_ESPERADA) throw new Error(\`Versão do commit (\${atual}) difere da release (\${process.env.VERSAO_ESPERADA}).\`);"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
-      - name: Aguardar CI do commit da main
+      - name: Executar CI do commit imutável
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODO: ${{ inputs.modo }}
+          VERSAO: ${{ steps.planejamento.outputs.versao }}
+        run: |
+          referencia=main
+          if [ "$MODO" = retomar ]; then referencia="v$VERSAO"; fi
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$referencia"
+
+      - name: Aguardar CI do commit imutável
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT: ${{ steps.estado.outputs.commit }}
