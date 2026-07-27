@@ -32,6 +32,8 @@ O ambiente de desenvolvimento requer Node.js 24 ou superior, conforme `package.j
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
+**Exceção para alterações exclusivamente documentais em `spec/`:** quando todos os arquivos alterados e rastreados estiverem sob `spec/**`, não execute `type-check`, `lint`, `test`, `test:coverage` ou `build`, pois esses comandos não validam o conteúdo Markdown e não acrescentam sinal relevante. Nesse caso, limite a validação ao fluxo `/spec`: registro pela automação, releitura das seções alteradas, `git diff --check` e conferência de títulos, cercas Markdown, caminhos e consistência entre specs relacionadas. Se houver qualquer arquivo alterado fora de `spec/**`, a exceção não se aplica e as validações normais devem ser executadas conforme o escopo.
+
 `npm run test:coverage` e `npm run knip -- --no-exit-code` continuam comandos de verificação manual/observacional importantes quando a mudança toca testes, cobertura, dependências, exports públicos ou limpeza estrutural.
 
 Para documentação de estado atual, use o fluxo `/spec` ou os scripts `npm run spec`, `npm run spec:auditar` e `npm run spec:registrar`. A classificação e cobertura dos specs ficam em `spec/09 automacao-spec/manifesto.json`.

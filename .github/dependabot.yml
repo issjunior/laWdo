@@ -5,20 +5,17 @@ updates:
     directory: "/"
     target-branch: "main"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
+      day: "1"
       time: "09:00"
       timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     groups:
-      npm-producao:
+      npm-versoes:
         applies-to: "version-updates"
-        dependency-type: "production"
-        update-types: ["minor", "patch"]
-      npm-desenvolvimento:
-        applies-to: "version-updates"
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        patterns:
+          - "*"
+        update-types: ["major", "minor", "patch"]
       npm-seguranca:
         applies-to: "security-updates"
         patterns:
@@ -28,17 +25,17 @@ updates:
     directory: "/"
     target-branch: "main"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
+      day: "1"
       time: "09:30"
       timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
     groups:
       github-actions-versoes:
         applies-to: "version-updates"
         patterns:
           - "*"
-        update-types: ["minor", "patch"]
+        update-types: ["major", "minor", "patch"]
       github-actions-seguranca:
         applies-to: "security-updates"
         patterns:

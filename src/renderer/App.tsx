@@ -1,5 +1,5 @@
 import React, { useState, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link } from 'react-router';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));

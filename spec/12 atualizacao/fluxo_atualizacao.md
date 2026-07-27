@@ -30,8 +30,9 @@ Mudanças em manifesto, assinatura, canais, nomes de plataforma, arquitetura, fo
 | registro global de alterações pendentes | `src/renderer/contexts/AlteracoesPendentesContext.tsx` |
 | inicialização e processamento de pendência | `src/main/index.ts` |
 | backups obrigatórios | `src/main/services/backup-atualizacao.service.ts` |
+| última verificação persistida | `userData/atualizacao-ultima-verificacao.json` |
 
-O estado canônico da execução é mantido somente em memória pelo singleton `atualizacaoService`. O único estado persistido do fluxo é `atualizacao-pendente.json`, usado para instalação automática na próxima inicialização, além dos pacotes copiados para `userData/atualizacoes`.
+O estado canônico da execução é mantido em memória pelo singleton `atualizacaoService`. Persistem em `userData`: `atualizacao-pendente.json`, usado para instalação automática na próxima inicialização; `atualizacao-ultima-verificacao.json`, que guarda `verificadoEm` em ISO 8601; e os pacotes copiados para `atualizacoes`. Esses arquivos são persistência do processo principal, não o `localStorage` do renderer.
 
 ## Estado e concorrência
 
@@ -53,7 +54,9 @@ Falhas capturadas pelo serviço normalmente retornam uma resposta com `estado: f
 
 Após o Electron ficar pronto, uma atualização agendada é processada antes da abertura do banco. Se não houver instalação pendente, a aplicação inicializa e agenda uma verificação automática com atraso aleatório entre 5 e 30 segundos.
 
-A URL-base atual é fixa em `https://issjunior.github.io/laWdo/stable`. O serviço deriva `<plataforma>-<arquitetura>.json` e baixa em paralelo o índice e seu arquivo `.sig`. A verificação automática é limitada a uma vez a cada 24 horas enquanto o processo permanece aberto; `verificadoEm` não é persistido entre execuções. A verificação manual ignora esse limite.
+A URL-base atual é fixa em `https://issjunior.github.io/laWdo/stable`. O serviço deriva `<plataforma>-<arquitetura>.json` e baixa em paralelo o índice e seu arquivo `.sig`. A verificação automática é limitada a uma vez a cada 24 horas usando `verificadoEm`, carregado de `userData/atualizacao-ultima-verificacao.json` ao criar o serviço. A verificação manual ignora esse limite.
+
+`verificadoEm` só é atualizado depois que índice e assinatura foram obtidos, normalizados, autenticados e contêm artefato compatível; falhas anteriores preservam a data anterior. O arquivo é tratado como fronteira insegura: JSON inválido, objeto inesperado ou data inválida são ignorados com log de aviso. Uma falha de escrita não invalida a verificação corrente, mas pode fazer a próxima execução perder a data.
 
 O manifesto remoto passa por normalização de tipos, SemVer, data, canais, formatos, tamanho, SHA-256, nome simples de arquivo e URL HTTPS. Em seguida, sua serialização canônica é validada com a chave pública Ed25519 embutida. Somente uma versão superior à instalada produz o estado `disponivel`.
 
@@ -96,7 +99,12 @@ O agendamento grava `atualizacao-pendente.json` por arquivo temporário e renome
 
 ## Interface
 
-`Header` consulta o estado ao montar e repete a consulta a cada 30 segundos. A verificação manual, atualização offline, download, instalação, agendamento e adiamento ficam no diálogo **Informações e atualizações**. O renderer mostra versão, data, formato, tamanho, notas, progresso e erro; o processo principal continua responsável por rede, arquivos, assinatura, backup e execução.
+`Header` consulta o estado ao montar e repete a consulta a cada 30 segundos. A interface separa duas responsabilidades:
+
+- **Informações** permanece visível com nome, versão do sistema e banco, ambiente, sistema operacional, memória e contatos;
+- **Atualizações** aparece normalmente somente como ícone. Quando o estado indica atualização disponível, o gatilho acrescenta o texto **Atualização**, usa destaque verde e mostra o badge **Nova versão**.
+
+O modal **Atualizações** segue a mesma largura, hierarquia visual e cores do modal **Informações**. Ele sempre mostra a versão atual do laWdo; mostra também a última verificação persistida, quando válida, e o status. Verificação manual e seleção offline ficam centralizadas na primeira linha de ações. Download, instalação, agendamento e adiamento aparecem conforme o estado. O renderer apresenta versão disponível, data, formato, tamanho, notas, progresso e erro; o processo principal continua responsável por rede, arquivos, assinatura, backup e execução.
 
 O botão de agendamento só aparece para NSIS ou AppImage. O indicador acessível considera `disponivel`, `baixando`, `baixada` e `aguardando_reinicio` como atualização disponível.
 
@@ -109,7 +117,8 @@ O botão de agendamento só aparece para NSIS ou AppImage. O indicador acessíve
 - Alterações em canais, manifesto, chave ou formatos devem revisar `spec/11 github actions/workflows_github_actions.md`, scripts de release, tipos compartilhados e consumidor.
 - Novos canais IPC exigem handler, `ALLOWED_CHANNELS`, API do preload e tipos alinhados.
 - Novas telas editáveis que devam bloquear atualização precisam registrar seu estado em `AlteracoesPendentesContext`.
+- `verificadoEm` precisa continuar sendo validado ao cruzar o arquivo JSON de `userData`; não deve ser movido para `localStorage`, pois o processo principal usa essa data antes e independentemente do renderer.
 
 ## Cobertura atual
 
-`src/__tests__/main/atualizacao.service.test.ts` cobre estado inicial, falha de índice, recusa de download sem versão disponível, assinatura offline inválida e persistência de pacote automático validado. Permanecem sem teste automatizado ponta a ponta: download válido, autorização IPC e timeout, instalação por processo, AppImage real, integração do Header, consulta ao Pages e ciclo completo entre release publicada e aplicativo.
+`src/__tests__/main/atualizacao.service.test.ts` cobre estado inicial, falha de índice, recusa de download sem versão disponível, assinatura offline inválida, persistência da última verificação entre inicializações e persistência de pacote automático validado. Permanecem sem teste automatizado ponta a ponta: download válido, autorização IPC e timeout, instalação por processo, AppImage real, integração do Header, consulta ao Pages e ciclo completo entre release publicada e aplicativo.

@@ -20,10 +20,13 @@ function argumentos() {
 function validarNotas(notas, versao) {
   const notasNormalizadas = notas.replace(/\r\n?/g, '\n');
   const secoes = [...notasNormalizadas.matchAll(/^## (.+)$/gm)].map(([, secao]) => secao);
-  if (!notasNormalizadas.startsWith(`# laWdo v${versao}\n`)) falhar('As notas devem iniciar com o título da versão promovida.');
   if (/\bPENDENTE\b/i.test(notasNormalizadas)) falhar('As notas ainda possuem placeholders pendentes.');
   if (secoes.length !== 2 || secoes[0] !== 'Alterações' || secoes[1] !== 'Correções') {
     falhar('As notas devem conter somente as seções Alterações e Correções.');
+  }
+  const tituloDuplicado = new RegExp(`^# laWdo v${versao.replaceAll('.', '\\.')}\\n`);
+  if (tituloDuplicado.test(notasNormalizadas)) {
+    process.stdout.write('Aviso: as notas usam o formato legado com título duplicado.\n');
   }
 }
 

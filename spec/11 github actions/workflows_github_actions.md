@@ -46,6 +46,7 @@ branch/PR ──────────┴─> CI
 
 main + despacho manual
   -> Preparar release
+  -> confirmar CI bem-sucedida do commit imutável
   -> builds selecionados
   -> tag + manifesto Ed25519 + release em rascunho
   -> smoke test manual
@@ -87,18 +88,29 @@ Atualizações major não pertencem aos grupos de versão `minor`/`patch`; quand
 
 ### Entrada e gate inicial
 
-O workflow é manual e compartilha o grupo de concorrência `release-producao` com a promoção, sem cancelar uma execução em andamento. As entradas são versão, resumo final da atualização, seleção de Windows/Linux/macOS, confirmação de omissões e modo `criar` ou `retomar`.
+O workflow é manual e compartilha o grupo de concorrência `release-producao` com a promoção, sem cancelar uma execução em andamento. As entradas são resumo final da atualização, seleção de Windows/Linux/macOS, confirmação de omissões e modo `criar` ou `retomar`. A versão não é informada manualmente: o workflow a planeja a partir da última release pública e dos metadados locais.
 
-`scripts/release/validar-solicitacao.mjs` bloqueia a execução quando:
+O gate inicial combina `validar-solicitacao.mjs`, a leitura coordenada dos metadados e `planejar-versao.mjs`. A execução é bloqueada quando:
 
 - a referência não é `refs/heads/main`;
-- a versão não é SemVer ou diverge de `package.json`;
+- `package.json`, `package-lock.json.version` e `package-lock.json.packages[""].version` não contêm a mesma versão SemVer estável;
+- a versão local não é igual à última publicada nem ao próximo patch esperado;
 - o modo não é reconhecido;
 - o resumo tem menos de 10 caracteres ou contém placeholder;
 - nenhuma plataforma foi selecionada;
 - uma plataforma foi omitida sem `CONFIRMO`.
 
 No modo `criar`, tag e release da versão devem estar ausentes. No modo `retomar`, a tag existente define o commit; antes da agregação, a release correspondente deve ser um rascunho sem assets.
+
+### Planejamento e integração automática da versão
+
+`planejar-versao.mjs` usa a última release pública como base. Se os metadados ainda estiverem nessa versão, calcula o próximo patch e o workflow executa `npm version patch --no-git-tag-version`, atualizando `package.json`, `package-lock.json.version` e `package-lock.json.packages[""].version`. Se os arquivos já estiverem no próximo patch, a execução continua sem incrementar novamente, o que torna segura a repetição após uma interrupção.
+
+Quando há incremento, o workflow cria uma branch efêmera `codex/release-v<versão>-<run-id>`, abre um PR para a `main` e o integra por merge. O commit resultante da `main` passa a ser o commit imutável usado por todos os builds e pela tag. Em `retomar`, a tag existente continua sendo a fonte do commit.
+
+O job inicial não repete instalação de dependências, tipos, lint, cobertura, testes de release nem build genérico. Depois de definir o commit imutável, ele procura a execução de `ci.yml` pelo SHA exato, aguardando por até 10 minutos que ela seja registrada, e usa `gh run watch --exit-status` até a conclusão. Somente uma CI bem-sucedida libera os builds nativos; ausência, cancelamento ou falha interrompem a preparação. O token desse job possui `actions: read` e `checks: read` apenas para consultar e acompanhar a CI, além das permissões de conteúdo e PR necessárias à integração da versão.
+
+Esse estágio escreve na `main` antes da criação do rascunho e não é transacional com os demais jobs. Proteções ou indisponibilidade que impeçam a criação/integração do PR interrompem a preparação antes dos builds. Se a CI falhar depois da integração automática, a versão permanece na `main`, mas tag, instaladores e rascunho não são criados; uma nova execução reutiliza o próximo patch já registrado sem incrementá-lo novamente.
 
 ### Builds e artefatos temporários
 
@@ -116,7 +128,9 @@ O upload temporário falha se os padrões não encontrarem arquivos. O Windows p
 
 A agregação baixa os artefatos temporários, troca espaços por pontos nos nomes públicos, cria ou confirma a tag imutável e chama `gerar-manifesto.mjs`. O script identifica plataforma e arquitetura pelo nome do artefato temporário, inclui apenas formatos instaláveis, calcula tamanho e SHA-256, monta URLs HTTPS, normaliza o contrato e assina a serialização canônica com Ed25519. Windows e Linux usam o canal `stable`; macOS usa `experimental`.
 
-A release é criada em rascunho com instaladores, metadados do electron-builder, `manifesto.json`, assinatura e notas iniciais. As notas nascem com seções pendentes e precisam ser completadas antes da promoção.
+O manifesto e sua assinatura são guardados em um artefato privado do Actions chamado `manifesto-assinado-<versão>`, com retenção de 90 dias. A release em rascunho recebe somente os instaladores reconhecidos pelo manifesto; metadados do electron-builder, manifesto e assinatura não são assets públicos.
+
+`gerar-notas-release.mjs` cria o corpo público sem repetir o título `laWdo v<versão>`. O conteúdo contém somente as seções `Alterações` e `Correções`, seguidas de uma tabela de instaladores com plataforma, arquitetura, formato e link. Os arquivos “Source code” exibidos pelo GitHub são arquivos automáticos da tag e não pertencem à lista de assets controlada pelo workflow.
 
 ### Falhas parciais
 
@@ -131,16 +145,15 @@ O workflow aceita `promover`, `reprocessar-feed` e `suspender`; suspensão exige
 Antes de alterar o estado público, o workflow confere tag, release, commit quando `targetCommitish` é um SHA completo, estado de rascunho conforme o modo, manifesto, assinatura, notas e assets. `scripts/release/validar-promocao.mjs` usa a chave pública Ed25519 embutida e bloqueia:
 
 - assinatura inválida ou versão divergente;
-- notas sem título ou seções obrigatórias, com placeholders ou sem commit, manifesto e assinatura;
-- resumo das notas divergente de `manifesto.notas`;
-- assets ausentes, duplicados ou com tamanho divergente;
+- notas com placeholders ou sem exatamente as seções `Alterações` e `Correções` nessa ordem; o título duplicado legado ainda é aceito com aviso;
+- assets ausentes, duplicados, extras ou com tamanho divergente;
 - URL que não corresponda ao asset esperado. Durante o rascunho, a URL temporária da API do GitHub também é aceita.
 
 `promover` publica o rascunho. `reprocessar-feed` exige release já pública e não republica binários. `suspender` mantém a release pública para download manual, acrescenta às notas um marcador idempotente e a exclui do feed subsequente.
 
 ### Feed e Pages
 
-O workflow lista até 100 releases públicas, baixa manifesto e assinatura de cada uma e materializa `.suspensa` para releases marcadas nas notas. `gerar-feed.mjs`:
+O workflow lista até 100 releases públicas e materializa `.suspensa` para releases marcadas nas notas. Para a versão solicitada, reutiliza o manifesto já validado no diretório de trabalho. Para as demais, tenta primeiro o histórico do Pages, depois o artefato privado não expirado do Actions e, por compatibilidade legada, os assets da própria release. Essa ordem também permite que `reprocessar-feed` recupere a versão atual quando o primeiro deploy do Pages falhou. `gerar-feed.mjs`:
 
 1. normaliza e verifica cada manifesto com a chave pública padrão;
 2. ignora releases suspensas;
@@ -177,9 +190,11 @@ A geração está limitada às 100 releases retornadas por `gh release list --li
 - preservação da versão mais recente por plataforma no feed;
 - exclusão de release suspensa com preservação da versão anterior;
 - bloqueio de notas incompletas;
-- aceitação da URL temporária do GitHub no rascunho.
+- aceitação da URL temporária do GitHub no rascunho;
+- planejamento idempotente do próximo patch e bloqueio de divergências entre `package.json` e lockfile;
+- geração das notas sem título duplicado e com tabela de instaladores por plataforma.
 
-A própria CI executa esses testes. Permanecem dependentes do GitHub Actions e de validação operacional: matriz nativa de empacotamento, environments, permissões, tag/release, download/upload de assets, publicação, deploy do Pages e verificação HTTPS.
+A própria CI executa esses testes, e o workflow de preparação consome o resultado dessa CI em vez de repeti-los. Permanecem dependentes do GitHub Actions e de validação operacional: associação da execução ao SHA exato, espera pelo resultado, matriz nativa de empacotamento, environments, permissões, tag/release, download/upload de assets, publicação, deploy do Pages e verificação HTTPS.
 
 ## Arquivos que mudam juntos
 
@@ -189,6 +204,7 @@ A própria CI executa esses testes. Permanecem dependentes do GitHub Actions e d
 | política de dependências | `.github/dependabot.yml`, CI e proteção da `main` |
 | plataforma, arquitetura ou formato | `release.yml`, `electron-builder.yml`, `gerar-manifesto.mjs`, `manifesto.mjs`, atualizador e testes |
 | manifesto ou assinatura | scripts de release, chave pública do aplicativo, serviço de atualização e testes |
-| notas ou assets obrigatórios | preparação, `validar-promocao.mjs` e testes de promoção |
+| versão do projeto | `package.json`, os dois campos de versão do `package-lock.json`, `planejar-versao.mjs`, workflow de preparação e testes |
+| notas ou assets obrigatórios | gerador de notas, preparação, `validar-promocao.mjs` e testes de promoção |
 | canal, suspensão ou seleção da versão | `promover-release.yml`, `gerar-feed.mjs`, consumidor do feed e testes |
 | publicação do feed | jobs de promoção, environments `release` e `github-pages` e URL-base consumida pelo aplicativo |
