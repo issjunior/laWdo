@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Feature até release publicada",
+    "subtitle": "PR obrigatória para main, CI, Preparar release e Promover release",
+    "output": "fluxo-feature-release.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "feature-main", "label": "Feature até main", "focus": ["feature", "pr", "ci", "main"], "note": "A mudança entra em main somente depois da PR e da CI verde." },
+      { "id": "rascunho", "label": "Preparar rascunho", "focus": ["main", "preparar", "builds", "rascunho"], "note": "A preparação fixa o commit aprovado, constrói os pacotes e assina o manifesto." },
+      { "id": "publicacao", "label": "Promover e implantar", "focus": ["rascunho", "promover", "feed"], "note": "A promoção valida os contratos, publica a release e confirma o feed por HTTPS." }
+    ]
+  },
+  "lanes": [
+    { "id": "desenvolvimento", "label": "Desenvolvimento e revisão" },
+    { "id": "ci", "label": "GitHub Actions — CI" },
+    { "id": "release", "label": "GitHub Actions — release" },
+    { "id": "operacao", "label": "Operação manual" },
+    { "id": "publicacao", "label": "GitHub Releases e Pages" }
+  ],
+  "phases": [
+    { "id": "feature", "label": "Feature", "fromCol": 0, "toCol": 0 },
+    { "id": "integracao", "label": "Integração", "fromCol": 1, "toCol": 2, "variant": "emphasis" },
+    { "id": "preparo", "label": "Preparar release", "fromCol": 3, "toCol": 4, "variant": "security" },
+    { "id": "promocao", "label": "Promover release", "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "gates-ci", "label": "Gates obrigatórios", "lane": "ci", "fromCol": 2, "toCol": 2, "variant": "emphasis" }
+  ],
+  "nodes": [
+    { "id": "feature", "lane": "desenvolvimento", "col": 0, "type": "frontend", "label": "Feature", "sublabel": "branch de trabalho" },
+    { "id": "pr", "lane": "desenvolvimento", "col": 1, "type": "security", "label": "Abrir PR", "sublabel": "destino: main", "tag": "obrigatória" },
+    { "id": "ci", "lane": "ci", "col": 2, "type": "backend", "label": "CI Validar", "sublabel": "qualidade e build", "tag": "bloqueante" },
+    { "id": "main", "lane": "desenvolvimento", "col": 3, "type": "frontend", "label": "Merge em main", "sublabel": "PR aprovada" },
+    { "id": "preparar", "lane": "release", "col": 3, "type": "security", "label": "Preparar", "sublabel": "despacho manual", "tag": "release-producao" },
+    { "id": "builds", "lane": "release", "col": 5, "type": "backend", "label": "Builds", "sublabel": "Windows · Linux · macOS" },
+    { "id": "rascunho", "lane": "publicacao", "col": 5, "type": "security", "label": "Rascunho", "sublabel": "tag + manifesto assinado", "tag": "GitHub Release" },
+    { "id": "promover", "lane": "operacao", "col": 4, "type": "security", "label": "Promover", "sublabel": "após smoke test", "tag": "manual" },
+    { "id": "feed", "lane": "publicacao", "col": 4, "type": "cloud", "label": "Feed público", "sublabel": "Pages verificado por HTTPS", "tag": "release publicada" }
+  ],
+  "edges": [
+    { "id": "feature-pr", "from": "feature", "to": "pr", "variant": "emphasis" },
+    { "id": "pr-ci", "from": "pr", "to": "ci", "variant": "emphasis", "route": "drop", "fromSide": "bottom", "toSide": "top" },
+    { "id": "ci-main", "from": "ci", "to": "main", "variant": "emphasis", "route": "drop", "fromSide": "top", "toSide": "bottom" },
+    { "id": "main-preparar", "from": "main", "to": "preparar", "variant": "security", "route": "drop", "fromSide": "bottom", "toSide": "top" },
+    { "id": "preparar-builds", "from": "preparar", "to": "builds", "variant": "security" },
+    { "id": "builds-rascunho", "from": "builds", "to": "rascunho", "variant": "security", "route": "drop", "fromSide": "bottom", "toSide": "top" },
+    { "id": "rascunho-promover", "from": "rascunho", "to": "promover", "variant": "emphasis", "route": "outside-right", "fromSide": "left", "toSide": "left" },
+    { "id": "promover-feed", "from": "promover", "to": "feed", "variant": "emphasis", "route": "drop", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "CI da PR", "items": ["Node.js 24 e npm ci", "type-check, lint e test:coverage", "test:release e build", "Também roda em push para main"] },
+    { "dot": "amber", "title": "Preparar release", "items": ["Somente em main; serializado por release-producao", "Planeja ou reutiliza o próximo patch", "Exige CI bem-sucedida do SHA imutável", "Builds nativos e manifesto Ed25519 geram o rascunho"] },
+    { "dot": "rose", "title": "Promover release", "items": ["Smoke test manual antecede a promoção", "Valida assinatura, notas e assets", "Publica a release, assina o feed e implanta no Pages", "Compara todos os arquivos do feed byte a byte por HTTPS"] }
+  ]
+}
