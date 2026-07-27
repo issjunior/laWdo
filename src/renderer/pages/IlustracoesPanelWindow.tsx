@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
