@@ -31,6 +31,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import {
   getSectionsForExame,
@@ -679,6 +688,7 @@ export const REPsPage: React.FC = () => {
 
   // Estados para o Alert Dialog de exclusão
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [repDuplicadaNumero, setRepDuplicadaNumero] = useState<string | null>(null);
 
   // Estados para o Dialog de Linha do Tempo
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -1166,7 +1176,13 @@ export const REPsPage: React.FC = () => {
           toast.success('REP criada com sucesso!');
           setTimeout(() => handleCancelar(), 1200);
         } else {
-          setError(r.error || 'Erro ao criar REP');
+          const erro = r.error || 'Erro ao criar REP';
+          if (/^Já existe outra REP com o número /u.test(erro)) {
+            setError(null);
+            setRepDuplicadaNumero(data.numero.trim());
+          } else {
+            setError(erro);
+          }
         }
       }
     } catch (e: unknown) {
@@ -2163,6 +2179,24 @@ export const REPsPage: React.FC = () => {
         pecasAtuais={pecasB602}
         onAplicar={handleAplicarPecasGdl}
       />
+      <AlertDialog open={repDuplicadaNumero !== null} onOpenChange={(open) => {
+        if (!open) setRepDuplicadaNumero(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Número de REP já cadastrado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Já existe uma REP cadastrada com o número <strong>{repDuplicadaNumero}</strong>.
+              Verifique a lista de REPs ou informe um número diferente antes de continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setRepDuplicadaNumero(null)}>
+              Entendi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </TooltipProvider>
   );
 };

@@ -1,97 +1,21 @@
 # Ciclo de vida atual do laudo
 
-## Criacao
+## Criação
 
-O laudo nasce em `criarLaudoInicial()` com status fixo `Em andamento`.
+`criarLaudoInicial()` impede duplicidade por `rep_id`, busca as seções do template, lê `campos_especificos`, filtra seções ativas, expande repetições e grava o HTML com status `Em andamento`, `tipo_criacao = 'template'`, `versao = 1` e `data_inicio`. Na ausência de conteúdo, usa `<p>Laudo em elaboracao.</p>`.
 
-Fluxo atual:
+## Atualização e reconciliação
 
-1. impede duplicidade por `rep_id`
-2. busca as secoes do template
-3. le `campos_especificos` da REP
-4. filtra secoes ativas
-5. expande secoes repetiveis
-6. monta `conteudo`
-7. grava o laudo com `tipo_criacao = 'template'`, `versao = 1` e `data_inicio`
+`updateConteudo()` substitui o conteúdo e `updated_at`. A evolução estrutural acontece em `sincronizarSecoesCondicionais()`, que recompõe a base do template e a reconcilia com o HTML salvo.
 
-Fallback de conteudo:
+Para seções B-602 derivadas, a reconciliação identifica blocos periciais versionados por `data-arma-chave` e `data-bloco-pericial`. Quando a peça permanece na projeção, o conteúdo atual do wrapper — inclusive `data-cond-suprimido="true"` — prevalece sobre o conteúdo-base. Headings internos legados são descartados durante essa preservação. Blocos de arma removida não são carregados para a nova estrutura.
 
-```html
-<p>Laudo em elaboracao.</p>
-```
+O laudo combina template, dados da REP e intervenções do usuário. Alterações em qualquer uma dessas fontes devem preservar a reconciliação, as seções estruturais e a identidade estável da arma.
 
-## Consultas principais
+## Status e exclusão
 
-`laudo.service.ts` hoje expoe:
+`updateStatus()` aceita `Em andamento`, `Concluido` e `Entregue`, preenche as respectivas datas de conclusão ou entrega e atualiza `updated_at`. A exclusão remove diretório físico, imagens e linha do banco; operações relacionadas não são transacionais.
 
-- `findByRepId(repId)`
-- `findAllByRepId(repId)`
-- `findAllComRep()`
-- `updateConteudo(id, conteudo)`
-- `updateStatus(id, status)`
-- `deletarPorRepId(repId)`
-- `deletar(laudoId)`
-- `gerarLaudoWizard(...)`
-- `salvarProgressoWizard(...)`
-- `getRespostasWizard(laudoId)`
-- `sincronizarSecoesCondicionais(laudoId)`
+## Limitações e verificação
 
-`findAllComRep()` ja retorna contexto de listagem com:
-
-- numero da REP
-- nome do template
-- status da REP
-- tipo de exame
-- data da requisicao
-
-## Status validos
-
-`updateStatus()` aceita apenas:
-
-- `Em andamento`
-- `Concluido`
-- `Entregue`
-
-Comportamento atual:
-
-- ao concluir, preenche `data_conclusao`
-- ao entregar, preenche `data_entrega`
-- sempre atualiza `updated_at`
-
-## Conteudo do laudo
-
-`updateConteudo()` apenas troca `conteudo` e `updated_at`.
-A evolucao estrutural do laudo fica separada em `sincronizarSecoesCondicionais()`, que reconstroi a base a partir do template e reconcilia com o HTML salvo.
-
-## Exclusao
-
-`deletar(laudoId)`:
-
-1. busca o laudo
-2. remove o diretorio fisico do laudo em `userData/laudos/{id}`
-3. remove `imagens_laudo`
-4. remove a linha do banco
-5. retorna `rep_id`
-
-`deletarPorRepId(repId)` repete o processo para todos os laudos da REP antes de apagar as linhas.
-
-## Wizard
-
-O wizard nao cria um laudo paralelo.
-Ele atualiza o laudo existente:
-
-- recalcula pecas por secao
-- injeta blocos com `data-peca-id` e `data-peca-hash`
-- reaplica pecas sem sobrescrever edicoes manuais detectadas por hash
-- persiste `respostas_wizard` no laudo e na tabela dedicada
-
-## Regra pratica
-
-No estado atual, o laudo nao e apenas um texto editavel.
-Ele e o resultado de tres fontes combinadas:
-
-1. template
-2. dados da REP
-3. intervencoes do usuario no editor e no wizard
-
-Toda manutencao que mexa em qualquer um desses tres lados precisa considerar o comportamento de reconciliacao do service.
+Atualização de REP e sincronização do laudo são sequenciais. Falhas na sincronização são registradas, mas não desfazem a REP já persistida. Testes de service cobrem criação, seções repetíveis e preservação de blocos versionados durante a sincronização.

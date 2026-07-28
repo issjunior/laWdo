@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
+import { encontrarAcaoSupressaoBloco, sincronizarAcoesSupressaoBlocos } from '@/lib/blocos-periciais';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
 
@@ -126,6 +127,8 @@ interface TinyMceEditorProps {
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
   condToggles?: Array<{ id: string; label: string; subtitulo?: string; subToggles?: Array<{ id: string; label: string; subtitulo?: string }> }>;
+  /** Solicita supressão confirmada de um bloco pericial versionado. */
+  onSolicitarSupressaoBloco?: (bloco: { tipo: string; armaChave?: string; armaIndice?: number }) => void;
 }
 
 type ToggleCondicionalFlat = { id: string; label: string; subtitulo?: string };
@@ -161,8 +164,8 @@ interface SubstituirImagemPayload {
 }
 
 const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
-  { id: 'b602_arma_N_func_toggle', label: 'Arma (N) - Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
-  { id: 'b602_arma_N_coleta_toggle', label: 'Arma (N) - Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
+  { id: 'b602_arma_N_funcionamento_eficiencia_v2', label: 'Arma (N) - Funcionamento e Eficiência', subtitulo: 'FUNCIONAMENTO E EFICIÊNCIA' },
+  { id: 'b602_arma_N_coleta_padroes_v2', label: 'Arma (N) - Coleta de Padrões Balísticos', subtitulo: 'COLETA DE PADRÕES BALÍSTICOS' },
 ];
 
 const BADGE_BLOCO_CONDICIONAL = 'Bloco condicional';
@@ -173,6 +176,8 @@ const RESUMOS_FIXOS_BLOCO_CONDICIONAL: Record<string, string> = {
   b602_estojos_toggle: 'Mostra quando: houver estojos na REP',
   b602_arma_N_func_toggle: 'Mostra quando: Funcionamento e eficiência da arma atual',
   b602_arma_N_coleta_toggle: 'Mostra quando: Coleta de padrões balísticos da arma atual',
+  b602_arma_N_funcionamento_eficiencia_v2: 'Mostra quando: a peça atual for uma arma',
+  b602_arma_N_coleta_padroes_v2: 'Mostra quando: a peça atual for uma arma',
 };
 
 function getTogglesCondicionaisDisponiveis(condToggles?: TinyMceEditorProps['condToggles']): ToggleCondicionalFlat[] {
@@ -211,16 +216,25 @@ function getTituloBlocoCondicional(toggleId: string, condToggles?: TinyMceEditor
 }
 
 function criarHtmlBlocoCondicional(toggleId: string, condToggles?: TinyMceEditorProps['condToggles']): string {
-  const titulo = getTituloBlocoCondicional(toggleId, condToggles);
   const resumo = getResumoCondicional(toggleId, condToggles);
+
+  const blocoPericial = toggleId.endsWith('_funcionamento_eficiencia_v2')
+    ? 'funcionamento'
+    : toggleId.endsWith('_coleta_padroes_v2')
+      ? 'coleta'
+      : '';
+  const atributosV2 = blocoPericial
+    ? ` data-bloco-pericial="${blocoPericial}" data-cond-versao="2"`
+    : '';
 
   return [
     `<div class="cond-bloco"`,
     ` data-cond-bloco="${toggleId}"`,
+    atributosV2,
     ` data-cond-badge="${BADGE_BLOCO_CONDICIONAL}"`,
     ` data-cond-resumo="${resumo}"`,
     ` title="${resumo}">`,
-    `<h3>${titulo}</h3><p>&nbsp;</p></div>`,
+    blocoPericial ? '<p>&nbsp;</p></div>' : `<h3>${getTituloBlocoCondicional(toggleId, condToggles)}</h3><p>&nbsp;</p></div>`,
   ].join('');
 }
 
@@ -236,6 +250,15 @@ function normalizarBlocosCondicionais(raiz: HTMLElement | null, condToggles?: Ti
 
     const badge = BADGE_BLOCO_CONDICIONAL;
     const resumo = getResumoCondicional(toggleId, condToggles);
+
+    if (bloco.hasAttribute('data-bloco-pericial')) {
+      const titulo = bloco.querySelector(':scope > h3');
+      if (titulo) {
+        titulo.remove();
+        alterados += 1;
+      }
+
+    }
 
     if (bloco.getAttribute('data-cond-badge') !== badge) {
       bloco.setAttribute('data-cond-badge', badge);
@@ -270,10 +293,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   onDummyFigureClick,
   autoConverterReservados = false,
   condToggles,
+  onSolicitarSupressaoBloco,
   ...rest
 }) => {
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
+  const onSolicitarSupressaoBlocoRef = useRef(onSolicitarSupressaoBloco);
   const [ready, setReady] = useState(false);
 
   const [stableInitialValue] = useState(initialValue);
@@ -282,6 +307,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useEffect(() => {
     placeholderChavesRef.current = placeholderChaves;
   }, [placeholderChaves]);
+
+  useEffect(() => {
+    onSolicitarSupressaoBlocoRef.current = onSolicitarSupressaoBloco;
+  }, [onSolicitarSupressaoBloco]);
 
   const imagesUploadHandler: UploadImagemHandler = (blobInfo) =>
     new Promise<string>((resolve) => {
@@ -397,7 +426,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             'charmap | link image table | blockquote hr | ' +
             'alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | ' +
             'searchreplace visualblocks nonbreaking code | fullscreen preview | ' +
-            (condToggles && condToggles.length > 0 ? 'condbloco | ' : '') +
+            (condToggles && condToggles.length > 0 ? 'condbloco suprimirblocopericial | ' : '') +
             'help',
           content_style: `
             body {
@@ -441,6 +470,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               border-bottom: 2px dotted #f59e0b;
               font-weight: 500;
             }
+            .campo-reservado[data-tooltip-xxx="true"] {
+              cursor: help;
+            }
             body.dark-content .campo-reservado {
               background-color: rgba(255,193,7,0.15);
               color: #fbbf24;
@@ -456,9 +488,81 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               padding: 10px 14px 12px;
               margin: 12px 0;
             }
+            .cond-bloco > table {
+              align-self: stretch;
+              width: 100% !important;
+            }
+            .cond-bloco [data-placeholder-preview="true"] {
+              align-self: stretch;
+              width: 100% !important;
+              max-width: 100% !important;
+              min-width: 0;
+              box-sizing: border-box;
+            }
+            .cond-bloco [data-placeholder-preview="true"] > table {
+              width: 100% !important;
+              max-width: 100% !important;
+            }
             body.dark-content .cond-bloco {
               border-left-color: #d97706;
               background-color: rgba(245, 158, 11, 0.12);
+            }
+            .cond-bloco[data-cond-suprimido="true"] {
+              display: block;
+              min-height: 0;
+              border-left-color: #9ca3af;
+              background-color: rgba(107, 114, 128, 0.1);
+              padding: 8px 12px;
+              color: #6b7280;
+              font-style: italic;
+            }
+            .cond-bloco[data-cond-suprimido="true"] > * {
+              display: none;
+            }
+            .cond-bloco[data-cond-suprimido="true"]::before {
+              content: "Bloco pericial suprimido — use Restaurar blocos acima para recuperá-lo";
+              display: block;
+              margin: 0;
+              padding: 0;
+              background: transparent;
+              color: inherit;
+              font-size: 12px;
+              letter-spacing: normal;
+              text-transform: none;
+            }
+            .cond-bloco[data-bloco-pericial] {
+              position: relative;
+              padding-right: 36px;
+            }
+            .cond-bloco .acao-suprimir-bloco {
+              position: absolute;
+              top: 6px;
+              right: 7px;
+              display: inline-flex !important;
+              align-items: center;
+              justify-content: center;
+              width: 22px;
+              height: 22px;
+              padding: 0;
+              border: 0;
+              border-radius: 4px;
+              background: #fff7ed;
+              color: #92400e;
+              cursor: pointer !important;
+              font-family: Arial, sans-serif;
+              font-size: 21px;
+              line-height: 1;
+              visibility: visible !important;
+              opacity: 1 !important;
+              pointer-events: auto !important;
+              z-index: 4;
+            }
+            .cond-bloco .acao-suprimir-bloco:hover {
+              background: rgba(146, 64, 14, 0.12);
+              color: #7c2d12;
+            }
+            .cond-bloco[data-cond-suprimido="true"] .acao-suprimir-bloco {
+              display: none;
             }
             .cond-bloco::before {
               content: "Bloco condicional";
@@ -613,7 +717,36 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             editor.addCommand('insertCondBloco', ((_ui, toggleId) => {
               if (!toggleId || typeof toggleId !== 'string') return;
               editor.insertContent(criarHtmlBlocoCondicional(toggleId, condToggles));
+              if (normalizarBlocosCondicionais(editor.getBody(), condToggles) > 0) {
+                onChange(editor.getContent());
+              }
             }) satisfies ComandoTinyMce<string>);
+
+            const solicitarSupressaoBlocoSelecionado = (elemento?: HTMLElement) => {
+              const inicio = editor.selection.getStart() as HTMLElement | null;
+              const bloco = elemento?.closest<HTMLElement>('[data-bloco-pericial]')
+                || inicio?.closest<HTMLElement>('[data-bloco-pericial]');
+              const tipo = bloco?.getAttribute('data-bloco-pericial');
+              if (!bloco || !tipo) return false;
+              const indiceBruto = bloco.getAttribute('data-arma-indice');
+              const armaIndice = indiceBruto ? Number(indiceBruto) : undefined;
+              onSolicitarSupressaoBlocoRef.current?.({
+                tipo,
+                armaChave: bloco.getAttribute('data-arma-chave') || undefined,
+                armaIndice: Number.isInteger(armaIndice) ? armaIndice : undefined,
+              });
+              return true;
+            };
+
+            editor.addCommand('suprimirBlocoPericial', () => {
+              solicitarSupressaoBlocoSelecionado();
+            });
+
+            editor.ui.registry.addButton('suprimirblocopericial', {
+              text: 'Suprimir bloco',
+              tooltip: 'Suprimir o bloco pericial selecionado',
+              onAction: () => editor.execCommand('suprimirBlocoPericial'),
+            });
 
             // Registrar botão "Bloco Condicional" na toolbar
             if (condToggles && condToggles.length > 0) {
@@ -665,9 +798,27 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               if (!doc) return;
               const body = editor.getBody();
 
+              const sincronizarAcoesSupressao = () => {
+                editor.undoManager.ignore(() => {
+                  sincronizarAcoesSupressaoBlocos(editor.getBody());
+                });
+              };
+              const agendarSincronizacaoAcoesSupressao = () => {
+                const janelaEditor = editor.getDoc()?.defaultView;
+                janelaEditor?.requestAnimationFrame(sincronizarAcoesSupressao);
+              };
+
               if (normalizarBlocosCondicionais(body, condToggles) > 0) {
                 onChange(editor.getContent());
               }
+              sincronizarAcoesSupressao();
+              editor.on('SetContent LoadContent Undo Redo', agendarSincronizacaoAcoesSupressao);
+
+              editor.on('keydown', (evento) => {
+                if ((evento.key === 'Delete' || evento.key === 'Backspace') && solicitarSupressaoBlocoSelecionado()) {
+                  evento.preventDefault();
+                }
+              });
 
               doc.addEventListener('contextmenu', (e: MouseEvent) => {
                 e.preventDefault();
@@ -685,6 +836,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 });
 
                 container.dispatchEvent(newEvent);
+              });
+
+              editor.on('click', (evento: Event) => {
+                const acao = encontrarAcaoSupressaoBloco(evento.target);
+                if (!acao) return;
+                evento.preventDefault();
+                evento.stopImmediatePropagation();
+                solicitarSupressaoBlocoSelecionado(acao);
               });
 
               doc.addEventListener('click', (e: MouseEvent) => {

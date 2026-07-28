@@ -5,6 +5,46 @@ import {
 } from '../../main/services/secao-builder.service';
 
 describe('secao-builder.service', () => {
+  it('mantém os blocos periciais versionados para qualquer arma, independentemente do toggle legado', () => {
+    const resultado = processarBlocosCondicionais(
+      '<div class="cond-bloco" data-cond-bloco="b602_arma_N_funcionamento_eficiencia_v2" data-bloco-pericial="funcionamento"><h3>FUNCIONAMENTO</h3><p>&nbsp;</p></div>',
+      { b602: { pecas: [] } },
+      { indiceArma: 1, arma: { exibeBlocosPericiais: true, func_toggle: 'off' } }
+    );
+
+    expect(resultado).toContain('b602_arma_1_funcionamento_eficiencia_v2');
+    expect(resultado).not.toContain('<h3>FUNCIONAMENTO</h3>');
+  });
+
+  it('remove os blocos periciais versionados quando a peça não é elegível', () => {
+    const resultado = processarBlocosCondicionais(
+      '<div class="cond-bloco" data-cond-bloco="b602_arma_N_coleta_padroes_v2" data-bloco-pericial="coleta"><h3>COLETA</h3><p>&nbsp;</p></div>',
+      { b602: { pecas: [] } },
+      { indiceArma: 1, arma: { exibeBlocosPericiais: false } }
+    );
+
+    expect(resultado).toBe('');
+  });
+
+  it('mantém o marcador legado de coleta para uma arma canônica elegível', () => {
+    const resultado = processarBlocosCondicionais(
+      '<div class="cond-bloco" data-cond-bloco="b602_arma_N_coleta_toggle"><h3>COLETA</h3><p>&nbsp;</p></div>',
+      {
+        b602: {
+          pecas: [{
+            idLocal: 'arma-pressao', origem: 'manual', alteradaLocalmente: false,
+            tipoCodigo: '613', tipoPeca: 'ARMA(S) DE PRESSÃO',
+            comuns: { quantidade: 1, identificacao: '', lacreEntrada: '' },
+            personalizados: {}, extrasGdl: {},
+          }],
+        },
+      },
+      { indiceArma: 1, arma: { exibeBlocosPericiais: true } }
+    );
+
+    expect(resultado).toContain('COLETA');
+  });
+
   it('remove bloco condicional por arma quando o toggle da arma estiver off', () => {
     const html = `
       <div data-cond-bloco="b602_arma_N_func_toggle" class="cond-bloco">
@@ -126,6 +166,8 @@ describe('secao-builder.service', () => {
 
     expect(html).toContain('ARMA {{b602_arma_1_tipo}}');
     expect(html).toContain('ARMA {{b602_arma_2_tipo}}');
+    expect(html).not.toContain('data-titulo-base="ARMA {{b602_arma_2_tipo}}"');
+    expect(html).toContain('data-repeat-item="arma"');
     expect(html).toContain('data-cond-bloco="b602_arma_1_func_toggle"');
     expect(html).not.toContain('data-cond-bloco="b602_arma_2_func_toggle"');
   });

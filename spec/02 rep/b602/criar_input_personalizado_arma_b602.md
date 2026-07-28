@@ -2,27 +2,29 @@
 
 ## Fonte dos dados
 
-O formulário B-602 persiste peças em `campos_especificos.b602.pecas`. O laudo não deve exigir que o formulário recrie `b602.armas`: `projetarB602ParaLaudo()` deriva uma visão compatível para armas, cartuchos, estojos e material encaminhado.
+O formato persistido é `campos_especificos.b602.pecas`. `projetarB602ParaLaudo()` é a adaptação única entre essa coleção canônica e os consumidores legados; ela deriva material encaminhado, cartuchos, estojos e armas, usando arrays legados apenas como fallback de leitura. Builders, exportadores e páginas não devem recriar essa projeção.
 
-A projeção é a única adaptação entre a coleção canônica e os consumidores legados. Ela usa `pecas` quando presente e faz fallback de leitura para os arrays legados, preservando compatibilidade com REPs antigas. Não duplicar essa transformação em builders, exportadores ou páginas.
+Cada arma projetada possui `chaveOrigem`, derivada de `PecaB602.idLocal` ou, para leitura legada, de `legado-{indice}`, e `exibeBlocosPericiais`, calculado pelo catálogo compartilhado quando `familia === 'arma'`. A chave identifica a peça entre reconstruções; não use o índice como identidade persistente.
 
-## Seções, toggles e expansão
+## Repetição e blocos periciais
 
-`secao-builder.service.ts` usa a projeção para decidir se uma seção derivada possui dados, para avaliar toggles de armas e para expandir `repetir_para = 'armas'`.
+`secao-builder.service.ts` expande `repetir_para = 'armas'`, reindexa placeholders e acrescenta `data-arma-chave` e `data-arma-indice` ao heading repetido e aos blocos periciais.
 
-1. Sem armas projetadas, a repetição produz conteúdo vazio.
-2. Com armas, cada item recebe índice estável na renderização e os placeholders indexados são reindexados.
-3. Condições `b602_arma_N_func_toggle` e `b602_arma_N_coleta_toggle` leem a arma projetada no índice correspondente.
-4. Toggles explícitos persistidos continuam tendo precedência quando existem.
+Os marcadores legados `b602_arma_N_func_toggle` e `b602_arma_N_coleta_toggle` continuam dependendo dos toggles projetados. Os marcadores versionados abaixo dependem exclusivamente de `exibeBlocosPericiais` e, portanto, aparecem para qualquer peça elegível como arma:
 
-A projeção classifica peças por família e traduz os campos relevantes para a estrutura usada pelo laudo. Tipos não classificados como arma não devem ativar repetição de armas.
+- `b602_arma_N_funcionamento_eficiencia_v2`, com `data-bloco-pericial="funcionamento"`;
+- `b602_arma_N_coleta_padroes_v2`, com `data-bloco-pericial="coleta"`.
 
-## Sincronização e falhas
+Os blocos versionados não carregam `h3` próprio: o heading estrutural da arma é a fonte do título. Tipos fora da família arma não entram na repetição e não ativam esses blocos.
 
-`laudoService.sincronizarSecoesCondicionais()` continua reconciliando o HTML derivado com o conteúdo salvo para preservar edições manuais fora das áreas estruturais. Criação/atualização da REP e sincronização do laudo não formam uma transação única; falha de sincronização é registrada sem desfazer a REP.
+## Sincronização e migração
 
-A expansão ocorre em memória e cresce com a quantidade de seções e armas. Evitar parse repetido de `campos_especificos` ou consultas por arma dentro dos loops.
+Ao sincronizar seção derivada, `laudoService` indexa blocos periciais por `data-arma-chave:data-bloco-pericial` e reaproveita o HTML atual quando a peça ainda existe. Assim preserva texto editado e a supressão recuperável, sem transferir conteúdo para outra arma.
 
-## Verificação
+A migration v31 atualiza somente a seção `DAS ARMAS` repetível por `armas` do template padrão `Laudo padrão B602` associado ao código `B-602`. Ela verifica a existência de `secoes_template`, altera apenas marcadores reconhecidos e falha a migration se a atualização não puder ser concluída. Templates e laudos fora desse alvo não são migrados automaticamente.
 
-Testes de `secao-builder.service` cobrem projeção de peças para seções, repetição e toggles. Qualquer alteração deve preservar: zero/uma/várias armas, reindexação de placeholders, conteúdo manual do laudo, peças manuais e importadas e fallback de leitura legada.
+## Limites e verificação
+
+Atualização de REP e sincronização de laudo não formam uma transação única; falha na sincronização é registrada sem desfazer a REP. A expansão é em memória e cresce com a quantidade de seções e armas.
+
+Testes de `secao-builder.service`, da projeção B-602 e da migration v31 cobrem elegibilidade, normalização dos marcadores, atributos de identidade, compatibilidade legada e o conteúdo atualizado do template padrão.

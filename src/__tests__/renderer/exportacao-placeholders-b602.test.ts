@@ -90,6 +90,8 @@ describe('placeholders B602 canônicos', () => {
     expect(resultado).toContain('TABELA 5 – ARMAS')
     expect(resultado).toContain('ABC123')
     expect(resultado).not.toContain('{{b602_')
+    const documento = new DOMParser().parseFromString(resultado, 'text/html')
+    expect(documento.querySelector('table')?.getAttribute('width')).toBe('100%')
   })
 
   it('exibe o rótulo da origem do estojo em vez do código GDL', () => {
@@ -113,7 +115,7 @@ describe('placeholders B602 canônicos', () => {
       },
     }
 
-    const resultado = resolverPlaceholdersExportacao('{{b602_tabela_estojos}}', {
+    const resultado = resolverPlaceholdersExportacao('<p><span data-placeholder="{{b602_tabela_estojos}}">{{b602_tabela_estojos}}</span></p>', {
       repData: { campos_especificos: JSON.stringify(camposEspecificos) },
     })
 
@@ -121,6 +123,20 @@ describe('placeholders B602 canônicos', () => {
     expect(resultado).toContain('>04</td>')
     expect(resultado).not.toMatch(/>94</)
     const documento = new DOMParser().parseFromString(resultado, 'text/html')
+    const tabela = documento.querySelector('table')
     expect([...documento.querySelectorAll('td')].every(celula => celula.style.textAlign === 'center')).toBe(true)
+    expect(tabela?.parentElement?.tagName).not.toBe('P')
+    expect(tabela?.getAttribute('width')).toBe('100%')
+    expect(tabela?.style.width).toBe('100%')
+  })
+
+  it('não exporta o botão visual de supressão do bloco pericial', () => {
+    const resultado = resolverPlaceholdersExportacao(
+      '<div data-bloco-pericial="funcionamento"><button data-acao-suprimir-bloco="true">×</button><p>Texto pericial</p></div>',
+      { repData: {} },
+    )
+
+    expect(resultado).not.toContain('data-acao-suprimir-bloco')
+    expect(resultado).toContain('Texto pericial')
   })
 })

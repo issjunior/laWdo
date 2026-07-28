@@ -5,7 +5,14 @@ export interface ProjecaoB602Laudo {
   materialEncaminhado: Record<string, unknown>[]
   cartuchos: Record<string, unknown>[]
   estojos: Record<string, unknown>[]
-  armas: Record<string, unknown>[]
+  armas: ArmaProjetadaB602[]
+}
+
+export interface ArmaProjetadaB602 extends Record<string, unknown> {
+  chaveOrigem: string
+  exibeBlocosPericiais: boolean
+  func_toggle: 'on' | 'off'
+  coleta_toggle: 'on' | 'off'
 }
 
 function ehRegistro(valor: unknown): valor is Record<string, unknown> {
@@ -72,9 +79,11 @@ function projetarEstojo(peca: PecaB602): Record<string, unknown> {
   }
 }
 
-function projetarArma(peca: PecaB602): Record<string, unknown> {
+function projetarArma(peca: PecaB602, indice: number): ArmaProjetadaB602 {
   const funcionamento = obterPersonalizado(peca, ['funcionamento'])
   return {
+    chaveOrigem: peca.idLocal?.trim() || `legado-${indice + 1}`,
+    exibeBlocosPericiais: TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.familia === 'arma',
     tipo: peca.tipoPeca,
     marca: obterPersonalizado(peca, ['marca_arma', 'marca']),
     modelo: obterPersonalizado(peca, ['modelo']),
@@ -105,7 +114,15 @@ export function projetarB602ParaLaudo(b602: unknown): ProjecaoB602Laudo {
       materialEncaminhado: lerColecaoLegada(b602, 'material_enc'),
       cartuchos: lerColecaoLegada(b602, 'cartuchos'),
       estojos: lerColecaoLegada(b602, 'estojos'),
-      armas: lerColecaoLegada(b602, 'armas'),
+      armas: lerColecaoLegada(b602, 'armas').map((arma, indice) => ({
+        ...arma,
+        chaveOrigem: typeof arma.idLocal === 'string' && arma.idLocal.trim()
+          ? arma.idLocal
+          : `legado-${indice + 1}`,
+        exibeBlocosPericiais: false,
+        func_toggle: arma.func_toggle === 'on' ? 'on' : 'off',
+        coleta_toggle: arma.coleta_toggle === 'on' ? 'on' : 'off',
+      })),
     }
   }
 

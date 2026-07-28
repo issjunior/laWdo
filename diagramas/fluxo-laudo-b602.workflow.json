@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Fluxo atual do laudo B-602",
+    "subtitle": "REP manual ou consulta GDL, template, condições por arma, elaboração, revisão e entrega local",
+    "output": "fluxo-laudo-b602.html",
+    "quality_profile": "standard",
+    "views": [
+      {
+        "id": "cadastro-da-rep",
+        "label": "Cadastro da REP",
+        "focus": ["cadastro_manual", "consulta_gdl", "formulario_b602", "salvar_rep"],
+        "note": "Os dois pontos de entrada convergem no mesmo formulário e exigem confirmação humana para persistir a REP."
+      },
+      {
+        "id": "template-e-condicoes",
+        "label": "Template e arma de fogo",
+        "focus": ["salvar_rep", "selecionar_template", "criar_laudo", "avaliar_armas", "expandir_condicoes"],
+        "note": "O laudo nasce do template e da REP; blocos por arma só aparecem quando os dados e toggles correspondentes estão ativos."
+      },
+      {
+        "id": "elaboracao-e-entrega",
+        "label": "Elaboração e entrega",
+        "focus": ["editor_laudo", "ia_apoio", "revisao_humana", "concluido", "entregue_local", "envio_gdl_indisponivel"],
+        "note": "A IA é auxiliar, a revisão permanece humana e a integração GDL atual não envia o laudo."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "perito", "label": "Perito" },
+    { "id": "revisao", "label": "Revisão humana" },
+    { "id": "rep", "label": "REP B-602 local" },
+    { "id": "template", "label": "Template" },
+    { "id": "construcao", "label": "Construção do laudo" },
+    { "id": "ia", "label": "IA (Gemini ou Groq)" },
+    { "id": "status", "label": "Status local do laudo" },
+    { "id": "gdl", "label": "API GDL (somente leitura)" },
+    { "id": "limite", "label": "Limite atual", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "entrada", "label": "1 · Cadastro", "fromCol": 0, "toCol": 1 },
+    { "id": "preparacao", "label": "2 · Template e geração", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "redacao", "label": "3 · Condições, redação e revisão", "fromCol": 4, "toCol": 5, "variant": "security" }
+  ],
+  "groups": [
+    { "id": "opcoes_edicao", "label": "Modo de elaboração", "lane": "perito", "fromCol": 5, "toCol": 5, "variant": "emphasis" },
+    { "id": "condicoes_b602", "label": "Seções condicionais B-602", "lane": "construcao", "fromCol": 4, "toCol": 5, "variant": "security" }
+  ],
+  "mainPath": ["cadastro_manual", "formulario_b602", "salvar_rep", "selecionar_template", "criar_laudo", "avaliar_armas", "expandir_condicoes", "editor_laudo", "revisao_humana", "concluido", "entregue_local"],
+  "nodes": [
+    { "id": "cadastro_manual", "lane": "perito", "col": 0, "width": 82, "type": "frontend", "label": "REP manual", "sublabel": "dados e peças" },
+    { "id": "consulta_gdl", "lane": "gdl", "col": 0, "type": "external", "label": "Consultar REP", "sublabel": "/api/rep/obter" },
+    { "id": "formulario_b602", "lane": "rep", "col": 1, "width": 64, "type": "backend", "label": "B-602", "sublabel": "formulário único" },
+    { "id": "salvar_rep", "lane": "rep", "col": 2, "width": 60, "type": "database", "label": "Salvar", "sublabel": "REP" },
+    { "id": "selecionar_template", "lane": "template", "col": 2, "width": 76, "type": "frontend", "label": "Template", "sublabel": "seções B-602" },
+    { "id": "criar_laudo", "lane": "construcao", "col": 3, "width": 60, "type": "backend", "label": "Gerar", "sublabel": "laudo inicial" },
+    { "id": "avaliar_armas", "lane": "construcao", "col": 4, "width": 52, "type": "security", "label": "Armas?", "sublabel": "projeção" },
+    { "id": "expandir_condicoes", "lane": "construcao", "col": 5, "width": 78, "type": "backend", "label": "Condições", "sublabel": "base ou repetição" },
+    { "id": "editor_laudo", "lane": "perito", "col": 5, "height": 32, "type": "frontend", "label": "Editar", "sublabel": "único ou seções" },
+    { "id": "ia_apoio", "lane": "ia", "col": 5, "type": "cloud", "label": "Auxílio de IA", "sublabel": "objetos, ambientes e ortografia" },
+    { "id": "revisao_humana", "lane": "revisao", "col": 5, "type": "security", "label": "Revisão", "sublabel": "humana" },
+    { "id": "concluido", "lane": "status", "col": 5, "type": "backend", "label": "Concluído", "sublabel": "grava data de conclusão" },
+    { "id": "entregue_local", "lane": "gdl", "col": 5, "type": "database", "label": "Entregue", "sublabel": "status local e data de entrega" },
+    { "id": "envio_gdl_indisponivel", "lane": "limite", "col": 5, "width": 80, "type": "external", "label": "Envio GDL", "sublabel": "indisponível", "tag": "só leitura" }
+  ],
+  "edges": [
+    { "id": "manual-formulario", "from": "cadastro_manual", "to": "formulario_b602", "variant": "emphasis", "route": "drop", "fromSide": "bottom", "toSide": "top" },
+    { "id": "gdl-formulario", "from": "consulta_gdl", "to": "formulario_b602", "label": "revisar e aplicar", "variant": "dashed", "role": "async" },
+    { "id": "formulario-salvar", "from": "formulario_b602", "to": "salvar_rep", "route": "bottom-channel", "fromSide": "bottom", "toSide": "bottom" },
+    { "id": "rep-template", "from": "salvar_rep", "to": "selecionar_template", "variant": "emphasis", "route": "drop", "fromSide": "top", "toSide": "bottom" },
+    { "id": "template-laudo", "from": "selecionar_template", "to": "criar_laudo", "label": "seções ativas", "variant": "emphasis", "route": "drop", "fromSide": "bottom", "toSide": "top" },
+    { "id": "laudo-armas", "from": "criar_laudo", "to": "avaliar_armas", "route": "bottom-channel", "fromSide": "bottom", "toSide": "bottom" },
+    { "id": "armas-secoes", "from": "avaliar_armas", "to": "expandir_condicoes", "label": "sim", "variant": "security" },
+    { "id": "secoes-editor", "from": "expandir_condicoes", "to": "editor_laudo", "variant": "emphasis", "route": "outside-right", "fromSide": "right", "toSide": "right" },
+    { "id": "editor-ia", "from": "editor_laudo", "to": "ia_apoio", "label": "opcional", "variant": "dashed", "role": "async", "route": "outside-right", "fromSide": "right", "toSide": "right" },
+    { "id": "ia-editor", "from": "ia_apoio", "to": "editor_laudo", "label": "sugestão", "variant": "dashed", "role": "return", "route": "return-left", "fromSide": "left", "toSide": "left" },
+    { "id": "editor-revisao", "from": "editor_laudo", "to": "revisao_humana", "variant": "security", "route": "drop", "fromSide": "bottom", "toSide": "top" },
+    { "id": "revisao-conclusao", "from": "revisao_humana", "to": "concluido", "label": "aprovar", "variant": "emphasis", "route": "outside-right", "fromSide": "right", "toSide": "right" },
+    { "id": "conclusao-entrega", "from": "concluido", "to": "entregue_local", "label": "status", "variant": "emphasis", "route": "outside-right", "fromSide": "right", "toSide": "right" },
+    { "id": "entrega-limite-gdl", "from": "entregue_local", "to": "envio_gdl_indisponivel", "label": "não existe", "variant": "security", "role": "error", "route": "outside-right", "fromSide": "right", "toSide": "right" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "REP B-602", "items": ["Manual e GDL convergem no mesmo formulário", "O retorno GDL é revisado antes de salvar", "GDL não recebe escrita do laWdo"] },
+    { "dot": "amber", "title": "Armas e placeholders", "items": ["b602.pecas é a fonte persistida", "A projeção fornece armas ao laudo", "Toggles de eficiência e coleta são avaliados por arma"] },
+    { "dot": "emerald", "title": "Controle de qualidade", "items": ["IA sugere; o perito decide", "Sincronização preserva edições manuais", "Concluído e Entregue são status locais válidos"] }
+  ]
+}

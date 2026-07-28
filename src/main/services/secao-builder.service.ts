@@ -79,6 +79,7 @@ function criarHeading(params: {
   nivel?: 2 | 3;
   tituloBase: string;
   tituloVisivel: string;
+  incluirTituloBase?: boolean;
   derivadaRep?: boolean;
   atributosExtras?: Array<[string, string]>;
 }): string {
@@ -87,7 +88,9 @@ function criarHeading(params: {
   if (params.secaoId) atributos.push(`data-secao-id="${escaparHtml(params.secaoId)}"`);
   if (params.parentId) atributos.push(`data-parent-id="${escaparHtml(params.parentId)}"`);
   if (params.nivel) atributos.push(`data-estrutura-nivel="${params.nivel}"`);
-  atributos.push(`data-titulo-base="${escaparHtml(params.tituloBase)}"`);
+  if (params.incluirTituloBase !== false) {
+    atributos.push(`data-titulo-base="${escaparHtml(params.tituloBase)}"`);
+  }
   if (params.derivadaRep) atributos.push('data-derivada-rep="true"');
   for (const [chave, valor] of params.atributosExtras || []) {
     atributos.push(`${chave}="${escaparHtml(valor)}"`);
@@ -104,6 +107,7 @@ function avaliarToggleSecao(toggleId: string, camposEspecificos: Record<string, 
   if (armaMatch) {
     const idx = Number(armaMatch[1]) - 1;
     const arma = projetarB602ParaLaudo(b602).armas[idx];
+    if (arma?.exibeBlocosPericiais === true) return true;
     return arma?.[`${armaMatch[2]}_toggle`] === 'on';
   }
 
@@ -128,7 +132,9 @@ function substituirIndicePlaceholders(html: string, idx: number): string {
 function normalizarCondicaoPorArma(toggleId: string, idx: number): string {
   return toggleId
     .replace(/b602_arma_N_func_toggle/g, `b602_arma_${idx}_func_toggle`)
-    .replace(/b602_arma_N_coleta_toggle/g, `b602_arma_${idx}_coleta_toggle`);
+    .replace(/b602_arma_N_coleta_toggle/g, `b602_arma_${idx}_coleta_toggle`)
+    .replace(/b602_arma_N_funcionamento_eficiencia_v2/g, `b602_arma_${idx}_funcionamento_eficiencia_v2`)
+    .replace(/b602_arma_N_coleta_padroes_v2/g, `b602_arma_${idx}_coleta_padroes_v2`);
 }
 
 function avaliarCondicaoBloco(
@@ -139,6 +145,15 @@ function avaliarCondicaoBloco(
   const b602 = camposEspecificos?.b602 as Record<string, unknown> | undefined;
   if (!b602) return false;
 
+  const marcadorV2 = toggleId.match(/^b602_arma_(\d+)_(funcionamento_eficiencia|coleta_padroes)_v2$/);
+  if (marcadorV2) {
+    const idx = Number(marcadorV2[1]) - 1;
+    const armaAtual = contexto.arma && contexto.indiceArma === idx + 1
+      ? contexto.arma
+      : projetarB602ParaLaudo(b602).armas[idx];
+    return armaAtual?.exibeBlocosPericiais === true;
+  }
+
   const armaMatch = toggleId.match(/^b602_arma_(\d+)_(func|coleta)_toggle$/);
   if (armaMatch) {
     const idx = Number(armaMatch[1]) - 1;
@@ -148,6 +163,10 @@ function avaliarCondicaoBloco(
         ? contexto.arma
         : projetarB602ParaLaudo(b602).armas[idx];
 
+    if (contexto.arma && contexto.indiceArma === idx + 1) {
+      return contexto.arma.exibeBlocosPericiais === true || armaAtual?.[chaveArma] === 'on';
+    }
+    if (armaAtual?.exibeBlocosPericiais === true) return true;
     return armaAtual?.[chaveArma] === 'on';
   }
 
@@ -162,7 +181,10 @@ export function processarBlocosCondicionais(
   const BLOCK_REGEX_INNERMOST = /<div\b([^>]*)\bdata-cond-bloco="([^"]*)"([^>]*)>((?:(?!<div\b[^>]*\bdata-cond-bloco=)[\s\S])*?)<\/div>/gi;
   const MAX_PASSES = 50;
 
-  let resultado = html;
+  let resultado = html.replace(
+    /(<div\b[^>]*\bdata-bloco-pericial="[^"]+"[^>]*>)\s*<h3[^>]*>[\s\S]*?<\/h3>/gi,
+    '$1',
+  );
   for (let passagem = 0; passagem < MAX_PASSES; passagem += 1) {
     const proximoResultado = resultado.replace(BLOCK_REGEX_INNERMOST, (match, _attrsAntes, toggleId, _attrsDepois) => {
       const toggleNormalizado = contexto.indiceArma
@@ -288,15 +310,28 @@ export function expandirSecoesRepetiveis(
           tag: 'h4',
           tituloBase,
           tituloVisivel: removerPrefixoNumerico(tituloBase),
+          incluirTituloBase: false,
           atributosExtras: [
             ['data-repeat-item', 'arma'],
             ['data-arma-indice', String(idx)],
+            ['data-arma-chave', String(armaAtual.chaveOrigem || `legado-${idx}`)],
           ],
         })
       );
 
       if (temConteudoUtil(conteudo)) {
-        partes.push(conteudo);
+        const conteudoComChave = conteudo.replace(
+          /(<div\b[^>]*\bdata-bloco-pericial="[^"]+"[^>]*)>/gi,
+          (_match, atributos: string) => {
+            const comChave = /\bdata-arma-chave=/i.test(atributos)
+              ? atributos
+              : `${atributos} data-arma-chave="${escaparHtml(String(armaAtual.chaveOrigem || `legado-${idx}`))}"`;
+            return /\bdata-arma-indice=/i.test(comChave)
+              ? `${comChave}>`
+              : `${comChave} data-arma-indice="${idx}">`;
+          }
+        );
+        partes.push(conteudoComChave);
       }
     }
 

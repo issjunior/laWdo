@@ -95,7 +95,22 @@ export interface ExportacaoContext {
   tipoExameCodigo?: string;
 }
 
-function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string> {
+export type FormatoValorPlaceholder = 'texto' | 'html';
+
+export interface ValorPlaceholderResolvido {
+  chave: string;
+  valor: string;
+  preenchido: boolean;
+  formato: FormatoValorPlaceholder;
+}
+
+export type MapaPlaceholdersResolvidos = Record<string, ValorPlaceholderResolvido>;
+
+function ehHtmlEstrutural(valor: string): boolean {
+  return /<(table|div|figure)\b/i.test(valor);
+}
+
+export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string> {
   const repData = ctx.repData;
   const perito = lerPeritoSessao();
 
@@ -329,8 +344,55 @@ function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string>
   return mapping;
 }
 
+export function construirMapaPlaceholdersResolvidos(ctx: ExportacaoContext): MapaPlaceholdersResolvidos {
+  const mapping = buildPlaceholderMapping(ctx);
+  return Object.fromEntries(Object.entries(mapping).map(([chave, valor]) => {
+    const valorNormalizado = valor.trim();
+    return [chave, {
+      chave,
+      valor,
+      preenchido: Boolean(valorNormalizado) && valorNormalizado !== '-',
+      formato: ehHtmlEstrutural(valor) ? 'html' : 'texto',
+    }];
+  }));
+}
+
+function criarCampoReservado(): string {
+  return '<span class="campo-reservado" data-reservado="true">XXX</span>';
+}
+
+function normalizarLarguraTabela(tabela: HTMLTableElement): void {
+  tabela.setAttribute('width', '100%');
+  tabela.style.setProperty('width', '100%', 'important');
+  tabela.style.setProperty('max-width', '100%', 'important');
+}
+
+function criarFragmentoResolvido(doc: Document, valor: string): DocumentFragment {
+  const fragmento = doc.createRange().createContextualFragment(valor);
+  fragmento.querySelectorAll('table').forEach(normalizarLarguraTabela);
+  return fragmento;
+}
+
+function normalizarValorEstrutural(doc: Document, valor: string): string {
+  if (!ehHtmlEstrutural(valor)) return valor;
+
+  const contenedor = doc.createElement('div');
+  contenedor.innerHTML = valor;
+  contenedor.querySelectorAll('table').forEach(normalizarLarguraTabela);
+  return contenedor.innerHTML;
+}
+
+function paragrafoContemSomentePlaceholder(paragrafo: HTMLParagraphElement, placeholder: Element): boolean {
+  return Array.from(paragrafo.childNodes).every(no => (
+    no === placeholder || (no.nodeType === 3 && !no.textContent?.trim())
+  ));
+}
+
 export function limparIndicadoresCondicionais(html: string): string {
   let result = html.replace(
+    /<[^>]+\bdata-acao-suprimir-bloco="true"[^>]*>[\s\S]*?<\/[^>]+>/gi,
+    '',
+  ).replace(
     /<p[^>]*data-cond-label="true"[^>]*>\[Condicional:\s*([^\]]+)\]<\/p>/gi,
     '<h3>$1</h3>'
   );
@@ -348,6 +410,7 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
+    doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
     const placeholderSpans = doc.querySelectorAll('span[data-placeholder]');
     placeholderSpans.forEach(span => {
       const rawPlaceholder = span.getAttribute('data-placeholder') || '';
@@ -355,8 +418,21 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
       if (chaveMatch) {
         const chave = chaveMatch[1];
         const valor = mapping[chave];
-        if (valor !== undefined) {
-          span.replaceWith(doc.createRange().createContextualFragment(valor));
+        const resolvido = valor?.trim() ? valor : criarCampoReservado();
+        const fragmento = criarFragmentoResolvido(doc, resolvido);
+        const pai = span.parentElement;
+        const paragrafo = pai instanceof HTMLParagraphElement ? pai : null;
+        const possuiTabela = fragmento.querySelector('table') !== null;
+
+        if (possuiTabela && paragrafo) {
+          if (paragrafoContemSomentePlaceholder(paragrafo, span)) {
+            paragrafo.replaceWith(fragmento);
+          } else {
+            paragrafo.after(fragmento);
+            span.remove();
+          }
+        } else {
+          span.replaceWith(fragmento);
         }
       }
     });
@@ -364,21 +440,30 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     let resultado = doc.body.innerHTML;
 
     Object.entries(mapping).forEach(([chave, valor]) => {
-      const displayValue = valor || '';
+      const displayValue = valor
+        ? normalizarValorEstrutural(doc, valor)
+        : criarCampoReservado();
       const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
       resultado = resultado.replace(tagRegex, displayValue);
     });
 
-    return limparIndicadoresCondicionais(resultado);
+    return limparIndicadoresCondicionais(preencherBlocosPericiaisVazios(resultado));
   } catch {
     let resultado = html;
     Object.entries(mapping).forEach(([chave, valor]) => {
-      const displayValue = valor || '';
+      const displayValue = valor || criarCampoReservado();
       const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
       resultado = resultado.replace(tagRegex, displayValue);
     });
-    return limparIndicadoresCondicionais(resultado);
+    return limparIndicadoresCondicionais(preencherBlocosPericiaisVazios(resultado));
   }
+}
+
+function preencherBlocosPericiaisVazios(html: string): string {
+  return html.replace(
+    /(<div\b[^>]*\bdata-bloco-pericial="[^"]+"[^>]*>)\s*(?:<p>(?:&nbsp;|\s)*<\/p>)?\s*(<\/div>)/gi,
+    `$1<p>${criarCampoReservado()}</p>$2`,
+  );
 }
