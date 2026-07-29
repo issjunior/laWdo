@@ -16,6 +16,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  aplicacao?: 'inserir' | 'substituir';
 }
 
 interface AISheetProps {
@@ -25,7 +26,8 @@ interface AISheetProps {
   editorId: string;
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
-  onApplyResponse: (texto: string) => void;
+  onApplyResponse: (texto: string, modo: 'inserir' | 'substituir') => void;
+  modoAplicacao?: 'inserir' | 'substituir';
   loading?: boolean;
   error?: string | null;
 }
@@ -42,6 +44,7 @@ export const AISheet: React.FC<AISheetProps> = ({
   messages,
   onSendMessage,
   onApplyResponse,
+  modoAplicacao = 'inserir',
   loading = false,
   error = null,
 }) => {
@@ -103,6 +106,8 @@ export const AISheet: React.FC<AISheetProps> = ({
   const formatTime = (ts: number) => {
     return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
+
+  const obterModoAplicacao = (mensagem: ChatMessage) => mensagem.aplicacao || modoAplicacao;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -176,11 +181,15 @@ export const AISheet: React.FC<AISheetProps> = ({
                         variant="ghost"
                         size="sm"
                         className="h-5 px-1.5 text-[10px]"
-                        onClick={() => onApplyResponse(msg.content)}
-                        title="Aplicar ao editor"
+                        onClick={() => onApplyResponse(msg.content, obterModoAplicacao(msg))}
+                        title={obterModoAplicacao(msg) === 'substituir'
+                          ? 'Revisar antes de substituir a seção'
+                          : 'Inserir resposta na posição atual do cursor'}
                       >
                         <Check size={10} className="mr-0.5" />
-                        Aplicar
+                        {obterModoAplicacao(msg) === 'substituir'
+                          ? 'Revisar substituição'
+                          : 'Inserir no cursor'}
                       </Button>
                     </>
                   )}

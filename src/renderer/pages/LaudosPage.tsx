@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
+import { useAtalhoSalvarLaudo } from '@/hooks/useAtalhoSalvarLaudo';
+import {
+  useGerenciadorAlteracoesLaudo,
+  type OrigemAlteracaoLaudo,
+} from '@/hooks/useGerenciadorAlteracoesLaudo';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,15 +14,22 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, ExternalLink, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
+import { Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
-import { AISectionToolbar } from '@/components/ai/AISectionToolbar';
+import { AssistenteIaCard } from '@/components/ai/AssistenteIaCard';
+import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
+import {
+  BarraEditorLaudo,
+  CabecalhoEditorLaudo,
+  obterClasseBadgeStatusLaudo,
+  RodapeEditorLaudo,
+} from '@/components/laudo/editor/ControlesEditorLaudo';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import {
   Dialog,
@@ -42,13 +54,6 @@ import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/pl
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/index';
 import type { ExamToggle } from '@/components/rep/exam-fields/index';
 import type { MenuSection } from '@/components/rep/exam-fields/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { reindexarFiguras } from '@/lib/figuras';
 import {
   getClasseSecaoEstrutural,
@@ -264,6 +269,14 @@ const aplicarPlaceholders = (
   tipoExameCodigo: extraContext?.tipoExameCodigo,
 });
 
+const converterHtmlEmTexto = (html: string): string => {
+  try {
+    return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() || '';
+  } catch {
+    return html;
+  }
+};
+
 interface LaudoItem {
   id: string;
   rep_id: string;
@@ -289,6 +302,12 @@ interface LaudoItem {
 
 type SecaoEditor = SecaoEstruturalLaudo;
 
+interface RespostaIaPendente {
+  texto: string;
+  conteudoAtual: string;
+  conteudoProposto: string;
+}
+
 export const LaudosPage: React.FC = () => {
   const navigate = useNavigate();
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
@@ -298,23 +317,21 @@ export const LaudosPage: React.FC = () => {
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
-  const [alteracoesPendentes, setAlteracoesPendentes] = useState(false);
+  const {
+    estadoSalvamento,
+    alteracoesPendentes,
+    salvando,
+    iniciarSessao,
+    encerrarSessao,
+    registrarAlteracao,
+    iniciarSalvamento,
+    concluirSalvamento,
+    falharSalvamento,
+    executarSemRegistrar,
+  } = useGerenciadorAlteracoesLaudo();
   const [dialogoSaidaAberto, setDialogoSaidaAberto] = useState(false);
   const salvarAntesDeVoltarRef = useRef<HTMLButtonElement>(null);
   useRegistrarAlteracoesPendentes('editor-laudo', Boolean(editando) && alteracoesPendentes);
-  const singleTemImagens = useMemo(() => {
-    if (!singleEditorHtml) return false;
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(singleEditorHtml, 'text/html');
-      return Array.from(doc.querySelectorAll('img')).some(
-        (img) => img.src.startsWith('data:') || img.src.startsWith('http') || img.src.startsWith('blob:')
-      );
-    } catch {
-      return false;
-    }
-  }, [singleEditorHtml]);
-  const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -336,7 +353,7 @@ export const LaudosPage: React.FC = () => {
   const [iaLoading, setIaLoading] = useState(false);
   const [iaError, setIaError] = useState<string | null>(null);
   const [iaSheetMode, setIaSheetMode] = useState<'ortografia' | 'adequar' | 'imagem' | 'perguntar' | null>(null);
-  const [singlePergunta, setSinglePergunta] = useState('');
+  const [respostaIaPendente, setRespostaIaPendente] = useState<RespostaIaPendente | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
@@ -567,14 +584,18 @@ export const LaudosPage: React.FC = () => {
     }))
   ), []);
 
-  const atualizarConteudoSecao = useCallback((idx: number, novoConteudo: string) => {
-    setAlteracoesPendentes(true);
+  const atualizarConteudoSecao = useCallback((
+    idx: number,
+    novoConteudo: string,
+    origem: OrigemAlteracaoLaudo = 'usuario',
+  ) => {
+    registrarAlteracao(origem);
     setSecoes(prev => {
       const novas = [...prev];
       novas[idx] = { ...novas[idx], conteudo: novoConteudo };
       return novas;
     });
-  }, []);
+  }, [registrarAlteracao]);
 
   const obterSecoesAtuaisDoEditor = useCallback((): SecaoEditor[] => {
     if (editorMode === 'single') {
@@ -587,10 +608,9 @@ export const LaudosPage: React.FC = () => {
     return secoes.map((secao, idx) => {
       const editor = obterEditorTinyMce(`secao-${idx}`);
       const conteudo = editor ? editor.getContent() : secao.conteudo;
-      if (editor) atualizarConteudoSecao(idx, conteudo);
       return { ...secao, conteudo };
     });
-  }, [atualizarConteudoSecao, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+  }, [editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
   const montarHtmlEstruturalAtual = useCallback((secoesFonte: SecaoEditor[]) => {
     const htmlEstrutural = reconstruirHtmlEstrutural(reindexarSecoesEditadas(secoesFonte));
@@ -1263,6 +1283,7 @@ export const LaudosPage: React.FC = () => {
 
   const handlePopOut = () => {
     if (!editando?.id) return;
+    setIaSheetOpen(false);
     setIlustracoesPanelOpen(false);
     setPanelPoppedOut(true);
     window.ipcAPI.ilustracoes.openPanel(editando.id, editando.rep_numero);
@@ -1275,6 +1296,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleToggleIlustracoes = () => {
+    setIaSheetOpen(false);
     if (panelPoppedOut) {
       window.ipcAPI.ilustracoes.closePanel();
       setPanelPoppedOut(false);
@@ -1612,7 +1634,7 @@ export const LaudosPage: React.FC = () => {
 
     setModoVisualizacaoPlaceholders('dados');
     setQuantidadeBlocosSuprimidos((laudo.conteudo.match(/data-cond-suprimido="true"/g) || []).length);
-    setAlteracoesPendentes(false);
+    iniciarSessao();
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
     setEditorMode('single');
@@ -1620,7 +1642,7 @@ export const LaudosPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setEditando(laudo);
-  }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes]);
+  }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao]);
 
   const aplicarModoNoEditor = useCallback((editor: TinyMceEditorInstance) => {
     aplicarModoVisualizacaoPlaceholders(editor, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders);
@@ -1649,7 +1671,7 @@ export const LaudosPage: React.FC = () => {
       bloco?.setAttribute('data-cond-suprimido', 'true');
     });
     const conteudo = editor.getContent();
-    setAlteracoesPendentes(true);
+    registrarAlteracao();
     if (editorMode === 'single') setSingleEditorHtml(conteudo);
     else {
       const indice = editores.indexOf(editor);
@@ -1657,7 +1679,7 @@ export const LaudosPage: React.FC = () => {
     }
     setQuantidadeBlocosSuprimidos(quantidade => quantidade + 1);
     setBlocoParaSuprimir(null);
-  }, [atualizarConteudoSecao, blocoParaSuprimir, editorMode, secoes]);
+  }, [atualizarConteudoSecao, blocoParaSuprimir, editorMode, registrarAlteracao, secoes]);
 
   const restaurarBlocosSuprimidos = useCallback(() => {
     const editores = editorMode === 'single'
@@ -1670,9 +1692,9 @@ export const LaudosPage: React.FC = () => {
       if (editorMode === 'single') setSingleEditorHtml(conteudo);
       else atualizarConteudoSecao(indice, conteudo);
     });
-    setAlteracoesPendentes(true);
+    registrarAlteracao();
     setQuantidadeBlocosSuprimidos(0);
-  }, [atualizarConteudoSecao, editorMode, secoes]);
+  }, [atualizarConteudoSecao, editorMode, registrarAlteracao, secoes]);
 
   useEffect(() => {
     if (!editando) return;
@@ -1693,7 +1715,7 @@ export const LaudosPage: React.FC = () => {
     setEditando(null);
     setSecoes([]);
     setSingleEditorHtml('');
-    setAlteracoesPendentes(false);
+    encerrarSessao();
     setEditorMode('single');
     setSecoesColapsadas({});
     setError(null);
@@ -1717,10 +1739,23 @@ export const LaudosPage: React.FC = () => {
     finalizarVolta();
   };
 
+  const handleVoltarAoTopo = useCallback(() => {
+    document.getElementById('conteudo-principal')?.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const handleIrAoFinal = useCallback(() => {
+    document.getElementById('rodape-editor-laudo')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end',
+    });
+  }, []);
+
   const handleSalvar = async (): Promise<boolean> => {
-    if (!editando) return false;
+    if (!editando || !iniciarSalvamento()) return false;
     try {
-      setSalvando(true);
       setError(null);
       setSuccess(null);
       const secoesAtuais = reindexarSecoesEditadas(obterSecoesAtuaisDoEditor());
@@ -1733,7 +1768,6 @@ export const LaudosPage: React.FC = () => {
 
       const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudoFinal);
       if (r.success) {
-        setAlteracoesPendentes(false);
         const secoesNormalizadas = parsearSecoesEstruturais(conteudoFinal).map(secao => ({
           ...secao,
           titulo: normalizarTituloSecao(secao.titulo),
@@ -1751,35 +1785,42 @@ export const LaudosPage: React.FC = () => {
           setSingleEditorHtml(htmlEditorUnico);
           const editor = obterEditorTinyMce('laudo-single-editor');
           if (editor) {
-            editor.setContent(htmlEditorUnico);
+            executarSemRegistrar(() => editor.setContent(htmlEditorUnico));
           }
         } else {
           setSecoes(secoesNormalizadas);
           secoesNormalizadas.forEach((sec, idx) => {
             const editor = obterEditorTinyMce(`secao-${idx}`);
             if (editor) {
-              editor.setContent(sec.conteudo);
+              executarSemRegistrar(() => editor.setContent(sec.conteudo));
             }
           });
         }
 
+        concluirSalvamento();
         setTimeout(() => setSuccess(null), 3000);
         return true;
       } else {
+        falharSalvamento();
         setError(r.error || 'Erro ao salvar laudo');
         return false;
       }
     } catch (e: unknown) {
+      falharSalvamento();
       setError(obterMensagemErro(e, 'Erro ao salvar laudo'));
       return false;
-    } finally {
-      setSalvando(false);
     }
   };
 
+  useAtalhoSalvarLaudo({
+    ativo: Boolean(editando),
+    bloqueado: salvando || carregandoPreview || exportando,
+    onSalvar: () => void handleSalvar(),
+  });
+
   const handleReindexarSecoes = useCallback(() => {
     try {
-      setAlteracoesPendentes(true);
+      registrarAlteracao();
       const secoesAtuais = reindexarSecoesEditadas(obterSecoesAtuaisDoEditor());
       setSecoes(secoesAtuais);
 
@@ -1794,9 +1835,18 @@ export const LaudosPage: React.FC = () => {
     } catch (e: unknown) {
       setError(obterMensagemErro(e, 'Erro ao reindexar seções'));
     }
-  }, [buildSingleHtmlFromSecoes, editorMode, obterSecoesAtuaisDoEditor, reindexarSecoesEditadas]);
+  }, [
+    buildSingleHtmlFromSecoes,
+    editorMode,
+    obterSecoesAtuaisDoEditor,
+    registrarAlteracao,
+    reindexarSecoesEditadas,
+  ]);
 
   const handleOpenSheet = (idx: number, titulo: string) => {
+    if (!panelPoppedOut) {
+      setIlustracoesPanelOpen(false);
+    }
     setIaSheetSecaoIdx(idx);
     setIaSheetSecaoTitulo(titulo);
     setIaSheetOpen(true);
@@ -1856,7 +1906,7 @@ export const LaudosPage: React.FC = () => {
       setIaLoading(true);
       setIaError(null);
       // Abre o sheet para o usuário ver a sugestão
-      handleOpenSheet(idx, secoes[idx]?.titulo || '');
+      handleOpenSheet(idx, idx === -1 ? 'Documento completo' : secoes[idx]?.titulo || '');
       const htmlResolvido = await resolverPlaceholdersNoHtml(html);
       const r = await window.ipcAPI.ia.revisarOrtografia(htmlResolvido);
       if (r.success && r.data) {
@@ -1865,6 +1915,7 @@ export const LaudosPage: React.FC = () => {
           role: 'assistant',
           content: String(r.data),
           timestamp: Date.now(),
+          aplicacao: 'substituir',
         };
         setChatMessages(prev => ({
           ...prev,
@@ -1893,6 +1944,7 @@ export const LaudosPage: React.FC = () => {
           role: 'assistant',
           content: String(r.data),
           timestamp: Date.now(),
+          aplicacao: 'substituir',
         };
         setChatMessages(prev => ({
           ...prev,
@@ -1920,6 +1972,7 @@ export const LaudosPage: React.FC = () => {
           role: 'assistant',
           content: String(r.data),
           timestamp: Date.now(),
+          aplicacao: 'inserir',
         };
         setChatMessages(prev => ({
           ...prev,
@@ -1959,6 +2012,7 @@ export const LaudosPage: React.FC = () => {
           role: 'assistant',
           content: String(r.data),
           timestamp: Date.now(),
+          aplicacao: 'inserir',
         };
         setChatMessages(prev => ({
           ...prev,
@@ -1974,53 +2028,72 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleApplyResponse = (texto: string) => {
-    if (iaSheetSecaoIdx !== null) {
-      if (iaSheetSecaoIdx === -1) {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        if (!editor) return;
-        if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
-          const descHtml = texto
-            .split('\n')
-            .map((line) => (line.trim() ? `<p>${line}</p>` : ''))
-            .join('');
-          editor.insertContent(descHtml);
-        } else {
-          editor.setContent(texto);
-        }
-        setSingleEditorHtml(editor.getContent());
-        setIaSheetOpen(false);
-        return;
-      }
+  const inserirRespostaIa = (texto: string) => {
+    if (iaSheetSecaoIdx === null) return;
+    const htmlInsercao = texto
+      .split('\n')
+      .map(linha => (linha.trim() ? `<p>${linha}</p>` : ''))
+      .join('');
 
-      const editorId = `secao-${iaSheetSecaoIdx}`;
-
-      if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
-        // Converter quebras de linha em parágrafos de HTML
-        const descHtml = texto
-          .split('\n')
-          .map((line) => (line.trim() ? `<p>${line}</p>` : ''))
-          .join('');
-
-        const editor = obterEditorTinyMce(editorId);
-        if (editor) {
-          // Insere na posição atual do cursor no editor correspondente
-          editor.insertContent(descHtml);
-        } else {
-          // Fallback caso o editor não seja encontrado: anexa ao final
-          const atual = secoes[iaSheetSecaoIdx]?.conteudo || '';
-          const divisor = atual.trim() ? '<p>&nbsp;</p>' : '';
-          atualizarConteudoSecao(iaSheetSecaoIdx, atual + divisor + descHtml);
-        }
+    if (iaSheetSecaoIdx === -1) {
+      const editor = obterEditorTinyMce('laudo-single-editor');
+      if (!editor) return;
+      editor.insertContent(htmlInsercao);
+      setSingleEditorHtml(editor.getContent());
+    } else {
+      const editor = obterEditorTinyMce(`secao-${iaSheetSecaoIdx}`);
+      if (editor) {
+        editor.insertContent(htmlInsercao);
+        atualizarConteudoSecao(iaSheetSecaoIdx, editor.getContent());
       } else {
-        const editor = obterEditorTinyMce(editorId);
-        if (editor) {
-          editor.setContent(texto);
-        }
-        atualizarConteudoSecao(iaSheetSecaoIdx, texto);
+        const atual = secoes[iaSheetSecaoIdx]?.conteudo || '';
+        const divisor = atual.trim() ? '<p>&nbsp;</p>' : '';
+        atualizarConteudoSecao(iaSheetSecaoIdx, atual + divisor + htmlInsercao);
       }
-      setIaSheetOpen(false);
     }
+
+    registrarAlteracao();
+    setIaSheetOpen(false);
+  };
+
+  const substituirConteudoComRespostaIa = (texto: string) => {
+    if (iaSheetSecaoIdx === null) return;
+    if (iaSheetSecaoIdx === -1) {
+      const editor = obterEditorTinyMce('laudo-single-editor');
+      if (!editor) return;
+      editor.setContent(texto);
+      setSingleEditorHtml(editor.getContent());
+    } else {
+      const editor = obterEditorTinyMce(`secao-${iaSheetSecaoIdx}`);
+      if (editor) editor.setContent(texto);
+      atualizarConteudoSecao(iaSheetSecaoIdx, texto);
+    }
+
+    registrarAlteracao();
+    setRespostaIaPendente(null);
+    setIaSheetOpen(false);
+  };
+
+  const handleApplyResponse = (texto: string, modoAplicacao: 'inserir' | 'substituir') => {
+    if (iaSheetSecaoIdx === null) return;
+    if (modoAplicacao === 'inserir') {
+      inserirRespostaIa(texto);
+      return;
+    }
+
+    const editorId = iaSheetSecaoIdx === -1
+      ? 'laudo-single-editor'
+      : `secao-${iaSheetSecaoIdx}`;
+    const editor = obterEditorTinyMce(editorId);
+    const htmlAtual = editor?.getContent()
+      || (iaSheetSecaoIdx === -1
+        ? singleEditorHtml
+        : secoes[iaSheetSecaoIdx]?.conteudo || '');
+    setRespostaIaPendente({
+      texto,
+      conteudoAtual: converterHtmlEmTexto(htmlAtual),
+      conteudoProposto: converterHtmlEmTexto(texto),
+    });
   };
 
   const handleSendChatMessage = (message: string) => {
@@ -2182,12 +2255,11 @@ export const LaudosPage: React.FC = () => {
       ),
       cell: ({ row }) => {
         const status = row.getValue('status') as string;
-        const statusStyles: Record<string, string> = {
-          'Em andamento': 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700',
-          'Concluído': 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700',
-          'Entregue': 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700',
-        };
-        return <Badge className={statusStyles[status] || ''}>{status}</Badge>;
+        return (
+          <Badge variant="outline" className={obterClasseBadgeStatusLaudo(status)}>
+            {status}
+          </Badge>
+        );
       },
     },
     {
@@ -2304,235 +2376,52 @@ export const LaudosPage: React.FC = () => {
 
   // Modo editor com múltiplas seções
   if (editando) {
+    const operacaoEmAndamento = salvando || carregandoPreview || exportando;
+
     return (
       <TooltipProvider>
-        <div className="w-full px-4 md:px-8 py-4 md:py-6 space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Editor de Laudo</h1>
-            <p className="text-muted-foreground mt-1">
-              REP: {editando.rep_numero}
-              {editando.tipo_exame_nome && ` — ${editando.tipo_exame_nome}`}
-              {editando.nome_envolvido && ` — ${editando.nome_envolvido}`}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center">
-                  <Button
-                    variant="outline"
-                    onClick={handleToggleIlustracoes}
-                    className={`flex items-center gap-2 rounded-r-none border-r-0 ${iluminacoesPanelOpen || panelPoppedOut ? (panelPoppedOut ? 'bg-primary/20 border-primary/40' : 'bg-muted') : ''}`}
-                  >
-                    <ImageIcon size={16} /> Ilustrações
-                    {panelPoppedOut && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className={`rounded-l-none h-9 w-7 ${iluminacoesPanelOpen || panelPoppedOut ? (panelPoppedOut ? 'bg-primary/20 border-primary/40' : 'bg-muted') : ''}`}
-                      >
-                        <ChevronDown size={14} />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={handlePopOut} disabled={panelPoppedOut}>
-                        <ExternalLink size={14} className="mr-2" />
-                        Abrir em janela separada
-                      </DropdownMenuItem>
-                      {panelPoppedOut && (
-                        <DropdownMenuItem onClick={handleToggleIlustracoes}>
-                          <ImageIcon size={14} className="mr-2" />
-                          Retornar ao editor
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {panelPoppedOut ? 'Painel em janela separada (clique para retornar)' : 'Abrir painel de ilustrações'}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => panelCallbacksRef.current.onRefreshHtml()}
-                  className="h-9 w-9"
-                >
-                  <RefreshCw size={15} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Atualizar figuras (numeração e legendas)</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  onClick={handleReindexarSecoes}
-                  disabled={salvando || carregandoPreview || exportando}
-                  className="flex items-center gap-2"
-                >
-                  <Layers size={15} /> Reindexar seções
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Reaplica a numeração estrutural do laudo</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
-                  <ArrowLeft size={16} /> Voltar
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Voltar para a lista de laudos</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center">
-                  <Button
-                    variant="secondary"
-                    onClick={handlePreview}
-                    disabled={carregandoPreview || salvando || exportando}
-                    className="flex items-center gap-2 rounded-r-none border-r-0"
-                  >
-                    {exportando ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : carregandoPreview ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Eye size={16} />
-                    )} {carregandoPreview ? 'Gerando...' : exportando ? 'Exportando...' : 'Exportar'}
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        disabled={carregandoPreview || salvando || exportando}
-                        className="rounded-l-none h-9 w-7"
-                      >
-                        <ChevronDown size={14} />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuItem onClick={handlePreview}>
-                        <Eye size={14} className="mr-2" />
-                        Visualizar PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleExportar('pdf')}>
-                        <FileDown size={14} className="mr-2" />
-                        Baixar PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleExportar('docx')}>
-                        <FileText size={14} className="mr-2" />
-                        Baixar Word (.docx)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleExportar('odt')}
-                        disabled={libreOfficeDisponivel !== true}
-                      >
-                        {libreOfficeDisponivel === true ? (
-                          <FileText size={14} className="mr-2" />
-                        ) : (
-                          <Download size={14} className="mr-2" />
-                        )}
-                        Baixar ODT (.odt)
-                        {libreOfficeDisponivel !== true && (
-                          <span className="ml-auto text-[10px] text-muted-foreground">
-                            {libreOfficeDisponivel === null ? 'Verificando...' : 'Requer LibreOffice'}
-                          </span>
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top">Exportar ou pré-visualizar o laudo</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={handleSalvar} disabled={salvando || carregandoPreview || exportando} className="flex items-center gap-2">
-                  <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar'}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Salvar o conteúdo do laudo</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
+        <div className="w-full space-y-4 px-4 pb-4 md:px-8 md:pb-6">
+        <CabecalhoEditorLaudo
+          repNumero={editando.rep_numero}
+          tipoExameCodigo={editando.tipo_exame_codigo}
+          tipoExameNome={editando.tipo_exame_nome}
+          status={editando.status}
+          estadoSalvamento={estadoSalvamento}
+          operacaoEmAndamento={operacaoEmAndamento}
+          carregandoPreview={carregandoPreview}
+          exportando={exportando}
+          libreOfficeDisponivel={libreOfficeDisponivel}
+          onVoltar={handleVoltar}
+          onIrAoFinal={handleIrAoFinal}
+          onVisualizar={handlePreview}
+          onExportar={formato => void handleExportar(formato)}
+          onSalvar={() => void handleSalvar()}
+        />
 
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-        {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
+        {success && <Alert><AlertDescription>{success}</AlertDescription></Alert>}
 
         <Card className="flex-1 overflow-hidden flex flex-col">
-          <CardHeader className="pb-3 flex-shrink-0">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <div>
-                <CardTitle className="text-lg">Template: {editando.template_nome || 'Não definido'}</CardTitle>
-                <CardDescription>
-                  Status: {editando.status} &middot; Iniciado em {formatarData(editando.data_inicio)}
-                  {editando.data_conclusao ? ` &middot; Concluído em ${formatarData(editando.data_conclusao)}` : ''}
-                </CardDescription>
-              </div>
-              <Badge className={
-                editando.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700' :
-                editando.status === 'Entregue' ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700' :
-                'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
-              }>{editando.status}</Badge>
+          <CardHeader className="flex-shrink-0 pb-4">
+            <div>
+              <CardTitle className="text-lg">Laudo pericial</CardTitle>
+              <CardDescription>
+                Template: {editando.template_nome || 'Não definido'} &middot; iniciado em {formatarData(editando.data_inicio)}
+                {editando.data_conclusao ? ` · concluído em ${formatarData(editando.data_conclusao)}` : ''}
+              </CardDescription>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50" aria-label="Visualização de placeholders">
-                <Button
-                  variant={modoVisualizacaoPlaceholders === 'dados' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setModoVisualizacaoPlaceholders('dados')}
-                  className="h-8 px-2.5 text-xs"
-                >
-                  Dados da REP
-                </Button>
-                <Button
-                  variant={modoVisualizacaoPlaceholders === 'chaves' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setModoVisualizacaoPlaceholders('chaves')}
-                  className="h-8 px-2.5 text-xs"
-                >
-                  Placeholders
-                </Button>
-              </div>
-              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={editorMode === 'multi' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => handleEditorModeChange('multi')}
-                      className="h-8 px-2.5"
-                    >
-                      <Layers size={14} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">Editor com múltiplas seções separadas</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={editorMode === 'single' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => handleEditorModeChange('single')}
-                      className="h-8 px-2.5"
-                    >
-                      <List size={14} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">Editor único com laudo inteiro</TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
+            <BarraEditorLaudo
+              modoConteudo={modoVisualizacaoPlaceholders}
+              modoOrganizacao={editorMode}
+              ilustracoesAbertas={iluminacoesPanelOpen}
+              ilustracoesEmJanela={panelPoppedOut}
+              operacaoEmAndamento={operacaoEmAndamento}
+              onModoConteudoChange={setModoVisualizacaoPlaceholders}
+              onModoOrganizacaoChange={handleEditorModeChange}
+              onToggleIlustracoes={handleToggleIlustracoes}
+              onAbrirIlustracoesEmJanela={handlePopOut}
+              onReindexarSecoes={handleReindexarSecoes}
+            />
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
             <div className="flex h-full gap-0">
@@ -2547,106 +2436,24 @@ export const LaudosPage: React.FC = () => {
                 )}
                 {editorMode === 'single' ? (
                   <div className="space-y-3 pb-4">
-                <div className="space-y-2 mb-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <Bot size={14} className="text-primary" />
-                      <span className="text-xs font-medium text-muted-foreground">IA:</span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={iaLoading}
-                      onClick={async () => {
-                        if (!singleEditorHtml.trim()) {
-                          setIaError('Editor vazio');
-                          return;
-                        }
-                        setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Editor único');
-                        setIaSheetOpen(true);
-                        await handleRevisarOrtografia(singleEditorHtml, -1);
-                      }}
-                    >
-                      <SpellCheck size={12} /> Ortografia
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={iaLoading}
-                      onClick={async () => {
-                        if (!singleEditorHtml.trim()) {
-                          setIaError('Editor vazio');
-                          return;
-                        }
-                        setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Editor único');
-                        setIaSheetOpen(true);
-                        await handleAdequarEscrita(singleEditorHtml, -1);
-                      }}
-                    >
-                      <PenLine size={12} /> Adequar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={iaLoading || !singleTemImagens}
-                      onClick={async () => {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(singleEditorHtml, 'text/html');
-                        const imagens = Array.from(doc.querySelectorAll('img'))
-                          .filter(img => img.src.startsWith('data:') || img.src.startsWith('http'))
-                          .map((img) => ({ src: img.src, alt: img.alt }));
-                        if (imagens.length === 0) {
-                          setIaError('Nenhuma imagem encontrada no editor.');
-                          return;
-                        }
-                        setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Editor único');
-                        setIaSheetOpen(true);
-                        await handleDescreverImagem(imagens, -1);
-                      }}
-                    >
-                      <ImageIcon size={12} /> Imagem
-                    </Button>
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      <Input
-                        value={singlePergunta}
-                        onChange={(e) => setSinglePergunta(e.target.value)}
-                        placeholder="Pergunte à IA..."
-                        className="h-7 text-xs w-[200px]"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 disabled:opacity-45 disabled:cursor-not-allowed"
-                        disabled={iaLoading || !singlePergunta.trim()}
-                        onClick={async () => {
-                          if (!singlePergunta.trim()) {
-                            setIaError('Digite uma pergunta para a IA.');
-                            return;
-                          }
-                          setIaSheetSecaoIdx(-1);
-                          setIaSheetSecaoTitulo('Editor único');
-                          setIaSheetOpen(true);
-                          await handlePerguntar(singlePergunta, singleEditorHtml, -1, 'Editor único');
-                          setSinglePergunta('');
-                        }}
-                      >
-                        <Send size={14} />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                    <AssistenteIaCard
+                      secaoIndex={-1}
+                      secaoTitulo="Documento completo"
+                      htmlContent={singleEditorHtml}
+                      processando={iaLoading}
+                      erro={iaSheetSecaoIdx === -1 ? iaError : null}
+                      onRevisarOrtografia={handleRevisarOrtografia}
+                      onAdequarEscrita={handleAdequarEscrita}
+                      onDescreverImagem={handleDescreverImagem}
+                      onPerguntar={handlePerguntar}
+                      onOpenSheet={handleOpenSheet}
+                    />
                     <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                       <TinyMceEditor
                         editorId="laudo-single-editor"
                         initialValue={singleEditorHtml}
-                        onChange={(html: string) => {
-                          setAlteracoesPendentes(true);
+                        onChange={(html: string, origem) => {
+                          registrarAlteracao(origem);
                           setSingleEditorHtml(html);
                         }}
                         height={560}
@@ -2658,6 +2465,7 @@ export const LaudosPage: React.FC = () => {
                         onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
+                          setIaSheetOpen(false);
                           setIlustracoesPanelOpen(true);
                           setPanelCollapsed(false);
                         }}
@@ -2695,11 +2503,12 @@ export const LaudosPage: React.FC = () => {
                           <ChevronDown className="h-4 w-4 transition-transform duration-200" />
                         </div>
                         <CollapsibleContent className="p-4 border-t" forceMount>
-                          <AISectionToolbar
-                            editorId={`secao-${idx}`}
+                          <AssistenteIaCard
                             secaoIndex={idx}
                             secaoTitulo={secao.titulo}
                             htmlContent={secao.conteudo}
+                            processando={iaLoading}
+                            erro={iaSheetSecaoIdx === idx ? iaError : null}
                             onRevisarOrtografia={handleRevisarOrtografia}
                             onAdequarEscrita={handleAdequarEscrita}
                             onDescreverImagem={handleDescreverImagem}
@@ -2711,7 +2520,7 @@ export const LaudosPage: React.FC = () => {
                               <TinyMceEditor
                                 editorId={`secao-${idx}`}
                                 initialValue={secao.conteudo}
-                                onChange={(txt) => atualizarConteudoSecao(idx, txt)}
+                                onChange={(txt, origem) => atualizarConteudoSecao(idx, txt, origem)}
                                 height={400}
                                 laudoId={editando.id}
                                 placeholderChaves={placeholderChaves}
@@ -2723,6 +2532,7 @@ export const LaudosPage: React.FC = () => {
                                 onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                                 onDummyFigureClick={(imageId) => {
                                   setFiguraSubstituicaoSolicitada(imageId);
+                                  setIaSheetOpen(false);
                                   setIlustracoesPanelOpen(true);
                                   setPanelCollapsed(false);
                                 }}
@@ -2744,24 +2554,39 @@ export const LaudosPage: React.FC = () => {
                     })}
                   </div>
                 )}
+                <RodapeEditorLaudo
+                  estadoSalvamento={estadoSalvamento}
+                  operacaoEmAndamento={operacaoEmAndamento}
+                  onVoltar={handleVoltar}
+                  onVoltarAoTopo={handleVoltarAoTopo}
+                  onSalvar={() => void handleSalvar()}
+                />
               </div>
 
               {iluminacoesPanelOpen && (
                 <>
-                  <button
-                    onClick={togglePanel}
-                    aria-expanded={!panelCollapsed}
-                    className="w-7 border-y border-l rounded-l-md bg-background hover:bg-accent flex-shrink-0 flex items-center justify-center transition-colors group"
-                    title={panelCollapsed ? 'Expandir painel' : 'Recolher painel'}
-                  >
-                    <ChevronRight
-                      size={15}
-                      className={cn(
-                        "transition-transform duration-300 ease-in-out text-muted-foreground group-hover:text-foreground",
-                        !panelCollapsed && "rotate-180"
-                      )}
-                    />
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={togglePanel}
+                        aria-expanded={!panelCollapsed}
+                        aria-label={panelCollapsed ? 'Expandir painel de ilustrações' : 'Recolher painel de ilustrações'}
+                        className="group flex w-7 flex-shrink-0 items-center justify-center rounded-l-md border-y border-l bg-background transition-colors hover:bg-accent"
+                      >
+                        <ChevronRight
+                          size={15}
+                          className={cn(
+                            'text-muted-foreground transition-transform duration-300 ease-in-out group-hover:text-foreground',
+                            !panelCollapsed && 'rotate-180',
+                          )}
+                        />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {panelCollapsed ? 'Expandir painel' : 'Recolher painel'}
+                    </TooltipContent>
+                  </Tooltip>
 
                   <div
                     className={cn(
@@ -2845,8 +2670,24 @@ export const LaudosPage: React.FC = () => {
           }
           onSendMessage={handleSendChatMessage}
           onApplyResponse={handleApplyResponse}
+          modoAplicacao={iaSheetMode === 'ortografia' || iaSheetMode === 'adequar'
+            ? 'substituir'
+            : 'inserir'}
           loading={iaLoading}
           error={iaError}
+        />
+
+        <DialogoAplicarRespostaIa
+          open={respostaIaPendente !== null}
+          secaoTitulo={iaSheetSecaoTitulo || 'Seção atual'}
+          conteudoAtual={respostaIaPendente?.conteudoAtual || ''}
+          conteudoProposto={respostaIaPendente?.conteudoProposto || ''}
+          onOpenChange={open => {
+            if (!open) setRespostaIaPendente(null);
+          }}
+          onConfirmar={() => {
+            if (respostaIaPendente) substituirConteudoComRespostaIa(respostaIaPendente.texto);
+          }}
         />
 
         <AlertDialog open={dialogoSaidaAberto} onOpenChange={setDialogoSaidaAberto}>
