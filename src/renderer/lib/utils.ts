@@ -9,7 +9,28 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function removerFormatacaoPlaceholders(html: string): string {
-  return html;
+  if (!html) return html;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  doc.querySelectorAll('[data-placeholder-preview="true"]').forEach(elemento => elemento.remove());
+  doc.querySelectorAll('[data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
+  doc.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
+    elemento.removeAttribute('data-tooltip-xxx');
+    elemento.removeAttribute('data-origem-xxx');
+    elemento.removeAttribute('title');
+    elemento.removeAttribute('aria-label');
+  });
+  doc.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(placeholder => {
+    const chave = placeholder.getAttribute('data-placeholder');
+    if (!chave) return;
+    placeholder.textContent = chave;
+    placeholder.removeAttribute('data-placeholder-apresentacao');
+    placeholder.removeAttribute('data-placeholder-preview-id');
+    placeholder.classList.remove('campo-reservado');
+    placeholder.removeAttribute('data-reservado');
+  });
+  return doc.body.innerHTML;
 }
 
 function escaparRegex(valor: string): string {

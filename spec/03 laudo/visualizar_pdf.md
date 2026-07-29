@@ -1,50 +1,16 @@
 # Preview PDF e HTML do laudo
 
-## Principio atual
+## Origem
 
-O preview PDF depende do mesmo corpo HTML que alimenta a exportacao.
-Esse corpo nao vem apenas do TinyMCE: ele pode ter sido criado ou sincronizado por `laudo.service.ts` a partir de template e `campos_especificos` da REP.
+O preview usa o corpo HTML persistido do laudo, que pode ter sido criado ou sincronizado por `laudo.service.ts` a partir de template e `campos_especificos` da REP. Antes da geração final, a resolução de placeholders produz a camada de valores e tabelas.
 
-## Origem do HTML
+A depuração deve seguir esta ordem: conteúdo salvo em `laudos.conteudo`, HTML após resolução e, por fim, a conversão para PDF/ODT.
 
-`laudo.service.ts` monta ou recalcula `laudos.conteudo` com:
+## Comportamento relevante
 
-- `filtrarSecoesAtivas()`
-- `expandirSecoesRepetiveis()`
-- `buildHtml()`
-- reconciliacao contra o HTML atual
+- Seções condicionais inativas e blocos periciais suprimidos não aparecem na saída.
+- Placeholders textuais ausentes e blocos periciais vazios aparecem como `XXX` destacado; isso é informação pendente, não erro de preview.
+- Tabelas resolvidas recebem `width` e `max-width` de 100% no fragmento HTML e nas folhas de estilo do PDF/ODT.
+- Prévia visual do editor não é fonte do preview: ela é removida e a resolução é refeita com dados da REP.
 
-Por isso o preview pode refletir:
-
-- secoes condicionais ja removidas
-- grupos de armas ja expandidos
-- headings estruturais numerados
-
-## Relacao com placeholders
-
-Antes da geracao final do PDF, o renderer ainda resolve placeholders simples e complexos.
-Os mais sensiveis hoje sao:
-
-- campos simples de REP
-- placeholders do B-602
-- tabelas HTML do B-602
-- placeholders indexados por arma
-
-## Diferenca entre conteudo salvo e preview
-
-O conteudo salvo em `laudos.conteudo` e a base.
-O preview final acrescenta a ultima camada de substituicao de placeholders e transformacao para PDF.
-
-Isso significa que bugs aparentes de "preview" podem nascer em tres pontos diferentes:
-
-1. geracao/sincronizacao do conteudo no main
-2. resolucao de placeholders no renderer
-3. pipeline de conversao para PDF
-
-## Regra pratica
-
-Se uma secao do laudo some, duplica ou fica desatualizada no PDF:
-
-- primeiro validar `laudos.conteudo`
-- depois validar o HTML pos-resolucao de placeholders
-- so por ultimo validar a camada de geracao do PDF
+Assim, defeitos de seção podem vir da sincronização estrutural, enquanto defeitos de valor ou tabela devem ser investigados no resolvedor antes da camada de conversão.

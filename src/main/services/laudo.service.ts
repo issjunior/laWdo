@@ -424,7 +424,11 @@ class LaudoService extends BaseService<LaudoRow> {
       const tituloBase = preservarAtual
         ? this._normalizarTituloBase(blocoAtual.tituloBase)
         : blocoBase.tituloBase;
-      const conteudoBaseEscolhido = preservarAtual ? blocoAtual.conteudo : blocoBase.conteudo;
+      const conteudoBaseEscolhido = preservarAtual
+        ? blocoAtual.conteudo
+        : blocoBase.derivadaRep
+          ? this._preservarBlocosPericiaisB602(blocoBase.conteudo, blocoAtual?.conteudo || '')
+          : blocoBase.conteudo;
       const conteudo = processarBlocosCondicionais(conteudoBaseEscolhido, camposEspecificos);
 
       partes.push(this._montarHeadingEstrutural({
@@ -457,6 +461,27 @@ class LaudoService extends BaseService<LaudoRow> {
     }
 
     return partes.join('\n');
+  }
+
+  /** Preserva texto e supressão dos blocos B-602 versionados ao recompor uma seção derivada. */
+  private _preservarBlocosPericiaisB602(htmlBase: string, htmlAtual: string): string {
+    const regexBloco = /<div\b([^>]*\bdata-bloco-pericial="([^"]+)"[^>]*)>([\s\S]*?)<\/div>/gi;
+    const atuais = new Map<string, string>();
+    const htmlAtualSemTitulos = htmlAtual.replace(
+      /(<div\b[^>]*\bdata-bloco-pericial="[^"]+"[^>]*>)\s*<h3[^>]*>[\s\S]*?<\/h3>/gi,
+      '$1',
+    );
+
+    for (const match of htmlAtualSemTitulos.matchAll(regexBloco)) {
+      const chaveArma = match[1].match(/data-arma-chave="([^"]+)"/i)?.[1];
+      const tipo = match[2];
+      if (chaveArma && tipo) atuais.set(`${chaveArma}:${tipo}`, match[0]);
+    }
+
+    return htmlBase.replace(regexBloco, (match, atributos: string, tipo: string) => {
+      const chaveArma = atributos.match(/data-arma-chave="([^"]+)"/i)?.[1];
+      return chaveArma ? atuais.get(`${chaveArma}:${tipo}`) || match : match;
+    });
   }
 
   private _parseBlocosEstruturais(html: string) {

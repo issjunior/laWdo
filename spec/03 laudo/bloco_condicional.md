@@ -1,60 +1,21 @@
 # Blocos condicionais do laudo
 
-## Onde a logica vive
+## Processamento
 
-O estado atual dos blocos condicionais depende principalmente de `src/main/services/secao-builder.service.ts`.
+`processarBlocosCondicionais(html, camposEspecificos, contexto?)`, em `secao-builder.service.ts`, processa primeiro wrappers internos com `data-cond-bloco`, remove o wrapper inteiro quando a condição não está ativa e encerra ao estabilizar. O limite defensivo é de 50 passagens.
 
-As funcoes centrais sao:
+Em seções repetidas, ids com `N` são normalizados para o índice da arma. Toggles legados de funcionamento e coleta continuam consultando os valores da arma projetada. Os dois ids B-602 versionados (`funcionamento_eficiencia_v2` e `coleta_padroes_v2`) dependem de `exibeBlocosPericiais`, calculado pela família da peça.
 
-- `processarBlocosCondicionais()`
-- `filtrarSecoesAtivas()`
-- `expandirSecoesRepetiveis()`
-- `buildHtml()`
+Antes da avaliação, headings `h3` residuais dentro de `[data-bloco-pericial]` são removidos. Isso preserva um único título estrutural por arma.
 
-## Como o builder avalia um bloco
+## Supressão recuperável
 
-`processarBlocosCondicionais(html, camposEspecificos, contexto?)` procura wrappers com `data-cond-bloco`.
+Blocos B-602 versionados carregam `data-bloco-pericial`, `data-arma-chave` e `data-cond-versao="2"`. No editor, a ação transitória de supressão não é serializada. Após confirmação na página de laudos, a decisão persistida é `data-cond-suprimido="true"` no wrapper do bloco.
 
-Regras atuais:
+A supressão não apaga o conteúdo: o editor mostra um aviso compacto e permite restaurar todos os blocos suprimidos. A exportação remove integralmente wrappers suprimidos. Ao reconstruir uma seção derivada, o service preserva o wrapper atual pelo par arma+tipo, incluindo texto e supressão.
 
-1. processa primeiro os blocos mais internos
-2. se a condicao nao estiver ativa, remove o bloco inteiro
-3. se houver contexto de arma, normaliza ids como `b602_arma_N_func_toggle` para o indice real
-4. se o HTML nao muda entre uma passagem e outra, encerra o loop
-5. se passar de 50 iteracoes, lanca erro defensivo
+## Seções e desempenho
 
-Esse limite de 50 passagens foi mantido para evitar congelamento ao reprocessar blocos ja estaveis.
+`filtrarSecoesAtivas()` continua descartando seções derivadas sem dados e pais sem filhos ativos ou conteúdo útil. `expandirSecoesRepetiveis()` aplica o processamento para cada arma. Evite parse repetido de `campos_especificos` ou buscas por arma dentro dos loops.
 
-## Como uma condicao e considerada ativa
-
-### Toggles simples
-
-Chaves como `b602_cartuchos_toggle` e `b602_estojos_toggle` ficam ativas quando:
-
-- o valor e `'on'`, ou
-- a colecao correspondente existe com itens
-
-### Toggles por arma
-
-Chaves como `b602_arma_1_func_toggle` e `b602_arma_1_coleta_toggle` dependem do item certo de `b602.armas[]`.
-
-## Filtragem de secoes
-
-`filtrarSecoesAtivas()` decide quais secoes do template entram no HTML base.
-
-Comportamento atual:
-
-- secoes derivadas da REP podem desaparecer se faltarem dados
-- pais sem filhos ativos e sem conteudo util sao descartados
-- uma secao com `condicao` JSON continua sendo respeitada
-
-## Integracao com repeticao por arma
-
-Quando uma secao repetivel usa `repetir_para = 'armas'`, o conteudo de cada instancia tambem passa por `processarBlocosCondicionais()`.
-
-Isso permite que uma arma tenha:
-
-- bloco de funcionamento
-- bloco de coleta
-
-sem obrigar todas as armas do laudo a exibirem os mesmos subtrechos.
+Os testes de `secao-builder.service` e de blocos periciais cobrem marcadores legados e versionados, elegibilidade, remoção de headings residuais e preservação de conteúdo.

@@ -59,11 +59,15 @@ import {
   type SecaoEstruturalLaudo,
 } from '@/lib/estrutura-laudo';
 import { getMargens } from '@/lib/margens';
+import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
-import { resolverPlaceholdersExportacao, limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
+import {
+  construirMapaPlaceholdersResolvidos,
+  limparIndicadoresCondicionais,
+  resolverPlaceholdersExportacao,
+  type MapaPlaceholdersResolvidos,
+} from '@/lib/exportacao-placeholders';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
-import { buildNumberedTable, buildDadosInvestigacaoTable } from '@/lib/tabelas-placeholder';
-import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -107,28 +111,6 @@ function formatarData(iso: string | undefined): string {
   }
 }
 
-function formatarDataExtenso(iso: string | undefined): string {
-  if (!iso) return '-';
-  try {
-    const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
-    if (isNaN(data.getTime())) return iso;
-    return data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-  } catch {
-    return iso;
-  }
-}
-
-function formatarDataHora(iso: string | undefined): string {
-  if (!iso) return '-';
-  try {
-    const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
-    if (isNaN(data.getTime())) return iso;
-    return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return iso;
-  }
-}
-
 interface RepPlaceholderData {
   numero?: string;
   numero_documento?: string;
@@ -145,15 +127,6 @@ interface RepPlaceholderData {
   solicitante_id?: string;
   tipo_exame_id?: string;
   campos_especificos?: string;
-}
-
-interface PeritoSessaoData {
-  id?: string;
-  nome?: string;
-  cargo?: string;
-  especialidade?: string;
-  lotacao?: string;
-  matricula?: string;
 }
 
 type TinymceWindow = Window & {
@@ -178,6 +151,90 @@ const obterMensagemErro = (erro: unknown, fallback: string): string => (
   erro instanceof Error && erro.message ? erro.message : fallback
 );
 
+type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
+
+function aplicarModoVisualizacaoPlaceholders(
+  editor: TinyMceEditorInstance,
+  modo: ModoVisualizacaoPlaceholders,
+  mapa: MapaPlaceholdersResolvidos,
+  placeholdersPersonalizados: Placeholder[],
+): void {
+  const body = editor.getBody();
+  if (!body) return;
+
+  editor.undoManager.ignore(() => {
+    body.querySelectorAll('[data-placeholder-preview="true"]').forEach(preview => preview.remove());
+    body.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
+      elemento.removeAttribute('data-tooltip-xxx');
+      elemento.removeAttribute('data-origem-xxx');
+      elemento.removeAttribute('title');
+      elemento.removeAttribute('aria-label');
+    });
+    body.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(ancora => {
+      const chaveBruta = ancora.getAttribute('data-placeholder') || '';
+      const chave = chaveBruta.match(/^\{\{(.+)\}\}$/)?.[1];
+      if (!chave) return;
+      const resolvido = mapa[chave];
+      ancora.classList.remove('campo-reservado');
+      ancora.removeAttribute('data-reservado');
+      ancora.removeAttribute('data-placeholder-apresentacao');
+      ancora.style.removeProperty('display');
+
+      if (modo === 'chaves') {
+        ancora.textContent = chaveBruta;
+        return;
+      }
+
+      if (!resolvido?.preenchido) {
+        ancora.textContent = 'XXX';
+        ancora.classList.add('campo-reservado');
+        ancora.setAttribute('data-reservado', 'true');
+        ancora.setAttribute('data-placeholder-apresentacao', 'dados');
+        const aviso = descreverPlaceholderPendente(chave, placeholdersPersonalizados, mapa);
+        ancora.setAttribute('data-tooltip-xxx', 'true');
+        ancora.setAttribute('data-origem-xxx', 'rep');
+        ancora.setAttribute('title', aviso);
+        ancora.setAttribute('aria-label', aviso);
+        return;
+      }
+
+      if (resolvido.formato === 'html') {
+        const id = `placeholder-preview-${chave.replace(/[^a-z0-9_-]/gi, '-')}`;
+        ancora.setAttribute('data-placeholder-preview-id', id);
+        ancora.style.display = 'none';
+        const preview = body.ownerDocument.createElement('div');
+        preview.setAttribute('contenteditable', 'false');
+        preview.setAttribute('data-placeholder-preview', 'true');
+        preview.setAttribute('data-placeholder-preview-for', id);
+        preview.style.width = '100%';
+        preview.style.maxWidth = '100%';
+        preview.style.minWidth = '0';
+        preview.style.alignSelf = 'stretch';
+        preview.style.boxSizing = 'border-box';
+        preview.innerHTML = resolvido.valor;
+        preview.querySelectorAll('table').forEach(tabela => {
+          tabela.setAttribute('width', '100%');
+          tabela.style.setProperty('width', '100%', 'important');
+          tabela.style.setProperty('max-width', '100%', 'important');
+        });
+        ancora.parentElement?.insertAdjacentElement('afterend', preview);
+      } else {
+        ancora.textContent = resolvido.valor;
+        ancora.setAttribute('data-placeholder-apresentacao', 'dados');
+      }
+    });
+
+    body.querySelectorAll<HTMLElement>('[data-reservado="true"]:not([data-placeholder])').forEach(campo => {
+      if (campo.textContent?.trim().toUpperCase() !== 'XXX') return;
+      const aviso = 'Campo de preenchimento manual no template';
+      campo.setAttribute('data-tooltip-xxx', 'true');
+      campo.setAttribute('data-origem-xxx', 'template');
+      campo.setAttribute('title', aviso);
+      campo.setAttribute('aria-label', aviso);
+    });
+  });
+}
+
 const isRecord = (valor: unknown): valor is Record<string, unknown> => (
   typeof valor === 'object' && valor !== null
 );
@@ -196,297 +253,16 @@ const isImagemLaudo = (valor: unknown): valor is ImagemLaudo => (
   && isString(valor.legenda)
 );
 
-const lerPeritoSessao = (): PeritoSessaoData | null => {
-  try {
-    const userJson = sessionStorage.getItem('lawdo_auth_user');
-    if (!userJson) return null;
-    const parsed: unknown = JSON.parse(userJson);
-    if (!isRecord(parsed)) return null;
-    return {
-      id: typeof parsed.id === 'string' ? parsed.id : undefined,
-      nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
-      cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
-      especialidade: typeof parsed.especialidade === 'string' ? parsed.especialidade : undefined,
-      lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
-      matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const aplicarPlaceholders = (html: string, repData: RepPlaceholderData, extraContext?: { solicitanteNome?: string; tipoExameNome?: string; tipoExameCodigo?: string }) => {
-  if (!repData) return html;
-
-  const perito = lerPeritoSessao();
-
-  // Mapeamento exaustivo para cobrir diferentes estilos de tag
-  const mapping: Record<string, string> = {
-    // Prefixados com rep. (compatibilidade com placeholders antigos)
-    'rep.numero': repData.numero || '',
-    'rep.documento': repData.numero_documento || '',
-    'rep.local': repData.local_fato || '',
-    'rep.data': formatarData(repData.data_requisicao),
-    'rep.autoridade': repData.autoridade_solicitante || '',
-    'rep.requisicao': repData.numero_documento || '',
-
-    // Prefixados com rep_ (notação do banco de dados — seed do sistema)
-    'rep_numero': repData.numero || '',
-    'rep_data_requisicao': formatarData(repData.data_requisicao),
-    'rep_prazo': repData.prazo || '',
-    'rep_tipo_solicitacao': repData.tipo_solicitacao || '',
-    'rep_numero_documento': repData.numero_documento || '',
-    'rep_data_documento': formatarData(repData.data_documento),
-    'rep_data_acionamento': formatarDataHora(repData.data_acionamento),
-    'rep_data_chegada': formatarDataHora(repData.data_chegada),
-    'rep_data_saida': formatarDataHora(repData.data_saida),
-    'rep_observacoes': repData.observacoes || '',
-
-    // Relacionamentos (preenchidos via extraContext em handlePreview)
-    'solicitante_nome': extraContext?.solicitanteNome || '',
-    'tipo_exame_nome': extraContext?.tipoExameNome || '',
-    'tipo_exame_codigo': extraContext?.tipoExameCodigo || '',
-
-    // Sem prefixo (compatibilidade)
-    'NUMERO_REP': repData.numero || '',
-    'NUMERO': repData.numero || '',
-    'LOCAL_FATO': repData.local_fato || '',
-    'AUTORIDADE': repData.autoridade_solicitante || '',
-
-    // Sem prefixo (notação recomendada após migração)
-    'numero_rep': repData.numero || '',
-    'data_recebimento_rep': formatarData(repData.data_requisicao),
-    'tipo_solicitacao_rep': repData.tipo_solicitacao || '',
-    'numero_solicitacao_rep': repData.numero_documento || '',
-    'data_solicitacao_rep': formatarData(repData.data_documento),
-    'autoridade_solicitante_rep': repData.autoridade_solicitante || '',
-    'data_acionamento_local': formatarDataHora(repData.data_acionamento),
-    'data_chegada_local': formatarDataHora(repData.data_chegada),
-    'data_saida_local': formatarDataHora(repData.data_saida),
-    'observacoes_rep': repData.observacoes || '',
-
-    // Perito (notação com ponto — compatibilidade retroativa)
-    'perito.nome': perito?.nome || '',
-    'perito.cargo': perito?.cargo || 'Perito Criminal',
-    'perito.especialidade': perito?.especialidade || '',
-
-    // Perito (notação snake_case — seed do sistema)
-    'perito_nome': perito?.nome || '',
-    'perito_cargo': perito?.cargo || 'Perito Criminal',
-    'perito_lotacao': perito?.lotacao || '',
-    'perito_matricula': perito?.matricula || '',
-
-    // Geral
-    'data_atual': new Date().toLocaleDateString('pt-BR'),
-    'data_extenso_recebimento_rep': formatarDataExtenso(repData.data_requisicao),
-  };
-
-  if (repData.campos_especificos) {
-    try {
-      const especificos = JSON.parse(repData.campos_especificos);
-      for (const placeholder of CAMPOS_ESPECIFICOS_PLACEHOLDERS) {
-        if (placeholder.computed || !placeholder.jsonPath) continue;
-        const partes = placeholder.jsonPath.split('.');
-        let valor: unknown = especificos;
-        for (const parte of partes) {
-          valor = (valor as Record<string, unknown>)?.[parte];
-        }
-        if (valor !== undefined && valor !== null && valor !== '') {
-          if (typeof valor === 'object' && placeholder.chave === 'b602_local') {
-            const loc = valor as Record<string, string>;
-            mapping[placeholder.chave] = [loc.bairro, loc.cidade, loc.uf].filter(Boolean).join(' / ');
-          } else {
-            mapping[placeholder.chave] = String(valor);
-          }
-        }
-      }
-
-      // Fallback: se local for string (formato antigo), extrair sub-campos
-      const b602Fallback = especificos.b602 as Record<string, unknown> | undefined;
-      if (b602Fallback && typeof b602Fallback.local === 'string') {
-        const partesLocal = (b602Fallback.local as string).split('/').map(s => s.trim()).filter(Boolean);
-        if (partesLocal.length >= 3 && !mapping['b602_local_bairro']) mapping['b602_local_bairro'] = partesLocal[0];
-        if (partesLocal.length >= 2 && !mapping['b602_local_cidade']) mapping['b602_local_cidade'] = partesLocal[partesLocal.length >= 3 ? 1 : 0];
-        if (partesLocal.length >= 2 && !mapping['b602_local_uf']) mapping['b602_local_uf'] = partesLocal[partesLocal.length - 1];
-      }
-
-      if (!mapping['b602_solicitante_nome']) {
-        mapping['b602_solicitante_nome'] = extraContext?.solicitanteNome || '';
-      }
-
-      const b602 = especificos.b602 as Record<string, unknown> | undefined;
-      if (b602) {
-        const projecaoB602 = projetarB602ParaLaudo(b602);
-        const integracaoGdl = isRecord(especificos.integracaoGdl) ? especificos.integracaoGdl : undefined;
-        const dadosSolicitacao = isRecord(integracaoGdl?.dadosSolicitacao)
-          ? integracaoGdl.dadosSolicitacao
-          : undefined;
-        const solicitanteB602 = String(b602.solicitante_nome || '').trim();
-        const orgaoGdl = String(dadosSolicitacao?.orgao || '').trim();
-        const autoridadeGdl = String(dadosSolicitacao?.autoridade || '').trim();
-        if (!mapping['solicitante_nome']) {
-          mapping['solicitante_nome'] = solicitanteB602 || orgaoGdl;
-        }
-        if (!mapping['autoridade_solicitante_rep'] && autoridadeGdl) {
-          mapping['autoridade_solicitante_rep'] = autoridadeGdl;
-        }
-        const envolvidos = b602.envolvidos as string[] | undefined;
-        if (envolvidos && envolvidos.length > 0) {
-          mapping['b602_envolvidos'] = envolvidos.filter(Boolean).join(', ');
-          envolvidos.forEach((nome, i) => {
-            mapping[`b602_envolvido_${i + 1}`] = nome;
-          });
-        }
-
-        mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602, extraContext?.solicitanteNome);
-
-        const material = projecaoB602.materialEncaminhado as Record<string, string>[];
-        if (material && material.length > 0) {
-          mapping['b602_tabela_material_enc'] = buildNumberedTable(
-            'TABELA 2 – MATERIAL ENCAMINHADO',
-            ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
-            material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || ''])
-          );
-          material.forEach((m, i) => {
-            mapping[`b602_material_enc_${i + 1}_natureza`] = m.natureza || '';
-            mapping[`b602_material_enc_${i + 1}_quantidade`] = m.quantidade || '';
-            mapping[`b602_material_enc_${i + 1}_tipo`] = m.tipo || '';
-            mapping[`b602_material_enc_${i + 1}_dito_oficio`] = m.dito_oficio || '';
-            mapping[`b602_material_enc_${i + 1}_numero_lacre`] = m.numero_lacre || '';
-          });
-        }
-
-        const cartuchos = projecaoB602.cartuchos;
-        if (cartuchos && cartuchos.length > 0) {
-          mapping['b602_tabela_cartuchos'] = buildNumberedTable(
-            'TABELA 3 – CARTUCHOS',
-            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Projétil', 'Observação'],
-            cartuchos.map(c => [
-              String(c.quantidade || ''),
-              String(c.calibre || ''),
-              String(c.marca || ''),
-              String(c.origem || ''),
-              String(c.espoleta || ''),
-              String(c.estojo || ''),
-              String(c.projetil || ''),
-              Array.isArray(c.observacao) ? (c.observacao as string[]).join(', ') : String(c.observacao || ''),
-            ])
-          );
-          cartuchos.forEach((c, i) => {
-            mapping[`b602_cartucho_${i + 1}_quantidade`] = String(c.quantidade || '');
-            mapping[`b602_cartucho_${i + 1}_calibre`] = String(c.calibre || '');
-            mapping[`b602_cartucho_${i + 1}_marca`] = String(c.marca || '');
-            mapping[`b602_cartucho_${i + 1}_origem`] = String(c.origem || '');
-            mapping[`b602_cartucho_${i + 1}_espoleta`] = String(c.espoleta || '');
-            mapping[`b602_cartucho_${i + 1}_estojo`] = String(c.estojo || '');
-            mapping[`b602_cartucho_${i + 1}_projetil`] = String(c.projetil || '');
-            mapping[`b602_cartucho_${i + 1}_observacao`] = Array.isArray(c.observacao) ? (c.observacao as string[]).join(', ') : '';
-          });
-        }
-
-        const estojos = projecaoB602.estojos;
-        if (estojos && estojos.length > 0) {
-          mapping['b602_tabela_estojos'] = buildNumberedTable(
-            'TABELA 4 – ESTOJOS',
-            ['Qtd', 'Calibre', 'Marca', 'Origem', 'Espoleta', 'Estojo', 'Observação'],
-            estojos.map(e => [
-              String(e.quantidade || ''),
-              String(e.calibre || ''),
-              String(e.marca || ''),
-              String(e.origem || ''),
-              String(e.espoleta || ''),
-              String(e.estojo || ''),
-              Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : String(e.observacao || ''),
-            ])
-          );
-          estojos.forEach((e, i) => {
-            mapping[`b602_estojo_${i + 1}_quantidade`] = String(e.quantidade || '');
-            mapping[`b602_estojo_${i + 1}_calibre`] = String(e.calibre || '');
-            mapping[`b602_estojo_${i + 1}_marca`] = String(e.marca || '');
-            mapping[`b602_estojo_${i + 1}_origem`] = String(e.origem || '');
-            mapping[`b602_estojo_${i + 1}_espoleta`] = String(e.espoleta || '');
-            mapping[`b602_estojo_${i + 1}_estojo`] = String(e.estojo || '');
-            mapping[`b602_estojo_${i + 1}_observacao`] = Array.isArray(e.observacao) ? (e.observacao as string[]).join(', ') : '';
-          });
-        }
-
-        // --- Placeholders individuais de armas ---
-        const armasData = projecaoB602.armas as Record<string, string>[];
-        if (armasData && armasData.length > 0) {
-          armasData.forEach((arma, i) => {
-            const idx = i + 1;
-            mapping[`b602_arma_${idx}_tipo`] = arma.tipo || '';
-            mapping[`b602_arma_${idx}_marca`] = arma.marca || '';
-            mapping[`b602_arma_${idx}_calibre`] = arma.calibre || '';
-            mapping[`b602_arma_${idx}_numeracao_serie`] = arma.numeracao_serie || '';
-            mapping[`b602_arma_${idx}_numeracao_cano`] = arma.numeracao_cano || '';
-            mapping[`b602_arma_${idx}_capacidade_carregador`] = arma.capacidade_carregador || '';
-            mapping[`b602_arma_${idx}_comprimento_cano`] = arma.comprimento_cano || '';
-            mapping[`b602_arma_${idx}_acabamento`] = arma.acabamento || '';
-            mapping[`b602_arma_${idx}_funcionamento`] = arma.funcionamento || '';
-            mapping[`b602_arma_${idx}_estado_conservacao`] = arma.estado_conservacao || '';
-            mapping[`b602_arma_${idx}_quantidade`] = arma.quantidade || '';
-            mapping[`b602_arma_${idx}_dito_oficio`] = arma.dito_oficio || '';
-            mapping[`b602_arma_${idx}_numero_lacre`] = arma.numero_lacre || '';
-          });
-        }
-      }
-    } catch { /* mantém mapping atual */ }
-  }
-
-  try {
-    // 1. Usar DOMParser para encontrar e substituir spans de placeholder
-    //    (muito mais robusto que regex, imune a modificações do TinyMCE no HTML)
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    const placeholderSpans = doc.querySelectorAll('span[data-placeholder]');
-    placeholderSpans.forEach(span => {
-      const rawPlaceholder = span.getAttribute('data-placeholder') || '';
-      // Extrai a chave de dentro de {{...}}
-      const chaveMatch = rawPlaceholder.match(/^\{\{(.+)\}\}$/);
-      if (chaveMatch) {
-        const chave = chaveMatch[1];
-        const valor = mapping[chave];
-        if (valor !== undefined) {
-          span.replaceWith(doc.createRange().createContextualFragment(valor));
-        }
-      }
-    });
-
-    // Serializa de volta, extraindo apenas o conteúdo do <body>
-    let resultado = doc.body.innerHTML;
-
-    // 2. Substituir tags de texto puro {{...}} que sobraram ou foram digitadas manualmente
-    Object.entries(mapping).forEach(([chave, valor]) => {
-      const displayValue = valor || '';
-      const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
-      resultado = resultado.replace(tagRegex, displayValue);
-    });
-
-    // 3. Se houver campos rep.X, tentar substituir também {{X}}
-    Object.entries(mapping).forEach(([chave, valor]) => {
-      if (chave.startsWith('rep.')) {
-        const semPrefixo = chave.replace('rep.', '');
-        const tagRegex = new RegExp(`\\{\\{${semPrefixo}\\}\\}`, 'gi');
-        resultado = resultado.replace(tagRegex, valor || '');
-      }
-    });
-
-    return limparIndicadoresCondicionais(resultado);
-  } catch {
-    // Fallback: se DOMParser falhar (muito raro), tentar só regex textual
-    let resultado = html;
-    Object.entries(mapping).forEach(([chave, valor]) => {
-      const displayValue = valor || '';
-      const escapedChave = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const tagRegex = new RegExp(`\\{\\{${escapedChave}\\}\\}`, 'gi');
-      resultado = resultado.replace(tagRegex, displayValue);
-    });
-    return limparIndicadoresCondicionais(resultado);
-  }
-};
+const aplicarPlaceholders = (
+  html: string,
+  repData: RepPlaceholderData,
+  extraContext?: { solicitanteNome?: string; tipoExameNome?: string; tipoExameCodigo?: string },
+): string => resolverPlaceholdersExportacao(html, {
+  repData,
+  solicitanteNome: extraContext?.solicitanteNome,
+  tipoExameNome: extraContext?.tipoExameNome,
+  tipoExameCodigo: extraContext?.tipoExameCodigo,
+});
 
 interface LaudoItem {
   id: string;
@@ -579,6 +355,10 @@ export const LaudosPage: React.FC = () => {
   const [exameMenuStructure, setExameMenuStructure] = useState<MenuSection[] | undefined>(undefined);
   const [exameCamposEspecificos, setExameCamposEspecificos] = useState<Record<string, unknown> | undefined>(undefined);
   const [categoriaExameId, setCategoriaExameId] = useState<string>('');
+  const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
+  const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
+  const [blocoParaSuprimir, setBlocoParaSuprimir] = useState<{ tipo: string; armaChave?: string; armaIndice?: number } | null>(null);
+  const [quantidadeBlocosSuprimidos, setQuantidadeBlocosSuprimidos] = useState(0);
 
   const exameToggles = useMemo<ExamToggle[] | undefined>(() => {
     if (!editando?.tipo_exame_codigo) return undefined;
@@ -914,6 +694,14 @@ export const LaudosPage: React.FC = () => {
     const editor = obterEditorTinyMce(editorId);
     if (editor) {
       editor.execCommand('insertPlaceholder', false, { chave });
+      window.setTimeout(() => {
+        aplicarModoVisualizacaoPlaceholders(
+          editor,
+          modoVisualizacaoPlaceholders,
+          mapaPlaceholdersResolvidos,
+          placeholders,
+        );
+      }, 0);
     }
   };
 
@@ -1796,21 +1584,15 @@ export const LaudosPage: React.FC = () => {
       ...secao,
       titulo: normalizarTituloSecao(secao.titulo),
     }));
-    setEditando(laudo);
-    setAlteracoesPendentes(false);
-    setSecoes(parsedSecoes);
-    setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
-    setEditorMode('single');
-    setSecoesColapsadas({});
-    setError(null);
-    setSuccess(null);
-
     const codigo = laudo.tipo_exame_codigo;
     if (codigo) {
       setCategoriaExameId(`cat-exam-${codigo}`);
       setExameMenuStructure(EXAM_MENU_REGISTRY[codigo]);
       try {
         const rRep = await window.ipcAPI.rep.findById(laudo.rep_id);
+        if (rRep.success && rRep.data) {
+          setMapaPlaceholdersResolvidos(construirMapaPlaceholdersResolvidos({ repData: rRep.data }));
+        }
         if (rRep.success && rRep.data && rRep.data.campos_especificos) {
           const parsed = JSON.parse(rRep.data.campos_especificos);
           setExameCamposEspecificos(parsed.b602 || parsed);
@@ -1819,13 +1601,90 @@ export const LaudosPage: React.FC = () => {
         }
       } catch {
         setExameCamposEspecificos(undefined);
+        setMapaPlaceholdersResolvidos({});
       }
     } else {
       setCategoriaExameId('');
       setExameMenuStructure(undefined);
       setExameCamposEspecificos(undefined);
+      setMapaPlaceholdersResolvidos({});
     }
+
+    setModoVisualizacaoPlaceholders('dados');
+    setQuantidadeBlocosSuprimidos((laudo.conteudo.match(/data-cond-suprimido="true"/g) || []).length);
+    setAlteracoesPendentes(false);
+    setSecoes(parsedSecoes);
+    setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
+    setEditorMode('single');
+    setSecoesColapsadas({});
+    setError(null);
+    setSuccess(null);
+    setEditando(laudo);
   }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes]);
+
+  const aplicarModoNoEditor = useCallback((editor: TinyMceEditorInstance) => {
+    aplicarModoVisualizacaoPlaceholders(editor, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders);
+    window.setTimeout(() => {
+      aplicarModoVisualizacaoPlaceholders(editor, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders);
+    }, 100);
+  }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
+
+  const confirmarSupressaoBloco = useCallback(() => {
+    if (!blocoParaSuprimir) return;
+    const editores = editorMode === 'single'
+      ? [obterEditorTinyMce('laudo-single-editor')]
+      : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
+    const editor = editores.filter(isTinyMceEditor).find(candidato => {
+      const seletor = `[data-bloco-pericial="${blocoParaSuprimir.tipo}"]`;
+      return Array.from(candidato.getBody()?.querySelectorAll<HTMLElement>(seletor) || []).some(bloco => (
+        !blocoParaSuprimir.armaChave || bloco.getAttribute('data-arma-chave') === blocoParaSuprimir.armaChave
+      ));
+    });
+    if (!editor) return;
+    editor.undoManager.transact(() => {
+      const seletor = `[data-bloco-pericial="${blocoParaSuprimir.tipo}"]`;
+      const bloco = Array.from(editor.getBody()?.querySelectorAll<HTMLElement>(seletor) || []).find(candidato => (
+        !blocoParaSuprimir.armaChave || candidato.getAttribute('data-arma-chave') === blocoParaSuprimir.armaChave
+      ));
+      bloco?.setAttribute('data-cond-suprimido', 'true');
+    });
+    const conteudo = editor.getContent();
+    setAlteracoesPendentes(true);
+    if (editorMode === 'single') setSingleEditorHtml(conteudo);
+    else {
+      const indice = editores.indexOf(editor);
+      if (indice >= 0) atualizarConteudoSecao(indice, conteudo);
+    }
+    setQuantidadeBlocosSuprimidos(quantidade => quantidade + 1);
+    setBlocoParaSuprimir(null);
+  }, [atualizarConteudoSecao, blocoParaSuprimir, editorMode, secoes]);
+
+  const restaurarBlocosSuprimidos = useCallback(() => {
+    const editores = editorMode === 'single'
+      ? [obterEditorTinyMce('laudo-single-editor')]
+      : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
+    editores.filter(isTinyMceEditor).forEach((editor, indice) => {
+      if (!editor.getBody()?.querySelector('[data-cond-suprimido="true"]')) return;
+      editor.undoManager.transact(() => editor.getBody()?.querySelectorAll('[data-cond-suprimido="true"]').forEach(bloco => bloco.removeAttribute('data-cond-suprimido')));
+      const conteudo = editor.getContent();
+      if (editorMode === 'single') setSingleEditorHtml(conteudo);
+      else atualizarConteudoSecao(indice, conteudo);
+    });
+    setAlteracoesPendentes(true);
+    setQuantidadeBlocosSuprimidos(0);
+  }, [atualizarConteudoSecao, editorMode, secoes]);
+
+  useEffect(() => {
+    if (!editando) return;
+    const aplicarAosEditores = () => {
+      const editores = editorMode === 'single'
+        ? [obterEditorTinyMce('laudo-single-editor')]
+        : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
+      editores.filter(isTinyMceEditor).forEach(aplicarModoNoEditor);
+    };
+    const tentativas = [0, 150, 500].map(atraso => window.setTimeout(aplicarAosEditores, atraso));
+    return () => tentativas.forEach(timeout => window.clearTimeout(timeout));
+  }, [aplicarModoNoEditor, editando, editorMode, secoes]);
 
   const finalizarVolta = () => {
     if (panelPoppedOut) {
@@ -1841,6 +1700,8 @@ export const LaudosPage: React.FC = () => {
     setSuccess(null);
     setExameMenuStructure(undefined);
     setExameCamposEspecificos(undefined);
+    setMapaPlaceholdersResolvidos({});
+    setQuantidadeBlocosSuprimidos(0);
     setCategoriaExameId('');
     if (previewBlobUrl) {
       URL.revokeObjectURL(previewBlobUrl);
@@ -2624,7 +2485,25 @@ export const LaudosPage: React.FC = () => {
                 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
               }>{editando.status}</Badge>
             </div>
-            <div className="flex items-center justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50" aria-label="Visualização de placeholders">
+                <Button
+                  variant={modoVisualizacaoPlaceholders === 'dados' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setModoVisualizacaoPlaceholders('dados')}
+                  className="h-8 px-2.5 text-xs"
+                >
+                  Dados da REP
+                </Button>
+                <Button
+                  variant={modoVisualizacaoPlaceholders === 'chaves' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setModoVisualizacaoPlaceholders('chaves')}
+                  className="h-8 px-2.5 text-xs"
+                >
+                  Placeholders
+                </Button>
+              </div>
               <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2658,6 +2537,14 @@ export const LaudosPage: React.FC = () => {
           <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
             <div className="flex h-full gap-0">
               <div className="flex-1 overflow-y-auto pr-2">
+                {quantidadeBlocosSuprimidos > 0 && (
+                  <Alert className="mb-3">
+                    <AlertDescription className="flex items-center justify-between gap-3">
+                      <span>{quantidadeBlocosSuprimidos} bloco(s) pericial(is) suprimido(s). Eles não serão exportados.</span>
+                      <Button variant="outline" size="sm" onClick={restaurarBlocosSuprimidos}>Restaurar blocos</Button>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {editorMode === 'single' ? (
                   <div className="space-y-3 pb-4">
                 <div className="space-y-2 mb-3">
@@ -2767,6 +2654,8 @@ export const LaudosPage: React.FC = () => {
                         laudoId={editando.id}
                         placeholderChaves={placeholderChaves}
                         condToggles={exameToggles}
+                        onEditorInit={aplicarModoNoEditor}
+                        onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
                           setIlustracoesPanelOpen(true);
@@ -2826,8 +2715,12 @@ export const LaudosPage: React.FC = () => {
                                 height={400}
                                 laudoId={editando.id}
                                 placeholderChaves={placeholderChaves}
-                                onEditorInit={isIlustracoes ? handleIlustracoesEditorInit : undefined}
+                                onEditorInit={(editor) => {
+                                  aplicarModoNoEditor(editor);
+                                  if (isIlustracoes) handleIlustracoesEditorInit(editor);
+                                }}
                                 condToggles={exameToggles}
+                                onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                                 onDummyFigureClick={(imageId) => {
                                   setFiguraSubstituicaoSolicitada(imageId);
                                   setIlustracoesPanelOpen(true);
@@ -3127,6 +3020,23 @@ export const LaudosPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={blocoParaSuprimir !== null} onOpenChange={(open) => {
+        if (!open) setBlocoParaSuprimir(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Suprimir bloco pericial?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O bloco de {blocoParaSuprimir?.tipo === 'coleta' ? 'Coleta de Padrões Balísticos' : 'Funcionamento e Eficiência'}{blocoParaSuprimir?.armaIndice ? ` da Arma ${String.fromCharCode(64 + blocoParaSuprimir.armaIndice)}` : ''} não será exportado. Você poderá restaurá-lo antes de salvar o laudo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarSupressaoBloco}>Suprimir bloco</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {timelineLaudo && (
         <RepTimelineDialog

@@ -153,7 +153,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   h2 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
   h3 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
   p { margin-bottom: 8px; }
-  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100% !important; max-width: 100% !important; margin: 12px 0; }
   table th, table td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
   table th { background: #f5f5f5; font-weight: 600; }
   ul, ol { margin: 8px 0; padding-left: 24px; }
@@ -526,7 +526,7 @@ async function gerarODT(
 
   const wrapperCss = `@page { margin-top: ${mt}cm; margin-right: ${mr}cm; margin-bottom: ${mb}cm; margin-left: ${ml}cm; }
 body { font-family: '${fontFamily}', sans-serif; font-size: ${fontSize}; line-height: 1.7; color: #000; }
-table { width: 100%; table-layout: fixed; }
+table { width: 100% !important; max-width: 100% !important; table-layout: fixed; }
 [data-laudo-secao-header] { background: transparent !important; }
 td, th { background: transparent !important; }`;
 

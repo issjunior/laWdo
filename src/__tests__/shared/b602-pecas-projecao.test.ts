@@ -47,6 +47,7 @@ describe('projetarB602ParaLaudo', () => {
     expect(resultado.armas).toEqual([expect.objectContaining({
       tipo: 'PISTOLA(S)', marca: 'Taurus', modelo: 'G3', calibre: '9mm Luger',
       numeracao_serie: 'ABC123', funcionamento: 'Eficiente', func_toggle: 'on',
+      chaveOrigem: 'peca-1', exibeBlocosPericiais: true,
     })])
   })
 
@@ -67,11 +68,22 @@ describe('projetarB602ParaLaudo', () => {
     expect(canonico.estojos).toEqual([expect.objectContaining({
       quantidade: '1', origem: 'NECRÓPSIA', estojo: 'Pistola apreendida',
     })])
-    expect(legado).toEqual({
-      materialEncaminhado: [{ tipo: 'Pistola' }],
-      cartuchos: [{ calibre: '.40' }],
-      estojos: [{ calibre: '9mm' }],
-      armas: [{ tipo: 'Revólver' }],
+    expect(legado.armas).toEqual([expect.objectContaining({
+      tipo: 'Revólver', chaveOrigem: 'legado-1', exibeBlocosPericiais: false,
+    })])
+  })
+
+  it('só projeta armas do catálogo e marca todas como elegíveis aos blocos periciais', () => {
+    const resultado = projetarB602ParaLaudo({
+      pecas: [
+        criarPeca({ tipoCodigo: '613', tipoPeca: 'ARMA(S) DE PRESSÃO' }),
+        criarPeca({ tipoCodigo: '272', tipoPeca: 'CARREGADOR(ES)' }),
+      ],
     })
+
+    expect(resultado.armas).toHaveLength(1)
+    expect(resultado.armas[0]).toEqual(expect.objectContaining({
+      tipo: 'ARMA(S) DE PRESSÃO', exibeBlocosPericiais: true,
+    }))
   })
 })

@@ -7,6 +7,7 @@ import {
   executeQuery,
   executeNonQuery,
 } from './sqlite.js';
+import { atualizarMarcadoresTemplateB602 } from './template-b602.migration.js';
 
 const log = getLogger('database');
 
@@ -15,7 +16,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 30;
+const CURRENT_SCHEMA_VERSION = 31;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -1877,6 +1878,46 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.debug('Migration v30: estrutura de imagens validada');
     } catch (error) {
       log.error('Erro ao aplicar migration versão 30', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 31: atualizar marcadores periciais do template padrão B-602
+  if (fromVersion < 31) {
+    try {
+      const [tabelaSecoesTemplate] = await executeQuery<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'secoes_template'"
+      );
+
+      if (!tabelaSecoesTemplate) {
+        log.debug('Migration v31: tabela secoes_template ausente; atualização do template B-602 ignorada');
+        return;
+      }
+
+      const secoes = await executeQuery<{ id: string; conteudo: string | null }>(`
+        SELECT st.id, st.conteudo
+        FROM secoes_template st
+        JOIN templates t ON t.id = st.template_id
+        JOIN tipos_exame te ON te.id = t.tipo_exame_id
+        WHERE t.nome = ? AND te.codigo = ? AND st.nome = ? AND st.repetir_para = ?
+      `, ['Laudo padrão B602', 'B-602', 'DAS ARMAS', 'armas']);
+
+      let atualizadas = 0;
+      for (const secao of secoes) {
+        const conteudoAtual = secao.conteudo || '';
+        const conteudoAtualizado = atualizarMarcadoresTemplateB602(conteudoAtual);
+        if (conteudoAtualizado === conteudoAtual) continue;
+
+        await executeNonQuery(
+          'UPDATE secoes_template SET conteudo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [conteudoAtualizado, secao.id],
+        );
+        atualizadas += 1;
+      }
+
+      log.debug(`Migration v31: ${atualizadas} seção(ões) do template padrão B-602 atualizada(s)`);
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 31 do template B-602', error);
       throw error;
     }
   }

@@ -3,6 +3,7 @@ import {
   cn,
   converterPlaceholdersTextuais,
   placeholderChaveEhValida,
+  removerFormatacaoPlaceholders,
   segmentarTextoComPlaceholders,
 } from '../../renderer/lib/utils'
 
@@ -63,6 +64,28 @@ describe('utilitários gerais de placeholders', () => {
 
     expect(documento.querySelectorAll('.campo-reservado')).toHaveLength(2)
     expect(documento.body.textContent).toBe('XXX e xxx')
+  })
+
+  it('remove os metadados transitórios de tooltip antes de salvar', () => {
+    const resultado = removerFormatacaoPlaceholders(
+      '<span class="campo-reservado" data-reservado="true" data-tooltip-xxx="true" data-origem-xxx="template" title="Campo de preenchimento manual no template" aria-label="Campo de preenchimento manual no template">XXX</span>',
+    )
+    const documento = new DOMParser().parseFromString(resultado, 'text/html')
+    const campo = documento.querySelector('.campo-reservado')
+
+    expect(campo?.getAttribute('data-reservado')).toBe('true')
+    expect(campo?.hasAttribute('data-tooltip-xxx')).toBe(false)
+    expect(campo?.hasAttribute('data-origem-xxx')).toBe(false)
+    expect(campo?.hasAttribute('title')).toBe(false)
+  })
+
+  it('remove o botão visual de supressão antes de salvar o laudo', () => {
+    const resultado = removerFormatacaoPlaceholders(
+      '<div data-bloco-pericial="funcionamento"><button data-acao-suprimir-bloco="true">×</button><p>Texto pericial</p></div>',
+    )
+
+    expect(resultado).not.toContain('data-acao-suprimir-bloco')
+    expect(resultado).toContain('Texto pericial')
   })
 
   it('combina classes condicionais e resolve conflitos Tailwind', () => {
