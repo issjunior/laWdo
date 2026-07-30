@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -55,6 +56,7 @@ import {
   KeyRound,
   BookOpen,
 } from 'lucide-react';
+import { PERFIL_RESPOSTA_IA_PADRAO, type PerfilRespostaIa } from '@shared/types/ia.types';
 
 const iaConfigSchema = z.object({
   provedor: z.enum(['groq', 'gemini']),
@@ -89,6 +91,8 @@ export const ModelosIAPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ status: 'success' | 'error', message: string } | null>(null);
+  const [perfil, setPerfil] = useState<PerfilRespostaIa>(PERFIL_RESPOSTA_IA_PADRAO);
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false);
 
   const form = useForm<IAConfigForm>({
     resolver: zodResolver(iaConfigSchema),
@@ -130,6 +134,9 @@ export const ModelosIAPage: React.FC = () => {
       if (rModeloGemini.success && rModeloGemini.data) {
         form.setValue('modeloGemini', rModeloGemini.data);
       }
+
+      const rPerfil = await window.ipcAPI.ia.obterPerfil();
+      if (rPerfil.success && rPerfil.data) setPerfil(rPerfil.data);
     } catch {
       // silencioso
     }
@@ -176,9 +183,9 @@ export const ModelosIAPage: React.FC = () => {
       setError(null);
       setTestResult(null);
 
-      const r = await window.ipcAPI.ia.perguntar('Diga apenas "OK" sem nenhum texto adicional.', '');
+      const r = await window.ipcAPI.ia.testarConexao();
 
-      if (r.success && r.data && (r.data as string).toLowerCase().includes('ok')) {
+      if (r.success) {
         const msg = `Conexão com a API ${provedorNome} estabelecida com sucesso!`;
         setTestResult({ status: 'success', message: msg });
         window.ipcAPI.logInfo('IA', msg);
@@ -199,6 +206,22 @@ export const ModelosIAPage: React.FC = () => {
       window.ipcAPI.logError('IA', msg, _e);
     } finally {
       setTestando(false);
+    }
+  };
+
+  const salvarPerfil = async () => {
+    try {
+      setSalvandoPerfil(true);
+      setError(null);
+      const resposta = await window.ipcAPI.ia.salvarPerfil(perfil);
+      if (!resposta.success) {
+        setError(resposta.error || 'Erro ao salvar preferências das respostas');
+        return;
+      }
+      setSuccess('Preferências das respostas salvas com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+    } finally {
+      setSalvandoPerfil(false);
     }
   };
 
@@ -283,6 +306,51 @@ export const ModelosIAPage: React.FC = () => {
 
       <Form {...form}>
         <form onSubmit={handleSalvar} className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ShieldCheck size={18} className="text-primary" />
+                Preferências das respostas
+              </CardTitle>
+              <CardDescription>Oriente como a IA deve elaborar as respostas. Estas preferências não alteram o provedor, modelo ou chaves.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2">
+                  <FormLabel>Tom</FormLabel>
+                  <Select value={perfil.tom} onValueChange={tom => setPerfil(atual => ({ ...atual, tom: tom as PerfilRespostaIa['tom'] }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tecnico_pericial">Técnico-pericial</SelectItem>
+                      <SelectItem value="formal">Formal</SelectItem>
+                      <SelectItem value="direto">Direto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <FormLabel>Detalhamento</FormLabel>
+                  <Select value={perfil.detalhamento} onValueChange={detalhamento => setPerfil(atual => ({ ...atual, detalhamento: detalhamento as PerfilRespostaIa['detalhamento'] }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="conciso">Conciso</SelectItem>
+                      <SelectItem value="equilibrado">Equilibrado</SelectItem>
+                      <SelectItem value="detalhado">Detalhado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <FormLabel>Instruções personalizadas</FormLabel>
+                <Textarea value={perfil.instrucoesPersonalizadas} maxLength={2000} onChange={evento => setPerfil(atual => ({ ...atual, instrucoesPersonalizadas: evento.target.value }))} placeholder="Ex.: priorize frases curtas e linguagem impessoal." />
+                <p className="text-xs text-muted-foreground">{perfil.instrucoesPersonalizadas.length}/2000 caracteres</p>
+              </div>
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={() => setPerfil(PERFIL_RESPOSTA_IA_PADRAO)}>Restaurar padrão</Button>
+                <Button type="button" onClick={() => void salvarPerfil()} disabled={salvandoPerfil}>{salvandoPerfil ? 'Salvando...' : 'Salvar preferências'}</Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* ── Card: Configuração do Provedor ── */}
           <Card>
             <CardHeader>

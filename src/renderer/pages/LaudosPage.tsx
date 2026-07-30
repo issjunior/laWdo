@@ -21,7 +21,6 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
-import { AssistenteIaCard } from '@/components/ai/AssistenteIaCard';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
 import {
@@ -1853,139 +1852,12 @@ export const LaudosPage: React.FC = () => {
     setIaError(null);
   };
 
-  /**
-   * Resolve os valores reais dos placeholders num bloco HTML antes de enviar à IA.
-   * Usa os dados da REP vinculada ao laudo em edição.
-   */
-  const resolverPlaceholdersNoHtml = async (html: string): Promise<string> => {
-    if (!editando) return html;
-    try {
-      const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
-      if (!rRep.success || !rRep.data) return html;
-      const repData = rRep.data;
-
-      let solicitanteNome = '';
-      let tipoExameNome = '';
-      let tipoExameCodigo = '';
-
-      if (repData.solicitante_id) {
-        try {
-          const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
-          if (rSol.success && rSol.data) solicitanteNome = rSol.data.nome || '';
-        } catch {}
-      }
-      if (repData.tipo_exame_id) {
-        try {
-          const rTipo = await window.ipcAPI.tipoExame.findById(repData.tipo_exame_id);
-          if (rTipo.success && rTipo.data) {
-            tipoExameNome = rTipo.data.nome || '';
-            tipoExameCodigo = rTipo.data.codigo || '';
-          }
-        } catch {}
-      }
-
-      // Substituir os {{placeholders}} pelos valores reais
-      let resolved = aplicarPlaceholders(html, repData, { solicitanteNome, tipoExameNome, tipoExameCodigo });
-
-      // Substituir quaisquer placeholders customizados (valor padrão do banco)
-      for (const p of placeholders) {
-        if (p.valor) {
-          resolved = resolved.split(`{{${p.chave}}}`).join(p.valor);
-        }
-      }
-
-      return resolved;
-    } catch {
-      return html; // fallback: envia o original
-    }
-  };
-
-  const handleRevisarOrtografia = async (html: string, idx: number) => {
-    try {
-      setIaSheetMode('ortografia');
-      setIaLoading(true);
-      setIaError(null);
-      // Abre o sheet para o usuário ver a sugestão
-      handleOpenSheet(idx, idx === -1 ? 'Documento completo' : secoes[idx]?.titulo || '');
-      const htmlResolvido = await resolverPlaceholdersNoHtml(html);
-      const r = await window.ipcAPI.ia.revisarOrtografia(htmlResolvido);
-      if (r.success && r.data) {
-        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-        const resposta: ChatMessage = {
-          role: 'assistant',
-          content: String(r.data),
-          timestamp: Date.now(),
-          aplicacao: 'substituir',
-        };
-        setChatMessages(prev => ({
-          ...prev,
-          [chatKey]: [...(prev[chatKey] || []), resposta],
-        }));
-      } else {
-        setIaError(r.error || 'Erro ao revisar ortografia');
-      }
-    } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao revisar ortografia'));
-    } finally {
-      setIaLoading(false);
-    }
-  };
-
-  const handleAdequarEscrita = async (html: string, idx: number) => {
-    try {
-      setIaSheetMode('adequar');
-      setIaLoading(true);
-      setIaError(null);
-      const htmlResolvido = await resolverPlaceholdersNoHtml(html);
-      const r = await window.ipcAPI.ia.adequarEscrita(htmlResolvido);
-      if (r.success && r.data) {
-        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-        const resposta: ChatMessage = {
-          role: 'assistant',
-          content: String(r.data),
-          timestamp: Date.now(),
-          aplicacao: 'substituir',
-        };
-        setChatMessages(prev => ({
-          ...prev,
-          [chatKey]: [...(prev[chatKey] || []), resposta],
-        }));
-      } else {
-        setIaError(r.error || 'Erro ao adequar escrita');
-      }
-    } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao adequar escrita'));
-    } finally {
-      setIaLoading(false);
-    }
-  };
-
-  const handleDescreverImagem = async (imagens: Array<{ src: string; alt?: string }>, idx: number) => {
-    try {
-      setIaSheetMode('imagem');
-      setIaLoading(true);
-      setIaError(null);
-      const r = await window.ipcAPI.ia.descreverImagem(imagens);
-      if (r.success && r.data) {
-        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-        const resposta: ChatMessage = {
-          role: 'assistant',
-          content: String(r.data),
-          timestamp: Date.now(),
-          aplicacao: 'inserir',
-        };
-        setChatMessages(prev => ({
-          ...prev,
-          [chatKey]: [...(prev[chatKey] || []), resposta],
-        }));
-      } else {
-        setIaError(r.error || 'Erro ao descrever imagem');
-      }
-    } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao descrever imagem'));
-    } finally {
-      setIaLoading(false);
-    }
+  const handleAbrirAssistenteIa = () => {
+    if (!panelPoppedOut) setIlustracoesPanelOpen(false);
+    setIaSheetSecaoIdx(null);
+    setIaSheetSecaoTitulo('Escolha um escopo para iniciar');
+    setIaSheetOpen(true);
+    setIaError(null);
   };
 
   const handlePerguntar = async (pergunta: string, html: string, idx: number, _titulo: string) => {
@@ -2006,11 +1878,18 @@ export const LaudosPage: React.FC = () => {
         [chatKey]: [...(prev[chatKey] || []), userMsg],
       }));
 
-      const r = await window.ipcAPI.ia.perguntar(pergunta, html);
-      if (r.success && r.data) {
+      const r = await window.ipcAPI.ia.executar({
+        operationId: crypto.randomUUID(),
+        acao: 'inserir',
+        escopo: idx === -1 ? 'laudo_completo' : 'secao',
+        instrucao: pergunta,
+        fragmentos: [{ id: 'alvo-0', texto: converterHtmlEmTexto(html) }],
+      });
+      const textoResposta = r.data?.fragmentos[0]?.texto;
+      if (r.success && textoResposta) {
         const assistantMsg: ChatMessage = {
           role: 'assistant',
-          content: String(r.data),
+          content: textoResposta,
           timestamp: Date.now(),
           aplicacao: 'inserir',
         };
@@ -2420,6 +2299,7 @@ export const LaudosPage: React.FC = () => {
               onModoOrganizacaoChange={handleEditorModeChange}
               onToggleIlustracoes={handleToggleIlustracoes}
               onAbrirIlustracoesEmJanela={handlePopOut}
+              onAbrirAssistenteIa={handleAbrirAssistenteIa}
               onReindexarSecoes={handleReindexarSecoes}
             />
           </CardHeader>
@@ -2436,18 +2316,6 @@ export const LaudosPage: React.FC = () => {
                 )}
                 {editorMode === 'single' ? (
                   <div className="space-y-3 pb-4">
-                    <AssistenteIaCard
-                      secaoIndex={-1}
-                      secaoTitulo="Documento completo"
-                      htmlContent={singleEditorHtml}
-                      processando={iaLoading}
-                      erro={iaSheetSecaoIdx === -1 ? iaError : null}
-                      onRevisarOrtografia={handleRevisarOrtografia}
-                      onAdequarEscrita={handleAdequarEscrita}
-                      onDescreverImagem={handleDescreverImagem}
-                      onPerguntar={handlePerguntar}
-                      onOpenSheet={handleOpenSheet}
-                    />
                     <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                       <TinyMceEditor
                         editorId="laudo-single-editor"
@@ -2503,18 +2371,6 @@ export const LaudosPage: React.FC = () => {
                           <ChevronDown className="h-4 w-4 transition-transform duration-200" />
                         </div>
                         <CollapsibleContent className="p-4 border-t" forceMount>
-                          <AssistenteIaCard
-                            secaoIndex={idx}
-                            secaoTitulo={secao.titulo}
-                            htmlContent={secao.conteudo}
-                            processando={iaLoading}
-                            erro={iaSheetSecaoIdx === idx ? iaError : null}
-                            onRevisarOrtografia={handleRevisarOrtografia}
-                            onAdequarEscrita={handleAdequarEscrita}
-                            onDescreverImagem={handleDescreverImagem}
-                            onPerguntar={handlePerguntar}
-                            onOpenSheet={handleOpenSheet}
-                          />
                           <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                             <div className={isIlustracoes ? 'relative' : ''}>
                               <TinyMceEditor
@@ -2675,6 +2531,11 @@ export const LaudosPage: React.FC = () => {
             : 'inserir'}
           loading={iaLoading}
           error={iaError}
+          opcoesEscopo={[
+            { id: -1, titulo: 'Documento completo' },
+            ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+          ]}
+          onSelecionarEscopo={indice => handleOpenSheet(indice, indice === -1 ? 'Documento completo' : secoes[indice]?.titulo || '')}
         />
 
         <DialogoAplicarRespostaIa

@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
+  Bot,
   Braces,
   CheckCircle2,
   ChevronDown,
@@ -300,6 +301,7 @@ interface BarraEditorLaudoProps {
   onModoOrganizacaoChange: (modo: ModoOrganizacaoLaudo) => void;
   onToggleIlustracoes: () => void;
   onAbrirIlustracoesEmJanela: () => void;
+  onAbrirAssistenteIa?: () => void;
   onReindexarSecoes: () => void;
 }
 
@@ -313,6 +315,7 @@ export function BarraEditorLaudo({
   onModoOrganizacaoChange,
   onToggleIlustracoes,
   onAbrirIlustracoesEmJanela,
+  onAbrirAssistenteIa,
   onReindexarSecoes,
 }: BarraEditorLaudoProps) {
   return (
@@ -341,6 +344,10 @@ export function BarraEditorLaudo({
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-muted-foreground">Painéis e manutenção</span>
         <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onAbrirAssistenteIa} className="gap-2">
+            <Bot className="size-4" />
+            Assistente IA
+          </Button>
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex items-center">

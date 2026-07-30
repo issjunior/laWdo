@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { ContextoIa, PerfilRespostaIa, RespostaIa, SolicitacaoIa } from '../shared/types/ia.types.js';
 import type {
   DashboardResponse,
   UserFilters,
@@ -257,6 +258,12 @@ export interface IpcAPI {
     adequarEscrita: (textoHtml: string) => Promise<UserResponse>;
     descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => Promise<UserResponse>;
     perguntar: (pergunta: string, contexto?: string) => Promise<UserResponse>;
+    obterContexto: () => Promise<UserResponse<ContextoIa>>;
+    obterPerfil: () => Promise<UserResponse<PerfilRespostaIa>>;
+    salvarPerfil: (perfil: PerfilRespostaIa) => Promise<UserResponse>;
+    executar: (solicitacao: SolicitacaoIa) => Promise<UserResponse<RespostaIa>>;
+    cancelar: (operationId: string) => Promise<UserResponse>;
+    testarConexao: () => Promise<UserResponse<ContextoIa>>;
   };
 
   // Backup e Restauração
@@ -478,6 +485,12 @@ const ALLOWED_CHANNELS = new Set([
   'ia:adequarEscrita',
   'ia:descreverImagem',
   'ia:perguntar',
+  'ia:obter-contexto',
+  'ia:obter-perfil',
+  'ia:salvar-perfil',
+  'ia:executar',
+  'ia:cancelar',
+  'ia:testar-conexao',
 
   // Backup
   'backup:criar',
@@ -1010,6 +1023,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof pergunta !== 'string' || !pergunta.trim()) throw new Error('Pergunta inválida');
       return ipcRenderer.invoke('ia:perguntar', pergunta, contexto);
     },
+    obterContexto: () => ipcRenderer.invoke('ia:obter-contexto'),
+    obterPerfil: () => ipcRenderer.invoke('ia:obter-perfil'),
+    salvarPerfil: (perfil: PerfilRespostaIa) => ipcRenderer.invoke('ia:salvar-perfil', perfil),
+    executar: (solicitacao: SolicitacaoIa) => ipcRenderer.invoke('ia:executar', solicitacao),
+    cancelar: (operationId: string) => ipcRenderer.invoke('ia:cancelar', operationId),
+    testarConexao: () => ipcRenderer.invoke('ia:testar-conexao'),
   },
 
   backup: {

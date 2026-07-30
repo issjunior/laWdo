@@ -52,6 +52,11 @@ export function AssistenteIaCard({
   useEffect(() => {
     if (!aberto) return;
 
+    if (!window.ipcAPI?.configuracao) {
+      setNomeModelo('Não configurado');
+      return;
+    }
+
     void window.ipcAPI.configuracao.obter('provedor_ia').then(resposta => {
       const configuracao = resposta as ConfiguracaoResposta;
       if (!configuracao.success || !configuracao.data) {

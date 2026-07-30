@@ -30,6 +30,8 @@ interface AISheetProps {
   modoAplicacao?: 'inserir' | 'substituir';
   loading?: boolean;
   error?: string | null;
+  opcoesEscopo?: Array<{ id: number; titulo: string }>;
+  onSelecionarEscopo?: (id: number) => void;
 }
 
 type ConfiguracaoResposta = {
@@ -41,12 +43,15 @@ export const AISheet: React.FC<AISheetProps> = ({
   open,
   onOpenChange,
   secaoTitulo,
+  editorId,
   messages,
   onSendMessage,
   onApplyResponse,
   modoAplicacao = 'inserir',
   loading = false,
   error = null,
+  opcoesEscopo = [],
+  onSelecionarEscopo,
 }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -141,7 +146,20 @@ export const AISheet: React.FC<AISheetProps> = ({
         {/* Área de mensagens */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="space-y-4">
-            {messages.length === 0 && !loading && (
+            {!editorId && !loading && (
+              <div className="space-y-3 py-4">
+                <p className="text-sm font-medium">Escolha o escopo que a IA poderá usar</p>
+                <p className="text-xs text-muted-foreground">Nenhum conteúdo é enviado até uma ação ser solicitada.</p>
+                <div className="flex flex-col gap-2">
+                  {opcoesEscopo.map(opcao => (
+                    <Button key={opcao.id} type="button" variant="outline" className="justify-start" onClick={() => onSelecionarEscopo?.(opcao.id)}>
+                      {opcao.titulo}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {editorId && messages.length === 0 && !loading && (
               <div className="text-center py-8 text-muted-foreground text-sm">
                 <p>Digite uma pergunta sobre o laudo.</p>
                 <p className="text-xs mt-1">A IA responde com base no contexto da seção atual.</p>
@@ -228,12 +246,13 @@ export const AISheet: React.FC<AISheetProps> = ({
               onKeyDown={handleKeyDown}
               placeholder="Digite sua pergunta... (Shift+Enter para nova linha)"
               className="min-h-[60px] resize-none text-sm"
-              disabled={loading}
+              disabled={!editorId || loading}
+              aria-label="Pedido livre ao assistente IA"
             />
             <Button
               size="icon"
               onClick={handleSend}
-              disabled={!input.trim() || loading}
+              disabled={!editorId || !input.trim() || loading}
               className="shrink-0 self-end"
             >
               <Send size={16} />

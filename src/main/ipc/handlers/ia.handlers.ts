@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
+import { iaExecucaoService } from '../../services/ia-execucao.service.js';
+import type { PerfilRespostaIa, SolicitacaoIa } from '../../../shared/types/ia.types.js';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
@@ -136,6 +138,52 @@ function extrairTextoDoHtml(html: string): string {
  * Registra handlers IPC para integração com IA (Groq / Gemini)
  */
 export const registerIAHandlers = (): void => {
+  ipcMain.handle('ia:obter-contexto', async () => {
+    try {
+      return { success: true, data: await iaExecucaoService.obterContexto() };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao obter contexto da IA' };
+    }
+  });
+
+  ipcMain.handle('ia:obter-perfil', async () => {
+    try {
+      return { success: true, data: await iaExecucaoService.obterPerfil() };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao obter preferências da IA' };
+    }
+  });
+
+  ipcMain.handle('ia:salvar-perfil', async (_event, perfil: unknown) => {
+    try {
+      await iaExecucaoService.salvarPerfil(perfil as PerfilRespostaIa);
+      return { success: true };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao salvar preferências da IA' };
+    }
+  });
+
+  ipcMain.handle('ia:executar', async (_event, solicitacao: unknown) => {
+    try {
+      if (!solicitacao || typeof solicitacao !== 'object') return { success: false, error: 'ENTRADA_INVALIDA' };
+      return { success: true, data: await iaExecucaoService.executar(solicitacao as SolicitacaoIa) };
+    } catch (error: unknown) {
+      const mensagem = error instanceof Error ? error.message : 'ERRO_INTERNO';
+      logError('Erro ao executar IA', { codigo: mensagem.split(':')[0] });
+      return { success: false, error: mensagem };
+    }
+  });
+
+  ipcMain.handle('ia:cancelar', async (_event, operationId: unknown) => {
+    if (typeof operationId !== 'string' || !operationId) return { success: false, error: 'ENTRADA_INVALIDA' };
+    iaExecucaoService.cancelar(operationId);
+    return { success: true };
+  });
+
+  ipcMain.handle('ia:testar-conexao', async () => {
+    const contexto = await iaExecucaoService.obterContexto();
+    return contexto.configurado ? { success: true, data: contexto } : { success: false, error: 'CONFIGURACAO_AUSENTE' };
+  });
   /**
    * Revisar ortografia de um texto HTML
    */
