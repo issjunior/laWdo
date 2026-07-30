@@ -82,7 +82,7 @@ export const registerIpcHandlers = (options: {
   registerTemplateHandlers();
   registerImportacaoHandlers();
   registerLaudoHandlers();
-  registerIAHandlers();
+  registerIAHandlers(options);
   registerBackupHandlers();
   registerLogSystemHandlers();
   registerIlustracoesHandlers(options);

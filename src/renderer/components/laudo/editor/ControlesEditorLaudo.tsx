@@ -32,7 +32,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { EstadoSalvamentoLaudo } from '@/hooks/useGerenciadorAlteracoesLaudo';
 import { cn } from '@/lib/utils';
 
@@ -296,12 +295,14 @@ interface BarraEditorLaudoProps {
   modoOrganizacao: ModoOrganizacaoLaudo;
   ilustracoesAbertas: boolean;
   ilustracoesEmJanela: boolean;
+  assistenteIaDestacado?: boolean;
   operacaoEmAndamento: boolean;
   onModoConteudoChange: (modo: ModoConteudoLaudo) => void;
   onModoOrganizacaoChange: (modo: ModoOrganizacaoLaudo) => void;
   onToggleIlustracoes: () => void;
   onAbrirIlustracoesEmJanela: () => void;
   onAbrirAssistenteIa?: () => void;
+  onDestacarAssistenteIa?: () => void;
   onReindexarSecoes: () => void;
 }
 
@@ -310,12 +311,14 @@ export function BarraEditorLaudo({
   modoOrganizacao,
   ilustracoesAbertas,
   ilustracoesEmJanela,
+  assistenteIaDestacado = false,
   operacaoEmAndamento,
   onModoConteudoChange,
   onModoOrganizacaoChange,
   onToggleIlustracoes,
   onAbrirIlustracoesEmJanela,
   onAbrirAssistenteIa,
+  onDestacarAssistenteIa,
   onReindexarSecoes,
 }: BarraEditorLaudoProps) {
   return (
@@ -344,13 +347,37 @@ export function BarraEditorLaudo({
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-muted-foreground">Painéis e manutenção</span>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onAbrirAssistenteIa} className="gap-2">
-            <Bot className="size-4" />
-            Assistente IA
-          </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center">
+          <div className="flex items-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onAbrirAssistenteIa}
+                  aria-pressed={assistenteIaDestacado}
+                  className={cn(
+                    'gap-2 rounded-r-none border-r-0',
+                    assistenteIaDestacado && 'bg-accent text-accent-foreground',
+                  )}
+                >
+                  <Bot className="size-4 shrink-0" />
+                  <span className="leading-none">Assistente IA</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Destacar Assistente IA"
+                  onClick={onDestacarAssistenteIa}
+                  disabled={assistenteIaDestacado}
+                  className={cn(
+                    'size-8 rounded-l-none',
+                    assistenteIaDestacado && 'bg-accent text-accent-foreground',
+                  )}
+                >
+                  <ExternalLink className="size-4" />
+                </Button>
+          </div>
+          <div className="flex items-center">
                 <Button
                   type="button"
                   variant="outline"
@@ -365,45 +392,21 @@ export function BarraEditorLaudo({
                   <Images className="size-4" />
                   Ilustrações
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Opções do painel de ilustrações"
-                      className={cn(
-                        'size-8 rounded-l-none',
-                        (ilustracoesAbertas || ilustracoesEmJanela) && 'bg-accent text-accent-foreground',
-                      )}
-                    >
-                      <ChevronDown className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem
-                      onClick={onAbrirIlustracoesEmJanela}
-                      disabled={ilustracoesEmJanela}
-                    >
-                      <ExternalLink className="mr-2 size-4" />
-                      Abrir em janela separada
-                    </DropdownMenuItem>
-                    {ilustracoesEmJanela && (
-                      <DropdownMenuItem onClick={onToggleIlustracoes}>
-                        <Images className="mr-2 size-4" />
-                        Retornar ao editor
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Destacar painel de ilustrações"
+                  onClick={onAbrirIlustracoesEmJanela}
+                  disabled={ilustracoesEmJanela}
+                  className={cn(
+                    'size-8 rounded-l-none',
+                    (ilustracoesAbertas || ilustracoesEmJanela) && 'bg-accent text-accent-foreground',
+                  )}
+                >
+                  <ExternalLink className="size-4" />
+                </Button>
               </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              {ilustracoesEmJanela
-                ? 'Painel aberto em janela separada'
-                : 'Abrir o painel de ilustrações'}
-            </TooltipContent>
-          </Tooltip>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

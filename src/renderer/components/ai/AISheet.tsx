@@ -10,14 +10,27 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Send, Loader2, Check, Copy, X } from 'lucide-react';
+import { Send, Loader2, Check, Copy, ExternalLink, X } from 'lucide-react';
+import type { AcaoIa } from '@shared/types/ia.types';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   aplicacao?: 'inserir' | 'substituir';
+  acao?: AcaoIa;
+  alvo?: { indice: number; conteudo: string };
 }
+
+const rotulosAcaoIa: Record<AcaoIa, string> = {
+  ortografia: 'Ortografia',
+  tecnico_pericial: 'Técnico-pericial',
+  reescrever: 'Reescrever',
+  clareza: 'Clareza',
+  resumir: 'Resumir',
+  expandir: 'Expandir',
+  inserir: 'Inserir',
+};
 
 interface AISheetProps {
   open: boolean;
@@ -26,12 +39,14 @@ interface AISheetProps {
   editorId: string;
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
-  onApplyResponse: (texto: string, modo: 'inserir' | 'substituir') => void;
+  onApplyResponse: (mensagem: ChatMessage) => void;
   modoAplicacao?: 'inserir' | 'substituir';
   loading?: boolean;
   error?: string | null;
   opcoesEscopo?: Array<{ id: number; titulo: string }>;
   onSelecionarEscopo?: (id: number) => void;
+  onExecutarAcao?: (acao: AcaoIa) => void;
+  onDestacar?: () => void;
 }
 
 type ConfiguracaoResposta = {
@@ -52,6 +67,8 @@ export const AISheet: React.FC<AISheetProps> = ({
   error = null,
   opcoesEscopo = [],
   onSelecionarEscopo,
+  onExecutarAcao,
+  onDestacar,
 }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -125,12 +142,24 @@ export const AISheet: React.FC<AISheetProps> = ({
                 {loading ? 'Pensando...' : 'Online'}
               </Badge>
             </SheetTitle>
-            <SheetClose asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <span className="sr-only">Fechar</span>
-                <X className="h-4 w-4" />
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={onDestacar}
+                aria-label="Destacar Assistente IA"
+              >
+                <ExternalLink className="h-4 w-4" />
               </Button>
-            </SheetClose>
+              <SheetClose asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <span className="sr-only">Fechar</span>
+                  <X className="h-4 w-4" />
+                </Button>
+              </SheetClose>
+            </div>
           </div>
           <div className="mt-1 flex flex-col gap-0.5">
             <p className="text-xs text-primary font-medium flex items-center gap-1.5">
@@ -160,9 +189,28 @@ export const AISheet: React.FC<AISheetProps> = ({
               </div>
             )}
             {editorId && messages.length === 0 && !loading && (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                <p>Digite uma pergunta sobre o laudo.</p>
-                <p className="text-xs mt-1">A IA responde com base no contexto da seção atual.</p>
+              <div className="space-y-5 py-4">
+                <div className="text-center text-muted-foreground text-sm">
+                  <p>Escolha uma ação ou descreva o que deseja inserir.</p>
+                  <p className="text-xs mt-1">A IA usa somente o conteúdo do escopo selecionado.</p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Revisar</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('ortografia')}>Ortografia</Button>
+                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('tecnico_pericial')}>Técnico-pericial</Button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Transformar</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('clareza')}>Clareza</Button>
+                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('resumir')}>Resumir</Button>
+                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('expandir')}>Expandir</Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -181,6 +229,11 @@ export const AISheet: React.FC<AISheetProps> = ({
                   <div className="whitespace-pre-wrap">{msg.content}</div>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
+                  {msg.acao && (
+                    <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">
+                      {rotulosAcaoIa[msg.acao]}
+                    </Badge>
+                  )}
                   <span className="text-[10px] text-muted-foreground">
                     {formatTime(msg.timestamp)}
                   </span>
@@ -199,7 +252,7 @@ export const AISheet: React.FC<AISheetProps> = ({
                         variant="ghost"
                         size="sm"
                         className="h-5 px-1.5 text-[10px]"
-                        onClick={() => onApplyResponse(msg.content, obterModoAplicacao(msg))}
+                        onClick={() => onApplyResponse(msg)}
                         title={obterModoAplicacao(msg) === 'substituir'
                           ? 'Revisar antes de substituir a seção'
                           : 'Inserir resposta na posição atual do cursor'}
@@ -244,7 +297,7 @@ export const AISheet: React.FC<AISheetProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Digite sua pergunta... (Shift+Enter para nova linha)"
+              placeholder="Descreva o texto que deseja inserir... (Shift+Enter para nova linha)"
               className="min-h-[60px] resize-none text-sm"
               disabled={!editorId || loading}
               aria-label="Pedido livre ao assistente IA"

@@ -1,11 +1,10 @@
 import { configuracaoService } from './configuracao.service.js';
 import { getLogger } from '../utils/logger.js';
-import {
-  PERFIL_RESPOSTA_IA_PADRAO,
-  type ContextoIa,
-  type PerfilRespostaIa,
-  type RespostaIa,
-  type SolicitacaoIa,
+import type {
+  ContextoIa,
+  PerfilRespostaIa,
+  RespostaIa,
+  SolicitacaoIa,
 } from '../../shared/types/ia.types.js';
 
 const log = getLogger('ia');
@@ -14,6 +13,12 @@ const URLS_PROVEDORES = {
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
 } as const;
 const MODELOS_COM_VISAO = new Set(['meta-llama/llama-4-scout-17b-16e-instruct', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']);
+const PERFIL_RESPOSTA_IA_PADRAO: PerfilRespostaIa = {
+  versao: 1,
+  tom: 'tecnico_pericial',
+  detalhamento: 'equilibrado',
+  instrucoesPersonalizadas: '',
+};
 
 function perfilValido(valor: unknown): valor is PerfilRespostaIa {
   if (!valor || typeof valor !== 'object') return false;

@@ -264,6 +264,15 @@ export interface IpcAPI {
     executar: (solicitacao: SolicitacaoIa) => Promise<UserResponse<RespostaIa>>;
     cancelar: (operationId: string) => Promise<UserResponse>;
     testarConexao: () => Promise<UserResponse<ContextoIa>>;
+    painelAbrir: (sessionId: string) => void;
+    painelFechar: () => void;
+    painelPronto: () => void;
+    painelPublicar: (sessionId: string, estado: unknown) => void;
+    painelReencaixar: () => void;
+    onPainelPronto: (callback: (sessionId: string) => void) => () => void;
+    onPainelEstado: (callback: (estado: unknown) => void) => () => void;
+    onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
+    onPainelFechado: (callback: (sessionId: string) => void) => () => void;
   };
 
   // Backup e Restauração
@@ -491,6 +500,11 @@ const ALLOWED_CHANNELS = new Set([
   'ia:executar',
   'ia:cancelar',
   'ia:testar-conexao',
+  'ia:painel-abrir',
+  'ia:painel-fechar',
+  'ia:painel-pronto',
+  'ia:painel-publicar',
+  'ia:painel-reencaixar',
 
   // Backup
   'backup:criar',
@@ -1029,6 +1043,31 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     executar: (solicitacao: SolicitacaoIa) => ipcRenderer.invoke('ia:executar', solicitacao),
     cancelar: (operationId: string) => ipcRenderer.invoke('ia:cancelar', operationId),
     testarConexao: () => ipcRenderer.invoke('ia:testar-conexao'),
+    painelAbrir: (sessionId: string) => ipcRenderer.send('ia:painel-abrir', sessionId),
+    painelFechar: () => ipcRenderer.send('ia:painel-fechar'),
+    painelPronto: () => ipcRenderer.send('ia:painel-pronto'),
+    painelPublicar: (sessionId: string, estado: unknown) => ipcRenderer.send('ia:painel-publicar', sessionId, estado),
+    painelReencaixar: () => ipcRenderer.send('ia:painel-reencaixar'),
+    onPainelPronto: (callback: (sessionId: string) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('ia:painel-pronto', listener);
+      return () => ipcRenderer.removeListener('ia:painel-pronto', listener);
+    },
+    onPainelEstado: (callback: (estado: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, estado: unknown) => callback(estado);
+      ipcRenderer.on('ia:painel-estado', listener);
+      return () => ipcRenderer.removeListener('ia:painel-estado', listener);
+    },
+    onPainelReencaixar: (callback: (sessionId: string) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('ia:painel-reencaixar', listener);
+      return () => ipcRenderer.removeListener('ia:painel-reencaixar', listener);
+    },
+    onPainelFechado: (callback: (sessionId: string) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('ia:painel-fechado', listener);
+      return () => ipcRenderer.removeListener('ia:painel-fechado', listener);
+    },
   },
 
   backup: {

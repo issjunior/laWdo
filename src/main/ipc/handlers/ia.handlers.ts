@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 import { iaExecucaoService } from '../../services/ia-execucao.service.js';
@@ -137,7 +137,78 @@ function extrairTextoDoHtml(html: string): string {
 /**
  * Registra handlers IPC para integração com IA (Groq / Gemini)
  */
-export const registerIAHandlers = (): void => {
+interface IaHandlerOptions {
+  preloadPath: string;
+  rendererHtmlPath: string;
+  isDev: boolean;
+}
+
+let janelaPainelIa: BrowserWindow | null = null;
+let sessaoPainelIa: { id: string; proprietarioId: number } | null = null;
+
+export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
+  const fecharJanelaPainelIa = (notificarProprietario: boolean) => {
+    const sessao = sessaoPainelIa;
+    if (janelaPainelIa && !janelaPainelIa.isDestroyed()) janelaPainelIa.close();
+    janelaPainelIa = null;
+    sessaoPainelIa = null;
+    if (notificarProprietario && sessao) {
+      const proprietario = BrowserWindow.fromId(sessao.proprietarioId);
+      if (proprietario && !proprietario.isDestroyed()) proprietario.webContents.send('ia:painel-fechado', sessao.id);
+    }
+  };
+
+  ipcMain.on('ia:painel-abrir', (event, sessionId: unknown) => {
+    if (typeof sessionId !== 'string' || !sessionId.trim()) return;
+    const proprietario = BrowserWindow.fromWebContents(event.sender);
+    if (!proprietario) return;
+    if (janelaPainelIa && !janelaPainelIa.isDestroyed()) {
+      if (sessaoPainelIa?.proprietarioId === proprietario.id && sessaoPainelIa.id === sessionId) janelaPainelIa.focus();
+      return;
+    }
+    sessaoPainelIa = { id: sessionId, proprietarioId: proprietario.id };
+    janelaPainelIa = new BrowserWindow({
+      width: 460,
+      height: 720,
+      minWidth: 360,
+      minHeight: 480,
+      title: 'Assistente IA',
+      show: false,
+      webPreferences: { preload: opcoes.preloadPath, nodeIntegration: false, contextIsolation: true, sandbox: true },
+    });
+    const destino = opcoes.isDev
+      ? `http://localhost:3000#/painel-ia?sessionId=${encodeURIComponent(sessionId)}`
+      : `file://${opcoes.rendererHtmlPath}#/painel-ia?sessionId=${encodeURIComponent(sessionId)}`;
+    janelaPainelIa.loadURL(destino);
+    janelaPainelIa.once('ready-to-show', () => janelaPainelIa?.show());
+    janelaPainelIa.on('closed', () => fecharJanelaPainelIa(true));
+    proprietario.once('closed', () => fecharJanelaPainelIa(false));
+  });
+
+  ipcMain.on('ia:painel-pronto', event => {
+    if (!janelaPainelIa || event.sender.id !== janelaPainelIa.webContents.id || !sessaoPainelIa) return;
+    const proprietario = BrowserWindow.fromId(sessaoPainelIa.proprietarioId);
+    if (proprietario && !proprietario.isDestroyed()) proprietario.webContents.send('ia:painel-pronto', sessaoPainelIa.id);
+  });
+
+  ipcMain.on('ia:painel-publicar', (event, sessionId: unknown, estado: unknown) => {
+    const proprietario = BrowserWindow.fromWebContents(event.sender);
+    if (!sessaoPainelIa || !janelaPainelIa || proprietario?.id !== sessaoPainelIa.proprietarioId || sessionId !== sessaoPainelIa.id) return;
+    janelaPainelIa.webContents.send('ia:painel-estado', estado);
+  });
+
+  ipcMain.on('ia:painel-reencaixar', event => {
+    if (!sessaoPainelIa || !janelaPainelIa || event.sender.id !== janelaPainelIa.webContents.id) return;
+    const proprietario = BrowserWindow.fromId(sessaoPainelIa.proprietarioId);
+    if (proprietario && !proprietario.isDestroyed()) proprietario.webContents.send('ia:painel-reencaixar', sessaoPainelIa.id);
+    fecharJanelaPainelIa(false);
+  });
+
+  ipcMain.on('ia:painel-fechar', event => {
+    const proprietario = BrowserWindow.fromWebContents(event.sender);
+    if (!sessaoPainelIa || proprietario?.id !== sessaoPainelIa.proprietarioId) return;
+    fecharJanelaPainelIa(false);
+  });
   ipcMain.handle('ia:obter-contexto', async () => {
     try {
       return { success: true, data: await iaExecucaoService.obterContexto() };

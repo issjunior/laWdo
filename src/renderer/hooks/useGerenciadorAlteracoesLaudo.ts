@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 export type EstadoSalvamentoLaudo = 'salvo' | 'pendente' | 'salvando' | 'erro';
-export type OrigemAlteracaoLaudo = 'usuario' | 'normalizacao-inicial';
+export type OrigemAlteracaoLaudo = 'usuario' | 'ia' | 'normalizacao-inicial';
 
 export function useGerenciadorAlteracoesLaudo() {
   const [estadoSalvamento, setEstadoSalvamento] = useState<EstadoSalvamentoLaudo>('salvo');

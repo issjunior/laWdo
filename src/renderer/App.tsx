@@ -17,6 +17,7 @@ const LogsPage = lazy(() => import('@/pages/LogsPage').then(m => ({ default: m.L
 const GdlConfigPage = lazy(() => import('@/pages/GdlConfigPage').then(m => ({ default: m.GdlConfigPage })));
 const MargensPage = lazy(() => import('@/pages/MargensPage').then(m => ({ default: m.MargensPage })));
 const IlustracoesPanelWindow = lazy(() => import('@/pages/IlustracoesPanelWindow'));
+const PainelIaWindow = lazy(() => import('@/pages/PainelIaWindow'));
 const PecasPage = lazy(() => import('@/pages/PecasPage'));
 const CategoriasPecasPage = lazy(() => import('@/pages/CategoriasPecasPage'));
 const WizardsPage = lazy(() => import('@/pages/WizardsPage'));
@@ -99,7 +100,7 @@ const App = () => {
     setCurrentUser(null);
   };
 
-  const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes');
+  const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes') || window.location.hash.startsWith('#/painel-ia');
 
   return (
     <ErrorBoundary>
@@ -119,6 +120,7 @@ const App = () => {
             <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
             <Routes>
               <Route path="/panel-ilustracoes" element={<IlustracoesPanelWindow />} />
+              <Route path="/painel-ia" element={<PainelIaWindow />} />
               <Route path="*" element={
                 <Layout onLogout={handleLogout} currentUser={currentUser}>
                   <Routes>

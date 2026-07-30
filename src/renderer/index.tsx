@@ -84,7 +84,17 @@ interface IpcAPIRendererLegada {
   categoriaPeca: IpcGrupoLegado;
   peca: IpcGrupoLegado;
   regraWizard: IpcGrupoLegado;
-  ia: IpcGrupoLegado;
+  ia: IpcGrupoLegado & {
+    painelAbrir: (sessionId: string) => void;
+    painelFechar: () => void;
+    painelPronto: () => void;
+    painelPublicar: (sessionId: string, estado: unknown) => void;
+    painelReencaixar: () => void;
+    onPainelPronto: (callback: (sessionId: string) => void) => () => void;
+    onPainelEstado: (callback: (estado: unknown) => void) => () => void;
+    onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
+    onPainelFechado: (callback: (sessionId: string) => void) => () => void;
+  };
   backup: IpcGrupoLegado;
   atualizacao?: {
     estado: () => Promise<RespostaAtualizacao>;

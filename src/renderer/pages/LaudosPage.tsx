@@ -23,6 +23,7 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
+import type { AcaoIa } from '@shared/types/ia.types';
 import {
   BarraEditorLaudo,
   CabecalhoEditorLaudo,
@@ -276,6 +277,20 @@ const converterHtmlEmTexto = (html: string): string => {
   }
 };
 
+const converterTextoEmHtmlSeguro = (texto: string): string => {
+  const escaparHtml = (valor: string) => valor
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+  return texto
+    .split(/\r?\n/)
+    .map(linha => linha.trim() ? `<p>${escaparHtml(linha)}</p>` : '<p>&nbsp;</p>')
+    .join('');
+};
+
 interface LaudoItem {
   id: string;
   rep_id: string;
@@ -305,6 +320,8 @@ interface RespostaIaPendente {
   texto: string;
   conteudoAtual: string;
   conteudoProposto: string;
+  indiceAlvo: number;
+  conteudoAlvo: string;
 }
 
 export const LaudosPage: React.FC = () => {
@@ -346,12 +363,13 @@ export const LaudosPage: React.FC = () => {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
 
   const [iaSheetOpen, setIaSheetOpen] = useState(false);
+  const [painelIaDestacado, setPainelIaDestacado] = useState(false);
   const [iaSheetSecaoIdx, setIaSheetSecaoIdx] = useState<number | null>(null);
   const [iaSheetSecaoTitulo, setIaSheetSecaoTitulo] = useState('');
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
   const [iaLoading, setIaLoading] = useState(false);
   const [iaError, setIaError] = useState<string | null>(null);
-  const [iaSheetMode, setIaSheetMode] = useState<'ortografia' | 'adequar' | 'imagem' | 'perguntar' | null>(null);
+  const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
   const [respostaIaPendente, setRespostaIaPendente] = useState<RespostaIaPendente | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1860,16 +1878,69 @@ export const LaudosPage: React.FC = () => {
     setIaError(null);
   };
 
-  const handlePerguntar = async (pergunta: string, html: string, idx: number, _titulo: string) => {
+  const sessaoPainelIaRef = useRef<string | null>(null);
+  const revisaoPainelIaRef = useRef(0);
+
+  const handleDestacarAssistenteIa = () => {
+    const sessionId = crypto.randomUUID();
+    sessaoPainelIaRef.current = sessionId;
+    revisaoPainelIaRef.current = 0;
+    setIaSheetOpen(false);
+    setPainelIaDestacado(true);
+    window.ipcAPI.ia.painelAbrir(sessionId);
+  };
+
+  useEffect(() => {
+    const publicarSnapshot = (sessionId: string) => {
+      if (sessionId !== sessaoPainelIaRef.current) return;
+      revisaoPainelIaRef.current += 1;
+      window.ipcAPI.ia.painelPublicar(sessionId, {
+        revisao: revisaoPainelIaRef.current,
+        titulo: iaSheetSecaoTitulo || 'Escolha um escopo no editor',
+        status: iaLoading ? 'Processando solicitação...' : 'Painel sincronizado. Use o editor para escolher o escopo e enviar pedidos.',
+      });
+    };
+    const removerPronto = window.ipcAPI.ia.onPainelPronto(publicarSnapshot);
+    const removerReencaixar = window.ipcAPI.ia.onPainelReencaixar(sessionId => {
+      if (sessionId !== sessaoPainelIaRef.current) return;
+      setPainelIaDestacado(false);
+      setIaSheetOpen(true);
+    });
+    const removerFechado = window.ipcAPI.ia.onPainelFechado(sessionId => {
+      if (sessionId === sessaoPainelIaRef.current) setPainelIaDestacado(false);
+    });
+    return () => { removerPronto(); removerReencaixar(); removerFechado(); };
+  }, [iaLoading, iaSheetSecaoTitulo]);
+
+  const obterDescricaoAcaoIa = (acao: AcaoIa) => {
+    const descricoes: Record<AcaoIa, string> = {
+      ortografia: 'Revisar ortografia',
+      tecnico_pericial: 'Adequar linguagem técnico-pericial',
+      reescrever: 'Reescrever conteúdo',
+      clareza: 'Melhorar clareza',
+      resumir: 'Resumir conteúdo',
+      expandir: 'Expandir conteúdo',
+      inserir: 'Inserir conteúdo',
+    };
+    return descricoes[acao];
+  };
+
+  const executarAcaoIa = async (acao: AcaoIa, instrucao?: string) => {
+    if (iaSheetSecaoIdx === null) return;
+
+    const idx = iaSheetSecaoIdx;
+    const html = idx === -1 ? singleEditorHtml : secoes[idx]?.conteudo || '';
+    const descricao = instrucao || obterDescricaoAcaoIa(acao);
     try {
-      setIaSheetMode('perguntar');
+      setIaSheetMode(acao);
       setIaLoading(true);
       setIaError(null);
 
       const userMsg: ChatMessage = {
         role: 'user',
-        content: pergunta,
+        content: descricao,
         timestamp: Date.now(),
+        acao,
       };
 
       const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
@@ -1880,9 +1951,9 @@ export const LaudosPage: React.FC = () => {
 
       const r = await window.ipcAPI.ia.executar({
         operationId: crypto.randomUUID(),
-        acao: 'inserir',
+        acao,
         escopo: idx === -1 ? 'laudo_completo' : 'secao',
-        instrucao: pergunta,
+        instrucao,
         fragmentos: [{ id: 'alvo-0', texto: converterHtmlEmTexto(html) }],
       });
       const textoResposta = r.data?.fragmentos[0]?.texto;
@@ -1891,100 +1962,98 @@ export const LaudosPage: React.FC = () => {
           role: 'assistant',
           content: textoResposta,
           timestamp: Date.now(),
-          aplicacao: 'inserir',
+          aplicacao: acao === 'inserir' ? 'inserir' : 'substituir',
+          acao,
+          alvo: { indice: idx, conteudo: html },
         };
         setChatMessages(prev => ({
           ...prev,
           [chatKey]: [...(prev[chatKey] || []), assistantMsg],
         }));
       } else {
-        setIaError(r.error || 'Erro ao processar pergunta');
+        setIaError(r.error || 'Erro ao processar solicitação');
       }
     } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao processar pergunta'));
+      setIaError(obterMensagemErro(e, 'Erro ao processar solicitação'));
     } finally {
       setIaLoading(false);
     }
   };
 
-  const inserirRespostaIa = (texto: string) => {
-    if (iaSheetSecaoIdx === null) return;
-    const htmlInsercao = texto
-      .split('\n')
-      .map(linha => (linha.trim() ? `<p>${linha}</p>` : ''))
-      .join('');
+  const inserirRespostaIa = (texto: string, indiceAlvo: number) => {
+    const htmlInsercao = converterTextoEmHtmlSeguro(texto);
 
-    if (iaSheetSecaoIdx === -1) {
+    if (indiceAlvo === -1) {
       const editor = obterEditorTinyMce('laudo-single-editor');
       if (!editor) return;
-      editor.insertContent(htmlInsercao);
+      editor.undoManager.transact(() => editor.insertContent(htmlInsercao));
       setSingleEditorHtml(editor.getContent());
     } else {
-      const editor = obterEditorTinyMce(`secao-${iaSheetSecaoIdx}`);
+      const editor = obterEditorTinyMce(`secao-${indiceAlvo}`);
       if (editor) {
-        editor.insertContent(htmlInsercao);
-        atualizarConteudoSecao(iaSheetSecaoIdx, editor.getContent());
+        editor.undoManager.transact(() => editor.insertContent(htmlInsercao));
+        atualizarConteudoSecao(indiceAlvo, editor.getContent(), 'ia');
       } else {
-        const atual = secoes[iaSheetSecaoIdx]?.conteudo || '';
+        const atual = secoes[indiceAlvo]?.conteudo || '';
         const divisor = atual.trim() ? '<p>&nbsp;</p>' : '';
-        atualizarConteudoSecao(iaSheetSecaoIdx, atual + divisor + htmlInsercao);
+        atualizarConteudoSecao(indiceAlvo, atual + divisor + htmlInsercao, 'ia');
       }
     }
 
     registrarAlteracao();
-    setIaSheetOpen(false);
   };
 
-  const substituirConteudoComRespostaIa = (texto: string) => {
-    if (iaSheetSecaoIdx === null) return;
-    if (iaSheetSecaoIdx === -1) {
+  const substituirConteudoComRespostaIa = (resposta: RespostaIaPendente) => {
+    const { texto, indiceAlvo, conteudoAlvo } = resposta;
+    const editorAtual = obterEditorTinyMce(indiceAlvo === -1 ? 'laudo-single-editor' : `secao-${indiceAlvo}`);
+    const conteudoAtual = editorAtual?.getContent() || (indiceAlvo === -1 ? singleEditorHtml : secoes[indiceAlvo]?.conteudo || '');
+    if (conteudoAtual !== conteudoAlvo) {
+      setIaError('O conteúdo-alvo foi alterado desde a geração da resposta. Gere uma nova resposta antes de aplicar.');
+      setRespostaIaPendente(null);
+      return;
+    }
+    const htmlSeguro = converterTextoEmHtmlSeguro(texto);
+    if (indiceAlvo === -1) {
       const editor = obterEditorTinyMce('laudo-single-editor');
       if (!editor) return;
-      editor.setContent(texto);
+      editor.undoManager.transact(() => editor.setContent(htmlSeguro));
       setSingleEditorHtml(editor.getContent());
     } else {
-      const editor = obterEditorTinyMce(`secao-${iaSheetSecaoIdx}`);
-      if (editor) editor.setContent(texto);
-      atualizarConteudoSecao(iaSheetSecaoIdx, texto);
+      const editor = obterEditorTinyMce(`secao-${indiceAlvo}`);
+      if (editor) editor.undoManager.transact(() => editor.setContent(htmlSeguro));
+      atualizarConteudoSecao(indiceAlvo, htmlSeguro, 'ia');
     }
 
     registrarAlteracao();
     setRespostaIaPendente(null);
-    setIaSheetOpen(false);
   };
 
-  const handleApplyResponse = (texto: string, modoAplicacao: 'inserir' | 'substituir') => {
-    if (iaSheetSecaoIdx === null) return;
-    if (modoAplicacao === 'inserir') {
-      inserirRespostaIa(texto);
+  const handleApplyResponse = (mensagem: ChatMessage) => {
+    if (!mensagem.alvo) return;
+    if (mensagem.aplicacao === 'inserir') {
+      inserirRespostaIa(mensagem.content, mensagem.alvo.indice);
       return;
     }
 
-    const editorId = iaSheetSecaoIdx === -1
+    const editorId = mensagem.alvo.indice === -1
       ? 'laudo-single-editor'
-      : `secao-${iaSheetSecaoIdx}`;
+      : `secao-${mensagem.alvo.indice}`;
     const editor = obterEditorTinyMce(editorId);
     const htmlAtual = editor?.getContent()
-      || (iaSheetSecaoIdx === -1
+      || (mensagem.alvo.indice === -1
         ? singleEditorHtml
-        : secoes[iaSheetSecaoIdx]?.conteudo || '');
+        : secoes[mensagem.alvo.indice]?.conteudo || '');
     setRespostaIaPendente({
-      texto,
+      texto: mensagem.content,
       conteudoAtual: converterHtmlEmTexto(htmlAtual),
-      conteudoProposto: converterHtmlEmTexto(texto),
+      conteudoProposto: converterHtmlEmTexto(mensagem.content),
+      indiceAlvo: mensagem.alvo.indice,
+      conteudoAlvo: mensagem.alvo.conteudo,
     });
   };
 
   const handleSendChatMessage = (message: string) => {
-    if (iaSheetSecaoIdx !== null) {
-      if (iaSheetSecaoIdx === -1) {
-        handlePerguntar(message, singleEditorHtml, -1, 'Editor único');
-        return;
-      }
-      const html = secoes[iaSheetSecaoIdx]?.conteudo || '';
-      const titulo = secoes[iaSheetSecaoIdx]?.titulo || '';
-      handlePerguntar(message, html, iaSheetSecaoIdx, titulo);
-    }
+    void executarAcaoIa('inserir', message);
   };
 
   function getCurrentUserId(): string {
@@ -2294,12 +2363,14 @@ export const LaudosPage: React.FC = () => {
               modoOrganizacao={editorMode}
               ilustracoesAbertas={iluminacoesPanelOpen}
               ilustracoesEmJanela={panelPoppedOut}
+              assistenteIaDestacado={painelIaDestacado}
               operacaoEmAndamento={operacaoEmAndamento}
               onModoConteudoChange={setModoVisualizacaoPlaceholders}
               onModoOrganizacaoChange={handleEditorModeChange}
               onToggleIlustracoes={handleToggleIlustracoes}
               onAbrirIlustracoesEmJanela={handlePopOut}
               onAbrirAssistenteIa={handleAbrirAssistenteIa}
+              onDestacarAssistenteIa={handleDestacarAssistenteIa}
               onReindexarSecoes={handleReindexarSecoes}
             />
           </CardHeader>
@@ -2525,10 +2596,10 @@ export const LaudosPage: React.FC = () => {
               : (iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : [])
           }
           onSendMessage={handleSendChatMessage}
+          onExecutarAcao={acao => void executarAcaoIa(acao)}
+          onDestacar={handleDestacarAssistenteIa}
           onApplyResponse={handleApplyResponse}
-          modoAplicacao={iaSheetMode === 'ortografia' || iaSheetMode === 'adequar'
-            ? 'substituir'
-            : 'inserir'}
+          modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
           loading={iaLoading}
           error={iaError}
           opcoesEscopo={[
@@ -2547,7 +2618,7 @@ export const LaudosPage: React.FC = () => {
             if (!open) setRespostaIaPendente(null);
           }}
           onConfirmar={() => {
-            if (respostaIaPendente) substituirConteudoComRespostaIa(respostaIaPendente.texto);
+            if (respostaIaPendente) substituirConteudoComRespostaIa(respostaIaPendente);
           }}
         />
 

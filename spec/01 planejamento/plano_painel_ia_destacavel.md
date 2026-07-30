@@ -16,6 +16,35 @@ A implementação deve:
 - Adotar mensagens IPC tipadas, sessão autenticada e revisão monotônica, sem copiar as ações genéricas do painel de ilustrações.
 - Tratar documento, instruções personalizadas e conteúdo de imagens como dados não confiáveis, nunca como instruções de sistema.
 
+## Progresso da implementação
+
+Última atualização: 29/07/2026. Alterações ainda não foram commitadas após o commit-base `ab05512`.
+
+### Concluído nesta etapa
+
+- Controle único `Assistente IA` na barra do editor; os cards por seção deixaram de ser renderizados.
+- Sheet lateral com escolha explícita de documento ou seção, histórico visual, ações rápidas de ortografia, técnico-pericial, clareza, resumo e expansão, além de pedido livre para inserção.
+- Botões de destacar visíveis tanto na barra do editor quanto no cabeçalho do Sheet; há janela destacada única, com handshake, URL contendo somente `sessionId` e reencaixe básico.
+- Contratos compartilhados iniciais, serviço de execução no processo principal, wrappers IPC/preload para perfil, execução, cancelamento, teste de conexão e ciclo da janela.
+- Preferências de tom, detalhamento e instruções personalizadas na página de modelos, persistidas em `perfil_resposta_ia`.
+- Prévia antes de substituições, inserção de texto escapado, aplicação em transação de undo e marcação de alteração com origem `ia`.
+- Cada resposta guarda a seção e o HTML de origem; uma substituição é bloqueada se o conteúdo-alvo tiver sido modificado antes da confirmação.
+- Validações executadas com sucesso: `npm run type-check`, `npm run lint`, `npm test` (230 testes aprovados) e `npm run build` na etapa anterior.
+
+### Parcialmente concluído
+
+- Janela destacada: infraestrutura de sessão e reencaixe existe, mas ela ainda é uma projeção de estado básica; precisa oferecer o mesmo histórico e comandos do Sheet.
+- Proteção do alvo: a resposta está vinculada ao HTML e à seção de origem, mas ainda faltam bookmark de seleção/cursor, fingerprint SHA-256 e validação por fragmentos.
+- Execução: já ocorre no serviço próprio e aceita cancelamento, mas ainda faltam timeout, retries, `Retry-After`, progresso por lote e erros estruturados completos.
+
+### Próximas prioridades
+
+1. Capturar seleção, seção sob o cursor e bookmark de inserção; aplicar no alvo original, sem depender do escopo atualmente aberto.
+2. Transformar conteúdo por fragmentos textuais identificados, com tokens de proteção e preservação verificável da estrutura HTML.
+3. Completar ações de reescrita e descrição de imagens, incluindo seleção controlada de imagens e validação de suporte a visão.
+4. Implementar planejamento e execução sequencial de lotes, confirmação para escopos extensos, progresso, cancelamento e retomada segura.
+5. Completar a janela destacada como projeção interativa do mesmo controlador e ampliar os testes específicos de IA, IPC e editor.
+
 ## Experiência e estado do painel
 
 - Adicionar `Assistente IA` à barra principal do editor. O painel terá `Sheet` integrado e uma única janela destacada, mutuamente exclusivos.
