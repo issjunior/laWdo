@@ -13,16 +13,19 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Send, Loader2, Check, Copy, ExternalLink, X } from 'lucide-react';
 import type { AcaoIa } from '@shared/types/ia.types';
 
+type AcaoPainelIa = AcaoIa | 'descrever_imagem';
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   aplicacao?: 'inserir' | 'substituir';
-  acao?: AcaoIa;
-  alvo?: { indice: number; conteudo: string };
+  acao?: AcaoPainelIa;
+  alvo?: { id: string; indice: number; conteudo: string; tipo: 'selecao' | 'secao' | 'laudo_completo' | 'cursor' };
+  conteudoProposto?: string;
 }
 
-const rotulosAcaoIa: Record<AcaoIa, string> = {
+const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
   ortografia: 'Ortografia',
   tecnico_pericial: 'Técnico-pericial',
   reescrever: 'Reescrever',
@@ -30,6 +33,7 @@ const rotulosAcaoIa: Record<AcaoIa, string> = {
   resumir: 'Resumir',
   expandir: 'Expandir',
   inserir: 'Inserir',
+  descrever_imagem: 'Descrever imagem',
 };
 
 interface AISheetProps {
@@ -38,7 +42,7 @@ interface AISheetProps {
   secaoTitulo: string;
   editorId: string;
   messages: ChatMessage[];
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, acao: 'inserir' | 'reescrever') => void;
   onApplyResponse: (mensagem: ChatMessage) => void;
   modoAplicacao?: 'inserir' | 'substituir';
   loading?: boolean;
@@ -47,6 +51,10 @@ interface AISheetProps {
   onSelecionarEscopo?: (id: number) => void;
   onExecutarAcao?: (acao: AcaoIa) => void;
   onDestacar?: () => void;
+  onCancelarOperacao?: () => void;
+  onDescreverImagens?: () => void;
+  imagemSelecionada?: boolean;
+  contextoImagem?: boolean;
 }
 
 type ConfiguracaoResposta = {
@@ -69,8 +77,13 @@ export const AISheet: React.FC<AISheetProps> = ({
   onSelecionarEscopo,
   onExecutarAcao,
   onDestacar,
+  onCancelarOperacao,
+  onDescreverImagens,
+  imagemSelecionada = false,
+  contextoImagem = false,
 }) => {
   const [input, setInput] = useState('');
+  const [acaoPedidoLivre, setAcaoPedidoLivre] = useState<'inserir' | 'reescrever'>('inserir');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -110,7 +123,7 @@ export const AISheet: React.FC<AISheetProps> = ({
 
   const handleSend = () => {
     if (!input.trim() || loading) return;
-    onSendMessage(input.trim());
+    onSendMessage(input.trim(), acaoPedidoLivre);
     setInput('');
   };
 
@@ -153,6 +166,11 @@ export const AISheet: React.FC<AISheetProps> = ({
               >
                 <ExternalLink className="h-4 w-4" />
               </Button>
+              {loading && onCancelarOperacao && (
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={onCancelarOperacao}>
+                  Cancelar
+                </Button>
+              )}
               <SheetClose asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                   <span className="sr-only">Fechar</span>
@@ -167,7 +185,9 @@ export const AISheet: React.FC<AISheetProps> = ({
               Modelo Ativo: {modelName}
             </p>
             <p className="text-xs text-muted-foreground truncate">
-              Contexto atual: Seção &quot;{secaoTitulo}&quot;
+              {contextoImagem
+                ? 'Contexto atual: Imagem selecionada'
+                : <>Contexto atual: Seção &quot;{secaoTitulo}&quot;</>}
             </p>
           </div>
         </SheetHeader>
@@ -175,7 +195,7 @@ export const AISheet: React.FC<AISheetProps> = ({
         {/* Área de mensagens */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="space-y-4">
-            {!editorId && !loading && (
+            {!editorId && !imagemSelecionada && !loading && (
               <div className="space-y-3 py-4">
                 <p className="text-sm font-medium">Escolha o escopo que a IA poderá usar</p>
                 <p className="text-xs text-muted-foreground">Nenhum conteúdo é enviado até uma ação ser solicitada.</p>
@@ -188,30 +208,44 @@ export const AISheet: React.FC<AISheetProps> = ({
                 </div>
               </div>
             )}
-            {editorId && messages.length === 0 && !loading && (
+            {(editorId || imagemSelecionada) && messages.length === 0 && !loading && (
               <div className="space-y-5 py-4">
                 <div className="text-center text-muted-foreground text-sm">
                   <p>Escolha uma ação ou descreva o que deseja inserir.</p>
                   <p className="text-xs mt-1">A IA usa somente o conteúdo do escopo selecionado.</p>
                 </div>
                 <div className="space-y-3">
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Revisar</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('ortografia')}>Ortografia</Button>
-                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('tecnico_pericial')}>Técnico-pericial</Button>
+                  {editorId && (
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">Revisar</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('ortografia')}>Ortografia</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('tecnico_pericial')}>Técnico-pericial</Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div>
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Transformar</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('clareza')}>Clareza</Button>
-                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('resumir')}>Resumir</Button>
-                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('expandir')}>Expandir</Button>
-                    </div>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Imagem</p>
+                    <Button type="button" variant="outline" size="sm" disabled={loading || !imagemSelecionada} onClick={onDescreverImagens}>{imagemSelecionada ? 'Descrever imagem selecionada' : 'Selecione uma imagem no laudo'}</Button>
                   </div>
+                  {editorId && (
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">Transformar</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('clareza')}>Clareza</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('resumir')}>Resumir</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('expandir')}>Expandir</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
+
+            {imagemSelecionada && messages.length > 0 && !loading && (
+              <Button type="button" variant="outline" size="sm" onClick={onDescreverImagens}>
+                Descrever novamente
+              </Button>
             )}
 
             {messages.map((msg, idx) => (
@@ -248,20 +282,22 @@ export const AISheet: React.FC<AISheetProps> = ({
                       >
                         <Copy size={10} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 px-1.5 text-[10px]"
-                        onClick={() => onApplyResponse(msg)}
-                        title={obterModoAplicacao(msg) === 'substituir'
-                          ? 'Revisar antes de substituir a seção'
-                          : 'Inserir resposta na posição atual do cursor'}
-                      >
-                        <Check size={10} className="mr-0.5" />
-                        {obterModoAplicacao(msg) === 'substituir'
-                          ? 'Revisar substituição'
-                          : 'Inserir no cursor'}
-                      </Button>
+                      {msg.acao !== 'descrever_imagem' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-1.5 text-[10px]"
+                          onClick={() => onApplyResponse(msg)}
+                          title={obterModoAplicacao(msg) === 'substituir'
+                            ? 'Revisar antes de substituir a seção'
+                            : 'Inserir resposta na posição atual do cursor'}
+                        >
+                          <Check size={10} className="mr-0.5" />
+                          {obterModoAplicacao(msg) === 'substituir'
+                            ? 'Revisar substituição'
+                            : 'Inserir no cursor'}
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -291,26 +327,45 @@ export const AISheet: React.FC<AISheetProps> = ({
 
         {/* Input de pergunta */}
         <div className="border-t px-4 py-3 shrink-0 bg-background">
-          <div className="flex gap-2">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Descreva o texto que deseja inserir... (Shift+Enter para nova linha)"
-              className="min-h-[60px] resize-none text-sm"
-              disabled={!editorId || loading}
-              aria-label="Pedido livre ao assistente IA"
-            />
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!editorId || !input.trim() || loading}
-              className="shrink-0 self-end"
-            >
-              <Send size={16} />
-            </Button>
-          </div>
+          {imagemSelecionada ? (
+            <p className="text-xs text-muted-foreground">
+              A descrição não será inserida automaticamente. Use o botão de copiar e cole o texto onde desejar.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2" role="group" aria-label="Ação do pedido livre">
+                <Button type="button" size="sm" variant={acaoPedidoLivre === 'inserir' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('inserir')} disabled={loading}>
+                  Inserir no cursor
+                </Button>
+                <Button type="button" size="sm" variant={acaoPedidoLivre === 'reescrever' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('reescrever')} disabled={loading}>
+                  Reescrever escopo
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={acaoPedidoLivre === 'inserir'
+                    ? 'Descreva o texto que deseja inserir... (Shift+Enter para nova linha)'
+                    : 'Descreva como o escopo selecionado deve ser reescrito... (Shift+Enter para nova linha)'}
+                  className="min-h-[60px] resize-none text-sm"
+                  disabled={!editorId || loading}
+                  aria-label="Pedido livre ao assistente IA"
+                />
+                <Button
+                  size="icon"
+                  onClick={handleSend}
+                  disabled={!editorId || !input.trim() || loading}
+                  className="shrink-0 self-end"
+                  aria-label="Enviar pedido livre"
+                >
+                  <Send size={16} />
+                </Button>
+              </div>
+            </div>
+          )}
           <p className="text-[10px] text-muted-foreground mt-1.5">
             A IA pode cometer erros. Sempre revise antes de aplicar ao laudo.
           </p>

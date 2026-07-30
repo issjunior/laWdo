@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Eye,
   EyeOff,
@@ -55,8 +66,16 @@ import {
   ExternalLink,
   KeyRound,
   BookOpen,
+  Info,
 } from 'lucide-react';
-import { PERFIL_RESPOSTA_IA_PADRAO, type PerfilRespostaIa } from '@shared/types/ia.types';
+import {
+  CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
+  configuracaoPrivacidadeIaValida,
+  deveMascararConteudoIa,
+  PERFIL_RESPOSTA_IA_PADRAO,
+  type ConfiguracaoPrivacidadeIa,
+  type PerfilRespostaIa,
+} from '@shared/types/ia.types';
 
 const iaConfigSchema = z.object({
   provedor: z.enum(['groq', 'gemini']),
@@ -93,6 +112,11 @@ export const ModelosIAPage: React.FC = () => {
   const [testResult, setTestResult] = useState<{ status: 'success' | 'error', message: string } | null>(null);
   const [perfil, setPerfil] = useState<PerfilRespostaIa>(PERFIL_RESPOSTA_IA_PADRAO);
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
+  const [salvandoPrivacidade, setSalvandoPrivacidade] = useState(false);
+  const [privacidade, setPrivacidade] = useState<ConfiguracaoPrivacidadeIa>(CONFIGURACAO_PRIVACIDADE_IA_PADRAO);
+  const [configuracaoAberta, setConfiguracaoAberta] = useState(false);
+  const [guiaChaveAberto, setGuiaChaveAberto] = useState(false);
+  const [confirmacaoPrivacidadeAberta, setConfirmacaoPrivacidadeAberta] = useState(false);
 
   const form = useForm<IAConfigForm>({
     resolver: zodResolver(iaConfigSchema),
@@ -137,6 +161,15 @@ export const ModelosIAPage: React.FC = () => {
 
       const rPerfil = await window.ipcAPI.ia.obterPerfil();
       if (rPerfil.success && rPerfil.data) setPerfil(rPerfil.data);
+      const rPrivacidade = await window.ipcAPI.configuracao.obter('privacidade_ia');
+      if (rPrivacidade.success && typeof rPrivacidade.data === 'string') {
+        try {
+          const valor: unknown = JSON.parse(rPrivacidade.data);
+          if (configuracaoPrivacidadeIaValida(valor)) setPrivacidade(valor);
+        } catch {
+          setPrivacidade(CONFIGURACAO_PRIVACIDADE_IA_PADRAO);
+        }
+      }
     } catch {
       // silencioso
     }
@@ -158,6 +191,7 @@ export const ModelosIAPage: React.FC = () => {
         window.ipcAPI.configuracao.salvar('api_key_gemini', data.apiKeyGemini || '', 'api_key', 'Chave de API Gemini'),
         window.ipcAPI.configuracao.salvar('modelo_ia_padrao', data.modeloGroq, 'texto', 'Modelo padrão Groq'),
         window.ipcAPI.configuracao.salvar('modelo_gemini_padrao', data.modeloGemini, 'texto', 'Modelo padrão Gemini'),
+        window.ipcAPI.configuracao.salvar('privacidade_ia', JSON.stringify(privacidade), 'json', 'Política de privacidade do conteúdo enviado à IA'),
       ]);
 
       const falha = resultados.find((r) => !r.success);
@@ -225,21 +259,39 @@ export const ModelosIAPage: React.FC = () => {
     }
   };
 
+  const salvarPrivacidade = async () => {
+    try {
+      setSalvandoPrivacidade(true);
+      setError(null);
+      const resposta = await window.ipcAPI.configuracao.salvar(
+        'privacidade_ia',
+        JSON.stringify(privacidade),
+        'json',
+        'Política de privacidade do conteúdo enviado à IA',
+      );
+      if (!resposta.success) {
+        setError(resposta.error || 'Não foi possível salvar a privacidade do conteúdo.');
+        return;
+      }
+      setConfirmacaoPrivacidadeAberta(true);
+    } catch (erro: unknown) {
+      setError(getMensagemErro(erro));
+    } finally {
+      setSalvandoPrivacidade(false);
+    }
+  };
+
   const modelOptions = provedor === 'gemini' ? GEMINI_MODEL_OPTIONS : GROQ_MODEL_OPTIONS;
   const modelFieldName = provedor === 'gemini' ? 'modeloGemini' as const : 'modeloGroq' as const;
   const apiKeyFieldName = provedor === 'gemini' ? 'apiKeyGemini' as const : 'apiKeyGroq' as const;
   const apiKeyPlaceholder = provedor === 'gemini' ? 'AIza...' : 'gsk_...';
+  const mascaramentoAtivo = deveMascararConteudoIa(privacidade);
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       {/* ── Título da Página ── */}
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Modelos de IA</h1>
-        <p className="text-muted-foreground mt-1">
-          Configure a integração com IA para assistência na escrita de laudos periciais.
-          Atualmente o sistema suporta <strong>Google Gemini</strong> e <strong>Groq</strong> —
-          novos provedores serão adicionados em versões futuras.
-        </p>
       </div>
 
       {/* ── Alert: Recomendação ── */}
@@ -303,9 +355,71 @@ export const ModelosIAPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmacaoPrivacidadeAberta} onOpenChange={setConfirmacaoPrivacidadeAberta}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Privacidade do conteúdo salva</AlertDialogTitle>
+            <AlertDialogDescription>
+              A preferência de envio do conteúdo à IA foi atualizada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setConfirmacaoPrivacidadeAberta(false)}>
+              Entendi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Form {...form}>
         <form onSubmit={handleSalvar} className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button type="button" variant="outline" className="h-auto justify-start gap-3 p-4" onClick={() => setConfiguracaoAberta(true)}>
+              <KeyRound className="h-5 w-5 text-primary" />
+              <span className="text-left"><span className="block font-medium">Configurar provedor</span><span className="block text-xs font-normal text-muted-foreground">Modelo, chave e conexão</span></span>
+            </Button>
+            <Button type="button" variant="outline" className="h-auto justify-start gap-3 p-4" onClick={() => setGuiaChaveAberto(true)}>
+              <BookOpen className="h-5 w-5 text-primary" />
+              <span className="text-left"><span className="block font-medium">Obter chave de API</span><span className="block text-xs font-normal text-muted-foreground">Guia para Gemini e Groq</span></span>
+            </Button>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ShieldCheck size={18} className="text-primary" />
+                Privacidade do conteúdo enviado
+              </CardTitle>
+              <CardDescription>Escolha como o conteúdo do laudo será enviado à IA.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg border p-4">
+                  <div className="space-y-1">
+                    <label htmlFor="conteudo-integral" className="text-sm font-medium">Enviar conteúdo integralmente</label>
+                    <p className="text-xs text-muted-foreground">Inclui texto e imagens sem mascaramento, independentemente do modelo selecionado.</p>
+                  </div>
+                  <Checkbox id="conteudo-integral" checked={privacidade.enviarConteudoIntegral} onCheckedChange={checked => setPrivacidade({ versao: 1, enviarConteudoIntegral: checked === true })} />
+                  <span aria-hidden="true" />
+                </div>
+                <Alert className={mascaramentoAtivo
+                  ? 'border-green-600/30 bg-green-500/5 dark:border-green-500/40 dark:bg-green-500/10'
+                  : 'border-amber-500/40 bg-amber-500/5 dark:border-amber-400/40 dark:bg-amber-500/10'}>
+                  <ShieldCheck className={mascaramentoAtivo ? 'h-4 w-4 text-green-600 dark:text-green-400' : 'h-4 w-4 text-amber-600 dark:text-amber-400'} />
+                  <AlertTitle>{mascaramentoAtivo ? 'Modo protegido ativo' : 'Modo conteúdo integral ativo'}</AlertTitle>
+                  <AlertDescription>
+                    {mascaramentoAtivo
+                      ? 'Dados sensíveis são mascarados antes do envio.'
+                      : 'O conteúdo é enviado sem mascaramento.'}
+                  </AlertDescription>
+                </Alert>
+              </div>
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => void salvarPrivacidade()} disabled={salvandoPrivacidade}>
+                  {salvandoPrivacidade ? 'Salvando...' : 'Salvar privacidade do conteúdo'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -315,9 +429,10 @@ export const ModelosIAPage: React.FC = () => {
               <CardDescription>Oriente como a IA deve elaborar as respostas. Estas preferências não alteram o provedor, modelo ou chaves.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              <TooltipProvider>
               <div className="grid gap-5 md:grid-cols-2">
                 <div className="space-y-2">
-                  <FormLabel>Tom</FormLabel>
+                  <div className="flex items-center gap-1.5"><FormLabel>Tom</FormLabel><Tooltip><TooltipTrigger asChild><button type="button" aria-label="Ajuda sobre os tons de resposta"><Info className="h-3.5 w-3.5 text-muted-foreground" /></button></TooltipTrigger><TooltipContent className="max-w-xs"><p><strong>Técnico-pericial:</strong> redação objetiva, impessoal e adequada a laudos.<br /><strong>Formal:</strong> linguagem mais solene e institucional.<br /><strong>Direto:</strong> frases curtas, simples e sem rodeios.</p></TooltipContent></Tooltip></div>
                   <Select value={perfil.tom} onValueChange={tom => setPerfil(atual => ({ ...atual, tom: tom as PerfilRespostaIa['tom'] }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -340,10 +455,11 @@ export const ModelosIAPage: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-2">
-                <FormLabel>Instruções personalizadas</FormLabel>
+                <div className="flex items-center gap-1.5"><FormLabel>Instruções personalizadas</FormLabel><Tooltip><TooltipTrigger asChild><button type="button" aria-label="Ajuda sobre instruções personalizadas"><Info className="h-3.5 w-3.5 text-muted-foreground" /></button></TooltipTrigger><TooltipContent className="max-w-xs"><p>Use este campo para orientar respostas específicas, como priorizar frases curtas, destacar limitações ou adotar uma terminologia técnica.</p></TooltipContent></Tooltip></div>
                 <Textarea value={perfil.instrucoesPersonalizadas} maxLength={2000} onChange={evento => setPerfil(atual => ({ ...atual, instrucoesPersonalizadas: evento.target.value }))} placeholder="Ex.: priorize frases curtas e linguagem impessoal." />
                 <p className="text-xs text-muted-foreground">{perfil.instrucoesPersonalizadas.length}/2000 caracteres</p>
               </div>
+              </TooltipProvider>
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button type="button" variant="outline" onClick={() => setPerfil(PERFIL_RESPOSTA_IA_PADRAO)}>Restaurar padrão</Button>
                 <Button type="button" onClick={() => void salvarPerfil()} disabled={salvandoPerfil}>{salvandoPerfil ? 'Salvando...' : 'Salvar preferências'}</Button>
@@ -352,7 +468,13 @@ export const ModelosIAPage: React.FC = () => {
           </Card>
 
           {/* ── Card: Configuração do Provedor ── */}
-          <Card>
+          <Dialog open={configuracaoAberta} onOpenChange={setConfiguracaoAberta}>
+            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Configuração do provedor</DialogTitle>
+                <DialogDescription>Escolha o modelo, informe a chave e teste a conexão.</DialogDescription>
+              </DialogHeader>
+              <Card className="border-0 shadow-none">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <KeyRound size={18} className="text-primary" />
@@ -468,16 +590,24 @@ export const ModelosIAPage: React.FC = () => {
                   )}
                   {testando ? 'Testando...' : 'Testar Conexão'}
                 </Button>
-                <Button type="submit" disabled={salvando} className="gap-2">
+                <Button type="button" onClick={() => void handleSalvar()} disabled={salvando} className="gap-2">
                   <Save size={16} />
                   {salvando ? 'Salvando...' : 'Salvar Configurações'}
                 </Button>
               </div>
             </CardContent>
-          </Card>
+              </Card>
+            </DialogContent>
+          </Dialog>
 
           {/* ── Card: Como Obter sua Chave de API ── */}
-          <Card>
+          <Dialog open={guiaChaveAberto} onOpenChange={setGuiaChaveAberto}>
+            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Como obter sua chave de API</DialogTitle>
+                <DialogDescription>Passo a passo para gerar uma chave no provedor escolhido.</DialogDescription>
+              </DialogHeader>
+              <Card className="border-0 shadow-none">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <BookOpen size={18} className="text-primary" />
@@ -582,7 +712,9 @@ export const ModelosIAPage: React.FC = () => {
                 🔌 Suporte a novos provedores de IA será adicionado em versões futuras do sistema.
               </p>
             </CardContent>
-          </Card>
+              </Card>
+            </DialogContent>
+          </Dialog>
         </form>
       </Form>
     </div>

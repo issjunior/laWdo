@@ -11,6 +11,9 @@ import { atualizacaoService } from './services/atualizacao.service.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const log = getLogger('sistema');
+const caminhoIcone = app.isPackaged
+  ? path.join(process.resourcesPath, 'assets/icon.ico')
+  : path.join(__dirname, '../../src/renderer/assets/icon.ico');
 
 // Configurações de segurança
 if (squirrelStartup) {
@@ -38,7 +41,7 @@ const createWindow = (): void => {
       contextIsolation: true,
       sandbox: true,
     },
-    icon: path.join(__dirname, '../../public/assets/icon.png'),
+    icon: caminhoIcone,
     title: 'laWdo',
     show: false, // Mostrar apenas quando estiver pronto
   });

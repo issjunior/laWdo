@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ContextoIa, PerfilRespostaIa, RespostaIa, SolicitacaoIa } from '../shared/types/ia.types.js';
+import type {
+  ContextoIa,
+  PerfilRespostaIa,
+  RespostaDescricaoImagemIa,
+  RespostaIa,
+  SolicitacaoDescricaoImagemIa,
+  SolicitacaoIa,
+} from '../shared/types/ia.types.js';
 import type {
   DashboardResponse,
   UserFilters,
@@ -256,12 +263,12 @@ export interface IpcAPI {
   ia: {
     revisarOrtografia: (textoHtml: string) => Promise<UserResponse>;
     adequarEscrita: (textoHtml: string) => Promise<UserResponse>;
-    descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => Promise<UserResponse>;
     perguntar: (pergunta: string, contexto?: string) => Promise<UserResponse>;
     obterContexto: () => Promise<UserResponse<ContextoIa>>;
     obterPerfil: () => Promise<UserResponse<PerfilRespostaIa>>;
     salvarPerfil: (perfil: PerfilRespostaIa) => Promise<UserResponse>;
     executar: (solicitacao: SolicitacaoIa) => Promise<UserResponse<RespostaIa>>;
+    descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => Promise<UserResponse<RespostaDescricaoImagemIa>>;
     cancelar: (operationId: string) => Promise<UserResponse>;
     testarConexao: () => Promise<UserResponse<ContextoIa>>;
     painelAbrir: (sessionId: string) => void;
@@ -492,7 +499,7 @@ const ALLOWED_CHANNELS = new Set([
   // IA
   'ia:revisarOrtografia',
   'ia:adequarEscrita',
-  'ia:descreverImagem',
+  'ia:descrever-imagem',
   'ia:perguntar',
   'ia:obter-contexto',
   'ia:obter-perfil',
@@ -1029,10 +1036,6 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof textoHtml !== 'string') throw new Error('Texto inválido');
       return ipcRenderer.invoke('ia:adequarEscrita', textoHtml);
     },
-    descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => {
-      if (!Array.isArray(imagens)) throw new Error('Imagens devem ser um array');
-      return ipcRenderer.invoke('ia:descreverImagem', imagens);
-    },
     perguntar: (pergunta: string, contexto?: string) => {
       if (typeof pergunta !== 'string' || !pergunta.trim()) throw new Error('Pergunta inválida');
       return ipcRenderer.invoke('ia:perguntar', pergunta, contexto);
@@ -1041,6 +1044,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     obterPerfil: () => ipcRenderer.invoke('ia:obter-perfil'),
     salvarPerfil: (perfil: PerfilRespostaIa) => ipcRenderer.invoke('ia:salvar-perfil', perfil),
     executar: (solicitacao: SolicitacaoIa) => ipcRenderer.invoke('ia:executar', solicitacao),
+    descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => ipcRenderer.invoke('ia:descrever-imagem', solicitacao),
     cancelar: (operationId: string) => ipcRenderer.invoke('ia:cancelar', operationId),
     testarConexao: () => ipcRenderer.invoke('ia:testar-conexao'),
     painelAbrir: (sessionId: string) => ipcRenderer.send('ia:painel-abrir', sessionId),

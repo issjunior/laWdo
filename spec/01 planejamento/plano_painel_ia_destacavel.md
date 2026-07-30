@@ -18,7 +18,7 @@ A implementação deve:
 
 ## Progresso da implementação
 
-Última atualização: 29/07/2026. Alterações ainda não foram commitadas após o commit-base `ab05512`.
+Última atualização: 30/07/2026. Alterações ainda não foram commitadas após o commit-base `ab05512`. Ponto de retomada: planejamento e execução sequencial de lotes.
 
 ### Concluído nesta etapa
 
@@ -29,21 +29,36 @@ A implementação deve:
 - Preferências de tom, detalhamento e instruções personalizadas na página de modelos, persistidas em `perfil_resposta_ia`.
 - Prévia antes de substituições, inserção de texto escapado, aplicação em transação de undo e marcação de alteração com origem `ia`.
 - Cada resposta guarda a seção e o HTML de origem; uma substituição é bloqueada se o conteúdo-alvo tiver sido modificado antes da confirmação.
-- Validações executadas com sucesso: `npm run type-check`, `npm run lint`, `npm test` (230 testes aprovados) e `npm run build` na etapa anterior.
+- Captura de alvo por seleção, seção ou documento, incluindo bookmark do TinyMCE, fingerprint SHA-256, fragmentos textuais protegidos, reconstrução sobre a estrutura original e validação antes da aplicação.
+- Pedido livre com escolha explícita entre inserir no cursor e reescrever o escopo capturado.
+- Proteção opaca e validação de restauração para placeholders, números, datas, identificadores e URLs nos fragmentos textuais enviados à IA; respostas que removem, duplicam ou inventam tokens são rejeitadas antes da prévia.
+- Cancelamento explícito no Sheet, associado ao `operationId` ativo e ao `AbortController` já controlado pelo processo principal.
+- Serviço de execução com timeout de 120 segundos, cancelamento, retries para rede/`408`/`429`/`5xx`, respeito a `Retry-After` e logs sem conteúdo sensível.
+- Descrição de imagem separada do pipeline textual: o renderer envia somente `operationId`, `laudoId` e `imagemId`; o main recupera a imagem persistida, valida pertencimento, formato e tamanho e envia um único conteúdo multimodal ao provedor.
+- A descrição de imagem agora retorna texto simples, tem histórico isolado por imagem, contexto visual de `Imagem selecionada`, cópia manual e nenhuma ação de inserir/aplicar automaticamente. O canal legado que aceitava data URI/URL pelo renderer foi removido.
+- Seleção de imagem para IA separada da figura visível usada pelo painel de ilustrações; ela é definida exclusivamente pelo clique no editor e é limpa ao trocar modo/laudo, remover ou substituir a figura.
+- Figuras inseridas pelo toolbox do TinyMCE agora são vinculadas automaticamente a `imagens_laudo`; a reconciliação também é executada em `Atualizar Figuras` e imediatamente antes da descrição por IA. A validação de pertencimento foi preservada, com mensagens específicas para imagem não vinculada ou pertencente a outro laudo.
+- Testes adicionados para descrição multimodal local e GDL, ausência de placeholders/fragmentos no payload, resposta vazia, formato/tamanho incompatível e interface de cópia manual.
+- Validações executadas com sucesso: `npm run type-check`, `npm run lint`, `npm test` (242 testes aprovados e 1 ignorado), `npm run build` e `npm run dead-code:check`.
+- Smoke test manual concluído com sucesso para imagem inserida/trocada pelo toolbox do editor e descrita no painel de IA.
+- Privacidade do conteúdo simplificada em uma única preferência persistida: `Enviar conteúdo integralmente`. Ela vem ativada por padrão; ativada envia texto e imagens sem mascaramento e desativada aplica o mascaramento em qualquer provedor.
+- Página `Modelos de IA` reorganizada: configuração do provedor e guia de chave em diálogos, confirmação de privacidade em `AlertDialog`, cartões de envio e modo em duas colunas equilibradas e tooltips para tom e instruções personalizadas.
+- Validações mais recentes desta etapa: `npm run type-check`, `npm run lint` e teste do serviço de IA concluídos com sucesso.
 
 ### Parcialmente concluído
 
 - Janela destacada: infraestrutura de sessão e reencaixe existe, mas ela ainda é uma projeção de estado básica; precisa oferecer o mesmo histórico e comandos do Sheet.
-- Proteção do alvo: a resposta está vinculada ao HTML e à seção de origem, mas ainda faltam bookmark de seleção/cursor, fingerprint SHA-256 e validação por fragmentos.
-- Execução: já ocorre no serviço próprio e aceita cancelamento, mas ainda faltam timeout, retries, `Retry-After`, progresso por lote e erros estruturados completos.
+- Execução: timeout, retries e `Retry-After` estão implementados; ainda faltam planejamento/progresso por lote, retomada segura e erros estruturados completos no contrato do renderer.
 
 ### Próximas prioridades
 
-1. Capturar seleção, seção sob o cursor e bookmark de inserção; aplicar no alvo original, sem depender do escopo atualmente aberto.
-2. Transformar conteúdo por fragmentos textuais identificados, com tokens de proteção e preservação verificável da estrutura HTML.
-3. Completar ações de reescrita e descrição de imagens, incluindo seleção controlada de imagens e validação de suporte a visão.
-4. Implementar planejamento e execução sequencial de lotes, confirmação para escopos extensos, progresso, cancelamento e retomada segura.
-5. Completar a janela destacada como projeção interativa do mesmo controlador e ampliar os testes específicos de IA, IPC e editor.
+1. Completar planejamento e execução sequencial de lotes, confirmação para escopos extensos, progresso, cancelamento e retomada segura.
+2. Completar a janela destacada como projeção interativa do mesmo controlador e ampliar os testes específicos de IA, IPC e editor.
+
+### Problemas registrados para resolução futura
+
+- **Cobertura manual pendente:** ampliar o smoke test no Windows para imagens legadas cujo `src` não seja um `data:` URI compatível, que continuam exigindo importação controlada antes da descrição por IA.
+- **Nomes e rótulos sem marcação estrutural:** placeholders e rótulos de figuras já permanecem fora dos fragmentos textuais, enquanto números, datas, identificadores e URLs são protegidos por token. Nomes livres no texto não podem ser identificados com segurança por expressão regular sem prejudicar a redação; permanecem cobertos pela regra invariável do provedor até haver uma marcação semântica própria.
 
 ## Experiência e estado do painel
 
@@ -208,13 +223,14 @@ Instruções personalizadas conflitantes não podem desativar essas regras.
 ## Descrição de imagens
 
 - Separar o fluxo de imagens do pipeline de transformação textual.
-- Exigir seleção explícita de até quatro imagens persistidas do laudo.
+- Exigir seleção explícita de uma imagem persistida do laudo.
 - Enviar ao main somente IDs das imagens, não data URIs ou URLs arbitrárias pelo IPC.
 - Carregar e normalizar as imagens no main a partir do armazenamento controlado do laudo.
 - Verificar se o modelo selecionado suporta visão.
 - Desabilitar a ação e oferecer acesso à página `Modelos de IA` quando o modelo for incompatível.
-- Gerar resposta textual destinada à inserção no cursor capturado.
+- Gerar resposta textual simples, exibida no histórico exclusivo da imagem e destinada à cópia manual pelo usuário.
 - Nunca permitir que a descrição altere figuras, atributos, legendas ou a estrutura do documento.
+- Para figuras legadas com origem não persistível pelo editor (por exemplo, URL externa), informar que a imagem deve ser importada pelo fluxo controlado antes da descrição.
 
 ## Erros e observabilidade
 
@@ -270,6 +286,7 @@ Definir wrappers específicos para:
 - obter contexto e capacidades do modelo;
 - obter, salvar e restaurar o perfil;
 - executar e cancelar operação;
+- descrever uma imagem persistida por `operationId`, `laudoId` e `imagemId`;
 - abrir, fechar e reencaixar o painel;
 - informar que a janela está pronta;
 - transmitir snapshot, delta, progresso e encerramento.
@@ -278,7 +295,7 @@ Persistir o perfil como JSON versionado na chave `perfil_resposta_ia` da tabela 
 
 Criar um canal próprio para teste de conexão. A página `Modelos de IA` não deve continuar usando `ia:perguntar` para testar o provedor.
 
-Manter os canais legados durante a migração interna e removê-los antes da conclusão, após busca de consumidores e testes.
+O canal legado de descrição que aceitava data URI/URL diretamente pelo renderer foi removido após busca de consumidores e testes. Os demais canais legados de IA permanecem fora deste recorte.
 
 ## Desempenho
 

@@ -2,7 +2,11 @@ import { BrowserWindow, ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 import { iaExecucaoService } from '../../services/ia-execucao.service.js';
-import type { PerfilRespostaIa, SolicitacaoIa } from '../../../shared/types/ia.types.js';
+import type {
+  PerfilRespostaIa,
+  SolicitacaoDescricaoImagemIa,
+  SolicitacaoIa,
+} from '../../../shared/types/ia.types.js';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
@@ -21,8 +25,23 @@ const GEMINI_MODELS = [
 ];
 
 const MODELO_PADRAO_GROQ = 'llama-3.3-70b-versatile';
-const MODELO_VISION_GROQ = 'meta-llama/llama-4-scout-17b-16e-instruct';
 const MODELO_PADRAO_GEMINI = 'gemini-2.5-flash';
+
+function solicitacaoDescricaoImagemValida(valor: unknown): valor is SolicitacaoDescricaoImagemIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const registro = valor as Record<string, unknown>;
+  const chaves = Object.keys(registro).sort();
+  return chaves.length === 3
+    && chaves[0] === 'imagemId'
+    && chaves[1] === 'laudoId'
+    && chaves[2] === 'operationId'
+    && typeof registro.operationId === 'string'
+    && registro.operationId.length > 0
+    && typeof registro.laudoId === 'string'
+    && registro.laudoId.length > 0
+    && typeof registro.imagemId === 'string'
+    && registro.imagemId.length > 0;
+}
 
 async function obterConfigGroq(): Promise<{ apiKey: string | null; modelo: string }> {
   const apiKey = await configuracaoService.obter('api_key_groq');
@@ -245,6 +264,17 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     }
   });
 
+  ipcMain.handle('ia:descrever-imagem', async (_event, solicitacao: unknown) => {
+    try {
+      if (!solicitacaoDescricaoImagemValida(solicitacao)) return { success: false, error: 'ENTRADA_INVALIDA' };
+      return { success: true, data: await iaExecucaoService.descreverImagem(solicitacao) };
+    } catch (error: unknown) {
+      const mensagem = error instanceof Error ? error.message : 'ERRO_INTERNO';
+      logError('Erro ao descrever imagem com IA', { codigo: mensagem.split(':')[0] });
+      return { success: false, error: mensagem };
+    }
+  });
+
   ipcMain.handle('ia:cancelar', async (_event, operationId: unknown) => {
     if (typeof operationId !== 'string' || !operationId) return { success: false, error: 'ENTRADA_INVALIDA' };
     iaExecucaoService.cancelar(operationId);
@@ -319,62 +349,6 @@ ${texto}`;
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : 'Erro ao adequar escrita';
       logError('Erro ao adequar escrita', { error: errMsg });
-      return { success: false, error: errMsg };
-    }
-  });
-
-  /**
-   * Descrever imagens usando visão
-   * Recebe array de objetos { src: string, alt?: string }
-   * O renderer deve extrair as imagens do HTML e converter para base64/data-URI
-   */
-  ipcMain.handle('ia:descreverImagem', async (_event, imagens: Array<{ src: string; alt?: string }>) => {
-    try {
-      if (!imagens || !Array.isArray(imagens) || imagens.length === 0) {
-        return { success: false, error: 'Nenhuma imagem fornecida' };
-      }
-
-      logDebug('IA: Descrevendo imagens', { count: imagens.length });
-
-      // Construir mensagem com imagens
-      const content: { type: string; text?: string; image_url?: { url: string } }[] = [
-        {
-          type: 'text',
-          text: 'Você é um perito criminal descrevendo evidências fotográficas para um laudo pericial. Descreva a(s) imagem(ns) abaixo de forma técnica, objetiva e detalhada, como seria inserida na seção de exames ou constatações de um laudo oficial. Retorne APENAS a descrição, sem comentários.',
-        },
-      ];
-
-      // Adicionar cada imagem como image_url
-      for (const img of imagens) {
-        if (img.src.startsWith('data:')) {
-          content.push({
-            type: 'image_url',
-            image_url: { url: img.src },
-          });
-        } else if (img.src.startsWith('http://') || img.src.startsWith('https://')) {
-          content.push({
-            type: 'image_url',
-            image_url: { url: img.src },
-          });
-        }
-      }
-
-      if (content.length === 1) {
-        return { success: false, error: 'Nenhuma imagem válida para descrição (apenas data-URI, URLs HTTP/HTTPS ou imagens do laudo são suportadas)' };
-      }
-
-      const resposta = await chamarIA(
-        [
-          { role: 'system', content: 'Você é um perito criminal especialista em descrição de evidências fotográficas. Responda apenas com a descrição técnica.' },
-          { role: 'user', content: content },
-        ],
-        MODELO_VISION_GROQ
-      );
-
-      return { success: true, data: resposta };
-    } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : 'Erro ao descrever imagem';
-      logError('Erro ao descrever imagem', { error: errMsg });
       return { success: false, error: errMsg };
     }
   });
