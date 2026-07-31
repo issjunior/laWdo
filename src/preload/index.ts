@@ -4,6 +4,8 @@ import type {
   PerfilRespostaIa,
   RespostaDescricaoImagemIa,
   RespostaIa,
+  ComandoPainelIa,
+  EstadoPainelIa,
   SolicitacaoDescricaoImagemIa,
   SolicitacaoIa,
 } from '../shared/types/ia.types.js';
@@ -271,13 +273,16 @@ export interface IpcAPI {
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => Promise<UserResponse<RespostaDescricaoImagemIa>>;
     cancelar: (operationId: string) => Promise<UserResponse>;
     testarConexao: () => Promise<UserResponse<ContextoIa>>;
+    copiarResposta: (texto: string) => Promise<UserResponse>;
     painelAbrir: (sessionId: string) => void;
     painelFechar: () => void;
     painelPronto: () => void;
-    painelPublicar: (sessionId: string, estado: unknown) => void;
+    painelPublicar: (sessionId: string, estado: EstadoPainelIa) => void;
+    painelEnviarComando: (comando: ComandoPainelIa) => void;
     painelReencaixar: () => void;
     onPainelPronto: (callback: (sessionId: string) => void) => () => void;
     onPainelEstado: (callback: (estado: unknown) => void) => () => void;
+    onPainelComando: (callback: (comando: ComandoPainelIa) => void) => () => void;
     onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
     onPainelFechado: (callback: (sessionId: string) => void) => () => void;
   };
@@ -507,10 +512,12 @@ const ALLOWED_CHANNELS = new Set([
   'ia:executar',
   'ia:cancelar',
   'ia:testar-conexao',
+  'ia:copiar-resposta',
   'ia:painel-abrir',
   'ia:painel-fechar',
   'ia:painel-pronto',
   'ia:painel-publicar',
+  'ia:painel-comando',
   'ia:painel-reencaixar',
 
   // Backup
@@ -1047,10 +1054,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => ipcRenderer.invoke('ia:descrever-imagem', solicitacao),
     cancelar: (operationId: string) => ipcRenderer.invoke('ia:cancelar', operationId),
     testarConexao: () => ipcRenderer.invoke('ia:testar-conexao'),
+    copiarResposta: (texto: string) => ipcRenderer.invoke('ia:copiar-resposta', texto),
     painelAbrir: (sessionId: string) => ipcRenderer.send('ia:painel-abrir', sessionId),
     painelFechar: () => ipcRenderer.send('ia:painel-fechar'),
     painelPronto: () => ipcRenderer.send('ia:painel-pronto'),
-    painelPublicar: (sessionId: string, estado: unknown) => ipcRenderer.send('ia:painel-publicar', sessionId, estado),
+    painelPublicar: (sessionId: string, estado: EstadoPainelIa) => ipcRenderer.send('ia:painel-publicar', sessionId, estado),
+    painelEnviarComando: (comando: ComandoPainelIa) => ipcRenderer.send('ia:painel-comando', comando),
     painelReencaixar: () => ipcRenderer.send('ia:painel-reencaixar'),
     onPainelPronto: (callback: (sessionId: string) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
@@ -1061,6 +1070,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       const listener = (_event: Electron.IpcRendererEvent, estado: unknown) => callback(estado);
       ipcRenderer.on('ia:painel-estado', listener);
       return () => ipcRenderer.removeListener('ia:painel-estado', listener);
+    },
+    onPainelComando: (callback: (comando: ComandoPainelIa) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, comando: ComandoPainelIa) => callback(comando);
+      ipcRenderer.on('ia:painel-comando', listener);
+      return () => ipcRenderer.removeListener('ia:painel-comando', listener);
     },
     onPainelReencaixar: (callback: (sessionId: string) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);

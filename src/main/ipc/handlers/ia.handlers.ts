@@ -1,7 +1,8 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 import { iaExecucaoService } from '../../services/ia-execucao.service.js';
+import { comandoPainelIaValido } from '../../../shared/types/ia.types.js';
 import type {
   PerfilRespostaIa,
   SolicitacaoDescricaoImagemIa,
@@ -216,6 +217,12 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     janelaPainelIa.webContents.send('ia:painel-estado', estado);
   });
 
+  ipcMain.on('ia:painel-comando', (event, comando: unknown) => {
+    if (!sessaoPainelIa || !janelaPainelIa || event.sender.id !== janelaPainelIa.webContents.id || !comandoPainelIaValido(comando)) return;
+    const proprietario = BrowserWindow.fromId(sessaoPainelIa.proprietarioId);
+    if (proprietario && !proprietario.isDestroyed()) proprietario.webContents.send('ia:painel-comando', comando);
+  });
+
   ipcMain.on('ia:painel-reencaixar', event => {
     if (!sessaoPainelIa || !janelaPainelIa || event.sender.id !== janelaPainelIa.webContents.id) return;
     const proprietario = BrowserWindow.fromId(sessaoPainelIa.proprietarioId);
@@ -228,6 +235,15 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     if (!sessaoPainelIa || proprietario?.id !== sessaoPainelIa.proprietarioId) return;
     fecharJanelaPainelIa(false);
   });
+
+  ipcMain.handle('ia:copiar-resposta', (event, texto: unknown) => {
+    if (typeof texto !== 'string' || !texto.trim() || texto.length > 100_000 || !BrowserWindow.fromWebContents(event.sender)) {
+      return { success: false, error: 'Texto inválido para cópia.' };
+    }
+    clipboard.writeText(texto);
+    return { success: true };
+  });
+
   ipcMain.handle('ia:obter-contexto', async () => {
     try {
       return { success: true, data: await iaExecucaoService.obterContexto() };

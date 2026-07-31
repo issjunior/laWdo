@@ -8,6 +8,7 @@ import type {
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
 import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
+import type { ComandoPainelIa, EstadoPainelIa } from '@shared/types/ia.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -86,12 +87,15 @@ interface IpcAPIRendererLegada {
   regraWizard: IpcGrupoLegado;
   ia: IpcGrupoLegado & {
     painelAbrir: (sessionId: string) => void;
+    copiarResposta: (texto: string) => Promise<IpcRespostaLegada>;
     painelFechar: () => void;
     painelPronto: () => void;
-    painelPublicar: (sessionId: string, estado: unknown) => void;
+    painelPublicar: (sessionId: string, estado: EstadoPainelIa) => void;
+    painelEnviarComando: (comando: ComandoPainelIa) => void;
     painelReencaixar: () => void;
     onPainelPronto: (callback: (sessionId: string) => void) => () => void;
-    onPainelEstado: (callback: (estado: unknown) => void) => () => void;
+    onPainelEstado: (callback: (estado: EstadoPainelIa) => void) => () => void;
+    onPainelComando: (callback: (comando: ComandoPainelIa) => void) => () => void;
     onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
     onPainelFechado: (callback: (sessionId: string) => void) => () => void;
   };

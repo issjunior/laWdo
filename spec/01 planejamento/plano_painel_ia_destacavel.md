@@ -18,13 +18,14 @@ A implementação deve:
 
 ## Progresso da implementação
 
-Última atualização: 30/07/2026. Alterações ainda não foram commitadas após o commit-base `ab05512`. Ponto de retomada: planejamento e execução sequencial de lotes.
+Última atualização: 31/07/2026. O processamento sequencial de laudos grandes foi reordenado para momento oportuno, após a conclusão da janela destacada interativa e de sua validação. Ponto de retomada: validação e aprimoramentos finais da janela destacada.
 
 ### Concluído nesta etapa
 
 - Controle único `Assistente IA` na barra do editor; os cards por seção deixaram de ser renderizados.
 - Sheet lateral com escolha explícita de documento ou seção, histórico visual, ações rápidas de ortografia, técnico-pericial, clareza, resumo e expansão, além de pedido livre para inserção.
 - Botões de destacar visíveis tanto na barra do editor quanto no cabeçalho do Sheet; há janela destacada única, com handshake, URL contendo somente `sessionId` e reencaixe básico.
+- Janela destacada concluída como projeção interativa do mesmo controlador do Sheet: exibe contexto, histórico, carregamento e erros; oferece ações rápidas, pedido livre, cancelamento, descrição de imagem, cópia, aplicação de respostas, escolha de escopo e reencaixe. Os comandos retornam ao editor por IPC validado, sem acesso da janela ao TinyMCE ou ao conteúdo-fonte do laudo.
 - Contratos compartilhados iniciais, serviço de execução no processo principal, wrappers IPC/preload para perfil, execução, cancelamento, teste de conexão e ciclo da janela.
 - Preferências de tom, detalhamento e instruções personalizadas na página de modelos, persistidas em `perfil_resposta_ia`.
 - Prévia antes de substituições, inserção de texto escapado, aplicação em transação de undo e marcação de alteração com origem `ia`.
@@ -47,13 +48,12 @@ A implementação deve:
 
 ### Parcialmente concluído
 
-- Janela destacada: infraestrutura de sessão e reencaixe existe, mas ela ainda é uma projeção de estado básica; precisa oferecer o mesmo histórico e comandos do Sheet.
-- Execução: timeout, retries e `Retry-After` estão implementados; ainda faltam planejamento/progresso por lote, retomada segura e erros estruturados completos no contrato do renderer.
+- Execução: timeout, retries e `Retry-After` estão implementados; planejamento/progresso por lote, retomada segura e erros estruturados completos no contrato do renderer foram reordenados para momento oportuno, depois da estabilização da experiência do painel destacável.
 
 ### Próximas prioridades
 
-1. Completar planejamento e execução sequencial de lotes, confirmação para escopos extensos, progresso, cancelamento e retomada segura.
-2. Completar a janela destacada como projeção interativa do mesmo controlador e ampliar os testes específicos de IA, IPC e editor.
+1. Ampliar os testes específicos de IA, IPC, editor e janela destacada, incluindo reencaixe, atualização de histórico e comandos remotos.
+2. Retomar, em momento oportuno, o planejamento e a execução sequencial de lotes, com confirmação para escopos extensos, progresso, cancelamento e retomada segura.
 
 ### Problemas registrados para resolução futura
 

@@ -28,6 +28,8 @@ import {
   configuracaoPrivacidadeIaValida,
   deveMascararConteudoIa,
   type AcaoIa,
+  type ComandoPainelIa,
+  type EstadoPainelIa,
   type FragmentoIa,
 } from '@shared/types/ia.types';
 import {
@@ -2103,37 +2105,102 @@ export const LaudosPage: React.FC = () => {
 
   const sessaoPainelIaRef = useRef<string | null>(null);
   const revisaoPainelIaRef = useRef(0);
+  const painelIaProntoRef = useRef(false);
+  const executarAcaoIaRef = useRef<(acao: AcaoIa) => void>(() => {});
+  const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever') => void>(() => {});
+  const cancelarOperacaoIaRef = useRef<() => void>(() => {});
+  const descreverImagemIaRef = useRef<() => void>(() => {});
+  const aplicarRespostaIaRef = useRef<(mensagem: ChatMessage) => void>(() => {});
 
   const handleDestacarAssistenteIa = () => {
     const sessionId = crypto.randomUUID();
     sessaoPainelIaRef.current = sessionId;
     revisaoPainelIaRef.current = 0;
+    painelIaProntoRef.current = false;
     setIaSheetOpen(false);
     setPainelIaDestacado(true);
     window.ipcAPI.ia.painelAbrir(sessionId);
   };
 
   useEffect(() => {
+    const obterMensagensVisiveis = (): ChatMessage[] => {
+      const chaveChat = imagemSelecionadaIaId
+        ? chaveChatImagemIa(imagemSelecionadaIaId)
+        : iaSheetSecaoIdx === -1
+          ? SINGLE_CHAT_KEY
+          : iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : '';
+      return chaveChat ? chatMessages[chaveChat] || [] : [];
+    };
+
     const publicarSnapshot = (sessionId: string) => {
       if (sessionId !== sessaoPainelIaRef.current) return;
       revisaoPainelIaRef.current += 1;
-      window.ipcAPI.ia.painelPublicar(sessionId, {
+      const imagemSelecionada = Boolean(imagemSelecionadaIaId);
+      const editorDisponivel = !imagemSelecionada && iaSheetSecaoIdx !== null;
+      const estado: EstadoPainelIa = {
         revisao: revisaoPainelIaRef.current,
         titulo: imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo || 'Escolha um escopo no editor',
-        status: iaLoading ? 'Processando solicitação...' : 'Painel sincronizado. Use o editor para escolher o escopo e enviar pedidos.',
-      });
+        carregando: iaLoading,
+        erro: iaError,
+        editorDisponivel,
+        imagemSelecionada,
+        contextoImagem: imagemSelecionada,
+        modoAplicacao: iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir',
+        mensagens: obterMensagensVisiveis().map(mensagem => ({
+          role: mensagem.role,
+          content: mensagem.content,
+          timestamp: mensagem.timestamp,
+          aplicacao: mensagem.aplicacao,
+          acao: mensagem.acao,
+          permiteAplicacao: mensagem.role === 'assistant' && mensagem.acao !== 'descrever_imagem',
+        })),
+        escopos: [
+          { id: -1, titulo: 'Documento completo' },
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+        ],
+      };
+      window.ipcAPI.ia.painelPublicar(sessionId, estado);
     };
-    const removerPronto = window.ipcAPI.ia.onPainelPronto(publicarSnapshot);
+    const removerPronto = window.ipcAPI.ia.onPainelPronto(sessionId => {
+      painelIaProntoRef.current = true;
+      publicarSnapshot(sessionId);
+    });
+    const removerComando = window.ipcAPI.ia.onPainelComando((comando: ComandoPainelIa) => {
+      if (!painelIaProntoRef.current) return;
+      if (comando.tipo === 'executar_acao') {
+        executarAcaoIaRef.current(comando.acao);
+      } else if (comando.tipo === 'enviar_pedido_livre') {
+        enviarMensagemIaRef.current(comando.mensagem, comando.aplicacao);
+      } else if (comando.tipo === 'cancelar_operacao') {
+        cancelarOperacaoIaRef.current();
+      } else if (comando.tipo === 'descrever_imagem') {
+        descreverImagemIaRef.current();
+      } else if (comando.tipo === 'selecionar_escopo') {
+        if (comando.indice === -1 || secoes[comando.indice]) {
+          setIaSheetSecaoIdx(comando.indice);
+          setIaSheetSecaoTitulo(comando.indice === -1 ? 'Documento completo' : secoes[comando.indice].titulo);
+          setIaError(null);
+        }
+      } else {
+        const mensagem = obterMensagensVisiveis()[comando.indiceMensagem];
+        if (mensagem) aplicarRespostaIaRef.current(mensagem);
+      }
+    });
     const removerReencaixar = window.ipcAPI.ia.onPainelReencaixar(sessionId => {
       if (sessionId !== sessaoPainelIaRef.current) return;
+      painelIaProntoRef.current = false;
       setPainelIaDestacado(false);
       setIaSheetOpen(true);
     });
     const removerFechado = window.ipcAPI.ia.onPainelFechado(sessionId => {
-      if (sessionId === sessaoPainelIaRef.current) setPainelIaDestacado(false);
+      if (sessionId === sessaoPainelIaRef.current) {
+        painelIaProntoRef.current = false;
+        setPainelIaDestacado(false);
+      }
     });
-    return () => { removerPronto(); removerReencaixar(); removerFechado(); };
-  }, [iaLoading, iaSheetSecaoTitulo, imagemSelecionadaIaId]);
+    if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarSnapshot(sessaoPainelIaRef.current);
+    return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
+  }, [chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, secoes]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2440,6 +2507,12 @@ export const LaudosPage: React.FC = () => {
   const handleSendChatMessage = (message: string, acao: 'inserir' | 'reescrever') => {
     void executarAcaoIa(acao, message);
   };
+
+  executarAcaoIaRef.current = acao => void executarAcaoIa(acao);
+  enviarMensagemIaRef.current = handleSendChatMessage;
+  cancelarOperacaoIaRef.current = () => void cancelarOperacaoIa();
+  descreverImagemIaRef.current = () => void descreverImagemSelecionadaIa();
+  aplicarRespostaIaRef.current = handleApplyResponse;
 
   function getCurrentUserId(): string {
     try {

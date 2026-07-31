@@ -135,7 +135,7 @@ export const AISheet: React.FC<AISheetProps> = ({
   };
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
+    void window.ipcAPI.ia.copiarResposta(text);
   };
 
   const formatTime = (ts: number) => {
