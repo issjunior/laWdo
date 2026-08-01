@@ -1,17 +1,67 @@
-import { ipcMain, BrowserWindow, app } from 'electron';
+import { ipcMain, BrowserWindow, app, dialog } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
-import { auditDelete } from '../../services/audit-log.service.js';
+import { auditDelete, auditExport } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
 import path from 'path';
 import fs from 'fs';
+import { exportarPacoteTemplate, importarPacoteTemplate, lerPreviaPacoteTemplate } from '../../services/template-pacote.service.js';
 
 const CM_TO_INCHES = 1 / 2.54;
 
 const mensagemErro = (error: unknown): string =>
   error instanceof Error ? error.message : 'Erro desconhecido';
 
+const nomeArquivoSeguro = (nome: string): string =>
+  nome.replace(/[<>:"/\\|?*]/g, '').trim() || 'template-laWdo';
+
 export const registerTemplateHandlers = (): void => {
+  ipcMain.handle('template:exportarPacote', async (event, templateId: string) => {
+    try {
+      const janela = BrowserWindow.fromWebContents(event.sender);
+      if (!janela) return { success: false, error: 'Nenhuma janela ativa' };
+      const template = (await templateService.findAllComSecoes()).find(item => item.id === templateId);
+      if (!template || !template.tipo_exame_codigo || !template.tipo_exame_nome) {
+        return { success: false, error: 'Template ou tipo de exame não encontrado' };
+      }
+      const nomeArquivo = nomeArquivoSeguro(`${template.nome} - ${template.tipo_exame_codigo} - ${template.tipo_exame_nome}`);
+      const resultado = await dialog.showSaveDialog(janela, {
+        title: 'Exportar template',
+        defaultPath: `${nomeArquivo}.zip`,
+        filters: [{ name: 'Pacote de template laWdo', extensions: ['zip'] }],
+      });
+      if (resultado.canceled || !resultado.filePath) return { success: false, error: 'Exportação cancelada' };
+      const resposta = await exportarPacoteTemplate(templateId, resultado.filePath);
+      if (resposta.success) auditExport('', 'Template', resultado.filePath);
+      return resposta;
+    } catch (error) {
+      logError('Erro ao exportar template', error);
+      return { success: false, error: mensagemErro(error) };
+    }
+  });
+
+  ipcMain.handle('template:selecionarPacote', async (event) => {
+    try {
+      const janela = BrowserWindow.fromWebContents(event.sender);
+      if (!janela) return { success: false, error: 'Nenhuma janela ativa' };
+      const resultado = await dialog.showOpenDialog(janela, {
+        title: 'Selecionar pacote de template',
+        properties: ['openFile'],
+        filters: [{ name: 'Pacote de template laWdo', extensions: ['zip'] }],
+      });
+      if (resultado.canceled || !resultado.filePaths[0]) return { success: false, error: 'Importação cancelada' };
+      return { success: true, data: await lerPreviaPacoteTemplate(resultado.filePaths[0]) };
+    } catch (error) {
+      logError('Erro ao ler pacote de template', error);
+      return { success: false, error: mensagemErro(error) };
+    }
+  });
+
+  ipcMain.handle('template:importarPacote', async (_event, caminho: string, criarTipo: boolean) => {
+    if (typeof caminho !== 'string' || typeof criarTipo !== 'boolean') return { success: false, error: 'Dados de importação inválidos' };
+    return importarPacoteTemplate(caminho, criarTipo);
+  });
+
   /** Listar todos os templates (com contagem de seções) */
   ipcMain.handle('template:findAll', async () => {
     try {

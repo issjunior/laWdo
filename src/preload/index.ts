@@ -47,6 +47,7 @@ type IpcPayload = unknown;
 type IpcParams = unknown[];
 type IpcResult = unknown;
 type ImportarArquivoResponse = { success: boolean; data?: IpcPayload; error?: string };
+type PacoteTemplateResponse = { success: boolean; data?: IpcPayload; nome?: string; error?: string };
 type BackupResponse = { success: boolean; path?: string; error?: string };
 type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; total?: number; error?: string };
 type TimelineResponse = { success: boolean; data?: IpcPayload[]; error?: string };
@@ -202,6 +203,9 @@ export interface IpcAPI {
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => Promise<UserResponse>;
     importarArquivo: () => Promise<ImportarArquivoResponse>;
+    exportarPacote: (templateId: string) => Promise<UserResponse>;
+    selecionarPacote: () => Promise<PacoteTemplateResponse>;
+    importarPacote: (caminho: string, criarTipo: boolean) => Promise<PacoteTemplateResponse>;
   };
 
   // Laudos
@@ -452,6 +456,9 @@ const ALLOWED_CHANNELS = new Set([
   'template:reordenarSecoes',
   'template:previewPDF',
   'template:importarArquivo',
+  'template:exportarPacote',
+  'template:selecionarPacote',
+  'template:importarPacote',
 
   // Laudos
   'laudo:findById',
@@ -979,6 +986,9 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => ipcRenderer.invoke('template:previewPDF', { html, margins, headerTemplate }),
     importarArquivo: () => ipcRenderer.invoke('template:importarArquivo'),
+    exportarPacote: (templateId: string) => ipcRenderer.invoke('template:exportarPacote', templateId),
+    selecionarPacote: () => ipcRenderer.invoke('template:selecionarPacote'),
+    importarPacote: (caminho: string, criarTipo: boolean) => ipcRenderer.invoke('template:importarPacote', caminho, criarTipo),
   },
 
   laudo: {
