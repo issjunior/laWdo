@@ -2108,16 +2108,22 @@ export const LaudosPage: React.FC = () => {
     setIaError(null);
   };
 
-  const capturarAlvoIa = (): AlvoIaCapturado | null => {
-    const editorId = editorIaAtivoRef.current;
+  const capturarAlvoIa = (priorizarEscopoDoPainel = false): AlvoIaCapturado | null => {
+    const editorIdDoEscopo = iaSheetSecaoIdx === null
+      ? null
+      : iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : `secao-${iaSheetSecaoIdx}`;
+    const editorId = priorizarEscopoDoPainel && editorIdDoEscopo
+      ? editorIdDoEscopo
+      : editorIaAtivoRef.current || editorIdDoEscopo;
     const editor = editorId ? obterEditorTinyMce(editorId) : null;
     if (editor) {
       const editorIdAtivo = editor.id;
       const indice = editorIdAtivo === 'laudo-single-editor'
         ? -1
         : Number(editorIdAtivo.replace('secao-', ''));
-      const htmlSelecao = editor.selection.getContent({ format: 'html' });
-      const textoSelecao = editor.selection.getContent({ format: 'text' }).trim();
+      const selecaoDoEditorAtivo = editorIdAtivo === editorIaAtivoRef.current;
+      const htmlSelecao = selecaoDoEditorAtivo ? editor.selection.getContent({ format: 'html' }) : '';
+      const textoSelecao = selecaoDoEditorAtivo ? editor.selection.getContent({ format: 'text' }).trim() : '';
       const temSelecao = Boolean(textoSelecao);
       const conteudo = temSelecao
         ? htmlSelecao
@@ -2474,15 +2480,19 @@ export const LaudosPage: React.FC = () => {
   };
 
   const executarAcaoIa = async (acao: AcaoIa, instrucao?: string) => {
+    const pedidoLivre = Boolean(instrucao?.trim());
     if (confirmacaoIaPendente) {
-      setIaError('Confirme ou cancele o planejamento atual antes de iniciar outra solicitação.');
-      return;
+      if (!pedidoLivre) {
+        setIaError('Confirme ou cancele o planejamento atual antes de iniciar outra solicitação.');
+        return;
+      }
+      setConfirmacaoIaPendente(null);
     }
     if (retomadaIaPendente) {
       await window.ipcAPI.ia.descartarRetomada(retomadaIaPendente.retomada.retomadaId);
       setRetomadaIaPendente(null);
     }
-    const alvo = capturarAlvoIa();
+    const alvo = capturarAlvoIa(true);
     if (!alvo) {
       setIaError('Escolha uma seção ou posicione o cursor no editor antes de usar o assistente.');
       return;
@@ -2515,7 +2525,7 @@ export const LaudosPage: React.FC = () => {
         setIaError(obterMensagemErroIa(planejamento.error));
         return;
       }
-      if (planejamento.data.requerConfirmacao) {
+      if (planejamento.data.requerConfirmacao && !pedidoLivre) {
         setConfirmacaoIaPendente({ plano: planejamento.data, execucao });
         return;
       }
