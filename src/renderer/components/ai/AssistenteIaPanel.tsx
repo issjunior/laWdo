@@ -407,21 +407,6 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   Reescrever escopo
                 </Button>
               </div>
-              {messages.length > 0 && onLimparConversa && (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs text-muted-foreground"
-                    onClick={onLimparConversa}
-                    disabled={loading}
-                  >
-                    <Trash2 className="mr-1 size-3" />
-                    Limpar conversa
-                  </Button>
-                </div>
-              )}
               <div className="flex gap-2">
                 <Textarea
                   ref={textareaRef}
@@ -435,15 +420,31 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   disabled={!editorId || controlesBloqueados}
                   aria-label="Pedido livre ao assistente IA"
                 />
-                <Button
-                  size="icon"
-                  onClick={handleSend}
-                  disabled={!editorId || !input.trim() || controlesBloqueados}
-                  className="shrink-0 self-end"
-                  aria-label="Enviar pedido livre"
-                >
-                  <Send size={16} />
-                </Button>
+                <div className="flex w-10 shrink-0 flex-col gap-2">
+                  {messages.length > 0 && onLimparConversa && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="min-h-0 flex-1"
+                      onClick={onLimparConversa}
+                      disabled={loading}
+                      aria-label="Limpar conversa"
+                      title="Limpar conversa"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  )}
+                  <Button
+                    size="icon"
+                    onClick={handleSend}
+                    disabled={!editorId || !input.trim() || controlesBloqueados}
+                    className="min-h-0 flex-1"
+                    aria-label="Enviar pedido livre"
+                  >
+                    <Send size={16} />
+                  </Button>
+                </div>
               </div>
             </div>
           )}
