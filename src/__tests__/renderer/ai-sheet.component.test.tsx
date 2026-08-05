@@ -86,6 +86,23 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     expect(onSendMessage).toHaveBeenCalledWith('Use redação mais objetiva.', 'reescrever')
   })
 
+  it('permite limpar a conversa do contexto atual', () => {
+    const onLimparConversa = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[{ id: 'mensagem-1', role: 'assistant', content: 'Resposta anterior', timestamp: Date.now() }]}
+        onSendMessage={vi.fn()}
+        onLimparConversa={onLimparConversa}
+        onApplyResponse={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar conversa' }))
+    expect(onLimparConversa).toHaveBeenCalledTimes(1)
+  })
+
   it('oferece cancelamento explícito enquanto uma operação está em andamento', () => {
     const onCancelarOperacao = vi.fn()
 

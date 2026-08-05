@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, X } from 'lucide-react';
+import { ArrowLeft, Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, Trash2, X } from 'lucide-react';
 import type { AcaoIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
 
 type AcaoPainelIa = AcaoIa | 'descrever_imagem';
@@ -44,6 +44,7 @@ interface AssistenteIaPanelProps {
   editorId: string;
   messages: ChatMessage[];
   onSendMessage: (message: string, acao: 'inserir' | 'reescrever') => void;
+  onLimparConversa?: () => void;
   onApplyResponse: (mensagem: ChatMessage) => void;
   modoAplicacao?: 'inserir' | 'substituir';
   loading?: boolean;
@@ -75,6 +76,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   editorId,
   messages,
   onSendMessage,
+  onLimparConversa,
   onApplyResponse,
   modoAplicacao = 'inserir',
   loading = false,
@@ -218,7 +220,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   onValueChange={valor => onSelecionarEscopo?.(Number(valor))}
                   disabled={loading || !onSelecionarEscopo}
                 >
-                  <SelectTrigger className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 text-xs shadow-none focus:ring-1" aria-label="Contexto atual da IA">
+                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-xs shadow-sm focus:ring-1" aria-label="Contexto atual da IA">
                     <SelectValue placeholder={secaoTitulo || 'Escolha uma seção'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -405,6 +407,21 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   Reescrever escopo
                 </Button>
               </div>
+              {messages.length > 0 && onLimparConversa && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={onLimparConversa}
+                    disabled={loading}
+                  >
+                    <Trash2 className="mr-1 size-3" />
+                    Limpar conversa
+                  </Button>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Textarea
                   ref={textareaRef}

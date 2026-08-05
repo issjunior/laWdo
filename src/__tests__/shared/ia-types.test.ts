@@ -69,6 +69,7 @@ describe('contratos compartilhados de IA', () => {
     expect(comandoPainelIaValido({ tipo: 'aplicar_resposta', mensagemId: 'mensagem-1' })).toBe(true);
     expect(comandoPainelIaValido({ tipo: 'aplicar_resposta', indiceMensagem: 0 })).toBe(false);
     expect(comandoPainelIaValido({ tipo: 'confirmar_execucao' })).toBe(true);
+    expect(comandoPainelIaValido({ tipo: 'limpar_conversa' })).toBe(true);
     expect(comandoPainelIaValido({ tipo: 'retomar_operacao' })).toBe(true);
     expect(progressoIaValido({
       operationId: 'operacao-1',

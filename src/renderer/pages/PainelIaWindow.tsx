@@ -80,6 +80,9 @@ export default function PainelIaWindow() {
             aplicacao,
           })
         }
+        onLimparConversa={() =>
+          window.ipcAPI.ia.painelEnviarComando({ tipo: 'limpar_conversa' })
+        }
         onApplyResponse={(mensagem) =>
           window.ipcAPI.ia.painelEnviarComando({
             tipo: 'aplicar_resposta',

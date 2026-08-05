@@ -2187,6 +2187,7 @@ export const LaudosPage: React.FC = () => {
   const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever') => void>(() => {});
   const cancelarOperacaoIaRef = useRef<() => void>(() => {});
   const retomarOperacaoIaRef = useRef<() => void>(() => {});
+  const limparConversaIaRef = useRef<() => void>(() => {});
   const descreverImagemIaRef = useRef<() => void>(() => {});
   const aplicarRespostaIaRef = useRef<(mensagem: ChatMessage) => void>(() => {});
   const operacaoIaAtivaRef = useRef<string | null>(null);
@@ -2310,6 +2311,8 @@ export const LaudosPage: React.FC = () => {
         cancelarOperacaoIaRef.current();
       } else if (comando.tipo === 'retomar_operacao') {
         retomarOperacaoIaRef.current();
+      } else if (comando.tipo === 'limpar_conversa') {
+        limparConversaIaRef.current();
       } else if (comando.tipo === 'descrever_imagem') {
         descreverImagemIaRef.current();
       } else if (comando.tipo === 'selecionar_escopo') {
@@ -2358,7 +2361,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const execucaoIaPermaneceAtual = async (execucao: ExecucaoIaPreparada): Promise<boolean> => {
-    const { alvo, html, indice } = execucao;
+    const { alvo, indice } = execucao;
     const editor = obterEditorTinyMce(alvo.editorId);
     try {
       let conteudoAtual: string;
@@ -2368,8 +2371,7 @@ export const LaudosPage: React.FC = () => {
       } else {
         conteudoAtual = editor?.getContent() || (indice === -1 ? singleEditorHtml : secoes[indice]?.conteudo || '');
       }
-      return conteudoAtual === html
-        && Boolean(alvo.fingerprint)
+      return Boolean(alvo.fingerprint)
         && await calcularFingerprintIa(alvo.tipo, conteudoAtual) === alvo.fingerprint;
     } catch {
       return false;
@@ -2661,7 +2663,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const substituirConteudoComRespostaIa = async (resposta: RespostaIaPendente) => {
-    const { indiceAlvo, conteudoAlvo } = resposta;
+    const { indiceAlvo } = resposta;
     const alvo = alvosIaRef.current.get(resposta.alvoId);
     if (!alvo) {
       setIaError('O alvo original desta resposta não está mais disponível. Gere uma nova resposta antes de aplicar.');
@@ -2673,7 +2675,7 @@ export const LaudosPage: React.FC = () => {
       try {
         editorAtual.selection.moveToBookmark(alvo.bookmark);
         const conteudoSelecionado = editorAtual.selection.getContent({ format: 'html' });
-        if (conteudoSelecionado !== conteudoAlvo || !alvo.fingerprint || await calcularFingerprintIa(alvo.tipo, conteudoSelecionado) !== alvo.fingerprint) {
+        if (!alvo.fingerprint || await calcularFingerprintIa(alvo.tipo, conteudoSelecionado) !== alvo.fingerprint) {
           throw new Error('Seleção alterada');
         }
         editorAtual.undoManager.transact(() => editorAtual.insertContent(resposta.htmlProposto));
@@ -2690,7 +2692,7 @@ export const LaudosPage: React.FC = () => {
       }
     }
     const conteudoAtual = editorAtual?.getContent() || (indiceAlvo === -1 ? singleEditorHtml : secoes[indiceAlvo]?.conteudo || '');
-    if (conteudoAtual !== conteudoAlvo || !alvo.fingerprint || await calcularFingerprintIa(alvo.tipo, conteudoAtual) !== alvo.fingerprint) {
+    if (!alvo.fingerprint || await calcularFingerprintIa(alvo.tipo, conteudoAtual) !== alvo.fingerprint) {
       setIaError('O conteúdo-alvo foi alterado desde a geração da resposta. Gere uma nova resposta antes de aplicar.');
       setRespostaIaPendente(null);
       return;
@@ -2748,10 +2750,22 @@ export const LaudosPage: React.FC = () => {
     void executarAcaoIa(acao, message);
   };
 
+  const limparConversaIa = () => {
+    const chaveChat = imagemSelecionadaIaId
+      ? chaveChatImagemIa(imagemSelecionadaIaId)
+      : iaSheetSecaoIdx === -1
+        ? SINGLE_CHAT_KEY
+        : iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : null;
+    if (!chaveChat) return;
+    setChatMessages(atual => ({ ...atual, [chaveChat]: [] }));
+    setIaError(null);
+  };
+
   executarAcaoIaRef.current = acao => void executarAcaoIa(acao);
   enviarMensagemIaRef.current = handleSendChatMessage;
   cancelarOperacaoIaRef.current = () => void cancelarOperacaoIa();
   retomarOperacaoIaRef.current = () => void retomarOperacaoIa();
+  limparConversaIaRef.current = limparConversaIa;
   descreverImagemIaRef.current = () => void descreverImagemSelecionadaIa();
   aplicarRespostaIaRef.current = handleApplyResponse;
 
@@ -3037,6 +3051,7 @@ export const LaudosPage: React.FC = () => {
           : (iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : (iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : ''))}
         messages={mensagensPainelIa}
         onSendMessage={handleSendChatMessage}
+        onLimparConversa={limparConversaIa}
         onExecutarAcao={acao => void executarAcaoIa(acao)}
         onDestacar={handleDestacarAssistenteIa}
         onRecolher={() => setPanelCollapsed(true)}

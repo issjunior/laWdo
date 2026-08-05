@@ -395,6 +395,7 @@ export function aplicarAtualizacaoPainelIa(
 export type ComandoPainelIa =
   | { tipo: 'executar_acao'; acao: AcaoIa }
   | { tipo: 'enviar_pedido_livre'; mensagem: string; aplicacao: 'inserir' | 'reescrever' }
+  | { tipo: 'limpar_conversa' }
   | { tipo: 'aplicar_resposta'; mensagemId: string }
   | { tipo: 'cancelar_operacao' }
   | { tipo: 'retomar_operacao' }
@@ -416,6 +417,7 @@ export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa 
   if (comando.tipo === 'aplicar_resposta') return typeof comando.mensagemId === 'string' && Boolean(comando.mensagemId);
   if (comando.tipo === 'cancelar_operacao'
     || comando.tipo === 'retomar_operacao'
+    || comando.tipo === 'limpar_conversa'
     || comando.tipo === 'confirmar_execucao'
     || comando.tipo === 'cancelar_confirmacao'
     || comando.tipo === 'descrever_imagem'
