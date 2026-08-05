@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AISheet } from '@/components/ai/AISheet'
+import { AssistenteIaPanel } from '@/components/ai/AssistenteIaPanel'
 
-describe('AISheet — descrição de imagem', () => {
+describe('AssistenteIaPanel — descrição de imagem', () => {
   beforeEach(() => {
     Object.assign(window.ipcAPI, {
       configuracao: {
@@ -16,9 +16,7 @@ describe('AISheet — descrição de imagem', () => {
     const onDescreverImagens = vi.fn()
 
     render(
-      <AISheet
-        open
-        onOpenChange={vi.fn()}
+      <AssistenteIaPanel
         secaoTitulo="Imagem selecionada"
         editorId=""
         messages={[]}
@@ -37,16 +35,16 @@ describe('AISheet — descrição de imagem', () => {
     expect(onDescreverImagens).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('textbox', { name: 'Pedido livre ao assistente IA' })).not.toBeInTheDocument()
     expect(screen.getByText(/não será inserida automaticamente/i)).toBeInTheDocument()
+    expect(document.querySelector('[data-slot="sheet-overlay"]')).not.toBeInTheDocument()
   })
 
   it('deve permitir copiar a descrição sem oferecer aplicação automática', () => {
     render(
-      <AISheet
-        open
-        onOpenChange={vi.fn()}
+      <AssistenteIaPanel
         secaoTitulo="Imagem selecionada"
         editorId=""
         messages={[{
+          id: 'mensagem-descricao-1',
           role: 'assistant',
           content: 'Observa-se um objeto metálico sobre superfície clara.',
           timestamp: Date.now(),
@@ -70,9 +68,7 @@ describe('AISheet — descrição de imagem', () => {
     const onSendMessage = vi.fn()
 
     render(
-      <AISheet
-        open
-        onOpenChange={vi.fn()}
+      <AssistenteIaPanel
         secaoTitulo="Documento completo"
         editorId="laudo-single-editor"
         messages={[]}
@@ -94,9 +90,7 @@ describe('AISheet — descrição de imagem', () => {
     const onCancelarOperacao = vi.fn()
 
     render(
-      <AISheet
-        open
-        onOpenChange={vi.fn()}
+      <AssistenteIaPanel
         secaoTitulo="Documento completo"
         editorId="laudo-single-editor"
         messages={[]}
@@ -109,5 +103,80 @@ describe('AISheet — descrição de imagem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(onCancelarOperacao).toHaveBeenCalledTimes(1)
+  })
+
+  it('apresenta progresso acessível durante o processamento em lotes', () => {
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        loading
+        progresso={{
+          operationId: 'operacao-1',
+          fase: 'processando',
+          loteAtual: 2,
+          totalLotes: 4,
+          tentativa: 1,
+          chamadasConcluidas: 1,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Processando lote 2 de 4')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: '1 de 4 lotes concluídos' })).toHaveValue(1)
+  })
+
+  it('solicita confirmação antes de iniciar um plano de múltiplos lotes', () => {
+    const onConfirmarExecucao = vi.fn()
+    const onCancelarConfirmacao = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        planoPendente={{
+          planoId: 'plano-1',
+          acao: 'resumir',
+          escopo: 'laudo_completo',
+          provedor: 'gemini',
+          modelo: 'gemini-2.5-flash',
+          totalLotes: 3,
+          chamadasBase: 3,
+          limiteMaximoChamadas: 24,
+          requerConfirmacao: true,
+        }}
+        onConfirmarExecucao={onConfirmarExecucao}
+        onCancelarConfirmacao={onCancelarConfirmacao}
+      />,
+    )
+
+    expect(screen.getByText(/3 lote\(s\).*3 chamada\(s\) base.*até 24/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e iniciar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(onConfirmarExecucao).toHaveBeenCalledTimes(1)
+    expect(onCancelarConfirmacao).toHaveBeenCalledTimes(1)
+  })
+
+  it('oferece continuar do lote preservado após uma falha', () => {
+    const onRetomarOperacao = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        retomada={{ retomadaId: 'retomada-1', planoId: 'plano-1', lotesConcluidos: 2, totalLotes: 4 }}
+        onRetomarOperacao={onRetomarOperacao}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar do lote 3 de 4' }))
+    expect(onRetomarOperacao).toHaveBeenCalledTimes(1)
   })
 })

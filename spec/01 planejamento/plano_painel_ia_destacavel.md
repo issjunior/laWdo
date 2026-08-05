@@ -4,7 +4,7 @@
 
 Evoluir o assistente atual para um painel único, seguro e reutilizável, disponível em dois modos mutuamente exclusivos:
 
-- `Sheet` lateral integrado ao editor.
+- Dock lateral integrado e redimensionável, sem overlay sobre o editor.
 - Janela destacável, redimensionável e reencaixável.
 
 A implementação deve:
@@ -18,13 +18,13 @@ A implementação deve:
 
 ## Progresso da implementação
 
-Última atualização: 31/07/2026. O processamento sequencial de laudos grandes foi reordenado para momento oportuno, após a conclusão da janela destacada interativa e de sua validação. Ponto de retomada: validação e aprimoramentos finais da janela destacada.
+Última atualização: 04/08/2026. A integração visual foi implementada como dock direito redimensionável, inspirado no painel de Ilustrações e sem portal ou sobreposição sobre o laudo. O processamento em lotes continua fora desta etapa.
 
 ### Concluído nesta etapa
 
 - Controle único `Assistente IA` na barra do editor; os cards por seção deixaram de ser renderizados.
-- Sheet lateral com escolha explícita de documento ou seção, histórico visual, ações rápidas de ortografia, técnico-pericial, clareza, resumo e expansão, além de pedido livre para inserção.
-- Botões de destacar visíveis tanto na barra do editor quanto no cabeçalho do Sheet; há janela destacada única, com handshake, URL contendo somente `sessionId` e reencaixe básico.
+- Dock lateral com escolha explícita de documento ou seção, histórico visual, ações rápidas de ortografia, técnico-pericial, clareza, resumo e expansão, além de pedido livre para inserção.
+- Botões de destacar visíveis tanto na barra do editor quanto no cabeçalho do dock; há janela destacada única, com handshake, URL contendo somente `sessionId` e reencaixe básico.
 - Janela destacada concluída como projeção interativa do mesmo controlador do Sheet: exibe contexto, histórico, carregamento e erros; oferece ações rápidas, pedido livre, cancelamento, descrição de imagem, cópia, aplicação de respostas, escolha de escopo e reencaixe. Os comandos retornam ao editor por IPC validado, sem acesso da janela ao TinyMCE ou ao conteúdo-fonte do laudo.
 - Contratos compartilhados iniciais, serviço de execução no processo principal, wrappers IPC/preload para perfil, execução, cancelamento, teste de conexão e ciclo da janela.
 - Preferências de tom, detalhamento e instruções personalizadas na página de modelos, persistidas em `perfil_resposta_ia`.
@@ -33,7 +33,7 @@ A implementação deve:
 - Captura de alvo por seleção, seção ou documento, incluindo bookmark do TinyMCE, fingerprint SHA-256, fragmentos textuais protegidos, reconstrução sobre a estrutura original e validação antes da aplicação.
 - Pedido livre com escolha explícita entre inserir no cursor e reescrever o escopo capturado.
 - Proteção opaca e validação de restauração para placeholders, números, datas, identificadores e URLs nos fragmentos textuais enviados à IA; respostas que removem, duplicam ou inventam tokens são rejeitadas antes da prévia.
-- Cancelamento explícito no Sheet, associado ao `operationId` ativo e ao `AbortController` já controlado pelo processo principal.
+- Cancelamento explícito no dock, associado ao `operationId` ativo e ao `AbortController` já controlado pelo processo principal.
 - Serviço de execução com timeout de 120 segundos, cancelamento, retries para rede/`408`/`429`/`5xx`, respeito a `Retry-After` e logs sem conteúdo sensível.
 - Descrição de imagem separada do pipeline textual: o renderer envia somente `operationId`, `laudoId` e `imagemId`; o main recupera a imagem persistida, valida pertencimento, formato e tamanho e envia um único conteúdo multimodal ao provedor.
 - A descrição de imagem agora retorna texto simples, tem histórico isolado por imagem, contexto visual de `Imagem selecionada`, cópia manual e nenhuma ação de inserir/aplicar automaticamente. O canal legado que aceitava data URI/URL pelo renderer foi removido.
@@ -45,15 +45,51 @@ A implementação deve:
 - Privacidade do conteúdo simplificada em uma única preferência persistida: `Enviar conteúdo integralmente`. Ela vem ativada por padrão; ativada envia texto e imagens sem mascaramento e desativada aplica o mascaramento em qualquer provedor.
 - Página `Modelos de IA` reorganizada: configuração do provedor e guia de chave em diálogos, confirmação de privacidade em `AlertDialog`, cartões de envio e modo em duas colunas equilibradas e tooltips para tom e instruções personalizadas.
 - Validações mais recentes desta etapa: `npm run type-check`, `npm run lint` e teste do serviço de IA concluídos com sucesso.
+- Payloads de perfil, execução textual, comandos e snapshots da janela agora são validados como `unknown` na fronteira IPC, sem casts diretos para confiar em dados do renderer.
+- Uma única operação de IA é aceita por renderer; cancelamentos só atingem operações pertencentes ao remetente e operações ativas são canceladas quando o renderer proprietário é destruído.
+- Mensagens e propostas passaram a ter identidade estável. A janela solicita aplicação por `mensagemId`, eliminando a dependência do índice visual do histórico, e mantém `proposalId` ligado à operação que produziu a resposta.
+- A revisão monotônica ignora estados atrasados e solicita ressincronização ao detectar lacunas. O handshake e a recuperação usam snapshots completos; mudanças normais usam deltas tipados contendo somente os campos alterados. Um delta fora de sequência não é aplicado antes da ressincronização.
+- Testes específicos cobrem contratos compartilhados, autorização da sessão, validação de snapshots, comandos remotos, exclusividade e propriedade das operações, histórico, reencaixe e ressincronização.
+- Validações deste checkpoint: `npm run type-check`, `npm run lint` e `npm test` concluídos com sucesso, com 248 testes aprovados e 1 ignorado.
+- IA e Ilustrações agora ocupam docks direitos separados e mutuamente exclusivos. O editor permanece montado ao abrir, redimensionar, recolher, trocar ou fechar o dock; janelas destacadas podem coexistir com o dock integrado.
+- O dock usa `react-resizable-panels`, preserva o painel direito em pixels e mantém um trilho vertical permanente à direita do editor, com ícones acessíveis para IA, Ilustrações e Ferramentas. O menu Ferramentas concentra as ações de manutenção do laudo, incluindo a reindexação de seções. Quando o conteúdo do dock é recolhido, somente esse trilho permanece. A largura da IA é limitada entre 360 e 640 px, e a de Ilustrações entre 320 e 720 px.
+- As larguras integradas são persistidas separadamente no `localStorage` apenas depois de interação do usuário. O estado aberto e o estado recolhido continuam transitórios.
+- A navegação esquerda recebe recolhimento temporário enquanto um dock está expandido, sem alterar o cookie da preferência normal. Uma expansão manual durante o dock substitui esse recolhimento até a próxima abertura.
+- `AssistenteIaPanel` não usa portal, overlay ou posicionamento fixo e é compartilhado pelo dock e pela janela destacada mediante callbacks distintos.
+- As dimensões das janelas destacadas de IA e Ilustrações são persistidas pelo processo principal, com validação, debounce de 300 ms e limite de 90% da área útil; a posição não é persistida.
+- Validações desta etapa: `npm run type-check`, `npm run lint` e `npm test` concluídos com sucesso, com 265 testes aprovados e 1 ignorado. A rolagem automática da figura ativa fica restrita à lista interna do painel, sem reposicionar a página do laudo no modo multi-editor.
+- A janela destacada passou a receber snapshot completo somente no handshake ou após pedido de ressincronização. Atualizações de carregamento, erro, contexto, modo, mensagens e escopos trafegam como deltas validados no main e no renderer, mantendo a revisão monotônica sem retransmitir todo o estado a cada mudança.
+- No modo de conteúdo integral, a IA recebe uma representação textual somente para leitura com os valores atuais dos placeholders, enquanto o HTML de origem e seus marcadores permanecem imutáveis para reconstrução e aplicação seguras. Valores ausentes são identificados de forma amigável, sem expor a sintaxe bruta do placeholder no histórico.
+- A execução textual solicita resposta JSON estruturada, possui fallback de compatibilidade para modelos que rejeitem esse recurso, tolera cercas Markdown e executa uma única tentativa corretiva quando o contrato da resposta for inválido. Falhas conhecidas são convertidas em mensagens acionáveis para o usuário, sem exibir códigos internos como `RESPOSTA_INVALIDA`.
+- A execução textual passou a planejar lotes determinísticos por orçamento conservador de caracteres, preservando a ordem global dos fragmentos e processando uma chamada por vez. Os resultados permanecem somente em memória e são entregues ao renderer apenas após todos os lotes concluírem, sem aplicação parcial no laudo.
+- O processo principal publica progresso tipado com fase, lote atual, total, tentativa e chamadas concluídas. O dock e a janela destacada exibem o mesmo progresso acessível; o cancelamento permanece válido entre chamadas e impede o início do lote seguinte.
+- Operações sobre o documento completo ou com múltiplos lotes exigem confirmação explícita antes da primeira chamada. O painel informa lotes, chamadas-base, limite máximo considerando retries/correções e modelo; os demais controles ficam bloqueados até confirmar ou cancelar, tanto no dock quanto na janela destacada.
+- Cada plano recebe fingerprint SHA-256 sobre alvo textual, ação, instrução, provedor, modelo, perfil e privacidade. Alterações posteriores invalidam confirmação e retomada antes de qualquer nova chamada ao provedor.
+- Se uma falha ocorrer após ao menos um lote concluído, os resultados intermediários permanecem exclusivamente em memória por até 30 minutos e podem continuar do primeiro lote pendente. Checkpoints pertencem ao renderer criador, são descartados após sucesso, cancelamento explícito de uma nova solicitação, mudança incompatível, expiração ou encerramento da sessão, e nunca são aplicados parcialmente ao laudo.
+- Validações deste checkpoint: `npm run type-check`, `npm run lint` e `npm test` concluídos com sucesso, com 275 testes aprovados e 1 ignorado.
 
 ### Parcialmente concluído
 
-- Execução: timeout, retries e `Retry-After` estão implementados; planejamento/progresso por lote, retomada segura e erros estruturados completos no contrato do renderer foram reordenados para momento oportuno, depois da estabilização da experiência do painel destacável.
+- Execução: timeout, retries, `Retry-After`, planejamento conservador, confirmação prévia textual, processamento sequencial, progresso por lote, checkpoint em memória e retomada segura por fingerprint estão implementados. Permanecem pendentes a confirmação específica para descrição de imagens, o orçamento derivado do catálogo central de modelos e a subdivisão contextual por blocos estruturais para aproveitar melhor a janela de contexto de cada modelo.
 
 ### Próximas prioridades
 
-1. Ampliar os testes específicos de IA, IPC, editor e janela destacada, incluindo reencaixe, atualização de histórico e comandos remotos.
-2. Retomar, em momento oportuno, o planejamento e a execução sequencial de lotes, com confirmação para escopos extensos, progresso, cancelamento e retomada segura.
+1. Concluir o smoke manual do dock em resoluções reduzidas e amplas, nos temas claro e escuro, incluindo mouse, teclado, destacar e reencaixar.
+2. Retomar o planejamento detalhado da execução sequencial de lotes, com confirmação para escopos extensos, progresso, cancelamento e retomada segura.
+3. Implementar os lotes somente depois da aprovação desse detalhamento e do smoke manual do painel.
+
+### Decisão de integração visual
+
+O redesenho foi concluído antes dos lotes porque a futura apresentação de progresso, confirmação, cancelamento, falha parcial e retomada depende diretamente da forma como o assistente se integra ao editor.
+
+As decisões aplicadas são:
+
+- o modo integrado reserva espaço real à direita do documento e nunca cobre o laudo;
+- como o controle da barra representa painel aberto, operação ativa, janela destacada e resposta pronta;
+- quais partes de contexto, histórico, ações e composição permanecem visíveis em cada largura;
+- destacar e reencaixar preservam o controlador, o histórico, o alvo, a operação e a proposta;
+- IA e Ilustrações compartilham a linguagem visual, mas permanecem docks separados e mutuamente exclusivos;
+- quais estados de progresso e confirmação serão necessários para o processamento em lotes.
 
 ### Problemas registrados para resolução futura
 
@@ -62,7 +98,7 @@ A implementação deve:
 
 ## Experiência e estado do painel
 
-- Adicionar `Assistente IA` à barra principal do editor. O painel terá `Sheet` integrado e uma única janela destacada, mutuamente exclusivos.
+- Adicionar `Assistente IA` à barra principal do editor. O painel terá dock integrado e uma única janela destacada, mutuamente exclusivos.
 - Escolher o escopo padrão nesta ordem: seleção não vazia, seção sob o cursor ou nenhum escopo. Nunca selecionar automaticamente o laudo completo.
 - Organizar ações em `Revisar`, `Transformar` e `Inserir`; pedidos livres escolherão explicitamente entre inserir no cursor ou transformar o escopo.
 - Disponibilizar as ações:
@@ -79,7 +115,7 @@ A implementação deve:
 - Apresentar estados explícitos: `preparando`, `processando`, `cancelando`, `concluído`, `falhou`, `cancelado` e `alvo alterado`.
 - Usar progresso acessível com `aria-live`, foco restaurado, atalhos de teclado, feedback de cópia e mensagens de erro com ação recomendada.
 - Fechar a janela pelo `X` apenas oculta o painel; a operação continua e permanece indicada na barra do editor. `Cancelar` é uma ação separada.
-- `Reencaixar` fecha a janela destacada e abre o sheet.
+- `Reencaixar` fecha a janela destacada e abre o dock com sua última largura integrada válida.
 - Fechar o laudo ou aplicativo cancela operações, fecha a janela e descarta todo o histórico da sessão.
 - Manter histórico cronológico da sessão, com badges de ação e escopo. Cada entrada guarda seu próprio alvo, fingerprint, modo de aplicação e estado.
 - Enviar cada pedido isoladamente ao modelo. Mensagens anteriores são apenas histórico visual e nunca integram solicitações futuras.
@@ -105,7 +141,7 @@ O perfil terá:
 
 `Restaurar padrão` deve alterar somente os campos locais do formulário. A restauração será persistida apenas após `Salvar preferências` e não poderá modificar provedor, modelo ou chaves.
 
-Manter um único perfil local, aplicado automaticamente a ações rápidas e pedidos livres no sheet e na janela destacada.
+Manter um único perfil local, aplicado automaticamente a ações rápidas e pedidos livres no dock e na janela destacada.
 
 Aplicar invariantes não configuráveis:
 
@@ -129,7 +165,7 @@ Instruções personalizadas conflitantes não podem desativar essas regras.
 - Rejeitar submissões duplicadas e ignorar respostas tardias de operações canceladas ou pertencentes a outra sessão.
 - A janela enviará um evento `painelPronto` após montar. O editor responderá com um snapshot inicial e, depois, somente com deltas.
 - Não retransmitir HTML de origem ou snapshots completos a cada atualização de progresso.
-- Manter tamanho e posição da janela somente em memória durante a execução atual do aplicativo e limitar a posição às telas disponíveis.
+- Persistir somente largura e altura de cada janela destacada em `janela_painel_ia_dimensoes` e `janela_painel_ilustracoes_dimensoes`, no formato `{ versao: 1, largura, altura }`. Validar os mínimos e limitar a 90% da área útil; não persistir posição.
 - Fechar automaticamente a janela se o renderer proprietário for destruído, recarregado ou sair do laudo.
 - Permitir que painéis destacados de IA e ilustrações coexistam. Dentro do editor, apenas um painel lateral ficará aberto por vez.
 

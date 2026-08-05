@@ -8,7 +8,7 @@ import type {
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
 import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
-import type { ComandoPainelIa, EstadoPainelIa } from '@shared/types/ia.types';
+import type { AtualizacaoPainelIa, ComandoPainelIa, PlanoExecucaoIaResumo, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -88,13 +88,16 @@ interface IpcAPIRendererLegada {
   ia: IpcGrupoLegado & {
     painelAbrir: (sessionId: string) => void;
     copiarResposta: (texto: string) => Promise<IpcRespostaLegada>;
+    planejar: (solicitacao: SolicitacaoIa) => Promise<{ success: boolean; data?: PlanoExecucaoIaResumo; error?: string }>;
+    executar: (solicitacao: SolicitacaoIa) => Promise<RespostaExecucaoIaIpc>;
+    onProgresso: (callback: (progresso: ProgressoIa) => void) => () => void;
     painelFechar: () => void;
     painelPronto: () => void;
-    painelPublicar: (sessionId: string, estado: EstadoPainelIa) => void;
+    painelPublicar: (sessionId: string, atualizacao: AtualizacaoPainelIa) => void;
     painelEnviarComando: (comando: ComandoPainelIa) => void;
     painelReencaixar: () => void;
     onPainelPronto: (callback: (sessionId: string) => void) => () => void;
-    onPainelEstado: (callback: (estado: EstadoPainelIa) => void) => () => void;
+    onPainelEstado: (callback: (atualizacao: unknown) => void) => () => void;
     onPainelComando: (callback: (comando: ComandoPainelIa) => void) => () => void;
     onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
     onPainelFechado: (callback: (sessionId: string) => void) => () => void;
@@ -218,7 +221,10 @@ const initApp = async () => {
           update: async () => ({ success: false, error: 'Mock mode' }),
           delete: async () => ({ success: false, error: 'Mock mode' }),
           findByEmail: async () => ({ success: false, error: 'Mock mode' }),
-          findActivePeritos: async () => ({ success: true, data: [] }),
+          findActivePeritos: async () => ({
+            success: false,
+            error: 'A ponte segura com o aplicativo não está disponível.',
+          }),
           updateProfile: async () => ({ success: false, error: 'Mock mode' }),
           uploadAvatar: async () => ({ success: true, data: { foto_url: '' } }),
           getAvatar: async () => ({ success: false, error: 'Mock mode' }),

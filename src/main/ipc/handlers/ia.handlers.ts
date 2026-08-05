@@ -1,12 +1,16 @@
 import { BrowserWindow, clipboard, ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
-import { iaExecucaoService } from '../../services/ia-execucao.service.js';
-import { comandoPainelIaValido } from '../../../shared/types/ia.types.js';
+import { ErroExecucaoIa, iaExecucaoService } from '../../services/ia-execucao.service.js';
+import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
+import {
+  atualizacaoPainelIaValida,
+  comandoPainelIaValido,
+  perfilRespostaIaValido,
+  solicitacaoIaValida,
+} from '../../../shared/types/ia.types.js';
 import type {
-  PerfilRespostaIa,
   SolicitacaoDescricaoImagemIa,
-  SolicitacaoIa,
 } from '../../../shared/types/ia.types.js';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -165,8 +169,39 @@ interface IaHandlerOptions {
 
 let janelaPainelIa: BrowserWindow | null = null;
 let sessaoPainelIa: { id: string; proprietarioId: number } | null = null;
+let criandoJanelaPainelIa = false;
 
 export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
+  const operacoesPorRenderer = new Map<number, Set<string>>();
+  const retomadasPorRenderer = new Map<number, Set<string>>();
+  const renderersMonitorados = new Set<number>();
+
+  const removerOperacao = (rendererId: number, operationId: string) => {
+    const operacoes = operacoesPorRenderer.get(rendererId);
+    operacoes?.delete(operationId);
+    if (!operacoes?.size) operacoesPorRenderer.delete(rendererId);
+  };
+
+  const registrarOperacao = (event: Electron.IpcMainInvokeEvent, operationId: string): boolean => {
+    const rendererId = event.sender.id;
+    const operacoes = operacoesPorRenderer.get(rendererId) ?? new Set<string>();
+    if (operacoes.size > 0) return false;
+    operacoes.add(operationId);
+    operacoesPorRenderer.set(rendererId, operacoes);
+
+    if (!renderersMonitorados.has(rendererId)) {
+      renderersMonitorados.add(rendererId);
+      event.sender.once('destroyed', () => {
+        operacoesPorRenderer.get(rendererId)?.forEach(id => iaExecucaoService.cancelar(id));
+        retomadasPorRenderer.get(rendererId)?.forEach(id => iaExecucaoService.descartarRetomada(id));
+        operacoesPorRenderer.delete(rendererId);
+        retomadasPorRenderer.delete(rendererId);
+        renderersMonitorados.delete(rendererId);
+      });
+    }
+    return true;
+  };
+
   const fecharJanelaPainelIa = (notificarProprietario: boolean) => {
     const sessao = sessaoPainelIa;
     if (janelaPainelIa && !janelaPainelIa.isDestroyed()) janelaPainelIa.close();
@@ -178,7 +213,7 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     }
   };
 
-  ipcMain.on('ia:painel-abrir', (event, sessionId: unknown) => {
+  ipcMain.on('ia:painel-abrir', async (event, sessionId: unknown) => {
     if (typeof sessionId !== 'string' || !sessionId.trim()) return;
     const proprietario = BrowserWindow.fromWebContents(event.sender);
     if (!proprietario) return;
@@ -186,23 +221,51 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
       if (sessaoPainelIa?.proprietarioId === proprietario.id && sessaoPainelIa.id === sessionId) janelaPainelIa.focus();
       return;
     }
-    sessaoPainelIa = { id: sessionId, proprietarioId: proprietario.id };
-    janelaPainelIa = new BrowserWindow({
-      width: 460,
-      height: 720,
-      minWidth: 360,
-      minHeight: 480,
-      title: 'Assistente IA',
-      show: false,
-      webPreferences: { preload: opcoes.preloadPath, nodeIntegration: false, contextIsolation: true, sandbox: true },
-    });
-    const destino = opcoes.isDev
-      ? `http://localhost:3000#/painel-ia?sessionId=${encodeURIComponent(sessionId)}`
-      : `file://${opcoes.rendererHtmlPath}#/painel-ia?sessionId=${encodeURIComponent(sessionId)}`;
-    janelaPainelIa.loadURL(destino);
-    janelaPainelIa.once('ready-to-show', () => janelaPainelIa?.show());
-    janelaPainelIa.on('closed', () => fecharJanelaPainelIa(true));
-    proprietario.once('closed', () => fecharJanelaPainelIa(false));
+    if (criandoJanelaPainelIa) return;
+
+    criandoJanelaPainelIa = true;
+    try {
+      const dimensoes = await carregarDimensoesJanela({
+        chave: 'janela_painel_ia_dimensoes',
+        descricao: 'Dimensões da janela destacada do Assistente IA',
+        larguraPadrao: 460,
+        alturaPadrao: 720,
+        larguraMinima: 360,
+        alturaMinima: 480,
+        janelaReferencia: proprietario,
+      });
+      if (proprietario.isDestroyed()) return;
+
+      sessaoPainelIa = { id: sessionId, proprietarioId: proprietario.id };
+      janelaPainelIa = new BrowserWindow({
+        width: dimensoes.largura,
+        height: dimensoes.altura,
+        minWidth: 360,
+        minHeight: 480,
+        title: 'Assistente IA',
+        show: false,
+        webPreferences: { preload: opcoes.preloadPath, nodeIntegration: false, contextIsolation: true, sandbox: true },
+      });
+      observarDimensoesJanela(janelaPainelIa, {
+        chave: 'janela_painel_ia_dimensoes',
+        descricao: 'Dimensões da janela destacada do Assistente IA',
+        larguraMinima: 360,
+        alturaMinima: 480,
+      });
+      const destino = opcoes.isDev
+        ? `http://localhost:3000#/painel-ia?sessionId=${encodeURIComponent(sessionId)}`
+        : `file://${opcoes.rendererHtmlPath}#/painel-ia?sessionId=${encodeURIComponent(sessionId)}`;
+      void janelaPainelIa.loadURL(destino);
+      janelaPainelIa.once('ready-to-show', () => janelaPainelIa?.show());
+      janelaPainelIa.on('closed', () => fecharJanelaPainelIa(true));
+      proprietario.once('closed', () => fecharJanelaPainelIa(false));
+    } catch (error) {
+      sessaoPainelIa = null;
+      janelaPainelIa = null;
+      logError('Erro ao abrir janela do Assistente IA', error);
+    } finally {
+      criandoJanelaPainelIa = false;
+    }
   });
 
   ipcMain.on('ia:painel-pronto', event => {
@@ -211,10 +274,10 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     if (proprietario && !proprietario.isDestroyed()) proprietario.webContents.send('ia:painel-pronto', sessaoPainelIa.id);
   });
 
-  ipcMain.on('ia:painel-publicar', (event, sessionId: unknown, estado: unknown) => {
+  ipcMain.on('ia:painel-publicar', (event, sessionId: unknown, atualizacao: unknown) => {
     const proprietario = BrowserWindow.fromWebContents(event.sender);
-    if (!sessaoPainelIa || !janelaPainelIa || proprietario?.id !== sessaoPainelIa.proprietarioId || sessionId !== sessaoPainelIa.id) return;
-    janelaPainelIa.webContents.send('ia:painel-estado', estado);
+    if (!sessaoPainelIa || !janelaPainelIa || proprietario?.id !== sessaoPainelIa.proprietarioId || sessionId !== sessaoPainelIa.id || !atualizacaoPainelIaValida(atualizacao)) return;
+    janelaPainelIa.webContents.send('ia:painel-estado', atualizacao);
   });
 
   ipcMain.on('ia:painel-comando', (event, comando: unknown) => {
@@ -262,28 +325,65 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
 
   ipcMain.handle('ia:salvar-perfil', async (_event, perfil: unknown) => {
     try {
-      await iaExecucaoService.salvarPerfil(perfil as PerfilRespostaIa);
+      if (!perfilRespostaIaValido(perfil)) return { success: false, error: 'ENTRADA_INVALIDA' };
+      await iaExecucaoService.salvarPerfil(perfil);
       return { success: true };
     } catch (error: unknown) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao salvar preferências da IA' };
     }
   });
 
-  ipcMain.handle('ia:executar', async (_event, solicitacao: unknown) => {
+  ipcMain.handle('ia:planejar', async (_event, solicitacao: unknown) => {
     try {
-      if (!solicitacao || typeof solicitacao !== 'object') return { success: false, error: 'ENTRADA_INVALIDA' };
-      return { success: true, data: await iaExecucaoService.executar(solicitacao as SolicitacaoIa) };
+      if (!solicitacaoIaValida(solicitacao)) return { success: false, error: 'ENTRADA_INVALIDA' };
+      return { success: true, data: await iaExecucaoService.planejar(solicitacao) };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'ERRO_INTERNO' };
+    }
+  });
+
+  ipcMain.handle('ia:executar', async (event, solicitacao: unknown) => {
+    try {
+      if (!solicitacaoIaValida(solicitacao)) return { success: false, error: 'ENTRADA_INVALIDA' };
+      const rendererId = event.sender.id;
+      if (solicitacao.retomadaId && !retomadasPorRenderer.get(rendererId)?.has(solicitacao.retomadaId)) {
+        return { success: false, error: 'RETOMADA_INDISPONIVEL' };
+      }
+      if (!registrarOperacao(event, solicitacao.operationId)) return { success: false, error: 'OPERACAO_EM_ANDAMENTO' };
+      try {
+        const resposta = {
+          success: true,
+          data: await iaExecucaoService.executar(solicitacao, progresso => {
+            if (!event.sender.isDestroyed()) event.sender.send('ia:progresso', progresso);
+          }),
+        };
+        if (solicitacao.retomadaId) retomadasPorRenderer.get(rendererId)?.delete(solicitacao.retomadaId);
+        return resposta;
+      } finally {
+        removerOperacao(event.sender.id, solicitacao.operationId);
+      }
     } catch (error: unknown) {
       const mensagem = error instanceof Error ? error.message : 'ERRO_INTERNO';
       logError('Erro ao executar IA', { codigo: mensagem.split(':')[0] });
+      if (error instanceof ErroExecucaoIa && error.retomada) {
+        const retomadas = retomadasPorRenderer.get(event.sender.id) ?? new Set<string>();
+        retomadas.add(error.retomada.retomadaId);
+        retomadasPorRenderer.set(event.sender.id, retomadas);
+        return { success: false, error: mensagem, retomada: error.retomada };
+      }
       return { success: false, error: mensagem };
     }
   });
 
-  ipcMain.handle('ia:descrever-imagem', async (_event, solicitacao: unknown) => {
+  ipcMain.handle('ia:descrever-imagem', async (event, solicitacao: unknown) => {
     try {
       if (!solicitacaoDescricaoImagemValida(solicitacao)) return { success: false, error: 'ENTRADA_INVALIDA' };
-      return { success: true, data: await iaExecucaoService.descreverImagem(solicitacao) };
+      if (!registrarOperacao(event, solicitacao.operationId)) return { success: false, error: 'OPERACAO_EM_ANDAMENTO' };
+      try {
+        return { success: true, data: await iaExecucaoService.descreverImagem(solicitacao) };
+      } finally {
+        removerOperacao(event.sender.id, solicitacao.operationId);
+      }
     } catch (error: unknown) {
       const mensagem = error instanceof Error ? error.message : 'ERRO_INTERNO';
       logError('Erro ao descrever imagem com IA', { codigo: mensagem.split(':')[0] });
@@ -291,9 +391,18 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     }
   });
 
-  ipcMain.handle('ia:cancelar', async (_event, operationId: unknown) => {
+  ipcMain.handle('ia:cancelar', async (event, operationId: unknown) => {
     if (typeof operationId !== 'string' || !operationId) return { success: false, error: 'ENTRADA_INVALIDA' };
-    iaExecucaoService.cancelar(operationId);
+    if (operacoesPorRenderer.get(event.sender.id)?.has(operationId)) iaExecucaoService.cancelar(operationId);
+    return { success: true };
+  });
+
+  ipcMain.handle('ia:descartar-retomada', async (event, retomadaId: unknown) => {
+    if (typeof retomadaId !== 'string' || !retomadaId) return { success: false, error: 'ENTRADA_INVALIDA' };
+    const retomadas = retomadasPorRenderer.get(event.sender.id);
+    if (!retomadas?.has(retomadaId)) return { success: false, error: 'RETOMADA_INDISPONIVEL' };
+    iaExecucaoService.descartarRetomada(retomadaId);
+    retomadas.delete(retomadaId);
     return { success: true };
   });
 

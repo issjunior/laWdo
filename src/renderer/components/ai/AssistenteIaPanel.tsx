@@ -1,21 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetClose,
-} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Send, Loader2, Check, Copy, ExternalLink, X } from 'lucide-react';
-import type { AcaoIa } from '@shared/types/ia.types';
+import { ArrowLeft, Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, X } from 'lucide-react';
+import type { AcaoIa, PlanoExecucaoIaResumo, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
 
 type AcaoPainelIa = AcaoIa | 'descrever_imagem';
 
 export interface ChatMessage {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
@@ -23,6 +17,8 @@ export interface ChatMessage {
   acao?: AcaoPainelIa;
   alvo?: { id: string; indice: number; conteudo: string; tipo: 'selecao' | 'secao' | 'laudo_completo' | 'cursor' };
   conteudoProposto?: string;
+  proposalId?: string;
+  permiteAplicacao?: boolean;
 }
 
 const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
@@ -36,9 +32,7 @@ const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
   descrever_imagem: 'Descrever imagem',
 };
 
-interface AISheetProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface AssistenteIaPanelProps {
   secaoTitulo: string;
   editorId: string;
   messages: ChatMessage[];
@@ -46,12 +40,21 @@ interface AISheetProps {
   onApplyResponse: (mensagem: ChatMessage) => void;
   modoAplicacao?: 'inserir' | 'substituir';
   loading?: boolean;
+  progresso?: ProgressoIa | null;
   error?: string | null;
   opcoesEscopo?: Array<{ id: number; titulo: string }>;
   onSelecionarEscopo?: (id: number) => void;
   onExecutarAcao?: (acao: AcaoIa) => void;
   onDestacar?: () => void;
+  onReencaixar?: () => void;
+  onRecolher?: () => void;
+  onFechar?: () => void;
   onCancelarOperacao?: () => void;
+  onRetomarOperacao?: () => void;
+  retomada?: RetomadaIa | null;
+  planoPendente?: PlanoExecucaoIaResumo | null;
+  onConfirmarExecucao?: () => void;
+  onCancelarConfirmacao?: () => void;
   onDescreverImagens?: () => void;
   imagemSelecionada?: boolean;
   contextoImagem?: boolean;
@@ -62,9 +65,7 @@ type ConfiguracaoResposta = {
   data?: string | null;
 };
 
-export const AISheet: React.FC<AISheetProps> = ({
-  open,
-  onOpenChange,
+export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   secaoTitulo,
   editorId,
   messages,
@@ -72,12 +73,21 @@ export const AISheet: React.FC<AISheetProps> = ({
   onApplyResponse,
   modoAplicacao = 'inserir',
   loading = false,
+  progresso = null,
   error = null,
   opcoesEscopo = [],
   onSelecionarEscopo,
   onExecutarAcao,
   onDestacar,
+  onReencaixar,
+  onRecolher,
+  onFechar,
   onCancelarOperacao,
+  onRetomarOperacao,
+  retomada = null,
+  planoPendente = null,
+  onConfirmarExecucao,
+  onCancelarConfirmacao,
   onDescreverImagens,
   imagemSelecionada = false,
   contextoImagem = false,
@@ -94,32 +104,31 @@ export const AISheet: React.FC<AISheetProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Focar textarea ao abrir e buscar modelo de IA
+  // Focar textarea e buscar modelo de IA ao montar o painel.
   useEffect(() => {
-    if (open) {
-      setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 100);
+    const foco = window.setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 100);
 
-      // Buscar provedor e modelo configurados
-      window.ipcAPI.configuracao.obter('provedor_ia').then((res: ConfiguracaoResposta) => {
-        if (res.success && res.data) {
-          const prov = res.data;
-          const keyModelo = prov === 'gemini' ? 'modelo_gemini_padrao' : 'modelo_ia_padrao';
-          window.ipcAPI.configuracao.obter(keyModelo).then((mRes: ConfiguracaoResposta) => {
-            const provedorStr = prov === 'gemini' ? 'Google Gemini' : 'Groq';
-            if (mRes.success && mRes.data) {
-              setModelName(`${provedorStr} · ${mRes.data}`);
-            } else {
-              setModelName(provedorStr);
-            }
-          });
-        } else {
-          setModelName('Nenhuma IA configurada');
-        }
-      });
-    }
-  }, [open]);
+    window.ipcAPI.configuracao.obter('provedor_ia').then((res: ConfiguracaoResposta) => {
+      if (res.success && res.data) {
+        const prov = res.data;
+        const keyModelo = prov === 'gemini' ? 'modelo_gemini_padrao' : 'modelo_ia_padrao';
+        window.ipcAPI.configuracao.obter(keyModelo).then((mRes: ConfiguracaoResposta) => {
+          const provedorStr = prov === 'gemini' ? 'Google Gemini' : 'Groq';
+          if (mRes.success && mRes.data) {
+            setModelName(`${provedorStr} · ${mRes.data}`);
+          } else {
+            setModelName(provedorStr);
+          }
+        });
+      } else {
+        setModelName('Nenhuma IA configurada');
+      }
+    });
+
+    return () => window.clearTimeout(foco);
+  }, []);
 
   const handleSend = () => {
     if (!input.trim() || loading) return;
@@ -143,46 +152,53 @@ export const AISheet: React.FC<AISheetProps> = ({
   };
 
   const obterModoAplicacao = (mensagem: ChatMessage) => mensagem.aplicacao || modoAplicacao;
+  const controlesBloqueados = loading || Boolean(planoPendente);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-[460px] flex flex-col p-0 [&>button]:hidden">
-        <SheetHeader className="px-5 py-4 border-b shrink-0">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-base flex items-center gap-2">
-              Assistente IA
-              <Badge variant={loading ? 'secondary' : 'default'} className="text-[10px]">
+    <div className="flex h-full min-w-0 flex-col bg-muted/20">
+        <header className="shrink-0 border-b bg-background px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2 text-base font-semibold">
+              <Bot className="size-4 shrink-0 text-primary" />
+              <span className="truncate">Assistente IA</span>
+              <Badge variant={loading ? 'secondary' : 'default'} className="shrink-0 text-[10px]">
                 {loading ? 'Pensando...' : 'Online'}
               </Badge>
-            </SheetTitle>
+            </div>
             <div className="flex items-center gap-1">
+              {onRecolher && (
+                <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onRecolher} aria-label="Recolher Assistente IA">
+                  <ChevronsRight className="size-4" />
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={onDestacar}
-                aria-label="Destacar Assistente IA"
+                size={onReencaixar ? 'sm' : 'icon'}
+                className={onReencaixar ? 'h-8 gap-1 px-2' : 'size-8'}
+                onClick={onReencaixar || onDestacar}
+                aria-label={onReencaixar ? 'Reencaixar Assistente IA' : 'Destacar Assistente IA'}
               >
-                <ExternalLink className="h-4 w-4" />
+                {onReencaixar ? <ArrowLeft className="size-4" /> : <ExternalLink className="size-4" />}
+                {onReencaixar && <span className="hidden sm:inline">Reencaixar</span>}
               </Button>
               {loading && onCancelarOperacao && (
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={onCancelarOperacao}>
                   Cancelar
                 </Button>
               )}
-              <SheetClose asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              {onFechar && (
+                <Button type="button" variant="ghost" size="icon" className="size-8" onClick={onFechar}>
                   <span className="sr-only">Fechar</span>
-                  <X className="h-4 w-4" />
+                  <X className="size-4" />
                 </Button>
-              </SheetClose>
+              )}
             </div>
           </div>
           <div className="mt-1 flex flex-col gap-0.5">
-            <p className="text-xs text-primary font-medium flex items-center gap-1.5">
+            <p className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-primary">
               <span className="w-1.5 h-1.5 rounded-full bg-primary/70 animate-pulse"></span>
-              Modelo Ativo: {modelName}
+              <span className="truncate">Modelo Ativo: {modelName}</span>
             </p>
             <p className="text-xs text-muted-foreground truncate">
               {contextoImagem
@@ -190,7 +206,7 @@ export const AISheet: React.FC<AISheetProps> = ({
                 : <>Contexto atual: Seção &quot;{secaoTitulo}&quot;</>}
             </p>
           </div>
-        </SheetHeader>
+        </header>
 
         {/* Área de mensagens */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -218,28 +234,50 @@ export const AISheet: React.FC<AISheetProps> = ({
                   {editorId && (
                     <div>
                       <p className="mb-2 text-xs font-medium text-muted-foreground">Revisar</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('ortografia')}>Ortografia</Button>
-                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('tecnico_pericial')}>Técnico-pericial</Button>
+                      <div className="grid grid-cols-1 gap-2 min-[430px]:grid-cols-2">
+                        <Button type="button" variant="outline" size="sm" disabled={controlesBloqueados} onClick={() => onExecutarAcao?.('ortografia')}>Ortografia</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={controlesBloqueados} onClick={() => onExecutarAcao?.('tecnico_pericial')}>Técnico-pericial</Button>
                       </div>
                     </div>
                   )}
                   <div>
                     <p className="mb-2 text-xs font-medium text-muted-foreground">Imagem</p>
-                    <Button type="button" variant="outline" size="sm" disabled={loading || !imagemSelecionada} onClick={onDescreverImagens}>{imagemSelecionada ? 'Descrever imagem selecionada' : 'Selecione uma imagem no laudo'}</Button>
+                    <Button type="button" variant="outline" size="sm" disabled={controlesBloqueados || !imagemSelecionada} onClick={onDescreverImagens}>{imagemSelecionada ? 'Descrever imagem selecionada' : 'Selecione uma imagem no laudo'}</Button>
                   </div>
                   {editorId && (
                     <div>
                       <p className="mb-2 text-xs font-medium text-muted-foreground">Transformar</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('clareza')}>Clareza</Button>
-                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('resumir')}>Resumir</Button>
-                        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => onExecutarAcao?.('expandir')}>Expandir</Button>
+                      <div className="grid grid-cols-1 gap-2 min-[430px]:grid-cols-3">
+                        <Button type="button" variant="outline" size="sm" disabled={controlesBloqueados} onClick={() => onExecutarAcao?.('clareza')}>Clareza</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={controlesBloqueados} onClick={() => onExecutarAcao?.('resumir')}>Resumir</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={controlesBloqueados} onClick={() => onExecutarAcao?.('expandir')}>Expandir</Button>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
+            )}
+
+            {planoPendente && !loading && (
+              <Alert>
+                <AlertDescription className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Confirmar processamento</p>
+                    <p>
+                      {planoPendente.totalLotes} lote(s) · {planoPendente.chamadasBase} chamada(s) base · até {planoPendente.limiteMaximoChamadas} com novas tentativas.
+                    </p>
+                    <p className="truncate">Modelo: {planoPendente.modelo}</p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={onCancelarConfirmacao}>
+                      Cancelar
+                    </Button>
+                    <Button type="button" size="sm" onClick={onConfirmarExecucao}>
+                      Confirmar e iniciar
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
             )}
 
             {imagemSelecionada && messages.length > 0 && !loading && (
@@ -250,7 +288,7 @@ export const AISheet: React.FC<AISheetProps> = ({
 
             {messages.map((msg, idx) => (
               <div
-                key={idx}
+                key={msg.id || idx}
                 className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
@@ -260,7 +298,7 @@ export const AISheet: React.FC<AISheetProps> = ({
                       : 'bg-muted text-foreground rounded-bl-sm'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <div className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.content}</div>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   {msg.acao && (
@@ -282,7 +320,7 @@ export const AISheet: React.FC<AISheetProps> = ({
                       >
                         <Copy size={10} />
                       </Button>
-                      {msg.acao !== 'descrever_imagem' && (
+                      {msg.acao !== 'descrever_imagem' && msg.permiteAplicacao !== false && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -306,11 +344,27 @@ export const AISheet: React.FC<AISheetProps> = ({
 
             {loading && (
               <div className="flex items-start">
-                <div className="bg-muted rounded-xl rounded-bl-sm px-4 py-3">
+                <div className="min-w-56 rounded-xl rounded-bl-sm bg-muted px-4 py-3" aria-live="polite">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 size={14} className="animate-spin" />
-                    Aguardando resposta...
+                    {progresso?.fase === 'processando'
+                      ? `Processando lote ${progresso.loteAtual} de ${progresso.totalLotes}`
+                      : 'Preparando a solicitação...'}
                   </div>
+                  {progresso && progresso.totalLotes > 1 && (
+                    <div className="mt-2 space-y-1">
+                      <progress
+                        className="h-1.5 w-full accent-primary"
+                        max={progresso.totalLotes}
+                        value={progresso.chamadasConcluidas}
+                        aria-label={`${progresso.chamadasConcluidas} de ${progresso.totalLotes} lotes concluídos`}
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        {progresso.chamadasConcluidas} concluído(s)
+                        {progresso.tentativa > 1 ? ` · tentativa corretiva ${progresso.tentativa}` : ''}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -319,6 +373,12 @@ export const AISheet: React.FC<AISheetProps> = ({
               <Alert variant="destructive" className="text-xs">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            )}
+
+            {retomada && !loading && onRetomarOperacao && (
+              <Button type="button" variant="outline" className="w-full" onClick={onRetomarOperacao}>
+                Continuar do lote {retomada.lotesConcluidos + 1} de {retomada.totalLotes}
+              </Button>
             )}
 
             <div ref={messagesEndRef} />
@@ -334,10 +394,10 @@ export const AISheet: React.FC<AISheetProps> = ({
           ) : (
             <div className="space-y-2">
               <div className="flex gap-2" role="group" aria-label="Ação do pedido livre">
-                <Button type="button" size="sm" variant={acaoPedidoLivre === 'inserir' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('inserir')} disabled={loading}>
+                <Button type="button" size="sm" variant={acaoPedidoLivre === 'inserir' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('inserir')} disabled={controlesBloqueados}>
                   Inserir no cursor
                 </Button>
-                <Button type="button" size="sm" variant={acaoPedidoLivre === 'reescrever' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('reescrever')} disabled={loading}>
+                <Button type="button" size="sm" variant={acaoPedidoLivre === 'reescrever' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('reescrever')} disabled={controlesBloqueados}>
                   Reescrever escopo
                 </Button>
               </div>
@@ -351,13 +411,13 @@ export const AISheet: React.FC<AISheetProps> = ({
                     ? 'Descreva o texto que deseja inserir... (Shift+Enter para nova linha)'
                     : 'Descreva como o escopo selecionado deve ser reescrito... (Shift+Enter para nova linha)'}
                   className="min-h-[60px] resize-none text-sm"
-                  disabled={!editorId || loading}
+                  disabled={!editorId || controlesBloqueados}
                   aria-label="Pedido livre ao assistente IA"
                 />
                 <Button
                   size="icon"
                   onClick={handleSend}
-                  disabled={!editorId || !input.trim() || loading}
+                  disabled={!editorId || !input.trim() || controlesBloqueados}
                   className="shrink-0 self-end"
                   aria-label="Enviar pedido livre"
                 >
@@ -370,7 +430,6 @@ export const AISheet: React.FC<AISheetProps> = ({
             A IA pode cometer erros. Sempre revise antes de aplicar ao laudo.
           </p>
         </div>
-      </SheetContent>
-    </Sheet>
+    </div>
   );
 };

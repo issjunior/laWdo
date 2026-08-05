@@ -67,7 +67,7 @@ describe('layout do editor de laudo', () => {
     expect(salvar).toHaveClass('bg-primary');
   });
 
-  it('expõe preferências acessíveis e mantém manutenção em Ferramentas', () => {
+  it('expõe as preferências acessíveis da barra do editor', () => {
     const onModoConteudoChange = vi.fn();
     const onModoOrganizacaoChange = vi.fn();
 
@@ -76,14 +76,8 @@ describe('layout do editor de laudo', () => {
         <BarraEditorLaudo
           modoConteudo="dados"
           modoOrganizacao="single"
-          ilustracoesAbertas={false}
-          ilustracoesEmJanela={false}
-          operacaoEmAndamento={false}
           onModoConteudoChange={onModoConteudoChange}
           onModoOrganizacaoChange={onModoOrganizacaoChange}
-          onToggleIlustracoes={vi.fn()}
-          onAbrirIlustracoesEmJanela={vi.fn()}
-          onReindexarSecoes={vi.fn()}
         />
       </TooltipProvider>,
     );
@@ -98,7 +92,6 @@ describe('layout do editor de laudo', () => {
 
     expect(onModoConteudoChange).toHaveBeenCalledWith('chaves');
     expect(onModoOrganizacaoChange).toHaveBeenCalledWith('multi');
-    expect(screen.getByRole('button', { name: /Ferramentas/ })).toBeInTheDocument();
   });
 
   it('mantém o assistente recolhido e abre comandos somente sob demanda', async () => {

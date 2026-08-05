@@ -24,6 +24,9 @@ describe('PainelIaWindow', () => {
   beforeEach(() => {
     receberEstado = undefined;
     Object.assign(window.ipcAPI, {
+      configuracao: {
+        obter: vi.fn().mockResolvedValue({ success: true, data: 'gemini' }),
+      },
       ia: {
         painelPronto,
         painelEnviarComando,
@@ -50,34 +53,81 @@ describe('PainelIaWindow', () => {
       editorDisponivel: true,
       imagemSelecionada: false,
       contextoImagem: false,
-      modoAplicacao: 'substituir',
+          modoAplicacao: 'substituir',
+          progresso: null,
+          planoPendente: null,
+          retomada: null,
       mensagens: [],
       escopos: [{ id: -1, titulo: 'Documento completo' }],
     };
-    act(() => receberEstado?.(estado));
+    act(() => receberEstado?.({ tipo: 'snapshot', estado }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Ortografia' }));
     expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'executar_acao', acao: 'ortografia' });
 
     act(() => receberEstado?.({
-      ...estado,
+      tipo: 'delta',
       revisao: 2,
-      mensagens: [{
-        role: 'assistant',
-        content: 'Texto revisado.',
-        timestamp: Date.now(),
-        acao: 'clareza',
-        aplicacao: 'substituir',
-        permiteAplicacao: true,
-      }],
+      alteracoes: {
+        mensagens: [{
+          id: 'mensagem-1',
+          role: 'assistant',
+          content: 'Texto revisado.',
+          timestamp: Date.now(),
+          acao: 'clareza',
+          aplicacao: 'substituir',
+          permiteAplicacao: true,
+        }],
+      },
     }));
     expect(screen.getByText('Texto revisado.')).toBeInTheDocument();
     fireEvent.click(screen.getByTitle('Copiar resposta'));
     expect(copiarResposta).toHaveBeenCalledWith('Texto revisado.');
     fireEvent.click(screen.getByRole('button', { name: 'Revisar substituição' }));
-    expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'aplicar_resposta', indiceMensagem: 0 });
+    expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'aplicar_resposta', mensagemId: 'mensagem-1' });
 
     fireEvent.click(screen.getByRole('button', { name: /reencaixar/i }));
     expect(painelReencaixar).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignora revisões antigas e solicita ressincronização ao detectar uma lacuna', () => {
+    renderizarJanela();
+    const estado: EstadoPainelIa = {
+      revisao: 1,
+      titulo: 'Seção inicial',
+      carregando: false,
+      erro: null,
+      editorDisponivel: true,
+      imagemSelecionada: false,
+      contextoImagem: false,
+          modoAplicacao: 'substituir',
+          progresso: null,
+          planoPendente: null,
+          retomada: null,
+      mensagens: [],
+      escopos: [],
+    };
+
+    act(() => receberEstado?.({ tipo: 'snapshot', estado }));
+    act(() => receberEstado?.({
+      tipo: 'delta',
+      revisao: 3,
+      alteracoes: { titulo: 'Estado com lacuna' },
+    }));
+    expect(document.body).not.toHaveTextContent('Estado com lacuna');
+    expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'solicitar_ressincronizacao' });
+
+    act(() => receberEstado?.({
+      tipo: 'snapshot',
+      estado: { ...estado, revisao: 4, titulo: 'Estado ressincronizado' },
+    }));
+    expect(document.body).toHaveTextContent('Estado ressincronizado');
+
+    act(() => receberEstado?.({
+      tipo: 'delta',
+      revisao: 2,
+      alteracoes: { titulo: 'Estado atrasado' },
+    }));
+    expect(document.body).not.toHaveTextContent('Estado atrasado');
   });
 });

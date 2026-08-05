@@ -31,6 +31,8 @@ import {
   Search,
   SearchX,
   ImageDown,
+  ChevronsRight,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -131,6 +133,8 @@ interface IlustracoesPanelProps {
   onSyncToggle?: (enabled: boolean) => void;
   onScrollToFigure?: (imageId: string) => void;
   onPopOut?: () => void;
+  onRecolher?: () => void;
+  onFechar?: () => void;
   onReplaceImage?: (imageId: string, imagem: ImagemLaudo) => void;
   figuraSubstituicaoSolicitada?: string | null;
   onFiguraSubstituicaoSolicitadaConsumida?: () => void;
@@ -289,7 +293,23 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
 
   useEffect(() => {
     if (ativo && itemRef.current) {
-      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const item = itemRef.current;
+      const lista = item.parentElement;
+      if (!lista) return;
+
+      const limitesItem = item.getBoundingClientRect();
+      const limitesLista = lista.getBoundingClientRect();
+      if (limitesItem.top < limitesLista.top) {
+        lista.scrollTo({
+          top: lista.scrollTop - (limitesLista.top - limitesItem.top),
+          behavior: 'smooth',
+        });
+      } else if (limitesItem.bottom > limitesLista.bottom) {
+        lista.scrollTo({
+          top: lista.scrollTop + (limitesItem.bottom - limitesLista.bottom),
+          behavior: 'smooth',
+        });
+      }
     }
   }, [ativo]);
 
@@ -392,6 +412,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onSyncToggle: _onSyncToggle,
   onScrollToFigure,
   onPopOut,
+  onRecolher,
+  onFechar,
   onReplaceImage,
   figuraSubstituicaoSolicitada,
   onFiguraSubstituicaoSolicitadaConsumida,
@@ -590,19 +612,41 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   return (
     <div className="flex flex-col h-full bg-muted/20">
       <div className="p-4 border-b space-y-3 bg-background relative">
-        <h2 className="text-sm font-semibold text-center">Painel de Ilustrações</h2>
+        <h2 className="pr-24 text-sm font-semibold">Painel de Ilustrações</h2>
 
-        {onPopOut && (
-          <div className="absolute right-3 top-3">
+        {(onPopOut || onRecolher || onFechar) && (
+          <div className="absolute right-3 top-3 flex items-center gap-1">
             <TooltipProvider>
+              {onRecolher && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRecolher} aria-label="Recolher painel de ilustrações">
+                      <ChevronsRight size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Recolher painel</TooltipContent>
+                </Tooltip>
+              )}
+              {onPopOut && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onPopOut}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onPopOut} aria-label="Destacar painel de ilustrações">
                     <ExternalLink size={14} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Abrir em janela separada</TooltipContent>
               </Tooltip>
+              )}
+              {onFechar && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onFechar} aria-label="Fechar painel de ilustrações">
+                      <X size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Fechar painel</TooltipContent>
+                </Tooltip>
+              )}
             </TooltipProvider>
           </div>
         )}

@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
-  Bot,
   Braces,
   CheckCircle2,
   ChevronDown,
@@ -11,17 +10,13 @@ import {
   Clock3,
   Database,
   Download,
-  ExternalLink,
   Eye,
   File,
   FileDown,
   FileText,
-  Images,
   Layers3,
-  ListRestart,
   Loader2,
   Save,
-  Wrench,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -293,138 +288,36 @@ export function CabecalhoEditorLaudo({
 interface BarraEditorLaudoProps {
   modoConteudo: ModoConteudoLaudo;
   modoOrganizacao: ModoOrganizacaoLaudo;
-  ilustracoesAbertas: boolean;
-  ilustracoesEmJanela: boolean;
-  assistenteIaDestacado?: boolean;
-  operacaoEmAndamento: boolean;
   onModoConteudoChange: (modo: ModoConteudoLaudo) => void;
   onModoOrganizacaoChange: (modo: ModoOrganizacaoLaudo) => void;
-  onToggleIlustracoes: () => void;
-  onAbrirIlustracoesEmJanela: () => void;
-  onAbrirAssistenteIa?: () => void;
-  onDestacarAssistenteIa?: () => void;
-  onReindexarSecoes: () => void;
 }
 
 export function BarraEditorLaudo({
   modoConteudo,
   modoOrganizacao,
-  ilustracoesAbertas,
-  ilustracoesEmJanela,
-  assistenteIaDestacado = false,
-  operacaoEmAndamento,
   onModoConteudoChange,
   onModoOrganizacaoChange,
-  onToggleIlustracoes,
-  onAbrirIlustracoesEmJanela,
-  onAbrirAssistenteIa,
-  onDestacarAssistenteIa,
-  onReindexarSecoes,
 }: BarraEditorLaudoProps) {
   return (
-    <div className="flex flex-col gap-3 border-t pt-4 xl:flex-row xl:items-end xl:justify-between">
-      <div className="flex min-w-0 flex-wrap items-end gap-3">
-        <ControleSegmentado
-          rotulo="Conteúdo exibido"
-          valor={modoConteudo}
-          onChange={onModoConteudoChange}
-          opcoes={[
-            { valor: 'dados', rotulo: 'Dados da REP', icone: Database },
-            { valor: 'chaves', rotulo: 'Placeholders', icone: Braces },
-          ]}
-        />
-        <ControleSegmentado
-          rotulo="Organização"
-          valor={modoOrganizacao}
-          onChange={onModoOrganizacaoChange}
-          opcoes={[
-            { valor: 'single', rotulo: 'Documento único', icone: FileText },
-            { valor: 'multi', rotulo: 'Por seções', icone: Layers3 },
-          ]}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Painéis e manutenção</span>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onAbrirAssistenteIa}
-                  aria-pressed={assistenteIaDestacado}
-                  className={cn(
-                    'gap-2 rounded-r-none border-r-0',
-                    assistenteIaDestacado && 'bg-accent text-accent-foreground',
-                  )}
-                >
-                  <Bot className="size-4 shrink-0" />
-                  <span className="leading-none">Assistente IA</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Destacar Assistente IA"
-                  onClick={onDestacarAssistenteIa}
-                  disabled={assistenteIaDestacado}
-                  className={cn(
-                    'size-8 rounded-l-none',
-                    assistenteIaDestacado && 'bg-accent text-accent-foreground',
-                  )}
-                >
-                  <ExternalLink className="size-4" />
-                </Button>
-          </div>
-          <div className="flex items-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onToggleIlustracoes}
-                  aria-pressed={ilustracoesAbertas || ilustracoesEmJanela}
-                  className={cn(
-                    'gap-2 rounded-r-none border-r-0',
-                    (ilustracoesAbertas || ilustracoesEmJanela) && 'bg-accent text-accent-foreground',
-                  )}
-                >
-                  <Images className="size-4" />
-                  Ilustrações
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Destacar painel de ilustrações"
-                  onClick={onAbrirIlustracoesEmJanela}
-                  disabled={ilustracoesEmJanela}
-                  className={cn(
-                    'size-8 rounded-l-none',
-                    (ilustracoesAbertas || ilustracoesEmJanela) && 'bg-accent text-accent-foreground',
-                  )}
-                >
-                  <ExternalLink className="size-4" />
-                </Button>
-              </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="gap-2">
-                <Wrench className="size-4" />
-                Ferramentas
-                <ChevronDown className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={onReindexarSecoes} disabled={operacaoEmAndamento}>
-                <ListRestart className="mr-2 size-4" />
-                Reindexar seções
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+    <div className="flex min-w-0 flex-wrap items-end gap-3 border-t pt-4">
+      <ControleSegmentado
+        rotulo="Conteúdo exibido"
+        valor={modoConteudo}
+        onChange={onModoConteudoChange}
+        opcoes={[
+          { valor: 'dados', rotulo: 'Dados da REP', icone: Database },
+          { valor: 'chaves', rotulo: 'Placeholders', icone: Braces },
+        ]}
+      />
+      <ControleSegmentado
+        rotulo="Organização"
+        valor={modoOrganizacao}
+        onChange={onModoOrganizacaoChange}
+        opcoes={[
+          { valor: 'single', rotulo: 'Documento único', icone: FileText },
+          { valor: 'multi', rotulo: 'Por seções', icone: Layers3 },
+        ]}
+      />
     </div>
   );
 }

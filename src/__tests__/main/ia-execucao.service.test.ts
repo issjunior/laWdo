@@ -32,6 +32,14 @@ const solicitacao = {
   imagemId: 'imagem-1',
 }
 
+const solicitacaoTexto = {
+  operationId: 'operacao-texto-1',
+  acao: 'resumir' as const,
+  escopo: 'secao' as const,
+  contextoResolvido: 'Preâmbulo recebido em 4 de agosto de 2026, em Curitiba.',
+  fragmentos: [{ id: 'texto-0', texto: 'Texto original do preâmbulo.' }],
+}
+
 const criarImagem = (origem: 'local' | 'gdl' = 'local', mimeType = 'image/jpeg', tamanho = 128) => ({
   id: 'imagem-1',
   laudoId: 'laudo-1',
@@ -98,6 +106,229 @@ describe('ia-execucao.service — descrição de imagem', () => {
     expect(String(opcoes.body)).not.toContain('{{')
     expect(String(opcoes.body)).not.toContain('fragmentos')
     expect(String(opcoes.body)).not.toContain('b602_tabela_estojos')
+  })
+
+  it('envia contexto resolvido no modo integral e solicita resposta JSON', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        fragmentos: [{ id: 'texto-0', texto: 'Resumo do preâmbulo.' }],
+      }) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    const resposta = await new IaExecucaoService().executar(solicitacaoTexto)
+
+    expect(resposta.fragmentos[0].texto).toBe('Resumo do preâmbulo.')
+    const [, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const corpo = JSON.parse(String(opcoes.body)) as {
+      response_format?: { type?: string }
+      messages: Array<{ content: string }>
+    }
+    expect(corpo.response_format).toEqual({ type: 'json_object' })
+    expect(corpo.messages[1].content).toContain('4 de agosto de 2026, em Curitiba')
+  })
+
+  it('faz uma tentativa corretiva quando o provedor retorna formato inválido', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: 'Não consegui gerar o JSON.' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: '```json\n{"fragmentos":[{"id":"texto-0","texto":"Resumo corrigido."}]}\n```' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    const resposta = await new IaExecucaoService().executar(solicitacaoTexto)
+
+    expect(resposta.fragmentos[0].texto).toBe('Resumo corrigido.')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [, segundaOpcoes] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(String(segundaOpcoes.body)).toContain('resposta anterior não respeitou o contrato')
+  })
+
+  it('repete sem response_format quando o modelo não aceita JSON mode', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: '{"fragmentos":[{"id":"texto-0","texto":"Resumo compatível."}]}' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    const resposta = await new IaExecucaoService().executar(solicitacaoTexto)
+
+    expect(resposta.fragmentos[0].texto).toBe('Resumo compatível.')
+    const [, primeiraOpcoes] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [, segundaOpcoes] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(String(primeiraOpcoes.body)).toContain('response_format')
+    expect(String(segundaOpcoes.body)).not.toContain('response_format')
+  })
+
+  it('não envia o contexto resolvido ao provedor no modo protegido', async () => {
+    configuracaoObterMock.mockImplementation(async (chave: string) => {
+      const configuracoes: Record<string, string> = {
+        provedor_ia: 'gemini',
+        api_key_gemini: 'chave-teste',
+        modelo_gemini_padrao: 'gemini-2.5-flash',
+        privacidade_ia: JSON.stringify({ versao: 1, enviarConteudoIntegral: false }),
+      }
+      return configuracoes[chave] ?? null
+    })
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '{"fragmentos":[{"id":"texto-0","texto":"Resumo protegido."}]}' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await new IaExecucaoService().executar(solicitacaoTexto)
+
+    const [, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(String(opcoes.body)).not.toContain('4 de agosto de 2026')
+    expect(String(opcoes.body)).toContain('não fornecido no modo protegido')
+  })
+
+  it('processa lotes sequencialmente e publica progresso sem retornar resultado parcial', async () => {
+    const solicitacaoEmLotes = {
+      ...solicitacaoTexto,
+      fragmentos: [
+        { id: 'texto-0', texto: 'a'.repeat(30_000) },
+        { id: 'texto-1', texto: 'b'.repeat(30_000) },
+      ],
+    }
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: '{"fragmentos":[{"id":"texto-0","texto":"Lote um."}]}' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: '{"fragmentos":[{"id":"texto-1","texto":"Lote dois."}]}' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const progressos: Array<{ fase: string; loteAtual: number; chamadasConcluidas: number }> = []
+
+    const servico = new IaExecucaoService()
+    const plano = await servico.planejar(solicitacaoEmLotes)
+    const resposta = await servico.executar(
+      { ...solicitacaoEmLotes, planoId: plano.planoId },
+      progresso => progressos.push(progresso),
+    )
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(resposta.fragmentos).toEqual([
+      { id: 'texto-0', texto: 'Lote um.' },
+      { id: 'texto-1', texto: 'Lote dois.' },
+    ])
+    expect(progressos).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fase: 'preparando', loteAtual: 0, chamadasConcluidas: 0 }),
+      expect.objectContaining({ fase: 'processando', loteAtual: 1, chamadasConcluidas: 0 }),
+      expect.objectContaining({ fase: 'processando', loteAtual: 2, chamadasConcluidas: 1 }),
+      expect.objectContaining({ fase: 'concluido', loteAtual: 2, chamadasConcluidas: 2 }),
+    ]))
+  })
+
+  it('interrompe uma operação cancelada entre lotes', async () => {
+    const servico = new IaExecucaoService()
+    const solicitacaoEmLotes = {
+      ...solicitacaoTexto,
+      fragmentos: [
+        { id: 'texto-0', texto: 'a'.repeat(30_000) },
+        { id: 'texto-1', texto: 'b'.repeat(30_000) },
+      ],
+    }
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '{"fragmentos":[{"id":"texto-0","texto":"Lote um."}]}' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    const plano = await servico.planejar(solicitacaoEmLotes)
+    await expect(servico.executar({ ...solicitacaoEmLotes, planoId: plano.planoId }, progresso => {
+      if (progresso.fase === 'processando' && progresso.loteAtual === 2) {
+        servico.cancelar(solicitacaoEmLotes.operationId)
+      }
+    })).rejects.toThrow('CANCELADO')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('planeja sem chamar o provedor e exige confirmação para múltiplos lotes', async () => {
+    const servico = new IaExecucaoService()
+    const solicitacaoEmLotes = {
+      ...solicitacaoTexto,
+      fragmentos: [
+        { id: 'texto-0', texto: 'a'.repeat(30_000) },
+        { id: 'texto-1', texto: 'b'.repeat(30_000) },
+      ],
+    }
+
+    const plano = await servico.planejar(solicitacaoEmLotes)
+
+    expect(plano).toEqual(expect.objectContaining({
+      totalLotes: 2,
+      chamadasBase: 2,
+      requerConfirmacao: true,
+      provedor: 'gemini',
+      modelo: 'gemini-2.5-flash',
+    }))
+    expect(plano.planoId).toMatch(/^[a-f0-9]{64}$/)
+    expect(fetchMock).not.toHaveBeenCalled()
+    await expect(servico.executar(solicitacaoEmLotes)).rejects.toThrow('CONFIRMACAO_NECESSARIA')
+  })
+
+  it('recusa um plano quando o perfil muda depois da confirmação', async () => {
+    const servico = new IaExecucaoService()
+    const plano = await servico.planejar(solicitacaoTexto)
+    configuracaoObterMock.mockImplementation(async (chave: string) => {
+      const configuracoes: Record<string, string> = {
+        provedor_ia: 'gemini',
+        api_key_gemini: 'chave-teste',
+        modelo_gemini_padrao: 'gemini-2.5-flash',
+        privacidade_ia: JSON.stringify({ versao: 1, enviarConteudoIntegral: true }),
+        perfil_resposta_ia: JSON.stringify({
+          versao: 1,
+          tom: 'formal',
+          detalhamento: 'equilibrado',
+          instrucoesPersonalizadas: '',
+        }),
+      }
+      return configuracoes[chave] ?? null
+    })
+
+    await expect(servico.executar({ ...solicitacaoTexto, planoId: plano.planoId }))
+      .rejects.toThrow('PLANO_ALTERADO')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('preserva lotes concluídos e retoma somente com o mesmo fingerprint do plano', async () => {
+    const servico = new IaExecucaoService()
+    const solicitacaoEmLotes = {
+      ...solicitacaoTexto,
+      fragmentos: [
+        { id: 'texto-0', texto: 'a'.repeat(30_000) },
+        { id: 'texto-1', texto: 'b'.repeat(30_000) },
+      ],
+    }
+    const plano = await servico.planejar(solicitacaoEmLotes)
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: '{"fragmentos":[{"id":"texto-0","texto":"Lote preservado."}]}' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+
+    let retomada: { retomadaId: string; planoId: string } | undefined
+    try {
+      await servico.executar({ ...solicitacaoEmLotes, planoId: plano.planoId })
+    } catch (error: unknown) {
+      retomada = error && typeof error === 'object' && 'retomada' in error
+        ? (error as { retomada?: { retomadaId: string; planoId: string } }).retomada
+        : undefined
+    }
+    expect(retomada).toEqual(expect.objectContaining({ planoId: plano.planoId }))
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      choices: [{ message: { content: '{"fragmentos":[{"id":"texto-1","texto":"Lote retomado."}]}' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const resposta = await servico.executar({
+      ...solicitacaoEmLotes,
+      operationId: 'operacao-retomada',
+      planoId: plano.planoId,
+      retomadaId: retomada?.retomadaId,
+    })
+
+    expect(resposta.fragmentos).toEqual([
+      { id: 'texto-0', texto: 'Lote preservado.' },
+      { id: 'texto-1', texto: 'Lote retomado.' },
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('deve rejeitar resposta multimodal vazia', async () => {

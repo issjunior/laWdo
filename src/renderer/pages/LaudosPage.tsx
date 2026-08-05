@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2 } from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -22,15 +22,20 @@ import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
-import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
+import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
 import {
   CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
   configuracaoPrivacidadeIaValida,
   deveMascararConteudoIa,
   type AcaoIa,
+  type AtualizacaoPainelIa,
+  type CamposEstadoPainelIa,
   type ComandoPainelIa,
-  type EstadoPainelIa,
   type FragmentoIa,
+  type PlanoExecucaoIaResumo,
+  type ProgressoIa,
+  type RetomadaIa,
+  type SolicitacaoIa,
 } from '@shared/types/ia.types';
 import {
   BarraEditorLaudo,
@@ -56,6 +61,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import {
+  PainelLateralRedimensionavel,
+  type PainelLateralAtivo,
+} from '@/components/laudo/PainelLateralRedimensionavel';
+import { useSidebar } from '@/components/ui/sidebar';
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
@@ -82,6 +92,7 @@ import {
 } from '@/lib/exportacao-placeholders';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { protegerFragmentosIa, restaurarFragmentosIa } from '@/lib/ia-fragmentos';
+import { resolverTextoContextoIa } from '@/lib/ia-contexto';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -164,6 +175,32 @@ const isTinyMceEditor = (editor: TinyMceEditorInstance | null | undefined): edit
 const obterMensagemErro = (erro: unknown, fallback: string): string => (
   erro instanceof Error && erro.message ? erro.message : fallback
 );
+
+const obterMensagemErroIa = (erro: unknown): string => {
+  const valor = typeof erro === 'string'
+    ? erro
+    : erro instanceof Error ? erro.message : '';
+  const codigo = valor.split(':')[0];
+  const mensagens: Record<string, string> = {
+    CONFIGURACAO_AUSENTE: 'Configure o provedor, o modelo e a chave de API em Modelos de IA antes de tentar novamente.',
+    NAO_AUTORIZADO: 'A chave de API foi recusada pelo provedor. Revise a configuração em Modelos de IA.',
+    ENTRADA_INVALIDA: 'O provedor recusou esta solicitação. Tente reduzir o escopo ou selecionar outro modelo.',
+    LIMITE_EXCEDIDO: 'O conteúdo selecionado excede o limite do modelo. Reduza o escopo e tente novamente.',
+    SEM_CONEXAO: 'Não foi possível conectar ao provedor de IA. Verifique sua conexão e tente novamente.',
+    LIMITE_REQUISICOES: 'O provedor atingiu o limite temporário de solicitações. Aguarde um momento e tente novamente.',
+    TIMEOUT: 'A IA demorou mais que o esperado para responder. Tente novamente ou reduza o escopo.',
+    PROVEDOR_INDISPONIVEL: 'O provedor de IA está temporariamente indisponível. Tente novamente em alguns instantes.',
+    RESPOSTA_INVALIDA: 'A IA respondeu em um formato inesperado mesmo após uma tentativa de correção. Tente novamente; se persistir, selecione outro modelo.',
+    CANCELADO: 'A operação foi cancelada. O conteúdo do laudo não foi alterado.',
+    OPERACAO_EM_ANDAMENTO: 'Já existe uma operação de IA em andamento. Aguarde sua conclusão ou cancele-a antes de iniciar outra.',
+    CONFIRMACAO_NECESSARIA: 'Revise e confirme o plano antes de iniciar o processamento.',
+    PLANO_ALTERADO: 'O texto ou as configurações mudaram após o planejamento. Gere a solicitação novamente.',
+    RETOMADA_INDISPONIVEL: 'Os resultados intermediários não estão mais disponíveis. Inicie novamente o processamento.',
+    RETOMADA_INVALIDA: 'O texto ou as configurações mudaram. Por segurança, o processamento deve ser iniciado novamente.',
+    ERRO_INTERNO: 'Ocorreu uma falha interna ao processar a solicitação. Tente novamente.',
+  };
+  return mensagens[codigo] || 'Não foi possível concluir a solicitação de IA. Tente novamente.';
+};
 
 type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
 
@@ -408,8 +445,29 @@ interface AlvoIaCapturado {
   fingerprint?: string;
 }
 
+interface ExecucaoIaPreparada {
+  solicitacao: SolicitacaoIa;
+  alvo: AlvoIaCapturado;
+  html: string;
+  indice: number;
+  descricao: string;
+  chatKey: string;
+  protecao: ReturnType<typeof protegerFragmentosIa> | null;
+}
+
+interface ConfirmacaoIaPendente {
+  plano: PlanoExecucaoIaResumo;
+  execucao: ExecucaoIaPreparada;
+}
+
+interface RetomadaIaPendente {
+  retomada: RetomadaIa;
+  execucao: ExecucaoIaPreparada;
+}
+
 export const LaudosPage: React.FC = () => {
   const navigate = useNavigate();
+  const { setTemporariamenteRecolhida } = useSidebar();
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<LaudoItem | null>(null);
@@ -453,6 +511,9 @@ export const LaudosPage: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
   const [iaLoading, setIaLoading] = useState(false);
   const [operacaoIaAtivaId, setOperacaoIaAtivaId] = useState<string | null>(null);
+  const [progressoIa, setProgressoIa] = useState<ProgressoIa | null>(null);
+  const [confirmacaoIaPendente, setConfirmacaoIaPendente] = useState<ConfirmacaoIaPendente | null>(null);
+  const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
   const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
   const [respostaIaPendente, setRespostaIaPendente] = useState<RespostaIaPendente | null>(null);
@@ -470,6 +531,16 @@ export const LaudosPage: React.FC = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
   const [figuraSubstituicaoSolicitada, setFiguraSubstituicaoSolicitada] = useState<string | null>(null);
+
+  const painelLateralAtivo: PainelLateralAtivo = iaSheetOpen
+    ? 'ia'
+    : iluminacoesPanelOpen ? 'ilustracoes' : null;
+  const painelLateralExpandido = painelLateralAtivo !== null && !panelCollapsed;
+
+  useEffect(() => {
+    setTemporariamenteRecolhida(painelLateralExpandido);
+    return () => setTemporariamenteRecolhida(false);
+  }, [painelLateralExpandido, setTemporariamenteRecolhida]);
 
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineLaudo, setTimelineLaudo] = useState<LaudoItem | null>(null);
@@ -527,9 +598,6 @@ export const LaudosPage: React.FC = () => {
       });
   }, [editando?.tipo_exame_codigo, exameCamposEspecificos]);
 
-  const togglePanel = useCallback(() => {
-    setPanelCollapsed(prev => !prev);
-  }, []);
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
   const [imagemSelecionadaIaId, setImagemSelecionadaIaId] = useState<string | null>(null);
@@ -1448,6 +1516,7 @@ export const LaudosPage: React.FC = () => {
         case 'ready': cbs.syncCurrentState(); break;
         case 'popIn':
           setPanelPoppedOut(false);
+          setIaSheetOpen(false);
           setIlustracoesPanelOpen(true);
           setPanelCollapsed(false);
           toast.info('Painel de ilustrações retornou ao editor');
@@ -2033,6 +2102,7 @@ export const LaudosPage: React.FC = () => {
     setIaSheetSecaoIdx(idx);
     setIaSheetSecaoTitulo(titulo);
     setIaSheetOpen(true);
+    setPanelCollapsed(false);
     setIaError(null);
   };
 
@@ -2050,13 +2120,16 @@ export const LaudosPage: React.FC = () => {
       const conteudo = temSelecao
         ? htmlSelecao
         : (indice === -1 ? editor.getContent() : secoes[indice]?.conteudo || editor.getContent());
+      const textoRenderizado = temSelecao
+        ? textoSelecao
+        : editor.getBody()?.innerText?.trim() || resolverTextoContextoIa(conteudo, mapaPlaceholdersResolvidos);
       return {
         id: crypto.randomUUID(),
         indice,
         editorId: editorIdAtivo,
         tipo: temSelecao ? 'selecao' : (indice === -1 ? 'laudo_completo' : 'secao'),
         conteudo,
-        texto: temSelecao ? textoSelecao : converterHtmlEmTexto(conteudo),
+        texto: textoRenderizado,
         bookmark: editor.selection.getBookmark(2, true),
       };
     }
@@ -2070,7 +2143,7 @@ export const LaudosPage: React.FC = () => {
       editorId: indice === -1 ? 'laudo-single-editor' : `secao-${indice}`,
       tipo: indice === -1 ? 'laudo_completo' : 'secao',
       conteudo,
-      texto: converterHtmlEmTexto(conteudo),
+      texto: resolverTextoContextoIa(conteudo, mapaPlaceholdersResolvidos),
       bookmark: null,
     };
   };
@@ -2100,22 +2173,48 @@ export const LaudosPage: React.FC = () => {
       setIaSheetSecaoTitulo('Escolha um escopo para iniciar');
     }
     setIaSheetOpen(true);
+    setPanelCollapsed(false);
     setIaError(null);
   };
 
   const sessaoPainelIaRef = useRef<string | null>(null);
   const revisaoPainelIaRef = useRef(0);
+  const ultimoEstadoPainelIaRef = useRef<CamposEstadoPainelIa | null>(null);
   const painelIaProntoRef = useRef(false);
   const executarAcaoIaRef = useRef<(acao: AcaoIa) => void>(() => {});
   const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever') => void>(() => {});
   const cancelarOperacaoIaRef = useRef<() => void>(() => {});
+  const retomarOperacaoIaRef = useRef<() => void>(() => {});
+  const confirmarExecucaoIaRef = useRef<() => void>(() => {});
   const descreverImagemIaRef = useRef<() => void>(() => {});
   const aplicarRespostaIaRef = useRef<(mensagem: ChatMessage) => void>(() => {});
+  const operacaoIaAtivaRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    operacaoIaAtivaRef.current = operacaoIaAtivaId;
+  }, [operacaoIaAtivaId]);
+
+  useEffect(() => {
+    const remover = window.ipcAPI.ia.onProgresso(progresso => {
+      if (progresso.operationId === operacaoIaAtivaRef.current) setProgressoIa(progresso);
+    });
+    return remover;
+  }, []);
+
+  useEffect(() => () => {
+    const operationId = operacaoIaAtivaRef.current;
+    if (operationId) void window.ipcAPI.ia.cancelar(operationId);
+    window.ipcAPI.ia.painelFechar();
+    sessaoPainelIaRef.current = null;
+    painelIaProntoRef.current = false;
+    ultimoEstadoPainelIaRef.current = null;
+  }, [editando?.id]);
 
   const handleDestacarAssistenteIa = () => {
     const sessionId = crypto.randomUUID();
     sessaoPainelIaRef.current = sessionId;
     revisaoPainelIaRef.current = 0;
+    ultimoEstadoPainelIaRef.current = null;
     painelIaProntoRef.current = false;
     setIaSheetOpen(false);
     setPainelIaDestacado(true);
@@ -2132,13 +2231,11 @@ export const LaudosPage: React.FC = () => {
       return chaveChat ? chatMessages[chaveChat] || [] : [];
     };
 
-    const publicarSnapshot = (sessionId: string) => {
+    const publicarEstado = (sessionId: string, forcarSnapshot = false) => {
       if (sessionId !== sessaoPainelIaRef.current) return;
-      revisaoPainelIaRef.current += 1;
       const imagemSelecionada = Boolean(imagemSelecionadaIaId);
       const editorDisponivel = !imagemSelecionada && iaSheetSecaoIdx !== null;
-      const estado: EstadoPainelIa = {
-        revisao: revisaoPainelIaRef.current,
+      const estado: CamposEstadoPainelIa = {
         titulo: imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo || 'Escolha um escopo no editor',
         carregando: iaLoading,
         erro: iaError,
@@ -2146,24 +2243,60 @@ export const LaudosPage: React.FC = () => {
         imagemSelecionada,
         contextoImagem: imagemSelecionada,
         modoAplicacao: iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir',
+        progresso: progressoIa,
+        planoPendente: confirmacaoIaPendente?.plano || null,
+        retomada: retomadaIaPendente?.retomada || null,
         mensagens: obterMensagensVisiveis().map(mensagem => ({
+          id: mensagem.id,
           role: mensagem.role,
           content: mensagem.content,
           timestamp: mensagem.timestamp,
           aplicacao: mensagem.aplicacao,
           acao: mensagem.acao,
           permiteAplicacao: mensagem.role === 'assistant' && mensagem.acao !== 'descrever_imagem',
+          proposalId: mensagem.proposalId,
         })),
         escopos: [
           { id: -1, titulo: 'Documento completo' },
           ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
         ],
       };
-      window.ipcAPI.ia.painelPublicar(sessionId, estado);
+      const anterior = ultimoEstadoPainelIaRef.current;
+      let atualizacao: AtualizacaoPainelIa;
+      if (forcarSnapshot || !anterior) {
+        revisaoPainelIaRef.current += 1;
+        atualizacao = {
+          tipo: 'snapshot',
+          estado: { revisao: revisaoPainelIaRef.current, ...estado },
+        };
+      } else {
+        const alteracoes: Partial<CamposEstadoPainelIa> = {};
+        if (estado.titulo !== anterior.titulo) alteracoes.titulo = estado.titulo;
+        if (estado.carregando !== anterior.carregando) alteracoes.carregando = estado.carregando;
+        if (estado.erro !== anterior.erro) alteracoes.erro = estado.erro;
+        if (estado.editorDisponivel !== anterior.editorDisponivel) alteracoes.editorDisponivel = estado.editorDisponivel;
+        if (estado.imagemSelecionada !== anterior.imagemSelecionada) alteracoes.imagemSelecionada = estado.imagemSelecionada;
+        if (estado.contextoImagem !== anterior.contextoImagem) alteracoes.contextoImagem = estado.contextoImagem;
+        if (estado.modoAplicacao !== anterior.modoAplicacao) alteracoes.modoAplicacao = estado.modoAplicacao;
+        if (JSON.stringify(estado.progresso) !== JSON.stringify(anterior.progresso)) alteracoes.progresso = estado.progresso;
+        if (JSON.stringify(estado.planoPendente) !== JSON.stringify(anterior.planoPendente)) alteracoes.planoPendente = estado.planoPendente;
+        if (JSON.stringify(estado.retomada) !== JSON.stringify(anterior.retomada)) alteracoes.retomada = estado.retomada;
+        if (JSON.stringify(estado.mensagens) !== JSON.stringify(anterior.mensagens)) alteracoes.mensagens = estado.mensagens;
+        if (JSON.stringify(estado.escopos) !== JSON.stringify(anterior.escopos)) alteracoes.escopos = estado.escopos;
+        if (Object.keys(alteracoes).length === 0) return;
+        revisaoPainelIaRef.current += 1;
+        atualizacao = {
+          tipo: 'delta',
+          revisao: revisaoPainelIaRef.current,
+          alteracoes,
+        };
+      }
+      ultimoEstadoPainelIaRef.current = estado;
+      window.ipcAPI.ia.painelPublicar(sessionId, atualizacao);
     };
     const removerPronto = window.ipcAPI.ia.onPainelPronto(sessionId => {
       painelIaProntoRef.current = true;
-      publicarSnapshot(sessionId);
+      publicarEstado(sessionId, true);
     });
     const removerComando = window.ipcAPI.ia.onPainelComando((comando: ComandoPainelIa) => {
       if (!painelIaProntoRef.current) return;
@@ -2173,6 +2306,12 @@ export const LaudosPage: React.FC = () => {
         enviarMensagemIaRef.current(comando.mensagem, comando.aplicacao);
       } else if (comando.tipo === 'cancelar_operacao') {
         cancelarOperacaoIaRef.current();
+      } else if (comando.tipo === 'retomar_operacao') {
+        retomarOperacaoIaRef.current();
+      } else if (comando.tipo === 'confirmar_execucao') {
+        confirmarExecucaoIaRef.current();
+      } else if (comando.tipo === 'cancelar_confirmacao') {
+        setConfirmacaoIaPendente(null);
       } else if (comando.tipo === 'descrever_imagem') {
         descreverImagemIaRef.current();
       } else if (comando.tipo === 'selecionar_escopo') {
@@ -2181,8 +2320,10 @@ export const LaudosPage: React.FC = () => {
           setIaSheetSecaoTitulo(comando.indice === -1 ? 'Documento completo' : secoes[comando.indice].titulo);
           setIaError(null);
         }
+      } else if (comando.tipo === 'solicitar_ressincronizacao') {
+        if (sessaoPainelIaRef.current) publicarEstado(sessaoPainelIaRef.current, true);
       } else {
-        const mensagem = obterMensagensVisiveis()[comando.indiceMensagem];
+        const mensagem = obterMensagensVisiveis().find(item => item.id === comando.mensagemId);
         if (mensagem) aplicarRespostaIaRef.current(mensagem);
       }
     });
@@ -2190,7 +2331,9 @@ export const LaudosPage: React.FC = () => {
       if (sessionId !== sessaoPainelIaRef.current) return;
       painelIaProntoRef.current = false;
       setPainelIaDestacado(false);
+      setIlustracoesPanelOpen(false);
       setIaSheetOpen(true);
+      setPanelCollapsed(false);
     });
     const removerFechado = window.ipcAPI.ia.onPainelFechado(sessionId => {
       if (sessionId === sessaoPainelIaRef.current) {
@@ -2198,9 +2341,9 @@ export const LaudosPage: React.FC = () => {
         setPainelIaDestacado(false);
       }
     });
-    if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarSnapshot(sessaoPainelIaRef.current);
+    if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
     return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
-  }, [chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, secoes]);
+  }, [chatMessages, confirmacaoIaPendente, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, progressoIa, retomadaIaPendente, secoes]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2215,13 +2358,133 @@ export const LaudosPage: React.FC = () => {
     return descricoes[acao];
   };
 
+  const execucaoIaPermaneceAtual = async (execucao: ExecucaoIaPreparada): Promise<boolean> => {
+    const { alvo, html, indice } = execucao;
+    const editor = obterEditorTinyMce(alvo.editorId);
+    try {
+      let conteudoAtual: string;
+      if (alvo.tipo === 'selecao' && editor && alvo.bookmark) {
+        editor.selection.moveToBookmark(alvo.bookmark);
+        conteudoAtual = editor.selection.getContent({ format: 'html' });
+      } else {
+        conteudoAtual = editor?.getContent() || (indice === -1 ? singleEditorHtml : secoes[indice]?.conteudo || '');
+      }
+      return conteudoAtual === html
+        && Boolean(alvo.fingerprint)
+        && await calcularFingerprintIa(alvo.tipo, conteudoAtual) === alvo.fingerprint;
+    } catch {
+      return false;
+    }
+  };
+
+  const executarPreparacaoIa = async (
+    execucao: ExecucaoIaPreparada,
+    planoId: string,
+    retomada?: RetomadaIa,
+  ) => {
+    if (!(await execucaoIaPermaneceAtual(execucao))) {
+      setRetomadaIaPendente(null);
+      setIaError('O texto foi alterado desde o planejamento. Gere uma nova solicitação para evitar aplicar uma resposta ao trecho errado.');
+      return;
+    }
+
+    const operationId = crypto.randomUUID();
+    const { alvo, html, indice, descricao, chatKey, protecao } = execucao;
+    try {
+      setIaSheetMode(execucao.solicitacao.acao);
+      setIaLoading(true);
+      setOperacaoIaAtivaId(operationId);
+      operacaoIaAtivaRef.current = operationId;
+      setProgressoIa(null);
+      setIaError(null);
+      setConfirmacaoIaPendente(null);
+      alvosIaRef.current.set(alvo.id, alvo);
+
+      if (!retomada) {
+        const userMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: descricao,
+          timestamp: Date.now(),
+          acao: execucao.solicitacao.acao,
+        };
+        setChatMessages(prev => ({
+          ...prev,
+          [chatKey]: [...(prev[chatKey] || []), userMsg],
+        }));
+      }
+
+      const r = await window.ipcAPI.ia.executar({
+        ...execucao.solicitacao,
+        operationId,
+        planoId,
+        retomadaId: retomada?.retomadaId,
+      });
+      if (!r.success || !r.data) {
+        if (r.retomada) setRetomadaIaPendente({ retomada: r.retomada, execucao });
+        else setRetomadaIaPendente(null);
+        setIaError(r.retomada
+          ? `${obterMensagemErroIa(r.error)} Os lotes concluídos foram preservados e podem ser retomados.`
+          : obterMensagemErroIa(r.error));
+        return;
+      }
+      setRetomadaIaPendente(null);
+      if (r.data.operationId !== operationId) {
+        setIaError('A resposta recebida não corresponde à solicitação atual. Tente novamente.');
+        return;
+      }
+      const fragmentosRestaurados = protecao
+        ? restaurarFragmentosIa(r.data.fragmentos, protecao)
+        : r.data.fragmentos;
+      if (!fragmentosRestaurados) {
+        setIaError('A resposta alterou dados protegidos do laudo e foi descartada com segurança. Tente novamente; se persistir, selecione outro modelo.');
+        return;
+      }
+      const htmlProposto = reconstruirHtmlIa(html, fragmentosRestaurados);
+      if (htmlProposto && assinaturaEstruturalIa(htmlProposto) === assinaturaEstruturalIa(html)) {
+        const acao = execucao.solicitacao.acao;
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: resolverTextoContextoIa(htmlProposto, mapaPlaceholdersResolvidos),
+          timestamp: Date.now(),
+          aplicacao: acao === 'inserir' ? 'inserir' : 'substituir',
+          acao,
+          alvo: { id: alvo.id, indice, conteudo: html, tipo: alvo.tipo },
+          conteudoProposto: htmlProposto,
+          proposalId: r.data.operationId,
+        };
+        setChatMessages(prev => ({
+          ...prev,
+          [chatKey]: [...(prev[chatKey] || []), assistantMsg],
+        }));
+      } else {
+        setIaError('A resposta não preservou a estrutura do trecho selecionado e foi descartada. Gere novamente antes de aplicar qualquer alteração.');
+      }
+    } catch (e: unknown) {
+      setIaError(obterMensagemErroIa(e));
+    } finally {
+      setIaLoading(false);
+      setOperacaoIaAtivaId(atual => atual === operationId ? null : atual);
+      operacaoIaAtivaRef.current = null;
+      setProgressoIa(null);
+    }
+  };
+
   const executarAcaoIa = async (acao: AcaoIa, instrucao?: string) => {
+    if (confirmacaoIaPendente) {
+      setIaError('Confirme ou cancele o planejamento atual antes de iniciar outra solicitação.');
+      return;
+    }
+    if (retomadaIaPendente) {
+      await window.ipcAPI.ia.descartarRetomada(retomadaIaPendente.retomada.retomadaId);
+      setRetomadaIaPendente(null);
+    }
     const alvo = capturarAlvoIa();
     if (!alvo) {
       setIaError('Escolha uma seção ou posicione o cursor no editor antes de usar o assistente.');
       return;
     }
-    alvosIaRef.current.set(alvo.id, alvo);
     const idx = alvo.indice;
     const html = alvo.conteudo;
     const fragmentosOriginais = extrairFragmentosIa(html);
@@ -2232,61 +2495,41 @@ export const LaudosPage: React.FC = () => {
     const mascarar = await obterMascaramentoIa();
     const protecao = mascarar ? protegerFragmentosIa(fragmentosOriginais) : null;
     const descricao = instrucao || obterDescricaoAcaoIa(acao);
-    const operationId = crypto.randomUUID();
     try {
-      setIaSheetMode(acao);
-      setIaLoading(true);
-      setOperacaoIaAtivaId(operationId);
       setIaError(null);
       alvo.fingerprint = await calcularFingerprintIa(alvo.tipo, html);
-
-      const userMsg: ChatMessage = {
-        role: 'user',
-        content: descricao,
-        timestamp: Date.now(),
-        acao,
-      };
-
       const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-      setChatMessages(prev => ({
-        ...prev,
-        [chatKey]: [...(prev[chatKey] || []), userMsg],
-      }));
-
-      const r = await window.ipcAPI.ia.executar({
-        operationId,
+      const solicitacao: SolicitacaoIa = {
+        operationId: crypto.randomUUID(),
         acao,
         escopo: alvo.tipo,
         instrucao,
+        contextoResolvido: alvo.texto,
         fragmentos: protecao?.fragmentos || fragmentosOriginais,
-      });
-      const fragmentosRestaurados = r.success && r.data
-        ? (protecao ? restaurarFragmentosIa(r.data.fragmentos, protecao) : r.data.fragmentos)
-        : null;
-      const htmlProposto = fragmentosRestaurados ? reconstruirHtmlIa(html, fragmentosRestaurados) : null;
-      if (htmlProposto && assinaturaEstruturalIa(htmlProposto) === assinaturaEstruturalIa(html)) {
-        const assistantMsg: ChatMessage = {
-          role: 'assistant',
-          content: converterHtmlEmTexto(htmlProposto),
-          timestamp: Date.now(),
-          aplicacao: acao === 'inserir' ? 'inserir' : 'substituir',
-          acao,
-          alvo: { id: alvo.id, indice: idx, conteudo: html, tipo: alvo.tipo },
-          conteudoProposto: htmlProposto,
-        };
-        setChatMessages(prev => ({
-          ...prev,
-          [chatKey]: [...(prev[chatKey] || []), assistantMsg],
-        }));
-      } else {
-        setIaError(r.error || 'A resposta não preservou os fragmentos e a estrutura do documento.');
+      };
+      const execucao: ExecucaoIaPreparada = { solicitacao, alvo, html, indice: idx, descricao, chatKey, protecao };
+      const planejamento = await window.ipcAPI.ia.planejar(solicitacao);
+      if (!planejamento.success || !planejamento.data) {
+        setIaError(obterMensagemErroIa(planejamento.error));
+        return;
       }
+      if (planejamento.data.requerConfirmacao) {
+        setConfirmacaoIaPendente({ plano: planejamento.data, execucao });
+        return;
+      }
+      await executarPreparacaoIa(execucao, planejamento.data.planoId);
     } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao processar solicitação'));
-    } finally {
-      setIaLoading(false);
-      setOperacaoIaAtivaId(atual => atual === operationId ? null : atual);
+      setIaError(obterMensagemErroIa(e));
     }
+  };
+
+  const retomarOperacaoIa = async () => {
+    if (!retomadaIaPendente || iaLoading) return;
+    await executarPreparacaoIa(
+      retomadaIaPendente.execucao,
+      retomadaIaPendente.retomada.planoId,
+      retomadaIaPendente.retomada,
+    );
   };
 
   const descreverImagemSelecionadaIa = async () => {
@@ -2312,6 +2555,7 @@ export const LaudosPage: React.FC = () => {
     const operationId = crypto.randomUUID();
     const chatKey = chaveChatImagemIa(imagemId);
     const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
       role: 'user',
       content: 'Descrever imagem selecionada',
       timestamp: Date.now(),
@@ -2355,6 +2599,7 @@ export const LaudosPage: React.FC = () => {
       }
 
       const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: descricao,
         timestamp: Date.now(),
@@ -2511,6 +2756,10 @@ export const LaudosPage: React.FC = () => {
   executarAcaoIaRef.current = acao => void executarAcaoIa(acao);
   enviarMensagemIaRef.current = handleSendChatMessage;
   cancelarOperacaoIaRef.current = () => void cancelarOperacaoIa();
+  retomarOperacaoIaRef.current = () => void retomarOperacaoIa();
+  confirmarExecucaoIaRef.current = () => {
+    if (confirmacaoIaPendente) void executarPreparacaoIa(confirmacaoIaPendente.execucao, confirmacaoIaPendente.plano.planoId);
+  };
   descreverImagemIaRef.current = () => void descreverImagemSelecionadaIa();
   aplicarRespostaIaRef.current = handleApplyResponse;
 
@@ -2783,6 +3032,67 @@ export const LaudosPage: React.FC = () => {
   // Modo editor com múltiplas seções
   if (editando) {
     const operacaoEmAndamento = salvando || carregandoPreview || exportando;
+    const mensagensPainelIa = imagemSelecionadaIaId
+      ? (chatMessages[chaveChatImagemIa(imagemSelecionadaIaId)] || [])
+      : iaSheetSecaoIdx === -1
+        ? (chatMessages[SINGLE_CHAT_KEY] || [])
+        : (iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : []);
+    const conteudoPainelLateral = painelLateralAtivo === 'ia' ? (
+      <AssistenteIaPanel
+        secaoTitulo={imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo}
+        editorId={imagemSelecionadaIaId
+          ? ''
+          : (iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : (iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : ''))}
+        messages={mensagensPainelIa}
+        onSendMessage={handleSendChatMessage}
+        onExecutarAcao={acao => void executarAcaoIa(acao)}
+        onDestacar={handleDestacarAssistenteIa}
+        onRecolher={() => setPanelCollapsed(true)}
+        onFechar={() => setIaSheetOpen(false)}
+        onCancelarOperacao={() => void cancelarOperacaoIa()}
+        onRetomarOperacao={() => void retomarOperacaoIa()}
+        retomada={retomadaIaPendente?.retomada || null}
+        onDescreverImagens={() => void descreverImagemSelecionadaIa()}
+        imagemSelecionada={Boolean(imagemSelecionadaIaId)}
+        contextoImagem={Boolean(imagemSelecionadaIaId)}
+        onApplyResponse={handleApplyResponse}
+        modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
+        loading={iaLoading}
+        progresso={progressoIa}
+        planoPendente={confirmacaoIaPendente?.plano || null}
+        onConfirmarExecucao={() => {
+          if (confirmacaoIaPendente) void executarPreparacaoIa(confirmacaoIaPendente.execucao, confirmacaoIaPendente.plano.planoId);
+        }}
+        onCancelarConfirmacao={() => setConfirmacaoIaPendente(null)}
+        error={iaError}
+        opcoesEscopo={[
+          { id: -1, titulo: 'Documento completo' },
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+        ]}
+        onSelecionarEscopo={indice => handleOpenSheet(indice, indice === -1 ? 'Documento completo' : secoes[indice]?.titulo || '')}
+      />
+    ) : painelLateralAtivo === 'ilustracoes' ? (
+      <IlustracoesPanel
+        laudoId={editando.id}
+        onInsertImage={panelCallbacksRef.current.onInsertImage}
+        onDeleteImage={panelCallbacksRef.current.onDeleteImage}
+        onRefreshHtml={panelCallbacksRef.current.onRefreshHtml}
+        onInsertAll={panelCallbacksRef.current.onInsertAll}
+        figurasNoEditor={extrairFigurasDoEditor()}
+        onUpdateLegendaInEditor={panelCallbacksRef.current.onUpdateLegenda}
+        onReorder={panelCallbacksRef.current.onReorder}
+        syncEnabled={syncEnabled}
+        figuraAtivaId={figuraAtivaId}
+        onSyncToggle={panelCallbacksRef.current.onSyncToggle}
+        onScrollToFigure={panelCallbacksRef.current.onScrollToFigure}
+        onPopOut={handlePopOut}
+        onRecolher={() => setPanelCollapsed(true)}
+        onFechar={() => setIlustracoesPanelOpen(false)}
+        onReplaceImage={panelCallbacksRef.current.onReplaceImage}
+        figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
+        onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
+      />
+    ) : null;
 
     return (
       <TooltipProvider>
@@ -2819,21 +3129,45 @@ export const LaudosPage: React.FC = () => {
             <BarraEditorLaudo
               modoConteudo={modoVisualizacaoPlaceholders}
               modoOrganizacao={editorMode}
-              ilustracoesAbertas={iluminacoesPanelOpen}
-              ilustracoesEmJanela={panelPoppedOut}
-              assistenteIaDestacado={painelIaDestacado}
-              operacaoEmAndamento={operacaoEmAndamento}
               onModoConteudoChange={setModoVisualizacaoPlaceholders}
               onModoOrganizacaoChange={handleEditorModeChange}
-              onToggleIlustracoes={handleToggleIlustracoes}
-              onAbrirIlustracoesEmJanela={handlePopOut}
-              onAbrirAssistenteIa={handleAbrirAssistenteIa}
-              onDestacarAssistenteIa={handleDestacarAssistenteIa}
-              onReindexarSecoes={handleReindexarSecoes}
             />
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
-            <div className="flex h-full gap-0">
+            <PainelLateralRedimensionavel
+              tipo={painelLateralAtivo}
+              chavePersistencia={painelLateralAtivo === 'ilustracoes'
+                ? 'lawdo:laudo:painel-ilustracoes:largura:v1'
+                : 'lawdo:laudo:painel-ia:largura:v1'}
+              larguraPadrao={painelLateralAtivo === 'ilustracoes' ? 380 : 460}
+              larguraMinima={painelLateralAtivo === 'ilustracoes' ? 320 : 360}
+              larguraMaxima={painelLateralAtivo === 'ilustracoes' ? 720 : 640}
+              recolhido={panelCollapsed}
+              iaDestacada={painelIaDestacado}
+              ilustracoesEmJanela={panelPoppedOut}
+              operacaoEmAndamento={operacaoEmAndamento}
+              onAlternarPainelIa={() => {
+                if (painelIaDestacado && sessaoPainelIaRef.current) {
+                  window.ipcAPI.ia.painelAbrir(sessaoPainelIaRef.current)
+                  return
+                }
+                if (iaSheetOpen) {
+                  if (panelCollapsed) setPanelCollapsed(false)
+                  else setIaSheetOpen(false)
+                  return
+                }
+                handleAbrirAssistenteIa()
+              }}
+              onAlternarPainelIlustracoes={() => {
+                if (iluminacoesPanelOpen && panelCollapsed) {
+                  setPanelCollapsed(false)
+                  return
+                }
+                handleToggleIlustracoes()
+              }}
+              onReindexarSecoes={handleReindexarSecoes}
+              conteudoPainel={conteudoPainelLateral}
+            >
               <div className="flex-1 overflow-y-auto pr-2">
                 {quantidadeBlocosSuprimidos > 0 && (
                   <Alert className="mb-3">
@@ -2961,64 +3295,7 @@ export const LaudosPage: React.FC = () => {
                   onSalvar={() => void handleSalvar()}
                 />
               </div>
-
-              {iluminacoesPanelOpen && (
-                <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={togglePanel}
-                        aria-expanded={!panelCollapsed}
-                        aria-label={panelCollapsed ? 'Expandir painel de ilustrações' : 'Recolher painel de ilustrações'}
-                        className="group flex w-7 flex-shrink-0 items-center justify-center rounded-l-md border-y border-l bg-background transition-colors hover:bg-accent"
-                      >
-                        <ChevronRight
-                          size={15}
-                          className={cn(
-                            'text-muted-foreground transition-transform duration-300 ease-in-out group-hover:text-foreground',
-                            !panelCollapsed && 'rotate-180',
-                          )}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {panelCollapsed ? 'Expandir painel' : 'Recolher painel'}
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <div
-                    className={cn(
-                      "border-l overflow-hidden bg-background transition-all duration-300 ease-in-out",
-                      panelCollapsed
-                        ? "w-0 border-l-0"
-                        : "w-[380px] 2xl:w-[420px] max-w-[85vw]"
-                    )}
-                  >
-                    <div className={cn("w-[380px] 2xl:w-[420px] max-w-[85vw] h-full overflow-y-auto", panelCollapsed && "invisible")}>
-                      <IlustracoesPanel
-                        laudoId={editando.id}
-                        onInsertImage={panelCallbacksRef.current.onInsertImage}
-                        onDeleteImage={panelCallbacksRef.current.onDeleteImage}
-                        onRefreshHtml={panelCallbacksRef.current.onRefreshHtml}
-                        onInsertAll={panelCallbacksRef.current.onInsertAll}
-                        figurasNoEditor={extrairFigurasDoEditor()}
-                        onUpdateLegendaInEditor={panelCallbacksRef.current.onUpdateLegenda}
-                        onReorder={panelCallbacksRef.current.onReorder}
-                        syncEnabled={syncEnabled}
-                        figuraAtivaId={figuraAtivaId}
-                        onSyncToggle={panelCallbacksRef.current.onSyncToggle}
-                        onScrollToFigure={panelCallbacksRef.current.onScrollToFigure}
-                        onPopOut={handlePopOut}
-                        onReplaceImage={panelCallbacksRef.current.onReplaceImage}
-                        figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
-                        onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            </PainelLateralRedimensionavel>
           </CardContent>
         </Card>
 
@@ -3055,39 +3332,6 @@ export const LaudosPage: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
-
-        {/* Sheet de Chat com IA */}
-        <AISheet
-          open={iaSheetOpen}
-          onOpenChange={setIaSheetOpen}
-          secaoTitulo={imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo}
-          editorId={imagemSelecionadaIaId
-            ? ''
-            : (iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : (iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : ''))}
-          messages={
-            imagemSelecionadaIaId
-              ? (chatMessages[chaveChatImagemIa(imagemSelecionadaIaId)] || [])
-              : iaSheetSecaoIdx === -1
-              ? (chatMessages[SINGLE_CHAT_KEY] || [])
-              : (iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : [])
-          }
-          onSendMessage={handleSendChatMessage}
-          onExecutarAcao={acao => void executarAcaoIa(acao)}
-          onDestacar={handleDestacarAssistenteIa}
-          onCancelarOperacao={() => void cancelarOperacaoIa()}
-          onDescreverImagens={() => void descreverImagemSelecionadaIa()}
-          imagemSelecionada={Boolean(imagemSelecionadaIaId)}
-          contextoImagem={Boolean(imagemSelecionadaIaId)}
-          onApplyResponse={handleApplyResponse}
-          modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
-          loading={iaLoading}
-          error={iaError}
-          opcoesEscopo={[
-            { id: -1, titulo: 'Documento completo' },
-            ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
-          ]}
-          onSelecionarEscopo={indice => handleOpenSheet(indice, indice === -1 ? 'Documento completo' : secoes[indice]?.titulo || '')}
-        />
 
         <DialogoAplicarRespostaIa
           open={respostaIaPendente !== null}
