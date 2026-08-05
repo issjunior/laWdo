@@ -3,8 +3,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ArrowLeft, Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, X } from 'lucide-react';
-import type { AcaoIa, PlanoExecucaoIaResumo, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
+import type { AcaoIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
 
 type AcaoPainelIa = AcaoIa | 'descrever_imagem';
 
@@ -43,6 +50,7 @@ interface AssistenteIaPanelProps {
   progresso?: ProgressoIa | null;
   error?: string | null;
   opcoesEscopo?: Array<{ id: number; titulo: string }>;
+  escopoSelecionado?: number | null;
   onSelecionarEscopo?: (id: number) => void;
   onExecutarAcao?: (acao: AcaoIa) => void;
   onDestacar?: () => void;
@@ -52,9 +60,6 @@ interface AssistenteIaPanelProps {
   onCancelarOperacao?: () => void;
   onRetomarOperacao?: () => void;
   retomada?: RetomadaIa | null;
-  planoPendente?: PlanoExecucaoIaResumo | null;
-  onConfirmarExecucao?: () => void;
-  onCancelarConfirmacao?: () => void;
   onDescreverImagens?: () => void;
   imagemSelecionada?: boolean;
   contextoImagem?: boolean;
@@ -76,6 +81,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   progresso = null,
   error = null,
   opcoesEscopo = [],
+  escopoSelecionado = null,
   onSelecionarEscopo,
   onExecutarAcao,
   onDestacar,
@@ -85,9 +91,6 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   onCancelarOperacao,
   onRetomarOperacao,
   retomada = null,
-  planoPendente = null,
-  onConfirmarExecucao,
-  onCancelarConfirmacao,
   onDescreverImagens,
   imagemSelecionada = false,
   contextoImagem = false,
@@ -157,7 +160,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   };
 
   const obterModoAplicacao = (mensagem: ChatMessage) => mensagem.aplicacao || modoAplicacao;
-  const controlesBloqueados = loading || Boolean(planoPendente);
+  const controlesBloqueados = loading;
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-muted/20">
@@ -205,11 +208,29 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-primary/70 animate-pulse"></span>
               <span className="truncate">Modelo Ativo: {modelName}</span>
             </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {contextoImagem
-                ? 'Contexto atual: Imagem selecionada'
-                : <>Contexto atual: Seção &quot;{secaoTitulo}&quot;</>}
-            </p>
+            {contextoImagem ? (
+              <p className="text-xs text-muted-foreground truncate">Contexto atual: Imagem selecionada</p>
+            ) : (
+              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <span className="shrink-0">Contexto atual:</span>
+                <Select
+                  value={escopoSelecionado === null ? undefined : String(escopoSelecionado)}
+                  onValueChange={valor => onSelecionarEscopo?.(Number(valor))}
+                  disabled={loading || !onSelecionarEscopo}
+                >
+                  <SelectTrigger className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 text-xs shadow-none focus:ring-1" aria-label="Contexto atual da IA">
+                    <SelectValue placeholder={secaoTitulo || 'Escolha uma seção'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {opcoesEscopo.map(opcao => (
+                      <SelectItem key={opcao.id} value={String(opcao.id)} className="text-xs">
+                        {opcao.titulo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </header>
 
@@ -261,28 +282,6 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   )}
                 </div>
               </div>
-            )}
-
-            {planoPendente && !loading && (
-              <Alert>
-                <AlertDescription className="space-y-3">
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground">Confirmar processamento</p>
-                    <p>
-                      {planoPendente.totalLotes} lote(s) · {planoPendente.chamadasBase} chamada(s) base · até {planoPendente.limiteMaximoChamadas} com novas tentativas.
-                    </p>
-                    <p className="truncate">Modelo: {planoPendente.modelo}</p>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={onCancelarConfirmacao}>
-                      Cancelar
-                    </Button>
-                    <Button type="button" size="sm" onClick={onConfirmarExecucao}>
-                      Confirmar e iniciar
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
             )}
 
             {imagemSelecionada && messages.length > 0 && !loading && (

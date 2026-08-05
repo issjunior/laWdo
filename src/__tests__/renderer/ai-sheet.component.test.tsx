@@ -129,37 +129,27 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     expect(screen.getByRole('progressbar', { name: '1 de 4 lotes concluídos' })).toHaveValue(1)
   })
 
-  it('solicita confirmação antes de iniciar um plano de múltiplos lotes', () => {
-    const onConfirmarExecucao = vi.fn()
-    const onCancelarConfirmacao = vi.fn()
+  it('permite trocar o contexto diretamente pelo seletor', () => {
+    const onSelecionarEscopo = vi.fn()
     render(
       <AssistenteIaPanel
-        secaoTitulo="Documento completo"
-        editorId="laudo-single-editor"
+        secaoTitulo="PREÂMBULO"
+        editorId="secao-0"
         messages={[]}
         onSendMessage={vi.fn()}
         onApplyResponse={vi.fn()}
-        planoPendente={{
-          planoId: 'plano-1',
-          acao: 'resumir',
-          escopo: 'laudo_completo',
-          provedor: 'gemini',
-          modelo: 'gemini-2.5-flash',
-          totalLotes: 3,
-          chamadasBase: 3,
-          limiteMaximoChamadas: 24,
-          requerConfirmacao: true,
-        }}
-        onConfirmarExecucao={onConfirmarExecucao}
-        onCancelarConfirmacao={onCancelarConfirmacao}
+        escopoSelecionado={0}
+        opcoesEscopo={[
+          { id: -1, titulo: 'Documento completo' },
+          { id: 0, titulo: 'Seção: PREÂMBULO' },
+        ]}
+        onSelecionarEscopo={onSelecionarEscopo}
       />,
     )
 
-    expect(screen.getByText(/3 lote\(s\).*3 chamada\(s\) base.*até 24/i)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e iniciar' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
-    expect(onConfirmarExecucao).toHaveBeenCalledTimes(1)
-    expect(onCancelarConfirmacao).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('combobox', { name: 'Contexto atual da IA' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Documento completo' }))
+    expect(onSelecionarEscopo).toHaveBeenCalledWith(-1)
   })
 
   it('oferece continuar do lote preservado após uma falha', () => {

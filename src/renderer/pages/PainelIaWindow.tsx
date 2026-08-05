@@ -57,13 +57,13 @@ export default function PainelIaWindow() {
         messages={mensagens}
         loading={estado.carregando}
         progresso={estado.progresso}
-        planoPendente={estado.planoPendente}
         retomada={estado.retomada}
         error={estado.erro}
         modoAplicacao={estado.modoAplicacao}
         imagemSelecionada={estado.imagemSelecionada}
         contextoImagem={estado.contextoImagem}
         opcoesEscopo={estado.escopos}
+        escopoSelecionado={estado.escopoSelecionado}
         onSelecionarEscopo={(indice) =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_escopo', indice })
         }
@@ -91,12 +91,6 @@ export default function PainelIaWindow() {
         }
         onRetomarOperacao={() =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'retomar_operacao' })
-        }
-        onConfirmarExecucao={() =>
-          window.ipcAPI.ia.painelEnviarComando({ tipo: 'confirmar_execucao' })
-        }
-        onCancelarConfirmacao={() =>
-          window.ipcAPI.ia.painelEnviarComando({ tipo: 'cancelar_confirmacao' })
         }
         onReencaixar={() => window.ipcAPI.ia.painelReencaixar()}
       />

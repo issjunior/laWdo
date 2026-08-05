@@ -270,6 +270,7 @@ export interface EstadoPainelIa {
   retomada: RetomadaIa | null;
   mensagens: MensagemPainelIa[];
   escopos: Array<{ id: number; titulo: string }>;
+  escopoSelecionado?: number | null;
 }
 
 export type CamposEstadoPainelIa = Omit<EstadoPainelIa, 'revisao'>;
@@ -336,6 +337,7 @@ function campoEstadoPainelIaValido(campo: keyof CamposEstadoPainelIa, valor: unk
     case 'retomada': return valor === null || retomadaIaValida(valor);
     case 'mensagens': return mensagensPainelIaValidas(valor);
     case 'escopos': return escoposPainelIaValidos(valor);
+    case 'escopoSelecionado': return valor === null || Number.isInteger(valor);
   }
 }
 
@@ -344,7 +346,8 @@ export function estadoPainelIaValido(valor: unknown): valor is EstadoPainelIa {
   const estado = valor as Record<string, unknown>;
   return Number.isInteger(estado.revisao)
     && (estado.revisao as number) > 0
-    && CAMPOS_ESTADO_PAINEL_IA.every(campo => campoEstadoPainelIaValido(campo, estado[campo]));
+    && CAMPOS_ESTADO_PAINEL_IA.every(campo => campoEstadoPainelIaValido(campo, estado[campo]))
+    && (!('escopoSelecionado' in estado) || campoEstadoPainelIaValido('escopoSelecionado', estado.escopoSelecionado));
 }
 
 export function atualizacaoPainelIaValida(valor: unknown): valor is AtualizacaoPainelIa {

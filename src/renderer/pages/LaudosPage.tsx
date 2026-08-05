@@ -32,7 +32,6 @@ import {
   type CamposEstadoPainelIa,
   type ComandoPainelIa,
   type FragmentoIa,
-  type PlanoExecucaoIaResumo,
   type ProgressoIa,
   type RetomadaIa,
   type SolicitacaoIa,
@@ -456,11 +455,6 @@ interface ExecucaoIaPreparada {
   protecao: ReturnType<typeof protegerFragmentosIa> | null;
 }
 
-interface ConfirmacaoIaPendente {
-  plano: PlanoExecucaoIaResumo;
-  execucao: ExecucaoIaPreparada;
-}
-
 interface RetomadaIaPendente {
   retomada: RetomadaIa;
   execucao: ExecucaoIaPreparada;
@@ -513,7 +507,6 @@ export const LaudosPage: React.FC = () => {
   const [iaLoading, setIaLoading] = useState(false);
   const [operacaoIaAtivaId, setOperacaoIaAtivaId] = useState<string | null>(null);
   const [progressoIa, setProgressoIa] = useState<ProgressoIa | null>(null);
-  const [confirmacaoIaPendente, setConfirmacaoIaPendente] = useState<ConfirmacaoIaPendente | null>(null);
   const [confirmacaoImagemIaPendente, setConfirmacaoImagemIaPendente] = useState(false);
   const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
@@ -2103,6 +2096,7 @@ export const LaudosPage: React.FC = () => {
     }
     setIaSheetSecaoIdx(idx);
     setIaSheetSecaoTitulo(titulo);
+    setImagemSelecionadaIaId(null);
     setIaSheetOpen(true);
     setPanelCollapsed(false);
     setIaError(null);
@@ -2193,7 +2187,6 @@ export const LaudosPage: React.FC = () => {
   const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever') => void>(() => {});
   const cancelarOperacaoIaRef = useRef<() => void>(() => {});
   const retomarOperacaoIaRef = useRef<() => void>(() => {});
-  const confirmarExecucaoIaRef = useRef<() => void>(() => {});
   const descreverImagemIaRef = useRef<() => void>(() => {});
   const aplicarRespostaIaRef = useRef<(mensagem: ChatMessage) => void>(() => {});
   const operacaoIaAtivaRef = useRef<string | null>(null);
@@ -2252,7 +2245,8 @@ export const LaudosPage: React.FC = () => {
         contextoImagem: imagemSelecionada,
         modoAplicacao: iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir',
         progresso: progressoIa,
-        planoPendente: confirmacaoIaPendente?.plano || null,
+        planoPendente: null,
+        escopoSelecionado: iaSheetSecaoIdx,
         retomada: retomadaIaPendente?.retomada || null,
         mensagens: obterMensagensVisiveis().map(mensagem => ({
           id: mensagem.id,
@@ -2287,7 +2281,7 @@ export const LaudosPage: React.FC = () => {
         if (estado.contextoImagem !== anterior.contextoImagem) alteracoes.contextoImagem = estado.contextoImagem;
         if (estado.modoAplicacao !== anterior.modoAplicacao) alteracoes.modoAplicacao = estado.modoAplicacao;
         if (JSON.stringify(estado.progresso) !== JSON.stringify(anterior.progresso)) alteracoes.progresso = estado.progresso;
-        if (JSON.stringify(estado.planoPendente) !== JSON.stringify(anterior.planoPendente)) alteracoes.planoPendente = estado.planoPendente;
+        if (estado.escopoSelecionado !== anterior.escopoSelecionado) alteracoes.escopoSelecionado = estado.escopoSelecionado;
         if (JSON.stringify(estado.retomada) !== JSON.stringify(anterior.retomada)) alteracoes.retomada = estado.retomada;
         if (JSON.stringify(estado.mensagens) !== JSON.stringify(anterior.mensagens)) alteracoes.mensagens = estado.mensagens;
         if (JSON.stringify(estado.escopos) !== JSON.stringify(anterior.escopos)) alteracoes.escopos = estado.escopos;
@@ -2316,21 +2310,18 @@ export const LaudosPage: React.FC = () => {
         cancelarOperacaoIaRef.current();
       } else if (comando.tipo === 'retomar_operacao') {
         retomarOperacaoIaRef.current();
-      } else if (comando.tipo === 'confirmar_execucao') {
-        confirmarExecucaoIaRef.current();
-      } else if (comando.tipo === 'cancelar_confirmacao') {
-        setConfirmacaoIaPendente(null);
       } else if (comando.tipo === 'descrever_imagem') {
         descreverImagemIaRef.current();
       } else if (comando.tipo === 'selecionar_escopo') {
         if (comando.indice === -1 || secoes[comando.indice]) {
           setIaSheetSecaoIdx(comando.indice);
           setIaSheetSecaoTitulo(comando.indice === -1 ? 'Documento completo' : secoes[comando.indice].titulo);
+          setImagemSelecionadaIaId(null);
           setIaError(null);
         }
       } else if (comando.tipo === 'solicitar_ressincronizacao') {
         if (sessaoPainelIaRef.current) publicarEstado(sessaoPainelIaRef.current, true);
-      } else {
+      } else if (comando.tipo === 'aplicar_resposta') {
         const mensagem = obterMensagensVisiveis().find(item => item.id === comando.mensagemId);
         if (mensagem) aplicarRespostaIaRef.current(mensagem);
       }
@@ -2351,7 +2342,7 @@ export const LaudosPage: React.FC = () => {
     });
     if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
     return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
-  }, [chatMessages, confirmacaoIaPendente, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, progressoIa, retomadaIaPendente, secoes]);
+  }, [chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, progressoIa, retomadaIaPendente, secoes]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2405,7 +2396,6 @@ export const LaudosPage: React.FC = () => {
       operacaoIaAtivaRef.current = operationId;
       setProgressoIa(null);
       setIaError(null);
-      setConfirmacaoIaPendente(null);
       alvosIaRef.current.set(alvo.id, alvo);
 
       if (!retomada) {
@@ -2480,14 +2470,6 @@ export const LaudosPage: React.FC = () => {
   };
 
   const executarAcaoIa = async (acao: AcaoIa, instrucao?: string) => {
-    const pedidoLivre = Boolean(instrucao?.trim());
-    if (confirmacaoIaPendente) {
-      if (!pedidoLivre) {
-        setIaError('Confirme ou cancele o planejamento atual antes de iniciar outra solicitação.');
-        return;
-      }
-      setConfirmacaoIaPendente(null);
-    }
     if (retomadaIaPendente) {
       await window.ipcAPI.ia.descartarRetomada(retomadaIaPendente.retomada.retomadaId);
       setRetomadaIaPendente(null);
@@ -2523,10 +2505,6 @@ export const LaudosPage: React.FC = () => {
       const planejamento = await window.ipcAPI.ia.planejar(solicitacao);
       if (!planejamento.success || !planejamento.data) {
         setIaError(obterMensagemErroIa(planejamento.error));
-        return;
-      }
-      if (planejamento.data.requerConfirmacao && !pedidoLivre) {
-        setConfirmacaoIaPendente({ plano: planejamento.data, execucao });
         return;
       }
       await executarPreparacaoIa(execucao, planejamento.data.planoId);
@@ -2774,9 +2752,6 @@ export const LaudosPage: React.FC = () => {
   enviarMensagemIaRef.current = handleSendChatMessage;
   cancelarOperacaoIaRef.current = () => void cancelarOperacaoIa();
   retomarOperacaoIaRef.current = () => void retomarOperacaoIa();
-  confirmarExecucaoIaRef.current = () => {
-    if (confirmacaoIaPendente) void executarPreparacaoIa(confirmacaoIaPendente.execucao, confirmacaoIaPendente.plano.planoId);
-  };
   descreverImagemIaRef.current = () => void descreverImagemSelecionadaIa();
   aplicarRespostaIaRef.current = handleApplyResponse;
 
@@ -3076,11 +3051,7 @@ export const LaudosPage: React.FC = () => {
         modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
         loading={iaLoading}
         progresso={progressoIa}
-        planoPendente={confirmacaoIaPendente?.plano || null}
-        onConfirmarExecucao={() => {
-          if (confirmacaoIaPendente) void executarPreparacaoIa(confirmacaoIaPendente.execucao, confirmacaoIaPendente.plano.planoId);
-        }}
-        onCancelarConfirmacao={() => setConfirmacaoIaPendente(null)}
+        escopoSelecionado={iaSheetSecaoIdx}
         error={iaError}
         opcoesEscopo={[
           { id: -1, titulo: 'Documento completo' },
