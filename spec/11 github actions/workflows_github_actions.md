@@ -35,7 +35,7 @@ Mudanças em versão do manifesto, serialização canônica, chave, canal, plata
 
 | Automação | Gatilho | Responsabilidade | Escrita externa |
 |---|---|---|---|
-| CI | `pull_request` para `main` e `push` em `main` | validar tipos, lint, cobertura, scripts de release e build | nenhuma |
+| CI | `workflow_dispatch`, `pull_request` para `main` e `push` em `main` | validar tipos, lint, cobertura, scripts de release e build | nenhuma |
 | Dependabot Updates | agenda de `.github/dependabot.yml` | abrir PRs de atualização para npm e GitHub Actions | PRs na `main`, gerenciados pelo GitHub |
 | Preparar release | `workflow_dispatch` | validar a solicitação, construir pacotes, assinar o manifesto e criar release em rascunho | tag e rascunho no GitHub Releases |
 | Promover release | `workflow_dispatch` | promover, reprocessar ou suspender uma release e implantar o feed assinado | release pública e GitHub Pages |
@@ -46,7 +46,8 @@ branch/PR ──────────┴─> CI
 
 main + despacho manual
   -> Preparar release
-  -> confirmar CI bem-sucedida do commit imutável
+  -> disparar CI manual para a referência do commit imutável
+  -> confirmar a execução manual pelo SHA exato
   -> builds selecionados
   -> tag + manifesto Ed25519 + release em rascunho
   -> smoke test manual
@@ -59,7 +60,7 @@ main + despacho manual
 
 ## CI
 
-A CI possui um único job `Validar` em `ubuntu-latest`, com `permissions: contents: read`. Cada execução faz checkout, configura Node.js 24 com cache do npm, instala por `npm ci` e executa nesta ordem:
+A CI aceita despacho manual por `workflow_dispatch`, além de `pull_request` para `main` e `push` em `main`. Possui um único job `Validar` em `ubuntu-latest`, com `permissions: contents: read`. Cada execução faz checkout, configura Node.js 24 com cache do npm, instala por `npm ci` e executa nesta ordem:
 
 1. `npm run type-check`;
 2. `npm run lint`;
@@ -79,10 +80,10 @@ Limitação atual: `actions/checkout@v7` e `actions/setup-node@v7` são referenc
 
 | Ecossistema | Agenda | Limite de PRs abertos | Agrupamento |
 |---|---|---:|---|
-| npm | segunda-feira, 09:00 | 3 | produção e desenvolvimento agrupam `minor`/`patch`; segurança agrupa todas as dependências |
-| github-actions | segunda-feira, 09:30 | 2 | versões agrupam `minor`/`patch`; segurança agrupa todas as Actions |
+| npm | dia 1 de cada mês, 09:00 | 1 | todas as dependências de versão agrupam `major`/`minor`/`patch`; segurança forma grupo próprio |
+| github-actions | dia 1 de cada mês, 09:30 | 1 | todas as Actions de versão agrupam `major`/`minor`/`patch`; segurança forma grupo próprio |
 
-Atualizações major não pertencem aos grupos de versão `minor`/`patch`; quando propostas, permanecem isoladas. Os PRs resultantes seguem o mesmo fluxo de revisão e CI dos demais PRs. A configuração não habilita auto-merge nem concede acesso a segredos.
+Atualizações major, minor e patch pertencem ao mesmo grupo mensal de cada ecossistema. Os PRs resultantes seguem o mesmo fluxo de revisão e CI dos demais PRs. A configuração não habilita auto-merge nem concede acesso a segredos.
 
 ## Preparar release
 
@@ -108,7 +109,7 @@ No modo `criar`, tag e release da versão devem estar ausentes. No modo `retomar
 
 Quando há incremento, o workflow cria uma branch efêmera `codex/release-v<versão>-<run-id>`, abre um PR para a `main` e o integra por merge. O commit resultante da `main` passa a ser o commit imutável usado por todos os builds e pela tag. Em `retomar`, a tag existente continua sendo a fonte do commit.
 
-O job inicial não repete instalação de dependências, tipos, lint, cobertura, testes de release nem build genérico. Depois de definir o commit imutável, ele procura a execução de `ci.yml` pelo SHA exato, aguardando por até 10 minutos que ela seja registrada, e usa `gh run watch --exit-status` até a conclusão. Somente uma CI bem-sucedida libera os builds nativos; ausência, cancelamento ou falha interrompem a preparação. O token desse job possui `actions: read` e `checks: read` apenas para consultar e acompanhar a CI, além das permissões de conteúdo e PR necessárias à integração da versão.
+O job inicial não repete instalação de dependências, tipos, lint, cobertura, testes de release nem build genérico. Depois de definir o commit imutável, ele despacha explicitamente `ci.yml` com `gh workflow run`: usa a referência `main` no modo `criar` e a tag `v<versão>` no modo `retomar`. Em seguida procura somente a execução `workflow_dispatch` associada ao SHA exato, aguardando por até 10 minutos que ela seja registrada, e usa `gh run watch --exit-status` até a conclusão. Somente uma CI bem-sucedida libera os builds nativos; ausência, cancelamento ou falha interrompem a preparação. O token desse job possui `actions: write` para disparar e acompanhar a CI e `checks: read`, além das permissões de conteúdo e PR necessárias à integração da versão.
 
 Esse estágio escreve na `main` antes da criação do rascunho e não é transacional com os demais jobs. Proteções ou indisponibilidade que impeçam a criação/integração do PR interrompem a preparação antes dos builds. Se a CI falhar depois da integração automática, a versão permanece na `main`, mas tag, instaladores e rascunho não são criados; uma nova execução reutiliza o próximo patch já registrado sem incrementá-lo novamente.
 
@@ -118,7 +119,7 @@ Os jobs selecionados fazem checkout do mesmo commit, usam Node.js 24, executam `
 
 - Windows x64: NSIS, blockmap e `latest.yml`;
 - Linux x64: AppImage, blockmap, DEB e `latest-linux.yml`;
-- macOS x64 e arm64: DMG e ZIP experimentais.
+- macOS x64 e arm64: somente DMG experimental. ZIP continua aceito pelo consumidor como compatibilidade de leitura, mas não é gerado, manifestado nem publicado pelo produtor atual.
 
 O upload temporário falha se os padrões não encontrarem arquivos. O Windows possui uma barreira adicional: a versão dentro de `app.asar` e a versão de produto do executável devem coincidir com a versão solicitada. Não há verificação interna equivalente para Linux ou macOS.
 
@@ -161,6 +162,8 @@ O workflow lista até 100 releases públicas e materializa `.suspensa` para rele
 4. gera um índice canônico e uma assinatura Ed25519 para cada destino;
 5. inclui `index.html` e `logo.png` no conjunto estático.
 
+A página `index.html` agrupa downloads por Windows, Linux e macOS e exibe arquitetura, formato, versão e tamanho legível. Ela filtra ZIPs de manifestos legados e oferece apenas os formatos instaláveis publicados atualmente; os índices assinados por destino continuam independentes dessa apresentação.
+
 A seleção por destino preserva uma versão anterior para plataformas omitidas ou para uma versão mais nova suspensa. O feed completo é enviado como artefato, preparado para Pages e implantado no environment `github-pages`. Esse job não recebe a chave privada; recebe somente o feed já assinado.
 
 Após o deploy, todos os arquivos locais do feed são baixados pela URL HTTPS retornada pelo Pages e comparados byte a byte. Divergência, ausência ou erro HTTP falha a execução.
@@ -192,9 +195,10 @@ A geração está limitada às 100 releases retornadas por `gh release list --li
 - bloqueio de notas incompletas;
 - aceitação da URL temporária do GitHub no rascunho;
 - planejamento idempotente do próximo patch e bloqueio de divergências entre `package.json` e lockfile;
-- geração das notas sem título duplicado e com tabela de instaladores por plataforma.
+- geração das notas sem título duplicado e com tabela de instaladores por plataforma;
+- página do feed agrupada por plataforma, com tamanhos legíveis e exclusão de ZIP dos downloads exibidos.
 
-A própria CI executa esses testes, e o workflow de preparação consome o resultado dessa CI em vez de repeti-los. Permanecem dependentes do GitHub Actions e de validação operacional: associação da execução ao SHA exato, espera pelo resultado, matriz nativa de empacotamento, environments, permissões, tag/release, download/upload de assets, publicação, deploy do Pages e verificação HTTPS.
+A própria CI executa esses testes, e o workflow de preparação dispara e consome uma execução manual dedicada em vez de repetir as validações no job inicial. Permanecem dependentes do GitHub Actions e de validação operacional: despacho pela referência correta, associação da execução manual ao SHA exato, espera pelo resultado, matriz nativa de empacotamento, environments, permissões, tag/release, download/upload de assets, publicação, deploy do Pages e verificação HTTPS.
 
 ## Arquivos que mudam juntos
 

@@ -41,6 +41,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Estrutura Modular:** Edição do laudo dividida por seções independentes baseadas no template ou visualização do laudo sob um unico editor de texto (padrão).
 - **Rich Text Editor:** Suporte a formatação avançada, tabelas e listas via TinyMCE.
 - **Snapshots:** Histórico das últimas 3 versões salvas para recuperação de desastres.
+- **Área de Trabalho:** Trilho permanente à direita com docks redimensionáveis e mutuamente exclusivos para Assistente IA e Ilustrações, sem sobrepor ou desmontar o editor.
 
 ### FR5: Gestão de Ilustrações
 
@@ -48,21 +49,24 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Placeholders de Imagem:** Inserção de figuras dummy (SVG placeholder) substituíveis por imagens reais via clique direto no editor ou via painel de ilustrações.
 - **Legendas Automáticas:** Sistema de numeração sequencial (Figura 1:, Figura 2:) com legendas.
 - **Seção de Ilustrações:** Geração automática de uma seção Ilustração se caso o usuario optar pelo uso de inserçao automática de figuras no laudo.
-- **Painel de Ilustrações:** Modo híbrido inline/pop-out — o painel pode ser usado embutido no editor ou destacado em janela separada (ideal para 2+ monitores) com sincronização de estado via IPC do Electron.
+- **Painel de Ilustrações:** Modo híbrido em dock/pop-out, com largura integrada e dimensões da janela persistidas, sincronização via IPC e coexistência com a janela destacada do Assistente IA.
 
 ### FR6: Sistema de Placeholders
 
 - **Substituição Dinâmica:** Uso de tags como `{{numero_rep}}` e `{{perito_nome}}` no texto.
 - **Placeholders Customizados:** Interface com layout 2-painéis (árvore hierárquica de categorias + DataTable de placeholders) com suporte a subcategorias aninhadas (parent_id), ordenação drag-and-drop, cores e ícones por categoria.
-- **Resolução Automática:** Placeholders são automaticamente resolvidos para valores reais antes do envio de texto à IA.
+- **Resolução para IA:** No envio integral, os valores atuais dos placeholders são apresentados à IA em contexto textual somente para leitura, sem alterar o HTML nem expor seus marcadores; no modo protegido, esse contexto não é enviado.
 
 ### FR7: Assistente IA
 
-- **Provedores Múltiplos:** Suporte a Groq e Google Gemini como provedores de LLM, selecionáveis pelo usuário na página de configuração (ModelosIAPage) com chaves de API independentes.
-- **Melhoria de Texto:** Revisão gramatical e adequação de tom formal técnico com aprovação expressa do perito (sem substituição silenciosa).
-- **Descrição de Imagens (Vision):** Uso de modelos de visão (Llama 4 Scout via Groq, Gemini 2.5 Flash/Pro via Google) para sugerir descrições técnicas de fotos de evidências, com conversão dinâmica de imagens locais (`laudo-img://`) para Base64 no backend.
-- **Chat IA:** Interface de chat para perguntas livres ao modelo, com respostas inseríveis diretamente na posição do cursor no editor.
-- **Privacidade:** Chaves de API configuráveis pelo usuário, armazenadas localmente com `safeStorage` quando disponível e fallback controlado (nunca expostas ao renderer), uso recomendado de email institucional `@policiacientifica.pr.gov.br` para evitar uso dos dados em treinamento de modelos.
+- **Provedores Múltiplos:** Suporte a Groq e Google Gemini, com catálogo compartilhado de modelos, capacidades de visão, limites e orçamento de contexto. A seleção e as chaves independentes são configuradas somente na página Modelos de IA.
+- **Painel Único:** Assistente disponível como dock direito redimensionável ou janela destacada reencaixável, com o mesmo contexto, histórico, progresso, confirmação e operação ativa.
+- **Transformações Controladas:** Revisão gramatical, linguagem técnico-pericial, clareza, resumo, expansão e reescrita livre sobre seleção, seção ou documento; pedidos livres também podem inserir texto no cursor originalmente capturado.
+- **Aplicação Segura:** Cada proposta permanece ligada ao alvo e ao fingerprint de origem, passa por comparação lado a lado e só altera fragmentos textuais. A estrutura HTML, figuras, formatação e tokens protegidos são revalidados, e a aplicação usa uma única operação de undo sem salvar automaticamente.
+- **Laudos Grandes:** Planejamento determinístico e processamento sequencial em lotes, com confirmação prévia, progresso, cancelamento, retomada temporária após falha e entrega atômica sem alteração parcial do documento.
+- **Descrição de Imagens:** O renderer envia apenas os IDs do laudo e da imagem persistida. O main valida pertencimento, formato, tamanho e suporte do modelo; a descrição resultante é destinada exclusivamente à cópia manual.
+- **Preferências e Privacidade:** Perfil local de tom, detalhamento e instruções personalizadas. A preferência `Enviar conteúdo integralmente` decide entre envio de texto/imagem ou mascaramento; chaves permanecem protegidas no main e conteúdo pericial não entra em logs.
+- **Segurança da Sessão:** IPC tipado e validado, operação vinculada ao renderer proprietário, revisão monotônica entre editor e janela e URL destacada contendo somente o identificador da sessão.
 
 ### FR8: Exportação e Auditoria
 
@@ -91,7 +95,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Offline-first:** O sistema deve ser totalmente funcional sem internet, exceto pelas funções de IA.
 - **Interface Premium:** Design moderno utilizando Shadcn/ui com suporte a Dark Mode.
 - **Performance de Banco:** Queries otimizadas no SQLite para suportar milhares de registros sem lentidão.
-- **Segurança:** Criptografia de dados sensíveis e sanitização de entradas para prevenir SQL Injection.
+- **Segurança:** Criptografia de dados sensíveis, sanitização de entradas, isolamento do renderer Electron e validação de dados externos nas fronteiras IPC, JSON, banco e provedores de IA.
 
 ## 6. Stack Tecnológica Atual
 
@@ -115,11 +119,11 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 
 - **Autenticação e Perfil:** Login local com senha criptografada, setup de primeiro acesso (Nome, Matrícula, Lotação), gerenciamento de perfil com avatar.
 - **Cadastros Estruturais:** CRUD completo de Solicitantes, Tipos de Exame e Templates de Laudo com formulários reutilizáveis em quick-create dialogs na tela de REPs.
-- **Placeholders:** Layout 2-painéis com árvore hierárquica de categorias (parent_id, drag-and-drop, cores e ícones) e DataTable de placeholders. Placeholders de sistema fixos no cabeçalho do laudo. Resolução automática antes do envio à IA.
+- **Placeholders:** Layout 2-painéis com árvore hierárquica de categorias (parent_id, drag-and-drop, cores e ícones) e DataTable de placeholders. Placeholders de sistema fixos no cabeçalho do laudo. Para IA, valores resolvidos são enviados apenas como contexto textual no modo integral, sem modificar o HTML de origem.
 - **Editor de Laudos:** TinyMCE independente por seção com menu de contexto para inserção de placeholders. Upload de imagens locais com protocolo `laudo-img://` e numeração automática de figuras. Substituição de figuras dummy por imagens reais com atualização correta de `data-mce-src` via API do TinyMCE. Snapshot das últimas 3 versões salvas.
-- **Painel de Ilustrações:** Modo híbrido inline/pop-out com sincronização bidirecional via IPC. Substituição de imagens com file picker local na janela pop-out e transmissão de data URI. Scroll-sync com IntersectionObserver, reordenação drag-and-drop, edição de legendas e lightbox.
+- **Painel de Ilustrações:** Dock direito redimensionável e janela destacada, com dimensões persistidas, sincronização por IPC, reordenação, edição de legendas, substituição de figuras e rolagem da seleção restrita à lista interna.
 - **Wizard de Peças:** Modo alternativo de criação de laudos via árvore de perguntas em cascata. Editor visual de wizard (WizardEditorPage), banco de peças com categorias hierárquicas (PecasPage, CategoriasPecasPage), motor de regras condicionais, WizardLaudoPage com stepper e preview em tempo real.
-- **Assistente IA:** Suporte a Groq e Google Gemini como provedores com seleção na ModelosIAPage. Revisão gramatical, adequação de tom técnico, descrição de imagens (Vision via Llama 4 Scout e Gemini 2.5 Flash/Pro) com conversão Base64 no backend, chat IA e inserção no cursor. Chaves criptografadas no SQLite (nunca expostas ao renderer).
+- **Assistente IA:** Painel único em dock ou janela destacada, com ações de transformação e inserção, seleção explícita de escopo, comparação editável apenas no texto, aplicação atômica com undo, lotes sequenciais, confirmação, cancelamento e retomada temporária. Groq e Gemini usam catálogo compartilhado; imagens persistidas são descritas por ID e ficam disponíveis apenas para cópia. Perfil e privacidade são configurados na ModelosIAPage, e chaves nunca são expostas ao renderer.
 - **Timeline Dual-Track:** Linha do tempo de trilha dupla (REP + Laudo) com eixo cronológico, conexões direcionais, trilha fantasma e acesso via tabelas de REPs/Laudos e aba dedicada nos Logs.
 - **Logs e Auditoria:** Sistema modular com JSON estruturado, viewer com abas Sistema/Auditoria/Timeline, filtro por módulo, registro de transições de status com snapshot antes/depois, exclusão autenticada por senha.
 - **Backup/Restauração:** Exportação/importação ZIP com banco + imagens, exclusão automática de auditoria e chaves de IA dos backups, agendamento de backup automático com periodicidade configurável.

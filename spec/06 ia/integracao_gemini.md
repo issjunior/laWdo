@@ -1,75 +1,27 @@
 # Gemini como provedor de IA
 
-## Papel atual
+## Papel e configuração
 
-Gemini ja esta integrado como alternativa real a Groq.
-O fluxo usa o mesmo contrato OpenAI-compativel do restante da feature de IA.
+Gemini é integrado pelo endpoint OpenAI-compatível `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`. A página `ModelosIAPage.tsx` persiste `provedor_ia = 'gemini'`, `api_key_gemini` e `modelo_gemini_padrao`; a chave permanece no main. O teste de conexão usa `ia:testar-conexao`.
 
-## Configuracao persistida
+O catálogo compartilhado `src/shared/catalogos/modelos-ia.catalogo.ts` registra:
 
-Chaves usadas:
+- `gemini-2.5-flash`: padrão, visão JPEG/PNG/WebP até 15 MiB;
+- `gemini-2.5-pro`: visão e maior orçamento de contexto;
+- `gemini-2.0-flash`: visão.
 
-- `provedor_ia = 'gemini'`
-- `api_key_gemini`
-- `modelo_gemini_padrao`
+Modelo salvo ausente ou incompatível cai no padrão do próprio Gemini. Não há fallback silencioso para Groq nem escolha automática de outro provedor.
 
-A mesma `ModelosIAPage.tsx` salva esses valores.
+## Execução atual
 
-## Endpoint e modelos aceitos
+O painel usa o mesmo contrato tipado e o mesmo `IaExecucaoService` empregado pela Groq. Planejamento, confirmação, lotes sequenciais, timeout de 120 segundos, até duas repetições para rede/408/429/5xx, cancelamento e checkpoints em memória não variam por provedor.
 
-Endpoint:
+Respostas textuais são solicitadas em JSON estruturado e validadas localmente. Cercas Markdown são toleradas; modelos que rejeitem `response_format` recebem uma tentativa de compatibilidade sem relaxar o contrato final. Uma tentativa corretiva pode ser feita quando a estrutura retornada é inválida.
 
-```txt
-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
-```
+Na descrição de imagem, o modelo Gemini selecionado precisa declarar visão e aceitar o MIME/tamanho persistido. O main resolve a imagem por `laudoId` e `imagemId`; o renderer não envia data URI, URL ou caminho. A resposta é texto simples para cópia manual e nunca é aplicada automaticamente.
 
-Modelos registrados:
+## Privacidade e invariantes
 
-- `gemini-2.5-flash`
-- `gemini-2.5-pro`
-- `gemini-2.0-flash`
+Perfil e privacidade são fotografados no início da operação. No modo integral, o provedor pode receber texto e imagens, além de uma representação textual somente para leitura dos placeholders resolvidos. No modo protegido, o contexto resolvido não segue e descrições de imagem são bloqueadas. Documento e imagem são tratados como conteúdo não confiável, subordinado às regras fixas do sistema.
 
-Default atual:
-
-- `gemini-2.5-flash`
-
-## Roteamento no backend
-
-`chamarIA()` delega para `chamarGemini()` quando `provedor_ia === 'gemini'`.
-
-`chamarGemini()`:
-
-1. le `api_key_gemini`
-2. le `modelo_gemini_padrao`
-3. valida o modelo recebido contra `GEMINI_MODELS`
-4. envia a request no mesmo formato de `messages`
-5. retorna `choices[0].message.content`
-
-## Integracao com as acoes de IA
-
-Os quatro handlers IPC sao os mesmos usados pela Groq:
-
-- revisar ortografia
-- adequar escrita
-- descrever imagem
-- perguntar livremente
-
-O renderer nao muda de assinatura quando o provider vira Gemini.
-
-## Descricao de imagem
-
-`ia:descreverImagem` ainda chama `chamarIA(..., MODELO_VISION_GROQ)`.
-
-No caso do Gemini, esse modelo externo nao passa pela validacao de `GEMINI_MODELS`, entao o backend faz fallback automatico para `modelo_gemini_padrao`.
-
-Na pratica:
-
-- com provider Groq -> usa o modelo de visao Groq
-- com provider Gemini -> usa o modelo Gemini salvo na configuracao
-
-## Regra pratica
-
-Qualquer manutencao em IA precisa preservar duas invariantes:
-
-1. o renderer continua falando apenas com `window.ipcAPI.ia.*`
-2. a decisao do provider continua centralizada em `ModelosIAPage.tsx` + `chamarIA()`
+Chaves, prompts, respostas, documentos e imagens não entram nos logs nem nos snapshots da janela. Mudanças devem manter alinhados catálogo, contratos shared, preload, handlers e serviço. O fluxo completo do painel está em `spec/06 ia/painel_assistente_ia.md`.

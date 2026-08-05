@@ -1,81 +1,30 @@
 # Groq como provedor de IA
 
-## Papel atual
+## Papel e configuração
 
-Groq continua sendo o fallback padrao do sistema quando `provedor_ia` nao estiver definido.
-O roteamento real fica em `src/main/ipc/handlers/ia.handlers.ts`.
+Groq é um dos dois provedores OpenAI-compatíveis e o fallback quando `provedor_ia` está ausente ou diferente de `gemini`. A página `ModelosIAPage.tsx` persiste `provedor_ia`, `api_key_groq` e `modelo_ia_padrao`; chaves são recuperadas somente no main. O teste de conexão usa o canal específico `ia:testar-conexao`, não o fluxo legado de pergunta.
 
-## Configuracao persistida
+Endpoint: `https://api.groq.com/openai/v1/chat/completions`.
 
-Chaves usadas no estado atual:
+O catálogo compartilhado `src/shared/catalogos/modelos-ia.catalogo.ts` é a fonte de verdade para modelos, capacidade de visão, MIME, limite de imagem e orçamento de contexto:
 
-- `provedor_ia`
-- `api_key_groq`
-- `modelo_ia_padrao`
+- `llama-3.3-70b-versatile`: padrão textual;
+- `meta-llama/llama-4-scout-17b-16e-instruct`: visão JPEG/PNG até 4 MiB;
+- `gemma2-9b-it`;
+- `mixtral-8x7b-32768`.
 
-`ModelosIAPage.tsx` edita essas configuracoes pela UI.
+Um modelo salvo que não pertença à Groq cai no modelo padrão do próprio provedor. Não existe fallback silencioso para Gemini.
 
-## Endpoint e modelos aceitos
+## Execução atual
 
-Endpoint:
+O painel novo usa `ia:planejar`, `ia:executar`, `ia:descrever-imagem`, `ia:cancelar` e eventos tipados de progresso. `IaExecucaoService` carrega provedor, modelo, chave, perfil e privacidade no início do plano e preserva essa fotografia durante todos os lotes. O corpo textual solicita JSON estruturado; se o modelo rejeitar `response_format`, a chamada é repetida em modo compatível e a validação local continua obrigatória.
 
-```txt
-https://api.groq.com/openai/v1/chat/completions
-```
+Lotes são sequenciais e atômicos para o renderer. Cada chamada tem timeout de 120 segundos. Rede, 408, 429 e 5xx admitem até duas repetições, com `Retry-After` limitado a 30 segundos ou backoff com jitter. Respostas vazias, fragmentos fora do contrato e respostas tardias após cancelamento são rejeitadas.
 
-Modelos registrados em `ia.handlers.ts`:
+A descrição multimodal só usa um modelo Groq com `suportaVisao`. O renderer envia IDs; o main carrega a imagem persistida, valida pertencimento, MIME e tamanho e envia um único conteúdo multimodal. A resposta é texto para cópia manual e não altera o laudo.
 
-- `llama-3.3-70b-versatile`
-- `meta-llama/llama-4-scout-17b-16e-instruct`
-- `gemma2-9b-it`
-- `mixtral-8x7b-32768`
+## Compatibilidade legada e invariantes
 
-Defaults atuais:
+Os canais legados `ia:revisarOrtografia`, `ia:adequarEscrita` e `ia:perguntar` ainda existem para consumidores antigos, mas não definem o contrato do painel destacável. O canal legado que aceitava data URI ou URL de imagem pelo renderer foi removido.
 
-- modelo textual padrao: `llama-3.3-70b-versatile`
-- modelo de visao para Groq: `meta-llama/llama-4-scout-17b-16e-instruct`
-
-## Onde o provider e escolhido
-
-A escolha do provedor acontece em um lugar so:
-
-- `src/renderer/pages/ModelosIAPage.tsx`
-
-O restante da UI apenas chama `window.ipcAPI.ia.*`.
-
-## Roteamento no backend
-
-`chamarIA(messages, modelo?)` le `provedor_ia`.
-Se o valor nao for `gemini`, o fluxo cai em `chamarGroq()`.
-
-`chamarGroq()`:
-
-1. le `api_key_groq`
-2. le `modelo_ia_padrao`
-3. valida o modelo contra a lista permitida
-4. envia `messages`, `temperature` e `max_tokens`
-5. retorna `choices[0].message.content`
-
-## Recursos hoje expostos via Groq
-
-Os handlers registrados sao:
-
-- `ia:revisarOrtografia`
-- `ia:adequarEscrita`
-- `ia:descreverImagem`
-- `ia:perguntar`
-
-Para Groq:
-
-- texto usa o modelo salvo ou o padrao
-- descricao de imagem força o modelo de visao Groq quando o provider selecionado continua sendo Groq
-
-## Observacao importante
-
-`extrairTextoDoHtml()` roda no processo main e usa regex simples:
-
-1. remove spans com `data-placeholder`
-2. remove tags HTML
-3. normaliza espacos
-
-Isso garante que as acoes de revisao textual enviem texto limpo, sem a estrutura do editor.
+Manutenções devem preservar o catálogo compartilhado, as validações de fronteira IPC, o isolamento das chaves no main, a ausência de fallback entre provedores e a proibição de registrar conteúdo pericial. O fluxo completo do painel está em `spec/06 ia/painel_assistente_ia.md`.
