@@ -3,6 +3,7 @@ import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 import { ErroExecucaoIa, iaExecucaoService } from '../../services/ia-execucao.service.js';
 import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
+import { obterModeloIa } from '../../../shared/catalogos/modelos-ia.catalogo.js';
 import {
   atualizacaoPainelIaValida,
   comandoPainelIaValido,
@@ -15,22 +16,6 @@ import type {
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-
-const GROQ_MODELS = [
-  'llama-3.3-70b-versatile',
-  'meta-llama/llama-4-scout-17b-16e-instruct',
-  'gemma2-9b-it',
-  'mixtral-8x7b-32768',
-];
-
-const GEMINI_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-  'gemini-2.0-flash',
-];
-
-const MODELO_PADRAO_GROQ = 'llama-3.3-70b-versatile';
-const MODELO_PADRAO_GEMINI = 'gemini-2.5-flash';
 
 function solicitacaoDescricaoImagemValida(valor: unknown): valor is SolicitacaoDescricaoImagemIa {
   if (!valor || typeof valor !== 'object') return false;
@@ -51,18 +36,14 @@ function solicitacaoDescricaoImagemValida(valor: unknown): valor is SolicitacaoD
 async function obterConfigGroq(): Promise<{ apiKey: string | null; modelo: string }> {
   const apiKey = await configuracaoService.obter('api_key_groq');
   const modeloSalvo = await configuracaoService.obter('modelo_ia_padrao');
-  const modelo = modeloSalvo && GROQ_MODELS.includes(modeloSalvo)
-    ? modeloSalvo
-    : MODELO_PADRAO_GROQ;
+  const modelo = obterModeloIa('groq', modeloSalvo).id;
   return { apiKey, modelo };
 }
 
 async function obterConfigGemini(): Promise<{ apiKey: string | null; modelo: string }> {
   const apiKey = await configuracaoService.obter('api_key_gemini');
   const modeloSalvo = await configuracaoService.obter('modelo_gemini_padrao');
-  const modelo = modeloSalvo && GEMINI_MODELS.includes(modeloSalvo)
-    ? modeloSalvo
-    : MODELO_PADRAO_GEMINI;
+  const modelo = obterModeloIa('gemini', modeloSalvo).id;
   return { apiKey, modelo };
 }
 
@@ -76,7 +57,7 @@ async function chamarGroq(
     throw new Error('Chave de API Groq não configurada. Configure em Configurações → Modelos IA.');
   }
 
-  const modeloFinal = modelo && GROQ_MODELS.includes(modelo) ? modelo : modeloPadrao;
+  const modeloFinal = modelo ? obterModeloIa('groq', modelo).id : modeloPadrao;
 
   const resposta = await fetch(GROQ_API_URL, {
     method: 'POST',
@@ -111,7 +92,7 @@ async function chamarGemini(
     throw new Error('Chave de API Gemini não configurada. Configure em Configurações → Modelos IA.');
   }
 
-  const modeloFinal = modelo && GEMINI_MODELS.includes(modelo) ? modelo : modeloPadrao;
+  const modeloFinal = modelo ? obterModeloIa('gemini', modelo).id : modeloPadrao;
 
   const resposta = await fetch(GEMINI_API_URL, {
     method: 'POST',

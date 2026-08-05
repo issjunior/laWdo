@@ -430,6 +430,7 @@ interface RespostaIaPendente {
   indiceAlvo: number;
   conteudoAlvo: string;
   alvoId: string;
+  fragmentosPropostos: FragmentoIa[];
 }
 
 type BookmarkTinyMce = ReturnType<TinyMceEditorInstance['selection']['getBookmark']>;
@@ -513,6 +514,7 @@ export const LaudosPage: React.FC = () => {
   const [operacaoIaAtivaId, setOperacaoIaAtivaId] = useState<string | null>(null);
   const [progressoIa, setProgressoIa] = useState<ProgressoIa | null>(null);
   const [confirmacaoIaPendente, setConfirmacaoIaPendente] = useState<ConfirmacaoIaPendente | null>(null);
+  const [confirmacaoImagemIaPendente, setConfirmacaoImagemIaPendente] = useState(false);
   const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
   const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
@@ -2532,10 +2534,14 @@ export const LaudosPage: React.FC = () => {
     );
   };
 
-  const descreverImagemSelecionadaIa = async () => {
+  const descreverImagemSelecionadaIa = async (confirmada = false) => {
     const laudoId = editando?.id;
     if (!imagemSelecionadaIaId || !laudoId) {
       setIaError('Clique em uma imagem do laudo antes de solicitar sua descrição.');
+      return;
+    }
+    if (!confirmada) {
+      setConfirmacaoImagemIaPendente(true);
       return;
     }
 
@@ -2746,6 +2752,7 @@ export const LaudosPage: React.FC = () => {
       indiceAlvo: mensagem.alvo.indice,
       conteudoAlvo: mensagem.alvo.conteudo,
       alvoId: mensagem.alvo.id,
+      fragmentosPropostos: extrairFragmentosIa(mensagem.conteudoProposto || converterTextoEmHtmlSeguro(mensagem.content)),
     });
   };
 
@@ -3338,6 +3345,26 @@ export const LaudosPage: React.FC = () => {
           secaoTitulo={iaSheetSecaoTitulo || 'Seção atual'}
           conteudoAtual={respostaIaPendente?.conteudoAtual || ''}
           conteudoProposto={respostaIaPendente?.conteudoProposto || ''}
+          fragmentosPropostos={respostaIaPendente?.fragmentosPropostos || []}
+          onAlterarFragmento={(id, texto) => {
+            setRespostaIaPendente(atual => {
+              if (!atual) return atual;
+              const fragmentosPropostos = atual.fragmentosPropostos.map(fragmento => (
+                fragmento.id === id ? { ...fragmento, texto } : fragmento
+              ));
+              const htmlProposto = reconstruirHtmlIa(atual.conteudoAlvo, fragmentosPropostos);
+              if (!htmlProposto || assinaturaEstruturalIa(htmlProposto) !== assinaturaEstruturalIa(atual.conteudoAlvo)) {
+                setIaError('A edição não preservou a estrutura da proposta e foi descartada.');
+                return atual;
+              }
+              return {
+                ...atual,
+                fragmentosPropostos,
+                htmlProposto,
+                conteudoProposto: converterHtmlEmTexto(htmlProposto),
+              };
+            });
+          }}
           onOpenChange={open => {
             if (!open) setRespostaIaPendente(null);
           }}
@@ -3345,6 +3372,26 @@ export const LaudosPage: React.FC = () => {
             if (respostaIaPendente) void substituirConteudoComRespostaIa(respostaIaPendente);
           }}
         />
+
+        <AlertDialog open={confirmacaoImagemIaPendente} onOpenChange={setConfirmacaoImagemIaPendente}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Descrever a imagem selecionada?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A imagem será enviada ao provedor de IA configurado para produzir uma descrição técnica. A descrição não altera o laudo e ficará disponível apenas para cópia manual.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                setConfirmacaoImagemIaPendente(false);
+                void descreverImagemSelecionadaIa(true);
+              }}>
+                Descrever imagem
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={dialogoSaidaAberto} onOpenChange={setDialogoSaidaAberto}>
         <AlertDialogContent

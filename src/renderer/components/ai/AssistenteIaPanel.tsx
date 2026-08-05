@@ -60,9 +60,9 @@ interface AssistenteIaPanelProps {
   contextoImagem?: boolean;
 }
 
-type ConfiguracaoResposta = {
+type ContextoIaResposta = {
   success: boolean;
-  data?: string | null;
+  data?: { configurado: boolean; provedor?: 'groq' | 'gemini'; modelo?: string };
 };
 
 export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
@@ -98,6 +98,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [modelName, setModelName] = useState<string>('Carregando...');
+  const [statusModelo, setStatusModelo] = useState<'carregando' | 'configurado' | 'indisponivel'>('carregando');
 
   // Auto-scroll para a última mensagem
   useEffect(() => {
@@ -110,21 +111,17 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
       textareaRef.current?.focus();
     }, 100);
 
-    window.ipcAPI.configuracao.obter('provedor_ia').then((res: ConfiguracaoResposta) => {
-      if (res.success && res.data) {
-        const prov = res.data;
-        const keyModelo = prov === 'gemini' ? 'modelo_gemini_padrao' : 'modelo_ia_padrao';
-        window.ipcAPI.configuracao.obter(keyModelo).then((mRes: ConfiguracaoResposta) => {
-          const provedorStr = prov === 'gemini' ? 'Google Gemini' : 'Groq';
-          if (mRes.success && mRes.data) {
-            setModelName(`${provedorStr} · ${mRes.data}`);
-          } else {
-            setModelName(provedorStr);
-          }
-        });
-      } else {
+    window.ipcAPI.ia.obterContexto().then((res: ContextoIaResposta) => {
+      if (!res.success || !res.data?.configurado || !res.data.provedor || !res.data.modelo) {
         setModelName('Nenhuma IA configurada');
+        setStatusModelo('indisponivel');
+        return;
       }
+      setModelName(`${res.data.provedor === 'gemini' ? 'Google Gemini' : 'Groq'} · ${res.data.modelo}`);
+      setStatusModelo('configurado');
+    }).catch(() => {
+      setModelName('IA indisponível');
+      setStatusModelo('indisponivel');
     });
 
     return () => window.clearTimeout(foco);
@@ -161,8 +158,8 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
             <div className="flex min-w-0 items-center gap-2 text-base font-semibold">
               <Bot className="size-4 shrink-0 text-primary" />
               <span className="truncate">Assistente IA</span>
-              <Badge variant={loading ? 'secondary' : 'default'} className="shrink-0 text-[10px]">
-                {loading ? 'Pensando...' : 'Online'}
+              <Badge variant={loading ? 'secondary' : statusModelo === 'configurado' ? 'default' : 'destructive'} className="shrink-0 text-[10px]">
+                {loading ? 'Processando' : statusModelo === 'configurado' ? 'Configurado' : statusModelo === 'carregando' ? 'Verificando' : 'Indisponível'}
               </Badge>
             </div>
             <div className="flex items-center gap-1">

@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { configuracaoService } from './configuracao.service.js';
 import { obterImagemLaudoPorId } from './imagem-laudo.service.js';
 import { getLogger } from '../utils/logger.js';
-import { planejarExecucaoIa } from '../../shared/ia-planejamento.js';
+import { planejarExecucaoIa, recomporFragmentosPlanejadosIa } from '../../shared/ia-planejamento.js';
+import { calcularOrcamentoEntradaIa, obterModeloIa } from '../../shared/catalogos/modelos-ia.catalogo.js';
 import {
   CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
   PERFIL_RESPOSTA_IA_PADRAO,
@@ -49,15 +50,6 @@ const log = getLogger('ia');
 const URLS_PROVEDORES = {
   groq: 'https://api.groq.com/openai/v1/chat/completions',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-} as const;
-const MODELOS_COM_VISAO = new Set(['meta-llama/llama-4-scout-17b-16e-instruct', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']);
-const MIMES_VISAO_SUPORTADOS = {
-  groq: new Set(['image/jpeg', 'image/png']),
-  gemini: new Set(['image/jpeg', 'image/png', 'image/webp']),
-} as const;
-const LIMITE_BYTES_IMAGEM_IA = {
-  groq: 4 * 1024 * 1024,
-  gemini: 15 * 1024 * 1024,
 } as const;
 function mensagemAcao(acao: SolicitacaoIa['acao']): string {
   const acoes: Record<SolicitacaoIa['acao'], string> = {
@@ -185,7 +177,7 @@ export class IaExecucaoService {
     const contexto = await this.obterContexto();
     if (!contexto.configurado || !contexto.provedor || !contexto.modelo) throw new Error('CONFIGURACAO_AUSENTE');
     const provedor = contexto.provedor;
-    const modelo = contexto.modelo;
+    const modelo = obterModeloIa(contexto.provedor, contexto.modelo);
     const chave = await configuracaoService.obter(provedor === 'groq' ? 'api_key_groq' : 'api_key_gemini');
     if (!chave) throw new Error('CONFIGURACAO_AUSENTE');
     const perfil = await this.obterPerfil();
@@ -193,7 +185,7 @@ export class IaExecucaoService {
     const contextoResolvido = enviarConteudoIntegral && solicitacao.contextoResolvido?.trim()
       ? solicitacao.contextoResolvido.trim()
       : 'não fornecido no modo protegido';
-    const plano = planejarExecucaoIa(solicitacao.fragmentos);
+    const plano = planejarExecucaoIa(solicitacao.fragmentos, calcularOrcamentoEntradaIa(modelo));
     const planoId = createHash('sha256').update(JSON.stringify({
       acao: solicitacao.acao,
       escopo: solicitacao.escopo,
@@ -201,14 +193,14 @@ export class IaExecucaoService {
       contextoResolvido,
       fragmentos: solicitacao.fragmentos,
       provedor,
-      modelo,
+      modelo: modelo.id,
       perfil,
       enviarConteudoIntegral,
     })).digest('hex');
     return {
       plano,
       provedor,
-      modelo,
+      modelo: modelo.id,
       chave,
       perfil,
       contextoResolvido,
@@ -217,7 +209,7 @@ export class IaExecucaoService {
         acao: solicitacao.acao,
         escopo: solicitacao.escopo,
         provedor,
-        modelo,
+        modelo: modelo.id,
         totalLotes: plano.totalLotes,
         chamadasBase: plano.chamadasBase,
         limiteMaximoChamadas: plano.limiteMaximoChamadas,
@@ -234,8 +226,9 @@ export class IaExecucaoService {
     const provedor = await configuracaoService.obter('provedor_ia');
     if (provedor !== 'groq' && provedor !== 'gemini') return { configurado: false, suportaVisao: false };
     const chave = await configuracaoService.obter(provedor === 'groq' ? 'api_key_groq' : 'api_key_gemini');
-    const modelo = await configuracaoService.obter(provedor === 'groq' ? 'modelo_ia_padrao' : 'modelo_gemini_padrao');
-    return { configurado: Boolean(chave), provedor, modelo: modelo || undefined, suportaVisao: Boolean(modelo && MODELOS_COM_VISAO.has(modelo)) };
+    const modeloSalvo = await configuracaoService.obter(provedor === 'groq' ? 'modelo_ia_padrao' : 'modelo_gemini_padrao');
+    const modelo = obterModeloIa(provedor, modeloSalvo);
+    return { configurado: Boolean(chave), provedor, modelo: modelo.id, suportaVisao: modelo.suportaVisao };
   }
 
   cancelar(operationId: string): void {
@@ -426,7 +419,9 @@ export class IaExecucaoService {
         lotes: plano.totalLotes,
       });
       if (solicitacao.retomadaId) this.checkpoints.delete(solicitacao.retomadaId);
-      return { operationId: solicitacao.operationId, fragmentos: fragmentosConcluidos };
+      const fragmentos = recomporFragmentosPlanejadosIa(solicitacao.fragmentos, fragmentosConcluidos);
+      if (!fragmentos) throw new Error('RESPOSTA_INVALIDA');
+      return { operationId: solicitacao.operationId, fragmentos };
     } catch (error: unknown) {
       const codigo = error instanceof Error ? error.message : 'ERRO_INTERNO';
       if (codigo !== 'CANCELADO' && fragmentosConcluidos.length > 0) {
@@ -467,8 +462,9 @@ export class IaExecucaoService {
     if (await this.deveMascararConteudo()) throw new Error('IMAGEM_PROTEGIDA');
 
     const imagem = await obterImagemLaudoPorId(solicitacao.laudoId, solicitacao.imagemId);
-    if (!MIMES_VISAO_SUPORTADOS[contexto.provedor].has(imagem.mimeType)) throw new Error('FORMATO_IMAGEM_NAO_SUPORTADO');
-    if (imagem.tamanho > LIMITE_BYTES_IMAGEM_IA[contexto.provedor]) throw new Error('IMAGEM_MUITO_GRANDE');
+    const modelo = obterModeloIa(contexto.provedor, contexto.modelo);
+    if (!modelo.mimesImagem.includes(imagem.mimeType)) throw new Error('FORMATO_IMAGEM_NAO_SUPORTADO');
+    if (imagem.tamanho > modelo.limiteBytesImagem) throw new Error('IMAGEM_MUITO_GRANDE');
 
     log.info('Iniciando descrição de imagem por IA', {
       operationId: solicitacao.operationId,

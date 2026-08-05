@@ -7,14 +7,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import type { FragmentoIa } from '@shared/types/ia.types';
 
 interface DialogoAplicarRespostaIaProps {
   open: boolean;
   secaoTitulo: string;
   conteudoAtual: string;
   conteudoProposto: string;
+  fragmentosPropostos?: FragmentoIa[];
   onOpenChange: (open: boolean) => void;
   onConfirmar: () => void;
+  onAlterarFragmento?: (id: string, texto: string) => void;
 }
 
 export function DialogoAplicarRespostaIa({
@@ -22,8 +26,10 @@ export function DialogoAplicarRespostaIa({
   secaoTitulo,
   conteudoAtual,
   conteudoProposto,
+  fragmentosPropostos = [],
   onOpenChange,
   onConfirmar,
+  onAlterarFragmento = () => undefined,
 }: DialogoAplicarRespostaIaProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -43,8 +49,17 @@ export function DialogoAplicarRespostaIa({
           </section>
           <section className="min-w-0">
             <h3 className="mb-2 text-sm font-medium">Conteúdo proposto</h3>
-            <div className="max-h-[48vh] overflow-y-auto rounded-md border bg-muted/20 p-3">
-              <p className="whitespace-pre-wrap text-sm">{conteudoProposto || 'Resposta vazia'}</p>
+            <p className="mb-2 text-xs text-muted-foreground">Edite apenas o texto. A estrutura do laudo permanece bloqueada.</p>
+            <div className="max-h-[48vh] space-y-2 overflow-y-auto rounded-md border bg-muted/20 p-3">
+              {fragmentosPropostos.length > 0 ? fragmentosPropostos.map(fragmento => (
+                <Textarea
+                  key={fragmento.id}
+                  value={fragmento.texto}
+                  onChange={evento => onAlterarFragmento(fragmento.id, evento.target.value)}
+                  aria-label={`Texto proposto ${fragmento.id}`}
+                  className="min-h-20 resize-y bg-background text-sm"
+                />
+              )) : <p className="whitespace-pre-wrap text-sm">{conteudoProposto || 'Resposta vazia'}</p>}
             </div>
           </section>
         </div>

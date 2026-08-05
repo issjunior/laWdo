@@ -76,6 +76,7 @@ import {
   type ConfiguracaoPrivacidadeIa,
   type PerfilRespostaIa,
 } from '@shared/types/ia.types';
+import { listarModelosIa } from '@shared/catalogos/modelos-ia.catalogo';
 
 const iaConfigSchema = z.object({
   provedor: z.enum(['groq', 'gemini']),
@@ -87,18 +88,8 @@ const iaConfigSchema = z.object({
 
 type IAConfigForm = z.infer<typeof iaConfigSchema>;
 
-const GROQ_MODEL_OPTIONS = [
-  { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (padrão — recomendado)' },
-  { value: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B Instruct (Multimodal / Imagens)' },
-  { value: 'gemma2-9b-it', label: 'Gemma 2 9B' },
-  { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
-];
-
-const GEMINI_MODEL_OPTIONS = [
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (padrão — recomendado)' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (raciocínio avançado)' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-];
+const GROQ_MODEL_OPTIONS = listarModelosIa('groq').map(modelo => ({ value: modelo.id, label: modelo.rotulo }));
+const GEMINI_MODEL_OPTIONS = listarModelosIa('gemini').map(modelo => ({ value: modelo.id, label: modelo.rotulo }));
 
 const getMensagemErro = (erro: unknown): string =>
   erro instanceof Error ? erro.message : 'Erro desconhecido';

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { planejarExecucaoIa } from '../../shared/ia-planejamento';
+import {
+  fragmentarParaOrcamentoIa,
+  planejarExecucaoIa,
+  recomporFragmentosPlanejadosIa,
+} from '../../shared/ia-planejamento';
 
 describe('planejamento de execução da IA', () => {
   it('mantém a ordem dos fragmentos ao distribuí-los em lotes', () => {
@@ -19,5 +23,15 @@ describe('planejamento de execução da IA', () => {
   it('rejeita fragmento que não pode ser processado atomicamente em um lote', () => {
     expect(() => planejarExecucaoIa([{ id: 'texto-0', texto: 'a'.repeat(100) }], 50))
       .toThrow('LIMITE_EXCEDIDO');
+  });
+
+  it('subdivide um fragmento extenso e recompõe a resposta na ordem original', () => {
+    const originais = [{ id: 'texto-0', texto: 'Primeira frase longa. Segunda frase longa. Terceira frase longa.'.repeat(30) }];
+    const planejados = fragmentarParaOrcamentoIa(originais, 512);
+    const plano = planejarExecucaoIa(originais, 512);
+
+    expect(planejados.length).toBeGreaterThan(1);
+    expect(plano.totalLotes).toBe(planejados.length);
+    expect(recomporFragmentosPlanejadosIa(originais, planejados)).toEqual(originais);
   });
 });
