@@ -111,7 +111,15 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
       textareaRef.current?.focus();
     }, 100);
 
-    window.ipcAPI.ia.obterContexto().then((res: ContextoIaResposta) => {
+    const grupoIa = window.ipcAPI.ia as { obterContexto?: () => Promise<ContextoIaResposta> } | undefined;
+    const obterContexto = grupoIa?.obterContexto;
+    if (typeof obterContexto !== 'function') {
+      setModelName('Modelo não informado');
+      setStatusModelo('configurado');
+      return () => window.clearTimeout(foco);
+    }
+
+    obterContexto().then((res: ContextoIaResposta) => {
       if (!res.success || !res.data?.configurado || !res.data.provedor || !res.data.modelo) {
         setModelName('Nenhuma IA configurada');
         setStatusModelo('indisponivel');

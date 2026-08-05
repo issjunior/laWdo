@@ -18,7 +18,7 @@ A implementação deve:
 
 ## Progresso da implementação
 
-Última atualização: 04/08/2026. A integração visual foi implementada como dock direito redimensionável, inspirado no painel de Ilustrações e sem portal ou sobreposição sobre o laudo. O processamento em lotes continua fora desta etapa.
+Última atualização: 04/08/2026. O dock direito redimensionável, a janela destacada, a execução sequencial de lotes e os mecanismos de confirmação, retomada e proteção estrutural estão implementados. Resta a validação manual de aceite no Windows.
 
 ### Concluído nesta etapa
 
@@ -67,16 +67,16 @@ A implementação deve:
 - Cada plano recebe fingerprint SHA-256 sobre alvo textual, ação, instrução, provedor, modelo, perfil e privacidade. Alterações posteriores invalidam confirmação e retomada antes de qualquer nova chamada ao provedor.
 - Se uma falha ocorrer após ao menos um lote concluído, os resultados intermediários permanecem exclusivamente em memória por até 30 minutos e podem continuar do primeiro lote pendente. Checkpoints pertencem ao renderer criador, são descartados após sucesso, cancelamento explícito de uma nova solicitação, mudança incompatível, expiração ou encerramento da sessão, e nunca são aplicados parcialmente ao laudo.
 - Validações deste checkpoint: `npm run type-check`, `npm run lint` e `npm test` concluídos com sucesso, com 275 testes aprovados e 1 ignorado.
-
-### Parcialmente concluído
-
-- Execução: timeout, retries, `Retry-After`, planejamento conservador, confirmação prévia textual, processamento sequencial, progresso por lote, checkpoint em memória e retomada segura por fingerprint estão implementados. Permanecem pendentes a confirmação específica para descrição de imagens, o orçamento derivado do catálogo central de modelos e a subdivisão contextual por blocos estruturais para aproveitar melhor a janela de contexto de cada modelo.
+- Catálogo compartilhado centraliza modelos, capacidades de visão, formatos e limites de imagem, além do orçamento conservador de entrada por modelo. Página de configurações, handlers legados e serviço de execução consomem a mesma fonte.
+- Fragmentos extensos agora são subdivididos em partes ordenadas por limites de frase quando excedem o orçamento do modelo, processados sequencialmente e recompostos antes de qualquer resposta chegar ao renderer.
+- A descrição de imagens exige confirmação explícita, informa que não altera o laudo e preserva o uso de cópia manual.
+- A comparação de substituição permite editar exclusivamente os fragmentos textuais propostos; o HTML é sempre reconstruído sobre a estrutura original e rejeitado se a assinatura estrutural divergir.
+- O painel mostra o estado real do provedor (`Configurado`, `Indisponível` ou `Verificando`) em vez de um indicador fixo de conexão.
 
 ### Próximas prioridades
 
-1. Concluir o smoke manual do dock em resoluções reduzidas e amplas, nos temas claro e escuro, incluindo mouse, teclado, destacar e reencaixar.
-2. Retomar o planejamento detalhado da execução sequencial de lotes, com confirmação para escopos extensos, progresso, cancelamento e retomada segura.
-3. Implementar os lotes somente depois da aprovação desse detalhamento e do smoke manual do painel.
+1. Executar o smoke manual de aceite no Windows em `1024×768`, `1200×800` e tela ampla, nos temas claro e escuro, incluindo mouse, teclado, destacar, reencaixar, cancelamento, retomada, imagem e proposta editada.
+2. Executar `/spec` e propor a revisão coordenada das especificações de IA e do ciclo do editor após a aprovação do smoke manual.
 
 ### Decisão de integração visual
 

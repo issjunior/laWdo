@@ -123,20 +123,28 @@ describe('layout do editor de laudo', () => {
 
   it('exige confirmação explícita antes de substituir a seção', () => {
     const onConfirmar = vi.fn();
+    const onAlterarFragmento = vi.fn();
     render(
       <DialogoAplicarRespostaIa
         open
         secaoTitulo="CONCLUSÃO"
         conteudoAtual="Texto atual"
         conteudoProposto="Texto revisado"
+        fragmentosPropostos={[{ id: 'texto-0', texto: 'Texto revisado' }]}
         onOpenChange={vi.fn()}
         onConfirmar={onConfirmar}
+        onAlterarFragmento={onAlterarFragmento}
       />,
     );
 
     expect(screen.getByText(/substituirá todo o conteúdo de “CONCLUSÃO”/)).toBeInTheDocument();
     expect(screen.getByText('Texto atual')).toBeInTheDocument();
-    expect(screen.getByText('Texto revisado')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Texto revisado')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Texto proposto texto-0' }), {
+      target: { value: 'Texto ajustado' },
+    });
+    expect(onAlterarFragmento).toHaveBeenCalledWith('texto-0', 'Texto ajustado');
 
     fireEvent.click(screen.getByRole('button', { name: 'Substituir seção' }));
     expect(onConfirmar).toHaveBeenCalledTimes(1);
