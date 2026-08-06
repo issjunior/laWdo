@@ -20,6 +20,7 @@ export interface PerfilRespostaIa {
   tom: TomRespostaIa;
   detalhamento: DetalhamentoRespostaIa;
   instrucoesPersonalizadas: string;
+  temperatura?: number;
 }
 
 export const PERFIL_RESPOSTA_IA_PADRAO: PerfilRespostaIa = {
@@ -27,6 +28,7 @@ export const PERFIL_RESPOSTA_IA_PADRAO: PerfilRespostaIa = {
   tom: 'tecnico_pericial',
   detalhamento: 'equilibrado',
   instrucoesPersonalizadas: '',
+  temperatura: 0.2,
 };
 
 export function perfilRespostaIaValido(valor: unknown): valor is PerfilRespostaIa {
@@ -36,7 +38,13 @@ export function perfilRespostaIaValido(valor: unknown): valor is PerfilRespostaI
     && ['tecnico_pericial', 'formal', 'direto'].includes(String(perfil.tom))
     && ['conciso', 'equilibrado', 'detalhado'].includes(String(perfil.detalhamento))
     && typeof perfil.instrucoesPersonalizadas === 'string'
-    && perfil.instrucoesPersonalizadas.length <= 2_000;
+    && perfil.instrucoesPersonalizadas.length <= 2_000
+    && (perfil.temperatura === undefined || (
+      typeof perfil.temperatura === 'number'
+      && Number.isFinite(perfil.temperatura)
+      && perfil.temperatura >= 0
+      && perfil.temperatura <= 1
+    ));
 }
 
 export interface ConfiguracaoPrivacidadeIa {
@@ -108,6 +116,7 @@ export interface SolicitacaoDescricaoImagemIa {
   operationId: string;
   laudoId: string;
   imagemId: string;
+  modo?: 'descricao' | 'legenda';
 }
 
 export interface ContextoIa {
@@ -394,7 +403,8 @@ export function aplicarAtualizacaoPainelIa(
 
 export type ComandoPainelIa =
   | { tipo: 'executar_acao'; acao: AcaoIa }
-  | { tipo: 'enviar_pedido_livre'; mensagem: string; aplicacao: 'inserir' | 'reescrever' }
+  | { tipo: 'enviar_pedido_livre'; mensagem: string; aplicacao: 'inserir' | 'reescrever'; tamanho: 'automatico' | 'curta' | 'media' | 'longa' }
+  | { tipo: 'reenviar_mensagem'; mensagemId: string }
   | { tipo: 'limpar_conversa' }
   | { tipo: 'aplicar_resposta'; mensagemId: string }
   | { tipo: 'cancelar_operacao' }
@@ -412,9 +422,10 @@ export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa 
   if (comando.tipo === 'enviar_pedido_livre') {
     return typeof comando.mensagem === 'string'
       && comando.mensagem.trim().length > 0
-      && (comando.aplicacao === 'inserir' || comando.aplicacao === 'reescrever');
+      && (comando.aplicacao === 'inserir' || comando.aplicacao === 'reescrever')
+      && ['automatico', 'curta', 'media', 'longa'].includes(String(comando.tamanho));
   }
-  if (comando.tipo === 'aplicar_resposta') return typeof comando.mensagemId === 'string' && Boolean(comando.mensagemId);
+  if (comando.tipo === 'aplicar_resposta' || comando.tipo === 'reenviar_mensagem') return typeof comando.mensagemId === 'string' && Boolean(comando.mensagemId);
   if (comando.tipo === 'cancelar_operacao'
     || comando.tipo === 'retomar_operacao'
     || comando.tipo === 'limpar_conversa'

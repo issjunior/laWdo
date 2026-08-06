@@ -444,6 +444,22 @@ export const ModelosIAPage: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5"><FormLabel>Temperatura</FormLabel><Tooltip><TooltipTrigger asChild><button type="button" aria-label="Ajuda sobre temperatura"><Info className="h-3.5 w-3.5 text-muted-foreground" /></button></TooltipTrigger><TooltipContent className="max-w-xs"><p>Controla a variação das respostas. Valores menores tornam a IA mais consistente; valores maiores permitem respostas mais variadas.</p></TooltipContent></Tooltip></div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={perfil.temperatura ?? 0.2}
+                      onChange={evento => setPerfil(atual => ({ ...atual, temperatura: Number(evento.target.value) }))}
+                      className="w-full accent-primary"
+                      aria-label="Temperatura da resposta"
+                    />
+                    <span className="w-8 text-right text-sm tabular-nums">{(perfil.temperatura ?? 0.2).toFixed(1)}</span>
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5"><FormLabel>Instruções personalizadas</FormLabel><Tooltip><TooltipTrigger asChild><button type="button" aria-label="Ajuda sobre instruções personalizadas"><Info className="h-3.5 w-3.5 text-muted-foreground" /></button></TooltipTrigger><TooltipContent className="max-w-xs"><p>Use este campo para orientar respostas específicas, como priorizar frases curtas, destacar limitações ou adotar uma terminologia técnica.</p></TooltipContent></Tooltip></div>

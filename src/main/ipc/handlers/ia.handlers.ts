@@ -21,16 +21,26 @@ function solicitacaoDescricaoImagemValida(valor: unknown): valor is SolicitacaoD
   if (!valor || typeof valor !== 'object') return false;
   const registro = valor as Record<string, unknown>;
   const chaves = Object.keys(registro).sort();
-  return chaves.length === 3
+  const chavesValidas = (
+    chaves.length === 3
     && chaves[0] === 'imagemId'
     && chaves[1] === 'laudoId'
     && chaves[2] === 'operationId'
+  ) || (
+    chaves.length === 4
+    && chaves[0] === 'imagemId'
+    && chaves[1] === 'laudoId'
+    && chaves[2] === 'modo'
+    && chaves[3] === 'operationId'
+  );
+  return chavesValidas
     && typeof registro.operationId === 'string'
     && registro.operationId.length > 0
     && typeof registro.laudoId === 'string'
     && registro.laudoId.length > 0
     && typeof registro.imagemId === 'string'
-    && registro.imagemId.length > 0;
+    && registro.imagemId.length > 0
+    && (registro.modo === undefined || registro.modo === 'descricao' || registro.modo === 'legenda');
 }
 
 async function obterConfigGroq(): Promise<{ apiKey: string | null; modelo: string }> {

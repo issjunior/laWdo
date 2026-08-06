@@ -514,6 +514,7 @@ export const LaudosPage: React.FC = () => {
   const [respostaIaPendente, setRespostaIaPendente] = useState<RespostaIaPendente | null>(null);
   const editorIaAtivoRef = useRef<string | null>(null);
   const alvosIaRef = useRef(new Map<string, AlvoIaCapturado>());
+  const execucoesIaReenviaveisRef = useRef(new Map<string, ExecucaoIaPreparada>());
   const reconciliacaoImagensRef = useRef<Promise<void> | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -2184,7 +2185,8 @@ export const LaudosPage: React.FC = () => {
   const ultimoEstadoPainelIaRef = useRef<CamposEstadoPainelIa | null>(null);
   const painelIaProntoRef = useRef(false);
   const executarAcaoIaRef = useRef<(acao: AcaoIa) => void>(() => {});
-  const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever') => void>(() => {});
+  const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever', tamanho?: 'automatico' | 'curta' | 'media' | 'longa') => void>(() => {});
+  const reenviarMensagemIaRef = useRef<(mensagemId: string) => void>(() => {});
   const cancelarOperacaoIaRef = useRef<() => void>(() => {});
   const retomarOperacaoIaRef = useRef<() => void>(() => {});
   const limparConversaIaRef = useRef<() => void>(() => {});
@@ -2306,7 +2308,9 @@ export const LaudosPage: React.FC = () => {
       if (comando.tipo === 'executar_acao') {
         executarAcaoIaRef.current(comando.acao);
       } else if (comando.tipo === 'enviar_pedido_livre') {
-        enviarMensagemIaRef.current(comando.mensagem, comando.aplicacao);
+        enviarMensagemIaRef.current(comando.mensagem, comando.aplicacao, comando.tamanho);
+      } else if (comando.tipo === 'reenviar_mensagem') {
+        reenviarMensagemIaRef.current(comando.mensagemId);
       } else if (comando.tipo === 'cancelar_operacao') {
         cancelarOperacaoIaRef.current();
       } else if (comando.tipo === 'retomar_operacao') {
@@ -2382,6 +2386,7 @@ export const LaudosPage: React.FC = () => {
     execucao: ExecucaoIaPreparada,
     planoId: string,
     retomada?: RetomadaIa,
+    mensagemExistenteId?: string,
   ) => {
     if (!(await execucaoIaPermaneceAtual(execucao))) {
       setRetomadaIaPendente(null);
@@ -2391,6 +2396,7 @@ export const LaudosPage: React.FC = () => {
 
     const operationId = crypto.randomUUID();
     const { alvo, html, indice, descricao, chatKey, protecao } = execucao;
+    let mensagemId = mensagemExistenteId;
     try {
       setIaSheetMode(execucao.solicitacao.acao);
       setIaLoading(true);
@@ -2400,7 +2406,7 @@ export const LaudosPage: React.FC = () => {
       setIaError(null);
       alvosIaRef.current.set(alvo.id, alvo);
 
-      if (!retomada) {
+      if (!retomada && !mensagemExistenteId) {
         const userMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'user',
@@ -2408,10 +2414,12 @@ export const LaudosPage: React.FC = () => {
           timestamp: Date.now(),
           acao: execucao.solicitacao.acao,
         };
+        mensagemId = userMsg.id;
         setChatMessages(prev => ({
           ...prev,
           [chatKey]: [...(prev[chatKey] || []), userMsg],
         }));
+        execucoesIaReenviaveisRef.current.set(userMsg.id, execucao);
       }
 
       const r = await window.ipcAPI.ia.executar({
@@ -2426,6 +2434,15 @@ export const LaudosPage: React.FC = () => {
         setIaError(r.retomada
           ? `${obterMensagemErroIa(r.error)} Os lotes concluídos foram preservados e podem ser retomados.`
           : obterMensagemErroIa(r.error));
+        const codigo = (r.error || '').split(':')[0];
+        if (!r.retomada && mensagemId && ['SEM_CONEXAO', 'LIMITE_REQUISICOES', 'TIMEOUT', 'PROVEDOR_INDISPONIVEL'].includes(codigo)) {
+          setChatMessages(prev => ({
+            ...prev,
+            [chatKey]: (prev[chatKey] || []).map(mensagem => (
+              mensagem.id === mensagemId ? { ...mensagem, permiteReenvio: true } : mensagem
+            )),
+          }));
+        }
         return;
       }
       setRetomadaIaPendente(null);
@@ -2471,7 +2488,7 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const executarAcaoIa = async (acao: AcaoIa, instrucao?: string) => {
+  const executarAcaoIa = async (acao: AcaoIa, instrucao?: string, descricaoPersonalizada?: string) => {
     if (retomadaIaPendente) {
       await window.ipcAPI.ia.descartarRetomada(retomadaIaPendente.retomada.retomadaId);
       setRetomadaIaPendente(null);
@@ -2490,7 +2507,7 @@ export const LaudosPage: React.FC = () => {
     }
     const mascarar = await obterMascaramentoIa();
     const protecao = mascarar ? protegerFragmentosIa(fragmentosOriginais) : null;
-    const descricao = instrucao || obterDescricaoAcaoIa(acao);
+    const descricao = descricaoPersonalizada || instrucao || obterDescricaoAcaoIa(acao);
     try {
       setIaError(null);
       alvo.fingerprint = await calcularFingerprintIa(alvo.tipo, html);
@@ -2746,8 +2763,47 @@ export const LaudosPage: React.FC = () => {
     });
   };
 
-  const handleSendChatMessage = (message: string, acao: 'inserir' | 'reescrever') => {
-    void executarAcaoIa(acao, message);
+  const handleSendChatMessage = (message: string, acao: 'inserir' | 'reescrever', tamanho: 'automatico' | 'curta' | 'media' | 'longa' = 'automatico') => {
+    const instrucoesTamanho = {
+      automatico: '',
+      curta: ' TAMANHO OBRIGATÓRIO: responda em até 10 palavras, com tolerância máxima de 5 palavras.',
+      media: ' TAMANHO OBRIGATÓRIO: responda em um único parágrafo.',
+      longa: ' TAMANHO OBRIGATÓRIO: responda em 2 a 3 parágrafos.',
+    } as const;
+    void executarAcaoIa(acao, `${message}${instrucoesTamanho[tamanho]}`, message);
+  };
+
+  const reenviarMensagemIa = async (mensagemId: string) => {
+    if (iaLoading) return;
+    const execucao = execucoesIaReenviaveisRef.current.get(mensagemId);
+    if (!execucao) return;
+    setChatMessages(prev => ({
+      ...prev,
+      [execucao.chatKey]: (prev[execucao.chatKey] || []).map(mensagem => (
+        mensagem.id === mensagemId ? { ...mensagem, permiteReenvio: false } : mensagem
+      )),
+    }));
+    const planejamento = await window.ipcAPI.ia.planejar(execucao.solicitacao);
+    if (!planejamento.success || !planejamento.data) {
+      setIaError(obterMensagemErroIa(planejamento.error));
+      return;
+    }
+    await executarPreparacaoIa(execucao, planejamento.data.planoId, undefined, mensagemId);
+  };
+
+  const gerarLegendaImagemIa = async (imagemId: string): Promise<string | null> => {
+    if (!editando?.id) return null;
+    const resposta = await window.ipcAPI.ia.descreverImagem({
+      operationId: crypto.randomUUID(),
+      laudoId: editando.id,
+      imagemId,
+      modo: 'legenda',
+    });
+    if (!resposta.success || !resposta.data?.descricao.trim()) {
+      setIaError(resposta.error || 'Não foi possível gerar a legenda da figura.');
+      return null;
+    }
+    return resposta.data.descricao.trim().replace(/\s+/g, ' ');
   };
 
   const limparConversaIa = () => {
@@ -2763,6 +2819,7 @@ export const LaudosPage: React.FC = () => {
 
   executarAcaoIaRef.current = acao => void executarAcaoIa(acao);
   enviarMensagemIaRef.current = handleSendChatMessage;
+  reenviarMensagemIaRef.current = mensagemId => void reenviarMensagemIa(mensagemId);
   cancelarOperacaoIaRef.current = () => void cancelarOperacaoIa();
   retomarOperacaoIaRef.current = () => void retomarOperacaoIa();
   limparConversaIaRef.current = limparConversaIa;
@@ -3060,6 +3117,7 @@ export const LaudosPage: React.FC = () => {
         onRetomarOperacao={() => void retomarOperacaoIa()}
         retomada={retomadaIaPendente?.retomada || null}
         onDescreverImagens={() => void descreverImagemSelecionadaIa()}
+        onReenviarMensagem={mensagemId => void reenviarMensagemIa(mensagemId)}
         imagemSelecionada={Boolean(imagemSelecionadaIaId)}
         contextoImagem={Boolean(imagemSelecionadaIaId)}
         onApplyResponse={handleApplyResponse}
@@ -3092,6 +3150,7 @@ export const LaudosPage: React.FC = () => {
         onRecolher={() => setPanelCollapsed(true)}
         onFechar={() => setIlustracoesPanelOpen(false)}
         onReplaceImage={panelCallbacksRef.current.onReplaceImage}
+        onGerarLegenda={gerarLegendaImagemIa}
         figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
         onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
       />

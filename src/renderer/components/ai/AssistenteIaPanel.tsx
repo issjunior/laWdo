@@ -26,6 +26,7 @@ export interface ChatMessage {
   conteudoProposto?: string;
   proposalId?: string;
   permiteAplicacao?: boolean;
+  permiteReenvio?: boolean;
 }
 
 const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
@@ -43,7 +44,7 @@ interface AssistenteIaPanelProps {
   secaoTitulo: string;
   editorId: string;
   messages: ChatMessage[];
-  onSendMessage: (message: string, acao: 'inserir' | 'reescrever') => void;
+  onSendMessage: (message: string, acao: 'inserir' | 'reescrever', tamanho: 'automatico' | 'curta' | 'media' | 'longa') => void;
   onLimparConversa?: () => void;
   onApplyResponse: (mensagem: ChatMessage) => void;
   modoAplicacao?: 'inserir' | 'substituir';
@@ -62,6 +63,7 @@ interface AssistenteIaPanelProps {
   onRetomarOperacao?: () => void;
   retomada?: RetomadaIa | null;
   onDescreverImagens?: () => void;
+  onReenviarMensagem?: (mensagemId: string) => void;
   imagemSelecionada?: boolean;
   contextoImagem?: boolean;
 }
@@ -94,11 +96,14 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   onRetomarOperacao,
   retomada = null,
   onDescreverImagens,
+  onReenviarMensagem,
   imagemSelecionada = false,
   contextoImagem = false,
 }) => {
   const [input, setInput] = useState('');
   const [acaoPedidoLivre, setAcaoPedidoLivre] = useState<'inserir' | 'reescrever'>('inserir');
+  const [tamanhoResposta, setTamanhoResposta] = useState<'automatico' | 'curta' | 'media' | 'longa'>('automatico');
+  const [segundosEmProcessamento, setSegundosEmProcessamento] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -109,6 +114,18 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      setSegundosEmProcessamento(0);
+      return;
+    }
+    const inicio = Date.now();
+    const atualizar = () => setSegundosEmProcessamento(Math.floor((Date.now() - inicio) / 1000));
+    atualizar();
+    const intervalo = window.setInterval(atualizar, 1000);
+    return () => window.clearInterval(intervalo);
+  }, [loading]);
 
   // Focar textarea e buscar modelo de IA ao montar o painel.
   useEffect(() => {
@@ -142,7 +159,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
 
   const handleSend = () => {
     if (!input.trim() || loading) return;
-    onSendMessage(input.trim(), acaoPedidoLivre);
+    onSendMessage(input.trim(), acaoPedidoLivre, tamanhoResposta);
     setInput('');
   };
 
@@ -315,6 +332,18 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   <span className="text-[10px] text-muted-foreground">
                     {formatTime(msg.timestamp)}
                   </span>
+                  {msg.role === 'user' && msg.permiteReenvio && onReenviarMensagem && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-1.5 text-[10px] text-primary-foreground hover:text-primary-foreground"
+                      onClick={() => onReenviarMensagem(msg.id)}
+                      disabled={loading}
+                      title="Reenviar esta solicitação"
+                    >
+                      Reenviar
+                    </Button>
+                  )}
                   {msg.role === 'assistant' && (
                     <>
                       <Button
@@ -348,7 +377,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
               </div>
             ))}
 
-            {loading && (
+            {loading && progresso && progresso.totalLotes > 1 && (
               <div className="flex items-start">
                 <div className="min-w-56 rounded-xl rounded-bl-sm bg-muted px-4 py-3" aria-live="polite">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -372,6 +401,13 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {loading && (!progresso || progresso.totalLotes === 1) && (
+              <div className="flex items-center gap-2 px-1 text-muted-foreground" aria-label="Processando solicitação">
+                <Loader2 size={16} className="animate-spin" />
+                <span className="text-xs tabular-nums">{`${Math.floor(segundosEmProcessamento / 60).toString().padStart(2, '0')}:${(segundosEmProcessamento % 60).toString().padStart(2, '0')}`}</span>
               </div>
             )}
 
@@ -407,6 +443,17 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   Reescrever escopo
                 </Button>
               </div>
+              <Select value={tamanhoResposta} onValueChange={(valor: 'automatico' | 'curta' | 'media' | 'longa') => setTamanhoResposta(valor)} disabled={controlesBloqueados}>
+                <SelectTrigger className="h-8 text-xs" aria-label="Tamanho da resposta">
+                  <SelectValue placeholder="Tamanho da resposta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="automatico">Tamanho automático</SelectItem>
+                  <SelectItem value="curta">Curta (até 10 palavras, tolerância de 5)</SelectItem>
+                  <SelectItem value="media">Média (1 parágrafo)</SelectItem>
+                  <SelectItem value="longa">Longa (2 a 3 parágrafos)</SelectItem>
+                </SelectContent>
+              </Select>
               <div className="flex gap-2">
                 <Textarea
                   ref={textareaRef}

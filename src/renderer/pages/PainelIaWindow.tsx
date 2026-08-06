@@ -73,12 +73,16 @@ export default function PainelIaWindow() {
         onDescreverImagens={() =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'descrever_imagem' })
         }
-        onSendMessage={(mensagem, aplicacao) =>
+        onSendMessage={(mensagem, aplicacao, tamanho) =>
           window.ipcAPI.ia.painelEnviarComando({
             tipo: 'enviar_pedido_livre',
             mensagem,
             aplicacao,
+            tamanho,
           })
+        }
+        onReenviarMensagem={(mensagemId) =>
+          window.ipcAPI.ia.painelEnviarComando({ tipo: 'reenviar_mensagem', mensagemId })
         }
         onLimparConversa={() =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'limpar_conversa' })

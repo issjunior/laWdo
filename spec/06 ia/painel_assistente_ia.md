@@ -2,54 +2,26 @@
 
 ## Responsabilidades e fontes de verdade
 
-O assistente é um painel único do editor de laudos, disponível como dock direito redimensionável ou como janela destacada. `LaudosPage.tsx` mantém o controlador canônico da sessão, o alvo capturado, o histórico, a operação ativa e as propostas. `AssistenteIaPanel.tsx` é uma apresentação reutilizada pelos dois modos; a janela `PainelIaWindow.tsx` é apenas uma projeção e não acessa TinyMCE nem o HTML-fonte.
+O assistente é um painel do editor de laudos, integrado no dock direito ou em janela destacada. `LaudosPage.tsx` mantém sessão, alvo capturado, histórico, operação, propostas e execuções reenviáveis. `AssistenteIaPanel.tsx` é apresentação compartilhada; `PainelIaWindow.tsx` só projeta a sessão e não acessa TinyMCE. Contratos ficam em `src/shared/types/ia.types.ts`, catálogo em `src/shared/catalogos/modelos-ia.catalogo.ts`, validação IPC em `ia.handlers.ts` e execução em `ia-execucao.service.ts`.
 
-Os contratos e validadores compartilhados ficam em `src/shared/types/ia.types.ts`; o catálogo de provedores, modelos, visão e orçamentos fica em `src/shared/catalogos/modelos-ia.catalogo.ts`; o planejamento determinístico de lotes fica em `src/shared/ia-planejamento.ts`. O main valida IPC e propriedade da operação em `ia.handlers.ts` e executa provedores em `ia-execucao.service.ts`.
+## Pedido livre, perfil e tamanho
 
-## Experiência integrada
+A mensagem exibida no balão do usuário é sempre o texto original digitado. Para pedido livre, o painel permite `automático`, `curta`, `média` e `longa`; a escolha é convertida em instrução obrigatória enviada ao serviço, sem virar dado visual do histórico. Curta pede 10 palavras com tolerância de 5; média pede um parágrafo; longa pede dois ou mais parágrafos; automático não limita. O controle por mensagem não altera o perfil persistido.
 
-O editor mantém um trilho vertical permanente com IA, Ilustrações e Ferramentas. IA e Ilustrações usam docks separados e mutuamente exclusivos, reservam espaço real e não desmontam o editor ao abrir, recolher ou redimensionar. O dock da IA varia de 360 a 640 px; sua largura é persistida em pixels no `localStorage` somente após interação. O estado aberto ou recolhido é transitório.
+A página Modelos de IA persiste o perfil versionado `perfil_resposta_ia` com tom, detalhamento, instruções personalizadas e temperatura de 0 a 1, em passos de 0,1. O serviço inclui pedido do usuário, perfil e temperatura no corpo de cada chamada, mantendo a instrução fixa de segurança acima de conteúdo de documento. Perfil inválido ou ausente usa padrão conservador.
 
-A janela destacada é única por sessão, pode coexistir com a janela destacada de Ilustrações e recebe na URL somente `sessionId`. Largura e altura são persistidas no main, validadas e limitadas a 90% da área útil; a posição não é persistida. Reencaixar fecha a janela e abre o dock na última largura válida.
+## Falhas, reenvio e progresso
 
-O painel oferece seleção explícita de seleção, seção, documento ou cursor conforme a ação. Ações rápidas cobrem ortografia, linguagem técnico-pericial, clareza, resumo e expansão; o pedido livre escolhe entre inserir no cursor capturado e reescrever o escopo. O histórico é somente visual: cada solicitação é isolada e limpar a conversa não altera o laudo.
+Para erros transitórios `SEM_CONEXAO`, `LIMITE_REQUISICOES`, `TIMEOUT` e `PROVEDOR_INDISPONIVEL`, o balão da mensagem do usuário oferece reenviar. O controlador reaproveita a mesma execução preparada, não duplica a mensagem nem replaneja contra um alvo novo; o comando remoto usa `mensagemId`. Outros erros não expõem reenvio.
 
-## Sessão, sincronização e autorização
+Uma solicitação de lote único mostra somente spinner e cronômetro. Para múltiplos lotes, o painel mostra lote atual, progresso e tentativas. Lotes seguem sequenciais, sem aplicação parcial; falha após lote concluído pode manter checkpoint em memória por até 30 minutos, sujeito ao mesmo plano.
 
-Cada sessão usa `sessionId`, cada execução usa `operationId`, cada mensagem tem identidade estável e cada proposta usa `proposalId`. O main associa sessão, janela e operações ao `webContents` proprietário, aceita uma operação ativa por renderer e cancela operações quando o proprietário é destruído. Cancelar é idempotente; fechar a janela pelo `X` não equivale a cancelar.
+## Segurança, sessão e aplicação
 
-O handshake e a ressincronização enviam snapshot completo. Mudanças normais usam deltas validados com revisão monotônica. A janela ignora revisões antigas e, ao detectar uma lacuna, solicita novo snapshot antes de aplicar deltas posteriores. Comandos remotos, inclusive aplicação, são validados e referenciam `mensagemId`, nunca índice visual.
+Cada sessão usa `sessionId`, execução usa `operationId`, mensagem usa identidade estável e proposta usa `proposalId`. O main associa operações ao `webContents`, aceita uma operação ativa e cancela quando o proprietário é destruído. Handshake usa snapshot e deltas com revisão monotônica.
 
-## Captura e aplicação segura
+O alvo é capturado antes da chamada. Placeholders e valores imutáveis são tokenizados; somente texto pode ser proposto. A aplicação revalida alvo e estrutura, usa uma transação única do undo manager e nunca salva automaticamente. Privacidade protegida mascara contexto resolvido e bloqueia descrição de imagens.
 
-O alvo é capturado antes da chamada como seleção, seção, documento ou cursor. Seleções e inserções preservam bookmark e contexto; transformações preservam HTML de origem, fragmentos textuais identificados e fingerprint SHA-256. Cada resposta permanece vinculada ao alvo que a originou. Se o conteúdo mudar, a prévia e a aplicação são bloqueadas como alvo alterado.
+## Imagens e verificação
 
-Somente texto é enviado e aceito como proposta. Placeholders, números, datas, identificadores e URLs são convertidos em tokens opacos e validados por identidade e cardinalidade. No modo integral, valores resolvidos dos placeholders seguem em uma representação textual somente para leitura; o HTML e seus marcadores continuam fora do contrato de geração. No modo protegido, o contexto resolvido e imagens não são enviados.
-
-A resposta textual deve ser JSON com todos os fragmentos, na ordem e uma única vez. O serviço tolera cercas Markdown, tenta compatibilidade sem `response_format` quando o modelo rejeita JSON estruturado e permite uma tentativa corretiva para contrato inválido. O renderer restaura tokens e reconstrói a proposta sobre a estrutura original.
-
-Substituições abrem comparação lado a lado. O usuário pode editar apenas os textos propostos; HTML e assinatura estrutural permanecem bloqueados e são revalidados. Inserções usam construtor seguro e texto escapado. A aplicação ocorre em uma única `undoManager.transact`, atualiza o estado React e registra alteração pendente com origem `ia`; propostas aplicadas não podem ser reaplicadas acidentalmente. A IA nunca salva o laudo automaticamente.
-
-## Planejamento, confirmação e falhas parciais
-
-O serviço calcula orçamento pelo catálogo do modelo, com margem de segurança e reserva de resposta. Fragmentos extensos são subdivididos em partes ordenadas por limites de frase, distribuídos em lotes e recompostos na ordem original. As chamadas são sequenciais e nenhum resultado chega ao renderer até a conclusão integral.
-
-Documento completo, múltiplos lotes e descrição de imagem exigem confirmação explícita. O resumo mostra provedor, modelo, lotes, chamadas-base e limite máximo considerando retries e correção. O plano recebe fingerprint sobre alvo, ação, instrução, provedor, modelo, perfil e privacidade; qualquer mudança invalida a confirmação.
-
-O timeout é de 120 segundos por chamada. Erros de rede, 408, 429 e 5xx admitem até duas repetições, respeitando `Retry-After` até 30 segundos ou backoff com jitter. Falhas após lotes concluídos criam checkpoint somente em memória por até 30 minutos. A retomada exige o mesmo plano e continua do primeiro lote pendente; sucesso, cancelamento, incompatibilidade, expiração ou fim da sessão descartam o checkpoint. Nunca há aplicação parcial no laudo.
-
-## Perfil, privacidade e observabilidade
-
-A página Modelos de IA é a única área de configuração. O perfil versionado em `perfil_resposta_ia` define tom, detalhamento e instruções personalizadas; JSON ausente ou inválido usa o padrão. A preferência versionada `privacidade_ia` controla `enviarConteudoIntegral`. Embora a UI apresente envio integral como padrão, o serviço adota mascaramento conservador quando a configuração está ausente, inválida ou corrompida.
-
-Chaves permanecem no main e não entram em snapshots, URL, histórico ou logs. Logs registram apenas identificadores, provedor/modelo, ação/escopo, contagens, duração, tentativas e códigos de erro. Corpos de provedor, prompts, respostas, laudos e imagens não são registrados nem devolvidos como erro bruto ao renderer.
-
-## Descrição de imagem
-
-A imagem para IA é escolhida por clique no editor e não se confunde com a seleção do Painel de Ilustrações. O renderer envia somente `operationId`, `laudoId` e `imagemId`. O main reconcilia a figura com `imagens_laudo`, valida pertencimento, MIME, tamanho e capacidade de visão e carrega o conteúdo persistido.
-
-A descrição retorna texto simples em contexto isolado por imagem, com cópia manual. Não existe inserção ou aplicação automática dessa resposta. Imagens sem vínculo persistido, de outro laudo, incompatíveis, grandes demais ou bloqueadas pelo modo protegido são rejeitadas antes da chamada ao provedor.
-
-## Verificação e mudanças coordenadas
-
-Testes cobrem contratos e catálogo compartilhados, lotes e retomada, timeout/cancelamento, formatos inválidos, propriedade IPC, snapshot/delta, comandos da janela, captura e proteção de fragmentos, aplicação e undo, layout redimensionável e descrição multimodal. Mudanças devem manter alinhados shared, preload, `ALLOWED_CHANNELS`, handlers, serviço, controlador em `LaudosPage`, dock e janela. A validação manual ampla em Windows, múltiplas resoluções, temas e monitores permanece como lacuna atual de cobertura.
+Descrição de imagem recebe somente IDs e é validada contra `imagens_laudo`. O modo normal devolve texto para cópia; o modo `legenda` é usado pelo Painel de Ilustrações e impõe uma linha técnico-pericial de até 15 palavras. Mudanças devem alinhar tipos shared, preload, canais permitidos, handler, serviço, controlador e ambas as projeções do painel. Testes cobrem contratos, lotes, falhas, comandos remotos, aplicação e layout; múltiplos monitores continuam sendo verificação manual ampla.

@@ -31,6 +31,7 @@ import {
   Search,
   SearchX,
   ImageDown,
+  Sparkles,
   ChevronsRight,
   X,
 } from 'lucide-react';
@@ -136,6 +137,7 @@ interface IlustracoesPanelProps {
   onRecolher?: () => void;
   onFechar?: () => void;
   onReplaceImage?: (imageId: string, imagem: ImagemLaudo) => void;
+  onGerarLegenda?: (imageId: string) => Promise<string | null>;
   figuraSubstituicaoSolicitada?: string | null;
   onFiguraSubstituicaoSolicitadaConsumida?: () => void;
 }
@@ -274,6 +276,7 @@ interface FiguraEditorItemProps {
   onPreview: () => void;
   onScrollToFigure?: (id: string) => void;
   onReplaceImage?: (id: string) => void;
+  onGerarLegenda?: (id: string) => Promise<string | null>;
 }
 
 const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
@@ -285,8 +288,10 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   onPreview,
   onScrollToFigure,
   onReplaceImage,
+  onGerarLegenda,
 }) => {
   const [legenda, setLegenda] = useState(imagem.legenda);
+  const [gerandoLegenda, setGerandoLegenda] = useState(false);
   const onUpdateLegendaRef = useRef(onUpdateLegenda);
   onUpdateLegendaRef.current = onUpdateLegenda;
   const itemRef = useRef<HTMLDivElement>(null);
@@ -371,6 +376,26 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
       >
         <Maximize2 size={14} />
       </Button>
+      {onGerarLegenda && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-primary hover:text-primary"
+          onClick={() => void (async () => {
+            setGerandoLegenda(true);
+            try {
+              const novaLegenda = await onGerarLegenda(imagem.id);
+              if (novaLegenda) setLegenda(novaLegenda);
+            } finally {
+              setGerandoLegenda(false);
+            }
+          })()}
+          disabled={gerandoLegenda}
+          title="Gerar legenda com IA"
+        >
+          <Sparkles size={14} className={gerandoLegenda ? 'animate-pulse' : undefined} />
+        </Button>
+      )}
       {onReplaceImage && (
         <Button
           variant="ghost"
@@ -415,6 +440,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onRecolher,
   onFechar,
   onReplaceImage,
+  onGerarLegenda,
   figuraSubstituicaoSolicitada,
   onFiguraSubstituicaoSolicitadaConsumida,
 }) => {
@@ -778,6 +804,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                   setFiguraSubstituicaoId(id);
                   setSeletorSubstituicaoAberto(true);
                 }}
+                onGerarLegenda={onGerarLegenda}
               />
             ))}
           </div>

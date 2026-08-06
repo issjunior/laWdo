@@ -7,6 +7,7 @@ import { setupDatabase } from './database/index.js';
 import { getLogger, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
 import { atualizacaoService } from './services/atualizacao.service.js';
+import { carregarEstadoJanelaPrincipal, observarEstadoJanelaPrincipal } from './utils/estado-janela-principal.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,11 +29,14 @@ if (squirrelStartup) {
 // Variável global para a janela principal
 let mainWindow: BrowserWindow | null = null;
 
-const createWindow = (): void => {
+const createWindow = async (): Promise<void> => {
+  const estado = await carregarEstadoJanelaPrincipal();
   // Criar a janela do navegador
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    x: estado.x,
+    y: estado.y,
+    width: estado.largura,
+    height: estado.altura,
     minWidth: 1024,
     minHeight: 768,
     webPreferences: {
@@ -45,6 +49,7 @@ const createWindow = (): void => {
     title: 'laWdo',
     show: false, // Mostrar apenas quando estiver pronto
   });
+  observarEstadoJanelaPrincipal(mainWindow);
 
   // Carregar a aplicação React
   if (process.env.NODE_ENV === 'development') {
@@ -57,7 +62,7 @@ const createWindow = (): void => {
   // Mostrar quando estiver pronto
   mainWindow.once('ready-to-show', () => {
     if (mainWindow) {
-      mainWindow.maximize();
+      if (estado.maximizada) mainWindow.maximize();
       mainWindow.show();
     }
   });
@@ -104,7 +109,7 @@ app.whenReady().then(async () => {
     registerIpcHandlers({ preloadPath, rendererHtmlPath, isDev });
 
     // Criar janela
-    createWindow();
+    await createWindow();
 
     const atrasoVerificacaoAtualizacao = 5_000 + Math.floor(Math.random() * 25_000);
     setTimeout(() => {
@@ -152,7 +157,7 @@ app.on('activate', () => {
   // No macOS, recriar uma janela no app quando
   // o ícone do dock for clicado e não houver janelas abertas
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    void createWindow();
   }
 });
 
