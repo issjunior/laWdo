@@ -455,6 +455,8 @@
       "descricao": "Integracao atual com Groq.",
       "globsCodigo": [
         "src/main/ipc/handlers/ia.handlers.ts",
+        "src/main/services/ia-execucao.service.ts",
+        "src/shared/catalogos/modelos-ia.catalogo.ts",
         "src/renderer/components/ai/**",
         "src/renderer/pages/ModelosIAPage.tsx"
       ]
@@ -466,8 +468,29 @@
       "descricao": "Integracao atual com Gemini.",
       "globsCodigo": [
         "src/main/ipc/handlers/ia.handlers.ts",
+        "src/main/services/ia-execucao.service.ts",
+        "src/shared/catalogos/modelos-ia.catalogo.ts",
         "src/renderer/components/ai/**",
         "src/renderer/pages/ModelosIAPage.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/06 ia/painel_assistente_ia.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Painel do Assistente IA, sessão, aplicação segura e processamento em lotes.",
+      "globsCodigo": [
+        "src/shared/types/ia.types.ts",
+        "src/shared/ia-planejamento.ts",
+        "src/shared/catalogos/modelos-ia.catalogo.ts",
+        "src/main/services/ia-execucao.service.ts",
+        "src/main/ipc/handlers/ia.handlers.ts",
+        "src/preload/index.ts",
+        "src/renderer/components/ai/**",
+        "src/renderer/lib/ia-*.ts",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/pages/ModelosIAPage.tsx",
+        "src/renderer/pages/PainelIaWindow.tsx"
       ]
     },
     {

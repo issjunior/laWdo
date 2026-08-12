@@ -1,75 +1,15 @@
 # Gemini como provedor de IA
 
-## Papel atual
+## Papel e configuração
 
-Gemini ja esta integrado como alternativa real a Groq.
-O fluxo usa o mesmo contrato OpenAI-compativel do restante da feature de IA.
+Gemini usa o endpoint OpenAI-compatível `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`. `ModelosIAPage.tsx` persiste `provedor_ia = 'gemini'`, chave e modelo padrão; a chave permanece no main. O catálogo compartilhado registra capacidade de visão, MIME, limites de imagem e orçamento. Modelo ausente ou incompatível recai no padrão do Gemini, sem fallback para Groq.
 
-## Configuracao persistida
+O perfil versionado `perfil_resposta_ia` contém tom, detalhamento, instruções personalizadas e temperatura entre 0 e 1, em passos de 0,1. Perfis ausentes, legados ou inválidos recebem o padrão, com temperatura 0,2.
 
-Chaves usadas:
+## Execução e invariantes
 
-- `provedor_ia = 'gemini'`
-- `api_key_gemini`
-- `modelo_gemini_padrao`
+O `IaExecucaoService` fotografa provedor, modelo, perfil e privacidade antes do planejamento. Cada chamada textual recebe a instrução fixa de segurança, a ação, o pedido explícito do usuário, o perfil e `temperature`; documento e contexto são conteúdo não confiável e não podem orientar o modelo. Respostas são JSON estruturado e validadas localmente, com tentativa compatível quando `response_format` é rejeitado.
 
-A mesma `ModelosIAPage.tsx` salva esses valores.
+Descrição multimodal exige modelo Gemini com visão e imagem persistida válida. No modo `legenda`, o serviço exige legenda técnico-pericial em uma linha, sem prefixo ou quebra, limitada a 15 palavras; no modo normal retorna apenas descrição simples para cópia manual.
 
-## Endpoint e modelos aceitos
-
-Endpoint:
-
-```txt
-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
-```
-
-Modelos registrados:
-
-- `gemini-2.5-flash`
-- `gemini-2.5-pro`
-- `gemini-2.0-flash`
-
-Default atual:
-
-- `gemini-2.5-flash`
-
-## Roteamento no backend
-
-`chamarIA()` delega para `chamarGemini()` quando `provedor_ia === 'gemini'`.
-
-`chamarGemini()`:
-
-1. le `api_key_gemini`
-2. le `modelo_gemini_padrao`
-3. valida o modelo recebido contra `GEMINI_MODELS`
-4. envia a request no mesmo formato de `messages`
-5. retorna `choices[0].message.content`
-
-## Integracao com as acoes de IA
-
-Os quatro handlers IPC sao os mesmos usados pela Groq:
-
-- revisar ortografia
-- adequar escrita
-- descrever imagem
-- perguntar livremente
-
-O renderer nao muda de assinatura quando o provider vira Gemini.
-
-## Descricao de imagem
-
-`ia:descreverImagem` ainda chama `chamarIA(..., MODELO_VISION_GROQ)`.
-
-No caso do Gemini, esse modelo externo nao passa pela validacao de `GEMINI_MODELS`, entao o backend faz fallback automatico para `modelo_gemini_padrao`.
-
-Na pratica:
-
-- com provider Groq -> usa o modelo de visao Groq
-- com provider Gemini -> usa o modelo Gemini salvo na configuracao
-
-## Regra pratica
-
-Qualquer manutencao em IA precisa preservar duas invariantes:
-
-1. o renderer continua falando apenas com `window.ipcAPI.ia.*`
-2. a decisao do provider continua centralizada em `ModelosIAPage.tsx` + `chamarIA()`
+Timeout, retries, cancelamento, checkpoints e privacidade são comuns aos dois provedores e estão em `spec/06 ia/painel_assistente_ia.md`. Chaves, prompts, respostas, documentos e imagens não entram em logs.

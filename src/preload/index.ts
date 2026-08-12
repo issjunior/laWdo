@@ -1,5 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  AtualizacaoPainelIa,
+  ContextoIa,
+  PerfilRespostaIa,
+  PlanoExecucaoIaResumo,
+  RespostaDescricaoImagemIa,
+  RespostaExecucaoIaIpc,
+  ComandoPainelIa,
+  SolicitacaoDescricaoImagemIa,
+  SolicitacaoIa,
+  ProgressoIa,
+} from '../shared/types/ia.types.js';
+import type {
   DashboardResponse,
   UserFilters,
   PaginationOptions,
@@ -25,6 +37,25 @@ import type {
 } from '../shared/types/imagem-laudo.types.js';
 import type { RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
 
+// O preload sandboxado não pode carregar módulos locais em tempo de execução.
+function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const progresso = valor as Record<string, unknown>;
+  return typeof progresso.operationId === 'string'
+    && Boolean(progresso.operationId)
+    && (progresso.fase === 'preparando' || progresso.fase === 'processando' || progresso.fase === 'concluido')
+    && Number.isInteger(progresso.loteAtual)
+    && (progresso.loteAtual as number) >= 0
+    && Number.isInteger(progresso.totalLotes)
+    && (progresso.totalLotes as number) > 0
+    && (progresso.loteAtual as number) <= (progresso.totalLotes as number)
+    && Number.isInteger(progresso.tentativa)
+    && (progresso.tentativa as number) >= 0
+    && Number.isInteger(progresso.chamadasConcluidas)
+    && (progresso.chamadasConcluidas as number) >= 0
+    && (progresso.chamadasConcluidas as number) <= (progresso.totalLotes as number);
+}
+
 // Tipo para entrada de log do sistema
 interface LogEntry {
   id: string;
@@ -37,6 +68,7 @@ type IpcPayload = unknown;
 type IpcParams = unknown[];
 type IpcResult = unknown;
 type ImportarArquivoResponse = { success: boolean; data?: IpcPayload; error?: string };
+type PacoteTemplateResponse = { success: boolean; data?: IpcPayload; nome?: string; error?: string };
 type BackupResponse = { success: boolean; path?: string; error?: string };
 type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; total?: number; error?: string };
 type TimelineResponse = { success: boolean; data?: IpcPayload[]; error?: string };
@@ -192,6 +224,9 @@ export interface IpcAPI {
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => Promise<UserResponse>;
     importarArquivo: () => Promise<ImportarArquivoResponse>;
+    exportarPacote: (templateId: string) => Promise<UserResponse>;
+    selecionarPacote: () => Promise<PacoteTemplateResponse>;
+    importarPacote: (caminho: string, criarTipo: boolean) => Promise<PacoteTemplateResponse>;
   };
 
   // Laudos
@@ -255,8 +290,29 @@ export interface IpcAPI {
   ia: {
     revisarOrtografia: (textoHtml: string) => Promise<UserResponse>;
     adequarEscrita: (textoHtml: string) => Promise<UserResponse>;
-    descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => Promise<UserResponse>;
     perguntar: (pergunta: string, contexto?: string) => Promise<UserResponse>;
+    obterContexto: () => Promise<UserResponse<ContextoIa>>;
+    obterPerfil: () => Promise<UserResponse<PerfilRespostaIa>>;
+    salvarPerfil: (perfil: PerfilRespostaIa) => Promise<UserResponse>;
+    planejar: (solicitacao: SolicitacaoIa) => Promise<UserResponse<PlanoExecucaoIaResumo>>;
+    executar: (solicitacao: SolicitacaoIa) => Promise<RespostaExecucaoIaIpc>;
+    descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => Promise<UserResponse<RespostaDescricaoImagemIa>>;
+    cancelar: (operationId: string) => Promise<UserResponse>;
+    descartarRetomada: (retomadaId: string) => Promise<UserResponse>;
+    testarConexao: () => Promise<UserResponse<ContextoIa>>;
+    copiarResposta: (texto: string) => Promise<UserResponse>;
+    onProgresso: (callback: (progresso: ProgressoIa) => void) => () => void;
+    painelAbrir: (sessionId: string) => void;
+    painelFechar: () => void;
+    painelPronto: () => void;
+    painelPublicar: (sessionId: string, atualizacao: AtualizacaoPainelIa) => void;
+    painelEnviarComando: (comando: ComandoPainelIa) => void;
+    painelReencaixar: () => void;
+    onPainelPronto: (callback: (sessionId: string) => void) => () => void;
+    onPainelEstado: (callback: (estado: unknown) => void) => () => void;
+    onPainelComando: (callback: (comando: ComandoPainelIa) => void) => () => void;
+    onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
+    onPainelFechado: (callback: (sessionId: string) => void) => () => void;
   };
 
   // Backup e Restauração
@@ -424,6 +480,9 @@ const ALLOWED_CHANNELS = new Set([
   'template:reordenarSecoes',
   'template:previewPDF',
   'template:importarArquivo',
+  'template:exportarPacote',
+  'template:selecionarPacote',
+  'template:importarPacote',
 
   // Laudos
   'laudo:findById',
@@ -476,8 +535,24 @@ const ALLOWED_CHANNELS = new Set([
   // IA
   'ia:revisarOrtografia',
   'ia:adequarEscrita',
-  'ia:descreverImagem',
+  'ia:descrever-imagem',
   'ia:perguntar',
+  'ia:obter-contexto',
+  'ia:obter-perfil',
+  'ia:salvar-perfil',
+  'ia:planejar',
+  'ia:executar',
+  'ia:cancelar',
+  'ia:descartar-retomada',
+  'ia:testar-conexao',
+  'ia:copiar-resposta',
+  'ia:progresso',
+  'ia:painel-abrir',
+  'ia:painel-fechar',
+  'ia:painel-pronto',
+  'ia:painel-publicar',
+  'ia:painel-comando',
+  'ia:painel-reencaixar',
 
   // Backup
   'backup:criar',
@@ -938,6 +1013,9 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => ipcRenderer.invoke('template:previewPDF', { html, margins, headerTemplate }),
     importarArquivo: () => ipcRenderer.invoke('template:importarArquivo'),
+    exportarPacote: (templateId: string) => ipcRenderer.invoke('template:exportarPacote', templateId),
+    selecionarPacote: () => ipcRenderer.invoke('template:selecionarPacote'),
+    importarPacote: (caminho: string, criarTipo: boolean) => ipcRenderer.invoke('template:importarPacote', caminho, criarTipo),
   },
 
   laudo: {
@@ -1002,13 +1080,57 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof textoHtml !== 'string') throw new Error('Texto inválido');
       return ipcRenderer.invoke('ia:adequarEscrita', textoHtml);
     },
-    descreverImagem: (imagens: Array<{ src: string; alt?: string }>) => {
-      if (!Array.isArray(imagens)) throw new Error('Imagens devem ser um array');
-      return ipcRenderer.invoke('ia:descreverImagem', imagens);
-    },
     perguntar: (pergunta: string, contexto?: string) => {
       if (typeof pergunta !== 'string' || !pergunta.trim()) throw new Error('Pergunta inválida');
       return ipcRenderer.invoke('ia:perguntar', pergunta, contexto);
+    },
+    obterContexto: () => ipcRenderer.invoke('ia:obter-contexto'),
+    obterPerfil: () => ipcRenderer.invoke('ia:obter-perfil'),
+    salvarPerfil: (perfil: PerfilRespostaIa) => ipcRenderer.invoke('ia:salvar-perfil', perfil),
+    planejar: (solicitacao: SolicitacaoIa) => ipcRenderer.invoke('ia:planejar', solicitacao),
+    executar: (solicitacao: SolicitacaoIa) => ipcRenderer.invoke('ia:executar', solicitacao),
+    descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => ipcRenderer.invoke('ia:descrever-imagem', solicitacao),
+    cancelar: (operationId: string) => ipcRenderer.invoke('ia:cancelar', operationId),
+    descartarRetomada: (retomadaId: string) => ipcRenderer.invoke('ia:descartar-retomada', retomadaId),
+    testarConexao: () => ipcRenderer.invoke('ia:testar-conexao'),
+    copiarResposta: (texto: string) => ipcRenderer.invoke('ia:copiar-resposta', texto),
+    onProgresso: (callback: (progresso: ProgressoIa) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
+        if (progressoIaValidoNoPreload(progresso)) callback(progresso);
+      };
+      ipcRenderer.on('ia:progresso', listener);
+      return () => ipcRenderer.removeListener('ia:progresso', listener);
+    },
+    painelAbrir: (sessionId: string) => ipcRenderer.send('ia:painel-abrir', sessionId),
+    painelFechar: () => ipcRenderer.send('ia:painel-fechar'),
+    painelPronto: () => ipcRenderer.send('ia:painel-pronto'),
+    painelPublicar: (sessionId: string, atualizacao: AtualizacaoPainelIa) => ipcRenderer.send('ia:painel-publicar', sessionId, atualizacao),
+    painelEnviarComando: (comando: ComandoPainelIa) => ipcRenderer.send('ia:painel-comando', comando),
+    painelReencaixar: () => ipcRenderer.send('ia:painel-reencaixar'),
+    onPainelPronto: (callback: (sessionId: string) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('ia:painel-pronto', listener);
+      return () => ipcRenderer.removeListener('ia:painel-pronto', listener);
+    },
+    onPainelEstado: (callback: (estado: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, estado: unknown) => callback(estado);
+      ipcRenderer.on('ia:painel-estado', listener);
+      return () => ipcRenderer.removeListener('ia:painel-estado', listener);
+    },
+    onPainelComando: (callback: (comando: ComandoPainelIa) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, comando: ComandoPainelIa) => callback(comando);
+      ipcRenderer.on('ia:painel-comando', listener);
+      return () => ipcRenderer.removeListener('ia:painel-comando', listener);
+    },
+    onPainelReencaixar: (callback: (sessionId: string) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('ia:painel-reencaixar', listener);
+      return () => ipcRenderer.removeListener('ia:painel-reencaixar', listener);
+    },
+    onPainelFechado: (callback: (sessionId: string) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('ia:painel-fechado', listener);
+      return () => ipcRenderer.removeListener('ia:painel-fechado', listener);
     },
   },
 

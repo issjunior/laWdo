@@ -37,6 +37,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { toast } from 'sonner';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Upload,
   FileText,
   Loader2,
@@ -45,6 +49,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
+import type { PreviaPacoteTemplate } from '@shared/types/template-pacote.types';
 
 interface SecaoImportada {
   nome: string;
@@ -183,12 +188,14 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
   placeholders: _placeholders,
   onImportSuccess,
 }) => {
-  const [etapa, setEtapa] = useState<'upload' | 'revisao'>('upload');
+  const [etapa, setEtapa] = useState<'upload' | 'revisao' | 'pacote'>('upload');
   const [nomeTemplate, setNomeTemplate] = useState('');
   const [tipoExameId, setTipoExameId] = useState('');
   const [secoes, setSecoes] = useState<SecaoImportada[]>([]);
   const [importando, setImportando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [pacote, setPacote] = useState<PreviaPacoteTemplate | null>(null);
+  const [confirmarCriacaoTipo, setConfirmarCriacaoTipo] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -202,6 +209,8 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
     setNomeTemplate('');
     setTipoExameId('');
     setSecoes([]);
+    setPacote(null);
+    setConfirmarCriacaoTipo(false);
     setImportando(false);
     setSalvando(false);
   }, []);
@@ -232,6 +241,42 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
       toast.error(getMensagemErro(e, 'Erro ao importar arquivo'));
     } finally {
       setImportando(false);
+    }
+  };
+
+  const handleSelecionarPacote = async () => {
+    try {
+      setImportando(true);
+      const resposta = await window.ipcAPI.template.selecionarPacote();
+      if (!resposta.success || !resposta.data) {
+        if (resposta.error !== 'Importação cancelada') toast.error(resposta.error || 'Erro ao ler pacote de template');
+        return;
+      }
+      setPacote(resposta.data as PreviaPacoteTemplate);
+      setEtapa('pacote');
+    } catch (erro: unknown) {
+      toast.error(getMensagemErro(erro, 'Erro ao ler pacote de template'));
+    } finally {
+      setImportando(false);
+    }
+  };
+
+  const handleImportarPacote = async (criarTipo: boolean) => {
+    if (!pacote) return;
+    try {
+      setSalvando(true);
+      const resposta = await window.ipcAPI.template.importarPacote(pacote.caminho, criarTipo);
+      if (!resposta.success) {
+        toast.error(resposta.error || 'Erro ao importar template');
+        return;
+      }
+      toast.success(`Template "${pacote.template.nome}" importado com sucesso`);
+      handleClose(false);
+      onImportSuccess();
+    } catch (erro: unknown) {
+      toast.error(getMensagemErro(erro, 'Erro ao importar template'));
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -338,12 +383,12 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText size={18} />
-            {etapa === 'upload' ? 'Importar Documento' : 'Revisar Seções Importadas'}
+            {etapa === 'upload' ? 'Importar Template' : etapa === 'pacote' ? 'Revisar Pacote de Template' : 'Revisar Seções Importadas'}
           </DialogTitle>
           <DialogDescription>
             {etapa === 'upload'
-              ? 'Selecione um documento PDF ou DOCX para converter em template.'
-              : 'Revise, edite e reordene as seções detectadas antes de salvar.'}
+              ? 'Importe um documento PDF/DOCX ou um pacote ZIP de template.'
+              : etapa === 'pacote' ? 'Confira os dados do pacote antes de criar uma cópia no sistema.' : 'Revise, edite e reordene as seções detectadas antes de salvar.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -362,9 +407,22 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                 )}
                 {importando ? 'Processando...' : 'Selecionar Arquivo (PDF ou DOCX)'}
               </Button>
+              <Button variant="outline" onClick={handleSelecionarPacote} disabled={importando} className="flex items-center gap-2">
+                <FileText size={18} /> Selecionar Pacote de Template (ZIP)
+              </Button>
               <p className="text-sm text-muted-foreground">
-                Limite máximo: 20 MB · Formatos aceitos: PDF, DOCX
+                Limite máximo: 20 MB · Formatos aceitos: PDF, DOCX e ZIP
               </p>
+            </div>
+          ) : etapa === 'pacote' && pacote ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-card/50 p-4 space-y-2">
+                <p><strong>Template:</strong> {pacote.template.nome}</p>
+                <p><strong>Tipo de exame:</strong> {pacote.tipo_exame.codigo} — {pacote.tipo_exame.nome}</p>
+                <p><strong>Seções:</strong> {pacote.secoes.length}</p>
+                {!pacote.tipoExameExiste && <p className="text-amber-700 dark:text-amber-400">Este tipo de exame ainda não existe nesta instalação.</p>}
+              </div>
+              <p className="text-sm text-muted-foreground">O template será importado como uma cópia, sem substituir os existentes.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -461,8 +519,30 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
               {salvando ? 'Salvando...' : 'Salvar como novo template'}
             </Button>
           )}
+          {etapa === 'pacote' && pacote && (
+            <Button
+              onClick={() => pacote.tipoExameExiste ? handleImportarPacote(false) : setConfirmarCriacaoTipo(true)}
+              disabled={salvando}
+            >
+              {salvando ? 'Importando...' : 'Importar como cópia'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
+      <AlertDialog open={confirmarCriacaoTipo} onOpenChange={setConfirmarCriacaoTipo}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tipo de exame não encontrado</AlertDialogTitle>
+            <AlertDialogDescription>
+              O tipo {pacote?.tipo_exame.codigo} não existe neste sistema. Você pode cancelar ou criá-lo automaticamente antes de importar o template.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleImportarPacote(true)}>Criar tipo de exame e importar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

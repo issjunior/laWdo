@@ -10,6 +10,7 @@ import {
   salvarImagemLaudo,
 } from '../../services/imagem-laudo.service.js';
 import type { SalvarImagemLaudoEntrada } from '../../../shared/types/imagem-laudo.types.js';
+import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
 
 interface IlustracoesHandlerOptions {
   preloadPath: string;
@@ -19,6 +20,7 @@ interface IlustracoesHandlerOptions {
 
 let panelWindow: BrowserWindow | null = null;
 let mainWindowId: number | null = null;
+let criandoPanelWindow = false;
 
 export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions): void {
   const { preloadPath, rendererHtmlPath, isDev } = options;
@@ -98,7 +100,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.on('ilustracoes:open-panel', (event, laudoId: unknown, tituloLaudo: unknown) => {
+  ipcMain.on('ilustracoes:open-panel', async (event, laudoId: unknown, tituloLaudo: unknown) => {
     if (panelWindow && !panelWindow.isDestroyed()) {
       panelWindow.focus();
       return;
@@ -110,11 +112,22 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
       logError('Painel de ilustrações não aberto: laudo inválido', new Error('Laudo inválido'));
       return;
     }
+    if (criandoPanelWindow) return;
 
+    criandoPanelWindow = true;
     try {
+      const dimensoes = await carregarDimensoesJanela({
+        chave: 'janela_painel_ilustracoes_dimensoes',
+        descricao: 'Dimensões da janela destacada do painel de Ilustrações',
+        larguraPadrao: 420,
+        alturaPadrao: 700,
+        larguraMinima: 320,
+        alturaMinima: 400,
+        janelaReferencia: senderWin,
+      });
       panelWindow = new BrowserWindow({
-        width: 420,
-        height: 700,
+        width: dimensoes.largura,
+        height: dimensoes.altura,
         minWidth: 320,
         minHeight: 400,
         webPreferences: {
@@ -125,6 +138,12 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         },
         title: 'Painel de Ilustrações',
         show: false,
+      });
+      observarDimensoesJanela(panelWindow, {
+        chave: 'janela_painel_ilustracoes_dimensoes',
+        descricao: 'Dimensões da janela destacada do painel de Ilustrações',
+        larguraMinima: 320,
+        alturaMinima: 400,
       });
 
       const titulo = typeof tituloLaudo === 'string' ? tituloLaudo.trim() : '';
@@ -150,6 +169,8 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
       logDebug('Painel de ilustrações aberto em janela separada');
     } catch (error) {
       logError('Erro ao abrir painel de ilustrações', error);
+    } finally {
+      criandoPanelWindow = false;
     }
   });
 

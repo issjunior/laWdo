@@ -6,6 +6,6 @@
     "module": "CommonJS",
     "moduleResolution": "Node"
   },
-  "include": ["src/preload/**/*", "src/shared/types/**/*", "src/types/**/*"],
+  "include": ["src/preload/**/*", "src/types/**/*"],
   "exclude": ["src/preload/**/*.test.ts", "src/preload/**/*.spec.ts"]
 }

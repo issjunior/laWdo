@@ -419,7 +419,7 @@ body.dark {
 }
 
 .dark button[class*="bg-primary"] {
-  color: hsl(222 30% 8%);
+  color: hsl(var(--primary-foreground));
 }
 
 .dark button[class*="bg-destructive"] {

@@ -17,14 +17,20 @@ files:
 
 asar: true
 
+extraResources:
+  - from: src/renderer/assets/icon.ico
+    to: assets/icon.ico
+
 win:
   target:
     - target: nsis
       arch:
         - x64
-  icon: build/icon.ico
+  icon: src/renderer/assets/icon.ico
 
 nsis:
+  installerIcon: src/renderer/assets/icon.ico
+  uninstallerIcon: src/renderer/assets/icon.ico
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

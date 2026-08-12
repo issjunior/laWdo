@@ -2,37 +2,24 @@
 
 ## Estado e responsabilidades
 
-O HTML do laudo é a fonte das figuras já inseridas no editor. A fila de imagens disponíveis no Painel de Ilustrações é persistida separadamente em `imagens_laudo`: arquivo local, metadados, legenda, origem e sequência. Ela permite reabrir o painel sem depender do conteúdo em memória ou da conexão com o GDL.
+O HTML do laudo é a fonte das figuras inseridas. A fila do Painel de Ilustrações é persistida separadamente em `imagens_laudo`: arquivo local, metadados, legenda, origem e sequência. `imagem-laudo.service.ts` valida IDs e conteúdo, calcula hash e expõe imagens como data URI; o renderer não recebe caminho local.
 
 | Estado | Fonte canônica | Consumidor principal |
 |---|---|---|
-| figura inserida | HTML do laudo (`<figure class="laudo-figure">`) | editor, preview e exportação |
-| imagem disponível no painel | `imagens_laudo` + arquivo sob `userData/imagens/laudos/<laudoId>` | `IlustracoesPanel` |
-| imagem arquivada após inserção | linha em `imagens_laudo` com `disponivel_painel = 0` | backup; não reaparece no painel |
-| thumbnail da Lista de Fotos | resposta temporária do GDL | seletor visual antes da captura |
+| figura inserida | HTML (`figure.laudo-figure`) | editor, preview e exportação |
+| imagem disponível | `imagens_laudo` e arquivo local | `IlustracoesPanel` |
+| imagem arquivada | `disponivel_painel = 0` | backup; fora do painel |
 
-`imagem-laudo.service.ts` valida IDs e data URIs, limita MIME, calcula SHA-256, grava por hash e expõe imagens como data URI; o renderer nunca recebe caminho local.
+## Painel e legenda assistida
 
-## Painel, seleção e substituição
+Upload e captura GDL entram na fila persistida. O painel permite inserir, excluir, reordenar, ampliar e substituir figuras. Em cada item, o botão de geração de legenda fica entre Ampliar e Substituir, pois atua sobre aquela figura.
 
-Upload local e captura GDL entram primeiro na fila persistida. O painel mostra thumbnails das imagens disponíveis e permite inserir, excluir, reordenar ou escolher uma imagem para substituir uma figura existente.
+Esse botão envia apenas `operationId`, `laudoId`, `imagemId` e `modo: 'legenda'`. O main valida vínculo, MIME, tamanho, privacidade e visão antes de carregar a imagem. A IA deve retornar uma legenda técnico-pericial em uma única linha, sem prefixo ou quebra, com no máximo 15 palavras. O texto volta ao editor de legenda para revisão humana: não é salvo, inserido nem aplicado automaticamente.
 
-O clique em um dummy do editor abre o seletor visual. A comparação mostra a figura original à esquerda e a nova figura à direita; o campo da nova legenda inicia com a legenda original, pode ser editado e é salvo no registro da imagem escolhida. Ao confirmar, o editor troca `src` e `data-image-id`, remove `data-dummy`, atualiza a legenda e registra uma única operação de undo. A nova imagem é arquivada da fila. Ao substituir uma figura real persistida, seu ID volta a ficar disponível no painel.
+Substituição conserva operação única de undo: atualiza `src`, `data-image-id`, legenda e disponibilidade da fila. Atualização do HTML e arquivamento persistido continuam independentes; falha de arquivamento pode exigir correção posterior.
 
-O preenchimento em lote lista apenas dummies, propõe imagens por ordem e permite revisar cada associação. Uma imagem só pode ser selecionada para um dummy; associações vazias deixam o dummy intacto. As atualizações de HTML e disponibilidade ainda usam operações independentes, portanto uma falha de arquivamento pode exigir correção pelo painel sem desfazer a figura já aplicada.
+## Dock, janela e GDL
 
-## Imagens da REP no GDL
+IA e Ilustrações ocupam docks direitos mutuamente exclusivos. O dock de Ilustrações varia de 320 a 720 px e persiste a largura integrada. A janela destacada reutiliza o painel e persiste somente dimensões, limitadas a 90% da área útil; pode coexistir com a janela de IA.
 
-O modal recebe somente `laudoId`. O main resolve `laudo → rep_id → rep.numero`, exige `número/ano` e não aceita número, URL, caminho ou hash do renderer. `gdl:listar-imagens-laudo` baixa a Lista de Fotos ZIP, devolve metadados e, quando decodificável, `thumbnailDataUri`: JPEG leve, com maior dimensão de 320 px, gerado no main. Falha de prévia não torna a foto inelegível e a interface mostra fallback.
-
-`gdl:capturar-imagens-laudo` aceita somente IDs SHA-256 e reobtém o ZIP antes de extrair os itens selecionados. A captura devolve sucessos e falhas por item. Arquivo ausente, corrompido, criptografado ou incompatível não bloqueia os demais. A thumbnail nunca é persistida, enviada à exportação ou usada como arquivo final; após captura, a cópia validada segue o fluxo local e entra em backup.
-
-## Editor e janela destacada
-
-As imagens são encapsuladas como `figure.laudo-figure`, recebem ID estável e são reindexadas antes de salvar ou gerar preview. O ciclo preserva single/multisseção, seção `ILUSTRAÇÕES`, legenda e ordenação.
-
-A janela destacada reutiliza o painel e comunica inserção, exclusão, reordenação e substituição pela ponte IPC existente. Persistência continua em wrappers específicos do preload; módulos Node/Electron não são expostos ao renderer.
-
-## Verificação
-
-`migracao-imagens-laudo.integration.test.ts` protege a tabela legada. `gdl-imagens-rep-modal.component.test.tsx` cobre seleção/captura e renderização de thumbnail retornada pelo GDL. `seletor-figura-dialog.component.test.tsx` cobre a cópia e edição da legenda antes da substituição. Mudanças em contratos exigem alinhar serviço, handler, `ALLOWED_CHANNELS`, preload, tipos e os dois modos do painel.
+O fluxo GDL recebe apenas `laudoId`; o main resolve REP e reobtém ZIP para captura. Thumbnails são temporárias, não persistidas nem usadas como arquivo final. Mudanças em contratos exigem alinhar serviço, handler, `ALLOWED_CHANNELS`, preload, tipos, dock e janela.

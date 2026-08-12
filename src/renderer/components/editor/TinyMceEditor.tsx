@@ -108,7 +108,7 @@ interface TinyMceEditorProps {
   value?: string;
   /** Modo NÃO controlado: conteúdo inicial fixo, sem sincronização automática. Ideal para editores com HTML complexo (ex: seções). */
   initialValue?: string;
-  onChange: (html: string) => void;
+  onChange: (html: string, origem?: 'usuario' | 'normalizacao-inicial') => void;
   height?: number;
   placeholder?: string;
   /** ID do laudo para upload de imagens. Se ausente, usa base64 (templates/cabeçalho). */
@@ -299,6 +299,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
   const onSolicitarSupressaoBlocoRef = useRef(onSolicitarSupressaoBloco);
+  const editorProntoParaAlteracoesRef = useRef(false);
+  const frameLiberarAlteracoesRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
 
   const [stableInitialValue] = useState(initialValue);
@@ -311,6 +313,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useEffect(() => {
     onSolicitarSupressaoBlocoRef.current = onSolicitarSupressaoBloco;
   }, [onSolicitarSupressaoBloco]);
+
+  useEffect(() => () => {
+    if (frameLiberarAlteracoesRef.current !== null) {
+      window.cancelAnimationFrame(frameLiberarAlteracoesRef.current);
+    }
+  }, []);
 
   const imagesUploadHandler: UploadImagemHandler = (blobInfo) =>
     new Promise<string>((resolve) => {
@@ -362,12 +370,19 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           editorRef.current = editor;
           setReady(true);
           onEditorInit?.(editor);
+          frameLiberarAlteracoesRef.current = window.requestAnimationFrame(() => {
+            editorProntoParaAlteracoesRef.current = true;
+            frameLiberarAlteracoesRef.current = null;
+          });
         }}
         {...(isUncontrolled
           ? { initialValue: stableInitialValue }
           : { value: value || '' }
         )}
-        onEditorChange={(html: string) => onChange(html)}
+        onEditorChange={(html: string) => onChange(
+          html,
+          editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial',
+        )}
         init={{
           height,
           menubar: false,
@@ -809,7 +824,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               };
 
               if (normalizarBlocosCondicionais(body, condToggles) > 0) {
-                onChange(editor.getContent());
+                onChange(editor.getContent(), 'normalizacao-inicial');
               }
               sincronizarAcoesSupressao();
               editor.on('SetContent LoadContent Undo Redo', agendarSincronizacaoAcoesSupressao);

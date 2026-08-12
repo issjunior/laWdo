@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import {
   Plus, Search, Edit, Trash2, Copy, ArrowLeft,
   FileText, Layers, Eye, LayoutGrid, List, Upload,
-  Image as ImageIcon,
+  Image as ImageIcon, Download,
   Baseline,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -548,6 +548,8 @@ export const TemplatesPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
   const [showPreview, setShowPreview] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [templateParaExportarId, setTemplateParaExportarId] = useState('');
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
@@ -1344,6 +1346,23 @@ export const TemplatesPage: React.FC = () => {
     }
   }, [placeholderChaves, montarHtmlPreview, gerarEExibirPdf]);
 
+  const handleExportarPacote = useCallback(async (template: TemplateItem) => {
+    const resposta = await window.ipcAPI.template.exportarPacote(template.id);
+    if (resposta.success) toast.success(`Template "${template.nome}" exportado com sucesso`);
+    else if (resposta.error !== 'Exportação cancelada') toast.error(resposta.error || 'Erro ao exportar template');
+  }, []);
+
+  const handleConfirmarExportacao = useCallback(async () => {
+    const template = templates.find(item => item.id === templateParaExportarId);
+    if (!template) {
+      toast.error('Selecione um template para exportar');
+      return;
+    }
+    await handleExportarPacote(template);
+    setShowExportDialog(false);
+    setTemplateParaExportarId('');
+  }, [handleExportarPacote, templateParaExportarId, templates]);
+
   const columnDefs = useMemo<ColumnDef<TemplateItem>[]>(() => [
     {
       accessorKey: 'nome',
@@ -1473,6 +1492,13 @@ export const TemplatesPage: React.FC = () => {
               className="flex items-center gap-2"
             >
               <Upload size={16} /> Importar Template
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowExportDialog(true)}
+              className="flex items-center gap-2"
+            >
+              <Download size={16} /> Exportar Template
             </Button>
             <Button variant="outline" onClick={handleNovo} className="flex items-center gap-2">
               <Plus size={16} /> Novo Template
@@ -1614,6 +1640,30 @@ export const TemplatesPage: React.FC = () => {
           placeholders={placeholders}
           onImportSuccess={carregarTemplates}
         />
+        <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Exportar Template</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="template-exportar">Template</Label>
+              <Select value={templateParaExportarId} onValueChange={setTemplateParaExportarId}>
+                <SelectTrigger id="template-exportar"><SelectValue placeholder="Selecione o template..." /></SelectTrigger>
+                <SelectContent>
+                  {templates.filter(t => t.id !== 'tpl-nao-definido').map(template => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {`${template.nome} — ${template.tipo_exame_codigo || template.tipo_exame_nome || 'Sem tipo'}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowExportDialog(false)}>Cancelar</Button>
+              <Button onClick={handleConfirmarExportacao} disabled={!templateParaExportarId}>Exportar</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
       </TooltipProvider>
     );

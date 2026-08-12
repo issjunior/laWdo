@@ -69,6 +69,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               variant="ghost"
               size="icon"
               onClick={onToggleTheme}
+              aria-label="Alternar tema"
               className="transition-transform duration-300"
             >
               {isDarkMode ? (
@@ -130,6 +131,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                           <button
                             type="button"
                             onClick={() => setShowPassword((p) => !p)}
+                            aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                             tabIndex={-1}
                           >

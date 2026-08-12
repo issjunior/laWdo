@@ -92,6 +92,41 @@ export async function listarImagensLaudo(laudoIdEntrada: string): Promise<Imagem
   return imagens
 }
 
+export async function obterImagemLaudoPorId(laudoIdEntrada: string, imagemIdEntrada: string): Promise<ImagemLaudoPersistida> {
+  const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
+  const imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
+  const registro = (await executeQuery<ImagemLaudoRow>(
+    'SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?',
+    [imagemId, laudoId],
+  ))[0]
+  if (!registro) {
+    const imagemEmOutroLaudo = (await executeQuery<Pick<ImagemLaudoRow, 'id'>>(
+      'SELECT id FROM imagens_laudo WHERE id = ?',
+      [imagemId],
+    ))[0]
+    throw new Error(imagemEmOutroLaudo ? 'IMAGEM_DE_OUTRO_LAUDO' : 'IMAGEM_NAO_VINCULADA')
+  }
+  try {
+    const bytes = fs.readFileSync(caminhoAbsoluto(registro.caminho_relativo))
+    return {
+      id: registro.id,
+      laudoId: registro.laudo_id,
+      nomeArquivo: registro.nome_arquivo,
+      mimeType: registro.mime_type,
+      tamanho: bytes.length,
+      sha256: registro.sha256,
+      legenda: registro.legenda,
+      origem: registro.origem,
+      sequencia: registro.sequencia,
+      dataUri: `data:${registro.mime_type};base64,${bytes.toString('base64')}`,
+      createdAt: registro.created_at,
+    }
+  } catch (error) {
+    log.warn('Imagem selecionada para IA ausente ou ilegível', { laudoId, imagemId, error })
+    throw new Error('A imagem selecionada não está disponível para descrição.')
+  }
+}
+
 export async function salvarImagemLaudo(
   laudoIdEntrada: string,
   entrada: SalvarImagemLaudoEntrada,

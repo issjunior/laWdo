@@ -35,14 +35,14 @@ const ITENS_INCLUIDOS = [
   { label: 'Tipos de Exame', desc: 'Codigos, nomes e templates padrao' },
   { label: 'Templates', desc: 'Templates de laudo e secoes' },
   { label: 'Placeholders', desc: 'Variaveis de sistema e personalizadas' },
-  { label: 'Configuracoes', desc: 'Cabecalho, rodape e preferencias (sem chaves de IA)' },
+  { label: 'Configuracoes', desc: 'Cabecalho, rodape e preferencias (sem credenciais, provedor e modelos de IA)' },
 ];
 
 const ITENS_EXCLUIDOS = [
   { label: 'Usuarios', desc: 'Peritos e credenciais' },
   { label: 'REPs', desc: 'Requisicoes de Exame Pericial' },
   { label: 'Laudos', desc: 'Documentos e conteudos gerados' },
-  { label: 'Modelos de IA', desc: 'Chaves de API e modelos Groq' },
+  { label: 'Configuracoes de IA', desc: 'Chaves de API, provedor e modelos configurados' },
   { label: 'Logs', desc: 'Registros de auditoria' },
   { label: 'Imagens', desc: 'Fotos vinculadas aos laudos' },
 ];
@@ -242,7 +242,7 @@ export const BackupPage: React.FC = () => {
               </CardTitle>
               <CardDescription>
                 O backup de configuracao contem apenas dados estruturais. Dados operacionais (laudos, REPs,
-                usuarios) e credenciais de IA nao sao incluidos.
+                usuarios) e configuracoes de IA nao sao incluidos.
               </CardDescription>
             </CardHeader>
             <CardContent>

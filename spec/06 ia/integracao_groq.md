@@ -1,81 +1,15 @@
 # Groq como provedor de IA
 
-## Papel atual
+## Papel e configuração
 
-Groq continua sendo o fallback padrao do sistema quando `provedor_ia` nao estiver definido.
-O roteamento real fica em `src/main/ipc/handlers/ia.handlers.ts`.
+Groq é um provedor OpenAI-compatível e o fallback quando `provedor_ia` está ausente ou diferente de `gemini`. `ModelosIAPage.tsx` persiste provedor, chave e modelo; a chave é recuperada somente no main. O catálogo compartilhado `src/shared/catalogos/modelos-ia.catalogo.ts` define modelos, visão, MIME, limite de imagem e orçamento de contexto. Modelo salvo incompatível recai no padrão do próprio Groq, sem fallback para Gemini.
 
-## Configuracao persistida
+A página também persiste `perfil_resposta_ia`: tom, detalhamento, instruções personalizadas e temperatura de 0 a 1, em passos de 0,1. Perfil ausente, legado ou inválido recebe o padrão, cuja temperatura é 0,2.
 
-Chaves usadas no estado atual:
+## Execução e invariantes
 
-- `provedor_ia`
-- `api_key_groq`
-- `modelo_ia_padrao`
+`IaExecucaoService` fotografa provedor, modelo, perfil e privacidade antes de planejar e usa essa fotografia durante todos os lotes. Para cada chamada textual, envia a instrução fixa de segurança, a ação, o pedido do usuário, o perfil e `temperature`; o pedido não é confundido com instruções encontradas no documento. A resposta continua sendo JSON validado localmente, com uma tentativa compatível sem `response_format` quando necessária.
 
-`ModelosIAPage.tsx` edita essas configuracoes pela UI.
+A descrição multimodal requer modelo Groq com visão. No modo `legenda`, a solicitação exige uma única linha técnico-pericial, sem prefixo ou quebra, com no máximo 15 palavras; no modo normal retorna descrição simples para cópia manual. O renderer envia somente IDs, e o main valida vínculo, MIME e tamanho antes de ler a imagem persistida.
 
-## Endpoint e modelos aceitos
-
-Endpoint:
-
-```txt
-https://api.groq.com/openai/v1/chat/completions
-```
-
-Modelos registrados em `ia.handlers.ts`:
-
-- `llama-3.3-70b-versatile`
-- `meta-llama/llama-4-scout-17b-16e-instruct`
-- `gemma2-9b-it`
-- `mixtral-8x7b-32768`
-
-Defaults atuais:
-
-- modelo textual padrao: `llama-3.3-70b-versatile`
-- modelo de visao para Groq: `meta-llama/llama-4-scout-17b-16e-instruct`
-
-## Onde o provider e escolhido
-
-A escolha do provedor acontece em um lugar so:
-
-- `src/renderer/pages/ModelosIAPage.tsx`
-
-O restante da UI apenas chama `window.ipcAPI.ia.*`.
-
-## Roteamento no backend
-
-`chamarIA(messages, modelo?)` le `provedor_ia`.
-Se o valor nao for `gemini`, o fluxo cai em `chamarGroq()`.
-
-`chamarGroq()`:
-
-1. le `api_key_groq`
-2. le `modelo_ia_padrao`
-3. valida o modelo contra a lista permitida
-4. envia `messages`, `temperature` e `max_tokens`
-5. retorna `choices[0].message.content`
-
-## Recursos hoje expostos via Groq
-
-Os handlers registrados sao:
-
-- `ia:revisarOrtografia`
-- `ia:adequarEscrita`
-- `ia:descreverImagem`
-- `ia:perguntar`
-
-Para Groq:
-
-- texto usa o modelo salvo ou o padrao
-- descricao de imagem força o modelo de visao Groq quando o provider selecionado continua sendo Groq
-
-## Observacao importante
-
-`extrairTextoDoHtml()` roda no processo main e usa regex simples:
-
-1. remove spans com `data-placeholder`
-2. remove tags HTML
-3. normaliza espacos
-
-Isso garante que as acoes de revisao textual enviem texto limpo, sem a estrutura do editor.
+Timeout, retries, cancelamento, checkpoints e privacidade são compartilhados com Gemini e descritos em `spec/06 ia/painel_assistente_ia.md`. Chaves, prompts, respostas, documentos e imagens não entram em logs.

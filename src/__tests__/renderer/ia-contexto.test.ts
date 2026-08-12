@@ -1,0 +1,33 @@
+import { describe, expect, it } from 'vitest'
+
+import { resolverTextoContextoIa } from '@/lib/ia-contexto'
+
+describe('contexto resolvido da IA', () => {
+  it('substitui placeholders por dados reais sem alterar o HTML original', () => {
+    const html = '<p>Na data de <span data-placeholder="{{data_extenso_recebimento_rep}}">{{data_extenso_recebimento_rep}}</span>, em {{cidade}}.</p>'
+    const resultado = resolverTextoContextoIa(html, {
+      data_extenso_recebimento_rep: {
+        chave: 'data_extenso_recebimento_rep',
+        valor: '4 de agosto de 2026',
+        preenchido: true,
+        formato: 'texto',
+      },
+      cidade: {
+        chave: 'cidade',
+        valor: 'Curitiba',
+        preenchido: true,
+        formato: 'texto',
+      },
+    })
+
+    expect(resultado).toBe('Na data de 4 de agosto de 2026, em Curitiba.')
+    expect(html).toContain('{{data_extenso_recebimento_rep}}')
+  })
+
+  it('identifica dados ausentes sem enviar a sintaxe de placeholder', () => {
+    const resultado = resolverTextoContextoIa('<p>{{campo_ausente}}</p>', {})
+
+    expect(resultado).toBe('[dado não preenchido: campo_ausente]')
+    expect(resultado).not.toContain('{{')
+  })
+})

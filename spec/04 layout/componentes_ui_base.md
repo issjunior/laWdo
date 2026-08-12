@@ -1,83 +1,26 @@
 # Componentes base de UI
 
-## Escopo
+## Escopo e regra de uso
 
-`src/renderer/components/ui/` concentra os wrappers compartilhados do design system local.
-Os arquivos auditados com cobertura faltante hoje sao:
+`src/renderer/components/ui/` concentra wrappers compartilhados do design system local. Eles encapsulam primitivas Radix, shadcn e bibliotecas de layout, padronizam classes com `cn`/`cva` e evitam importações diretas quando já existe equivalente local. Estilos são compostos com Tailwind e tokens de `globals.css`; não há CSS avulso por componente.
 
-- `badge.tsx`
-- `button.tsx`
-- `card.tsx`
-- `context-menu.tsx`
-- `dialog.tsx`
-- `dropdown-menu.tsx`
-- `select.tsx`
-- `sheet.tsx`
-- `sidebar.tsx`
-- `table.tsx`
-- `textarea.tsx`
+## Grupos atuais
 
-## Papel da camada `ui/`
+- Ações e status: `button.tsx`, `badge.tsx`.
+- Containers e dados: `card.tsx`, `table.tsx`.
+- Entrada: `select.tsx`, `textarea.tsx`.
+- Sobreposições e menus: `dialog.tsx`, `sheet.tsx`, `dropdown-menu.tsx`, `context-menu.tsx`.
+- Navegação: `sidebar.tsx`.
+- Layout redimensionável: `resizable.tsx`, wrapper de `react-resizable-panels`.
 
-Essa pasta cumpre tres funcoes no estado atual:
+`sheet.tsx` permanece disponível para fluxos em sobreposição, mas o Assistente IA do editor não usa Sheet, portal, overlay ou posicionamento fixo. O dock atual é composto por `PainelLateralRedimensionavel.tsx` sobre `resizable.tsx`, reserva espaço real e mantém o editor montado.
 
-1. encapsular primitivas Radix/shadcn
-2. padronizar classes e variantes com `cn` e, quando necessario, `cva`
-3. impedir que paginas e features importem Radix cru diretamente para casos comuns
+## Painéis e sidebar
 
-## Componentes por grupo
+O layout do laudo mantém um trilho direito permanente e mostra um único dock integrado por vez. IA usa largura de 360 a 640 px e Ilustrações de 320 a 720 px. `use-largura-painel-persistida.ts` normaliza e persiste a largura em pixels somente após interação; aberto/recolhido não é persistido.
 
-### Acoes e status
+A sidebar esquerda suporta recolhimento temporário enquanto o dock está expandido. Esse estado não altera o cookie da preferência normal; uma expansão manual prevalece durante a abertura atual e uma nova abertura do dock pode aplicar novamente o recolhimento temporário.
 
-- `button.tsx`: botao com variantes e tamanhos reutilizados pela aplicacao inteira
-- `badge.tsx`: pills de status, filtros e rotulos curtos
+## Decisão de extensão
 
-### Containers
-
-- `card.tsx`: casca base para blocos de pagina, metricas, dialogs internos e areas informativas
-- `table.tsx`: wrappers semanticos para tabela, header, body, row e cell
-
-### Entrada de dados
-
-- `select.tsx`: wrapper de Select usado em formularios, filtros e configuracoes
-- `textarea.tsx`: textarea com a mesma linguagem visual dos inputs do projeto
-
-### Sobreposicoes e menus
-
-- `dialog.tsx`: base para modais de confirmacao, formularios e previews
-- `sheet.tsx`: painel lateral usado por fluxos como assistencia de IA
-- `dropdown-menu.tsx`: menus de acao compactos
-- `context-menu.tsx`: menus contextuais, inclusive no editor
-
-### Navegacao estrutural
-
-- `sidebar.tsx`: primitives da barra lateral usada pelo layout principal
-
-## Regra de uso no projeto
-
-O renderer deve preferir esses wrappers a importar componentes Radix diretamente quando ja houver equivalente em `ui/`.
-
-Isso garante:
-
-- consistencia visual
-- consistencia de comportamento
-- manutencao centralizada de classes
-
-## Relacao com `globals.css`
-
-Os wrappers de `ui/` vivem combinados com as variaveis e tokens definidos em `src/renderer/styles/globals.css`.
-O projeto nao cria CSS avulso por componente para esses casos; a camada `ui/` assume a composicao via classes Tailwind e tokens globais.
-
-## Regra pratica
-
-Quando uma feature precisa de:
-
-- botao padrao
-- card padrao
-- dialog
-- menu
-- select
-- sidebar
-
-o caminho esperado e reutilizar `src/renderer/components/ui/*`.
-So vale abrir nova abstracao de estilo quando o padrao base nao for suficiente e a diferenca fizer sentido para mais de um fluxo.
+Features devem reutilizar wrappers existentes para botões, diálogos, menus, selects, sidebar e painéis redimensionáveis. Uma abstração nova só se justifica quando reduz duplicação real ou estabiliza um comportamento compartilhado; diferenças exclusivas de uma feature permanecem no componente da própria feature. Testes de layout cobrem limites, persistência de largura, trilho, montagem estável do editor e interação temporária com a sidebar.

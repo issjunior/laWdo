@@ -2,6 +2,13 @@
 
 Aplicação desktop para elaboração de laudos periciais.
 
+## Principais recursos
+
+- Gestão local de REPs, laudos, templates, peças, placeholders e ilustrações.
+- Editor TinyMCE com modos de documento único ou por seções, histórico de versões e exportação em PDF, DOCX e ODT.
+- Assistente IA com Groq e Gemini em dock redimensionável ou janela destacada, aplicação revisável, processamento sequencial de laudos grandes e descrição segura de imagens persistidas.
+- Operação offline-first com SQLite, backup local, logs de auditoria e integração opcional com o GDL.
+
 ## Acesse
 
 - [Página oficial do laWdo](https://issjunior.github.io/laWdo/) — apresentação e informações do sistema.

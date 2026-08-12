@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
+import { useAtalhoSalvarLaudo } from '@/hooks/useAtalhoSalvarLaudo';
+import {
+  useGerenciadorAlteracoesLaudo,
+  type OrigemAlteracaoLaudo,
+} from '@/hooks/useGerenciadorAlteracoesLaudo';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,15 +14,34 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, ArrowLeft, Edit, ChevronDown, ChevronRight, Eye, FileText, Trash2, Layers, List, Bot, SpellCheck, PenLine, Image as ImageIcon, Send, ExternalLink, RefreshCw, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, FileDown, Loader2 } from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
-import { AISectionToolbar } from '@/components/ai/AISectionToolbar';
-import { AISheet, type ChatMessage } from '@/components/ai/AISheet';
+import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
+import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
+import {
+  CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
+  configuracaoPrivacidadeIaValida,
+  deveMascararConteudoIa,
+  type AcaoIa,
+  type AtualizacaoPainelIa,
+  type CamposEstadoPainelIa,
+  type ComandoPainelIa,
+  type FragmentoIa,
+  type ProgressoIa,
+  type RetomadaIa,
+  type SolicitacaoIa,
+} from '@shared/types/ia.types';
+import {
+  BarraEditorLaudo,
+  CabecalhoEditorLaudo,
+  obterClasseBadgeStatusLaudo,
+  RodapeEditorLaudo,
+} from '@/components/laudo/editor/ControlesEditorLaudo';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import {
   Dialog,
@@ -36,19 +60,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import {
+  PainelLateralRedimensionavel,
+  type PainelLateralAtivo,
+} from '@/components/laudo/PainelLateralRedimensionavel';
+import { useSidebar } from '@/components/ui/sidebar';
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/index';
 import type { ExamToggle } from '@/components/rep/exam-fields/index';
 import type { MenuSection } from '@/components/rep/exam-fields/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { reindexarFiguras } from '@/lib/figuras';
 import {
   getClasseSecaoEstrutural,
@@ -68,6 +90,8 @@ import {
   type MapaPlaceholdersResolvidos,
 } from '@/lib/exportacao-placeholders';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
+import { protegerFragmentosIa, restaurarFragmentosIa } from '@/lib/ia-fragmentos';
+import { resolverTextoContextoIa } from '@/lib/ia-contexto';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -150,6 +174,32 @@ const isTinyMceEditor = (editor: TinyMceEditorInstance | null | undefined): edit
 const obterMensagemErro = (erro: unknown, fallback: string): string => (
   erro instanceof Error && erro.message ? erro.message : fallback
 );
+
+const obterMensagemErroIa = (erro: unknown): string => {
+  const valor = typeof erro === 'string'
+    ? erro
+    : erro instanceof Error ? erro.message : '';
+  const codigo = valor.split(':')[0];
+  const mensagens: Record<string, string> = {
+    CONFIGURACAO_AUSENTE: 'Configure o provedor, o modelo e a chave de API em Modelos de IA antes de tentar novamente.',
+    NAO_AUTORIZADO: 'A chave de API foi recusada pelo provedor. Revise a configuração em Modelos de IA.',
+    ENTRADA_INVALIDA: 'O provedor recusou esta solicitação. Tente reduzir o escopo ou selecionar outro modelo.',
+    LIMITE_EXCEDIDO: 'O conteúdo selecionado excede o limite do modelo. Reduza o escopo e tente novamente.',
+    SEM_CONEXAO: 'Não foi possível conectar ao provedor de IA. Verifique sua conexão e tente novamente.',
+    LIMITE_REQUISICOES: 'O provedor atingiu o limite temporário de solicitações. Aguarde um momento e tente novamente.',
+    TIMEOUT: 'A IA demorou mais que o esperado para responder. Tente novamente ou reduza o escopo.',
+    PROVEDOR_INDISPONIVEL: 'O provedor de IA está temporariamente indisponível. Tente novamente em alguns instantes.',
+    RESPOSTA_INVALIDA: 'A IA respondeu em um formato inesperado mesmo após uma tentativa de correção. Tente novamente; se persistir, selecione outro modelo.',
+    CANCELADO: 'A operação foi cancelada. O conteúdo do laudo não foi alterado.',
+    OPERACAO_EM_ANDAMENTO: 'Já existe uma operação de IA em andamento. Aguarde sua conclusão ou cancele-a antes de iniciar outra.',
+    CONFIRMACAO_NECESSARIA: 'Revise e confirme o plano antes de iniciar o processamento.',
+    PLANO_ALTERADO: 'O texto ou as configurações mudaram após o planejamento. Gere a solicitação novamente.',
+    RETOMADA_INDISPONIVEL: 'Os resultados intermediários não estão mais disponíveis. Inicie novamente o processamento.',
+    RETOMADA_INVALIDA: 'O texto ou as configurações mudaram. Por segurança, o processamento deve ser iniciado novamente.',
+    ERRO_INTERNO: 'Ocorreu uma falha interna ao processar a solicitação. Tente novamente.',
+  };
+  return mensagens[codigo] || 'Não foi possível concluir a solicitação de IA. Tente novamente.';
+};
 
 type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
 
@@ -264,6 +314,88 @@ const aplicarPlaceholders = (
   tipoExameCodigo: extraContext?.tipoExameCodigo,
 });
 
+const converterHtmlEmTexto = (html: string): string => {
+  try {
+    return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() || '';
+  } catch {
+    return html;
+  }
+};
+
+const converterTextoEmHtmlSeguro = (texto: string): string => {
+  const escaparHtml = (valor: string) => valor
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+  return texto
+    .split(/\r?\n/)
+    .map(linha => linha.trim() ? `<p>${escaparHtml(linha)}</p>` : '<p>&nbsp;</p>')
+    .join('');
+};
+
+const seletorTextoProtegidoIa = 'figure, figcaption, script, style, [data-placeholder], [contenteditable="false"]';
+
+const extrairFragmentosIa = (html: string): FragmentoIa[] => {
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  const walker = documento.createTreeWalker(documento.body, NodeFilter.SHOW_TEXT);
+  const fragmentos: FragmentoIa[] = [];
+  let no: Node | null;
+  while ((no = walker.nextNode())) {
+    const pai = no.parentElement;
+    if (!pai || pai.closest(seletorTextoProtegidoIa) || !no.textContent?.trim()) continue;
+    fragmentos.push({ id: `texto-${fragmentos.length}`, texto: no.textContent });
+  }
+  return fragmentos;
+};
+
+const reconstruirHtmlIa = (htmlOriginal: string, fragmentos: FragmentoIa[]): string | null => {
+  const documento = new DOMParser().parseFromString(htmlOriginal, 'text/html');
+  const walker = documento.createTreeWalker(documento.body, NodeFilter.SHOW_TEXT);
+  const nos: Text[] = [];
+  let no: Node | null;
+  while ((no = walker.nextNode())) {
+    if (no.parentElement && !no.parentElement.closest(seletorTextoProtegidoIa) && no.textContent?.trim()) nos.push(no as Text);
+  }
+  if (nos.length !== fragmentos.length || fragmentos.some((fragmento, indice) => fragmento.id !== `texto-${indice}`)) return null;
+  nos.forEach((texto, indice) => { texto.textContent = fragmentos[indice].texto; });
+  return documento.body.innerHTML;
+};
+
+const assinaturaEstruturalIa = (html: string): string => {
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  const descrever = (elemento: Element): string => {
+    const atributos = Array.from(elemento.attributes)
+      .map(atributo => `${atributo.name}=${atributo.value}`)
+      .sort()
+      .join(';');
+    return `<${elemento.tagName.toLowerCase()} ${atributos}>${Array.from(elemento.children).map(descrever).join('')}</${elemento.tagName.toLowerCase()}>`;
+  };
+  return Array.from(documento.body.children).map(descrever).join('');
+};
+
+const calcularFingerprintIa = async (tipo: AlvoIaCapturado['tipo'], html: string): Promise<string> => {
+  const dados = `${tipo}\n${assinaturaEstruturalIa(html)}\n${extrairFragmentosIa(html).map(fragmento => `${fragmento.id}:${fragmento.texto}`).join('\n')}`;
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(dados));
+  return Array.from(new Uint8Array(hash)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const obterMascaramentoIa = async (): Promise<boolean> => {
+  const privacidadeResposta = await window.ipcAPI.configuracao.obter('privacidade_ia');
+  let configuracao = CONFIGURACAO_PRIVACIDADE_IA_PADRAO;
+  if (privacidadeResposta.success && typeof privacidadeResposta.data === 'string') {
+    try {
+      const valor: unknown = JSON.parse(privacidadeResposta.data);
+      if (configuracaoPrivacidadeIaValida(valor)) configuracao = valor;
+    } catch {
+      configuracao = CONFIGURACAO_PRIVACIDADE_IA_PADRAO;
+    }
+  }
+  return deveMascararConteudoIa(configuracao);
+};
+
 interface LaudoItem {
   id: string;
   rep_id: string;
@@ -289,8 +421,48 @@ interface LaudoItem {
 
 type SecaoEditor = SecaoEstruturalLaudo;
 
+interface RespostaIaPendente {
+  texto: string;
+  htmlProposto: string;
+  conteudoAtual: string;
+  conteudoProposto: string;
+  indiceAlvo: number;
+  conteudoAlvo: string;
+  alvoId: string;
+  fragmentosPropostos: FragmentoIa[];
+}
+
+type BookmarkTinyMce = ReturnType<TinyMceEditorInstance['selection']['getBookmark']>;
+
+interface AlvoIaCapturado {
+  id: string;
+  indice: number;
+  editorId: string;
+  tipo: 'selecao' | 'secao' | 'laudo_completo' | 'cursor';
+  conteudo: string;
+  texto: string;
+  bookmark: BookmarkTinyMce | null;
+  fingerprint?: string;
+}
+
+interface ExecucaoIaPreparada {
+  solicitacao: SolicitacaoIa;
+  alvo: AlvoIaCapturado;
+  html: string;
+  indice: number;
+  descricao: string;
+  chatKey: string;
+  protecao: ReturnType<typeof protegerFragmentosIa> | null;
+}
+
+interface RetomadaIaPendente {
+  retomada: RetomadaIa;
+  execucao: ExecucaoIaPreparada;
+}
+
 export const LaudosPage: React.FC = () => {
   const navigate = useNavigate();
+  const { setTemporariamenteRecolhida } = useSidebar();
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<LaudoItem | null>(null);
@@ -298,23 +470,21 @@ export const LaudosPage: React.FC = () => {
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
-  const [alteracoesPendentes, setAlteracoesPendentes] = useState(false);
+  const {
+    estadoSalvamento,
+    alteracoesPendentes,
+    salvando,
+    iniciarSessao,
+    encerrarSessao,
+    registrarAlteracao,
+    iniciarSalvamento,
+    concluirSalvamento,
+    falharSalvamento,
+    executarSemRegistrar,
+  } = useGerenciadorAlteracoesLaudo();
   const [dialogoSaidaAberto, setDialogoSaidaAberto] = useState(false);
   const salvarAntesDeVoltarRef = useRef<HTMLButtonElement>(null);
   useRegistrarAlteracoesPendentes('editor-laudo', Boolean(editando) && alteracoesPendentes);
-  const singleTemImagens = useMemo(() => {
-    if (!singleEditorHtml) return false;
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(singleEditorHtml, 'text/html');
-      return Array.from(doc.querySelectorAll('img')).some(
-        (img) => img.src.startsWith('data:') || img.src.startsWith('http') || img.src.startsWith('blob:')
-      );
-    } catch {
-      return false;
-    }
-  }, [singleEditorHtml]);
-  const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -330,13 +500,22 @@ export const LaudosPage: React.FC = () => {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
 
   const [iaSheetOpen, setIaSheetOpen] = useState(false);
+  const [painelIaDestacado, setPainelIaDestacado] = useState(false);
   const [iaSheetSecaoIdx, setIaSheetSecaoIdx] = useState<number | null>(null);
   const [iaSheetSecaoTitulo, setIaSheetSecaoTitulo] = useState('');
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
   const [iaLoading, setIaLoading] = useState(false);
+  const [operacaoIaAtivaId, setOperacaoIaAtivaId] = useState<string | null>(null);
+  const [progressoIa, setProgressoIa] = useState<ProgressoIa | null>(null);
+  const [confirmacaoImagemIaPendente, setConfirmacaoImagemIaPendente] = useState(false);
+  const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
-  const [iaSheetMode, setIaSheetMode] = useState<'ortografia' | 'adequar' | 'imagem' | 'perguntar' | null>(null);
-  const [singlePergunta, setSinglePergunta] = useState('');
+  const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
+  const [respostaIaPendente, setRespostaIaPendente] = useState<RespostaIaPendente | null>(null);
+  const editorIaAtivoRef = useRef<string | null>(null);
+  const alvosIaRef = useRef(new Map<string, AlvoIaCapturado>());
+  const execucoesIaReenviaveisRef = useRef(new Map<string, ExecucaoIaPreparada>());
+  const reconciliacaoImagensRef = useRef<Promise<void> | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
@@ -348,6 +527,16 @@ export const LaudosPage: React.FC = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
   const [figuraSubstituicaoSolicitada, setFiguraSubstituicaoSolicitada] = useState<string | null>(null);
+
+  const painelLateralAtivo: PainelLateralAtivo = iaSheetOpen
+    ? 'ia'
+    : iluminacoesPanelOpen ? 'ilustracoes' : null;
+  const painelLateralExpandido = painelLateralAtivo !== null && !panelCollapsed;
+
+  useEffect(() => {
+    setTemporariamenteRecolhida(painelLateralExpandido);
+    return () => setTemporariamenteRecolhida(false);
+  }, [painelLateralExpandido, setTemporariamenteRecolhida]);
 
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineLaudo, setTimelineLaudo] = useState<LaudoItem | null>(null);
@@ -405,11 +594,9 @@ export const LaudosPage: React.FC = () => {
       });
   }, [editando?.tipo_exame_codigo, exameCamposEspecificos]);
 
-  const togglePanel = useCallback(() => {
-    setPanelCollapsed(prev => !prev);
-  }, []);
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
+  const [imagemSelecionadaIaId, setImagemSelecionadaIaId] = useState<string | null>(null);
 
   const [ilustracoesKey, setIlustracoesKey] = useState(0);
   const [ilustracoesRemounting, setIlustracoesRemounting] = useState(false);
@@ -480,6 +667,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const SINGLE_CHAT_KEY = 'single-editor';
+  const chaveChatImagemIa = (imagemId: string) => `imagem-${imagemId}`;
 
   const placeholderChaves = useMemo(
     () => Array.from(new Set([
@@ -567,14 +755,18 @@ export const LaudosPage: React.FC = () => {
     }))
   ), []);
 
-  const atualizarConteudoSecao = useCallback((idx: number, novoConteudo: string) => {
-    setAlteracoesPendentes(true);
+  const atualizarConteudoSecao = useCallback((
+    idx: number,
+    novoConteudo: string,
+    origem: OrigemAlteracaoLaudo = 'usuario',
+  ) => {
+    registrarAlteracao(origem);
     setSecoes(prev => {
       const novas = [...prev];
       novas[idx] = { ...novas[idx], conteudo: novoConteudo };
       return novas;
     });
-  }, []);
+  }, [registrarAlteracao]);
 
   const obterSecoesAtuaisDoEditor = useCallback((): SecaoEditor[] => {
     if (editorMode === 'single') {
@@ -587,10 +779,9 @@ export const LaudosPage: React.FC = () => {
     return secoes.map((secao, idx) => {
       const editor = obterEditorTinyMce(`secao-${idx}`);
       const conteudo = editor ? editor.getContent() : secao.conteudo;
-      if (editor) atualizarConteudoSecao(idx, conteudo);
       return { ...secao, conteudo };
     });
-  }, [atualizarConteudoSecao, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+  }, [editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
   const montarHtmlEstruturalAtual = useCallback((secoesFonte: SecaoEditor[]) => {
     const htmlEstrutural = reconstruirHtmlEstrutural(reindexarSecoesEditadas(secoesFonte));
@@ -690,6 +881,19 @@ export const LaudosPage: React.FC = () => {
     };
   }, [syncEnabled, editando, editorMode, secoes, singleEditorHtml]);
 
+  useEffect(() => {
+    setImagemSelecionadaIaId(null);
+  }, [editando?.id, editorMode]);
+
+  useEffect(() => {
+    if (!imagemSelecionadaIaId) return;
+    const marcador = `data-image-id="${imagemSelecionadaIaId}"`;
+    const imagemPermaneceNoLaudo = editorMode === 'single'
+      ? singleEditorHtml.includes(marcador)
+      : secoes.some(secao => secao.conteudo.includes(marcador));
+    if (!imagemPermaneceNoLaudo) setImagemSelecionadaIaId(null);
+  }, [editorMode, imagemSelecionadaIaId, secoes, singleEditorHtml]);
+
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const editor = obterEditorTinyMce(editorId);
     if (editor) {
@@ -781,6 +985,64 @@ export const LaudosPage: React.FC = () => {
     }
     return secoes.flatMap(s => extrairFigurasDoHtml(s.conteudo));
   }, [editorMode, singleEditorHtml, secoes]);
+
+  const reconciliarImagensDoEditor = useCallback(async (): Promise<void> => {
+    if (!editando?.id) return;
+    if (reconciliacaoImagensRef.current) return reconciliacaoImagensRef.current;
+
+    const reconciliar = async () => {
+      const editorIds = editorMode === 'single'
+        ? ['laudo-single-editor']
+        : secoes.map((_, indice) => `secao-${indice}`);
+      const figuras = editorIds.flatMap(editorId => {
+        const editor = obterEditorTinyMce(editorId);
+        return Array.from(editor?.getBody()?.querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]') || [])
+          .map(figura => ({ editorId, figura }));
+      });
+
+      for (const [indice, { figura }] of figuras.entries()) {
+        const imagemId = figura.getAttribute('data-image-id');
+        const imagem = figura.querySelector('img');
+        const dataUri = imagem?.getAttribute('src') || '';
+        if (!imagemId || !/^data:image\/(?:jpeg|png|gif|bmp|webp);base64,/i.test(dataUri)) continue;
+
+        const legenda = figura.querySelector('figcaption')?.textContent
+          ?.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*/i, '')
+          .trim() || '';
+        const resposta = await window.ipcAPI.ilustracoes.salvarImagem(editando.id, {
+          id: imagemId,
+          nomeArquivo: `imagem-editor-${indice + 1}`,
+          dataUri,
+          legenda,
+          origem: 'local',
+          sequencia: indice + 1,
+        });
+        if (!resposta.success) throw new Error(resposta.error || 'Não foi possível vincular a imagem ao laudo.');
+        const arquivamento = await window.ipcAPI.ilustracoes.arquivarImagem(editando.id, imagemId);
+        if (!arquivamento.success) throw new Error(arquivamento.error || 'Não foi possível atualizar a imagem vinculada.');
+      }
+
+      if (editorMode === 'single') {
+        const editor = obterEditorTinyMce('laudo-single-editor');
+        if (!editor) return;
+        const html = editor.getContent();
+        setSingleEditorHtml(html);
+        setSecoes(parseSingleHtmlToSecoes(html, secoes));
+        return;
+      }
+
+      setSecoes(prev => prev.map((secao, indice) => {
+        const editor = obterEditorTinyMce(`secao-${indice}`);
+        return editor ? { ...secao, conteudo: editor.getContent() } : secao;
+      }));
+    };
+
+    const promessa = reconciliar().finally(() => {
+      reconciliacaoImagensRef.current = null;
+    });
+    reconciliacaoImagensRef.current = promessa;
+    return promessa;
+  }, [editando?.id, editorMode, parseSingleHtmlToSecoes, secoes]);
 
   const handleScrollToFigure = useCallback((imageId: string) => {
     const editorIds = editorMode === 'single'
@@ -955,6 +1217,7 @@ export const LaudosPage: React.FC = () => {
       }
     },
     onDeleteImage: (imageId) => {
+      setImagemSelecionadaIaId(atual => atual === imageId ? null : atual);
       if (editorMode === 'single') {
         const editor = obterEditorTinyMce('laudo-single-editor');
         if (!editor) return;
@@ -1111,6 +1374,9 @@ export const LaudosPage: React.FC = () => {
           return novas;
         });
       }
+      void reconciliarImagensDoEditor().catch(error => {
+        toast.error(obterMensagemErro(error, 'Não foi possível vincular as imagens do editor ao laudo.'));
+      });
     },
     onInsertAll: (imagens) => {
       if (!imagens || imagens.length === 0) {
@@ -1160,6 +1426,7 @@ export const LaudosPage: React.FC = () => {
     onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
     onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
     onReplaceImage: (imageId, imagem) => {
+      setImagemSelecionadaIaId(atual => atual === imageId ? null : atual);
       const executarReplace = () => {
         if (editorMode === 'single') {
           const editor = obterEditorTinyMce('laudo-single-editor');
@@ -1245,6 +1512,7 @@ export const LaudosPage: React.FC = () => {
         case 'ready': cbs.syncCurrentState(); break;
         case 'popIn':
           setPanelPoppedOut(false);
+          setIaSheetOpen(false);
           setIlustracoesPanelOpen(true);
           setPanelCollapsed(false);
           toast.info('Painel de ilustrações retornou ao editor');
@@ -1263,6 +1531,7 @@ export const LaudosPage: React.FC = () => {
 
   const handlePopOut = () => {
     if (!editando?.id) return;
+    setIaSheetOpen(false);
     setIlustracoesPanelOpen(false);
     setPanelPoppedOut(true);
     window.ipcAPI.ilustracoes.openPanel(editando.id, editando.rep_numero);
@@ -1275,6 +1544,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleToggleIlustracoes = () => {
+    setIaSheetOpen(false);
     if (panelPoppedOut) {
       window.ipcAPI.ilustracoes.closePanel();
       setPanelPoppedOut(false);
@@ -1612,7 +1882,7 @@ export const LaudosPage: React.FC = () => {
 
     setModoVisualizacaoPlaceholders('dados');
     setQuantidadeBlocosSuprimidos((laudo.conteudo.match(/data-cond-suprimido="true"/g) || []).length);
-    setAlteracoesPendentes(false);
+    iniciarSessao();
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
     setEditorMode('single');
@@ -1620,7 +1890,7 @@ export const LaudosPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setEditando(laudo);
-  }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes]);
+  }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao]);
 
   const aplicarModoNoEditor = useCallback((editor: TinyMceEditorInstance) => {
     aplicarModoVisualizacaoPlaceholders(editor, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders);
@@ -1649,7 +1919,7 @@ export const LaudosPage: React.FC = () => {
       bloco?.setAttribute('data-cond-suprimido', 'true');
     });
     const conteudo = editor.getContent();
-    setAlteracoesPendentes(true);
+    registrarAlteracao();
     if (editorMode === 'single') setSingleEditorHtml(conteudo);
     else {
       const indice = editores.indexOf(editor);
@@ -1657,7 +1927,7 @@ export const LaudosPage: React.FC = () => {
     }
     setQuantidadeBlocosSuprimidos(quantidade => quantidade + 1);
     setBlocoParaSuprimir(null);
-  }, [atualizarConteudoSecao, blocoParaSuprimir, editorMode, secoes]);
+  }, [atualizarConteudoSecao, blocoParaSuprimir, editorMode, registrarAlteracao, secoes]);
 
   const restaurarBlocosSuprimidos = useCallback(() => {
     const editores = editorMode === 'single'
@@ -1670,9 +1940,9 @@ export const LaudosPage: React.FC = () => {
       if (editorMode === 'single') setSingleEditorHtml(conteudo);
       else atualizarConteudoSecao(indice, conteudo);
     });
-    setAlteracoesPendentes(true);
+    registrarAlteracao();
     setQuantidadeBlocosSuprimidos(0);
-  }, [atualizarConteudoSecao, editorMode, secoes]);
+  }, [atualizarConteudoSecao, editorMode, registrarAlteracao, secoes]);
 
   useEffect(() => {
     if (!editando) return;
@@ -1693,7 +1963,7 @@ export const LaudosPage: React.FC = () => {
     setEditando(null);
     setSecoes([]);
     setSingleEditorHtml('');
-    setAlteracoesPendentes(false);
+    encerrarSessao();
     setEditorMode('single');
     setSecoesColapsadas({});
     setError(null);
@@ -1717,10 +1987,23 @@ export const LaudosPage: React.FC = () => {
     finalizarVolta();
   };
 
+  const handleVoltarAoTopo = useCallback(() => {
+    document.getElementById('conteudo-principal')?.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const handleIrAoFinal = useCallback(() => {
+    document.getElementById('rodape-editor-laudo')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end',
+    });
+  }, []);
+
   const handleSalvar = async (): Promise<boolean> => {
-    if (!editando) return false;
+    if (!editando || !iniciarSalvamento()) return false;
     try {
-      setSalvando(true);
       setError(null);
       setSuccess(null);
       const secoesAtuais = reindexarSecoesEditadas(obterSecoesAtuaisDoEditor());
@@ -1733,7 +2016,6 @@ export const LaudosPage: React.FC = () => {
 
       const r = await window.ipcAPI.laudo.updateConteudo(editando.id, conteudoFinal);
       if (r.success) {
-        setAlteracoesPendentes(false);
         const secoesNormalizadas = parsearSecoesEstruturais(conteudoFinal).map(secao => ({
           ...secao,
           titulo: normalizarTituloSecao(secao.titulo),
@@ -1751,35 +2033,42 @@ export const LaudosPage: React.FC = () => {
           setSingleEditorHtml(htmlEditorUnico);
           const editor = obterEditorTinyMce('laudo-single-editor');
           if (editor) {
-            editor.setContent(htmlEditorUnico);
+            executarSemRegistrar(() => editor.setContent(htmlEditorUnico));
           }
         } else {
           setSecoes(secoesNormalizadas);
           secoesNormalizadas.forEach((sec, idx) => {
             const editor = obterEditorTinyMce(`secao-${idx}`);
             if (editor) {
-              editor.setContent(sec.conteudo);
+              executarSemRegistrar(() => editor.setContent(sec.conteudo));
             }
           });
         }
 
+        concluirSalvamento();
         setTimeout(() => setSuccess(null), 3000);
         return true;
       } else {
+        falharSalvamento();
         setError(r.error || 'Erro ao salvar laudo');
         return false;
       }
     } catch (e: unknown) {
+      falharSalvamento();
       setError(obterMensagemErro(e, 'Erro ao salvar laudo'));
       return false;
-    } finally {
-      setSalvando(false);
     }
   };
 
+  useAtalhoSalvarLaudo({
+    ativo: Boolean(editando),
+    bloqueado: salvando || carregandoPreview || exportando,
+    onSalvar: () => void handleSalvar(),
+  });
+
   const handleReindexarSecoes = useCallback(() => {
     try {
-      setAlteracoesPendentes(true);
+      registrarAlteracao();
       const secoesAtuais = reindexarSecoesEditadas(obterSecoesAtuaisDoEditor());
       setSecoes(secoesAtuais);
 
@@ -1794,246 +2083,748 @@ export const LaudosPage: React.FC = () => {
     } catch (e: unknown) {
       setError(obterMensagemErro(e, 'Erro ao reindexar seções'));
     }
-  }, [buildSingleHtmlFromSecoes, editorMode, obterSecoesAtuaisDoEditor, reindexarSecoesEditadas]);
+  }, [
+    buildSingleHtmlFromSecoes,
+    editorMode,
+    obterSecoesAtuaisDoEditor,
+    registrarAlteracao,
+    reindexarSecoesEditadas,
+  ]);
 
   const handleOpenSheet = (idx: number, titulo: string) => {
+    if (!panelPoppedOut) {
+      setIlustracoesPanelOpen(false);
+    }
     setIaSheetSecaoIdx(idx);
     setIaSheetSecaoTitulo(titulo);
+    setImagemSelecionadaIaId(null);
     setIaSheetOpen(true);
+    setPanelCollapsed(false);
     setIaError(null);
   };
 
-  /**
-   * Resolve os valores reais dos placeholders num bloco HTML antes de enviar à IA.
-   * Usa os dados da REP vinculada ao laudo em edição.
-   */
-  const resolverPlaceholdersNoHtml = async (html: string): Promise<string> => {
-    if (!editando) return html;
-    try {
-      const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
-      if (!rRep.success || !rRep.data) return html;
-      const repData = rRep.data;
-
-      let solicitanteNome = '';
-      let tipoExameNome = '';
-      let tipoExameCodigo = '';
-
-      if (repData.solicitante_id) {
-        try {
-          const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
-          if (rSol.success && rSol.data) solicitanteNome = rSol.data.nome || '';
-        } catch {}
-      }
-      if (repData.tipo_exame_id) {
-        try {
-          const rTipo = await window.ipcAPI.tipoExame.findById(repData.tipo_exame_id);
-          if (rTipo.success && rTipo.data) {
-            tipoExameNome = rTipo.data.nome || '';
-            tipoExameCodigo = rTipo.data.codigo || '';
-          }
-        } catch {}
-      }
-
-      // Substituir os {{placeholders}} pelos valores reais
-      let resolved = aplicarPlaceholders(html, repData, { solicitanteNome, tipoExameNome, tipoExameCodigo });
-
-      // Substituir quaisquer placeholders customizados (valor padrão do banco)
-      for (const p of placeholders) {
-        if (p.valor) {
-          resolved = resolved.split(`{{${p.chave}}}`).join(p.valor);
-        }
-      }
-
-      return resolved;
-    } catch {
-      return html; // fallback: envia o original
-    }
-  };
-
-  const handleRevisarOrtografia = async (html: string, idx: number) => {
-    try {
-      setIaSheetMode('ortografia');
-      setIaLoading(true);
-      setIaError(null);
-      // Abre o sheet para o usuário ver a sugestão
-      handleOpenSheet(idx, secoes[idx]?.titulo || '');
-      const htmlResolvido = await resolverPlaceholdersNoHtml(html);
-      const r = await window.ipcAPI.ia.revisarOrtografia(htmlResolvido);
-      if (r.success && r.data) {
-        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-        const resposta: ChatMessage = {
-          role: 'assistant',
-          content: String(r.data),
-          timestamp: Date.now(),
-        };
-        setChatMessages(prev => ({
-          ...prev,
-          [chatKey]: [...(prev[chatKey] || []), resposta],
-        }));
-      } else {
-        setIaError(r.error || 'Erro ao revisar ortografia');
-      }
-    } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao revisar ortografia'));
-    } finally {
-      setIaLoading(false);
-    }
-  };
-
-  const handleAdequarEscrita = async (html: string, idx: number) => {
-    try {
-      setIaSheetMode('adequar');
-      setIaLoading(true);
-      setIaError(null);
-      const htmlResolvido = await resolverPlaceholdersNoHtml(html);
-      const r = await window.ipcAPI.ia.adequarEscrita(htmlResolvido);
-      if (r.success && r.data) {
-        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-        const resposta: ChatMessage = {
-          role: 'assistant',
-          content: String(r.data),
-          timestamp: Date.now(),
-        };
-        setChatMessages(prev => ({
-          ...prev,
-          [chatKey]: [...(prev[chatKey] || []), resposta],
-        }));
-      } else {
-        setIaError(r.error || 'Erro ao adequar escrita');
-      }
-    } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao adequar escrita'));
-    } finally {
-      setIaLoading(false);
-    }
-  };
-
-  const handleDescreverImagem = async (imagens: Array<{ src: string; alt?: string }>, idx: number) => {
-    try {
-      setIaSheetMode('imagem');
-      setIaLoading(true);
-      setIaError(null);
-      const r = await window.ipcAPI.ia.descreverImagem(imagens);
-      if (r.success && r.data) {
-        const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-        const resposta: ChatMessage = {
-          role: 'assistant',
-          content: String(r.data),
-          timestamp: Date.now(),
-        };
-        setChatMessages(prev => ({
-          ...prev,
-          [chatKey]: [...(prev[chatKey] || []), resposta],
-        }));
-      } else {
-        setIaError(r.error || 'Erro ao descrever imagem');
-      }
-    } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao descrever imagem'));
-    } finally {
-      setIaLoading(false);
-    }
-  };
-
-  const handlePerguntar = async (pergunta: string, html: string, idx: number, _titulo: string) => {
-    try {
-      setIaSheetMode('perguntar');
-      setIaLoading(true);
-      setIaError(null);
-
-      const userMsg: ChatMessage = {
-        role: 'user',
-        content: pergunta,
-        timestamp: Date.now(),
+  const capturarAlvoIa = (priorizarEscopoDoPainel = false): AlvoIaCapturado | null => {
+    const editorIdDoEscopo = iaSheetSecaoIdx === null
+      ? null
+      : iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : `secao-${iaSheetSecaoIdx}`;
+    const editorId = priorizarEscopoDoPainel && editorIdDoEscopo
+      ? editorIdDoEscopo
+      : editorIaAtivoRef.current || editorIdDoEscopo;
+    const editor = editorId ? obterEditorTinyMce(editorId) : null;
+    if (editor) {
+      const editorIdAtivo = editor.id;
+      const indice = editorIdAtivo === 'laudo-single-editor'
+        ? -1
+        : Number(editorIdAtivo.replace('secao-', ''));
+      const selecaoDoEditorAtivo = editorIdAtivo === editorIaAtivoRef.current;
+      const htmlSelecao = selecaoDoEditorAtivo ? editor.selection.getContent({ format: 'html' }) : '';
+      const textoSelecao = selecaoDoEditorAtivo ? editor.selection.getContent({ format: 'text' }).trim() : '';
+      const temSelecao = Boolean(textoSelecao);
+      const conteudo = temSelecao
+        ? htmlSelecao
+        : (indice === -1 ? editor.getContent() : secoes[indice]?.conteudo || editor.getContent());
+      const textoRenderizado = temSelecao
+        ? textoSelecao
+        : editor.getBody()?.innerText?.trim() || resolverTextoContextoIa(conteudo, mapaPlaceholdersResolvidos);
+      return {
+        id: crypto.randomUUID(),
+        indice,
+        editorId: editorIdAtivo,
+        tipo: temSelecao ? 'selecao' : (indice === -1 ? 'laudo_completo' : 'secao'),
+        conteudo,
+        texto: textoRenderizado,
+        bookmark: editor.selection.getBookmark(2, true),
       };
+    }
 
-      const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
-      setChatMessages(prev => ({
-        ...prev,
-        [chatKey]: [...(prev[chatKey] || []), userMsg],
-      }));
+    if (iaSheetSecaoIdx === null) return null;
+    const indice = iaSheetSecaoIdx;
+    const conteudo = indice === -1 ? singleEditorHtml : secoes[indice]?.conteudo || '';
+    return {
+      id: crypto.randomUUID(),
+      indice,
+      editorId: indice === -1 ? 'laudo-single-editor' : `secao-${indice}`,
+      tipo: indice === -1 ? 'laudo_completo' : 'secao',
+      conteudo,
+      texto: resolverTextoContextoIa(conteudo, mapaPlaceholdersResolvidos),
+      bookmark: null,
+    };
+  };
 
-      const r = await window.ipcAPI.ia.perguntar(pergunta, html);
-      if (r.success && r.data) {
-        const assistantMsg: ChatMessage = {
-          role: 'assistant',
-          content: String(r.data),
+  const registrarEditorIa = (editor: TinyMceEditorInstance) => {
+    editor.on('focus', () => {
+      editorIaAtivoRef.current = editor.id;
+    });
+    editor.on('click', event => {
+      const alvo = event.target as HTMLElement;
+      const figura = alvo.closest<HTMLElement>('.laudo-figure[data-image-id]');
+      const imagemId = figura?.getAttribute('data-image-id') || null;
+      setImagemSelecionadaIaId(imagemId);
+      if (imagemId) setFiguraAtivaId(imagemId);
+    });
+  };
+
+  const handleAbrirAssistenteIa = () => {
+    if (!panelPoppedOut) setIlustracoesPanelOpen(false);
+    const alvo = capturarAlvoIa();
+    if (alvo) {
+      alvosIaRef.current.set(alvo.id, alvo);
+      setIaSheetSecaoIdx(alvo.indice);
+      setIaSheetSecaoTitulo(alvo.tipo === 'selecao' ? 'Seleção atual' : alvo.indice === -1 ? 'Documento completo' : secoes[alvo.indice]?.titulo || 'Seção atual');
+    } else {
+      setIaSheetSecaoIdx(null);
+      setIaSheetSecaoTitulo('Escolha um escopo para iniciar');
+    }
+    setIaSheetOpen(true);
+    setPanelCollapsed(false);
+    setIaError(null);
+  };
+
+  const sessaoPainelIaRef = useRef<string | null>(null);
+  const revisaoPainelIaRef = useRef(0);
+  const ultimoEstadoPainelIaRef = useRef<CamposEstadoPainelIa | null>(null);
+  const painelIaProntoRef = useRef(false);
+  const executarAcaoIaRef = useRef<(acao: AcaoIa) => void>(() => {});
+  const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever', tamanho?: 'automatico' | 'curta' | 'media' | 'longa') => void>(() => {});
+  const reenviarMensagemIaRef = useRef<(mensagemId: string) => void>(() => {});
+  const cancelarOperacaoIaRef = useRef<() => void>(() => {});
+  const retomarOperacaoIaRef = useRef<() => void>(() => {});
+  const limparConversaIaRef = useRef<() => void>(() => {});
+  const descreverImagemIaRef = useRef<() => void>(() => {});
+  const aplicarRespostaIaRef = useRef<(mensagem: ChatMessage) => void>(() => {});
+  const operacaoIaAtivaRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    operacaoIaAtivaRef.current = operacaoIaAtivaId;
+  }, [operacaoIaAtivaId]);
+
+  useEffect(() => {
+    const remover = window.ipcAPI.ia.onProgresso(progresso => {
+      if (progresso.operationId === operacaoIaAtivaRef.current) setProgressoIa(progresso);
+    });
+    return remover;
+  }, []);
+
+  useEffect(() => () => {
+    const operationId = operacaoIaAtivaRef.current;
+    if (operationId) void window.ipcAPI.ia.cancelar(operationId);
+    window.ipcAPI.ia.painelFechar();
+    sessaoPainelIaRef.current = null;
+    painelIaProntoRef.current = false;
+    ultimoEstadoPainelIaRef.current = null;
+  }, [editando?.id]);
+
+  const handleDestacarAssistenteIa = () => {
+    const sessionId = crypto.randomUUID();
+    sessaoPainelIaRef.current = sessionId;
+    revisaoPainelIaRef.current = 0;
+    ultimoEstadoPainelIaRef.current = null;
+    painelIaProntoRef.current = false;
+    setIaSheetOpen(false);
+    setPainelIaDestacado(true);
+    window.ipcAPI.ia.painelAbrir(sessionId);
+  };
+
+  useEffect(() => {
+    const obterMensagensVisiveis = (): ChatMessage[] => {
+      const chaveChat = imagemSelecionadaIaId
+        ? chaveChatImagemIa(imagemSelecionadaIaId)
+        : iaSheetSecaoIdx === -1
+          ? SINGLE_CHAT_KEY
+          : iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : '';
+      return chaveChat ? chatMessages[chaveChat] || [] : [];
+    };
+
+    const publicarEstado = (sessionId: string, forcarSnapshot = false) => {
+      if (sessionId !== sessaoPainelIaRef.current) return;
+      const imagemSelecionada = Boolean(imagemSelecionadaIaId);
+      const editorDisponivel = !imagemSelecionada && iaSheetSecaoIdx !== null;
+      const estado: CamposEstadoPainelIa = {
+        titulo: imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo || 'Escolha um escopo no editor',
+        carregando: iaLoading,
+        erro: iaError,
+        editorDisponivel,
+        imagemSelecionada,
+        contextoImagem: imagemSelecionada,
+        modoAplicacao: iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir',
+        progresso: progressoIa,
+        planoPendente: null,
+        escopoSelecionado: iaSheetSecaoIdx,
+        retomada: retomadaIaPendente?.retomada || null,
+        mensagens: obterMensagensVisiveis().map(mensagem => ({
+          id: mensagem.id,
+          role: mensagem.role,
+          content: mensagem.content,
+          timestamp: mensagem.timestamp,
+          aplicacao: mensagem.aplicacao,
+          acao: mensagem.acao,
+          permiteAplicacao: mensagem.role === 'assistant' && mensagem.acao !== 'descrever_imagem',
+          proposalId: mensagem.proposalId,
+        })),
+        escopos: [
+          { id: -1, titulo: 'Documento completo' },
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+        ],
+      };
+      const anterior = ultimoEstadoPainelIaRef.current;
+      let atualizacao: AtualizacaoPainelIa;
+      if (forcarSnapshot || !anterior) {
+        revisaoPainelIaRef.current += 1;
+        atualizacao = {
+          tipo: 'snapshot',
+          estado: { revisao: revisaoPainelIaRef.current, ...estado },
+        };
+      } else {
+        const alteracoes: Partial<CamposEstadoPainelIa> = {};
+        if (estado.titulo !== anterior.titulo) alteracoes.titulo = estado.titulo;
+        if (estado.carregando !== anterior.carregando) alteracoes.carregando = estado.carregando;
+        if (estado.erro !== anterior.erro) alteracoes.erro = estado.erro;
+        if (estado.editorDisponivel !== anterior.editorDisponivel) alteracoes.editorDisponivel = estado.editorDisponivel;
+        if (estado.imagemSelecionada !== anterior.imagemSelecionada) alteracoes.imagemSelecionada = estado.imagemSelecionada;
+        if (estado.contextoImagem !== anterior.contextoImagem) alteracoes.contextoImagem = estado.contextoImagem;
+        if (estado.modoAplicacao !== anterior.modoAplicacao) alteracoes.modoAplicacao = estado.modoAplicacao;
+        if (JSON.stringify(estado.progresso) !== JSON.stringify(anterior.progresso)) alteracoes.progresso = estado.progresso;
+        if (estado.escopoSelecionado !== anterior.escopoSelecionado) alteracoes.escopoSelecionado = estado.escopoSelecionado;
+        if (JSON.stringify(estado.retomada) !== JSON.stringify(anterior.retomada)) alteracoes.retomada = estado.retomada;
+        if (JSON.stringify(estado.mensagens) !== JSON.stringify(anterior.mensagens)) alteracoes.mensagens = estado.mensagens;
+        if (JSON.stringify(estado.escopos) !== JSON.stringify(anterior.escopos)) alteracoes.escopos = estado.escopos;
+        if (Object.keys(alteracoes).length === 0) return;
+        revisaoPainelIaRef.current += 1;
+        atualizacao = {
+          tipo: 'delta',
+          revisao: revisaoPainelIaRef.current,
+          alteracoes,
+        };
+      }
+      ultimoEstadoPainelIaRef.current = estado;
+      window.ipcAPI.ia.painelPublicar(sessionId, atualizacao);
+    };
+    const removerPronto = window.ipcAPI.ia.onPainelPronto(sessionId => {
+      painelIaProntoRef.current = true;
+      publicarEstado(sessionId, true);
+    });
+    const removerComando = window.ipcAPI.ia.onPainelComando((comando: ComandoPainelIa) => {
+      if (!painelIaProntoRef.current) return;
+      if (comando.tipo === 'executar_acao') {
+        executarAcaoIaRef.current(comando.acao);
+      } else if (comando.tipo === 'enviar_pedido_livre') {
+        enviarMensagemIaRef.current(comando.mensagem, comando.aplicacao, comando.tamanho);
+      } else if (comando.tipo === 'reenviar_mensagem') {
+        reenviarMensagemIaRef.current(comando.mensagemId);
+      } else if (comando.tipo === 'cancelar_operacao') {
+        cancelarOperacaoIaRef.current();
+      } else if (comando.tipo === 'retomar_operacao') {
+        retomarOperacaoIaRef.current();
+      } else if (comando.tipo === 'limpar_conversa') {
+        limparConversaIaRef.current();
+      } else if (comando.tipo === 'descrever_imagem') {
+        descreverImagemIaRef.current();
+      } else if (comando.tipo === 'selecionar_escopo') {
+        if (comando.indice === -1 || secoes[comando.indice]) {
+          setIaSheetSecaoIdx(comando.indice);
+          setIaSheetSecaoTitulo(comando.indice === -1 ? 'Documento completo' : secoes[comando.indice].titulo);
+          setImagemSelecionadaIaId(null);
+          setIaError(null);
+        }
+      } else if (comando.tipo === 'solicitar_ressincronizacao') {
+        if (sessaoPainelIaRef.current) publicarEstado(sessaoPainelIaRef.current, true);
+      } else if (comando.tipo === 'aplicar_resposta') {
+        const mensagem = obterMensagensVisiveis().find(item => item.id === comando.mensagemId);
+        if (mensagem) aplicarRespostaIaRef.current(mensagem);
+      }
+    });
+    const removerReencaixar = window.ipcAPI.ia.onPainelReencaixar(sessionId => {
+      if (sessionId !== sessaoPainelIaRef.current) return;
+      painelIaProntoRef.current = false;
+      setPainelIaDestacado(false);
+      setIlustracoesPanelOpen(false);
+      setIaSheetOpen(true);
+      setPanelCollapsed(false);
+    });
+    const removerFechado = window.ipcAPI.ia.onPainelFechado(sessionId => {
+      if (sessionId === sessaoPainelIaRef.current) {
+        painelIaProntoRef.current = false;
+        setPainelIaDestacado(false);
+      }
+    });
+    if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
+    return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
+  }, [chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, progressoIa, retomadaIaPendente, secoes]);
+
+  const obterDescricaoAcaoIa = (acao: AcaoIa) => {
+    const descricoes: Record<AcaoIa, string> = {
+      ortografia: 'Revisar ortografia',
+      tecnico_pericial: 'Adequar linguagem técnico-pericial',
+      reescrever: 'Reescrever conteúdo',
+      clareza: 'Melhorar clareza',
+      resumir: 'Resumir conteúdo',
+      expandir: 'Expandir conteúdo',
+      inserir: 'Inserir conteúdo',
+    };
+    return descricoes[acao];
+  };
+
+  const execucaoIaPermaneceAtual = async (execucao: ExecucaoIaPreparada): Promise<boolean> => {
+    const { alvo, indice } = execucao;
+    const editor = obterEditorTinyMce(alvo.editorId);
+    try {
+      let conteudoAtual: string;
+      if (alvo.tipo === 'selecao' && editor && alvo.bookmark) {
+        editor.selection.moveToBookmark(alvo.bookmark);
+        conteudoAtual = editor.selection.getContent({ format: 'html' });
+      } else {
+        conteudoAtual = editor?.getContent() || (indice === -1 ? singleEditorHtml : secoes[indice]?.conteudo || '');
+      }
+      return Boolean(alvo.fingerprint)
+        && await calcularFingerprintIa(alvo.tipo, conteudoAtual) === alvo.fingerprint;
+    } catch {
+      return false;
+    }
+  };
+
+  const executarPreparacaoIa = async (
+    execucao: ExecucaoIaPreparada,
+    planoId: string,
+    retomada?: RetomadaIa,
+    mensagemExistenteId?: string,
+  ) => {
+    if (!(await execucaoIaPermaneceAtual(execucao))) {
+      setRetomadaIaPendente(null);
+      setIaError('O texto foi alterado desde o planejamento. Gere uma nova solicitação para evitar aplicar uma resposta ao trecho errado.');
+      return;
+    }
+
+    const operationId = crypto.randomUUID();
+    const { alvo, html, indice, descricao, chatKey, protecao } = execucao;
+    let mensagemId = mensagemExistenteId;
+    try {
+      setIaSheetMode(execucao.solicitacao.acao);
+      setIaLoading(true);
+      setOperacaoIaAtivaId(operationId);
+      operacaoIaAtivaRef.current = operationId;
+      setProgressoIa(null);
+      setIaError(null);
+      alvosIaRef.current.set(alvo.id, alvo);
+
+      if (!retomada && !mensagemExistenteId) {
+        const userMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: descricao,
           timestamp: Date.now(),
+          acao: execucao.solicitacao.acao,
+        };
+        mensagemId = userMsg.id;
+        setChatMessages(prev => ({
+          ...prev,
+          [chatKey]: [...(prev[chatKey] || []), userMsg],
+        }));
+        execucoesIaReenviaveisRef.current.set(userMsg.id, execucao);
+      }
+
+      const r = await window.ipcAPI.ia.executar({
+        ...execucao.solicitacao,
+        operationId,
+        planoId,
+        retomadaId: retomada?.retomadaId,
+      });
+      if (!r.success || !r.data) {
+        if (r.retomada) setRetomadaIaPendente({ retomada: r.retomada, execucao });
+        else setRetomadaIaPendente(null);
+        setIaError(r.retomada
+          ? `${obterMensagemErroIa(r.error)} Os lotes concluídos foram preservados e podem ser retomados.`
+          : obterMensagemErroIa(r.error));
+        const codigo = (r.error || '').split(':')[0];
+        if (!r.retomada && mensagemId && ['SEM_CONEXAO', 'LIMITE_REQUISICOES', 'TIMEOUT', 'PROVEDOR_INDISPONIVEL'].includes(codigo)) {
+          setChatMessages(prev => ({
+            ...prev,
+            [chatKey]: (prev[chatKey] || []).map(mensagem => (
+              mensagem.id === mensagemId ? { ...mensagem, permiteReenvio: true } : mensagem
+            )),
+          }));
+        }
+        return;
+      }
+      setRetomadaIaPendente(null);
+      if (r.data.operationId !== operationId) {
+        setIaError('A resposta recebida não corresponde à solicitação atual. Tente novamente.');
+        return;
+      }
+      const fragmentosRestaurados = protecao
+        ? restaurarFragmentosIa(r.data.fragmentos, protecao)
+        : r.data.fragmentos;
+      if (!fragmentosRestaurados) {
+        setIaError('A resposta alterou dados protegidos do laudo e foi descartada com segurança. Tente novamente; se persistir, selecione outro modelo.');
+        return;
+      }
+      const htmlProposto = reconstruirHtmlIa(html, fragmentosRestaurados);
+      if (htmlProposto && assinaturaEstruturalIa(htmlProposto) === assinaturaEstruturalIa(html)) {
+        const acao = execucao.solicitacao.acao;
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: resolverTextoContextoIa(htmlProposto, mapaPlaceholdersResolvidos),
+          timestamp: Date.now(),
+          aplicacao: acao === 'inserir' ? 'inserir' : 'substituir',
+          acao,
+          alvo: { id: alvo.id, indice, conteudo: html, tipo: alvo.tipo },
+          conteudoProposto: htmlProposto,
+          proposalId: r.data.operationId,
         };
         setChatMessages(prev => ({
           ...prev,
           [chatKey]: [...(prev[chatKey] || []), assistantMsg],
         }));
       } else {
-        setIaError(r.error || 'Erro ao processar pergunta');
+        setIaError('A resposta não preservou a estrutura do trecho selecionado e foi descartada. Gere novamente antes de aplicar qualquer alteração.');
       }
     } catch (e: unknown) {
-      setIaError(obterMensagemErro(e, 'Erro ao processar pergunta'));
+      setIaError(obterMensagemErroIa(e));
     } finally {
       setIaLoading(false);
+      setOperacaoIaAtivaId(atual => atual === operationId ? null : atual);
+      operacaoIaAtivaRef.current = null;
+      setProgressoIa(null);
     }
   };
 
-  const handleApplyResponse = (texto: string) => {
-    if (iaSheetSecaoIdx !== null) {
-      if (iaSheetSecaoIdx === -1) {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        if (!editor) return;
-        if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
-          const descHtml = texto
-            .split('\n')
-            .map((line) => (line.trim() ? `<p>${line}</p>` : ''))
-            .join('');
-          editor.insertContent(descHtml);
-        } else {
-          editor.setContent(texto);
-        }
-        setSingleEditorHtml(editor.getContent());
-        setIaSheetOpen(false);
+  const executarAcaoIa = async (acao: AcaoIa, instrucao?: string, descricaoPersonalizada?: string) => {
+    if (retomadaIaPendente) {
+      await window.ipcAPI.ia.descartarRetomada(retomadaIaPendente.retomada.retomadaId);
+      setRetomadaIaPendente(null);
+    }
+    const alvo = capturarAlvoIa(true);
+    if (!alvo) {
+      setIaError('Escolha uma seção ou posicione o cursor no editor antes de usar o assistente.');
+      return;
+    }
+    const idx = alvo.indice;
+    const html = alvo.conteudo;
+    const fragmentosOriginais = extrairFragmentosIa(html);
+    if (!fragmentosOriginais.length) {
+      setIaError('O escopo selecionado não possui texto editável para processar.');
+      return;
+    }
+    const mascarar = await obterMascaramentoIa();
+    const protecao = mascarar ? protegerFragmentosIa(fragmentosOriginais) : null;
+    const descricao = descricaoPersonalizada || instrucao || obterDescricaoAcaoIa(acao);
+    try {
+      setIaError(null);
+      alvo.fingerprint = await calcularFingerprintIa(alvo.tipo, html);
+      const chatKey = idx === -1 ? SINGLE_CHAT_KEY : `secao-${idx}`;
+      const solicitacao: SolicitacaoIa = {
+        operationId: crypto.randomUUID(),
+        acao,
+        escopo: alvo.tipo,
+        instrucao,
+        contextoResolvido: alvo.texto,
+        fragmentos: protecao?.fragmentos || fragmentosOriginais,
+      };
+      const execucao: ExecucaoIaPreparada = { solicitacao, alvo, html, indice: idx, descricao, chatKey, protecao };
+      const planejamento = await window.ipcAPI.ia.planejar(solicitacao);
+      if (!planejamento.success || !planejamento.data) {
+        setIaError(obterMensagemErroIa(planejamento.error));
+        return;
+      }
+      await executarPreparacaoIa(execucao, planejamento.data.planoId);
+    } catch (e: unknown) {
+      setIaError(obterMensagemErroIa(e));
+    }
+  };
+
+  const retomarOperacaoIa = async () => {
+    if (!retomadaIaPendente || iaLoading) return;
+    await executarPreparacaoIa(
+      retomadaIaPendente.execucao,
+      retomadaIaPendente.retomada.planoId,
+      retomadaIaPendente.retomada,
+    );
+  };
+
+  const descreverImagemSelecionadaIa = async (confirmada = false) => {
+    const laudoId = editando?.id;
+    if (!imagemSelecionadaIaId || !laudoId) {
+      setIaError('Clique em uma imagem do laudo antes de solicitar sua descrição.');
+      return;
+    }
+    if (!confirmada) {
+      setConfirmacaoImagemIaPendente(true);
+      return;
+    }
+
+    try {
+      await reconciliarImagensDoEditor();
+    } catch (error: unknown) {
+      setIaError(obterMensagemErro(error, 'Não foi possível vincular a imagem selecionada ao laudo.'));
+      return;
+    }
+
+    const imagemId = imagemSelecionadaIaId;
+    if (!imagemId) {
+      setIaError('A imagem selecionada não está mais disponível. Selecione-a novamente e tente descrever.');
+      return;
+    }
+
+    const operationId = crypto.randomUUID();
+    const chatKey = chaveChatImagemIa(imagemId);
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: 'Descrever imagem selecionada',
+      timestamp: Date.now(),
+      acao: 'descrever_imagem',
+    };
+
+    try {
+      setIaSheetMode(null);
+      setIaLoading(true);
+      setOperacaoIaAtivaId(operationId);
+      setIaError(null);
+      setChatMessages(prev => ({
+        ...prev,
+        [chatKey]: [...(prev[chatKey] || []), userMsg],
+      }));
+
+      const resposta = await window.ipcAPI.ia.descreverImagem({
+        operationId,
+        laudoId,
+        imagemId,
+      });
+      const descricao = resposta.data?.descricao.trim();
+      if (!resposta.success || !descricao) {
+        const mensagens: Record<string, string> = {
+          CONFIGURACAO_AUSENTE: 'Configure um provedor e um modelo de IA antes de descrever a imagem.',
+          MODELO_INCOMPATIVEL: 'O modelo selecionado não oferece suporte à análise de imagens.',
+          FORMATO_IMAGEM_NAO_SUPORTADO: 'O formato desta imagem não é suportado pelo modelo selecionado.',
+          IMAGEM_MUITO_GRANDE: 'A imagem selecionada excede o limite aceito pelo provedor de IA.',
+          IMAGEM_PROTEGIDA: 'A descrição de imagens exige o modo Conteúdo integral. Ajuste essa opção em Modelos de IA antes de continuar.',
+          IMAGEM_NAO_VINCULADA: 'Esta imagem ainda não foi vinculada ao armazenamento do laudo. Atualize as figuras e tente novamente.',
+          IMAGEM_DE_OUTRO_LAUDO: 'A imagem selecionada pertence a outro laudo. Selecione a figura correta e tente novamente.',
+          RESPOSTA_VAZIA: 'A IA não retornou uma descrição para a imagem selecionada.',
+          RESPOSTA_INVALIDA: 'A resposta do provedor não pôde ser interpretada como uma descrição.',
+        };
+        setIaError(mensagens[resposta.error || ''] || resposta.error || 'Erro ao descrever a imagem selecionada.');
+        return;
+      }
+      if (resposta.data?.operationId !== operationId) {
+        setIaError('A resposta recebida não corresponde à solicitação atual.');
         return;
       }
 
-      const editorId = `secao-${iaSheetSecaoIdx}`;
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: descricao,
+        timestamp: Date.now(),
+        acao: 'descrever_imagem',
+      };
+      setChatMessages(prev => ({
+        ...prev,
+        [chatKey]: [...(prev[chatKey] || []), assistantMsg],
+      }));
+    } catch (error: unknown) {
+      setIaError(obterMensagemErro(error, 'Erro ao descrever a imagem selecionada'));
+    } finally {
+      setIaLoading(false);
+      setOperacaoIaAtivaId(atual => atual === operationId ? null : atual);
+    }
+  };
 
-      if (iaSheetMode === 'imagem' || iaSheetMode === 'perguntar') {
-        // Converter quebras de linha em parágrafos de HTML
-        const descHtml = texto
-          .split('\n')
-          .map((line) => (line.trim() ? `<p>${line}</p>` : ''))
-          .join('');
+  const cancelarOperacaoIa = async () => {
+    const operationId = operacaoIaAtivaId;
+    if (!operationId) return;
+    const resposta = await window.ipcAPI.ia.cancelar(operationId);
+    if (!resposta.success) {
+      setIaError(resposta.error || 'Não foi possível cancelar a operação atual.');
+      return;
+    }
+    setIaError(null);
+  };
 
-        const editor = obterEditorTinyMce(editorId);
-        if (editor) {
-          // Insere na posição atual do cursor no editor correspondente
-          editor.insertContent(descHtml);
-        } else {
-          // Fallback caso o editor não seja encontrado: anexa ao final
-          const atual = secoes[iaSheetSecaoIdx]?.conteudo || '';
-          const divisor = atual.trim() ? '<p>&nbsp;</p>' : '';
-          atualizarConteudoSecao(iaSheetSecaoIdx, atual + divisor + descHtml);
-        }
+  const inserirRespostaIa = (texto: string, alvo: AlvoIaCapturado) => {
+    const htmlInsercao = converterTextoEmHtmlSeguro(texto);
+    const editorDoAlvo = obterEditorTinyMce(alvo.editorId);
+
+    if (editorDoAlvo && alvo.bookmark) {
+      try {
+        editorDoAlvo.selection.moveToBookmark(alvo.bookmark);
+        editorDoAlvo.undoManager.transact(() => editorDoAlvo.insertContent(htmlInsercao));
+        if (alvo.indice === -1) setSingleEditorHtml(editorDoAlvo.getContent());
+        else atualizarConteudoSecao(alvo.indice, editorDoAlvo.getContent(), 'ia');
+        registrarAlteracao();
+        return;
+      } catch {
+        setIaError('A posição original de inserção não está mais disponível. Gere uma nova resposta antes de inserir.');
+        return;
+      }
+    }
+
+    if (alvo.indice === -1) {
+      const editor = obterEditorTinyMce('laudo-single-editor');
+      if (!editor) return;
+      editor.undoManager.transact(() => editor.insertContent(htmlInsercao));
+      setSingleEditorHtml(editor.getContent());
+    } else {
+      const editor = obterEditorTinyMce(`secao-${alvo.indice}`);
+      if (editor) {
+        editor.undoManager.transact(() => editor.insertContent(htmlInsercao));
+        atualizarConteudoSecao(alvo.indice, editor.getContent(), 'ia');
       } else {
-        const editor = obterEditorTinyMce(editorId);
-        if (editor) {
-          editor.setContent(texto);
-        }
-        atualizarConteudoSecao(iaSheetSecaoIdx, texto);
+        const atual = secoes[alvo.indice]?.conteudo || '';
+        const divisor = atual.trim() ? '<p>&nbsp;</p>' : '';
+        atualizarConteudoSecao(alvo.indice, atual + divisor + htmlInsercao, 'ia');
       }
-      setIaSheetOpen(false);
     }
+
+    registrarAlteracao();
   };
 
-  const handleSendChatMessage = (message: string) => {
-    if (iaSheetSecaoIdx !== null) {
-      if (iaSheetSecaoIdx === -1) {
-        handlePerguntar(message, singleEditorHtml, -1, 'Editor único');
+  const substituirConteudoComRespostaIa = async (resposta: RespostaIaPendente) => {
+    const { indiceAlvo } = resposta;
+    const alvo = alvosIaRef.current.get(resposta.alvoId);
+    if (!alvo) {
+      setIaError('O alvo original desta resposta não está mais disponível. Gere uma nova resposta antes de aplicar.');
+      setRespostaIaPendente(null);
+      return;
+    }
+    const editorAtual = obterEditorTinyMce(indiceAlvo === -1 ? 'laudo-single-editor' : `secao-${indiceAlvo}`);
+    if (alvo.tipo === 'selecao' && editorAtual && alvo.bookmark) {
+      try {
+        editorAtual.selection.moveToBookmark(alvo.bookmark);
+        const conteudoSelecionado = editorAtual.selection.getContent({ format: 'html' });
+        if (!alvo.fingerprint || await calcularFingerprintIa(alvo.tipo, conteudoSelecionado) !== alvo.fingerprint) {
+          throw new Error('Seleção alterada');
+        }
+        editorAtual.undoManager.transact(() => editorAtual.insertContent(resposta.htmlProposto));
+        if (indiceAlvo === -1) setSingleEditorHtml(editorAtual.getContent());
+        else atualizarConteudoSecao(indiceAlvo, editorAtual.getContent(), 'ia');
+        registrarAlteracao();
+        setRespostaIaPendente(null);
+        alvosIaRef.current.delete(resposta.alvoId);
+        return;
+      } catch {
+        setIaError('A seleção original foi alterada ou não está mais disponível. Gere uma nova resposta antes de aplicar.');
+        setRespostaIaPendente(null);
         return;
       }
-      const html = secoes[iaSheetSecaoIdx]?.conteudo || '';
-      const titulo = secoes[iaSheetSecaoIdx]?.titulo || '';
-      handlePerguntar(message, html, iaSheetSecaoIdx, titulo);
     }
+    const conteudoAtual = editorAtual?.getContent() || (indiceAlvo === -1 ? singleEditorHtml : secoes[indiceAlvo]?.conteudo || '');
+    if (!alvo.fingerprint || await calcularFingerprintIa(alvo.tipo, conteudoAtual) !== alvo.fingerprint) {
+      setIaError('O conteúdo-alvo foi alterado desde a geração da resposta. Gere uma nova resposta antes de aplicar.');
+      setRespostaIaPendente(null);
+      return;
+    }
+    const htmlSeguro = resposta.htmlProposto;
+    if (indiceAlvo === -1) {
+      const editor = obterEditorTinyMce('laudo-single-editor');
+      if (!editor) return;
+      editor.undoManager.transact(() => editor.setContent(htmlSeguro));
+      setSingleEditorHtml(editor.getContent());
+    } else {
+      const editor = obterEditorTinyMce(`secao-${indiceAlvo}`);
+      if (editor) editor.undoManager.transact(() => editor.setContent(htmlSeguro));
+      atualizarConteudoSecao(indiceAlvo, htmlSeguro, 'ia');
+    }
+
+    registrarAlteracao();
+    setRespostaIaPendente(null);
+    alvosIaRef.current.delete(resposta.alvoId);
   };
+
+  const handleApplyResponse = (mensagem: ChatMessage) => {
+    if (!mensagem.alvo) return;
+    const alvo = alvosIaRef.current.get(mensagem.alvo.id);
+    if (!alvo) {
+      setIaError('O alvo original desta resposta não está mais disponível. Gere uma nova resposta.');
+      return;
+    }
+    if (mensagem.aplicacao === 'inserir') {
+      inserirRespostaIa(mensagem.content, alvo);
+      return;
+    }
+
+    const editorId = mensagem.alvo.indice === -1
+      ? 'laudo-single-editor'
+      : `secao-${mensagem.alvo.indice}`;
+    const editor = obterEditorTinyMce(editorId);
+    const htmlAtual = editor?.getContent()
+      || (mensagem.alvo.indice === -1
+        ? singleEditorHtml
+        : secoes[mensagem.alvo.indice]?.conteudo || '');
+    setRespostaIaPendente({
+      texto: mensagem.content,
+      htmlProposto: mensagem.conteudoProposto || converterTextoEmHtmlSeguro(mensagem.content),
+      conteudoAtual: converterHtmlEmTexto(htmlAtual),
+      conteudoProposto: converterHtmlEmTexto(mensagem.content),
+      indiceAlvo: mensagem.alvo.indice,
+      conteudoAlvo: mensagem.alvo.conteudo,
+      alvoId: mensagem.alvo.id,
+      fragmentosPropostos: extrairFragmentosIa(mensagem.conteudoProposto || converterTextoEmHtmlSeguro(mensagem.content)),
+    });
+  };
+
+  const handleSendChatMessage = (message: string, acao: 'inserir' | 'reescrever', tamanho: 'automatico' | 'curta' | 'media' | 'longa' = 'automatico') => {
+    const instrucoesTamanho = {
+      automatico: '',
+      curta: ' TAMANHO OBRIGATÓRIO: responda em até 10 palavras, com tolerância máxima de 5 palavras.',
+      media: ' TAMANHO OBRIGATÓRIO: responda em um único parágrafo.',
+      longa: ' TAMANHO OBRIGATÓRIO: responda em 2 a 3 parágrafos.',
+    } as const;
+    void executarAcaoIa(acao, `${message}${instrucoesTamanho[tamanho]}`, message);
+  };
+
+  const reenviarMensagemIa = async (mensagemId: string) => {
+    if (iaLoading) return;
+    const execucao = execucoesIaReenviaveisRef.current.get(mensagemId);
+    if (!execucao) return;
+    setChatMessages(prev => ({
+      ...prev,
+      [execucao.chatKey]: (prev[execucao.chatKey] || []).map(mensagem => (
+        mensagem.id === mensagemId ? { ...mensagem, permiteReenvio: false } : mensagem
+      )),
+    }));
+    const planejamento = await window.ipcAPI.ia.planejar(execucao.solicitacao);
+    if (!planejamento.success || !planejamento.data) {
+      setIaError(obterMensagemErroIa(planejamento.error));
+      return;
+    }
+    await executarPreparacaoIa(execucao, planejamento.data.planoId, undefined, mensagemId);
+  };
+
+  const gerarLegendaImagemIa = async (imagemId: string): Promise<string | null> => {
+    if (!editando?.id) return null;
+    const resposta = await window.ipcAPI.ia.descreverImagem({
+      operationId: crypto.randomUUID(),
+      laudoId: editando.id,
+      imagemId,
+      modo: 'legenda',
+    });
+    if (!resposta.success || !resposta.data?.descricao.trim()) {
+      setIaError(resposta.error || 'Não foi possível gerar a legenda da figura.');
+      return null;
+    }
+    return resposta.data.descricao.trim().replace(/\s+/g, ' ');
+  };
+
+  const limparConversaIa = () => {
+    const chaveChat = imagemSelecionadaIaId
+      ? chaveChatImagemIa(imagemSelecionadaIaId)
+      : iaSheetSecaoIdx === -1
+        ? SINGLE_CHAT_KEY
+        : iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : null;
+    if (!chaveChat) return;
+    setChatMessages(atual => ({ ...atual, [chaveChat]: [] }));
+    setIaError(null);
+  };
+
+  executarAcaoIaRef.current = acao => void executarAcaoIa(acao);
+  enviarMensagemIaRef.current = handleSendChatMessage;
+  reenviarMensagemIaRef.current = mensagemId => void reenviarMensagemIa(mensagemId);
+  cancelarOperacaoIaRef.current = () => void cancelarOperacaoIa();
+  retomarOperacaoIaRef.current = () => void retomarOperacaoIa();
+  limparConversaIaRef.current = limparConversaIa;
+  descreverImagemIaRef.current = () => void descreverImagemSelecionadaIa();
+  aplicarRespostaIaRef.current = handleApplyResponse;
 
   function getCurrentUserId(): string {
     try {
@@ -2182,12 +2973,11 @@ export const LaudosPage: React.FC = () => {
       ),
       cell: ({ row }) => {
         const status = row.getValue('status') as string;
-        const statusStyles: Record<string, string> = {
-          'Em andamento': 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700',
-          'Concluído': 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700',
-          'Entregue': 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700',
-        };
-        return <Badge className={statusStyles[status] || ''}>{status}</Badge>;
+        return (
+          <Badge variant="outline" className={obterClasseBadgeStatusLaudo(status)}>
+            {status}
+          </Badge>
+        );
       },
     },
     {
@@ -2304,238 +3094,142 @@ export const LaudosPage: React.FC = () => {
 
   // Modo editor com múltiplas seções
   if (editando) {
+    const operacaoEmAndamento = salvando || carregandoPreview || exportando;
+    const mensagensPainelIa = imagemSelecionadaIaId
+      ? (chatMessages[chaveChatImagemIa(imagemSelecionadaIaId)] || [])
+      : iaSheetSecaoIdx === -1
+        ? (chatMessages[SINGLE_CHAT_KEY] || [])
+        : (iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : []);
+    const conteudoPainelLateral = painelLateralAtivo === 'ia' ? (
+      <AssistenteIaPanel
+        secaoTitulo={imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo}
+        editorId={imagemSelecionadaIaId
+          ? ''
+          : (iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : (iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : ''))}
+        messages={mensagensPainelIa}
+        onSendMessage={handleSendChatMessage}
+        onLimparConversa={limparConversaIa}
+        onExecutarAcao={acao => void executarAcaoIa(acao)}
+        onDestacar={handleDestacarAssistenteIa}
+        onRecolher={() => setPanelCollapsed(true)}
+        onFechar={() => setIaSheetOpen(false)}
+        onCancelarOperacao={() => void cancelarOperacaoIa()}
+        onRetomarOperacao={() => void retomarOperacaoIa()}
+        retomada={retomadaIaPendente?.retomada || null}
+        onDescreverImagens={() => void descreverImagemSelecionadaIa()}
+        onReenviarMensagem={mensagemId => void reenviarMensagemIa(mensagemId)}
+        imagemSelecionada={Boolean(imagemSelecionadaIaId)}
+        contextoImagem={Boolean(imagemSelecionadaIaId)}
+        onApplyResponse={handleApplyResponse}
+        modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
+        loading={iaLoading}
+        progresso={progressoIa}
+        escopoSelecionado={iaSheetSecaoIdx}
+        error={iaError}
+        opcoesEscopo={[
+          { id: -1, titulo: 'Documento completo' },
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+        ]}
+        onSelecionarEscopo={indice => handleOpenSheet(indice, indice === -1 ? 'Documento completo' : secoes[indice]?.titulo || '')}
+      />
+    ) : painelLateralAtivo === 'ilustracoes' ? (
+      <IlustracoesPanel
+        laudoId={editando.id}
+        onInsertImage={panelCallbacksRef.current.onInsertImage}
+        onDeleteImage={panelCallbacksRef.current.onDeleteImage}
+        onRefreshHtml={panelCallbacksRef.current.onRefreshHtml}
+        onInsertAll={panelCallbacksRef.current.onInsertAll}
+        figurasNoEditor={extrairFigurasDoEditor()}
+        onUpdateLegendaInEditor={panelCallbacksRef.current.onUpdateLegenda}
+        onReorder={panelCallbacksRef.current.onReorder}
+        syncEnabled={syncEnabled}
+        figuraAtivaId={figuraAtivaId}
+        onSyncToggle={panelCallbacksRef.current.onSyncToggle}
+        onScrollToFigure={panelCallbacksRef.current.onScrollToFigure}
+        onPopOut={handlePopOut}
+        onRecolher={() => setPanelCollapsed(true)}
+        onFechar={() => setIlustracoesPanelOpen(false)}
+        onReplaceImage={panelCallbacksRef.current.onReplaceImage}
+        onGerarLegenda={gerarLegendaImagemIa}
+        figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
+        onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
+      />
+    ) : null;
+
     return (
       <TooltipProvider>
-        <div className="w-full px-4 md:px-8 py-4 md:py-6 space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Editor de Laudo</h1>
-            <p className="text-muted-foreground mt-1">
-              REP: {editando.rep_numero}
-              {editando.tipo_exame_nome && ` — ${editando.tipo_exame_nome}`}
-              {editando.nome_envolvido && ` — ${editando.nome_envolvido}`}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center">
-                  <Button
-                    variant="outline"
-                    onClick={handleToggleIlustracoes}
-                    className={`flex items-center gap-2 rounded-r-none border-r-0 ${iluminacoesPanelOpen || panelPoppedOut ? (panelPoppedOut ? 'bg-primary/20 border-primary/40' : 'bg-muted') : ''}`}
-                  >
-                    <ImageIcon size={16} /> Ilustrações
-                    {panelPoppedOut && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className={`rounded-l-none h-9 w-7 ${iluminacoesPanelOpen || panelPoppedOut ? (panelPoppedOut ? 'bg-primary/20 border-primary/40' : 'bg-muted') : ''}`}
-                      >
-                        <ChevronDown size={14} />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={handlePopOut} disabled={panelPoppedOut}>
-                        <ExternalLink size={14} className="mr-2" />
-                        Abrir em janela separada
-                      </DropdownMenuItem>
-                      {panelPoppedOut && (
-                        <DropdownMenuItem onClick={handleToggleIlustracoes}>
-                          <ImageIcon size={14} className="mr-2" />
-                          Retornar ao editor
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {panelPoppedOut ? 'Painel em janela separada (clique para retornar)' : 'Abrir painel de ilustrações'}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => panelCallbacksRef.current.onRefreshHtml()}
-                  className="h-9 w-9"
-                >
-                  <RefreshCw size={15} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Atualizar figuras (numeração e legendas)</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  onClick={handleReindexarSecoes}
-                  disabled={salvando || carregandoPreview || exportando}
-                  className="flex items-center gap-2"
-                >
-                  <Layers size={15} /> Reindexar seções
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Reaplica a numeração estrutural do laudo</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" onClick={handleVoltar} className="flex items-center gap-2">
-                  <ArrowLeft size={16} /> Voltar
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Voltar para a lista de laudos</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center">
-                  <Button
-                    variant="secondary"
-                    onClick={handlePreview}
-                    disabled={carregandoPreview || salvando || exportando}
-                    className="flex items-center gap-2 rounded-r-none border-r-0"
-                  >
-                    {exportando ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : carregandoPreview ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Eye size={16} />
-                    )} {carregandoPreview ? 'Gerando...' : exportando ? 'Exportando...' : 'Exportar'}
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        disabled={carregandoPreview || salvando || exportando}
-                        className="rounded-l-none h-9 w-7"
-                      >
-                        <ChevronDown size={14} />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuItem onClick={handlePreview}>
-                        <Eye size={14} className="mr-2" />
-                        Visualizar PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleExportar('pdf')}>
-                        <FileDown size={14} className="mr-2" />
-                        Baixar PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleExportar('docx')}>
-                        <FileText size={14} className="mr-2" />
-                        Baixar Word (.docx)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleExportar('odt')}
-                        disabled={libreOfficeDisponivel !== true}
-                      >
-                        {libreOfficeDisponivel === true ? (
-                          <FileText size={14} className="mr-2" />
-                        ) : (
-                          <Download size={14} className="mr-2" />
-                        )}
-                        Baixar ODT (.odt)
-                        {libreOfficeDisponivel !== true && (
-                          <span className="ml-auto text-[10px] text-muted-foreground">
-                            {libreOfficeDisponivel === null ? 'Verificando...' : 'Requer LibreOffice'}
-                          </span>
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top">Exportar ou pré-visualizar o laudo</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={handleSalvar} disabled={salvando || carregandoPreview || exportando} className="flex items-center gap-2">
-                  <Save size={16} /> {salvando ? 'Salvando...' : 'Salvar'}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Salvar o conteúdo do laudo</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
+        <div className="w-full space-y-4 px-4 pb-4 md:px-8 md:pb-6">
+        <CabecalhoEditorLaudo
+          repNumero={editando.rep_numero}
+          tipoExameCodigo={editando.tipo_exame_codigo}
+          tipoExameNome={editando.tipo_exame_nome}
+          status={editando.status}
+          estadoSalvamento={estadoSalvamento}
+          operacaoEmAndamento={operacaoEmAndamento}
+          carregandoPreview={carregandoPreview}
+          exportando={exportando}
+          libreOfficeDisponivel={libreOfficeDisponivel}
+          onVoltar={handleVoltar}
+          onIrAoFinal={handleIrAoFinal}
+          onVisualizar={handlePreview}
+          onExportar={formato => void handleExportar(formato)}
+          onSalvar={() => void handleSalvar()}
+        />
 
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-        {success && <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
+        {success && <Alert><AlertDescription>{success}</AlertDescription></Alert>}
 
         <Card className="flex-1 overflow-hidden flex flex-col">
-          <CardHeader className="pb-3 flex-shrink-0">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <div>
-                <CardTitle className="text-lg">Template: {editando.template_nome || 'Não definido'}</CardTitle>
-                <CardDescription>
-                  Status: {editando.status} &middot; Iniciado em {formatarData(editando.data_inicio)}
-                  {editando.data_conclusao ? ` &middot; Concluído em ${formatarData(editando.data_conclusao)}` : ''}
-                </CardDescription>
-              </div>
-              <Badge className={
-                editando.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700' :
-                editando.status === 'Entregue' ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700' :
-                'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
-              }>{editando.status}</Badge>
+          <CardHeader className="flex-shrink-0 pb-4">
+            <div>
+              <CardTitle className="text-lg">Laudo pericial</CardTitle>
+              <CardDescription>
+                Template: {editando.template_nome || 'Não definido'} &middot; iniciado em {formatarData(editando.data_inicio)}
+                {editando.data_conclusao ? ` · concluído em ${formatarData(editando.data_conclusao)}` : ''}
+              </CardDescription>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50" aria-label="Visualização de placeholders">
-                <Button
-                  variant={modoVisualizacaoPlaceholders === 'dados' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setModoVisualizacaoPlaceholders('dados')}
-                  className="h-8 px-2.5 text-xs"
-                >
-                  Dados da REP
-                </Button>
-                <Button
-                  variant={modoVisualizacaoPlaceholders === 'chaves' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setModoVisualizacaoPlaceholders('chaves')}
-                  className="h-8 px-2.5 text-xs"
-                >
-                  Placeholders
-                </Button>
-              </div>
-              <div className="border rounded-lg p-1 flex items-center gap-1 bg-muted/50">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={editorMode === 'multi' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => handleEditorModeChange('multi')}
-                      className="h-8 px-2.5"
-                    >
-                      <Layers size={14} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">Editor com múltiplas seções separadas</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={editorMode === 'single' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => handleEditorModeChange('single')}
-                      className="h-8 px-2.5"
-                    >
-                      <List size={14} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">Editor único com laudo inteiro</TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
+            <BarraEditorLaudo
+              modoConteudo={modoVisualizacaoPlaceholders}
+              modoOrganizacao={editorMode}
+              onModoConteudoChange={setModoVisualizacaoPlaceholders}
+              onModoOrganizacaoChange={handleEditorModeChange}
+            />
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
-            <div className="flex h-full gap-0">
+            <PainelLateralRedimensionavel
+              tipo={painelLateralAtivo}
+              chavePersistencia={painelLateralAtivo === 'ilustracoes'
+                ? 'lawdo:laudo:painel-ilustracoes:largura:v1'
+                : 'lawdo:laudo:painel-ia:largura:v1'}
+              larguraPadrao={painelLateralAtivo === 'ilustracoes' ? 380 : 460}
+              larguraMinima={painelLateralAtivo === 'ilustracoes' ? 320 : 360}
+              larguraMaxima={painelLateralAtivo === 'ilustracoes' ? 720 : 640}
+              recolhido={panelCollapsed}
+              iaDestacada={painelIaDestacado}
+              ilustracoesEmJanela={panelPoppedOut}
+              operacaoEmAndamento={operacaoEmAndamento}
+              onAlternarPainelIa={() => {
+                if (painelIaDestacado && sessaoPainelIaRef.current) {
+                  window.ipcAPI.ia.painelAbrir(sessaoPainelIaRef.current)
+                  return
+                }
+                if (iaSheetOpen) {
+                  if (panelCollapsed) setPanelCollapsed(false)
+                  else setIaSheetOpen(false)
+                  return
+                }
+                handleAbrirAssistenteIa()
+              }}
+              onAlternarPainelIlustracoes={() => {
+                if (iluminacoesPanelOpen && panelCollapsed) {
+                  setPanelCollapsed(false)
+                  return
+                }
+                handleToggleIlustracoes()
+              }}
+              onReindexarSecoes={handleReindexarSecoes}
+              conteudoPainel={conteudoPainelLateral}
+            >
               <div className="flex-1 overflow-y-auto pr-2">
                 {quantidadeBlocosSuprimidos > 0 && (
                   <Alert className="mb-3">
@@ -2547,117 +3241,32 @@ export const LaudosPage: React.FC = () => {
                 )}
                 {editorMode === 'single' ? (
                   <div className="space-y-3 pb-4">
-                <div className="space-y-2 mb-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <Bot size={14} className="text-primary" />
-                      <span className="text-xs font-medium text-muted-foreground">IA:</span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={iaLoading}
-                      onClick={async () => {
-                        if (!singleEditorHtml.trim()) {
-                          setIaError('Editor vazio');
-                          return;
-                        }
-                        setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Editor único');
-                        setIaSheetOpen(true);
-                        await handleRevisarOrtografia(singleEditorHtml, -1);
-                      }}
-                    >
-                      <SpellCheck size={12} /> Ortografia
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={iaLoading}
-                      onClick={async () => {
-                        if (!singleEditorHtml.trim()) {
-                          setIaError('Editor vazio');
-                          return;
-                        }
-                        setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Editor único');
-                        setIaSheetOpen(true);
-                        await handleAdequarEscrita(singleEditorHtml, -1);
-                      }}
-                    >
-                      <PenLine size={12} /> Adequar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 disabled:opacity-45 disabled:cursor-not-allowed"
-                      disabled={iaLoading || !singleTemImagens}
-                      onClick={async () => {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(singleEditorHtml, 'text/html');
-                        const imagens = Array.from(doc.querySelectorAll('img'))
-                          .filter(img => img.src.startsWith('data:') || img.src.startsWith('http'))
-                          .map((img) => ({ src: img.src, alt: img.alt }));
-                        if (imagens.length === 0) {
-                          setIaError('Nenhuma imagem encontrada no editor.');
-                          return;
-                        }
-                        setIaSheetSecaoIdx(-1);
-                        setIaSheetSecaoTitulo('Editor único');
-                        setIaSheetOpen(true);
-                        await handleDescreverImagem(imagens, -1);
-                      }}
-                    >
-                      <ImageIcon size={12} /> Imagem
-                    </Button>
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      <Input
-                        value={singlePergunta}
-                        onChange={(e) => setSinglePergunta(e.target.value)}
-                        placeholder="Pergunte à IA..."
-                        className="h-7 text-xs w-[200px]"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 disabled:opacity-45 disabled:cursor-not-allowed"
-                        disabled={iaLoading || !singlePergunta.trim()}
-                        onClick={async () => {
-                          if (!singlePergunta.trim()) {
-                            setIaError('Digite uma pergunta para a IA.');
-                            return;
-                          }
-                          setIaSheetSecaoIdx(-1);
-                          setIaSheetSecaoTitulo('Editor único');
-                          setIaSheetOpen(true);
-                          await handlePerguntar(singlePergunta, singleEditorHtml, -1, 'Editor único');
-                          setSinglePergunta('');
-                        }}
-                      >
-                        <Send size={14} />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
                     <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                       <TinyMceEditor
                         editorId="laudo-single-editor"
                         initialValue={singleEditorHtml}
-                        onChange={(html: string) => {
-                          setAlteracoesPendentes(true);
+                        onChange={(html: string, origem) => {
+                          registrarAlteracao(origem);
                           setSingleEditorHtml(html);
                         }}
                         height={560}
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
+                        onImageInserted={() => {
+                          void reconciliarImagensDoEditor().catch(error => {
+                            toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
+                          });
+                        }}
                         placeholderChaves={placeholderChaves}
                         condToggles={exameToggles}
-                        onEditorInit={aplicarModoNoEditor}
+                        onEditorInit={(editor) => {
+                          aplicarModoNoEditor(editor);
+                          registrarEditorIa(editor);
+                        }}
                         onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
+                          setIaSheetOpen(false);
                           setIlustracoesPanelOpen(true);
                           setPanelCollapsed(false);
                         }}
@@ -2695,34 +3304,30 @@ export const LaudosPage: React.FC = () => {
                           <ChevronDown className="h-4 w-4 transition-transform duration-200" />
                         </div>
                         <CollapsibleContent className="p-4 border-t" forceMount>
-                          <AISectionToolbar
-                            editorId={`secao-${idx}`}
-                            secaoIndex={idx}
-                            secaoTitulo={secao.titulo}
-                            htmlContent={secao.conteudo}
-                            onRevisarOrtografia={handleRevisarOrtografia}
-                            onAdequarEscrita={handleAdequarEscrita}
-                            onDescreverImagem={handleDescreverImagem}
-                            onPerguntar={handlePerguntar}
-                            onOpenSheet={handleOpenSheet}
-                          />
                           <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                             <div className={isIlustracoes ? 'relative' : ''}>
                               <TinyMceEditor
                                 editorId={`secao-${idx}`}
                                 initialValue={secao.conteudo}
-                                onChange={(txt) => atualizarConteudoSecao(idx, txt)}
+                                onChange={(txt, origem) => atualizarConteudoSecao(idx, txt, origem)}
                                 height={400}
                                 laudoId={editando.id}
+                                onImageInserted={() => {
+                                  void reconciliarImagensDoEditor().catch(error => {
+                                    toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
+                                  });
+                                }}
                                 placeholderChaves={placeholderChaves}
                                 onEditorInit={(editor) => {
                                   aplicarModoNoEditor(editor);
+                                  registrarEditorIa(editor);
                                   if (isIlustracoes) handleIlustracoesEditorInit(editor);
                                 }}
                                 condToggles={exameToggles}
                                 onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                                 onDummyFigureClick={(imageId) => {
                                   setFiguraSubstituicaoSolicitada(imageId);
+                                  setIaSheetOpen(false);
                                   setIlustracoesPanelOpen(true);
                                   setPanelCollapsed(false);
                                 }}
@@ -2744,57 +3349,15 @@ export const LaudosPage: React.FC = () => {
                     })}
                   </div>
                 )}
+                <RodapeEditorLaudo
+                  estadoSalvamento={estadoSalvamento}
+                  operacaoEmAndamento={operacaoEmAndamento}
+                  onVoltar={handleVoltar}
+                  onVoltarAoTopo={handleVoltarAoTopo}
+                  onSalvar={() => void handleSalvar()}
+                />
               </div>
-
-              {iluminacoesPanelOpen && (
-                <>
-                  <button
-                    onClick={togglePanel}
-                    aria-expanded={!panelCollapsed}
-                    className="w-7 border-y border-l rounded-l-md bg-background hover:bg-accent flex-shrink-0 flex items-center justify-center transition-colors group"
-                    title={panelCollapsed ? 'Expandir painel' : 'Recolher painel'}
-                  >
-                    <ChevronRight
-                      size={15}
-                      className={cn(
-                        "transition-transform duration-300 ease-in-out text-muted-foreground group-hover:text-foreground",
-                        !panelCollapsed && "rotate-180"
-                      )}
-                    />
-                  </button>
-
-                  <div
-                    className={cn(
-                      "border-l overflow-hidden bg-background transition-all duration-300 ease-in-out",
-                      panelCollapsed
-                        ? "w-0 border-l-0"
-                        : "w-[380px] 2xl:w-[420px] max-w-[85vw]"
-                    )}
-                  >
-                    <div className={cn("w-[380px] 2xl:w-[420px] max-w-[85vw] h-full overflow-y-auto", panelCollapsed && "invisible")}>
-                      <IlustracoesPanel
-                        laudoId={editando.id}
-                        onInsertImage={panelCallbacksRef.current.onInsertImage}
-                        onDeleteImage={panelCallbacksRef.current.onDeleteImage}
-                        onRefreshHtml={panelCallbacksRef.current.onRefreshHtml}
-                        onInsertAll={panelCallbacksRef.current.onInsertAll}
-                        figurasNoEditor={extrairFigurasDoEditor()}
-                        onUpdateLegendaInEditor={panelCallbacksRef.current.onUpdateLegenda}
-                        onReorder={panelCallbacksRef.current.onReorder}
-                        syncEnabled={syncEnabled}
-                        figuraAtivaId={figuraAtivaId}
-                        onSyncToggle={panelCallbacksRef.current.onSyncToggle}
-                        onScrollToFigure={panelCallbacksRef.current.onScrollToFigure}
-                        onPopOut={handlePopOut}
-                        onReplaceImage={panelCallbacksRef.current.onReplaceImage}
-                        figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
-                        onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            </PainelLateralRedimensionavel>
           </CardContent>
         </Card>
 
@@ -2832,22 +3395,58 @@ export const LaudosPage: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Sheet de Chat com IA */}
-        <AISheet
-          open={iaSheetOpen}
-          onOpenChange={setIaSheetOpen}
-          secaoTitulo={iaSheetSecaoTitulo}
-          editorId={iaSheetSecaoIdx === -1 ? 'laudo-single-editor' : (iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : '')}
-          messages={
-            iaSheetSecaoIdx === -1
-              ? (chatMessages[SINGLE_CHAT_KEY] || [])
-              : (iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : [])
-          }
-          onSendMessage={handleSendChatMessage}
-          onApplyResponse={handleApplyResponse}
-          loading={iaLoading}
-          error={iaError}
+        <DialogoAplicarRespostaIa
+          open={respostaIaPendente !== null}
+          secaoTitulo={iaSheetSecaoTitulo || 'Seção atual'}
+          conteudoAtual={respostaIaPendente?.conteudoAtual || ''}
+          conteudoProposto={respostaIaPendente?.conteudoProposto || ''}
+          fragmentosPropostos={respostaIaPendente?.fragmentosPropostos || []}
+          onAlterarFragmento={(id, texto) => {
+            setRespostaIaPendente(atual => {
+              if (!atual) return atual;
+              const fragmentosPropostos = atual.fragmentosPropostos.map(fragmento => (
+                fragmento.id === id ? { ...fragmento, texto } : fragmento
+              ));
+              const htmlProposto = reconstruirHtmlIa(atual.conteudoAlvo, fragmentosPropostos);
+              if (!htmlProposto || assinaturaEstruturalIa(htmlProposto) !== assinaturaEstruturalIa(atual.conteudoAlvo)) {
+                setIaError('A edição não preservou a estrutura da proposta e foi descartada.');
+                return atual;
+              }
+              return {
+                ...atual,
+                fragmentosPropostos,
+                htmlProposto,
+                conteudoProposto: converterHtmlEmTexto(htmlProposto),
+              };
+            });
+          }}
+          onOpenChange={open => {
+            if (!open) setRespostaIaPendente(null);
+          }}
+          onConfirmar={() => {
+            if (respostaIaPendente) void substituirConteudoComRespostaIa(respostaIaPendente);
+          }}
         />
+
+        <AlertDialog open={confirmacaoImagemIaPendente} onOpenChange={setConfirmacaoImagemIaPendente}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Descrever a imagem selecionada?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A imagem será enviada ao provedor de IA configurado para produzir uma descrição técnica. A descrição não altera o laudo e ficará disponível apenas para cópia manual.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                setConfirmacaoImagemIaPendente(false);
+                void descreverImagemSelecionadaIa(true);
+              }}>
+                Descrever imagem
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={dialogoSaidaAberto} onOpenChange={setDialogoSaidaAberto}>
         <AlertDialogContent

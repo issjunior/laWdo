@@ -12,7 +12,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -37,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from '@/components/ui/avatar';
 import { AvatarUploadDialog } from '@/components/avatar/AvatarUploadDialog';
+import logoSidebar from '@/assets/logo-sidebar.png';
 import { itensMenu } from '@/lib/menu-config';
 
 const AUTH_USER_KEY = 'lawdo_auth_user';
@@ -120,21 +120,19 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
   return (
     <>
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-        <SidebarHeader className="flex items-center justify-between px-4 py-6 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
-          <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            <div className="flex flex-col">
-              <span className="text-lg font-bold tracking-tight text-sidebar-foreground">laWdo</span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Pericial</span>
-            </div>
-          </div>
-          <div className="hidden group-data-[collapsible=icon]:flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground p-1">
-            <span className="text-lg font-bold">W</span>
+        <SidebarHeader className="flex items-center justify-between px-4 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-6">
+          <div className="flex w-full flex-col items-center">
+            <img
+              src={logoSidebar}
+              alt="laWdo"
+              className="h-14 w-14 object-contain transition-[width,height] duration-200 ease-linear group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
+            />
+            <span className="text-sm font-bold leading-4 tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">laWdo</span>
           </div>
         </SidebarHeader>
 
         <SidebarContent className="px-2 group-data-[collapsible=icon]:px-1">
           <SidebarGroup>
-            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">Menu Principal</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {itensMenu.map((item) => (
