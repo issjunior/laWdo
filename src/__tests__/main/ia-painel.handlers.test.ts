@@ -188,5 +188,52 @@ describe('handlers IPC do painel de IA', () => {
       success: true,
       data: { operationId: 'operacao-1', fragmentos: solicitacao.fragmentos },
     });
+
+    expect(handle.get('ia:copiar-resposta')?.(eventoProprietario, 'Resposta conferida.'))
+      .toEqual({ success: true });
+    expect(mocks.clipboardWriteText).toHaveBeenCalledWith('Resposta conferida.');
+    expect(handle.get('ia:copiar-resposta')?.(eventoProprietario, ''))
+      .toEqual({ success: false, error: 'Texto inválido para cópia.' });
+
+    await expect(handle.get('ia:planejar')?.(eventoProprietario, { operationId: '' }))
+      .resolves.toEqual({ success: false, error: 'ENTRADA_INVALIDA' });
+    await expect(handle.get('ia:descrever-imagem')?.(eventoProprietario, { operationId: '' }))
+      .resolves.toEqual({ success: false, error: 'ENTRADA_INVALIDA' });
+    await expect(handle.get('ia:cancelar')?.(eventoProprietario, ''))
+      .resolves.toEqual({ success: false, error: 'ENTRADA_INVALIDA' });
+    await expect(handle.get('ia:descartar-retomada')?.(eventoProprietario, 'retomada-ausente'))
+      .resolves.toEqual({ success: false, error: 'RETOMADA_INDISPONIVEL' });
+
+    mocks.obterContexto.mockResolvedValueOnce({ configurado: false });
+    await expect(handle.get('ia:testar-conexao')?.(eventoProprietario))
+      .resolves.toEqual({ success: false, error: 'CONFIGURACAO_AUSENTE' });
+    mocks.obterContexto.mockResolvedValueOnce({ configurado: true, provedor: 'gemini' });
+    await expect(handle.get('ia:testar-conexao')?.(eventoProprietario))
+      .resolves.toEqual({ success: true, data: { configurado: true, provedor: 'gemini' } });
+    mocks.obterContexto.mockRejectedValueOnce(new Error('Configuração indisponível'));
+    await expect(handle.get('ia:obter-contexto')?.(eventoProprietario))
+      .resolves.toEqual({ success: false, error: 'Configuração indisponível' });
+
+    mocks.obterPerfil.mockResolvedValueOnce({ versao: 1, tom: 'formal' });
+    await expect(handle.get('ia:obter-perfil')?.(eventoProprietario))
+      .resolves.toEqual({ success: true, data: { versao: 1, tom: 'formal' } });
+    await expect(handle.get('ia:salvar-perfil')?.(eventoProprietario, { tom: 'inválido' }))
+      .resolves.toEqual({ success: false, error: 'ENTRADA_INVALIDA' });
+    const perfil = { versao: 1, tom: 'formal', detalhamento: 'equilibrado', instrucoesPersonalizadas: '', temperatura: 0.2 };
+    await expect(handle.get('ia:salvar-perfil')?.(eventoProprietario, perfil))
+      .resolves.toEqual({ success: true });
+    expect(mocks.salvarPerfil).toHaveBeenCalledWith(perfil);
+
+    const descricao = { operationId: 'descricao-1', laudoId: 'laudo-1', imagemId: 'imagem-1' };
+    mocks.descreverImagem.mockResolvedValueOnce({ operationId: 'descricao-1', descricao: 'Objeto metálico.' });
+    await expect(handle.get('ia:descrever-imagem')?.(eventoProprietario, descricao))
+      .resolves.toEqual({ success: true, data: { operationId: 'descricao-1', descricao: 'Objeto metálico.' } });
+
+    await expect(handle.get('ia:revisarOrtografia')?.(eventoProprietario, ''))
+      .resolves.toEqual({ success: false, error: 'Texto inválido' });
+    await expect(handle.get('ia:adequarEscrita')?.(eventoProprietario, ''))
+      .resolves.toEqual({ success: false, error: 'Texto inválido' });
+    await expect(handle.get('ia:perguntar')?.(eventoProprietario, ''))
+      .resolves.toEqual({ success: false, error: 'Pergunta inválida' });
   });
 });

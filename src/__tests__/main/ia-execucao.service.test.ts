@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const configuracaoObterMock = vi.fn()
+const configuracaoSalvarMock = vi.fn()
 const obterImagemLaudoPorIdMock = vi.fn()
 const fetchMock = vi.fn()
 const logInfoMock = vi.fn()
@@ -9,7 +10,7 @@ const logWarnMock = vi.fn()
 vi.mock('../../main/services/configuracao.service.js', () => ({
   configuracaoService: {
     obter: (...args: unknown[]) => configuracaoObterMock(...args),
-    salvar: vi.fn(),
+    salvar: (...args: unknown[]) => configuracaoSalvarMock(...args),
   },
 }))
 
@@ -57,6 +58,7 @@ const criarImagem = (origem: 'local' | 'gdl' = 'local', mimeType = 'image/jpeg',
 describe('ia-execucao.service — descrição de imagem', () => {
   beforeEach(() => {
     configuracaoObterMock.mockReset()
+    configuracaoSalvarMock.mockReset()
     obterImagemLaudoPorIdMock.mockReset()
     fetchMock.mockReset()
     logInfoMock.mockReset()
@@ -386,6 +388,47 @@ describe('ia-execucao.service — descrição de imagem', () => {
 
     await expect(new IaExecucaoService().descreverImagem(solicitacao))
       .rejects.toThrow('A imagem selecionada não pertence ao laudo.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('normaliza o perfil persistido e rejeita preferências inválidas antes de salvar', async () => {
+    configuracaoObterMock.mockImplementation(async (chave: string) => {
+      if (chave === 'perfil_resposta_ia') return JSON.stringify({
+        versao: 1,
+        tom: 'formal',
+        detalhamento: 'detalhado',
+        instrucoesPersonalizadas: 'Use frases objetivas.',
+        temperatura: 0.7,
+      })
+      return null
+    })
+    const servico = new IaExecucaoService()
+
+    await expect(servico.obterPerfil()).resolves.toMatchObject({ tom: 'formal', temperatura: 0.7 })
+    await expect(servico.salvarPerfil({
+      versao: 1,
+      tom: 'direto',
+      detalhamento: 'conciso',
+      instrucoesPersonalizadas: '',
+      temperatura: 0.1,
+    })).resolves.toBeUndefined()
+    expect(configuracaoSalvarMock).toHaveBeenCalledWith(
+      'perfil_resposta_ia',
+      expect.stringContaining('"tom":"direto"'),
+      'json',
+      'Preferências das respostas de IA',
+    )
+    await expect(servico.salvarPerfil({ versao: 1, tom: 'direto', detalhamento: 'conciso', instrucoesPersonalizadas: '', temperatura: 2 }))
+      .rejects.toThrow('Perfil de resposta inválido')
+  })
+
+  it('expõe contexto não configurado e rejeita solicitações de execução inválidas', async () => {
+    configuracaoObterMock.mockResolvedValue(null)
+    const servico = new IaExecucaoService()
+
+    await expect(servico.obterContexto()).resolves.toEqual({ configurado: false, suportaVisao: false })
+    await expect(servico.executar({ ...solicitacaoTexto, operationId: '', fragmentos: [] }))
+      .rejects.toThrow('Solicitação de IA inválida')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

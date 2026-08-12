@@ -64,6 +64,16 @@ describe('PainelIaWindow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ortografia' }));
     expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'executar_acao', acao: 'ortografia' });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Pedido livre ao assistente IA' }), {
+      target: { value: 'Torne o texto objetivo.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar pedido livre' }));
+    expect(painelEnviarComando).toHaveBeenCalledWith({
+      tipo: 'enviar_pedido_livre',
+      mensagem: 'Torne o texto objetivo.',
+      aplicacao: 'inserir',
+      tamanho: 'automatico',
+    });
 
     act(() => receberEstado?.({
       tipo: 'delta',
@@ -85,6 +95,33 @@ describe('PainelIaWindow', () => {
     expect(copiarResposta).toHaveBeenCalledWith('Texto revisado.');
     fireEvent.click(screen.getByRole('button', { name: 'Revisar substituição' }));
     expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'aplicar_resposta', mensagemId: 'mensagem-1' });
+
+    act(() => receberEstado?.({
+      tipo: 'delta',
+      revisao: 3,
+      alteracoes: { imagemSelecionada: true },
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Descrever novamente' }));
+    expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'descrever_imagem' });
+
+    act(() => receberEstado?.({
+      tipo: 'delta',
+      revisao: 4,
+      alteracoes: { carregando: true },
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'cancelar_operacao' });
+
+    act(() => receberEstado?.({
+      tipo: 'delta',
+      revisao: 5,
+      alteracoes: {
+        carregando: false,
+        retomada: { retomadaId: 'retomada-1', planoId: 'plano-1', lotesConcluidos: 1, totalLotes: 2 },
+      },
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar do lote 2 de 2' }));
+    expect(painelEnviarComando).toHaveBeenCalledWith({ tipo: 'retomar_operacao' });
 
     fireEvent.click(screen.getByRole('button', { name: /reencaixar/i }));
     expect(painelReencaixar).toHaveBeenCalledTimes(1);

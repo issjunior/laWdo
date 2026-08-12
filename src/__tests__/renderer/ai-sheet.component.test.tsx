@@ -8,6 +8,9 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
       configuracao: {
         obter: vi.fn().mockResolvedValue({ success: true, data: 'gemini' }),
       },
+      ia: {
+        copiarResposta: vi.fn().mockResolvedValue({ success: true }),
+      },
     })
     Element.prototype.scrollIntoView = vi.fn()
   })
@@ -185,5 +188,104 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Continuar do lote 3 de 4' }))
     expect(onRetomarOperacao).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['Curta (até 10 palavras, tolerância de 5)', 'curta'],
+    ['Média (1 parágrafo)', 'media'],
+    ['Longa (2 a 3 parágrafos)', 'longa'],
+  ] as const)('envia pedido livre com o tamanho %s selecionado', (rotulo, tamanho) => {
+    const onSendMessage = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={onSendMessage}
+        onApplyResponse={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Tamanho da resposta' }))
+    fireEvent.click(screen.getByRole('option', { name: rotulo }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Pedido livre ao assistente IA' }), { target: { value: 'Ajuste o texto.' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Pedido livre ao assistente IA' }), { key: 'Enter' })
+
+    expect(onSendMessage).toHaveBeenCalledWith('Ajuste o texto.', 'inserir', tamanho)
+  })
+
+  it('encaminha ações, reenvio, cópia e aplicação conforme as permissões da mensagem', () => {
+    const onExecutarAcao = vi.fn()
+    const onReenviarMensagem = vi.fn()
+    const onApplyResponse = vi.fn()
+    const mensagens = [
+      { id: 'usuario-1', role: 'user' as const, content: 'Pedido anterior', timestamp: Date.now(), permiteReenvio: true },
+      { id: 'assistente-1', role: 'assistant' as const, content: 'Resposta pronta', timestamp: Date.now(), aplicacao: 'inserir' as const, permiteAplicacao: true },
+    ]
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={mensagens}
+        onSendMessage={vi.fn()}
+        onApplyResponse={onApplyResponse}
+        onExecutarAcao={onExecutarAcao}
+        onReenviarMensagem={onReenviarMensagem}
+      />,
+    )
+
+    fireEvent.click(screen.getByTitle('Reenviar esta solicitação'))
+    fireEvent.click(screen.getByTitle('Copiar resposta'))
+    fireEvent.click(screen.getByTitle('Inserir resposta na posição atual do cursor'))
+
+    expect(onReenviarMensagem).toHaveBeenCalledWith('usuario-1')
+    expect(window.ipcAPI.ia.copiarResposta).toHaveBeenCalledWith('Resposta pronta')
+    expect(onApplyResponse).toHaveBeenCalledWith(mensagens[1])
+  })
+
+  it('encaminha ações prontas do escopo selecionado', () => {
+    const onExecutarAcao = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        onExecutarAcao={onExecutarAcao}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clareza' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ortografia' }))
+
+    expect(onExecutarAcao).toHaveBeenNthCalledWith(1, 'clareza')
+    expect(onExecutarAcao).toHaveBeenNthCalledWith(2, 'ortografia')
+  })
+
+  it('permite destacar, recolher e fechar o painel pelo cabeçalho', () => {
+    const onDestacar = vi.fn()
+    const onRecolher = vi.fn()
+    const onFechar = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        onDestacar={onDestacar}
+        onRecolher={onRecolher}
+        onFechar={onFechar}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Destacar Assistente IA' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Recolher Assistente IA' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }))
+
+    expect(onDestacar).toHaveBeenCalledTimes(1)
+    expect(onRecolher).toHaveBeenCalledTimes(1)
+    expect(onFechar).toHaveBeenCalledTimes(1)
   })
 })
