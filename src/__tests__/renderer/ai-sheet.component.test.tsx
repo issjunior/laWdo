@@ -83,7 +83,7 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Enviar pedido livre' }))
 
-    expect(onSendMessage).toHaveBeenCalledWith('Use redação mais objetiva.', 'reescrever')
+    expect(onSendMessage).toHaveBeenCalledWith('Use redação mais objetiva.', 'reescrever', 'automatico')
   })
 
   it('permite limpar a conversa do contexto atual', () => {
