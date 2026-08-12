@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import type { Placeholder } from '@/lib/validators/placeholder.schema';
-import { type ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -271,7 +271,7 @@ export const PlaceholdersPage: React.FC = () => {
   }, [placeholdersDaCategoria, searchTerm]);
 
   /* ── Colunas da DataTable ── */
-  const columnDefs = useMemo<ColumnDef<Placeholder>[]>(() => [
+  const columnDefs = useMemo<DefinicaoColunaTabela<Placeholder>[]>(() => [
     {
       accessorKey: 'chave',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Chave" />,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { toast } from 'sonner';
 import {
   Trash2,
@@ -428,7 +428,7 @@ export function LogsPage() {
     toast.success(`CSV exportado com ${dados.length} registros`);
   };
 
-  const columnsSistema = useMemo<ColumnDef<SystemLog>[]>(() => [
+  const columnsSistema = useMemo<DefinicaoColunaTabela<SystemLog>[]>(() => [
     {
       accessorKey: 'timestamp',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Data/Hora" />,
@@ -468,7 +468,7 @@ export function LogsPage() {
     },
   ], []);
 
-  const columnsAuditoria = useMemo<ColumnDef<AuditLog>[]>(() => [
+  const columnsAuditoria = useMemo<DefinicaoColunaTabela<AuditLog>[]>(() => [
     {
       accessorKey: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Data/Hora" />,

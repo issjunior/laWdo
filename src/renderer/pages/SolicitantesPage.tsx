@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Plus, Edit, Trash2, X, Eye, EyeOff, Building2, Users, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { createSolicitanteSchema, type Solicitante, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
@@ -271,7 +271,7 @@ export const SolicitantesPage: React.FC = () => {
   }, [mostrarTodos, carregarSolicitantes, carregarTodosSolicitantes]);
 
   // Definições de colunas da DataTable
-  const columnDefs = useMemo<ColumnDef<Solicitante>[]>(() => [
+  const columnDefs = useMemo<DefinicaoColunaTabela<Solicitante>[]>(() => [
     {
       accessorKey: 'nome',
       header: ({ column }) => (

@@ -13,7 +13,7 @@ import { Plus, Search, Edit, Trash2, Loader2, AlertCircle, Package, Settings2, t
 import { useNavigate } from 'react-router';
 import * as LucideIcons from 'lucide-react';
 import { DataTable } from '@/components/data-table/data-table';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { toast } from 'sonner';
 
@@ -203,7 +203,7 @@ const PecasPage: React.FC = () => {
     return true;
   });
 
-  const columnas: ColumnDef<PecaItem>[] = [
+  const columnas: DefinicaoColunaTabela<PecaItem>[] = [
     {
       accessorKey: 'nome',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nome" />,

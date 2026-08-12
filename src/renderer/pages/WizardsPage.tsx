@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Edit, Trash2, Loader2, AlertCircle, Wand2 } from 'lucide-react';
 import { DataTable } from '@/components/data-table/data-table';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { toast } from 'sonner';
 
@@ -133,7 +133,7 @@ const WizardsPage: React.FC = () => {
     }
   };
 
-  const colunas: ColumnDef<WizardItem>[] = [
+  const colunas: DefinicaoColunaTabela<WizardItem>[] = [
     {
       accessorKey: 'nome',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nome" />,

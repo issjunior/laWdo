@@ -21,7 +21,7 @@ import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMe
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { converterPlaceholdersTextuais } from '@/lib/utils';
 import { z } from 'zod';
-import { type ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/index';
@@ -1363,7 +1363,7 @@ export const TemplatesPage: React.FC = () => {
     setTemplateParaExportarId('');
   }, [handleExportarPacote, templateParaExportarId, templates]);
 
-  const columnDefs = useMemo<ColumnDef<TemplateItem>[]>(() => [
+  const columnDefs = useMemo<DefinicaoColunaTabela<TemplateItem>[]>(() => [
     {
       accessorKey: 'nome',
       header: ({ column }) => (
