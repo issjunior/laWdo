@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Plus, Edit, Trash2, X, Eye, EyeOff, FlaskConical, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import type { TipoExame, CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
@@ -220,7 +220,7 @@ export const TiposExamePage: React.FC = () => {
   }, [mostrarTodos, carregarTiposTodos, carregarTiposExame, carregarTodosTipos]);
 
   // Definições de colunas da DataTable
-  const columnDefs = useMemo<ColumnDef<TipoExame>[]>(() => [
+  const columnDefs = useMemo<DefinicaoColunaTabela<TipoExame>[]>(() => [
     {
       accessorKey: 'codigo',
       header: ({ column }) => (

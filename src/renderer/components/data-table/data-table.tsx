@@ -1,16 +1,12 @@
 import * as React from "react"
 import {
-  ColumnDef,
   ColumnFiltersState,
+  ColumnVisibilityState,
+  type RowData,
   RowPinningState,
   SortingState,
-  VisibilityState,
   flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
+  useTable,
 } from "@tanstack/react-table"
 import { Pin, PinOff, Search, Settings2 } from "lucide-react"
 
@@ -33,16 +29,20 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { DataTablePagination } from "./data-table-pagination"
+import {
+  type DefinicaoColunaTabela,
+  recursosTabela,
+} from "./data-table-features"
 
-interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
+interface DataTableProps<TData extends RowData> {
+  columns: DefinicaoColunaTabela<TData>[]
   data: TData[]
   /** Coluna a ser usada para o filtro global de busca (ex: "numero" ou "rep_numero") */
   searchColumn?: string
   /** Placeholder do campo de busca */
   searchPlaceholder?: string
   /** Visibilidade inicial das colunas (colunas com false iniciam ocultas) */
-  initialColumnVisibility?: VisibilityState
+  initialColumnVisibility?: ColumnVisibilityState
   /** Oculta o campo de busca global */
   hideSearch?: boolean
   /** Ordenação inicial [{ id: "coluna", desc: true/false }] */
@@ -51,7 +51,7 @@ interface DataTableProps<TData, TValue> {
   enableRowPinning?: boolean
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends RowData>({
   columns,
   data,
   searchColumn: _searchColumn = "numero",
@@ -60,28 +60,28 @@ export function DataTable<TData, TValue>({
   hideSearch = false,
   defaultSorting = [],
   enableRowPinning = false,
-}: DataTableProps<TData, TValue>) {
+}: DataTableProps<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>(defaultSorting)
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(initialColumnVisibility)
+  const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>(initialColumnVisibility)
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [rowPinning, setRowPinning] = React.useState<RowPinningState>({ top: [], bottom: [] })
 
-  const table = useReactTable({
+  const table = useTable({
+    features: recursosTabela,
     data,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onGlobalFilterChange: setGlobalFilter,
     onRowPinningChange: setRowPinning,
     enableRowPinning,
     keepPinnedRows: true,
-    globalFilterFn: "auto",
+    globalFilterFn: "incluiTexto",
+    defaultColumn: {
+      sortFn: "alfanumerico",
+    },
     state: {
       sorting,
       columnFilters,

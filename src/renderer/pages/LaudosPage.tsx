@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { type ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
@@ -2912,7 +2912,7 @@ export const LaudosPage: React.FC = () => {
     return null;
   };
 
-  const laudoColumns = useMemo<ColumnDef<LaudoItem>[]>(() => [
+  const laudoColumns = useMemo<DefinicaoColunaTabela<LaudoItem>[]>(() => [
     {
       accessorKey: 'data_requisicao',
       header: ({ column }) => (

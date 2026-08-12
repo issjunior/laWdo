@@ -21,7 +21,7 @@ import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Cloc
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { REP } from '@/lib/validators/rep.schema';
 import { z } from 'zod';
-import { type ColumnDef } from '@tanstack/react-table';
+import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import {
@@ -1365,7 +1365,7 @@ export const REPsPage: React.FC = () => {
     setTimeout(() => setSuccess(null), 5000);
   };
 
-  const columnDefs = useMemo<ColumnDef<REP>[]>(() => [
+  const columnDefs = useMemo<DefinicaoColunaTabela<REP>[]>(() => [
     {
       accessorKey: 'data_requisicao',
       header: ({ column }) => (
