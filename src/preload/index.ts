@@ -6,9 +6,11 @@ import type {
   PlanoExecucaoIaResumo,
   RespostaDescricaoImagemIa,
   RespostaExecucaoIaIpc,
+  RespostaConsultaIa,
   ComandoPainelIa,
   SolicitacaoDescricaoImagemIa,
   SolicitacaoIa,
+  SolicitacaoConsultaIa,
   ProgressoIa,
 } from '../shared/types/ia.types.js';
 import type {
@@ -296,11 +298,12 @@ export interface IpcAPI {
     salvarPerfil: (perfil: PerfilRespostaIa) => Promise<UserResponse>;
     planejar: (solicitacao: SolicitacaoIa) => Promise<UserResponse<PlanoExecucaoIaResumo>>;
     executar: (solicitacao: SolicitacaoIa) => Promise<RespostaExecucaoIaIpc>;
+    consultar: (solicitacao: SolicitacaoConsultaIa) => Promise<UserResponse<RespostaConsultaIa>>;
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => Promise<UserResponse<RespostaDescricaoImagemIa>>;
     cancelar: (operationId: string) => Promise<UserResponse>;
     descartarRetomada: (retomadaId: string) => Promise<UserResponse>;
     testarConexao: () => Promise<UserResponse<ContextoIa>>;
-    copiarResposta: (texto: string) => Promise<UserResponse>;
+    copiarResposta: (texto: string, html?: string) => Promise<UserResponse>;
     onProgresso: (callback: (progresso: ProgressoIa) => void) => () => void;
     painelAbrir: (sessionId: string) => void;
     painelFechar: () => void;
@@ -542,6 +545,7 @@ const ALLOWED_CHANNELS = new Set([
   'ia:salvar-perfil',
   'ia:planejar',
   'ia:executar',
+  'ia:consultar',
   'ia:cancelar',
   'ia:descartar-retomada',
   'ia:testar-conexao',
@@ -582,6 +586,7 @@ const ALLOWED_CHANNELS = new Set([
   // Diagnóstico interno
   'diagnostico:atualizar-contexto-renderer',
   'diagnostico:erro-fatal-renderer',
+  'diagnostico:registrar-evento',
 
   // Painel de Ilustrações
   'ilustracoes:open-panel',
@@ -605,14 +610,178 @@ const validarCanal = (channel: string): void => {
   }
 };
 
+const canaisDiagnosticoInternos = new Set([
+  'diagnostico:atualizar-contexto-renderer',
+  'diagnostico:erro-fatal-renderer',
+  'diagnostico:registrar-evento',
+]);
+
+const registrarEventoIpcDiagnostico = (dados: Record<string, unknown>): void => {
+  ipcRenderer.send('diagnostico:registrar-evento', dados);
+};
+
+function descreverElementoDiagnostico(alvo: EventTarget | null): Record<string, unknown> {
+  if (!(alvo instanceof HTMLElement)) return { tipoElemento: 'desconhecido' };
+  return {
+    tipoElemento: alvo.tagName.toLowerCase(),
+    papel: alvo.getAttribute('role'),
+    nome: alvo.getAttribute('data-diagnostico-id') || alvo.getAttribute('aria-label') || alvo.getAttribute('title') || null,
+    identificador: alvo.getAttribute('data-diagnostico-id') || alvo.id || null,
+  };
+}
+
+let ultimoRegistroRolagemDiagnostico = 0;
+let capturaProblemaDiagnosticoAtiva = false;
+let ultimoWheelDiagnostico = 0;
+let observadorIframesDiagnostico: MutationObserver | null = null;
+const iframesDiagnosticoInstalados = new WeakSet<HTMLIFrameElement>();
+
+ipcRenderer.on('diagnostico:alterar-captura', (_evento, dados: unknown) => {
+  capturaProblemaDiagnosticoAtiva = Boolean(
+    dados && typeof dados === 'object' && (dados as Record<string, unknown>).ativa && (dados as Record<string, unknown>).finalidade === 'problema',
+  );
+  if (capturaProblemaDiagnosticoAtiva) {
+    instalarSondasIframesDiagnostico();
+    observadorIframesDiagnostico ??= new MutationObserver(instalarSondasIframesDiagnostico);
+    observadorIframesDiagnostico.observe(document.documentElement, { childList: true, subtree: true });
+  } else {
+    observadorIframesDiagnostico?.disconnect();
+    observadorIframesDiagnostico = null;
+  }
+});
+
+function cadeiaRolavelDiagnostico(alvo: EventTarget | null): Array<Record<string, unknown>> {
+  const cadeia: Array<Record<string, unknown>> = [];
+  let atual = alvo instanceof HTMLElement ? alvo : null;
+  while (atual && cadeia.length < 8) {
+    const estilo = getComputedStyle(atual);
+    if (/(auto|scroll|overlay)/.test(estilo.overflowY) || atual.scrollHeight > atual.clientHeight) {
+      cadeia.push({ identificador: atual.getAttribute('data-diagnostico-id') || atual.id || atual.tagName.toLowerCase(), scrollTop: Math.round(atual.scrollTop), scrollHeight: atual.scrollHeight, clientHeight: atual.clientHeight });
+    }
+    atual = atual.parentElement;
+  }
+  return cadeia;
+}
+
+window.addEventListener('click', evento => {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  registrarEventoIpcDiagnostico({
+    categoria: 'acao', nivel: 'info', tipo: 'clique_usuario', ...descreverElementoDiagnostico(evento.target),
+  });
+}, { capture: true });
+
+window.addEventListener('change', evento => {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  registrarEventoIpcDiagnostico({
+    categoria: 'acao', nivel: 'info', tipo: 'alteracao_usuario', ...descreverElementoDiagnostico(evento.target),
+  });
+}, { capture: true });
+
+window.addEventListener('load', evento => {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  if (!(evento.target instanceof HTMLImageElement)) return;
+  registrarEventoIpcDiagnostico({
+    categoria: 'acao', nivel: 'debug', tipo: 'imagem_carregada', largura: evento.target.naturalWidth, altura: evento.target.naturalHeight,
+  });
+}, { capture: true });
+
+window.addEventListener('scroll', evento => {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  const agora = performance.now();
+  if (agora - ultimoRegistroRolagemDiagnostico < 250) return;
+  ultimoRegistroRolagemDiagnostico = agora;
+  const alvo = evento.target;
+  const elemento = alvo instanceof Document ? document.scrollingElement : alvo instanceof HTMLElement ? alvo : null;
+  const y = elemento?.scrollTop ?? window.scrollY;
+  const maximoY = Math.max(0, (elemento?.scrollHeight ?? document.documentElement.scrollHeight) - (elemento?.clientHeight ?? window.innerHeight));
+  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'scroll', y, maximoY, teveWheelRecente: performance.now() - ultimoWheelDiagnostico <= 150, cadeiaRolavel: cadeiaRolavelDiagnostico(elemento), ...descreverElementoDiagnostico(elemento) });
+}, { capture: true, passive: true });
+
+window.addEventListener('wheel', evento => {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  ultimoWheelDiagnostico = performance.now();
+  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'wheel', deltaX: Math.round(evento.deltaX), deltaY: Math.round(evento.deltaY), cadeiaRolavel: cadeiaRolavelDiagnostico(evento.target), ...descreverElementoDiagnostico(evento.target) });
+}, { capture: true, passive: true });
+
+function registrarWheelIframeDiagnostico(evento: WheelEvent): void {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  ultimoWheelDiagnostico = performance.now();
+  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'wheel', origemDocumento: 'tinymce_iframe', deltaX: Math.round(evento.deltaX), deltaY: Math.round(evento.deltaY), cadeiaRolavel: cadeiaRolavelDiagnostico(evento.target), ...descreverElementoDiagnostico(evento.target) });
+}
+
+function registrarScrollIframeDiagnostico(evento: Event): void {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  const agora = performance.now();
+  if (agora - ultimoRegistroRolagemDiagnostico < 250) return;
+  ultimoRegistroRolagemDiagnostico = agora;
+  const alvo = evento.target;
+  const documento = alvo && typeof alvo === 'object' && 'scrollingElement' in alvo ? alvo as Document : null;
+  const elemento = documento?.scrollingElement;
+  if (!elemento) return;
+  const maximoY = Math.max(0, elemento.scrollHeight - elemento.clientHeight);
+  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'scroll', origemDocumento: 'tinymce_iframe', y: elemento.scrollTop, maximoY, teveWheelRecente: performance.now() - ultimoWheelDiagnostico <= 150, cadeiaRolavel: cadeiaRolavelDiagnostico(elemento), ...descreverElementoDiagnostico(elemento) });
+}
+
+function instalarSondasIframesDiagnostico(): void {
+  for (const iframe of Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe.tox-edit-area__iframe'))) {
+    if (iframesDiagnosticoInstalados.has(iframe)) continue;
+    iframesDiagnosticoInstalados.add(iframe);
+    iframe.addEventListener('load', () => {
+      try {
+        const documento = iframe.contentDocument;
+        if (!documento) return;
+        documento.addEventListener('wheel', registrarWheelIframeDiagnostico, { capture: true, passive: true });
+        documento.addEventListener('scroll', registrarScrollIframeDiagnostico, { capture: true, passive: true });
+      } catch { /* iframe fora da mesma origem não é instrumentado. */ }
+    }, { once: true });
+    if (iframe.contentDocument?.readyState === 'complete') iframe.dispatchEvent(new Event('load'));
+  }
+}
+
+const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParams): Promise<T> => {
+  const correlacaoId = crypto.randomUUID();
+  const inicio = performance.now();
+  if (!canaisDiagnosticoInternos.has(channel)) {
+    registrarEventoIpcDiagnostico({ fase: 'inicio', canal: channel, correlacaoId });
+  }
+  return (ipcRenderer.invoke(channel, ...args) as Promise<T>).then(
+    resposta => {
+      if (!canaisDiagnosticoInternos.has(channel)) {
+        registrarEventoIpcDiagnostico({ fase: 'sucesso', canal: channel, correlacaoId, duracaoMs: performance.now() - inicio });
+      }
+      return resposta;
+    },
+    erro => {
+      if (!canaisDiagnosticoInternos.has(channel)) {
+        registrarEventoIpcDiagnostico({
+          fase: 'erro',
+          canal: channel,
+          correlacaoId,
+          duracaoMs: performance.now() - inicio,
+          erro: erro instanceof Error ? erro.message : 'Erro IPC não identificável',
+        });
+      }
+      throw erro;
+    },
+  );
+};
+
+const enviarComDiagnostico = (channel: string, ...args: IpcParams): void => {
+  const correlacaoId = crypto.randomUUID();
+  if (!canaisDiagnosticoInternos.has(channel)) {
+    registrarEventoIpcDiagnostico({ fase: 'envio', canal: channel, correlacaoId });
+  }
+  ipcRenderer.send(channel, ...args);
+};
+
 const invokeSeguro = <T = IpcResult>(channel: string, ...args: IpcParams): Promise<T> => {
   validarCanal(channel);
-  return ipcRenderer.invoke(channel, ...args) as Promise<T>;
+  return invocarComDiagnostico<T>(channel, ...args);
 };
 
 const sendSeguro = (channel: string, ...args: IpcParams): void => {
   validarCanal(channel);
-  ipcRenderer.send(channel, ...args);
+  enviarComDiagnostico(channel, ...args);
 };
 
 // Expor API segura para o renderer
@@ -663,7 +832,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       throw new Error('Query não pode ser vazia');
     }
 
-    return ipcRenderer.invoke('execute-query', trimmedQuery, params || []);
+    return invocarComDiagnostico('execute-query', trimmedQuery, params || []);
   },
 
   // Autenticação
@@ -676,25 +845,25 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       throw new Error('Username e password não podem ser vazios');
     }
 
-    return ipcRenderer.invoke('login', username.trim(), password.trim());
+    return invocarComDiagnostico('login', username.trim(), password.trim());
   },
 
   verifyPassword: (userId: string, password: string) => {
     if (typeof userId !== 'string' || typeof password !== 'string') return Promise.resolve({ success: false, valid: false, error: 'Dados inválidos' });
-    return ipcRenderer.invoke('user:verifyPassword', userId, password);
+    return invocarComDiagnostico('user:verifyPassword', userId, password);
   },
 
   // Usuários
   user: {
     findAll: (filters = {}, options = {}) => {
-      return ipcRenderer.invoke('user:findAll', filters, options);
+      return invocarComDiagnostico('user:findAll', filters, options);
     },
 
     findById: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('user:findById', id.trim());
+      return invocarComDiagnostico('user:findById', id.trim());
     },
 
     create: (userData: UserCreateData) => {
@@ -704,7 +873,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!userData.nome || !userData.email) {
         throw new Error('Nome e email são obrigatórios');
       }
-      return ipcRenderer.invoke('user:create', userData);
+      return invocarComDiagnostico('user:create', userData);
     },
 
     update: (id: string, updateData: UserUpdateData) => {
@@ -714,25 +883,25 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!updateData || typeof updateData !== 'object') {
         throw new Error('Dados de atualização inválidos');
       }
-      return ipcRenderer.invoke('user:update', id.trim(), updateData);
+      return invocarComDiagnostico('user:update', id.trim(), updateData);
     },
 
     delete: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('user:delete', id.trim());
+      return invocarComDiagnostico('user:delete', id.trim());
     },
 
     findByEmail: (email: string) => {
       if (typeof email !== 'string' || !email.trim()) {
         throw new Error('Email inválido');
       }
-      return ipcRenderer.invoke('user:findByEmail', email.trim());
+      return invocarComDiagnostico('user:findByEmail', email.trim());
     },
 
     findActivePeritos: () => {
-      return ipcRenderer.invoke('user:findActivePeritos');
+      return invocarComDiagnostico('user:findActivePeritos');
     },
 
     updateProfile: (userId: string, profileData: UserProfileUpdateData) => {
@@ -742,7 +911,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!profileData || typeof profileData !== 'object') {
         throw new Error('Dados do perfil inválidos');
       }
-      return ipcRenderer.invoke('user:updateProfile', userId.trim(), profileData);
+      return invocarComDiagnostico('user:updateProfile', userId.trim(), profileData);
     },
 
     uploadAvatar: (userId: string, base64Data: string) => {
@@ -752,32 +921,32 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof base64Data !== 'string' || !base64Data) {
         throw new Error('Dados da imagem inválidos');
       }
-      return ipcRenderer.invoke('user:uploadAvatar', userId.trim(), base64Data);
+      return invocarComDiagnostico('user:uploadAvatar', userId.trim(), base64Data);
     },
 
     getAvatar: (userId: string) => {
       if (typeof userId !== 'string' || !userId.trim()) {
         throw new Error('ID do usuário inválido');
       }
-      return ipcRenderer.invoke('user:getAvatar', userId.trim());
+      return invocarComDiagnostico('user:getAvatar', userId.trim());
     },
   },
 
   // Solicitantes
   solicitante: {
     findAll: (filters?: SolicitanteFilters, options?: PaginationOptions) => {
-      return ipcRenderer.invoke('solicitante:findAll', filters, options);
+      return invocarComDiagnostico('solicitante:findAll', filters, options);
     },
 
     findAllSemFiltroStatus: (filters?: SolicitanteFilters, options?: PaginationOptions) => {
-      return ipcRenderer.invoke('solicitante:findAllSemFiltroStatus', filters, options);
+      return invocarComDiagnostico('solicitante:findAllSemFiltroStatus', filters, options);
     },
 
     findById: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('solicitante:findById', id.trim());
+      return invocarComDiagnostico('solicitante:findById', id.trim());
     },
 
     create: (solicitanteData: SolicitanteCreateData) => {
@@ -787,7 +956,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!solicitanteData.nome) {
         throw new Error('Nome é obrigatório');
       }
-      return ipcRenderer.invoke('solicitante:create', solicitanteData);
+      return invocarComDiagnostico('solicitante:create', solicitanteData);
     },
 
     update: (id: string, updateData: SolicitanteUpdateData) => {
@@ -797,57 +966,57 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!updateData || typeof updateData !== 'object') {
         throw new Error('Dados de atualização inválidos');
       }
-      return ipcRenderer.invoke('solicitante:update', id.trim(), updateData);
+      return invocarComDiagnostico('solicitante:update', id.trim(), updateData);
     },
 
     delete: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('solicitante:delete', id.trim());
+      return invocarComDiagnostico('solicitante:delete', id.trim());
     },
 
     hardDelete: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('solicitante:hardDelete', id.trim());
+      return invocarComDiagnostico('solicitante:hardDelete', id.trim());
     },
 
     toggleStatus: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('solicitante:toggleStatus', id.trim());
+      return invocarComDiagnostico('solicitante:toggleStatus', id.trim());
     },
 
     findByTipo: (tipo: string) => {
       if (typeof tipo !== 'string' || !tipo.trim()) {
         throw new Error('Tipo inválido');
       }
-      return ipcRenderer.invoke('solicitante:findByTipo', tipo.trim());
+      return invocarComDiagnostico('solicitante:findByTipo', tipo.trim());
     },
 
     findTipos: () => {
-      return ipcRenderer.invoke('solicitante:findTipos');
+      return invocarComDiagnostico('solicitante:findTipos');
     },
 
     findAtivos: (filters = {}, options = {}) => {
-      return ipcRenderer.invoke('solicitante:findAtivos', filters, options);
+      return invocarComDiagnostico('solicitante:findAtivos', filters, options);
     },
   },
 
   // Tipos de Exame
   tipoExame: {
     findAll: () => {
-      return ipcRenderer.invoke('tipo-exame:findAll');
+      return invocarComDiagnostico('tipo-exame:findAll');
     },
 
     findById: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('tipo-exame:findById', id.trim());
+      return invocarComDiagnostico('tipo-exame:findById', id.trim());
     },
 
     create: (tipoExameData: TipoExameCreateData) => {
@@ -860,7 +1029,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!tipoExameData.nome) {
         throw new Error('Nome é obrigatório');
       }
-      return ipcRenderer.invoke('tipo-exame:create', tipoExameData);
+      return invocarComDiagnostico('tipo-exame:create', tipoExameData);
     },
 
     update: (id: string, updateData: TipoExameUpdateData) => {
@@ -870,18 +1039,18 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (!updateData || typeof updateData !== 'object') {
         throw new Error('Dados de atualização inválidos');
       }
-      return ipcRenderer.invoke('tipo-exame:update', id.trim(), updateData);
+      return invocarComDiagnostico('tipo-exame:update', id.trim(), updateData);
     },
 
     delete: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('tipo-exame:delete', id.trim());
+      return invocarComDiagnostico('tipo-exame:delete', id.trim());
     },
 
     findComTemplate: () => {
-      return ipcRenderer.invoke('tipo-exame:findComTemplate');
+      return invocarComDiagnostico('tipo-exame:findComTemplate');
     },
 
     atualizarTemplate: (id: string, template: string) => {
@@ -891,25 +1060,25 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof template !== 'string') {
         throw new Error('Template inválido');
       }
-      return ipcRenderer.invoke('tipo-exame:atualizarTemplate', id.trim(), template);
+      return invocarComDiagnostico('tipo-exame:atualizarTemplate', id.trim(), template);
     },
 
     obterTemplate: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('tipo-exame:obterTemplate', id.trim());
+      return invocarComDiagnostico('tipo-exame:obterTemplate', id.trim());
     },
 
     toggleStatus: (id: string) => {
       if (typeof id !== 'string' || !id.trim()) {
         throw new Error('ID inválido');
       }
-      return ipcRenderer.invoke('tipo-exame:toggleStatus', id.trim());
+      return invocarComDiagnostico('tipo-exame:toggleStatus', id.trim());
     },
 
     findAllSemFiltroStatus: () => {
-      return ipcRenderer.invoke('tipo-exame:findAllSemFiltroStatus');
+      return invocarComDiagnostico('tipo-exame:findAllSemFiltroStatus');
     },
   },
 
@@ -918,20 +1087,20 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof chave !== 'string' || !chave.trim()) {
         throw new Error('Chave inválida');
       }
-      return ipcRenderer.invoke('configuracao:obter', chave.trim());
+      return invocarComDiagnostico('configuracao:obter', chave.trim());
     },
     salvar: (chave: string, valor: string, tipo?: string, descricao?: string) => {
       if (typeof chave !== 'string' || !chave.trim()) {
         throw new Error('Chave inválida');
       }
-      return ipcRenderer.invoke('configuracao:salvar', chave.trim(), valor, tipo, descricao);
+      return invocarComDiagnostico('configuracao:salvar', chave.trim(), valor, tipo, descricao);
     },
   },
 
   gdl: {
-    testarConexao: (ambiente?: string) => ipcRenderer.invoke('gdl:testar-conexao', ambiente),
-    obterValidacaoSessao: (ambiente?: string) => ipcRenderer.invoke('gdl:obter-validacao-sessao', ambiente),
-    limparValidacaoSessao: (ambiente?: string) => ipcRenderer.invoke('gdl:limpar-validacao-sessao', ambiente),
+    testarConexao: (ambiente?: string) => invocarComDiagnostico('gdl:testar-conexao', ambiente),
+    obterValidacaoSessao: (ambiente?: string) => invocarComDiagnostico('gdl:obter-validacao-sessao', ambiente),
+    limparValidacaoSessao: (ambiente?: string) => invocarComDiagnostico('gdl:limpar-validacao-sessao', ambiente),
     validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => {
       if (typeof ambiente !== 'string' || !ambiente.trim()) {
         throw new Error('Ambiente GDL é obrigatório');
@@ -942,7 +1111,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof ano !== 'string' || !ano.trim()) {
         throw new Error('Ano da REP é obrigatório');
       }
-      return ipcRenderer.invoke('gdl:validar-credenciais', ambiente.trim(), credenciais, numero.trim(), ano.trim());
+      return invocarComDiagnostico('gdl:validar-credenciais', ambiente.trim(), credenciais, numero.trim(), ano.trim());
     },
     consultarRep: (numero: string, ano: string) => {
       if (typeof numero !== 'string' || !numero.trim()) {
@@ -951,149 +1120,150 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof ano !== 'string' || !ano.trim()) {
         throw new Error('Ano da REP é obrigatório');
       }
-      return ipcRenderer.invoke('gdl:consultar-rep', numero.trim(), ano.trim());
+      return invocarComDiagnostico('gdl:consultar-rep', numero.trim(), ano.trim());
     },
     listarImagensLaudo: (laudoId: string) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
-      return ipcRenderer.invoke('gdl:listar-imagens-laudo', laudoId);
+      return invocarComDiagnostico('gdl:listar-imagens-laudo', laudoId);
     },
     capturarImagensLaudo: (laudoId: string, idsSelecao: string[]) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
       if (!Array.isArray(idsSelecao) || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
         throw new Error('Seleção de imagens inválida');
       }
-      return ipcRenderer.invoke('gdl:capturar-imagens-laudo', laudoId, idsSelecao);
+      return invocarComDiagnostico('gdl:capturar-imagens-laudo', laudoId, idsSelecao);
     },
   },
 
   rep: {
-    findAll: () => ipcRenderer.invoke('rep:findAll'),
-    findById: (id: string) => ipcRenderer.invoke('rep:findById', id),
-    findByNumero: (numero: string) => ipcRenderer.invoke('rep:findByNumero', numero),
-    create: (data: IpcPayload) => ipcRenderer.invoke('rep:create', data),
-    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('rep:update', id, data),
-    delete: (id: string) => ipcRenderer.invoke('rep:delete', id),
-    updateStatus: (id: string, status: string) => ipcRenderer.invoke('rep:updateStatus', id, status),
+    findAll: () => invocarComDiagnostico('rep:findAll'),
+    findById: (id: string) => invocarComDiagnostico('rep:findById', id),
+    findByNumero: (numero: string) => invocarComDiagnostico('rep:findByNumero', numero),
+    create: (data: IpcPayload) => invocarComDiagnostico('rep:create', data),
+    update: (id: string, data: IpcPayload) => invocarComDiagnostico('rep:update', id, data),
+    delete: (id: string) => invocarComDiagnostico('rep:delete', id),
+    updateStatus: (id: string, status: string) => invocarComDiagnostico('rep:updateStatus', id, status),
   },
 
   dashboard: {
-    resumo: () => ipcRenderer.invoke('dashboard:resumo'),
-    projecoes: () => ipcRenderer.invoke('dashboard:projecoes'),
+    resumo: () => invocarComDiagnostico('dashboard:resumo'),
+    projecoes: () => invocarComDiagnostico('dashboard:projecoes'),
   },
 
   categoria: {
-    findAll: () => ipcRenderer.invoke('categoria:findAll'),
-    findArvore: () => ipcRenderer.invoke('categoria:findArvore'),
-    create: (data: IpcPayload) => ipcRenderer.invoke('categoria:create', data),
-    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('categoria:update', id, data),
-    delete: (id: string) => ipcRenderer.invoke('categoria:delete', id),
+    findAll: () => invocarComDiagnostico('categoria:findAll'),
+    findArvore: () => invocarComDiagnostico('categoria:findArvore'),
+    create: (data: IpcPayload) => invocarComDiagnostico('categoria:create', data),
+    update: (id: string, data: IpcPayload) => invocarComDiagnostico('categoria:update', id, data),
+    delete: (id: string) => invocarComDiagnostico('categoria:delete', id),
   },
 
   placeholder: {
-    findAll: () => ipcRenderer.invoke('placeholder:findAll'),
-    findById: (id: string) => ipcRenderer.invoke('placeholder:findById', id),
-    create: (data: IpcPayload) => ipcRenderer.invoke('placeholder:create', data),
-    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('placeholder:update', id, data),
-    delete: (id: string) => ipcRenderer.invoke('placeholder:delete', id),
-    migrateSistema: () => ipcRenderer.invoke('placeholder:migrateSistema'),
-    seedSistema: () => ipcRenderer.invoke('placeholder:seedSistema'),
+    findAll: () => invocarComDiagnostico('placeholder:findAll'),
+    findById: (id: string) => invocarComDiagnostico('placeholder:findById', id),
+    create: (data: IpcPayload) => invocarComDiagnostico('placeholder:create', data),
+    update: (id: string, data: IpcPayload) => invocarComDiagnostico('placeholder:update', id, data),
+    delete: (id: string) => invocarComDiagnostico('placeholder:delete', id),
+    migrateSistema: () => invocarComDiagnostico('placeholder:migrateSistema'),
+    seedSistema: () => invocarComDiagnostico('placeholder:seedSistema'),
   },
 
   template: {
-    findAll: () => ipcRenderer.invoke('template:findAll'),
-    findById: (id: string) => ipcRenderer.invoke('template:findById', id),
-    findByTipoExame: (tipoExameId: string) => ipcRenderer.invoke('template:findByTipoExame', tipoExameId),
-    create: (data: IpcPayload) => ipcRenderer.invoke('template:create', data),
-    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('template:update', id, data),
-    delete: (id: string) => ipcRenderer.invoke('template:delete', id),
-    findSecoes: (templateId: string) => ipcRenderer.invoke('template:findSecoes', templateId),
-    createSecao: (data: IpcPayload) => ipcRenderer.invoke('template:createSecao', data),
-    updateSecao: (id: string, data: IpcPayload) => ipcRenderer.invoke('template:updateSecao', id, data),
-    deleteSecao: (id: string) => ipcRenderer.invoke('template:deleteSecao', id),
-    reordenarSecoes: (templateId: string, idsOrdenados: string[]) => ipcRenderer.invoke('template:reordenarSecoes', templateId, idsOrdenados),
-    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => ipcRenderer.invoke('template:previewPDF', { html, margins, headerTemplate }),
-    importarArquivo: () => ipcRenderer.invoke('template:importarArquivo'),
-    exportarPacote: (templateId: string) => ipcRenderer.invoke('template:exportarPacote', templateId),
-    selecionarPacote: () => ipcRenderer.invoke('template:selecionarPacote'),
-    importarPacote: (caminho: string, criarTipo: boolean) => ipcRenderer.invoke('template:importarPacote', caminho, criarTipo),
+    findAll: () => invocarComDiagnostico('template:findAll'),
+    findById: (id: string) => invocarComDiagnostico('template:findById', id),
+    findByTipoExame: (tipoExameId: string) => invocarComDiagnostico('template:findByTipoExame', tipoExameId),
+    create: (data: IpcPayload) => invocarComDiagnostico('template:create', data),
+    update: (id: string, data: IpcPayload) => invocarComDiagnostico('template:update', id, data),
+    delete: (id: string) => invocarComDiagnostico('template:delete', id),
+    findSecoes: (templateId: string) => invocarComDiagnostico('template:findSecoes', templateId),
+    createSecao: (data: IpcPayload) => invocarComDiagnostico('template:createSecao', data),
+    updateSecao: (id: string, data: IpcPayload) => invocarComDiagnostico('template:updateSecao', id, data),
+    deleteSecao: (id: string) => invocarComDiagnostico('template:deleteSecao', id),
+    reordenarSecoes: (templateId: string, idsOrdenados: string[]) => invocarComDiagnostico('template:reordenarSecoes', templateId, idsOrdenados),
+    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => invocarComDiagnostico('template:previewPDF', { html, margins, headerTemplate }),
+    importarArquivo: () => invocarComDiagnostico('template:importarArquivo'),
+    exportarPacote: (templateId: string) => invocarComDiagnostico('template:exportarPacote', templateId),
+    selecionarPacote: () => invocarComDiagnostico('template:selecionarPacote'),
+    importarPacote: (caminho: string, criarTipo: boolean) => invocarComDiagnostico('template:importarPacote', caminho, criarTipo),
   },
 
   laudo: {
-    findAll: () => ipcRenderer.invoke('laudo:findAll'),
-    findAllByRepId: (repId: string) => ipcRenderer.invoke('laudo:findAllByRepId', repId),
-    findById: (id: string) => ipcRenderer.invoke('laudo:findById', id),
-    findByRepId: (repId: string) => ipcRenderer.invoke('laudo:findByRepId', repId),
-    updateConteudo: (laudoId: string, conteudo: string) => ipcRenderer.invoke('laudo:updateConteudo', laudoId, conteudo),
-    create: (data: { rep_id: string; perito_id: string; template_id: string }) => ipcRenderer.invoke('laudo:create', data),
-    delete: (laudoId: string, userId?: string) => ipcRenderer.invoke('laudo:delete', laudoId, userId),
-    updateStatus: (laudoId: string, status: string) => ipcRenderer.invoke('laudo:updateStatus', laudoId, status),
-    gerarWizard: (params: IpcPayload) => ipcRenderer.invoke('laudo:gerarWizard', params),
-    salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => ipcRenderer.invoke('laudo:salvarProgressoWizard', laudoId, respostas),
-    getRespostasWizard: (laudoId: string) => ipcRenderer.invoke('laudo:getRespostasWizard', laudoId),
-    exportar: (params: ExportacaoLaudoParams) => ipcRenderer.invoke('laudo:exportar', params),
-    verificarLibreOffice: () => ipcRenderer.invoke('laudo:verificarLibreOffice'),
-    sincronizarSecoes: (laudoId: string) => ipcRenderer.invoke('laudo:sincronizarSecoes', laudoId),
+    findAll: () => invocarComDiagnostico('laudo:findAll'),
+    findAllByRepId: (repId: string) => invocarComDiagnostico('laudo:findAllByRepId', repId),
+    findById: (id: string) => invocarComDiagnostico('laudo:findById', id),
+    findByRepId: (repId: string) => invocarComDiagnostico('laudo:findByRepId', repId),
+    updateConteudo: (laudoId: string, conteudo: string) => invocarComDiagnostico('laudo:updateConteudo', laudoId, conteudo),
+    create: (data: { rep_id: string; perito_id: string; template_id: string }) => invocarComDiagnostico('laudo:create', data),
+    delete: (laudoId: string, userId?: string) => invocarComDiagnostico('laudo:delete', laudoId, userId),
+    updateStatus: (laudoId: string, status: string) => invocarComDiagnostico('laudo:updateStatus', laudoId, status),
+    gerarWizard: (params: IpcPayload) => invocarComDiagnostico('laudo:gerarWizard', params),
+    salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => invocarComDiagnostico('laudo:salvarProgressoWizard', laudoId, respostas),
+    getRespostasWizard: (laudoId: string) => invocarComDiagnostico('laudo:getRespostasWizard', laudoId),
+    exportar: (params: ExportacaoLaudoParams) => invocarComDiagnostico('laudo:exportar', params),
+    verificarLibreOffice: () => invocarComDiagnostico('laudo:verificarLibreOffice'),
+    sincronizarSecoes: (laudoId: string) => invocarComDiagnostico('laudo:sincronizarSecoes', laudoId),
   },
 
   wizard: {
-    findAll: () => ipcRenderer.invoke('wizard:findAll'),
-    findById: (id: string) => ipcRenderer.invoke('wizard:findById', id),
-    findByTipoExame: (tipoExameId: string) => ipcRenderer.invoke('wizard:findByTipoExame', tipoExameId),
-    create: (data: IpcPayload) => ipcRenderer.invoke('wizard:create', data),
-    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('wizard:update', id, data),
-    delete: (id: string) => ipcRenderer.invoke('wizard:delete', id),
-    getArvore: (wizardId: string) => ipcRenderer.invoke('wizard:getArvore', wizardId),
-    saveArvore: (wizardId: string, arvore: IpcPayload) => ipcRenderer.invoke('wizard:saveArvore', wizardId, arvore),
+    findAll: () => invocarComDiagnostico('wizard:findAll'),
+    findById: (id: string) => invocarComDiagnostico('wizard:findById', id),
+    findByTipoExame: (tipoExameId: string) => invocarComDiagnostico('wizard:findByTipoExame', tipoExameId),
+    create: (data: IpcPayload) => invocarComDiagnostico('wizard:create', data),
+    update: (id: string, data: IpcPayload) => invocarComDiagnostico('wizard:update', id, data),
+    delete: (id: string) => invocarComDiagnostico('wizard:delete', id),
+    getArvore: (wizardId: string) => invocarComDiagnostico('wizard:getArvore', wizardId),
+    saveArvore: (wizardId: string, arvore: IpcPayload) => invocarComDiagnostico('wizard:saveArvore', wizardId, arvore),
   },
 
   categoriaPeca: {
-    findAll: () => ipcRenderer.invoke('categoria-peca:findAll'),
-    findArvore: () => ipcRenderer.invoke('categoria-peca:findArvore'),
-    create: (data: IpcPayload) => ipcRenderer.invoke('categoria-peca:create', data),
-    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('categoria-peca:update', id, data),
-    delete: (id: string) => ipcRenderer.invoke('categoria-peca:delete', id),
+    findAll: () => invocarComDiagnostico('categoria-peca:findAll'),
+    findArvore: () => invocarComDiagnostico('categoria-peca:findArvore'),
+    create: (data: IpcPayload) => invocarComDiagnostico('categoria-peca:create', data),
+    update: (id: string, data: IpcPayload) => invocarComDiagnostico('categoria-peca:update', id, data),
+    delete: (id: string) => invocarComDiagnostico('categoria-peca:delete', id),
   },
 
   peca: {
-    findAll: () => ipcRenderer.invoke('peca:findAll'),
-    findById: (id: string) => ipcRenderer.invoke('peca:findById', id),
-    create: (data: IpcPayload) => ipcRenderer.invoke('peca:create', data),
-    update: (id: string, data: IpcPayload) => ipcRenderer.invoke('peca:update', id, data),
-    delete: (id: string) => ipcRenderer.invoke('peca:delete', id),
-    search: (query: string) => ipcRenderer.invoke('peca:search', query),
-    findByCategoria: (categoriaId: string) => ipcRenderer.invoke('peca:findByCategoria', categoriaId),
-    findByCategoriaRecursiva: (categoriaId: string) => ipcRenderer.invoke('peca:findByCategoriaRecursiva', categoriaId),
+    findAll: () => invocarComDiagnostico('peca:findAll'),
+    findById: (id: string) => invocarComDiagnostico('peca:findById', id),
+    create: (data: IpcPayload) => invocarComDiagnostico('peca:create', data),
+    update: (id: string, data: IpcPayload) => invocarComDiagnostico('peca:update', id, data),
+    delete: (id: string) => invocarComDiagnostico('peca:delete', id),
+    search: (query: string) => invocarComDiagnostico('peca:search', query),
+    findByCategoria: (categoriaId: string) => invocarComDiagnostico('peca:findByCategoria', categoriaId),
+    findByCategoriaRecursiva: (categoriaId: string) => invocarComDiagnostico('peca:findByCategoriaRecursiva', categoriaId),
   },
 
   regraWizard: {
-    findByWizard: (wizardId: string) => ipcRenderer.invoke('regra-wizard:findByWizard', wizardId),
-    save: (regras: IpcPayload[]) => ipcRenderer.invoke('regra-wizard:save', regras),
-    calcularPecas: (wizardId: string, respostas: IpcPayload) => ipcRenderer.invoke('regra-wizard:calcularPecas', wizardId, respostas),
+    findByWizard: (wizardId: string) => invocarComDiagnostico('regra-wizard:findByWizard', wizardId),
+    save: (regras: IpcPayload[]) => invocarComDiagnostico('regra-wizard:save', regras),
+    calcularPecas: (wizardId: string, respostas: IpcPayload) => invocarComDiagnostico('regra-wizard:calcularPecas', wizardId, respostas),
   },
 
   ia: {
     revisarOrtografia: (textoHtml: string) => {
       if (typeof textoHtml !== 'string') throw new Error('Texto inválido');
-      return ipcRenderer.invoke('ia:revisarOrtografia', textoHtml);
+      return invocarComDiagnostico('ia:revisarOrtografia', textoHtml);
     },
     adequarEscrita: (textoHtml: string) => {
       if (typeof textoHtml !== 'string') throw new Error('Texto inválido');
-      return ipcRenderer.invoke('ia:adequarEscrita', textoHtml);
+      return invocarComDiagnostico('ia:adequarEscrita', textoHtml);
     },
     perguntar: (pergunta: string, contexto?: string) => {
       if (typeof pergunta !== 'string' || !pergunta.trim()) throw new Error('Pergunta inválida');
-      return ipcRenderer.invoke('ia:perguntar', pergunta, contexto);
+      return invocarComDiagnostico('ia:perguntar', pergunta, contexto);
     },
-    obterContexto: () => ipcRenderer.invoke('ia:obter-contexto'),
-    obterPerfil: () => ipcRenderer.invoke('ia:obter-perfil'),
-    salvarPerfil: (perfil: PerfilRespostaIa) => ipcRenderer.invoke('ia:salvar-perfil', perfil),
-    planejar: (solicitacao: SolicitacaoIa) => ipcRenderer.invoke('ia:planejar', solicitacao),
-    executar: (solicitacao: SolicitacaoIa) => ipcRenderer.invoke('ia:executar', solicitacao),
-    descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => ipcRenderer.invoke('ia:descrever-imagem', solicitacao),
-    cancelar: (operationId: string) => ipcRenderer.invoke('ia:cancelar', operationId),
-    descartarRetomada: (retomadaId: string) => ipcRenderer.invoke('ia:descartar-retomada', retomadaId),
-    testarConexao: () => ipcRenderer.invoke('ia:testar-conexao'),
-    copiarResposta: (texto: string) => ipcRenderer.invoke('ia:copiar-resposta', texto),
+    obterContexto: () => invocarComDiagnostico('ia:obter-contexto'),
+    obterPerfil: () => invocarComDiagnostico('ia:obter-perfil'),
+    salvarPerfil: (perfil: PerfilRespostaIa) => invocarComDiagnostico('ia:salvar-perfil', perfil),
+    planejar: (solicitacao: SolicitacaoIa) => invocarComDiagnostico('ia:planejar', solicitacao),
+    executar: (solicitacao: SolicitacaoIa) => invocarComDiagnostico('ia:executar', solicitacao),
+    consultar: (solicitacao: SolicitacaoConsultaIa) => invocarComDiagnostico('ia:consultar', solicitacao),
+    descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => invocarComDiagnostico('ia:descrever-imagem', solicitacao),
+    cancelar: (operationId: string) => invocarComDiagnostico('ia:cancelar', operationId),
+    descartarRetomada: (retomadaId: string) => invocarComDiagnostico('ia:descartar-retomada', retomadaId),
+    testarConexao: () => invocarComDiagnostico('ia:testar-conexao'),
+    copiarResposta: (texto: string, html?: string) => invocarComDiagnostico('ia:copiar-resposta', texto, html),
     onProgresso: (callback: (progresso: ProgressoIa) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
         if (progressoIaValidoNoPreload(progresso)) callback(progresso);
@@ -1101,12 +1271,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       ipcRenderer.on('ia:progresso', listener);
       return () => ipcRenderer.removeListener('ia:progresso', listener);
     },
-    painelAbrir: (sessionId: string) => ipcRenderer.send('ia:painel-abrir', sessionId),
-    painelFechar: () => ipcRenderer.send('ia:painel-fechar'),
-    painelPronto: () => ipcRenderer.send('ia:painel-pronto'),
-    painelPublicar: (sessionId: string, atualizacao: AtualizacaoPainelIa) => ipcRenderer.send('ia:painel-publicar', sessionId, atualizacao),
-    painelEnviarComando: (comando: ComandoPainelIa) => ipcRenderer.send('ia:painel-comando', comando),
-    painelReencaixar: () => ipcRenderer.send('ia:painel-reencaixar'),
+    painelAbrir: (sessionId: string) => enviarComDiagnostico('ia:painel-abrir', sessionId),
+    painelFechar: () => enviarComDiagnostico('ia:painel-fechar'),
+    painelPronto: () => enviarComDiagnostico('ia:painel-pronto'),
+    painelPublicar: (sessionId: string, atualizacao: AtualizacaoPainelIa) => enviarComDiagnostico('ia:painel-publicar', sessionId, atualizacao),
+    painelEnviarComando: (comando: ComandoPainelIa) => enviarComDiagnostico('ia:painel-comando', comando),
+    painelReencaixar: () => enviarComDiagnostico('ia:painel-reencaixar'),
     onPainelPronto: (callback: (sessionId: string) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, sessionId: string) => callback(sessionId);
       ipcRenderer.on('ia:painel-pronto', listener);
@@ -1135,10 +1305,10 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   backup: {
-    criar: () => ipcRenderer.invoke('backup:criar'),
-    restaurar: () => ipcRenderer.invoke('backup:restaurar'),
-    configExportar: () => ipcRenderer.invoke('backup:config-exportar'),
-    configImportar: () => ipcRenderer.invoke('backup:config-importar'),
+    criar: () => invocarComDiagnostico('backup:criar'),
+    restaurar: () => invocarComDiagnostico('backup:restaurar'),
+    configExportar: () => invocarComDiagnostico('backup:config-exportar'),
+    configImportar: () => invocarComDiagnostico('backup:config-importar'),
   },
 
   atualizacao: {
@@ -1167,38 +1337,38 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   log: {
-    listar: (filters?: Record<string, unknown>) => ipcRenderer.invoke('log:listar', filters),
-    limpar: () => ipcRenderer.invoke('log:limpar'),
-    listarAuditoria: (filters?: Record<string, unknown>) => ipcRenderer.invoke('log:listar-auditoria', filters),
-    limparAuditoria: (userId?: string) => ipcRenderer.invoke('log:limpar-auditoria', userId),
-    contar: () => ipcRenderer.invoke('log:contar'),
-    timelineRep: (repId: string) => ipcRenderer.invoke('log:timeline-rep', repId),
+    listar: (filters?: Record<string, unknown>) => invocarComDiagnostico('log:listar', filters),
+    limpar: () => invocarComDiagnostico('log:limpar'),
+    listarAuditoria: (filters?: Record<string, unknown>) => invocarComDiagnostico('log:listar-auditoria', filters),
+    limparAuditoria: (userId?: string) => invocarComDiagnostico('log:limpar-auditoria', userId),
+    contar: () => invocarComDiagnostico('log:contar'),
+    timelineRep: (repId: string) => invocarComDiagnostico('log:timeline-rep', repId),
   },
 
   diagnosticoInterno: {
     atualizarContextoRenderer: (contexto: Record<string, unknown>) => {
-      ipcRenderer.send('diagnostico:atualizar-contexto-renderer', contexto);
+      enviarComDiagnostico('diagnostico:atualizar-contexto-renderer', contexto);
     },
     registrarErroFatalRenderer: (erro: Record<string, unknown>) => {
-      ipcRenderer.send('diagnostico:erro-fatal-renderer', erro);
+      enviarComDiagnostico('diagnostico:erro-fatal-renderer', erro);
     },
   },
 
   ilustracoes: {
-    listarImagens: (laudoId: string) => ipcRenderer.invoke('ilustracoes:listar-imagens', laudoId),
-    salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => ipcRenderer.invoke('ilustracoes:salvar-imagem', laudoId, imagem),
-    excluirImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:excluir-imagem', laudoId, imagemId),
-    arquivarImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:arquivar-imagem', laudoId, imagemId),
-    disponibilizarImagem: (laudoId: string, imagemId: string) => ipcRenderer.invoke('ilustracoes:disponibilizar-imagem', laudoId, imagemId),
-    atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => ipcRenderer.invoke('ilustracoes:atualizar-legenda', laudoId, imagemId, legenda),
-    atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => ipcRenderer.invoke('ilustracoes:atualizar-ordem', laudoId, ordem),
+    listarImagens: (laudoId: string) => invocarComDiagnostico('ilustracoes:listar-imagens', laudoId),
+    salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => invocarComDiagnostico('ilustracoes:salvar-imagem', laudoId, imagem),
+    excluirImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:excluir-imagem', laudoId, imagemId),
+    arquivarImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:arquivar-imagem', laudoId, imagemId),
+    disponibilizarImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:disponibilizar-imagem', laudoId, imagemId),
+    atualizarLegenda: (laudoId: string, imagemId: string, legenda: string) => invocarComDiagnostico('ilustracoes:atualizar-legenda', laudoId, imagemId, legenda),
+    atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => invocarComDiagnostico('ilustracoes:atualizar-ordem', laudoId, ordem),
     openPanel: (laudoId: string, tituloLaudo?: string) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
-      ipcRenderer.send('ilustracoes:open-panel', laudoId, tituloLaudo);
+      enviarComDiagnostico('ilustracoes:open-panel', laudoId, tituloLaudo);
     },
-    closePanel: () => ipcRenderer.send('ilustracoes:close-panel'),
-    syncToPanel: (data) => ipcRenderer.send('ilustracoes:sync-to-panel', data),
-    sendAction: (action, ...args) => ipcRenderer.send('ilustracoes:panel-action', action, ...args),
+    closePanel: () => enviarComDiagnostico('ilustracoes:close-panel'),
+    syncToPanel: (data) => enviarComDiagnostico('ilustracoes:sync-to-panel', data),
+    sendAction: (action, ...args) => enviarComDiagnostico('ilustracoes:panel-action', action, ...args),
     onPanelAction: (cb) => {
       const handler = (_event: Electron.IpcRendererEvent, action: string, ...args: unknown[]) => cb(action, ...args);
       ipcRenderer.on('ilustracoes:panel-action', handler);
@@ -1223,4 +1393,3 @@ declare global {
     ipcAPI: IpcAPI;
   }
 }
-

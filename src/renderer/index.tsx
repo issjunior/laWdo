@@ -87,7 +87,7 @@ interface IpcAPIRendererLegada {
   regraWizard: IpcGrupoLegado;
   ia: IpcGrupoLegado & {
     painelAbrir: (sessionId: string) => void;
-    copiarResposta: (texto: string) => Promise<IpcRespostaLegada>;
+    copiarResposta: (texto: string, html?: string) => Promise<IpcRespostaLegada>;
     planejar: (solicitacao: SolicitacaoIa) => Promise<{ success: boolean; data?: PlanoExecucaoIaResumo; error?: string }>;
     executar: (solicitacao: SolicitacaoIa) => Promise<RespostaExecucaoIaIpc>;
     onProgresso: (callback: (progresso: ProgressoIa) => void) => () => void;

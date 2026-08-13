@@ -23,6 +23,8 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
+import { serializarBlocosContextoIa } from '@/lib/ia-consulta-contexto';
+import { tabelaMarkdownParaHtmlSeguro } from '@/lib/ia-resposta-formatada';
 import {
   CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
   configuracaoPrivacidadeIaValida,
@@ -32,6 +34,7 @@ import {
   type CamposEstadoPainelIa,
   type ComandoPainelIa,
   type FragmentoIa,
+  type ModoInteracaoIa,
   type ProgressoIa,
   type RetomadaIa,
   type SolicitacaoIa,
@@ -91,7 +94,7 @@ import {
 } from '@/lib/exportacao-placeholders';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { protegerFragmentosIa, restaurarFragmentosIa } from '@/lib/ia-fragmentos';
-import { resolverTextoContextoIa } from '@/lib/ia-contexto';
+import { resolverHtmlContextoIa, resolverTextoContextoIa } from '@/lib/ia-contexto';
 import { toast } from 'sonner';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
@@ -453,6 +456,7 @@ interface ExecucaoIaPreparada {
   descricao: string;
   chatKey: string;
   protecao: ReturnType<typeof protegerFragmentosIa> | null;
+  tamanhoResposta?: ChatMessage['tamanhoResposta'];
 }
 
 interface RetomadaIaPendente {
@@ -515,6 +519,7 @@ export const LaudosPage: React.FC = () => {
   const editorIaAtivoRef = useRef<string | null>(null);
   const alvosIaRef = useRef(new Map<string, AlvoIaCapturado>());
   const execucoesIaReenviaveisRef = useRef(new Map<string, ExecucaoIaPreparada>());
+  const memoriaConsultasIaRef = useRef(new Map<string, Array<{ pergunta: string; resposta: string }>>());
   const reconciliacaoImagensRef = useRef<Promise<void> | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -2185,7 +2190,7 @@ export const LaudosPage: React.FC = () => {
   const ultimoEstadoPainelIaRef = useRef<CamposEstadoPainelIa | null>(null);
   const painelIaProntoRef = useRef(false);
   const executarAcaoIaRef = useRef<(acao: AcaoIa) => void>(() => {});
-  const enviarMensagemIaRef = useRef<(mensagem: string, acao: 'inserir' | 'reescrever', tamanho?: 'automatico' | 'curta' | 'media' | 'longa') => void>(() => {});
+  const enviarMensagemIaRef = useRef<(mensagem: string, modo: ModoInteracaoIa, tamanho?: 'automatico' | 'curta' | 'media' | 'longa') => void>(() => {});
   const reenviarMensagemIaRef = useRef<(mensagemId: string) => void>(() => {});
   const cancelarOperacaoIaRef = useRef<() => void>(() => {});
   const retomarOperacaoIaRef = useRef<() => void>(() => {});
@@ -2308,7 +2313,7 @@ export const LaudosPage: React.FC = () => {
       if (comando.tipo === 'executar_acao') {
         executarAcaoIaRef.current(comando.acao);
       } else if (comando.tipo === 'enviar_pedido_livre') {
-        enviarMensagemIaRef.current(comando.mensagem, comando.aplicacao, comando.tamanho);
+        enviarMensagemIaRef.current(comando.mensagem, comando.modo, comando.tamanho);
       } else if (comando.tipo === 'reenviar_mensagem') {
         reenviarMensagemIaRef.current(comando.mensagemId);
       } else if (comando.tipo === 'cancelar_operacao') {
@@ -2413,6 +2418,7 @@ export const LaudosPage: React.FC = () => {
           content: descricao,
           timestamp: Date.now(),
           acao: execucao.solicitacao.acao,
+          tamanhoResposta: execucao.tamanhoResposta,
         };
         mensagemId = userMsg.id;
         setChatMessages(prev => ({
@@ -2488,7 +2494,12 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const executarAcaoIa = async (acao: AcaoIa, instrucao?: string, descricaoPersonalizada?: string) => {
+  const executarAcaoIa = async (
+    acao: AcaoIa,
+    instrucao?: string,
+    descricaoPersonalizada?: string,
+    tamanhoResposta?: ChatMessage['tamanhoResposta'],
+  ) => {
     if (retomadaIaPendente) {
       await window.ipcAPI.ia.descartarRetomada(retomadaIaPendente.retomada.retomadaId);
       setRetomadaIaPendente(null);
@@ -2520,7 +2531,7 @@ export const LaudosPage: React.FC = () => {
         contextoResolvido: alvo.texto,
         fragmentos: protecao?.fragmentos || fragmentosOriginais,
       };
-      const execucao: ExecucaoIaPreparada = { solicitacao, alvo, html, indice: idx, descricao, chatKey, protecao };
+      const execucao: ExecucaoIaPreparada = { solicitacao, alvo, html, indice: idx, descricao, chatKey, protecao, tamanhoResposta };
       const planejamento = await window.ipcAPI.ia.planejar(solicitacao);
       if (!planejamento.success || !planejamento.data) {
         setIaError(obterMensagemErroIa(planejamento.error));
@@ -2642,7 +2653,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const inserirRespostaIa = (texto: string, alvo: AlvoIaCapturado) => {
-    const htmlInsercao = converterTextoEmHtmlSeguro(texto);
+    const htmlInsercao = tabelaMarkdownParaHtmlSeguro(texto) || converterTextoEmHtmlSeguro(texto);
     const editorDoAlvo = obterEditorTinyMce(alvo.editorId);
 
     if (editorDoAlvo && alvo.bookmark) {
@@ -2763,14 +2774,60 @@ export const LaudosPage: React.FC = () => {
     });
   };
 
-  const handleSendChatMessage = (message: string, acao: 'inserir' | 'reescrever', tamanho: 'automatico' | 'curta' | 'media' | 'longa' = 'automatico') => {
+  const consultarIa = async (pergunta: string) => {
+    if (iaLoading) return;
+    const alvo = capturarAlvoIa(true);
+    if (!alvo || (alvo.tipo !== 'secao' && alvo.tipo !== 'laudo_completo')) {
+      setIaError('Escolha uma seção ou o documento completo antes de perguntar.');
+      return;
+    }
+    const operationId = crypto.randomUUID();
+    const escopoCompleto = alvo.tipo === 'laudo_completo';
+    const fontes = escopoCompleto
+      ? secoes.map((secao, indice) => ({ html: secao.conteudo, id: `secao-${indice}`, titulo: secao.titulo }))
+      : [{ html: alvo.conteudo, id: `secao-${alvo.indice}`, titulo: iaSheetSecaoTitulo || 'Seção selecionada' }];
+    const fontesResolvidas = fontes.map(fonte => ({ ...fonte, html: resolverHtmlContextoIa(fonte.html, mapaPlaceholdersResolvidos) }));
+    const blocos = fontesResolvidas.flatMap((fonte, indice) => serializarBlocosContextoIa(fonte.html, fonte.id, fonte.titulo, indice * 10_000));
+    if (!blocos.length) {
+      setIaError('O escopo selecionado não possui conteúdo consultável.');
+      return;
+    }
+    const fingerprint = await calcularFingerprintIa(alvo.tipo, fontes.map(fonte => fonte.html).join(''));
+    const chaveMemoria = `${alvo.tipo}:${alvo.indice}:${fingerprint}`;
+    const chatKey = alvo.indice === -1 ? SINGLE_CHAT_KEY : `secao-${alvo.indice}`;
+    setIaLoading(true);
+    setOperacaoIaAtivaId(operationId);
+    setIaError(null);
+    setChatMessages(atual => ({ ...atual, [chatKey]: [...(atual[chatKey] || []), { id: crypto.randomUUID(), role: 'user', content: pergunta, timestamp: Date.now(), permiteAplicacao: false }] }));
+    try {
+      const resposta = await window.ipcAPI.ia.consultar({ operationId, pergunta, escopo: escopoCompleto ? 'laudo_completo' : 'secao', fingerprint, blocos, memoria: memoriaConsultasIaRef.current.get(chaveMemoria) || [] });
+      if (!resposta.success || !resposta.data || resposta.data.operationId !== operationId) throw new Error(resposta.error || 'RESPOSTA_INVALIDA');
+      memoriaConsultasIaRef.current.set(chaveMemoria, [
+        ...(memoriaConsultasIaRef.current.get(chaveMemoria) || []),
+        { pergunta, resposta: resposta.data.resposta },
+      ].slice(-3));
+      setChatMessages(atual => ({ ...atual, [chatKey]: [...(atual[chatKey] || []), { id: crypto.randomUUID(), role: 'assistant', content: resposta.data!.resposta, timestamp: Date.now(), acao: 'inserir', permiteAplicacao: true }] }));
+    } catch (erro: unknown) {
+      setIaError(obterMensagemErroIa(erro));
+    } finally {
+      setIaLoading(false);
+      setOperacaoIaAtivaId(atual => atual === operationId ? null : atual);
+    }
+  };
+
+  const handleSendChatMessage = (message: string, modo: ModoInteracaoIa, tamanho: 'automatico' | 'curta' | 'media' | 'longa' = 'automatico') => {
+    if (modo === 'perguntar') {
+      void consultarIa(message);
+      return;
+    }
+    const acao = modo === 'escrever' ? 'inserir' : 'reescrever';
     const instrucoesTamanho = {
       automatico: '',
       curta: ' TAMANHO OBRIGATÓRIO: responda em até 10 palavras, com tolerância máxima de 5 palavras.',
       media: ' TAMANHO OBRIGATÓRIO: responda em um único parágrafo.',
       longa: ' TAMANHO OBRIGATÓRIO: responda em 2 a 3 parágrafos.',
     } as const;
-    void executarAcaoIa(acao, `${message}${instrucoesTamanho[tamanho]}`, message);
+    void executarAcaoIa(acao, `${message}${instrucoesTamanho[tamanho]}`, message, tamanho);
   };
 
   const reenviarMensagemIa = async (mensagemId: string) => {
@@ -2814,6 +2871,7 @@ export const LaudosPage: React.FC = () => {
         : iaSheetSecaoIdx !== null ? `secao-${iaSheetSecaoIdx}` : null;
     if (!chaveChat) return;
     setChatMessages(atual => ({ ...atual, [chaveChat]: [] }));
+    memoriaConsultasIaRef.current.clear();
     setIaError(null);
   };
 
@@ -3158,7 +3216,7 @@ export const LaudosPage: React.FC = () => {
 
     return (
       <TooltipProvider>
-        <div className="w-full space-y-4 px-4 pb-4 md:px-8 md:pb-6">
+        <div className="flex h-full min-h-0 w-full flex-col gap-4 px-4 pb-4 md:px-8 md:pb-6">
         <CabecalhoEditorLaudo
           repNumero={editando.rep_numero}
           tipoExameCodigo={editando.tipo_exame_codigo}
@@ -3179,7 +3237,7 @@ export const LaudosPage: React.FC = () => {
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {success && <Alert><AlertDescription>{success}</AlertDescription></Alert>}
 
-        <Card className="flex-1 overflow-hidden flex flex-col">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <CardHeader className="flex-shrink-0 pb-4">
             <div>
               <CardTitle className="text-lg">Laudo pericial</CardTitle>
@@ -3195,7 +3253,7 @@ export const LaudosPage: React.FC = () => {
               onModoOrganizacaoChange={handleEditorModeChange}
             />
           </CardHeader>
-          <CardContent className="flex-1 overflow-hidden p-0 px-6 pb-6">
+          <CardContent className="min-h-0 flex-1 overflow-hidden p-0 px-6 pb-6">
             <PainelLateralRedimensionavel
               tipo={painelLateralAtivo}
               chavePersistencia={painelLateralAtivo === 'ilustracoes'
@@ -3230,7 +3288,7 @@ export const LaudosPage: React.FC = () => {
               onReindexarSecoes={handleReindexarSecoes}
               conteudoPainel={conteudoPainelLateral}
             >
-              <div className="flex-1 overflow-y-auto pr-2">
+              <div data-diagnostico-id="laudos.editor-scroll" className="min-h-0 flex-1 overflow-y-auto pr-2 [overflow-anchor:none]">
                 {quantidadeBlocosSuprimidos > 0 && (
                   <Alert className="mb-3">
                     <AlertDescription className="flex items-center justify-between gap-3">

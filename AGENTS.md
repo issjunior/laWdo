@@ -32,6 +32,12 @@ O ambiente de desenvolvimento requer Node.js 24 ou superior, conforme `package.j
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
+### Diagnóstico assistido por IA
+
+No desenvolvimento local, `npm run dev:diagnostico` habilita o modo de diagnóstico assistido com source maps. Ele nunca é habilitado pelo `npm run dev`, pelo `npm start` nem no aplicativo empacotado. Depois de `npm run build`, execute `npm run diagnostico:configurar-codex` e reinicie o Codex para registrar o servidor MCP local.
+
+Quando as ferramentas estiverem disponíveis, para falhas reproduzíveis siga `diagnostico_status` → `iniciar_captura(finalidade=problema)` → usuário reproduz → `finalizar_captura`; não peça cursores, filtros, caminhos ou comandos MCP ao usuário. Para saúde e desempenho, use `diagnostico_status` → `iniciar_captura(finalidade=desempenho)` → `consultar_captura` após a conclusão automática. As ferramentas pontuais `capturar_tela`, `inspecionar_interface`, `executar_acao`, `obter_eventos` e `criar_snapshot` ficam para aprofundamento. A v1.1 expõe: `diagnostico_status`, `capturar_tela`, `inspecionar_interface`, `executar_acao`, `obter_eventos`, `criar_snapshot`, `iniciar_captura`, `status_captura`, `finalizar_captura` e `consultar_captura`. Nunca tente usar avaliação livre de JavaScript, consultas SQLite arbitrárias ou rede de diagnóstico: não fazem parte do contrato.
+
 **Exceção para alterações exclusivamente documentais em `spec/`:** quando todos os arquivos alterados e rastreados estiverem sob `spec/**`, não execute `type-check`, `lint`, `test`, `test:coverage` ou `build`, pois esses comandos não validam o conteúdo Markdown e não acrescentam sinal relevante. Nesse caso, limite a validação ao fluxo `/spec`: registro pela automação, releitura das seções alteradas, `git diff --check` e conferência de títulos, cercas Markdown, caminhos e consistência entre specs relacionadas. Se houver qualquer arquivo alterado fora de `spec/**`, a exceção não se aplica e as validações normais devem ser executadas conforme o escopo.
 
 `npm run test:coverage` e `npm run knip -- --no-exit-code` continuam comandos de verificação manual/observacional importantes quando a mudança toca testes, cobertura, dependências, exports públicos ou limpeza estrutural.

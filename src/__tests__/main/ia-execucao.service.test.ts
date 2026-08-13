@@ -41,6 +41,18 @@ const solicitacaoTexto = {
   fragmentos: [{ id: 'texto-0', texto: 'Texto original do preâmbulo.' }],
 }
 
+const solicitacaoConsulta = {
+  operationId: 'consulta-1',
+  pergunta: 'Quantas armas foram examinadas?',
+  escopo: 'laudo_completo' as const,
+  fingerprint: 'a'.repeat(64),
+  memoria: [],
+  blocos: [{
+    id: 'secao-1:1', tipo: 'tabela' as const, ordem: 0, secaoId: 'secao-1', secaoTitulo: 'Exames', titulo: 'Armas', ancora: 'armas',
+    texto: 'Foram examinadas três armas.',
+  }],
+}
+
 const criarImagem = (origem: 'local' | 'gdl' = 'local', mimeType = 'image/jpeg', tamanho = 128) => ({
   id: 'imagem-1',
   laudoId: 'laudo-1',
@@ -141,6 +153,20 @@ describe('ia-execucao.service — descrição de imagem', () => {
     const resposta = await new IaExecucaoService().executar(solicitacaoTexto)
 
     expect(resposta.fragmentos[0].texto).toBe('Resumo corrigido.')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [, segundaOpcoes] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(String(segundaOpcoes.body)).toContain('resposta anterior não respeitou o contrato')
+  })
+
+  it('corrige uma resposta de consulta factual que não respeita o contrato', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: 'Foram três armas.' } }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: 'Foram examinadas três armas.', evidencias: ['secao-1:1'], itens: ['arma A', 'arma B', 'arma C'], total: 3 }) } }] }), { status: 200 }))
+
+    const resposta = await new IaExecucaoService().consultar(solicitacaoConsulta)
+
+    expect(resposta.total).toBe(3)
+    expect(resposta.evidencias).toEqual([{ blocoId: 'secao-1:1' }])
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [, segundaOpcoes] = fetchMock.mock.calls[1] as [string, RequestInit]
     expect(String(segundaOpcoes.body)).toContain('resposta anterior não respeitou o contrato')
