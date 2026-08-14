@@ -1,7 +1,7 @@
 import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
@@ -41,6 +41,17 @@ let pipeDiagnostico: DiagnosticoPipeService | null = null;
 let capturaDiagnostico: DiagnosticoCapturaService | null = null;
 let sourceMapsDiagnostico: DiagnosticoSourceMapService | null = null;
 let encerramentoDiagnosticoEmAndamento = false;
+let temporizadorAtrasoEventLoopDiagnostico: NodeJS.Timeout | null = null;
+let atrasoEventLoopDiagnostico: number | null = null;
+
+function iniciarMedicaoAtrasoEventLoop(): void {
+  let esperado = performance.now() + 1_000;
+  temporizadorAtrasoEventLoopDiagnostico = setInterval(() => {
+    const agora = performance.now();
+    atrasoEventLoopDiagnostico = Math.max(0, Number((agora - esperado).toFixed(2)));
+    esperado = agora + 1_000;
+  }, 1_000);
+}
 
 function registrarEventoDiagnostico(
   categoria: 'janela' | 'console' | 'erro',
@@ -111,6 +122,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
   });
   const ativa = await sessao.iniciar();
   if (!ativa) return;
+  iniciarMedicaoAtrasoEventLoop();
   const interfaceServico = new DiagnosticoInterfaceService();
   sourceMapsDiagnostico = new DiagnosticoSourceMapService(path.join(app.getAppPath(), 'out'));
   let marcadoresDiagnostico: Record<string, string> = {};
@@ -122,26 +134,30 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
   } catch {
     marcadoresDiagnostico = {};
   }
-  const coletarEstadoCaptura = async (janelaId?: number) => {
+  const coletarEstadoCaptura = async (janelaId: number | undefined, finalidade: 'problema' | 'desempenho') => {
     const janela = obterJanelaDiagnostico(janelaId);
     if (!janela) throw new Error('JANELA_NAO_ENCONTRADA');
     const erros: Array<{ componente: string; codigo: string; mensagem: string }> = [];
     let tela: Buffer | undefined;
     let interfaceSnapshot: unknown;
-    try { tela = Buffer.from((await capturarTelaDiagnostico(janela)).imagemBase64, 'base64'); } catch (erro) { erros.push({ componente: 'tela', codigo: erro instanceof Error ? erro.message : 'ERRO_INTERNO', mensagem: 'A tela não foi capturada.' }); }
-    try { interfaceSnapshot = await interfaceServico.inspecionar(janela, 500, 12); } catch (erro) { erros.push({ componente: 'interface', codigo: erro instanceof Error ? erro.message : 'ERRO_INTERNO', mensagem: 'A interface não foi inspecionada.' }); }
-    return { janelaId: janela.id, rota: janela.webContents.getURL(), tela, interface: interfaceSnapshot, contexto: { zoom: janela.webContents.getZoomFactor(), largura: janela.getContentBounds().width, altura: janela.getContentBounds().height }, erros };
+    if (finalidade === 'problema') {
+      try { tela = Buffer.from((await capturarTelaDiagnostico(janela)).imagemBase64, 'base64'); } catch (erro) { erros.push({ componente: 'tela', codigo: erro instanceof Error ? erro.message : 'ERRO_INTERNO', mensagem: 'A tela não foi capturada.' }); }
+      try { interfaceSnapshot = await interfaceServico.inspecionar(janela, 500, 12); } catch (erro) { erros.push({ componente: 'interface', codigo: erro instanceof Error ? erro.message : 'ERRO_INTERNO', mensagem: 'A interface não foi inspecionada.' }); }
+    }
+    return { janelaId: janela.id, rota: janela.webContents.getURL(), tela, interface: interfaceSnapshot, contexto: { zoom: janela.webContents.getZoomFactor(), largura: janela.getContentBounds().width, altura: janela.getContentBounds().height, versaoAplicativo: app.getVersion(), empacotado: app.isPackaged, sourceMapsDisponiveis: Boolean(sourceMapsDiagnostico) }, erros };
   };
   capturaDiagnostico = new DiagnosticoCapturaService({
     diretorioSessao: () => sessao.diretorioSessao,
     sessionId: () => sessao.ativa?.sessionId ?? null,
     eventos: () => sessao.servicoEventos,
     capturarLinhaBase: coletarEstadoCaptura,
-    capturarEstadoFinal: async janelaId => {
-      const estado = await coletarEstadoCaptura(janelaId);
+    capturarEstadoFinal: async (janelaId, finalidade) => {
+      const estado = await coletarEstadoCaptura(janelaId, finalidade);
       return { tela: estado.tela, interface: estado.interface, contexto: estado.contexto, erros: estado.erros };
     },
     obterMetricas: () => app.getAppMetrics().map(metrica => ({ pid: metrica.pid, tipo: metrica.type, cpu: metrica.cpu.percentCPUUsage, memoriaKb: metrica.memory?.workingSetSize ?? null })),
+    obterAtrasoEventLoop: () => atrasoEventLoopDiagnostico,
+    obterPendenciasPersistencia: () => sessao.servicoEventos?.pendenciasPersistencia ?? 0,
     obterMarcadores: () => marcadoresDiagnostico,
     alterarSonda: (ativa, finalidade) => {
       const janela = obterJanelaDiagnostico();
@@ -374,6 +390,10 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
 }
 
 async function encerrarDiagnosticoAssistido(): Promise<void> {
+  await capturaDiagnostico?.interromper('Aplicativo encerrado durante a captura.').catch(() => undefined);
+  if (temporizadorAtrasoEventLoopDiagnostico) clearInterval(temporizadorAtrasoEventLoopDiagnostico);
+  temporizadorAtrasoEventLoopDiagnostico = null;
+  atrasoEventLoopDiagnostico = null;
   await pipeDiagnostico?.encerrar().catch(() => undefined);
   await sessaoDiagnostico?.encerrar().catch(() => undefined);
   pipeDiagnostico = null;
@@ -414,7 +434,8 @@ const createWindow = async (): Promise<void> => {
   mainWindow.webContents.on('console-message', ({ level, message, lineNumber, sourceId, frame }) => {
     const nivel = level === 'error' ? 'error' : level === 'warning' ? 'warn' : level === 'debug' ? 'debug' : 'info';
     void sourceMapsDiagnostico?.resolver(sourceId, lineNumber, 1).then(localizacaoOriginal => {
-      registrarEventoDiagnostico('console', nivel, { mensagem: message, linha: lineNumber, origem: sourceId, principal: frame?.parent === null, localizacaoOriginal }, mainWindow ?? undefined);
+      const assinatura = createHash('sha256').update(message).digest('hex').slice(0, 16);
+      registrarEventoDiagnostico('console', nivel, { assinatura, linha: lineNumber, origem: sourceId, principal: frame?.parent === null, localizacaoOriginal, agregada: capturaDiagnostico?.finalidadeAtiva() === 'desempenho' }, mainWindow ?? undefined);
     });
   });
 
@@ -446,8 +467,15 @@ const createWindow = async (): Promise<void> => {
   // Lidar com fechamento da janela
   mainWindow.on('closed', () => {
     registrarEventoDiagnostico('janela', 'info', { evento: 'fechada' }, mainWindow ?? undefined);
+    void capturaDiagnostico?.interromper('Janela encerrada durante a captura.');
     mainWindow = null;
   });
+  mainWindow.webContents.on('render-process-gone', (_evento, detalhes) => {
+    registrarEventoDiagnostico('erro', 'error', { evento: 'renderer_encerrado', motivo: detalhes.reason, codigo: detalhes.exitCode }, mainWindow ?? undefined);
+    void capturaDiagnostico?.interromper(`Renderer encerrado: ${detalhes.reason}.`);
+  });
+  mainWindow.webContents.on('unresponsive', () => registrarEventoDiagnostico('janela', 'warn', { evento: 'renderer_sem_resposta' }, mainWindow ?? undefined));
+  mainWindow.webContents.on('responsive', () => registrarEventoDiagnostico('janela', 'info', { evento: 'renderer_responsivo' }, mainWindow ?? undefined));
 };
 
 // Função para alternar DevTools

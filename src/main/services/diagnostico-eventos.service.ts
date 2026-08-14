@@ -15,12 +15,15 @@ export interface FiltrosEventosDiagnostico {
   correlacaoId?: string;
 }
 
-const chavesSensiveis = /senha|password|token|secret|api.?key|cpf|rg|email|telefone|foto|avatar|endere[cç]o/i;
+const chavesSensiveis = /senha|password|token|secret|api.?key|cpf|rg|email|telefone|foto|avatar|endere[cç]o|textcontent|innertext|\bvalue\b|conteudo(?:editavel)?|mensagem/i;
 
 export function sanitizarDadosDiagnostico(valor: unknown, profundidade = 0): unknown {
   if (profundidade >= 6) return '[profundidade_maxima]';
   if (valor === null || typeof valor === 'boolean' || typeof valor === 'number') return valor;
-  if (typeof valor === 'string') return valor.length > 2_000 ? `${valor.slice(0, 2_000)}...[truncado]` : valor;
+  if (typeof valor === 'string') {
+    if (valor === 'undefined') return null;
+    return valor.length > 2_000 ? `${valor.slice(0, 2_000)}...[truncado]` : valor;
+  }
   if (Array.isArray(valor)) return valor.slice(0, 100).map(item => sanitizarDadosDiagnostico(item, profundidade + 1));
   if (typeof valor === 'object') {
     return Object.fromEntries(Object.entries(valor as Record<string, unknown>).slice(0, 100).map(([chave, conteudo]) => [
@@ -35,6 +38,7 @@ export class DiagnosticoEventosService {
   private sequencia = 0;
   private eventos: EventoDiagnostico[] = [];
   private filaPersistencia: Promise<void> = Promise.resolve();
+  private operacoesPendentes = 0;
 
   constructor(private readonly caminhoEventos: string) {}
 
@@ -46,7 +50,8 @@ export class DiagnosticoEventosService {
       dados: sanitizarDadosDiagnostico(evento.dados ?? {}) as Record<string, unknown>,
     });
     const linha = `${JSON.stringify(eventoPersistido)}\n`;
-    this.filaPersistencia = this.filaPersistencia.then(() => appendFile(this.caminhoEventos, linha, 'utf8'));
+    this.operacoesPendentes += 1;
+    this.filaPersistencia = this.filaPersistencia.then(() => appendFile(this.caminhoEventos, linha, 'utf8')).finally(() => { this.operacoesPendentes -= 1; });
     await this.filaPersistencia;
     this.eventos.push(eventoPersistido);
     return eventoPersistido;
@@ -71,6 +76,10 @@ export class DiagnosticoEventosService {
 
   get ultimoCursor(): number {
     return this.sequencia;
+  }
+
+  get pendenciasPersistencia(): number {
+    return this.operacoesPendentes;
   }
 
   static async lerNdjson(caminhoEventos: string): Promise<EventoDiagnostico[]> {

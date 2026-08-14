@@ -77,7 +77,8 @@ function registrarFerramenta(nome: string, schema: z.ZodType, descricao: string,
     }
     const codigoErro = resultado.resposta.erro?.codigo;
     const codigosConhecidos = new Set(['ENTRADA_INVALIDA', 'SESSAO_INDISPONIVEL', 'AUTENTICACAO_FALHOU', 'VERSAO_INCOMPATIVEL', 'JANELA_NAO_ENCONTRADA', 'JANELA_INDISPONIVEL', 'SNAPSHOT_EXPIRADO', 'ELEMENTO_NAO_ENCONTRADO', 'ACAO_NAO_SUPORTADA', 'TIMEOUT', 'CAPTURA_PARCIAL', 'CAPTURA_EM_ANDAMENTO', 'CAPTURA_NAO_ENCONTRADA', 'CAPTURA_EXPIRADA', 'CAPTURA_INCOMPATIVEL', 'ERRO_INTERNO']);
-    const dadosEstruturados = imagem && resultado.resposta.dados && typeof resultado.resposta.dados === 'object'
+    const deveRetornarImagem = imagem || (nome === 'consultar_captura' && typeof (entrada as Record<string, unknown>).componente === 'string' && String((entrada as Record<string, unknown>).componente).startsWith('tela_'));
+    const dadosEstruturados = deveRetornarImagem && resultado.resposta.dados && typeof resultado.resposta.dados === 'object'
       ? Object.fromEntries(Object.entries(resultado.resposta.dados as Record<string, unknown>).filter(([chave]) => chave !== 'imagemBase64'))
       : resultado.resposta.dados;
     const envelope = resultado.resposta.ok
@@ -89,7 +90,7 @@ function registrarFerramenta(nome: string, schema: z.ZodType, descricao: string,
         resultado.resposta.erro?.mensagem ?? 'Falha na operação diagnóstica.',
         true,
       );
-    if (!imagem || !resultado.resposta.ok || !resultado.resposta.dados || typeof resultado.resposta.dados !== 'object') return { content: [], structuredContent: envelope as unknown as Record<string, unknown> };
+    if (!deveRetornarImagem || !resultado.resposta.ok || !resultado.resposta.dados || typeof resultado.resposta.dados !== 'object') return { content: [], structuredContent: envelope as unknown as Record<string, unknown> };
     const dados = resultado.resposta.dados as Record<string, unknown>;
     const imagemBase64 = typeof dados.imagemBase64 === 'string' ? dados.imagemBase64 : null;
     if (!imagemBase64) return { content: [], structuredContent: envelope as unknown as Record<string, unknown> };

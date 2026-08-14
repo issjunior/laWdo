@@ -39,6 +39,6 @@ describe('DiagnosticoEventosService', () => {
   });
 
   it('redige dados sensíveis e limita estruturas externas', () => {
-    expect(sanitizarDadosDiagnostico({ senha: 'x', dados: ['ok'] })).toEqual({ senha: '[redigido]', dados: ['ok'] });
+    expect(sanitizarDadosDiagnostico({ senha: 'x', value: 'conteúdo do laudo', textContent: 'conteúdo', ausente: 'undefined', dados: ['ok'] })).toEqual({ senha: '[redigido]', value: '[redigido]', textContent: '[redigido]', ausente: null, dados: ['ok'] });
   });
 });

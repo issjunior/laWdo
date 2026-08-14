@@ -625,16 +625,20 @@ function descreverElementoDiagnostico(alvo: EventTarget | null): Record<string, 
   return {
     tipoElemento: alvo.tagName.toLowerCase(),
     papel: alvo.getAttribute('role'),
-    nome: alvo.getAttribute('data-diagnostico-id') || alvo.getAttribute('aria-label') || alvo.getAttribute('title') || null,
-    identificador: alvo.getAttribute('data-diagnostico-id') || alvo.id || null,
+    identificador: alvo.getAttribute('data-diagnostico-id') || null,
   };
 }
 
 let ultimoRegistroRolagemDiagnostico = 0;
 let capturaProblemaDiagnosticoAtiva = false;
 let ultimoWheelDiagnostico = 0;
+let ultimaEntradaUsuarioDiagnostico = 0;
 let observadorIframesDiagnostico: MutationObserver | null = null;
+let observadorEstruturalDiagnostico: MutationObserver | null = null;
+let observadorResizeDiagnostico: ResizeObserver | null = null;
+let observadorPerformanceDiagnostico: PerformanceObserver | null = null;
 const iframesDiagnosticoInstalados = new WeakSet<HTMLIFrameElement>();
+const posicoesRolagemDiagnostico = new Map<string, number>();
 
 ipcRenderer.on('diagnostico:alterar-captura', (_evento, dados: unknown) => {
   capturaProblemaDiagnosticoAtiva = Boolean(
@@ -642,11 +646,19 @@ ipcRenderer.on('diagnostico:alterar-captura', (_evento, dados: unknown) => {
   );
   if (capturaProblemaDiagnosticoAtiva) {
     instalarSondasIframesDiagnostico();
+    instalarSondasLayoutDiagnostico();
     observadorIframesDiagnostico ??= new MutationObserver(instalarSondasIframesDiagnostico);
     observadorIframesDiagnostico.observe(document.documentElement, { childList: true, subtree: true });
   } else {
     observadorIframesDiagnostico?.disconnect();
     observadorIframesDiagnostico = null;
+    observadorEstruturalDiagnostico?.disconnect();
+    observadorEstruturalDiagnostico = null;
+    observadorResizeDiagnostico?.disconnect();
+    observadorResizeDiagnostico = null;
+    observadorPerformanceDiagnostico?.disconnect();
+    observadorPerformanceDiagnostico = null;
+    posicoesRolagemDiagnostico.clear();
   }
 });
 
@@ -663,12 +675,66 @@ function cadeiaRolavelDiagnostico(alvo: EventTarget | null): Array<Record<string
   return cadeia;
 }
 
+function registrarEventoInterfaceDiagnostico(tipo: string, alvo: EventTarget | null, dados: Record<string, unknown> = {}): void {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo, ...dados, ...descreverElementoDiagnostico(alvo) });
+}
+
+function instalarSondasLayoutDiagnostico(): void {
+  const raizes = Array.from(document.querySelectorAll<HTMLElement>('[data-diagnostico-id]')).slice(0, 25);
+  observadorResizeDiagnostico?.disconnect();
+  observadorResizeDiagnostico = new ResizeObserver(entradas => {
+    if (!capturaProblemaDiagnosticoAtiva) return;
+    for (const entrada of entradas.slice(0, 25)) {
+      const alvo = entrada.target;
+      registrarEventoInterfaceDiagnostico('redimensionamento', alvo, {
+        largura: Math.round(entrada.contentRect.width), altura: Math.round(entrada.contentRect.height),
+      });
+    }
+  });
+  raizes.forEach(raiz => observadorResizeDiagnostico?.observe(raiz));
+  observadorEstruturalDiagnostico ??= new MutationObserver(mudancas => {
+    if (!capturaProblemaDiagnosticoAtiva) return;
+    const relevantes = mudancas.filter(mudanca => mudanca.target instanceof HTMLElement && mudanca.target.closest('[data-diagnostico-id]')).slice(0, 10);
+    if (relevantes.length) registrarEventoInterfaceDiagnostico('mutacao_estrutural', relevantes[0]?.target ?? null, { quantidade: relevantes.length });
+    instalarSondasIframesDiagnostico();
+  });
+  observadorEstruturalDiagnostico.observe(document.documentElement, { childList: true, subtree: true });
+  if (typeof PerformanceObserver !== 'undefined') {
+    observadorPerformanceDiagnostico?.disconnect();
+    try {
+      observadorPerformanceDiagnostico = new PerformanceObserver(lista => {
+        for (const entrada of lista.getEntries().slice(-20)) {
+          const shift = entrada as PerformanceEntry & { value?: number; hadRecentInput?: boolean; sources?: Array<{ node?: Node }> };
+          if (typeof shift.value !== 'number' || shift.hadRecentInput) continue;
+          registrarEventoInterfaceDiagnostico('layout_shift', shift.sources?.[0]?.node ?? null, { valor: Number(shift.value.toFixed(4)), teveEntradaRecente: false });
+        }
+      });
+      observadorPerformanceDiagnostico.observe({ type: 'layout-shift', buffered: true });
+    } catch { observadorPerformanceDiagnostico = null; }
+  }
+}
+
 window.addEventListener('click', evento => {
   if (!capturaProblemaDiagnosticoAtiva) return;
   registrarEventoIpcDiagnostico({
     categoria: 'acao', nivel: 'info', tipo: 'clique_usuario', ...descreverElementoDiagnostico(evento.target),
   });
 }, { capture: true });
+
+window.addEventListener('pointerdown', evento => {
+  ultimaEntradaUsuarioDiagnostico = performance.now();
+  registrarEventoInterfaceDiagnostico('pointerdown', evento.target, { botao: evento.button, ponteiro: evento.pointerType });
+}, { capture: true, passive: true });
+
+window.addEventListener('keydown', evento => {
+  ultimaEntradaUsuarioDiagnostico = performance.now();
+  registrarEventoInterfaceDiagnostico('keydown', evento.target, { tecla: evento.key.length <= 32 ? evento.key : 'desconhecida', codigo: evento.code });
+}, { capture: true });
+
+window.addEventListener('focusin', evento => registrarEventoInterfaceDiagnostico('foco', evento.target), { capture: true });
+window.addEventListener('hashchange', () => registrarEventoInterfaceDiagnostico('mudanca_rota', document.documentElement, { rota: window.location.hash }));
+window.addEventListener('popstate', () => registrarEventoInterfaceDiagnostico('mudanca_rota', document.documentElement, { rota: window.location.hash }));
 
 window.addEventListener('change', evento => {
   if (!capturaProblemaDiagnosticoAtiva) return;
@@ -694,12 +760,16 @@ window.addEventListener('scroll', evento => {
   const elemento = alvo instanceof Document ? document.scrollingElement : alvo instanceof HTMLElement ? alvo : null;
   const y = elemento?.scrollTop ?? window.scrollY;
   const maximoY = Math.max(0, (elemento?.scrollHeight ?? document.documentElement.scrollHeight) - (elemento?.clientHeight ?? window.innerHeight));
-  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'scroll', y, maximoY, teveWheelRecente: performance.now() - ultimoWheelDiagnostico <= 150, cadeiaRolavel: cadeiaRolavelDiagnostico(elemento), ...descreverElementoDiagnostico(elemento) });
+  const identificador = elemento instanceof HTMLElement ? elemento.getAttribute('data-diagnostico-id') || elemento.tagName.toLowerCase() : 'documento';
+  const anterior = posicoesRolagemDiagnostico.get(identificador) ?? y;
+  posicoesRolagemDiagnostico.set(identificador, y);
+  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'scroll', y, maximoY, distancia: y - anterior, direcao: y === anterior ? 'nenhuma' : y > anterior ? 'baixo' : 'cima', teveWheelRecente: performance.now() - ultimoWheelDiagnostico <= 150, teveEntradaRecente: performance.now() - ultimaEntradaUsuarioDiagnostico <= 150, cadeiaRolavel: cadeiaRolavelDiagnostico(elemento), ...descreverElementoDiagnostico(elemento) });
 }, { capture: true, passive: true });
 
 window.addEventListener('wheel', evento => {
   if (!capturaProblemaDiagnosticoAtiva) return;
   ultimoWheelDiagnostico = performance.now();
+  ultimaEntradaUsuarioDiagnostico = ultimoWheelDiagnostico;
   registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'wheel', deltaX: Math.round(evento.deltaX), deltaY: Math.round(evento.deltaY), cadeiaRolavel: cadeiaRolavelDiagnostico(evento.target), ...descreverElementoDiagnostico(evento.target) });
 }, { capture: true, passive: true });
 
@@ -722,6 +792,14 @@ function registrarScrollIframeDiagnostico(evento: Event): void {
   registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo: 'scroll', origemDocumento: 'tinymce_iframe', y: elemento.scrollTop, maximoY, teveWheelRecente: performance.now() - ultimoWheelDiagnostico <= 150, cadeiaRolavel: cadeiaRolavelDiagnostico(elemento), ...descreverElementoDiagnostico(elemento) });
 }
 
+function registrarInteracaoIframeDiagnostico(evento: Event): void {
+  if (!capturaProblemaDiagnosticoAtiva) return;
+  const tipo = evento.type === 'pointerdown' ? 'pointerdown' : evento.type === 'keydown' ? 'keydown' : evento.type === 'focusin' ? 'foco' : 'alteracao_usuario';
+  if (evento instanceof PointerEvent || evento instanceof KeyboardEvent) ultimaEntradaUsuarioDiagnostico = performance.now();
+  const dados = evento instanceof KeyboardEvent ? { tecla: evento.key.length <= 32 ? evento.key : 'desconhecida', codigo: evento.code } : {};
+  registrarEventoIpcDiagnostico({ categoria: 'acao', nivel: 'debug', tipo, origemDocumento: 'tinymce_iframe', ...dados, ...descreverElementoDiagnostico(evento.target) });
+}
+
 function instalarSondasIframesDiagnostico(): void {
   for (const iframe of Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe.tox-edit-area__iframe'))) {
     if (iframesDiagnosticoInstalados.has(iframe)) continue;
@@ -732,6 +810,10 @@ function instalarSondasIframesDiagnostico(): void {
         if (!documento) return;
         documento.addEventListener('wheel', registrarWheelIframeDiagnostico, { capture: true, passive: true });
         documento.addEventListener('scroll', registrarScrollIframeDiagnostico, { capture: true, passive: true });
+        documento.addEventListener('pointerdown', registrarInteracaoIframeDiagnostico, { capture: true, passive: true });
+        documento.addEventListener('keydown', registrarInteracaoIframeDiagnostico, { capture: true });
+        documento.addEventListener('focusin', registrarInteracaoIframeDiagnostico, { capture: true });
+        documento.addEventListener('change', registrarInteracaoIframeDiagnostico, { capture: true });
       } catch { /* iframe fora da mesma origem não é instrumentado. */ }
     }, { once: true });
     if (iframe.contentDocument?.readyState === 'complete') iframe.dispatchEvent(new Event('load'));
