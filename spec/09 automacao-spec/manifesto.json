@@ -151,6 +151,26 @@
         "src/renderer/lib/menu-config.ts",
         "src/types/dashboard.d.ts"
       ]
+    },
+    {
+      "subdiretorio": "13 diagnostico",
+      "descricao": "Diagnóstico assistido local, capturas guiadas, transporte MCP e snapshots de falha.",
+      "globsCodigo": [
+        "scripts/diagnostico/**",
+        "src/shared/diagnostico/**",
+        "src/main/diagnostico-mcp.ts",
+        "src/main/services/diagnostico-*.service.ts",
+        "src/main/index.ts",
+        "src/main/ipc/index.ts",
+        "src/preload/index.ts",
+        "src/renderer/components/diagnostico/**",
+        "src/renderer/App.tsx",
+        "src/__tests__/main/diagnostico-*.test.ts",
+        "src/__tests__/shared/diagnostico-contratos.test.ts",
+        "package.json",
+        "tsconfig.json",
+        "tsconfig.preload.json"
+      ]
     }
   ],
   "specs": [
@@ -639,6 +659,28 @@
         "src/__tests__/main/backup-atualizacao.service.test.ts",
         "src/shared/atualizacao/atualizacao.types.ts",
         "scripts/release/manifesto.mjs"
+      ]
+    },
+    {
+      "arquivo": "spec/13 diagnostico/diagnostico_assistido.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Modo de diagnóstico assistido local, capturas guiadas, eventos, desempenho, segurança e snapshots fatais.",
+      "globsCodigo": [
+        "scripts/diagnostico/**",
+        "src/shared/diagnostico/**",
+        "src/main/diagnostico-mcp.ts",
+        "src/main/services/diagnostico-*.service.ts",
+        "src/main/index.ts",
+        "src/main/ipc/index.ts",
+        "src/preload/index.ts",
+        "src/renderer/components/diagnostico/**",
+        "src/renderer/App.tsx",
+        "src/__tests__/main/diagnostico-*.test.ts",
+        "src/__tests__/shared/diagnostico-contratos.test.ts",
+        "package.json",
+        "tsconfig.json",
+        "tsconfig.preload.json"
       ]
     }
   ]

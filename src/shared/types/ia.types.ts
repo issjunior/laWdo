@@ -12,6 +12,90 @@ export const ESCOPOS_IA = ['selecao', 'secao', 'laudo_completo', 'cursor'] as co
 
 export type AcaoIa = typeof ACOES_IA[number];
 export type EscopoIa = typeof ESCOPOS_IA[number];
+export type ModoInteracaoIa = 'perguntar' | 'escrever' | 'reescrever';
+export type EstadoConsultaIa = 'respondida' | 'insuficiente' | 'conflitante';
+export type FaseConsultaIa = 'preparando' | 'analisando' | 'consolidando' | 'verificando';
+
+export interface BlocoContextoIa {
+  id: string;
+  tipo: 'titulo' | 'paragrafo' | 'lista' | 'tabela' | 'figura' | 'legenda' | 'bloco';
+  ordem: number;
+  secaoId: string;
+  secaoTitulo: string;
+  titulo: string;
+  texto: string;
+  ancora: string;
+}
+
+export interface EvidenciaConsultaIa {
+  blocoId: string;
+}
+
+export interface SolicitacaoConsultaIa {
+  operationId: string;
+  pergunta: string;
+  escopo: 'secao' | 'laudo_completo';
+  modelo?: string;
+  fingerprint: string;
+  blocos: BlocoContextoIa[];
+  memoria: Array<{ pergunta: string; resposta: string }>;
+}
+
+export interface RespostaConsultaIa {
+  operationId: string;
+  estado: EstadoConsultaIa;
+  resposta: string;
+  evidencias: EvidenciaConsultaIa[];
+  itens?: string[];
+  total?: number;
+  modelo: string;
+  recomendacao?: string;
+}
+
+export interface ProgressoConsultaIa {
+  operationId: string;
+  fase: FaseConsultaIa;
+}
+
+function blocoContextoIaValido(valor: unknown): valor is BlocoContextoIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const bloco = valor as Record<string, unknown>;
+  return typeof bloco.id === 'string' && Boolean(bloco.id)
+    && ['titulo', 'paragrafo', 'lista', 'tabela', 'figura', 'legenda', 'bloco'].includes(String(bloco.tipo))
+    && Number.isInteger(bloco.ordem) && (bloco.ordem as number) >= 0
+    && ['secaoId', 'secaoTitulo', 'titulo', 'texto', 'ancora'].every(campo => typeof bloco[campo] === 'string');
+}
+
+export function solicitacaoConsultaIaValida(valor: unknown): valor is SolicitacaoConsultaIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const solicitacao = valor as Record<string, unknown>;
+  return typeof solicitacao.operationId === 'string' && Boolean(solicitacao.operationId)
+    && typeof solicitacao.pergunta === 'string' && solicitacao.pergunta.trim().length > 0 && solicitacao.pergunta.length <= 10_000
+    && (solicitacao.escopo === 'secao' || solicitacao.escopo === 'laudo_completo')
+    && typeof solicitacao.fingerprint === 'string' && Boolean(solicitacao.fingerprint)
+    && Array.isArray(solicitacao.blocos) && solicitacao.blocos.length > 0 && solicitacao.blocos.every(blocoContextoIaValido)
+    && Array.isArray(solicitacao.memoria) && solicitacao.memoria.length <= 3
+    && solicitacao.memoria.every(item => item && typeof item === 'object' && typeof item.pergunta === 'string' && typeof item.resposta === 'string');
+}
+
+export function respostaConsultaIaValida(valor: unknown, blocos?: BlocoContextoIa[]): valor is RespostaConsultaIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const resposta = valor as Record<string, unknown>;
+  if (typeof resposta.operationId !== 'string' || !resposta.operationId
+    || !['respondida', 'insuficiente', 'conflitante'].includes(String(resposta.estado))
+    || typeof resposta.resposta !== 'string' || typeof resposta.modelo !== 'string'
+    || !Array.isArray(resposta.evidencias)) return false;
+  const ids = new Set<string>();
+  const idsBlocos = blocos ? new Set(blocos.map(bloco => bloco.id)) : null;
+  return resposta.evidencias.every(evidencia => {
+    if (!evidencia || typeof evidencia !== 'object' || typeof (evidencia as Record<string, unknown>).blocoId !== 'string') return false;
+    const id = (evidencia as Record<string, unknown>).blocoId as string;
+    if (ids.has(id) || (idsBlocos && !idsBlocos.has(id))) return false;
+    ids.add(id);
+    return true;
+  }) && (resposta.itens === undefined || (Array.isArray(resposta.itens) && resposta.itens.every(item => typeof item === 'string')))
+    && (resposta.total === undefined || (Number.isInteger(resposta.total) && (resposta.total as number) >= 0));
+}
 export type TomRespostaIa = 'tecnico_pericial' | 'formal' | 'direto';
 export type DetalhamentoRespostaIa = 'conciso' | 'equilibrado' | 'detalhado';
 
@@ -403,7 +487,7 @@ export function aplicarAtualizacaoPainelIa(
 
 export type ComandoPainelIa =
   | { tipo: 'executar_acao'; acao: AcaoIa }
-  | { tipo: 'enviar_pedido_livre'; mensagem: string; aplicacao: 'inserir' | 'reescrever'; tamanho: 'automatico' | 'curta' | 'media' | 'longa' }
+  | { tipo: 'enviar_pedido_livre'; mensagem: string; modo: ModoInteracaoIa; tamanho: 'automatico' | 'curta' | 'media' | 'longa' }
   | { tipo: 'reenviar_mensagem'; mensagemId: string }
   | { tipo: 'limpar_conversa' }
   | { tipo: 'aplicar_resposta'; mensagemId: string }
@@ -422,7 +506,7 @@ export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa 
   if (comando.tipo === 'enviar_pedido_livre') {
     return typeof comando.mensagem === 'string'
       && comando.mensagem.trim().length > 0
-      && (comando.aplicacao === 'inserir' || comando.aplicacao === 'reescrever')
+      && (comando.modo === 'perguntar' || comando.modo === 'escrever' || comando.modo === 'reescrever')
       && ['automatico', 'curta', 'media', 'longa'].includes(String(comando.tamanho));
   }
   if (comando.tipo === 'aplicar_resposta' || comando.tipo === 'reenviar_mensagem') return typeof comando.mensagemId === 'string' && Boolean(comando.mensagemId);

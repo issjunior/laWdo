@@ -117,10 +117,10 @@ export function PainelLateralRedimensionavel({
   const rotuloPainel = tipo === 'ilustracoes' ? 'ilustrações' : 'Assistente IA'
 
   return (
-    <div className="flex h-full min-w-0">
+    <div className="flex h-full min-h-0 min-w-0">
       <ResizablePanelGroup
         orientation="horizontal"
-        className="min-w-0 flex-1"
+        className="min-h-0 min-w-0 flex-1"
         onLayoutChanged={(_layout, detalhes) => {
           if (detalhes.isUserInteraction && painelExpandido) {
             persistirLargura(ultimaLargura.current)
@@ -128,7 +128,7 @@ export function PainelLateralRedimensionavel({
         }}
       >
         <ResizablePanel id="editor-laudo" minSize={560}>
-          <div className="h-full min-w-0">{children}</div>
+          <div className="h-full min-h-0 min-w-0">{children}</div>
         </ResizablePanel>
         {painelExpandido && (
           <>
@@ -144,7 +144,7 @@ export function PainelLateralRedimensionavel({
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="h-full min-w-0 overflow-hidden border-l bg-background">
+              <div className="h-full min-h-0 min-w-0 overflow-hidden border-l bg-background">
                 {conteudoPainel}
               </div>
             </ResizablePanel>

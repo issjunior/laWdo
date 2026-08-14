@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolverTextoContextoIa } from '@/lib/ia-contexto'
+import { resolverHtmlContextoIa, resolverTextoContextoIa } from '@/lib/ia-contexto'
 
 describe('contexto resolvido da IA', () => {
   it('substitui placeholders por dados reais sem alterar o HTML original', () => {
@@ -28,6 +28,18 @@ describe('contexto resolvido da IA', () => {
     const resultado = resolverTextoContextoIa('<p>{{campo_ausente}}</p>', {})
 
     expect(resultado).toBe('[dado não preenchido: campo_ausente]')
+    expect(resultado).not.toContain('{{')
+  })
+
+  it('preserva a tabela ao resolver placeholders para consulta factual', () => {
+    const resultado = resolverHtmlContextoIa('<table><tbody><tr><td>{{arma}}</td><td><span data-placeholder="{{exame}}">{{exame}}</span></td></tr></tbody></table>', {
+      arma: { chave: 'arma', valor: 'Revólver', preenchido: true, formato: 'texto' },
+      exame: { chave: 'exame', valor: 'Prestabilidade', preenchido: true, formato: 'texto' },
+    })
+
+    expect(resultado).toContain('<table>')
+    expect(resultado).toContain('Revólver')
+    expect(resultado).toContain('Prestabilidade')
     expect(resultado).not.toContain('{{')
   })
 })

@@ -80,7 +80,7 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reescrever escopo' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Reescrever' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Pedido livre ao assistente IA' }), {
       target: { value: 'Use redação mais objetiva.' },
     })
@@ -191,9 +191,9 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
   })
 
   it.each([
-    ['Curta (até 10 palavras, tolerância de 5)', 'curta'],
-    ['Média (1 parágrafo)', 'media'],
-    ['Longa (2 a 3 parágrafos)', 'longa'],
+    ['Curta', 'curta'],
+    ['Média', 'media'],
+    ['Longa', 'longa'],
   ] as const)('envia pedido livre com o tamanho %s selecionado', (rotulo, tamanho) => {
     const onSendMessage = vi.fn()
     render(
@@ -206,12 +206,13 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Escrever' }))
     fireEvent.click(screen.getByRole('combobox', { name: 'Tamanho da resposta' }))
     fireEvent.click(screen.getByRole('option', { name: rotulo }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Pedido livre ao assistente IA' }), { target: { value: 'Ajuste o texto.' } })
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Pedido livre ao assistente IA' }), { key: 'Enter' })
 
-    expect(onSendMessage).toHaveBeenCalledWith('Ajuste o texto.', 'inserir', tamanho)
+    expect(onSendMessage).toHaveBeenCalledWith('Ajuste o texto.', 'escrever', tamanho)
   })
 
   it('encaminha ações, reenvio, cópia e aplicação conforme as permissões da mensagem', () => {

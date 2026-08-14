@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { extrairTabelaMarkdownIa, tabelaMarkdownParaHtmlSeguro, tabelaMarkdownParaTexto } from '@/lib/ia-resposta-formatada';
 import {
   Select,
   SelectContent,
@@ -10,8 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, Trash2, X } from 'lucide-react';
-import type { AcaoIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
+import { Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, PanelRightOpen, Trash2, X } from 'lucide-react';
+import type { AcaoIa, ModoInteracaoIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
 
 type AcaoPainelIa = AcaoIa | 'descrever_imagem';
 
@@ -27,6 +29,7 @@ export interface ChatMessage {
   proposalId?: string;
   permiteAplicacao?: boolean;
   permiteReenvio?: boolean;
+  tamanhoResposta?: 'automatico' | 'curta' | 'media' | 'longa';
 }
 
 const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
@@ -40,11 +43,18 @@ const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
   descrever_imagem: 'Descrever imagem',
 };
 
+const rotulosTamanhoResposta = {
+  automatico: 'Tamanho automático',
+  curta: 'Resposta curta',
+  media: 'Resposta média',
+  longa: 'Resposta longa',
+} as const;
+
 interface AssistenteIaPanelProps {
   secaoTitulo: string;
   editorId: string;
   messages: ChatMessage[];
-  onSendMessage: (message: string, acao: 'inserir' | 'reescrever', tamanho: 'automatico' | 'curta' | 'media' | 'longa') => void;
+  onSendMessage: (message: string, modo: ModoInteracaoIa, tamanho: 'automatico' | 'curta' | 'media' | 'longa') => void;
   onLimparConversa?: () => void;
   onApplyResponse: (mensagem: ChatMessage) => void;
   modoAplicacao?: 'inserir' | 'substituir';
@@ -72,6 +82,19 @@ type ContextoIaResposta = {
   success: boolean;
   data?: { configurado: boolean; provedor?: 'groq' | 'gemini'; modelo?: string };
 };
+
+function TabelaResposta({ texto }: { texto: string }) {
+  const tabela = extrairTabelaMarkdownIa(texto)
+  if (!tabela) return null
+  return (
+    <div className="max-w-full overflow-x-auto">
+      <table className="w-full border-collapse text-left text-xs">
+        <thead><tr>{tabela.cabecalho.map((celula, indice) => <th key={`${celula}-${indice}`} className="border border-border bg-background/60 px-2 py-1 font-semibold">{celula}</th>)}</tr></thead>
+        <tbody>{tabela.linhas.map((linha, indice) => <tr key={`${linha.join('-')}-${indice}`}>{linha.map((celula, indiceCelula) => <td key={`${celula}-${indiceCelula}`} className="border border-border px-2 py-1 align-top">{celula}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  )
+}
 
 export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   secaoTitulo,
@@ -101,7 +124,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   contextoImagem = false,
 }) => {
   const [input, setInput] = useState('');
-  const [acaoPedidoLivre, setAcaoPedidoLivre] = useState<'inserir' | 'reescrever'>('inserir');
+  const [modoInteracao, setModoInteracao] = useState<ModoInteracaoIa>('perguntar');
   const [tamanhoResposta, setTamanhoResposta] = useState<'automatico' | 'curta' | 'media' | 'longa'>('automatico');
   const [segundosEmProcessamento, setSegundosEmProcessamento] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -159,7 +182,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
 
   const handleSend = () => {
     if (!input.trim() || loading) return;
-    onSendMessage(input.trim(), acaoPedidoLivre, tamanhoResposta);
+    onSendMessage(input.trim(), modoInteracao, tamanhoResposta);
     setInput('');
   };
 
@@ -171,7 +194,9 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   };
 
   const handleCopy = (text: string) => {
-    void window.ipcAPI.ia.copiarResposta(text);
+    const html = tabelaMarkdownParaHtmlSeguro(text);
+    if (html) void window.ipcAPI.ia.copiarResposta(tabelaMarkdownParaTexto(text), html);
+    else void window.ipcAPI.ia.copiarResposta(text);
   };
 
   const formatTime = (ts: number) => {
@@ -182,7 +207,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   const controlesBloqueados = loading;
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-muted/20">
+    <div data-diagnostico-id="painel-ia.dock" className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-muted/20">
         <header className="shrink-0 border-b bg-background px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2 text-base font-semibold">
@@ -206,7 +231,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                 onClick={onReencaixar || onDestacar}
                 aria-label={onReencaixar ? 'Reencaixar Assistente IA' : 'Destacar Assistente IA'}
               >
-                {onReencaixar ? <ArrowLeft className="size-4" /> : <ExternalLink className="size-4" />}
+                {onReencaixar ? <PanelRightOpen className="size-4" /> : <ExternalLink className="size-4" />}
                 {onReencaixar && <span className="hidden sm:inline">Reencaixar</span>}
               </Button>
               {loading && onCancelarOperacao && (
@@ -254,15 +279,22 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
         </header>
 
         {/* Área de mensagens */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           <div className="space-y-4">
-            {!editorId && !imagemSelecionada && !loading && (
+            {!imagemSelecionada && !loading && messages.length === 0 && opcoesEscopo.length > 0 && (
               <div className="space-y-3 py-4">
                 <p className="text-sm font-medium">Escolha o escopo que a IA poderá usar</p>
                 <p className="text-xs text-muted-foreground">Nenhum conteúdo é enviado até uma ação ser solicitada.</p>
                 <div className="flex flex-col gap-2">
                   {opcoesEscopo.map(opcao => (
-                    <Button key={opcao.id} type="button" variant="outline" className="justify-start" onClick={() => onSelecionarEscopo?.(opcao.id)}>
+                    <Button
+                      key={opcao.id}
+                      type="button"
+                      variant={opcao.id === escopoSelecionado ? 'secondary' : 'outline'}
+                      className="justify-start"
+                      onClick={() => onSelecionarEscopo?.(opcao.id)}
+                      disabled={!onSelecionarEscopo}
+                    >
                       {opcao.titulo}
                     </Button>
                   ))}
@@ -321,12 +353,19 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                       : 'bg-muted text-foreground rounded-bl-sm'
                   }`}
                 >
-                  <div className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.content}</div>
+                  {msg.role === 'assistant' && extrairTabelaMarkdownIa(msg.content)
+                    ? <TabelaResposta texto={msg.content} />
+                    : <div className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.content}</div>}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   {msg.acao && (
                     <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">
                       {rotulosAcaoIa[msg.acao]}
+                    </Badge>
+                  )}
+                  {msg.role === 'user' && msg.tamanhoResposta && (
+                    <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">
+                      {rotulosTamanhoResposta[msg.tamanhoResposta]}
                     </Badge>
                   )}
                   <span className="text-[10px] text-muted-foreground">
@@ -435,34 +474,24 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
             </p>
           ) : (
             <div className="space-y-2">
-              <div className="flex gap-2" role="group" aria-label="Ação do pedido livre">
-                <Button type="button" size="sm" variant={acaoPedidoLivre === 'inserir' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('inserir')} disabled={controlesBloqueados}>
-                  Inserir no cursor
-                </Button>
-                <Button type="button" size="sm" variant={acaoPedidoLivre === 'reescrever' ? 'default' : 'outline'} onClick={() => setAcaoPedidoLivre('reescrever')} disabled={controlesBloqueados}>
-                  Reescrever escopo
-                </Button>
-              </div>
-              <Select value={tamanhoResposta} onValueChange={(valor: 'automatico' | 'curta' | 'media' | 'longa') => setTamanhoResposta(valor)} disabled={controlesBloqueados}>
-                <SelectTrigger className="h-8 text-xs" aria-label="Tamanho da resposta">
-                  <SelectValue placeholder="Tamanho da resposta" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="automatico">Tamanho automático</SelectItem>
-                  <SelectItem value="curta">Curta (até 10 palavras, tolerância de 5)</SelectItem>
-                  <SelectItem value="media">Média (1 parágrafo)</SelectItem>
-                  <SelectItem value="longa">Longa (2 a 3 parágrafos)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Tabs value={modoInteracao} onValueChange={valor => setModoInteracao(valor as ModoInteracaoIa)}>
+                <TabsList className="grid w-full grid-cols-3" aria-label="Modo do assistente">
+                  <TabsTrigger value="perguntar" onClick={() => setModoInteracao('perguntar')}>Perguntar</TabsTrigger>
+                  <TabsTrigger value="escrever" onClick={() => setModoInteracao('escrever')}>Escrever</TabsTrigger>
+                  <TabsTrigger value="reescrever" onClick={() => setModoInteracao('reescrever')}>Reescrever</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {modoInteracao !== 'perguntar' && <Select value={tamanhoResposta} onValueChange={(valor: 'automatico' | 'curta' | 'media' | 'longa') => setTamanhoResposta(valor)} disabled={controlesBloqueados}>
+                <SelectTrigger className="h-8 text-xs" aria-label="Tamanho da resposta"><SelectValue placeholder="Tamanho da resposta" /></SelectTrigger>
+                <SelectContent><SelectItem value="automatico">Tamanho automático</SelectItem><SelectItem value="curta">Curta</SelectItem><SelectItem value="media">Média</SelectItem><SelectItem value="longa">Longa</SelectItem></SelectContent>
+              </Select>}
               <div className="flex gap-2">
                 <Textarea
                   ref={textareaRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={acaoPedidoLivre === 'inserir'
-                    ? 'Descreva o texto que deseja inserir... (Shift+Enter para nova linha)'
-                    : 'Descreva como o escopo selecionado deve ser reescrito... (Shift+Enter para nova linha)'}
+                  placeholder={modoInteracao === 'perguntar' ? 'Pergunte sobre o escopo selecionado... (Shift+Enter para nova linha)' : modoInteracao === 'escrever' ? 'Descreva o texto que deseja inserir... (Shift+Enter para nova linha)' : 'Descreva como o escopo selecionado deve ser reescrito... (Shift+Enter para nova linha)'}
                   className="min-h-[60px] resize-none text-sm"
                   disabled={!editorId || controlesBloqueados}
                   aria-label="Pedido livre ao assistente IA"

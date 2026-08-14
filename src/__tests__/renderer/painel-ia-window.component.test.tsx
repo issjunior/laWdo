@@ -71,7 +71,7 @@ describe('PainelIaWindow', () => {
     expect(painelEnviarComando).toHaveBeenCalledWith({
       tipo: 'enviar_pedido_livre',
       mensagem: 'Torne o texto objetivo.',
-      aplicacao: 'inserir',
+      modo: 'perguntar',
       tamanho: 'automatico',
     });
 

@@ -8,6 +8,7 @@ import {
   atualizacaoPainelIaValida,
   comandoPainelIaValido,
   perfilRespostaIaValido,
+  solicitacaoConsultaIaValida,
   solicitacaoIaValida,
 } from '../../../shared/types/ia.types.js';
 import type {
@@ -290,11 +291,14 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     fecharJanelaPainelIa(false);
   });
 
-  ipcMain.handle('ia:copiar-resposta', (event, texto: unknown) => {
-    if (typeof texto !== 'string' || !texto.trim() || texto.length > 100_000 || !BrowserWindow.fromWebContents(event.sender)) {
+  ipcMain.handle('ia:copiar-resposta', (event, texto: unknown, html: unknown) => {
+    if (typeof texto !== 'string' || !texto.trim() || texto.length > 100_000
+      || (html !== undefined && (typeof html !== 'string' || html.length > 100_000))
+      || !BrowserWindow.fromWebContents(event.sender)) {
       return { success: false, error: 'Texto inválido para cópia.' };
     }
-    clipboard.writeText(texto);
+    if (typeof html === 'string' && html.trim()) clipboard.write({ text: texto, html });
+    else clipboard.writeText(texto);
     return { success: true };
   });
 
@@ -362,6 +366,27 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
         retomadasPorRenderer.set(event.sender.id, retomadas);
         return { success: false, error: mensagem, retomada: error.retomada };
       }
+      return { success: false, error: mensagem };
+    }
+  });
+
+  ipcMain.handle('ia:consultar', async (event, solicitacao: unknown) => {
+    try {
+      if (!solicitacaoConsultaIaValida(solicitacao)) return { success: false, error: 'ENTRADA_INVALIDA' };
+      if (!registrarOperacao(event, solicitacao.operationId)) return { success: false, error: 'OPERACAO_EM_ANDAMENTO' };
+      try {
+        return {
+          success: true,
+          data: await iaExecucaoService.consultar(solicitacao, fase => {
+            if (!event.sender.isDestroyed()) event.sender.send('ia:consulta-progresso', { operationId: solicitacao.operationId, fase });
+          }),
+        };
+      } finally {
+        removerOperacao(event.sender.id, solicitacao.operationId);
+      }
+    } catch (error: unknown) {
+      const mensagem = error instanceof Error ? error.message : 'ERRO_INTERNO';
+      logError('Erro ao consultar IA', { codigo: mensagem.split(':')[0] });
       return { success: false, error: mensagem };
     }
   });
