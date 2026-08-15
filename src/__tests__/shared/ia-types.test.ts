@@ -54,6 +54,8 @@ describe('contratos compartilhados de IA', () => {
       escopos: [{ id: -1, titulo: 'Documento completo' }],
     };
     expect(estadoPainelIaValido(estado)).toBe(true);
+    expect(estadoPainelIaValido({ ...estado, escopoSelecionado: undefined })).toBe(false);
+    expect(estadoPainelIaValido({ ...estado, avisoLimite: { mensagem: 'Limite confirmado', tentarNovamenteEm: undefined } })).toBe(true);
     expect(estadoPainelIaValido({ ...estado, mensagens: [{ content: 'Sem identidade' }] })).toBe(false);
     expect(atualizacaoPainelIaValida({ tipo: 'snapshot', estado })).toBe(true);
     expect(atualizacaoPainelIaValida({

@@ -106,6 +106,64 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     expect(onLimparConversa).toHaveBeenCalledTimes(1)
   })
 
+  it('mostra prazo apenas quando o provedor o informou', () => {
+    const { rerender } = render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId=""
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        error="O provedor recusou esta solicitação devido a um limite de uso. Verifique o aviso para os detalhes informados."
+        avisoLimite={{ mensagem: 'O Gemini recusou a solicitação por limite de uso, mas não informou qual limite foi atingido.' }}
+      />,
+    )
+
+    expect(screen.getByText(/não informou qual limite/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Nova tentativa recomendada após/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Verifique o aviso para os detalhes/i)).not.toBeInTheDocument()
+
+    rerender(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId=""
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        avisoLimite={{ mensagem: 'O Gemini informou que o limite de tokens foi atingido.', tentarNovamenteEm: Date.now() + 60_000 }}
+      />,
+    )
+
+    expect(screen.getByText(/Nova tentativa recomendada após/i)).toBeInTheDocument()
+  })
+
+  it('exibe evidências recolhíveis e permite navegar ao trecho que sustenta a resposta', () => {
+    const onNavegarEvidencia = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Armas"
+        editorId="secao-0"
+        messages={[{
+          id: 'consulta-1',
+          role: 'assistant',
+          content: 'Foram examinadas três armas.',
+          timestamp: Date.now(),
+          estadoConsulta: 'respondida',
+          modeloConsulta: 'gemini-2.5-flash',
+          evidencias: [{ id: 'secao-0:1', tipo: 'tabela', ordem: 0, secaoId: 'secao-0', secaoTitulo: 'Armas', titulo: 'Tabela de armas', texto: 'Arma A, B e C', ancora: 'tabela-armas' }],
+        }]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        onNavegarEvidencia={onNavegarEvidencia}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Evidências (1)' }))
+    expect(screen.getByText(/Tabela de armas/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Ver no laudo/ }))
+    expect(onNavegarEvidencia).toHaveBeenCalledWith(expect.objectContaining({ id: 'secao-0:1' }))
+  })
+
   it('oferece cancelamento explícito enquanto uma operação está em andamento', () => {
     const onCancelarOperacao = vi.fn()
 

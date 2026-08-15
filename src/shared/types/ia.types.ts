@@ -163,6 +163,7 @@ export interface SolicitacaoIa {
   escopo: EscopoIa;
   instrucao?: string;
   contextoResolvido?: string;
+  modelo?: string;
   planoId?: string;
   retomadaId?: string;
   fragmentos: FragmentoIa[];
@@ -180,6 +181,7 @@ export function solicitacaoIaValida(valor: unknown): valor is SolicitacaoIa {
     || !ESCOPOS_IA.includes(solicitacao.escopo as EscopoIa)
     || (solicitacao.instrucao !== undefined && (typeof solicitacao.instrucao !== 'string' || solicitacao.instrucao.length > 10_000))
     || (solicitacao.contextoResolvido !== undefined && (typeof solicitacao.contextoResolvido !== 'string' || solicitacao.contextoResolvido.length > 200_000))
+    || (solicitacao.modelo !== undefined && (typeof solicitacao.modelo !== 'string' || !solicitacao.modelo.trim() || solicitacao.modelo.length > 200))
     || (solicitacao.planoId !== undefined && (typeof solicitacao.planoId !== 'string' || !solicitacao.planoId))
     || (solicitacao.retomadaId !== undefined && (typeof solicitacao.retomadaId !== 'string' || !solicitacao.retomadaId))
     || !Array.isArray(solicitacao.fragmentos)
@@ -236,6 +238,16 @@ export interface ErroIa {
   mensagem: string;
   retryable: boolean;
   acaoSugerida: string;
+}
+
+export type CategoriaLimiteUsoIa = 'requisicoes' | 'tokens' | 'diario' | 'gasto' | 'desconhecido';
+
+export interface LimiteUsoIa {
+  provedor: 'groq' | 'gemini';
+  categoria: CategoriaLimiteUsoIa;
+  tentarNovamenteEm?: number;
+  fonteTempo?: 'retry_info' | 'retry_after' | 'cabecalho_provedor';
+  identificadorCota?: string;
 }
 
 export interface RespostaIa {
@@ -300,6 +312,7 @@ export interface RespostaExecucaoIaIpc {
   data?: RespostaIa;
   error?: string;
   retomada?: RetomadaIa;
+  limiteRequisicoes?: LimiteUsoIa;
 }
 
 export type FaseProgressoIa = 'preparando' | 'processando' | 'concluido';
@@ -354,6 +367,7 @@ export interface EstadoPainelIa {
   titulo: string;
   carregando: boolean;
   erro: string | null;
+  avisoLimite?: { mensagem: string; tentarNovamenteEm?: number } | null;
   editorDisponivel: boolean;
   imagemSelecionada: boolean;
   contextoImagem: boolean;
@@ -364,6 +378,8 @@ export interface EstadoPainelIa {
   mensagens: MensagemPainelIa[];
   escopos: Array<{ id: number; titulo: string }>;
   escopoSelecionado?: number | null;
+  modeloSelecionado?: string;
+  provedorIa?: 'groq' | 'gemini';
 }
 
 export type CamposEstadoPainelIa = Omit<EstadoPainelIa, 'revisao'>;
@@ -385,6 +401,7 @@ const CAMPOS_ESTADO_PAINEL_IA: Array<keyof CamposEstadoPainelIa> = [
   'titulo',
   'carregando',
   'erro',
+  'avisoLimite',
   'editorDisponivel',
   'imagemSelecionada',
   'contextoImagem',
@@ -394,6 +411,8 @@ const CAMPOS_ESTADO_PAINEL_IA: Array<keyof CamposEstadoPainelIa> = [
   'retomada',
   'mensagens',
   'escopos',
+  'modeloSelecionado',
+  'provedorIa',
 ];
 
 function mensagensPainelIaValidas(valor: unknown): valor is MensagemPainelIa[] {
@@ -419,6 +438,13 @@ function escoposPainelIaValidos(valor: unknown): valor is EstadoPainelIa['escopo
 function campoEstadoPainelIaValido(campo: keyof CamposEstadoPainelIa, valor: unknown): boolean {
   switch (campo) {
     case 'titulo': return typeof valor === 'string';
+    case 'avisoLimite': return valor === undefined || valor === null || (
+      typeof valor === 'object'
+      && typeof (valor as { mensagem?: unknown }).mensagem === 'string'
+      && (!('tentarNovamenteEm' in valor)
+        || (valor as { tentarNovamenteEm?: unknown }).tentarNovamenteEm === undefined
+        || Number.isFinite((valor as { tentarNovamenteEm?: unknown }).tentarNovamenteEm))
+    );
     case 'carregando':
     case 'editorDisponivel':
     case 'imagemSelecionada':
@@ -431,6 +457,8 @@ function campoEstadoPainelIaValido(campo: keyof CamposEstadoPainelIa, valor: unk
     case 'mensagens': return mensagensPainelIaValidas(valor);
     case 'escopos': return escoposPainelIaValidos(valor);
     case 'escopoSelecionado': return valor === null || Number.isInteger(valor);
+    case 'modeloSelecionado': return valor === undefined || (typeof valor === 'string' && Boolean(valor));
+    case 'provedorIa': return valor === undefined || valor === 'groq' || valor === 'gemini';
   }
 }
 
@@ -497,7 +525,8 @@ export type ComandoPainelIa =
   | { tipo: 'cancelar_confirmacao' }
   | { tipo: 'descrever_imagem' }
   | { tipo: 'solicitar_ressincronizacao' }
-  | { tipo: 'selecionar_escopo'; indice: number };
+  | { tipo: 'selecionar_escopo'; indice: number }
+  | { tipo: 'selecionar_modelo'; modelo: string };
 
 export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa {
   if (!valor || typeof valor !== 'object') return false;
@@ -517,5 +546,13 @@ export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa 
     || comando.tipo === 'cancelar_confirmacao'
     || comando.tipo === 'descrever_imagem'
     || comando.tipo === 'solicitar_ressincronizacao') return true;
-  return comando.tipo === 'selecionar_escopo' && Number.isInteger(comando.indice);
+  if (comando.tipo === 'selecionar_escopo') return Number.isInteger(comando.indice);
+  return comando.tipo === 'selecionar_modelo' && typeof comando.modelo === 'string' && Boolean(comando.modelo.trim()) && comando.modelo.length <= 200;
+}
+
+export interface ModeloIaDisponivel {
+  id: string;
+  rotulo: string;
+  provedor: 'groq' | 'gemini';
+  disponibilidade: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave';
 }

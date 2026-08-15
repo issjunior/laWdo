@@ -19,6 +19,7 @@ const chavesSensiveis = /senha|password|token|secret|api.?key|cpf|rg|email|telef
 
 export function sanitizarDadosDiagnostico(valor: unknown, profundidade = 0): unknown {
   if (profundidade >= 6) return '[profundidade_maxima]';
+  if (valor === undefined) return null;
   if (valor === null || typeof valor === 'boolean' || typeof valor === 'number') return valor;
   if (typeof valor === 'string') {
     if (valor === 'undefined') return null;
@@ -26,10 +27,13 @@ export function sanitizarDadosDiagnostico(valor: unknown, profundidade = 0): unk
   }
   if (Array.isArray(valor)) return valor.slice(0, 100).map(item => sanitizarDadosDiagnostico(item, profundidade + 1));
   if (typeof valor === 'object') {
-    return Object.fromEntries(Object.entries(valor as Record<string, unknown>).slice(0, 100).map(([chave, conteudo]) => [
-      chave,
-      chavesSensiveis.test(chave) ? '[redigido]' : sanitizarDadosDiagnostico(conteudo, profundidade + 1),
-    ]));
+    return Object.fromEntries(Object.entries(valor as Record<string, unknown>)
+      .filter(([, conteudo]) => conteudo !== undefined)
+      .slice(0, 100)
+      .map(([chave, conteudo]) => [
+        chave,
+        chavesSensiveis.test(chave) ? '[redigido]' : sanitizarDadosDiagnostico(conteudo, profundidade + 1),
+      ]));
   }
   return String(valor);
 }

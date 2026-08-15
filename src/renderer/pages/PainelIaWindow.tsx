@@ -10,6 +10,7 @@ import {
   atualizacaoPainelIaValida,
   type EstadoPainelIa,
 } from '@shared/types/ia.types'
+import { listarModelosIa } from '@shared/catalogos/modelos-ia.catalogo'
 
 export default function PainelIaWindow() {
   const [searchParams] = useSearchParams()
@@ -59,11 +60,15 @@ export default function PainelIaWindow() {
         progresso={estado.progresso}
         retomada={estado.retomada}
         error={estado.erro}
+        avisoLimite={estado.avisoLimite}
         modoAplicacao={estado.modoAplicacao}
         imagemSelecionada={estado.imagemSelecionada}
         contextoImagem={estado.contextoImagem}
         opcoesEscopo={estado.escopos}
         escopoSelecionado={estado.escopoSelecionado}
+        modeloSelecionado={estado.modeloSelecionado}
+        opcoesModelo={estado.provedorIa ? listarModelosIa(estado.provedorIa).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo })) : []}
+        onSelecionarModelo={(modelo) => window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_modelo', modelo })}
         onSelecionarEscopo={(indice) =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_escopo', indice })
         }

@@ -23,17 +23,21 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
-import { serializarBlocosContextoIa } from '@/lib/ia-consulta-contexto';
+import { localizarEvidenciasConsultaIa, serializarBlocosContextoIa } from '@/lib/ia-consulta-contexto';
 import { tabelaMarkdownParaHtmlSeguro } from '@/lib/ia-resposta-formatada';
+import { listarModelosIa } from '@shared/catalogos/modelos-ia.catalogo';
 import {
   CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
   configuracaoPrivacidadeIaValida,
   deveMascararConteudoIa,
+  respostaConsultaIaValida,
   type AcaoIa,
+  type BlocoContextoIa,
   type AtualizacaoPainelIa,
   type CamposEstadoPainelIa,
   type ComandoPainelIa,
   type FragmentoIa,
+  type LimiteUsoIa,
   type ModoInteracaoIa,
   type ProgressoIa,
   type RetomadaIa,
@@ -189,7 +193,7 @@ const obterMensagemErroIa = (erro: unknown): string => {
     ENTRADA_INVALIDA: 'O provedor recusou esta solicitação. Tente reduzir o escopo ou selecionar outro modelo.',
     LIMITE_EXCEDIDO: 'O conteúdo selecionado excede o limite do modelo. Reduza o escopo e tente novamente.',
     SEM_CONEXAO: 'Não foi possível conectar ao provedor de IA. Verifique sua conexão e tente novamente.',
-    LIMITE_REQUISICOES: 'O provedor atingiu o limite temporário de solicitações. Aguarde um momento e tente novamente.',
+    LIMITE_REQUISICOES: 'O provedor respondeu HTTP 429. Verifique o aviso para os detalhes informados.',
     TIMEOUT: 'A IA demorou mais que o esperado para responder. Tente novamente ou reduza o escopo.',
     PROVEDOR_INDISPONIVEL: 'O provedor de IA está temporariamente indisponível. Tente novamente em alguns instantes.',
     RESPOSTA_INVALIDA: 'A IA respondeu em um formato inesperado mesmo após uma tentativa de correção. Tente novamente; se persistir, selecione outro modelo.',
@@ -202,6 +206,21 @@ const obterMensagemErroIa = (erro: unknown): string => {
     ERRO_INTERNO: 'Ocorreu uma falha interna ao processar a solicitação. Tente novamente.',
   };
   return mensagens[codigo] || 'Não foi possível concluir a solicitação de IA. Tente novamente.';
+};
+
+const obterAvisoLimiteIa = (limite: LimiteUsoIa | undefined): { mensagem: string; tentarNovamenteEm?: number } => {
+  const provedor = limite?.provedor === 'gemini' ? 'O Gemini' : limite?.provedor === 'groq' ? 'O Groq' : 'O provedor';
+  const descricoes: Record<LimiteUsoIa['categoria'], string> = {
+    requisicoes: 'informou que o limite de requisições foi atingido.',
+    tokens: 'informou que o limite de tokens foi atingido.',
+    diario: 'informou que a cota diária foi atingida.',
+    gasto: 'informou que o limite de uso financeiro foi atingido.',
+    desconhecido: 'respondeu HTTP 429, sem detalhes suficientes para identificar a causa.',
+  };
+  return {
+    mensagem: `${provedor} ${descricoes[limite?.categoria ?? 'desconhecido']}`,
+    ...(limite?.tentarNovamenteEm !== undefined ? { tentarNovamenteEm: limite.tentarNovamenteEm } : {}),
+  };
 };
 
 type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
@@ -425,6 +444,7 @@ interface LaudoItem {
 type SecaoEditor = SecaoEstruturalLaudo;
 
 interface RespostaIaPendente {
+  modo: 'inserir' | 'substituir';
   texto: string;
   htmlProposto: string;
   conteudoAtual: string;
@@ -514,6 +534,43 @@ export const LaudosPage: React.FC = () => {
   const [confirmacaoImagemIaPendente, setConfirmacaoImagemIaPendente] = useState(false);
   const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
+  const [avisoLimiteIa, setAvisoLimiteIa] = useState<{ mensagem: string; tentarNovamenteEm?: number } | null>(null);
+  const [modeloIaSessao, setModeloIaSessao] = useState<string | null>(null);
+  const [provedorIaSessao, setProvedorIaSessao] = useState<'groq' | 'gemini' | null>(null);
+  const [modelosIaSessao, setModelosIaSessao] = useState<Array<{ id: string; rotulo: string; disponibilidade: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }>>([]);
+
+  useEffect(() => {
+    if (!editando?.id) {
+      setModeloIaSessao(null);
+      setProvedorIaSessao(null);
+      setModelosIaSessao([]);
+      return;
+    }
+    let ativo = true;
+    void window.ipcAPI.ia.obterContexto().then(resposta => {
+      const dados: unknown = resposta.data;
+      if (!ativo || !resposta.success || !dados || typeof dados !== 'object') return;
+      const contexto = dados as { provedor?: unknown; modelo?: unknown };
+      if ((contexto.provedor === 'groq' || contexto.provedor === 'gemini') && typeof contexto.modelo === 'string') {
+        setProvedorIaSessao(contexto.provedor);
+        setModeloIaSessao(contexto.modelo);
+      }
+    }).catch(() => undefined);
+    void window.ipcAPI.ia.listarModelos().then(resposta => {
+      const dados: unknown = resposta.data;
+      if (!ativo || !resposta.success || !Array.isArray(dados)) return;
+      const modelos = dados.flatMap(item => {
+        if (!item || typeof item !== 'object') return [];
+        const modelo = item as Record<string, unknown>;
+        return typeof modelo.id === 'string' && typeof modelo.rotulo === 'string'
+          && ['disponivel', 'nao_verificado', 'removido', 'sem_chave'].includes(String(modelo.disponibilidade))
+          ? [{ id: modelo.id, rotulo: modelo.rotulo, disponibilidade: modelo.disponibilidade as 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }]
+          : [];
+      });
+      setModelosIaSessao(modelos);
+    }).catch(() => undefined);
+    return () => { ativo = false; };
+  }, [editando?.id]);
   const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
   const [respostaIaPendente, setRespostaIaPendente] = useState<RespostaIaPendente | null>(null);
   const editorIaAtivoRef = useRef<string | null>(null);
@@ -2248,13 +2305,16 @@ export const LaudosPage: React.FC = () => {
         titulo: imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo || 'Escolha um escopo no editor',
         carregando: iaLoading,
         erro: iaError,
+        avisoLimite: avisoLimiteIa,
         editorDisponivel,
         imagemSelecionada,
         contextoImagem: imagemSelecionada,
         modoAplicacao: iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir',
         progresso: progressoIa,
         planoPendente: null,
-        escopoSelecionado: iaSheetSecaoIdx,
+        escopoSelecionado: iaSheetSecaoIdx ?? null,
+        ...(modeloIaSessao ? { modeloSelecionado: modeloIaSessao } : {}),
+        ...(provedorIaSessao ? { provedorIa: provedorIaSessao } : {}),
         retomada: retomadaIaPendente?.retomada || null,
         mensagens: obterMensagensVisiveis().map(mensagem => ({
           id: mensagem.id,
@@ -2284,12 +2344,15 @@ export const LaudosPage: React.FC = () => {
         if (estado.titulo !== anterior.titulo) alteracoes.titulo = estado.titulo;
         if (estado.carregando !== anterior.carregando) alteracoes.carregando = estado.carregando;
         if (estado.erro !== anterior.erro) alteracoes.erro = estado.erro;
+        if (estado.avisoLimite !== anterior.avisoLimite) alteracoes.avisoLimite = estado.avisoLimite;
         if (estado.editorDisponivel !== anterior.editorDisponivel) alteracoes.editorDisponivel = estado.editorDisponivel;
         if (estado.imagemSelecionada !== anterior.imagemSelecionada) alteracoes.imagemSelecionada = estado.imagemSelecionada;
         if (estado.contextoImagem !== anterior.contextoImagem) alteracoes.contextoImagem = estado.contextoImagem;
         if (estado.modoAplicacao !== anterior.modoAplicacao) alteracoes.modoAplicacao = estado.modoAplicacao;
         if (JSON.stringify(estado.progresso) !== JSON.stringify(anterior.progresso)) alteracoes.progresso = estado.progresso;
         if (estado.escopoSelecionado !== anterior.escopoSelecionado) alteracoes.escopoSelecionado = estado.escopoSelecionado;
+        if (estado.modeloSelecionado !== anterior.modeloSelecionado && estado.modeloSelecionado) alteracoes.modeloSelecionado = estado.modeloSelecionado;
+        if (estado.provedorIa !== anterior.provedorIa && estado.provedorIa) alteracoes.provedorIa = estado.provedorIa;
         if (JSON.stringify(estado.retomada) !== JSON.stringify(anterior.retomada)) alteracoes.retomada = estado.retomada;
         if (JSON.stringify(estado.mensagens) !== JSON.stringify(anterior.mensagens)) alteracoes.mensagens = estado.mensagens;
         if (JSON.stringify(estado.escopos) !== JSON.stringify(anterior.escopos)) alteracoes.escopos = estado.escopos;
@@ -2331,6 +2394,8 @@ export const LaudosPage: React.FC = () => {
           setImagemSelecionadaIaId(null);
           setIaError(null);
         }
+      } else if (comando.tipo === 'selecionar_modelo' && provedorIaSessao) {
+        if (listarModelosIa(provedorIaSessao).some(modelo => modelo.id === comando.modelo)) setModeloIaSessao(comando.modelo);
       } else if (comando.tipo === 'solicitar_ressincronizacao') {
         if (sessaoPainelIaRef.current) publicarEstado(sessaoPainelIaRef.current, true);
       } else if (comando.tipo === 'aplicar_resposta') {
@@ -2354,7 +2419,7 @@ export const LaudosPage: React.FC = () => {
     });
     if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
     return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
-  }, [chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, progressoIa, retomadaIaPendente, secoes]);
+  }, [avisoLimiteIa, chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, progressoIa, provedorIaSessao, retomadaIaPendente, secoes]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2441,6 +2506,7 @@ export const LaudosPage: React.FC = () => {
           ? `${obterMensagemErroIa(r.error)} Os lotes concluídos foram preservados e podem ser retomados.`
           : obterMensagemErroIa(r.error));
         const codigo = (r.error || '').split(':')[0];
+        if (codigo === 'LIMITE_REQUISICOES') setAvisoLimiteIa(obterAvisoLimiteIa(r.limiteRequisicoes));
         if (!r.retomada && mensagemId && ['SEM_CONEXAO', 'LIMITE_REQUISICOES', 'TIMEOUT', 'PROVEDOR_INDISPONIVEL'].includes(codigo)) {
           setChatMessages(prev => ({
             ...prev,
@@ -2452,6 +2518,7 @@ export const LaudosPage: React.FC = () => {
         return;
       }
       setRetomadaIaPendente(null);
+      setAvisoLimiteIa(null);
       if (r.data.operationId !== operationId) {
         setIaError('A resposta recebida não corresponde à solicitação atual. Tente novamente.');
         return;
@@ -2527,6 +2594,7 @@ export const LaudosPage: React.FC = () => {
         operationId: crypto.randomUUID(),
         acao,
         escopo: alvo.tipo,
+        modelo: modeloIaSessao || undefined,
         instrucao,
         contextoResolvido: alvo.texto,
         fragmentos: protecao?.fragmentos || fragmentosOriginais,
@@ -2750,7 +2818,17 @@ export const LaudosPage: React.FC = () => {
       return;
     }
     if (mensagem.aplicacao === 'inserir') {
-      inserirRespostaIa(mensagem.content, alvo);
+      setRespostaIaPendente({
+        modo: 'inserir',
+        texto: mensagem.content,
+        htmlProposto: tabelaMarkdownParaHtmlSeguro(mensagem.content) || converterTextoEmHtmlSeguro(mensagem.content),
+        conteudoAtual: '',
+        conteudoProposto: mensagem.content,
+        indiceAlvo: alvo.indice,
+        conteudoAlvo: alvo.conteudo,
+        alvoId: alvo.id,
+        fragmentosPropostos: [],
+      });
       return;
     }
 
@@ -2763,6 +2841,7 @@ export const LaudosPage: React.FC = () => {
         ? singleEditorHtml
         : secoes[mensagem.alvo.indice]?.conteudo || '');
     setRespostaIaPendente({
+      modo: 'substituir',
       texto: mensagem.content,
       htmlProposto: mensagem.conteudoProposto || converterTextoEmHtmlSeguro(mensagem.content),
       conteudoAtual: converterHtmlEmTexto(htmlAtual),
@@ -2772,6 +2851,30 @@ export const LaudosPage: React.FC = () => {
       alvoId: mensagem.alvo.id,
       fragmentosPropostos: extrairFragmentosIa(mensagem.conteudoProposto || converterTextoEmHtmlSeguro(mensagem.content)),
     });
+  };
+
+  const navegarParaEvidenciaIa = (evidencia: BlocoContextoIa) => {
+    const indice = evidencia.secaoId.match(/^secao-(\d+)$/)?.[1];
+    if (indice !== undefined) {
+      const indiceSecao = Number(indice);
+      setSecoesColapsadas(atual => ({ ...atual, [indiceSecao]: false }));
+      setIaSheetSecaoIdx(indiceSecao);
+      setIaSheetSecaoTitulo(secoes[indiceSecao]?.titulo || evidencia.secaoTitulo);
+    }
+    window.setTimeout(() => {
+      const editor = obterEditorTinyMce(indice === undefined || Number(indice) === -1
+        ? 'laudo-single-editor'
+        : `secao-${Number(indice)}`);
+      const corpo = editor?.getBody();
+      if (!corpo) return;
+      const alvo = Array.from(corpo.querySelectorAll<HTMLElement>('[id], [data-arma-chave], [data-arma-indice]'))
+        .find(elemento => elemento.id === evidencia.ancora
+          || elemento.getAttribute('data-arma-chave') === evidencia.ancora
+          || elemento.getAttribute('data-arma-indice') === evidencia.ancora) || corpo;
+      alvo.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => alvo.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 2_000);
+    }, 0);
   };
 
   const consultarIa = async (pergunta: string) => {
@@ -2800,13 +2903,28 @@ export const LaudosPage: React.FC = () => {
     setIaError(null);
     setChatMessages(atual => ({ ...atual, [chatKey]: [...(atual[chatKey] || []), { id: crypto.randomUUID(), role: 'user', content: pergunta, timestamp: Date.now(), permiteAplicacao: false }] }));
     try {
-      const resposta = await window.ipcAPI.ia.consultar({ operationId, pergunta, escopo: escopoCompleto ? 'laudo_completo' : 'secao', fingerprint, blocos, memoria: memoriaConsultasIaRef.current.get(chaveMemoria) || [] });
-      if (!resposta.success || !resposta.data || resposta.data.operationId !== operationId) throw new Error(resposta.error || 'RESPOSTA_INVALIDA');
+      const resposta = await window.ipcAPI.ia.consultar({ operationId, pergunta, escopo: escopoCompleto ? 'laudo_completo' : 'secao', modelo: modeloIaSessao || undefined, fingerprint, blocos, memoria: memoriaConsultasIaRef.current.get(chaveMemoria) || [] });
+      const dadosResposta: unknown = resposta.data;
+      if (!resposta.success) {
+        if (resposta.error === 'LIMITE_REQUISICOES') {
+          setAvisoLimiteIa(obterAvisoLimiteIa(resposta.limiteRequisicoes));
+        }
+        throw new Error(resposta.error || 'RESPOSTA_INVALIDA');
+      }
+      if (!respostaConsultaIaValida(dadosResposta, blocos) || dadosResposta.operationId !== operationId) throw new Error('RESPOSTA_INVALIDA');
+      const evidencias = localizarEvidenciasConsultaIa(blocos, dadosResposta.evidencias.map(evidencia => evidencia.blocoId));
+      if (!evidencias) throw new Error('RESPOSTA_INVALIDA');
       memoriaConsultasIaRef.current.set(chaveMemoria, [
         ...(memoriaConsultasIaRef.current.get(chaveMemoria) || []),
         { pergunta, resposta: resposta.data.resposta },
       ].slice(-3));
-      setChatMessages(atual => ({ ...atual, [chatKey]: [...(atual[chatKey] || []), { id: crypto.randomUUID(), role: 'assistant', content: resposta.data!.resposta, timestamp: Date.now(), acao: 'inserir', permiteAplicacao: true }] }));
+      setChatMessages(atual => ({ ...atual, [chatKey]: [...(atual[chatKey] || []), {
+        id: crypto.randomUUID(), role: 'assistant', content: dadosResposta.resposta, timestamp: Date.now(), acao: 'inserir', permiteAplicacao: true,
+        evidencias,
+        estadoConsulta: dadosResposta.estado,
+        modeloConsulta: dadosResposta.modelo,
+      }] }));
+      setAvisoLimiteIa(null);
     } catch (erro: unknown) {
       setIaError(obterMensagemErroIa(erro));
     } finally {
@@ -3178,12 +3296,17 @@ export const LaudosPage: React.FC = () => {
         onReenviarMensagem={mensagemId => void reenviarMensagemIa(mensagemId)}
         imagemSelecionada={Boolean(imagemSelecionadaIaId)}
         contextoImagem={Boolean(imagemSelecionadaIaId)}
+        onNavegarEvidencia={navegarParaEvidenciaIa}
+        modeloSelecionado={modeloIaSessao || undefined}
+        opcoesModelo={modelosIaSessao.length > 0 ? modelosIaSessao : (provedorIaSessao ? listarModelosIa(provedorIaSessao).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, disponibilidade: 'nao_verificado' as const })) : [])}
+        onSelecionarModelo={modelo => setModeloIaSessao(modelo)}
         onApplyResponse={handleApplyResponse}
         modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
         loading={iaLoading}
         progresso={progressoIa}
         escopoSelecionado={iaSheetSecaoIdx}
         error={iaError}
+        avisoLimite={avisoLimiteIa}
         opcoesEscopo={[
           { id: -1, titulo: 'Documento completo' },
           ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
@@ -3455,6 +3578,7 @@ export const LaudosPage: React.FC = () => {
 
         <DialogoAplicarRespostaIa
           open={respostaIaPendente !== null}
+          modo={respostaIaPendente?.modo}
           secaoTitulo={iaSheetSecaoTitulo || 'Seção atual'}
           conteudoAtual={respostaIaPendente?.conteudoAtual || ''}
           conteudoProposto={respostaIaPendente?.conteudoProposto || ''}
@@ -3482,7 +3606,19 @@ export const LaudosPage: React.FC = () => {
             if (!open) setRespostaIaPendente(null);
           }}
           onConfirmar={() => {
-            if (respostaIaPendente) void substituirConteudoComRespostaIa(respostaIaPendente);
+            if (!respostaIaPendente) return;
+            if (respostaIaPendente.modo === 'inserir') {
+              const alvo = alvosIaRef.current.get(respostaIaPendente.alvoId);
+              if (!alvo) {
+                setIaError('A posição original de inserção não está mais disponível. Gere uma nova resposta antes de inserir.');
+                setRespostaIaPendente(null);
+                return;
+              }
+              inserirRespostaIa(respostaIaPendente.texto, alvo);
+              setRespostaIaPendente(null);
+              return;
+            }
+            void substituirConteudoComRespostaIa(respostaIaPendente);
           }}
         />
 
