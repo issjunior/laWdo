@@ -155,10 +155,15 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
     const mensagensContainer = mensagensContainerRef.current;
     if (!mensagensContainer) return;
 
-    mensagensContainer.scrollTo({
-      top: mensagensContainer.scrollHeight,
-      behavior: 'smooth',
-    });
+    if (typeof mensagensContainer.scrollTo === 'function') {
+      mensagensContainer.scrollTo({
+        top: mensagensContainer.scrollHeight,
+        behavior: 'smooth',
+      });
+      return;
+    }
+
+    mensagensContainer.scrollTop = mensagensContainer.scrollHeight;
   }, [messages, loading]);
 
   useEffect(() => {
