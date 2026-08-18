@@ -576,7 +576,10 @@ export class IaExecucaoService {
     );
     aoProgredir?.('verificando');
     log.info('Consulta de IA consolidada', { operationId: solicitacao.operationId, provedor: contexto.provedor, modelo, blocos: solicitacao.blocos.length, lotes: lotes.length, estado: consulta.estado });
-    return consulta;
+    const modeloPrecisao = listarModelosIa(contexto.provedor).find(item => item.perfil === 'maior_precisao' && item.id !== modelo);
+    return modeloPrecisao
+      ? { ...consulta, recomendacao: `Para consultas extensas futuras, ${modeloPrecisao.rotulo} pode oferecer maior precisão.` }
+      : consulta;
   }
 
   private async executarConsultaFactual(

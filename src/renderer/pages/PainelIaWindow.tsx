@@ -67,7 +67,12 @@ export default function PainelIaWindow() {
         opcoesEscopo={estado.escopos}
         escopoSelecionado={estado.escopoSelecionado}
         modeloSelecionado={estado.modeloSelecionado}
-        opcoesModelo={estado.provedorIa ? listarModelosIa(estado.provedorIa).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo })) : []}
+        opcoesModelo={estado.provedorIa ? listarModelosIa(estado.provedorIa).map(modelo => ({
+          id: modelo.id,
+          rotulo: modelo.rotulo,
+          perfil: modelo.perfil,
+          disponibilidade: estado.modelosIa?.find(item => item.id === modelo.id)?.disponibilidade || 'nao_verificado',
+        })) : []}
         onSelecionarModelo={(modelo) => window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_modelo', modelo })}
         onSelecionarEscopo={(indice) =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_escopo', indice })
@@ -88,6 +93,9 @@ export default function PainelIaWindow() {
         }
         onReenviarMensagem={(mensagemId) =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'reenviar_mensagem', mensagemId })
+        }
+        onNavegarEvidencia={(evidencia) =>
+          window.ipcAPI.ia.painelEnviarComando({ tipo: 'navegar_evidencia', evidencia })
         }
         onLimparConversa={() =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'limpar_conversa' })

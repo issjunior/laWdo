@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 import { useAtalhoSalvarLaudo } from '@/hooks/useAtalhoSalvarLaudo';
+import { useModelosIaSessao } from '@/hooks/useModelosIaSessao';
 import {
   useGerenciadorAlteracoesLaudo,
   type OrigemAlteracaoLaudo,
@@ -23,9 +24,10 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
-import { localizarEvidenciasConsultaIa, serializarBlocosContextoIa } from '@/lib/ia-consulta-contexto';
+import { criarChaveMemoriaConsultaIa, localizarEvidenciasConsultaIa, serializarBlocosContextoIa } from '@/lib/ia-consulta-contexto';
 import { tabelaMarkdownParaHtmlSeguro } from '@/lib/ia-resposta-formatada';
-import { listarModelosIa } from '@shared/catalogos/modelos-ia.catalogo';
+import { navegarParaEvidenciaIa as navegarParaEvidenciaNoEditor } from '@/lib/ia-evidencia-navegacao';
+import { listarModelosIa, obterModeloPadraoIa } from '@shared/catalogos/modelos-ia.catalogo';
 import {
   CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
   configuracaoPrivacidadeIaValida,
@@ -484,6 +486,12 @@ interface RetomadaIaPendente {
   execucao: ExecucaoIaPreparada;
 }
 
+interface FallbackModeloIaPendente {
+  pergunta: string;
+  codigo: 'MODELO_REMOVIDO' | 'MODELO_INCOMPATIVEL' | 'CONFIGURACAO_AUSENTE';
+  modeloRecomendado: string | null;
+}
+
 export const LaudosPage: React.FC = () => {
   const navigate = useNavigate();
   const { setTemporariamenteRecolhida } = useSidebar();
@@ -535,42 +543,13 @@ export const LaudosPage: React.FC = () => {
   const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
   const [avisoLimiteIa, setAvisoLimiteIa] = useState<{ mensagem: string; tentarNovamenteEm?: number } | null>(null);
-  const [modeloIaSessao, setModeloIaSessao] = useState<string | null>(null);
-  const [provedorIaSessao, setProvedorIaSessao] = useState<'groq' | 'gemini' | null>(null);
-  const [modelosIaSessao, setModelosIaSessao] = useState<Array<{ id: string; rotulo: string; disponibilidade: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }>>([]);
-
-  useEffect(() => {
-    if (!editando?.id) {
-      setModeloIaSessao(null);
-      setProvedorIaSessao(null);
-      setModelosIaSessao([]);
-      return;
-    }
-    let ativo = true;
-    void window.ipcAPI.ia.obterContexto().then(resposta => {
-      const dados: unknown = resposta.data;
-      if (!ativo || !resposta.success || !dados || typeof dados !== 'object') return;
-      const contexto = dados as { provedor?: unknown; modelo?: unknown };
-      if ((contexto.provedor === 'groq' || contexto.provedor === 'gemini') && typeof contexto.modelo === 'string') {
-        setProvedorIaSessao(contexto.provedor);
-        setModeloIaSessao(contexto.modelo);
-      }
-    }).catch(() => undefined);
-    void window.ipcAPI.ia.listarModelos().then(resposta => {
-      const dados: unknown = resposta.data;
-      if (!ativo || !resposta.success || !Array.isArray(dados)) return;
-      const modelos = dados.flatMap(item => {
-        if (!item || typeof item !== 'object') return [];
-        const modelo = item as Record<string, unknown>;
-        return typeof modelo.id === 'string' && typeof modelo.rotulo === 'string'
-          && ['disponivel', 'nao_verificado', 'removido', 'sem_chave'].includes(String(modelo.disponibilidade))
-          ? [{ id: modelo.id, rotulo: modelo.rotulo, disponibilidade: modelo.disponibilidade as 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }]
-          : [];
-      });
-      setModelosIaSessao(modelos);
-    }).catch(() => undefined);
-    return () => { ativo = false; };
-  }, [editando?.id]);
+  const {
+    modeloIaSessao,
+    setModeloIaSessao,
+    provedorIaSessao,
+    modelosIaSessao,
+  } = useModelosIaSessao(editando?.id);
+  const [fallbackModeloIaPendente, setFallbackModeloIaPendente] = useState<FallbackModeloIaPendente | null>(null);
   const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
   const [respostaIaPendente, setRespostaIaPendente] = useState<RespostaIaPendente | null>(null);
   const editorIaAtivoRef = useRef<string | null>(null);
@@ -1221,6 +1200,7 @@ export const LaudosPage: React.FC = () => {
     onSyncToggle: (enabled: boolean) => void;
     onScrollToFigure: (imageId: string) => void;
     onReplaceImage: (imageId: string, imagem: ImagemLaudo) => void;
+    onGerarLegenda: (imageId: string) => Promise<string | null>;
     syncCurrentState: () => void;
   }>({
     onInsertImage: () => {},
@@ -1232,6 +1212,7 @@ export const LaudosPage: React.FC = () => {
     onSyncToggle: () => {},
     onScrollToFigure: () => {},
     onReplaceImage: () => {},
+    onGerarLegenda: async () => null,
     syncCurrentState: () => {},
   });
 
@@ -1487,6 +1468,14 @@ export const LaudosPage: React.FC = () => {
     },
     onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
     onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
+    onGerarLegenda: async (imageId) => {
+      const legenda = await gerarLegendaImagemIaRef.current(imageId);
+      if (legenda) {
+        panelCallbacksRef.current.onUpdateLegenda(imageId, legenda);
+        panelCallbacksRef.current.syncCurrentState();
+      }
+      return legenda;
+    },
     onReplaceImage: (imageId, imagem) => {
       setImagemSelecionadaIaId(atual => atual === imageId ? null : atual);
       const executarReplace = () => {
@@ -1570,6 +1559,9 @@ export const LaudosPage: React.FC = () => {
           break;
         case 'replaceImage':
           if (isString(args[0]) && isImagemLaudo(args[1])) cbs.onReplaceImage(args[0], args[1]);
+          break;
+        case 'generateCaption':
+          if (isString(args[0])) void cbs.onGerarLegenda(args[0]);
           break;
         case 'ready': cbs.syncCurrentState(); break;
         case 'popIn':
@@ -2234,8 +2226,8 @@ export const LaudosPage: React.FC = () => {
       setIaSheetSecaoIdx(alvo.indice);
       setIaSheetSecaoTitulo(alvo.tipo === 'selecao' ? 'Seleção atual' : alvo.indice === -1 ? 'Documento completo' : secoes[alvo.indice]?.titulo || 'Seção atual');
     } else {
-      setIaSheetSecaoIdx(null);
-      setIaSheetSecaoTitulo('Escolha um escopo para iniciar');
+      setIaSheetSecaoIdx(-1);
+      setIaSheetSecaoTitulo('Documento completo');
     }
     setIaSheetOpen(true);
     setPanelCollapsed(false);
@@ -2253,7 +2245,9 @@ export const LaudosPage: React.FC = () => {
   const retomarOperacaoIaRef = useRef<() => void>(() => {});
   const limparConversaIaRef = useRef<() => void>(() => {});
   const descreverImagemIaRef = useRef<() => void>(() => {});
+  const gerarLegendaImagemIaRef = useRef<(imagemId: string) => Promise<string | null>>(async () => null);
   const aplicarRespostaIaRef = useRef<(mensagem: ChatMessage) => void>(() => {});
+  const navegarParaEvidenciaIaRef = useRef<(evidencia: BlocoContextoIa) => void>(() => {});
   const operacaoIaAtivaRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -2315,6 +2309,7 @@ export const LaudosPage: React.FC = () => {
         escopoSelecionado: iaSheetSecaoIdx ?? null,
         ...(modeloIaSessao ? { modeloSelecionado: modeloIaSessao } : {}),
         ...(provedorIaSessao ? { provedorIa: provedorIaSessao } : {}),
+        modelosIa: modelosIaSessao.map(modelo => ({ ...modelo, provedor: provedorIaSessao || 'gemini' })),
         retomada: retomadaIaPendente?.retomada || null,
         mensagens: obterMensagensVisiveis().map(mensagem => ({
           id: mensagem.id,
@@ -2323,6 +2318,10 @@ export const LaudosPage: React.FC = () => {
           timestamp: mensagem.timestamp,
           aplicacao: mensagem.aplicacao,
           acao: mensagem.acao,
+          estadoConsulta: mensagem.estadoConsulta,
+          modeloConsulta: mensagem.modeloConsulta,
+          recomendacao: mensagem.recomendacao,
+          evidencias: mensagem.evidencias,
           permiteAplicacao: mensagem.role === 'assistant' && mensagem.acao !== 'descrever_imagem',
           proposalId: mensagem.proposalId,
         })),
@@ -2353,6 +2352,7 @@ export const LaudosPage: React.FC = () => {
         if (estado.escopoSelecionado !== anterior.escopoSelecionado) alteracoes.escopoSelecionado = estado.escopoSelecionado;
         if (estado.modeloSelecionado !== anterior.modeloSelecionado && estado.modeloSelecionado) alteracoes.modeloSelecionado = estado.modeloSelecionado;
         if (estado.provedorIa !== anterior.provedorIa && estado.provedorIa) alteracoes.provedorIa = estado.provedorIa;
+        if (JSON.stringify(estado.modelosIa) !== JSON.stringify(anterior.modelosIa)) alteracoes.modelosIa = estado.modelosIa;
         if (JSON.stringify(estado.retomada) !== JSON.stringify(anterior.retomada)) alteracoes.retomada = estado.retomada;
         if (JSON.stringify(estado.mensagens) !== JSON.stringify(anterior.mensagens)) alteracoes.mensagens = estado.mensagens;
         if (JSON.stringify(estado.escopos) !== JSON.stringify(anterior.escopos)) alteracoes.escopos = estado.escopos;
@@ -2395,12 +2395,16 @@ export const LaudosPage: React.FC = () => {
           setIaError(null);
         }
       } else if (comando.tipo === 'selecionar_modelo' && provedorIaSessao) {
-        if (listarModelosIa(provedorIaSessao).some(modelo => modelo.id === comando.modelo)) setModeloIaSessao(comando.modelo);
+        const modelo = modelosIaSessao.find(item => item.id === comando.modelo);
+        if (listarModelosIa(provedorIaSessao).some(item => item.id === comando.modelo)
+          && modelo?.disponibilidade !== 'removido' && modelo?.disponibilidade !== 'sem_chave') setModeloIaSessao(comando.modelo);
       } else if (comando.tipo === 'solicitar_ressincronizacao') {
         if (sessaoPainelIaRef.current) publicarEstado(sessaoPainelIaRef.current, true);
       } else if (comando.tipo === 'aplicar_resposta') {
         const mensagem = obterMensagensVisiveis().find(item => item.id === comando.mensagemId);
         if (mensagem) aplicarRespostaIaRef.current(mensagem);
+      } else if (comando.tipo === 'navegar_evidencia') {
+        navegarParaEvidenciaIaRef.current(comando.evidencia);
       }
     });
     const removerReencaixar = window.ipcAPI.ia.onPainelReencaixar(sessionId => {
@@ -2419,7 +2423,7 @@ export const LaudosPage: React.FC = () => {
     });
     if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
     return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
-  }, [avisoLimiteIa, chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, progressoIa, provedorIaSessao, retomadaIaPendente, secoes]);
+  }, [avisoLimiteIa, chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, modelosIaSessao, progressoIa, provedorIaSessao, retomadaIaPendente, secoes, setModeloIaSessao]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2853,35 +2857,36 @@ export const LaudosPage: React.FC = () => {
     });
   };
 
-  const navegarParaEvidenciaIa = (evidencia: BlocoContextoIa) => {
-    const indice = evidencia.secaoId.match(/^secao-(\d+)$/)?.[1];
-    if (indice !== undefined) {
-      const indiceSecao = Number(indice);
-      setSecoesColapsadas(atual => ({ ...atual, [indiceSecao]: false }));
-      setIaSheetSecaoIdx(indiceSecao);
-      setIaSheetSecaoTitulo(secoes[indiceSecao]?.titulo || evidencia.secaoTitulo);
-    }
-    window.setTimeout(() => {
-      const editor = obterEditorTinyMce(indice === undefined || Number(indice) === -1
-        ? 'laudo-single-editor'
-        : `secao-${Number(indice)}`);
-      const corpo = editor?.getBody();
-      if (!corpo) return;
-      const alvo = Array.from(corpo.querySelectorAll<HTMLElement>('[id], [data-arma-chave], [data-arma-indice]'))
-        .find(elemento => elemento.id === evidencia.ancora
-          || elemento.getAttribute('data-arma-chave') === evidencia.ancora
-          || elemento.getAttribute('data-arma-indice') === evidencia.ancora) || corpo;
-      alvo.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
-      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      window.setTimeout(() => alvo.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 2_000);
-    }, 0);
-  };
+  const navegarParaEvidenciaIa = useCallback((evidencia: BlocoContextoIa) => {
+    navegarParaEvidenciaNoEditor({
+      modoEditor: editorMode,
+      evidencia,
+      obterEditor: obterEditorTinyMce,
+      expandirSecao: indice => setSecoesColapsadas(atual => ({ ...atual, [indice]: false })),
+      agendar: callback => window.setTimeout(callback, 0),
+    });
+  }, [editorMode]);
+  navegarParaEvidenciaIaRef.current = navegarParaEvidenciaIa;
 
-  const consultarIa = async (pergunta: string) => {
+  const consultarIa = async (pergunta: string, modeloForcado?: string) => {
     if (iaLoading) return;
     const alvo = capturarAlvoIa(true);
     if (!alvo || (alvo.tipo !== 'secao' && alvo.tipo !== 'laudo_completo')) {
       setIaError('Escolha uma seção ou o documento completo antes de perguntar.');
+      return;
+    }
+    const modeloSelecionado = modeloForcado || modeloIaSessao;
+    const disponibilidadeModelo = modeloSelecionado
+      ? modelosIaSessao.find(modelo => modelo.id === modeloSelecionado)?.disponibilidade
+      : undefined;
+    if (disponibilidadeModelo === 'removido' || disponibilidadeModelo === 'sem_chave') {
+      const codigo = disponibilidadeModelo === 'removido' ? 'MODELO_REMOVIDO' : 'CONFIGURACAO_AUSENTE';
+      const recomendado = provedorIaSessao
+        ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloSelecionado
+          && modelosIaSessao.find(item => item.id === modelo.id)?.disponibilidade === 'disponivel')?.id
+          || obterModeloPadraoIa(provedorIaSessao).id
+        : null;
+      setFallbackModeloIaPendente({ pergunta, codigo, modeloRecomendado: recomendado === modeloSelecionado ? null : recomendado });
       return;
     }
     const operationId = crypto.randomUUID();
@@ -2896,14 +2901,14 @@ export const LaudosPage: React.FC = () => {
       return;
     }
     const fingerprint = await calcularFingerprintIa(alvo.tipo, fontes.map(fonte => fonte.html).join(''));
-    const chaveMemoria = `${alvo.tipo}:${alvo.indice}:${fingerprint}`;
+    const chaveMemoria = criarChaveMemoriaConsultaIa(alvo.tipo, alvo.indice, fingerprint);
     const chatKey = alvo.indice === -1 ? SINGLE_CHAT_KEY : `secao-${alvo.indice}`;
     setIaLoading(true);
     setOperacaoIaAtivaId(operationId);
     setIaError(null);
     setChatMessages(atual => ({ ...atual, [chatKey]: [...(atual[chatKey] || []), { id: crypto.randomUUID(), role: 'user', content: pergunta, timestamp: Date.now(), permiteAplicacao: false }] }));
     try {
-      const resposta = await window.ipcAPI.ia.consultar({ operationId, pergunta, escopo: escopoCompleto ? 'laudo_completo' : 'secao', modelo: modeloIaSessao || undefined, fingerprint, blocos, memoria: memoriaConsultasIaRef.current.get(chaveMemoria) || [] });
+      const resposta = await window.ipcAPI.ia.consultar({ operationId, pergunta, escopo: escopoCompleto ? 'laudo_completo' : 'secao', modelo: modeloSelecionado || undefined, fingerprint, blocos, memoria: memoriaConsultasIaRef.current.get(chaveMemoria) || [] });
       const dadosResposta: unknown = resposta.data;
       if (!resposta.success) {
         if (resposta.error === 'LIMITE_REQUISICOES') {
@@ -2923,9 +2928,19 @@ export const LaudosPage: React.FC = () => {
         evidencias,
         estadoConsulta: dadosResposta.estado,
         modeloConsulta: dadosResposta.modelo,
+        recomendacao: dadosResposta.recomendacao,
       }] }));
       setAvisoLimiteIa(null);
     } catch (erro: unknown) {
+      const codigo = erro instanceof Error ? erro.message.split(':')[0] : '';
+      if (codigo === 'MODELO_INCOMPATIVEL' || codigo === 'CONFIGURACAO_AUSENTE') {
+        const recomendado = provedorIaSessao
+          ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloIaSessao
+            && modelosIaSessao.find(item => item.id === modelo.id)?.disponibilidade !== 'removido')?.id
+            || obterModeloPadraoIa(provedorIaSessao).id
+          : null;
+        setFallbackModeloIaPendente({ pergunta, codigo, modeloRecomendado: recomendado === modeloIaSessao ? null : recomendado });
+      }
       setIaError(obterMensagemErroIa(erro));
     } finally {
       setIaLoading(false);
@@ -2980,6 +2995,8 @@ export const LaudosPage: React.FC = () => {
     }
     return resposta.data.descricao.trim().replace(/\s+/g, ' ');
   };
+
+  gerarLegendaImagemIaRef.current = gerarLegendaImagemIa;
 
   const limparConversaIa = () => {
     const chaveChat = imagemSelecionadaIaId
@@ -3298,7 +3315,9 @@ export const LaudosPage: React.FC = () => {
         contextoImagem={Boolean(imagemSelecionadaIaId)}
         onNavegarEvidencia={navegarParaEvidenciaIa}
         modeloSelecionado={modeloIaSessao || undefined}
-        opcoesModelo={modelosIaSessao.length > 0 ? modelosIaSessao : (provedorIaSessao ? listarModelosIa(provedorIaSessao).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, disponibilidade: 'nao_verificado' as const })) : [])}
+        opcoesModelo={modelosIaSessao.length > 0
+          ? modelosIaSessao.map(modelo => ({ ...modelo, perfil: provedorIaSessao ? listarModelosIa(provedorIaSessao).find(item => item.id === modelo.id)?.perfil : undefined }))
+          : (provedorIaSessao ? listarModelosIa(provedorIaSessao).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, perfil: modelo.perfil, disponibilidade: 'nao_verificado' as const })) : [])}
         onSelecionarModelo={modelo => setModeloIaSessao(modelo)}
         onApplyResponse={handleApplyResponse}
         modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
@@ -3621,6 +3640,47 @@ export const LaudosPage: React.FC = () => {
             void substituirConteudoComRespostaIa(respostaIaPendente);
           }}
         />
+
+        <AlertDialog open={fallbackModeloIaPendente !== null} onOpenChange={aberto => {
+          if (!aberto) setFallbackModeloIaPendente(null);
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Escolha como continuar com a IA</AlertDialogTitle>
+              <AlertDialogDescription>
+                {fallbackModeloIaPendente?.codigo === 'MODELO_REMOVIDO'
+                  ? 'O modelo selecionado não está mais disponível no provedor.'
+                  : fallbackModeloIaPendente?.codigo === 'MODELO_INCOMPATIVEL'
+                    ? 'O modelo selecionado não é compatível com esta solicitação.'
+                    : 'A configuração do modelo ou da chave precisa de atenção antes de continuar.'}
+                {' '}A pergunta e o escopo foram preservados.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2 sm:flex-wrap">
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <Button type="button" variant="outline" onClick={() => setFallbackModeloIaPendente(null)}>
+                Selecionar outro modelo
+              </Button>
+              <Button type="button" variant="outline" onClick={() => {
+                setFallbackModeloIaPendente(null);
+                navigate('/modelos-ia');
+              }}>
+                Abrir configurações
+              </Button>
+              {fallbackModeloIaPendente?.modeloRecomendado && (
+                <AlertDialogAction onClick={() => {
+                  const pendencia = fallbackModeloIaPendente;
+                  if (!pendencia?.modeloRecomendado) return;
+                  setFallbackModeloIaPendente(null);
+                  setModeloIaSessao(pendencia.modeloRecomendado);
+                  void consultarIa(pendencia.pergunta, pendencia.modeloRecomendado);
+                }}>
+                  Reenviar com o modelo recomendado
+                </AlertDialogAction>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={confirmacaoImagemIaPendente} onOpenChange={setConfirmacaoImagemIaPendente}>
           <AlertDialogContent>

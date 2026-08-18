@@ -427,6 +427,53 @@ describe('ia-execucao.service — descrição de imagem', () => {
       itens: ['Arma A', 'Arma C'],
       evidencias: [{ blocoId: 'arma-a' }, { blocoId: 'arma-c' }],
     });
+    expect(resposta.recomendacao).toContain('Gemini 2.5 Pro');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  })
+
+  it('consolida o total e os dois exames da fixture B-602 sem misturar as armas', async () => {
+    const consultaB602 = {
+      ...solicitacaoConsulta,
+      operationId: 'consulta-b602-mapeamento',
+      pergunta: 'Organize as armas e seus exames em uma tabela.',
+      blocos: [
+        ['arma-a', 'Arma A. Exame de prestabilidade realizado.'],
+        ['arma-b', 'Arma B. Coleta de padrão balístico realizada.'],
+        ['arma-c', 'Arma C. Exames de prestabilidade e coleta de padrão balístico realizados.'],
+      ].map(([id, texto], ordem) => ({
+        id,
+        tipo: 'tabela' as const,
+        ordem,
+        secaoId: 'b602-armas',
+        secaoTitulo: 'Armas examinadas',
+        titulo: `Arma ${String.fromCharCode(65 + ordem)}`,
+        ancora: id,
+        texto: `${texto} `.repeat(9_000),
+      })),
+    };
+    for (const [id, item] of [['arma-a', 'Arma A'], ['arma-b', 'Arma B'], ['arma-c', 'Arma C']]) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: item, evidencias: [id], itens: [item], total: 1 }) } }],
+      }), { status: 200 }));
+    }
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        estado: 'respondida',
+        resposta: '| Arma | Prestabilidade | Padrão balístico |\n| --- | --- | --- |\n| A | Sim | Não |\n| B | Não | Sim |\n| C | Sim | Sim |',
+        evidencias: ['arma-a', 'arma-b', 'arma-c'],
+        itens: ['Arma A', 'Arma B', 'Arma C'],
+        total: 3,
+      }) } }],
+    }), { status: 200 }));
+
+    const resposta = await new IaExecucaoService().consultar(consultaB602);
+
+    expect(resposta.total).toBe(3);
+    expect(resposta.itens).toEqual(['Arma A', 'Arma B', 'Arma C']);
+    expect(resposta.resposta).toContain('| A | Sim | Não |');
+    expect(resposta.resposta).toContain('| B | Não | Sim |');
+    expect(resposta.resposta).toContain('| C | Sim | Sim |');
+    expect(resposta.evidencias.map(evidencia => evidencia.blocoId)).toEqual(['arma-a', 'arma-b', 'arma-c']);
     expect(fetchMock).toHaveBeenCalledTimes(4);
   })
 

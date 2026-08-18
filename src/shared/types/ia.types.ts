@@ -94,7 +94,8 @@ export function respostaConsultaIaValida(valor: unknown, blocos?: BlocoContextoI
     ids.add(id);
     return true;
   }) && (resposta.itens === undefined || (Array.isArray(resposta.itens) && resposta.itens.every(item => typeof item === 'string')))
-    && (resposta.total === undefined || (Number.isInteger(resposta.total) && (resposta.total as number) >= 0));
+    && (resposta.total === undefined || (Number.isInteger(resposta.total) && (resposta.total as number) >= 0))
+    && (resposta.recomendacao === undefined || (typeof resposta.recomendacao === 'string' && resposta.recomendacao.length <= 500));
 }
 export type TomRespostaIa = 'tecnico_pericial' | 'formal' | 'direto';
 export type DetalhamentoRespostaIa = 'conciso' | 'equilibrado' | 'detalhado';
@@ -358,6 +359,10 @@ export interface MensagemPainelIa {
   timestamp: number;
   aplicacao?: 'inserir' | 'substituir';
   acao?: AcaoPainelIa;
+  evidencias?: BlocoContextoIa[];
+  estadoConsulta?: EstadoConsultaIa;
+  modeloConsulta?: string;
+  recomendacao?: string;
   permiteAplicacao?: boolean;
   proposalId?: string;
 }
@@ -380,6 +385,7 @@ export interface EstadoPainelIa {
   escopoSelecionado?: number | null;
   modeloSelecionado?: string;
   provedorIa?: 'groq' | 'gemini';
+  modelosIa?: ModeloIaDisponivel[];
 }
 
 export type CamposEstadoPainelIa = Omit<EstadoPainelIa, 'revisao'>;
@@ -413,6 +419,7 @@ const CAMPOS_ESTADO_PAINEL_IA: Array<keyof CamposEstadoPainelIa> = [
   'escopos',
   'modeloSelecionado',
   'provedorIa',
+  'modelosIa',
 ];
 
 function mensagensPainelIaValidas(valor: unknown): valor is MensagemPainelIa[] {
@@ -423,7 +430,11 @@ function mensagensPainelIaValidas(valor: unknown): valor is MensagemPainelIa[] {
       && Boolean(item.id)
       && (item.role === 'user' || item.role === 'assistant')
       && typeof item.content === 'string'
-      && typeof item.timestamp === 'number';
+      && typeof item.timestamp === 'number'
+      && (item.evidencias === undefined || Array.isArray(item.evidencias))
+      && (item.estadoConsulta === undefined || ['respondida', 'insuficiente', 'conflitante'].includes(String(item.estadoConsulta)))
+      && (item.modeloConsulta === undefined || typeof item.modeloConsulta === 'string')
+      && (item.recomendacao === undefined || typeof item.recomendacao === 'string');
   });
 }
 
@@ -432,6 +443,17 @@ function escoposPainelIaValidos(valor: unknown): valor is EstadoPainelIa['escopo
     if (!escopo || typeof escopo !== 'object') return false;
     const item = escopo as Record<string, unknown>;
     return Number.isInteger(item.id) && typeof item.titulo === 'string';
+  });
+}
+
+function modelosIaPainelValidos(valor: unknown): valor is ModeloIaDisponivel[] {
+  return Array.isArray(valor) && valor.every(modelo => {
+    if (!modelo || typeof modelo !== 'object') return false;
+    const item = modelo as Record<string, unknown>;
+    return typeof item.id === 'string' && Boolean(item.id)
+      && typeof item.rotulo === 'string'
+      && (item.provedor === 'groq' || item.provedor === 'gemini')
+      && ['disponivel', 'nao_verificado', 'removido', 'sem_chave'].includes(String(item.disponibilidade));
   });
 }
 
@@ -459,6 +481,7 @@ function campoEstadoPainelIaValido(campo: keyof CamposEstadoPainelIa, valor: unk
     case 'escopoSelecionado': return valor === null || Number.isInteger(valor);
     case 'modeloSelecionado': return valor === undefined || (typeof valor === 'string' && Boolean(valor));
     case 'provedorIa': return valor === undefined || valor === 'groq' || valor === 'gemini';
+    case 'modelosIa': return valor === undefined || modelosIaPainelValidos(valor);
   }
 }
 
@@ -519,6 +542,7 @@ export type ComandoPainelIa =
   | { tipo: 'reenviar_mensagem'; mensagemId: string }
   | { tipo: 'limpar_conversa' }
   | { tipo: 'aplicar_resposta'; mensagemId: string }
+  | { tipo: 'navegar_evidencia'; evidencia: BlocoContextoIa }
   | { tipo: 'cancelar_operacao' }
   | { tipo: 'retomar_operacao' }
   | { tipo: 'confirmar_execucao' }
@@ -539,6 +563,7 @@ export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa 
       && ['automatico', 'curta', 'media', 'longa'].includes(String(comando.tamanho));
   }
   if (comando.tipo === 'aplicar_resposta' || comando.tipo === 'reenviar_mensagem') return typeof comando.mensagemId === 'string' && Boolean(comando.mensagemId);
+  if (comando.tipo === 'navegar_evidencia') return blocoContextoIaValido(comando.evidencia);
   if (comando.tipo === 'cancelar_operacao'
     || comando.tipo === 'retomar_operacao'
     || comando.tipo === 'limpar_conversa'

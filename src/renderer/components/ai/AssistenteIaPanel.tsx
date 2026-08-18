@@ -9,7 +9,9 @@ import { extrairTabelaMarkdownIa, tabelaMarkdownParaHtmlSeguro, tabelaMarkdownPa
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -34,6 +36,7 @@ export interface ChatMessage {
   evidencias?: BlocoContextoIa[];
   estadoConsulta?: EstadoConsultaIa;
   modeloConsulta?: string;
+  recomendacao?: string;
 }
 
 const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
@@ -82,7 +85,7 @@ interface AssistenteIaPanelProps {
   imagemSelecionada?: boolean;
   contextoImagem?: boolean;
   onNavegarEvidencia?: (evidencia: BlocoContextoIa) => void;
-  opcoesModelo?: Array<{ id: string; rotulo: string; disponibilidade?: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }>;
+  opcoesModelo?: Array<{ id: string; rotulo: string; perfil?: 'rapido' | 'equilibrado' | 'maior_precisao'; disponibilidade?: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }>;
   modeloSelecionado?: string;
   onSelecionarModelo?: (modelo: string) => void;
 }
@@ -141,6 +144,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   const [modoInteracao, setModoInteracao] = useState<ModoInteracaoIa>('perguntar');
   const [tamanhoResposta, setTamanhoResposta] = useState<'automatico' | 'curta' | 'media' | 'longa'>('automatico');
   const [segundosEmProcessamento, setSegundosEmProcessamento] = useState(0);
+  const [evidenciasAbertas, setEvidenciasAbertas] = useState<Set<string>>(() => new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -297,9 +301,17 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                     <SelectValue placeholder="Modelo configurado" />
                   </SelectTrigger>
                   <SelectContent>
-                    {opcoesModelo.map(modelo => <SelectItem key={modelo.id} value={modelo.id} className="text-xs" disabled={modelo.disponibilidade === 'removido' || modelo.disponibilidade === 'sem_chave'}>
-                      {modelo.rotulo}{modelo.disponibilidade === 'nao_verificado' ? ' · Não verificado' : modelo.disponibilidade === 'removido' ? ' · Removido' : ''}
-                    </SelectItem>)}
+                    {(['rapido', 'equilibrado', 'maior_precisao'] as const).map(perfil => {
+                      const modelos = opcoesModelo.filter(modelo => (modelo.perfil || 'equilibrado') === perfil);
+                      if (!modelos.length) return null;
+                      const rotuloPerfil = perfil === 'rapido' ? 'Rápido' : perfil === 'equilibrado' ? 'Equilibrado' : 'Maior precisão';
+                      return <SelectGroup key={perfil}>
+                        <SelectLabel>{rotuloPerfil}</SelectLabel>
+                        {modelos.map(modelo => <SelectItem key={modelo.id} value={modelo.id} className="text-xs" disabled={modelo.disponibilidade === 'removido' || modelo.disponibilidade === 'sem_chave'}>
+                          {modelo.rotulo}{modelo.disponibilidade === 'nao_verificado' ? ' · Não verificado' : modelo.disponibilidade === 'removido' ? ' · Removido' : modelo.disponibilidade === 'sem_chave' ? ' · Sem chave' : ''}
+                        </SelectItem>)}
+                      </SelectGroup>;
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -392,6 +404,11 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                         : 'Há informações conflitantes no escopo. Revise as evidências antes de usar a resposta.'}
                     </p>
                   )}
+                  {msg.role === 'assistant' && msg.recomendacao && (
+                    <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                      {msg.recomendacao}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   {msg.acao && (
@@ -455,7 +472,16 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   )}
                 </div>
                 {msg.role === 'assistant' && msg.evidencias && msg.evidencias.length > 0 && (
-                  <Collapsible className="mt-2 w-full max-w-[90%] rounded-md border bg-background/60 px-2 py-1">
+                  <Collapsible
+                    open={evidenciasAbertas.has(msg.id)}
+                    onOpenChange={aberto => setEvidenciasAbertas(atuais => {
+                      const proximas = new Set(atuais);
+                      if (aberto) proximas.add(msg.id);
+                      else proximas.delete(msg.id);
+                      return proximas;
+                    })}
+                    className="mt-2 w-full max-w-[90%] rounded-md border bg-background/60 px-2 py-1"
+                  >
                     <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 py-1 text-left text-xs font-medium">
                       <span>Evidências ({msg.evidencias.length})</span>
                       <ChevronDown className="size-3.5" aria-hidden="true" />

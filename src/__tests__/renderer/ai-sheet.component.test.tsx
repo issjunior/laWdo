@@ -89,6 +89,28 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     expect(onSendMessage).toHaveBeenCalledWith('Use redação mais objetiva.', 'reescrever', 'automatico')
   })
 
+  it('preserva o rascunho ao trocar de modo e só envia com Enter sem Shift', () => {
+    const onSendMessage = vi.fn()
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={onSendMessage}
+        onApplyResponse={vi.fn()}
+      />,
+    )
+
+    const campo = screen.getByRole('textbox', { name: 'Pedido livre ao assistente IA' })
+    fireEvent.change(campo, { target: { value: 'Texto a preservar.' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'Escrever' }))
+    expect(campo).toHaveValue('Texto a preservar.')
+    fireEvent.keyDown(campo, { key: 'Enter', shiftKey: true })
+    expect(onSendMessage).not.toHaveBeenCalled()
+    fireEvent.keyDown(campo, { key: 'Enter' })
+    expect(onSendMessage).toHaveBeenCalledWith('Texto a preservar.', 'escrever', 'automatico')
+  })
+
   it('permite limpar a conversa do contexto atual', () => {
     const onLimparConversa = vi.fn()
     render(
@@ -164,6 +186,39 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     expect(onNavegarEvidencia).toHaveBeenCalledWith(expect.objectContaining({ id: 'secao-0:1' }))
   })
 
+  it('mantém evidências abertas quando o estado sincronizado atualiza a resposta', () => {
+    const mensagem = {
+      id: 'consulta-1',
+      role: 'assistant' as const,
+      content: 'Foram examinadas três armas.',
+      timestamp: Date.now(),
+      evidencias: [{ id: 'secao-0:1', tipo: 'tabela' as const, ordem: 0, secaoId: 'secao-0', secaoTitulo: 'Armas', titulo: 'Tabela de armas', texto: 'Arma A', ancora: 'tabela-armas' }],
+    }
+    const { rerender } = render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[mensagem]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Evidências (1)' }))
+    expect(screen.getByText(/Tabela de armas/)).toBeVisible()
+    rerender(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[{ ...mensagem, content: 'Foram examinadas três armas, com evidência validada.' }]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/Tabela de armas/)).toBeVisible()
+  })
+
   it('oferece cancelamento explícito enquanto uma operação está em andamento', () => {
     const onCancelarOperacao = vi.fn()
 
@@ -228,6 +283,29 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'Contexto atual da IA' }))
     fireEvent.click(screen.getByRole('option', { name: 'Documento completo' }))
     expect(onSelecionarEscopo).toHaveBeenCalledWith(-1)
+  })
+
+  it('agrupa modelos por perfil e desabilita os indisponíveis', () => {
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        modeloSelecionado="flash"
+        opcoesModelo={[
+          { id: 'flash', rotulo: 'Flash', perfil: 'rapido', disponibilidade: 'disponivel' },
+          { id: 'pro', rotulo: 'Pro', perfil: 'maior_precisao', disponibilidade: 'removido' },
+        ]}
+        onSelecionarModelo={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Modelo da IA para esta sessão' }))
+    expect(screen.getByText('Rápido')).toBeInTheDocument()
+    expect(screen.getByText('Maior precisão')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Pro.*Removido/ })).toHaveAttribute('data-disabled')
   })
 
   it('oferece continuar do lote preservado após uma falha', () => {
