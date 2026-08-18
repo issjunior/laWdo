@@ -25,7 +25,7 @@ vi.mock('../../main/utils/logger.js', () => ({
   }),
 }))
 
-import { IaExecucaoService } from '../../main/services/ia-execucao.service'
+import { ErroExecucaoIa, IaExecucaoService } from '../../main/services/ia-execucao.service'
 
 const solicitacao = {
   operationId: 'operacao-1',
@@ -170,6 +170,311 @@ describe('ia-execucao.service — descrição de imagem', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [, segundaOpcoes] = fetchMock.mock.calls[1] as [string, RequestInit]
     expect(String(segundaOpcoes.body)).toContain('resposta anterior não respeitou o contrato')
+  })
+
+  it('expõe contagem inconsistente como conflito em vez de ocultar a resposta por erro genérico', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: 'Foram três armas.', evidencias: ['secao-1:1'], itens: ['arma A', 'arma A'], total: 3 }) } }],
+    }), { status: 200 }))
+
+    const resposta = await new IaExecucaoService().consultar(solicitacaoConsulta)
+
+    expect(resposta).toMatchObject({
+      estado: 'conflitante',
+      evidencias: [{ blocoId: 'secao-1:1' }],
+    })
+    expect(resposta.resposta).toContain('contagem inconsistente')
+  })
+
+  it('preserva somente o prazo de nova tentativa informado pelo cabeçalho do provedor ao atingir HTTP 429', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 429, headers: { 'retry-after': '0' } }))
+
+    let erro: unknown
+    try {
+      await new IaExecucaoService().consultar(solicitacaoConsulta)
+    } catch (causa: unknown) {
+      erro = causa
+    }
+
+    expect(erro).toBeInstanceOf(ErroExecucaoIa)
+    expect((erro as ErroExecucaoIa).message).toBe('LIMITE_REQUISICOES')
+    expect((erro as ErroExecucaoIa).limiteRequisicoes).toMatchObject({
+      provedor: 'gemini',
+      categoria: 'desconhecido',
+      fonteTempo: 'retry_after',
+    })
+    expect((erro as ErroExecucaoIa).limiteRequisicoes?.tentarNovamenteEm).toEqual(expect.any(Number))
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('interpreta RetryInfo e QuotaFailure do Gemini sem supor quando a cota será renovada', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      error: {
+        status: 'RESOURCE_EXHAUSTED',
+        details: [
+          { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '0s' },
+          {
+            '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+            violations: [{ quotaMetric: 'generativelanguage.googleapis.com/generate_content_input_token_count' }],
+          },
+        ],
+      },
+    }), { status: 429 }))
+
+    let erro: unknown
+    try {
+      await new IaExecucaoService().consultar(solicitacaoConsulta)
+    } catch (causa: unknown) {
+      erro = causa
+    }
+
+    expect((erro as ErroExecucaoIa).limiteRequisicoes).toMatchObject({
+      provedor: 'gemini',
+      categoria: 'tokens',
+      fonteTempo: 'retry_info',
+      identificadorCota: 'generativelanguage.googleapis.com/generate_content_input_token_count',
+    })
+    expect((erro as ErroExecucaoIa).limiteRequisicoes?.tentarNovamenteEm).toEqual(expect.any(Number))
+  })
+
+  it('registra no diagnóstico somente metadados seguros do HTTP 429 terminal', async () => {
+    const registrarDiagnostico = vi.fn()
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      error: {
+        status: 'RESOURCE_EXHAUSTED',
+        code: 429,
+        type: 'insufficient_quota',
+        message: 'segredo-do-corpo-do-provedor',
+        details: [
+          { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '10s' },
+          {
+            '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+            violations: [{
+              quotaMetric: 'generativelanguage.googleapis.com/generate_content_input_token_count',
+              quotaId: 'GenerateContentInputTokensPerModelPerMinute-FreeTier',
+            }],
+          },
+        ],
+      },
+    }), { status: 429, headers: { 'Content-Type': 'application/json; charset=utf-8' } }))
+    const servico = new IaExecucaoService()
+    servico.configurarRegistradorDiagnostico(registrarDiagnostico)
+
+    await expect(servico.consultar(solicitacaoConsulta)).rejects.toThrow('LIMITE_REQUISICOES')
+
+    expect(registrarDiagnostico).toHaveBeenCalledTimes(1)
+    expect(registrarDiagnostico).toHaveBeenCalledWith({
+      evento: 'limite_uso_ia',
+      codigo: 'HTTP_429',
+      operationId: 'consulta-1',
+      provedor: 'gemini',
+      modelo: 'gemini-2.5-flash',
+      statusHttp: 429,
+      tentativa: 1,
+      totalTentativas: 3,
+      categoriaCota: 'tokens',
+      fonteTempo: 'retry_info',
+      formatoCorpoResposta: 'objeto_json',
+      mimeResposta: 'application/json; charset=utf-8',
+      statusErroProvedor: 'RESOURCE_EXHAUSTED',
+      codigoErroProvedor: 429,
+      tipoErroProvedor: 'insufficient_quota',
+      tiposDetalhes: [
+        'type.googleapis.com/google.rpc.RetryInfo',
+        'type.googleapis.com/google.rpc.QuotaFailure',
+      ],
+      metricaCota: 'generativelanguage.googleapis.com/generate_content_input_token_count',
+      identificadorCota: 'GenerateContentInputTokensPerModelPerMinute-FreeTier',
+      retryDelayMs: expect.any(Number),
+    })
+    expect(JSON.stringify(registrarDiagnostico.mock.calls)).not.toContain('segredo-do-corpo-do-provedor')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('extrai apenas metadados permitidos quando o HTTP 429 traz um array JSON', async () => {
+    const registrarDiagnostico = vi.fn()
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([{
+      code: 'RESOURCE_EXHAUSTED',
+      type: 'rate_limit',
+      status: 'RESOURCE_EXHAUSTED',
+      message: 'segredo-do-array-do-provedor',
+      detalhesInternos: 'não registrar',
+    }]), { status: 429, headers: { 'Content-Type': 'application/json' } }))
+    const servico = new IaExecucaoService()
+    servico.configurarRegistradorDiagnostico(registrarDiagnostico)
+
+    await expect(servico.consultar(solicitacaoConsulta)).rejects.toThrow('LIMITE_REQUISICOES')
+
+    expect(registrarDiagnostico).toHaveBeenCalledWith(expect.objectContaining({
+      formatoCorpoResposta: 'array_json',
+      mimeResposta: 'application/json',
+      quantidadeItensCorpo: 1,
+      chavesPrimeiroItem: ['status', 'code', 'type'],
+      statusErroProvedor: 'RESOURCE_EXHAUSTED',
+      codigoErroProvedor: 'RESOURCE_EXHAUSTED',
+      tipoErroProvedor: 'rate_limit',
+    }))
+    expect(JSON.stringify(registrarDiagnostico.mock.calls)).not.toContain('segredo-do-array-do-provedor')
+    expect(JSON.stringify(registrarDiagnostico.mock.calls)).not.toContain('não registrar')
+  })
+
+  it('não repete HTTP 429 nem inventa prazo quando o Gemini não oferece RetryInfo ou cabeçalho', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { status: 'RESOURCE_EXHAUSTED' } }), { status: 429 }))
+
+    let erro: unknown
+    try {
+      await new IaExecucaoService().consultar(solicitacaoConsulta)
+    } catch (causa: unknown) {
+      erro = causa
+    }
+
+    expect((erro as ErroExecucaoIa).limiteRequisicoes).toEqual({
+      provedor: 'gemini',
+      categoria: 'desconhecido',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('cruza o catálogo local com a disponibilidade remota sem trocar o modelo automaticamente', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'gemini-2.5-flash' }],
+    }), { status: 200 }))
+
+    const modelos = await new IaExecucaoService().listarModelosDisponiveis()
+
+    expect(modelos).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'gemini-2.5-flash', disponibilidade: 'disponivel' }),
+      expect.objectContaining({ id: 'gemini-2.5-pro', disponibilidade: 'removido' }),
+    ]))
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://generativelanguage.googleapis.com/v1beta/openai/models',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer chave-teste' }) }),
+    )
+  })
+
+  it('extrai blocos extensos em paralelo limitado e consolida sem reenviar o documento completo', async () => {
+    const consultaExtensa = {
+      ...solicitacaoConsulta,
+      blocos: ['A', 'B', 'C'].map((arma, indice) => ({
+        id: `secao-1:${indice + 1}`,
+        tipo: 'paragrafo' as const,
+        ordem: indice,
+        secaoId: 'secao-1',
+        secaoTitulo: 'Armas',
+        titulo: `Arma ${arma}`,
+        ancora: `arma-${arma}`,
+        texto: `${arma} `.repeat(10_000),
+      })),
+    }
+    for (const indice of [1, 2, 3]) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: `Arma ${indice}.`, evidencias: [`secao-1:${indice}`], itens: [`arma ${indice}`], total: 1 }) } }],
+      }), { status: 200 }))
+    }
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: 'Foram três armas.', evidencias: ['secao-1:1', 'secao-1:2', 'secao-1:3'], itens: ['arma 1', 'arma 2', 'arma 3'], total: 3 }) } }],
+    }), { status: 200 }))
+
+    const resposta = await new IaExecucaoService().consultar(consultaExtensa)
+
+    expect(resposta.total).toBe(3)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    const [, opcoesConsolidacao] = fetchMock.mock.calls[3] as [string, RequestInit]
+    const corpoConsolidacao = JSON.parse(String(opcoesConsolidacao.body)) as { messages: Array<{ content: string }> }
+    expect(corpoConsolidacao.messages[1].content).toContain('extracoes')
+    expect(corpoConsolidacao.messages[1].content).not.toContain('A A A A A A A A')
+  })
+
+  it('consolida as evidências da fixture B-602 distribuídas entre três armas', async () => {
+    const consultaB602 = {
+      ...solicitacaoConsulta,
+      operationId: 'consulta-b602-1',
+      pergunta: 'Quais armas tiveram exame de prestabilidade?',
+      blocos: [
+        ['arma-a', 'Arma A. Exame de prestabilidade realizado.'],
+        ['arma-b', 'Arma B. Coleta de padrão balístico realizada.'],
+        ['arma-c', 'Arma C. Exames de prestabilidade e coleta de padrão balístico realizados.'],
+      ].map(([id, descricao], ordem) => ({
+        id,
+        tipo: 'paragrafo' as const,
+        ordem,
+        secaoId: 'b602-armas',
+        secaoTitulo: 'Armas examinadas',
+        titulo: `Arma ${String.fromCharCode(65 + ordem)}`,
+        ancora: id,
+        texto: `${descricao} `.repeat(9000),
+      })),
+    }
+    const extracoes = [
+      { id: 'arma-a', itens: ['Arma A'], resposta: 'A arma A teve exame de prestabilidade.' },
+      { id: 'arma-b', itens: [], resposta: 'A arma B não teve exame de prestabilidade.' },
+      { id: 'arma-c', itens: ['Arma C'], resposta: 'A arma C teve exame de prestabilidade.' },
+    ];
+    for (const extracao of extracoes) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: extracao.resposta, evidencias: [extracao.id], itens: extracao.itens, total: extracao.itens.length }) } }],
+      }), { status: 200 }));
+    }
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: 'As armas A e C tiveram exame de prestabilidade.', evidencias: ['arma-a', 'arma-c'], itens: ['Arma A', 'Arma C'], total: 2 }) } }],
+    }), { status: 200 }));
+
+    const resposta = await new IaExecucaoService().consultar(consultaB602);
+
+    expect(resposta).toMatchObject({
+      estado: 'respondida',
+      total: 2,
+      itens: ['Arma A', 'Arma C'],
+      evidencias: [{ blocoId: 'arma-a' }, { blocoId: 'arma-c' }],
+    });
+    expect(resposta.recomendacao).toContain('Gemini 2.5 Pro');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  })
+
+  it('consolida o total e os dois exames da fixture B-602 sem misturar as armas', async () => {
+    const consultaB602 = {
+      ...solicitacaoConsulta,
+      operationId: 'consulta-b602-mapeamento',
+      pergunta: 'Organize as armas e seus exames em uma tabela.',
+      blocos: [
+        ['arma-a', 'Arma A. Exame de prestabilidade realizado.'],
+        ['arma-b', 'Arma B. Coleta de padrão balístico realizada.'],
+        ['arma-c', 'Arma C. Exames de prestabilidade e coleta de padrão balístico realizados.'],
+      ].map(([id, texto], ordem) => ({
+        id,
+        tipo: 'tabela' as const,
+        ordem,
+        secaoId: 'b602-armas',
+        secaoTitulo: 'Armas examinadas',
+        titulo: `Arma ${String.fromCharCode(65 + ordem)}`,
+        ancora: id,
+        texto: `${texto} `.repeat(9_000),
+      })),
+    };
+    for (const [id, item] of [['arma-a', 'Arma A'], ['arma-b', 'Arma B'], ['arma-c', 'Arma C']]) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ estado: 'respondida', resposta: item, evidencias: [id], itens: [item], total: 1 }) } }],
+      }), { status: 200 }));
+    }
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        estado: 'respondida',
+        resposta: '| Arma | Prestabilidade | Padrão balístico |\n| --- | --- | --- |\n| A | Sim | Não |\n| B | Não | Sim |\n| C | Sim | Sim |',
+        evidencias: ['arma-a', 'arma-b', 'arma-c'],
+        itens: ['Arma A', 'Arma B', 'Arma C'],
+        total: 3,
+      }) } }],
+    }), { status: 200 }));
+
+    const resposta = await new IaExecucaoService().consultar(consultaB602);
+
+    expect(resposta.total).toBe(3);
+    expect(resposta.itens).toEqual(['Arma A', 'Arma B', 'Arma C']);
+    expect(resposta.resposta).toContain('| A | Sim | Não |');
+    expect(resposta.resposta).toContain('| B | Não | Sim |');
+    expect(resposta.resposta).toContain('| C | Sim | Sim |');
+    expect(resposta.evidencias.map(evidencia => evidencia.blocoId)).toEqual(['arma-a', 'arma-b', 'arma-c']);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   })
 
   it('repete sem response_format quando o modelo não aceita JSON mode', async () => {

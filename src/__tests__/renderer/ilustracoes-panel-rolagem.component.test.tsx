@@ -65,4 +65,19 @@ describe('rolagem do painel de ilustrações', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 170, behavior: 'smooth' })
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
+
+  it('padroniza o selo visual de figuras de exemplo', () => {
+    render(
+      <IlustracoesPanel
+        laudoId="laudo-1"
+        onInsertImage={vi.fn()}
+        onRefreshHtml={vi.fn()}
+        figurasNoEditor={[{ ...figura, id: 'figura-exemplo', dummy: true }]}
+      />,
+    )
+
+    expect(screen.getByText('Fig. 1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Figura 1, exemplo')).toBeInTheDocument()
+    expect(screen.queryByText('Fig. Exemplo')).not.toBeInTheDocument()
+  })
 })

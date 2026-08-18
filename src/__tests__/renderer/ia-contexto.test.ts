@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolverHtmlContextoIa, resolverTextoContextoIa } from '@/lib/ia-contexto'
+import { criarChaveMemoriaConsultaIa } from '@/lib/ia-consulta-contexto'
 
 describe('contexto resolvido da IA', () => {
   it('substitui placeholders por dados reais sem alterar o HTML original', () => {
@@ -41,5 +42,15 @@ describe('contexto resolvido da IA', () => {
     expect(resultado).toContain('Revólver')
     expect(resultado).toContain('Prestabilidade')
     expect(resultado).not.toContain('{{')
+  })
+
+  it('isola a memória consultiva quando o fingerprint do escopo muda', () => {
+    const memoria = new Map<string, Array<{ pergunta: string; resposta: string }>>()
+    const chaveAnterior = criarChaveMemoriaConsultaIa('secao', 2, 'fingerprint-anterior')
+    const chaveAtual = criarChaveMemoriaConsultaIa('secao', 2, 'fingerprint-atual')
+    memoria.set(chaveAnterior, [{ pergunta: 'Qual é a arma?', resposta: 'Arma A.' }])
+
+    expect(chaveAtual).not.toBe(chaveAnterior)
+    expect(memoria.get(chaveAtual)).toBeUndefined()
   })
 })

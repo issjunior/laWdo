@@ -306,6 +306,23 @@ Os canais deverão ser registrados em conjunto no handler, `ALLOWED_CHANNELS`, p
 - Correção da rolagem automática observada ao abrir laudos com imagens: *reflow*/*scroll anchoring*, remontagem do TinyMCE e efeitos concorrentes continuam como hipóteses; nenhuma será adotada antes de uma captura causal reproduzível.
 - Smoke manual da REP 190-2026, incluindo consulta de continuação em tabela com valores de placeholders resolvidos.
 
+## Checkpoint — 18/08/2026
+
+### Layout híbrido de rolagem
+
+- O laudo deixa de ficar confinado a um card de altura fixa: a rolagem principal é a da página da aplicação.
+- O editor único mantém a altura estável de 560 px e cada editor por seção 400 px, com rolagem interna nativa. O crescimento automático pelo plugin `autoresize` não é usado, pois a integração local não concluiu a inicialização em laudos reais.
+- O painel lateral ativo e o trilho de ferramentas permanecem `sticky` na viewport disponível. A conversa da IA e a lista de ilustrações mantêm rolagem própria sem limitar a altura do laudo.
+- A largura dos painéis continua redimensionável e persistida. Abrir, recolher, destacar ou reencaixar um painel não pode alterar a altura nem a posição de leitura do documento.
+- O auto-scroll de novas mensagens é limitado ao histórico interno do painel de IA; ele não pode rolar o contêiner principal da página nem alterar a posição de leitura do laudo.
+- A navegação por evidência e por miniatura continua sendo programática e pode rolar o editor até o alvo; rolagem originada por essa ação é esperada.
+
+### Verificação automatizada
+
+- `PainelLateralRedimensionavel` cobre que o conteúdo lateral e o trilho usam posicionamento fixo relativo à viewport, sem remontar o editor ao abrir um painel.
+- `AssistenteIaPanel` cobre que a atualização do histórico não usa `scrollIntoView`, impedindo o auto-scroll de alcançar ancestrais roláveis do laudo.
+- A validação do comportamento visual completo permanece manual, pois depende do layout real do Electron, da altura da tela e de documentos com conteúdo suficiente para acionar o limite do editor.
+
 ## Premissas
 
 - A fonte factual será exclusivamente o snapshot visível do editor.
