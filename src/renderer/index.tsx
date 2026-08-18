@@ -8,7 +8,7 @@ import type {
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
 import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
-import type { AtualizacaoPainelIa, ComandoPainelIa, PlanoExecucaoIaResumo, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
+import type { AtualizacaoPainelIa, ComandoPainelIa, LimiteUsoIa, PlanoExecucaoIaResumo, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -28,6 +28,7 @@ interface IpcRespostaLegada {
   data?: IpcDadoLegado;
   user?: IpcDadoLegado;
   error: string;
+  limiteRequisicoes?: LimiteUsoIa;
   message?: string;
   total?: number;
   count?: number;

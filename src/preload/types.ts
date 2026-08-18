@@ -59,6 +59,14 @@ export interface DashboardResponse<T> {
   error?: string
 }
 
+export interface LimiteUsoIaResposta {
+  provedor: 'groq' | 'gemini'
+  categoria: 'requisicoes' | 'tokens' | 'diario' | 'gasto' | 'desconhecido'
+  tentarNovamenteEm?: number
+  fonteTempo?: 'retry_info' | 'retry_after' | 'cabecalho_provedor'
+  identificadorCota?: string
+}
+
 /**
  * Resposta padrão para operações de usuário
  */
@@ -67,6 +75,7 @@ export interface UserResponse<T = unknown> {
   data?: T
   message?: string
   error?: string
+  limiteRequisicoes?: LimiteUsoIaResposta
   total?: number
 }
 

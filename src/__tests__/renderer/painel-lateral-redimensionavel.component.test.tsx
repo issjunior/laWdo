@@ -83,4 +83,30 @@ describe('PainelLateralRedimensionavel', () => {
     fireEvent.click(reindexarSecoes)
     expect(onReindexarSecoes).toHaveBeenCalledTimes(1)
   })
+
+  it('mantém o conteúdo lateral fixo na viewport sem limitar a altura do editor', () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null)
+    render(
+      <PainelLateralRedimensionavel
+        tipo="ia"
+        chavePersistencia="painel-teste"
+        larguraPadrao={460}
+        larguraMinima={360}
+        larguraMaxima={640}
+        recolhido={false}
+        iaDestacada={false}
+        ilustracoesEmJanela={false}
+        operacaoEmAndamento={false}
+        onAlternarPainelIa={vi.fn()}
+        onAlternarPainelIlustracoes={vi.fn()}
+        onReindexarSecoes={vi.fn()}
+        conteudoPainel={<div>Assistente fixo</div>}
+      >
+        <div>Editor expansível</div>
+      </PainelLateralRedimensionavel>,
+    )
+
+    expect(screen.getByText('Assistente fixo').parentElement).toHaveClass('sticky', 'top-4')
+    expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
+  })
 })

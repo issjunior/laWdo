@@ -1,5 +1,13 @@
 import type { BlocoContextoIa } from '@shared/types/ia.types'
 
+export function criarChaveMemoriaConsultaIa(
+  escopo: 'secao' | 'laudo_completo',
+  indice: number,
+  fingerprint: string,
+): string {
+  return `${escopo}:${indice}:${fingerprint}`
+}
+
 const TIPOS_BLOCO: Record<string, BlocoContextoIa['tipo']> = {
   H1: 'titulo', H2: 'titulo', H3: 'titulo', H4: 'titulo', H5: 'titulo', H6: 'titulo',
   P: 'paragrafo', LI: 'lista', TABLE: 'tabela', FIGURE: 'figura', FIGCAPTION: 'legenda',
