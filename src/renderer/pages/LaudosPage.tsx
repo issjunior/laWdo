@@ -3358,7 +3358,7 @@ export const LaudosPage: React.FC = () => {
 
     return (
       <TooltipProvider>
-        <div className="flex h-full min-h-0 w-full flex-col gap-4 px-4 pb-4 md:px-8 md:pb-6">
+        <div className="flex w-full flex-col gap-4 px-4 pb-4 md:px-8 md:pb-6">
         <CabecalhoEditorLaudo
           repNumero={editando.rep_numero}
           tipoExameCodigo={editando.tipo_exame_codigo}
@@ -3379,7 +3379,7 @@ export const LaudosPage: React.FC = () => {
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {success && <Alert><AlertDescription>{success}</AlertDescription></Alert>}
 
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Card className="flex flex-col overflow-visible">
           <CardHeader className="flex-shrink-0 pb-4">
             <div>
               <CardTitle className="text-lg">Laudo pericial</CardTitle>
@@ -3395,7 +3395,7 @@ export const LaudosPage: React.FC = () => {
               onModoOrganizacaoChange={handleEditorModeChange}
             />
           </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-hidden p-0 px-6 pb-6">
+          <CardContent className="overflow-visible p-0 px-6 pb-6">
             <PainelLateralRedimensionavel
               tipo={painelLateralAtivo}
               chavePersistencia={painelLateralAtivo === 'ilustracoes'
@@ -3430,7 +3430,7 @@ export const LaudosPage: React.FC = () => {
               onReindexarSecoes={handleReindexarSecoes}
               conteudoPainel={conteudoPainelLateral}
             >
-              <div data-diagnostico-id="laudos.editor-scroll" className="min-h-0 flex-1 overflow-y-auto pr-2 [overflow-anchor:none]">
+              <div data-diagnostico-id="laudos.editor-scroll" className="pr-2 [overflow-anchor:none]">
                 {quantidadeBlocosSuprimidos > 0 && (
                   <Alert className="mb-3">
                     <AlertDescription className="flex items-center justify-between gap-3">

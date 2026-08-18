@@ -15,6 +15,33 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     Element.prototype.scrollIntoView = vi.fn()
   })
 
+  it('mantém o auto-scroll restrito ao histórico interno', () => {
+    const scrollTo = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    })
+
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="Documento completo"
+        editorId="laudo-single-editor"
+        messages={[{
+          id: 'mensagem-auto-scroll',
+          role: 'assistant',
+          content: 'Resposta recebida.',
+          timestamp: Date.now(),
+        }]}
+        loading={false}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+      />,
+    )
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+  })
+
   it('deve apresentar contexto exclusivo e iniciar a descrição da imagem selecionada', () => {
     const onDescreverImagens = vi.fn()
 

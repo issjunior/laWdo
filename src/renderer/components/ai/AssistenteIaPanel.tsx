@@ -145,15 +145,20 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   const [tamanhoResposta, setTamanhoResposta] = useState<'automatico' | 'curta' | 'media' | 'longa'>('automatico');
   const [segundosEmProcessamento, setSegundosEmProcessamento] = useState(0);
   const [evidenciasAbertas, setEvidenciasAbertas] = useState<Set<string>>(() => new Set());
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mensagensContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [modelName, setModelName] = useState<string>('Carregando...');
   const [statusModelo, setStatusModelo] = useState<'carregando' | 'configurado' | 'indisponivel'>('carregando');
 
-  // Auto-scroll para a última mensagem
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const mensagensContainer = mensagensContainerRef.current;
+    if (!mensagensContainer) return;
+
+    mensagensContainer.scrollTo({
+      top: mensagensContainer.scrollHeight,
+      behavior: 'smooth',
+    });
   }, [messages, loading]);
 
   useEffect(() => {
@@ -320,7 +325,11 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
         </header>
 
         {/* Área de mensagens */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div
+          ref={mensagensContainerRef}
+          data-diagnostico-id="painel-ia.mensagens"
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        >
           <div className="space-y-4">
             {!imagemSelecionada && !loading && messages.length === 0 && opcoesEscopo.length > 0 && (
               <div className="space-y-3 py-4">
@@ -559,7 +568,6 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
               </Button>
             )}
 
-            <div ref={messagesEndRef} />
           </div>
         </div>
 
