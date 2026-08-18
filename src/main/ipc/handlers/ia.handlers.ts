@@ -366,7 +366,11 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
         retomadasPorRenderer.set(event.sender.id, retomadas);
         return { success: false, error: mensagem, retomada: error.retomada };
       }
-      return { success: false, error: mensagem };
+      return {
+        success: false,
+        error: mensagem,
+        ...(error instanceof ErroExecucaoIa && error.limiteRequisicoes ? { limiteRequisicoes: error.limiteRequisicoes } : {}),
+      };
     }
   });
 
@@ -387,7 +391,19 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     } catch (error: unknown) {
       const mensagem = error instanceof Error ? error.message : 'ERRO_INTERNO';
       logError('Erro ao consultar IA', { codigo: mensagem.split(':')[0] });
-      return { success: false, error: mensagem };
+      return {
+        success: false,
+        error: mensagem,
+        ...(error instanceof ErroExecucaoIa && error.limiteRequisicoes ? { limiteRequisicoes: error.limiteRequisicoes } : {}),
+      };
+    }
+  });
+
+  ipcMain.handle('ia:listar-modelos', async () => {
+    try {
+      return { success: true, data: await iaExecucaoService.listarModelosDisponiveis() };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'ERRO_INTERNO' };
     }
   });
 

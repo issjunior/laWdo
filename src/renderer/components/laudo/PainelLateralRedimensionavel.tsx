@@ -117,10 +117,10 @@ export function PainelLateralRedimensionavel({
   const rotuloPainel = tipo === 'ilustracoes' ? 'ilustrações' : 'Assistente IA'
 
   return (
-    <div className="flex h-full min-h-0 min-w-0">
+    <div className="flex min-w-0 items-start">
       <ResizablePanelGroup
         orientation="horizontal"
-        className="min-h-0 min-w-0 flex-1"
+        className="h-auto min-w-0 flex-1 items-start"
         onLayoutChanged={(_layout, detalhes) => {
           if (detalhes.isUserInteraction && painelExpandido) {
             persistirLargura(ultimaLargura.current)
@@ -128,7 +128,7 @@ export function PainelLateralRedimensionavel({
         }}
       >
         <ResizablePanel id="editor-laudo" minSize={560}>
-          <div className="h-full min-h-0 min-w-0">{children}</div>
+          <div className="min-w-0">{children}</div>
         </ResizablePanel>
         {painelExpandido && (
           <>
@@ -144,7 +144,7 @@ export function PainelLateralRedimensionavel({
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="h-full min-h-0 min-w-0 overflow-hidden border-l bg-background">
+              <div className="sticky top-4 h-[calc(100dvh-3rem)] min-h-[32rem] min-w-0 overflow-hidden border-l bg-background">
                 {conteudoPainel}
               </div>
             </ResizablePanel>
@@ -154,7 +154,7 @@ export function PainelLateralRedimensionavel({
 
       <aside
         aria-label="Painéis do laudo"
-        className="flex w-10 shrink-0 flex-col items-center gap-1 border-l bg-muted/20 px-1 py-2"
+        className="sticky top-4 flex w-10 shrink-0 self-start flex-col items-center gap-1 border-l bg-muted/20 px-1 py-2"
       >
         <BotaoTrilho
           titulo="Painel de IA"

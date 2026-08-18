@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { PanelRightOpen } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SyncState {
@@ -82,7 +82,12 @@ const IlustracoesPanelWindow: React.FC = () => {
     toast.success('Figura enviada para substituição');
   }, [sendAction]);
 
-  const handleVoltarAoEditor = () => {
+  const handleGerarLegenda = useCallback(async (imageId: string): Promise<string | null> => {
+    sendAction('generateCaption', imageId);
+    return null;
+  }, [sendAction]);
+
+  const handleReintegrarAoEditor = () => {
     window.ipcAPI.ilustracoes.sendAction('popIn');
     window.ipcAPI.ilustracoes.closePanel();
   };
@@ -99,15 +104,16 @@ const IlustracoesPanelWindow: React.FC = () => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleVoltarAoEditor}
+          onClick={handleReintegrarAoEditor}
           className="h-7 text-xs gap-1"
+          aria-label="Reintegrar ao editor"
         >
-          <ArrowLeft size={14} />
-          Voltar ao editor
+          <PanelRightOpen size={14} />
+          Reintegrar ao editor
         </Button>
       </header>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {!ready ? (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
             Aguardando sincronização...
@@ -124,6 +130,7 @@ const IlustracoesPanelWindow: React.FC = () => {
             onSyncToggle={handleSyncToggle}
             onScrollToFigure={handleScrollToFigure}
             onReplaceImage={handleReplaceImage}
+            onGerarLegenda={handleGerarLegenda}
             figurasNoEditor={figurasNoEditor}
             syncEnabled={syncEnabled}
             figuraAtivaId={figuraAtivaId}

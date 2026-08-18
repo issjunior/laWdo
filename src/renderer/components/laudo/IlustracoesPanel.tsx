@@ -293,6 +293,10 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   const [legenda, setLegenda] = useState(imagem.legenda);
   const [gerandoLegenda, setGerandoLegenda] = useState(false);
   const onUpdateLegendaRef = useRef(onUpdateLegenda);
+
+  useEffect(() => {
+    setLegenda(imagem.legenda);
+  }, [imagem.legenda]);
   onUpdateLegendaRef.current = onUpdateLegenda;
   const itemRef = useRef<HTMLDivElement>(null);
 
@@ -345,8 +349,12 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
-        <Badge className="absolute top-0 left-0 h-4 px-1 text-[9px] rounded-none rounded-br" variant={imagem.dummy ? 'outline' : 'secondary'}>
-          {imagem.dummy ? 'Fig. Exemplo' : `Fig. ${index + 1}`}
+        <Badge
+          className="absolute top-0 left-0 h-4 px-1 text-[9px] rounded-none rounded-br"
+          variant="secondary"
+          aria-label={imagem.dummy ? `Figura ${index + 1}, exemplo` : `Figura ${index + 1}`}
+        >
+          {`Fig. ${index + 1}`}
         </Badge>
       </div>
       <div className="flex-1 min-w-0">
@@ -712,7 +720,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
         {loading ? (
           <div className="text-center py-10 text-xs text-muted-foreground">Carregando...</div>
         ) : filteredImagens.length === 0 ? (

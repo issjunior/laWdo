@@ -15,6 +15,7 @@ import { DiagnosticoPipeService } from './services/diagnostico-pipe.service.js';
 import { DiagnosticoInterfaceService } from './services/diagnostico-interface.service.js';
 import { DiagnosticoCapturaService } from './services/diagnostico-captura.service.js';
 import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.service.js';
+import { iaExecucaoService } from './services/ia-execucao.service.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -385,11 +386,15 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     }));
   });
   sessaoDiagnostico = sessao;
+  iaExecucaoService.configurarRegistradorDiagnostico(dados => {
+    registrarEventoDiagnostico('erro', 'warn', dados, mainWindow ?? undefined);
+  });
   pipeDiagnostico = pipe;
   log.info(`Modo diagnóstico pronto (${ativa.sessionId.slice(0, 8)}).`);
 }
 
 async function encerrarDiagnosticoAssistido(): Promise<void> {
+  iaExecucaoService.configurarRegistradorDiagnostico();
   await capturaDiagnostico?.interromper('Aplicativo encerrado durante a captura.').catch(() => undefined);
   if (temporizadorAtrasoEventLoopDiagnostico) clearInterval(temporizadorAtrasoEventLoopDiagnostico);
   temporizadorAtrasoEventLoopDiagnostico = null;
