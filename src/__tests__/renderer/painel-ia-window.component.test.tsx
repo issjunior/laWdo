@@ -99,6 +99,26 @@ describe('PainelIaWindow', () => {
     act(() => receberEstado?.({
       tipo: 'delta',
       revisao: 3,
+      alteracoes: {
+        mensagens: [{
+          id: 'mensagem-1',
+          role: 'assistant',
+          content: 'Texto revisado.',
+          timestamp: 1,
+          evidencias: [{ id: 'secao-0:1', tipo: 'tabela', ordem: 0, secaoId: 'secao-0', secaoTitulo: 'Armas', titulo: 'Tabela de armas', texto: 'Arma A', ancora: 'tabela-armas' }],
+        }],
+      },
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Evidências (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: /Ver no laudo/ }));
+    expect(painelEnviarComando).toHaveBeenCalledWith({
+      tipo: 'navegar_evidencia',
+      evidencia: expect.objectContaining({ id: 'secao-0:1' }),
+    });
+
+    act(() => receberEstado?.({
+      tipo: 'delta',
+      revisao: 4,
       alteracoes: { imagemSelecionada: true },
     }));
     fireEvent.click(screen.getByRole('button', { name: 'Descrever novamente' }));
@@ -106,7 +126,7 @@ describe('PainelIaWindow', () => {
 
     act(() => receberEstado?.({
       tipo: 'delta',
-      revisao: 4,
+      revisao: 5,
       alteracoes: { carregando: true },
     }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
@@ -114,7 +134,7 @@ describe('PainelIaWindow', () => {
 
     act(() => receberEstado?.({
       tipo: 'delta',
-      revisao: 5,
+      revisao: 6,
       alteracoes: {
         carregando: false,
         retomada: { retomadaId: 'retomada-1', planoId: 'plano-1', lotesConcluidos: 1, totalLotes: 2 },
@@ -166,5 +186,34 @@ describe('PainelIaWindow', () => {
       alteracoes: { titulo: 'Estado atrasado' },
     }));
     expect(document.body).not.toHaveTextContent('Estado atrasado');
+  });
+
+  it('recebe a disponibilidade do editor proprietário ao listar modelos', () => {
+    renderizarJanela();
+    const estado: EstadoPainelIa = {
+      revisao: 1,
+      titulo: 'Documento completo',
+      carregando: false,
+      erro: null,
+      editorDisponivel: true,
+      imagemSelecionada: false,
+      contextoImagem: false,
+      modoAplicacao: 'inserir',
+      progresso: null,
+      planoPendente: null,
+      retomada: null,
+      mensagens: [],
+      escopos: [],
+      provedorIa: 'gemini',
+      modeloSelecionado: 'gemini-2.5-flash',
+      modelosIa: [
+        { id: 'gemini-2.5-flash', rotulo: 'Gemini 2.5 Flash', provedor: 'gemini', disponibilidade: 'disponivel' },
+        { id: 'gemini-2.5-pro', rotulo: 'Gemini 2.5 Pro', provedor: 'gemini', disponibilidade: 'removido' },
+      ],
+    };
+
+    act(() => receberEstado?.({ tipo: 'snapshot', estado }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Modelo da IA para esta sessão' }));
+    expect(screen.getByRole('option', { name: /Gemini 2.5 Pro.*Removido/ })).toHaveAttribute('data-disabled');
   });
 });

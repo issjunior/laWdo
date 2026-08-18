@@ -4,16 +4,19 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { extrairTabelaMarkdownIa, tabelaMarkdownParaHtmlSeguro, tabelaMarkdownParaTexto } from '@/lib/ia-resposta-formatada';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, PanelRightOpen, Trash2, X } from 'lucide-react';
-import type { AcaoIa, ModoInteracaoIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
+import { Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, PanelRightOpen, Trash2, X, ChevronDown, MapPin } from 'lucide-react';
+import type { AcaoIa, BlocoContextoIa, EstadoConsultaIa, ModoInteracaoIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
 
 type AcaoPainelIa = AcaoIa | 'descrever_imagem';
 
@@ -30,6 +33,10 @@ export interface ChatMessage {
   permiteAplicacao?: boolean;
   permiteReenvio?: boolean;
   tamanhoResposta?: 'automatico' | 'curta' | 'media' | 'longa';
+  evidencias?: BlocoContextoIa[];
+  estadoConsulta?: EstadoConsultaIa;
+  modeloConsulta?: string;
+  recomendacao?: string;
 }
 
 const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
@@ -61,6 +68,7 @@ interface AssistenteIaPanelProps {
   loading?: boolean;
   progresso?: ProgressoIa | null;
   error?: string | null;
+  avisoLimite?: { mensagem: string; tentarNovamenteEm?: number } | null;
   opcoesEscopo?: Array<{ id: number; titulo: string }>;
   escopoSelecionado?: number | null;
   onSelecionarEscopo?: (id: number) => void;
@@ -76,6 +84,10 @@ interface AssistenteIaPanelProps {
   onReenviarMensagem?: (mensagemId: string) => void;
   imagemSelecionada?: boolean;
   contextoImagem?: boolean;
+  onNavegarEvidencia?: (evidencia: BlocoContextoIa) => void;
+  opcoesModelo?: Array<{ id: string; rotulo: string; perfil?: 'rapido' | 'equilibrado' | 'maior_precisao'; disponibilidade?: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }>;
+  modeloSelecionado?: string;
+  onSelecionarModelo?: (modelo: string) => void;
 }
 
 type ContextoIaResposta = {
@@ -107,6 +119,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   loading = false,
   progresso = null,
   error = null,
+  avisoLimite = null,
   opcoesEscopo = [],
   escopoSelecionado = null,
   onSelecionarEscopo,
@@ -122,20 +135,30 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   onReenviarMensagem,
   imagemSelecionada = false,
   contextoImagem = false,
+  onNavegarEvidencia,
+  opcoesModelo = [],
+  modeloSelecionado,
+  onSelecionarModelo,
 }) => {
   const [input, setInput] = useState('');
   const [modoInteracao, setModoInteracao] = useState<ModoInteracaoIa>('perguntar');
   const [tamanhoResposta, setTamanhoResposta] = useState<'automatico' | 'curta' | 'media' | 'longa'>('automatico');
   const [segundosEmProcessamento, setSegundosEmProcessamento] = useState(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [evidenciasAbertas, setEvidenciasAbertas] = useState<Set<string>>(() => new Set());
+  const mensagensContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [modelName, setModelName] = useState<string>('Carregando...');
   const [statusModelo, setStatusModelo] = useState<'carregando' | 'configurado' | 'indisponivel'>('carregando');
 
-  // Auto-scroll para a última mensagem
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const mensagensContainer = mensagensContainerRef.current;
+    if (!mensagensContainer) return;
+
+    mensagensContainer.scrollTo({
+      top: mensagensContainer.scrollHeight,
+      behavior: 'smooth',
+    });
   }, [messages, loading]);
 
   useEffect(() => {
@@ -275,11 +298,38 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                 </Select>
               </div>
             )}
+            {opcoesModelo.length > 0 && (
+              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <span className="shrink-0">Modelo:</span>
+                <Select value={modeloSelecionado} onValueChange={onSelecionarModelo} disabled={loading || !onSelecionarModelo}>
+                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-xs shadow-sm focus:ring-1" aria-label="Modelo da IA para esta sessão">
+                    <SelectValue placeholder="Modelo configurado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['rapido', 'equilibrado', 'maior_precisao'] as const).map(perfil => {
+                      const modelos = opcoesModelo.filter(modelo => (modelo.perfil || 'equilibrado') === perfil);
+                      if (!modelos.length) return null;
+                      const rotuloPerfil = perfil === 'rapido' ? 'Rápido' : perfil === 'equilibrado' ? 'Equilibrado' : 'Maior precisão';
+                      return <SelectGroup key={perfil}>
+                        <SelectLabel>{rotuloPerfil}</SelectLabel>
+                        {modelos.map(modelo => <SelectItem key={modelo.id} value={modelo.id} className="text-xs" disabled={modelo.disponibilidade === 'removido' || modelo.disponibilidade === 'sem_chave'}>
+                          {modelo.rotulo}{modelo.disponibilidade === 'nao_verificado' ? ' · Não verificado' : modelo.disponibilidade === 'removido' ? ' · Removido' : modelo.disponibilidade === 'sem_chave' ? ' · Sem chave' : ''}
+                        </SelectItem>)}
+                      </SelectGroup>;
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </header>
 
         {/* Área de mensagens */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div
+          ref={mensagensContainerRef}
+          data-diagnostico-id="painel-ia.mensagens"
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        >
           <div className="space-y-4">
             {!imagemSelecionada && !loading && messages.length === 0 && opcoesEscopo.length > 0 && (
               <div className="space-y-3 py-4">
@@ -356,6 +406,18 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   {msg.role === 'assistant' && extrairTabelaMarkdownIa(msg.content)
                     ? <TabelaResposta texto={msg.content} />
                     : <div className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.content}</div>}
+                  {msg.role === 'assistant' && msg.estadoConsulta && msg.estadoConsulta !== 'respondida' && (
+                    <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                      {msg.estadoConsulta === 'insuficiente'
+                        ? 'O escopo atual não contém evidências suficientes para uma conclusão completa.'
+                        : 'Há informações conflitantes no escopo. Revise as evidências antes de usar a resposta.'}
+                    </p>
+                  )}
+                  {msg.role === 'assistant' && msg.recomendacao && (
+                    <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                      {msg.recomendacao}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   {msg.acao && (
@@ -371,6 +433,11 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   <span className="text-[10px] text-muted-foreground">
                     {formatTime(msg.timestamp)}
                   </span>
+                  {msg.role === 'assistant' && msg.modeloConsulta && (
+                    <span className="max-w-32 truncate text-[10px] text-muted-foreground" title={msg.modeloConsulta}>
+                      {msg.modeloConsulta}
+                    </span>
+                  )}
                   {msg.role === 'user' && msg.permiteReenvio && onReenviarMensagem && (
                     <Button
                       variant="ghost"
@@ -413,6 +480,35 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                     </>
                   )}
                 </div>
+                {msg.role === 'assistant' && msg.evidencias && msg.evidencias.length > 0 && (
+                  <Collapsible
+                    open={evidenciasAbertas.has(msg.id)}
+                    onOpenChange={aberto => setEvidenciasAbertas(atuais => {
+                      const proximas = new Set(atuais);
+                      if (aberto) proximas.add(msg.id);
+                      else proximas.delete(msg.id);
+                      return proximas;
+                    })}
+                    className="mt-2 w-full max-w-[90%] rounded-md border bg-background/60 px-2 py-1"
+                  >
+                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 py-1 text-left text-xs font-medium">
+                      <span>Evidências ({msg.evidencias.length})</span>
+                      <ChevronDown className="size-3.5" aria-hidden="true" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 pb-1">
+                      {msg.evidencias.map(evidencia => (
+                        <div key={evidencia.id} className="flex items-start justify-between gap-2 rounded px-1 py-1 text-xs text-muted-foreground">
+                          <span className="min-w-0 break-words"><strong className="font-medium text-foreground">{evidencia.titulo}</strong>: {evidencia.texto}</span>
+                          {onNavegarEvidencia && (
+                            <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-1.5 text-[10px]" onClick={() => onNavegarEvidencia(evidencia)}>
+                              <MapPin className="mr-1 size-3" />Ver no laudo
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
               </div>
             ))}
 
@@ -450,7 +546,17 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
               </div>
             )}
 
-            {error && (
+            {avisoLimite && (
+              <Alert variant="destructive" className="border-amber-500/60 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                <AlertDescription>
+                  <p className="font-medium">Solicitação recusada pelo provedor.</p>
+                  <p>{avisoLimite.mensagem}</p>
+                  {avisoLimite.tentarNovamenteEm && <p className="mt-1 font-medium">Nova tentativa recomendada após: {formatTime(avisoLimite.tentarNovamenteEm)}.</p>}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {error && !avisoLimite && (
               <Alert variant="destructive" className="text-xs">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
@@ -462,7 +568,6 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
               </Button>
             )}
 
-            <div ref={messagesEndRef} />
           </div>
         </div>
 

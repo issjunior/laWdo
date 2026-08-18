@@ -1,6 +1,7 @@
 export const PROVEDORES_IA = ['groq', 'gemini'] as const;
 
 export type ProvedorIa = typeof PROVEDORES_IA[number];
+export type PerfilModeloIa = 'rapido' | 'equilibrado' | 'maior_precisao';
 
 export interface ModeloIaCatalogo {
   id: string;
@@ -11,6 +12,7 @@ export interface ModeloIaCatalogo {
   limiteBytesImagem: number;
   janelaContextoCaracteres: number;
   reservaRespostaCaracteres: number;
+  perfil: PerfilModeloIa;
 }
 
 const MARGEM_SEGURANCA_CONTEXTO = 0.2;
@@ -25,6 +27,7 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     limiteBytesImagem: 0,
     janelaContextoCaracteres: 96_000,
     reservaRespostaCaracteres: 16_000,
+    perfil: 'equilibrado',
   },
   {
     id: 'meta-llama/llama-4-scout-17b-16e-instruct',
@@ -35,6 +38,7 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     limiteBytesImagem: 4 * 1024 * 1024,
     janelaContextoCaracteres: 96_000,
     reservaRespostaCaracteres: 16_000,
+    perfil: 'rapido',
   },
   {
     id: 'gemma2-9b-it',
@@ -45,6 +49,7 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     limiteBytesImagem: 0,
     janelaContextoCaracteres: 32_000,
     reservaRespostaCaracteres: 8_000,
+    perfil: 'rapido',
   },
   {
     id: 'mixtral-8x7b-32768',
@@ -55,6 +60,7 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     limiteBytesImagem: 0,
     janelaContextoCaracteres: 24_000,
     reservaRespostaCaracteres: 6_000,
+    perfil: 'equilibrado',
   },
   {
     id: 'gemini-2.5-flash',
@@ -65,6 +71,7 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     limiteBytesImagem: 15 * 1024 * 1024,
     janelaContextoCaracteres: 80_000,
     reservaRespostaCaracteres: 20_000,
+    perfil: 'rapido',
   },
   {
     id: 'gemini-2.5-pro',
@@ -75,6 +82,7 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     limiteBytesImagem: 15 * 1024 * 1024,
     janelaContextoCaracteres: 160_000,
     reservaRespostaCaracteres: 20_000,
+    perfil: 'maior_precisao',
   },
   {
     id: 'gemini-2.0-flash',
@@ -85,6 +93,7 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     limiteBytesImagem: 15 * 1024 * 1024,
     janelaContextoCaracteres: 96_000,
     reservaRespostaCaracteres: 16_000,
+    perfil: 'equilibrado',
   },
 ];
 
@@ -104,6 +113,14 @@ export function obterModeloIa(provedor: ProvedorIa, id: string | null | undefine
 
 export function obterModeloPadraoIa(provedor: ProvedorIa): ModeloIaCatalogo {
   return obterModeloIa(provedor, MODELOS_PADRAO[provedor]);
+}
+
+export function rotuloPerfilModeloIa(perfil: PerfilModeloIa): string {
+  return {
+    rapido: 'Rápido',
+    equilibrado: 'Equilibrado',
+    maior_precisao: 'Maior precisão',
+  }[perfil];
 }
 
 export function calcularOrcamentoEntradaIa(modelo: ModeloIaCatalogo): number {
