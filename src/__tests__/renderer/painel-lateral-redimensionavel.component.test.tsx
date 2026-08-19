@@ -106,12 +106,20 @@ describe('PainelLateralRedimensionavel', () => {
       </PainelLateralRedimensionavel>,
     )
 
-    expect(screen.getByText('Assistente fixo').parentElement).toHaveClass('sticky', 'top-4', 'h-[calc(100dvh-3rem)]')
+    const grupoRedimensionavel = container.querySelector('[data-slot="resizable-panel-group"]')
+    const elementosSticky = container.querySelectorAll('[data-painel-lateral-sticky]')
+
+    expect(screen.getByText('Assistente fixo').parentElement).toHaveClass('h-full')
     expect(screen.getByText('Assistente fixo').parentElement).not.toHaveClass('min-h-[32rem]')
     expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
     expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('[overflow-x:clip]')
-    expect(container.querySelector('[data-slot="resizable-panel-group"]')).toHaveClass('items-stretch')
-    expect(screen.getByText('Assistente fixo').parentElement?.parentElement).toHaveStyle({ overflow: 'visible' })
+    expect(grupoRedimensionavel).toHaveClass(
+      'items-stretch',
+      '[&>[data-painel-lateral-sticky]]:sticky',
+      '[&>[data-painel-lateral-sticky]]:top-4',
+      '[&>[data-painel-lateral-sticky]]:self-start',
+    )
+    expect(elementosSticky).toHaveLength(2)
   })
 
   it('define uma largura mínima que preserva editor, painel e trilho', () => {

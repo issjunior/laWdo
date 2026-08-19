@@ -144,7 +144,14 @@ export function PainelLateralRedimensionavel({
     <div ref={containerRef} className="flex min-w-0 max-w-full items-start [overflow-x:clip]">
       <ResizablePanelGroup
         orientation="horizontal"
-        className="h-auto min-w-0 flex-1 items-stretch"
+        className={cn(
+          'h-auto min-w-0 flex-1 items-stretch',
+          '[&>[data-painel-lateral-sticky]]:sticky',
+          '[&>[data-painel-lateral-sticky]]:top-4',
+          '[&>[data-painel-lateral-sticky]]:self-start',
+          '[&>[data-painel-lateral-sticky]]:!h-[calc(100dvh-3rem)]',
+          '[&>[data-painel-lateral-sticky]]:!max-h-[calc(100dvh-3rem)]',
+        )}
         onLayoutChanged={(_layout, detalhes) => {
           if (detalhes.isUserInteraction && painelExpandido) {
             persistirLargura(ultimaLargura.current)
@@ -156,20 +163,24 @@ export function PainelLateralRedimensionavel({
         </ResizablePanel>
         {painelExpandido && (
           <>
-            <ResizableHandle withHandle aria-label={`Redimensionar painel de ${rotuloPainel}`} />
+            <ResizableHandle
+              withHandle
+              data-painel-lateral-sticky
+              aria-label={`Redimensionar painel de ${rotuloPainel}`}
+            />
             <ResizablePanel
               key={tipo}
               id={`painel-lateral-${tipo}`}
+              data-painel-lateral-sticky
               defaultSize={largura}
               minSize={larguraMinima}
               maxSize={larguraMaxima}
               groupResizeBehavior="preserve-pixel-size"
-              style={{ overflow: 'visible' }}
               onResize={(tamanho) => {
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="sticky top-4 h-[calc(100dvh-3rem)] min-w-0 overflow-hidden border-l bg-background">
+              <div className="h-full min-w-0 overflow-hidden border-l bg-background">
                 {conteudoPainel}
               </div>
             </ResizablePanel>
