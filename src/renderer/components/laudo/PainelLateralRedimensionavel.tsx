@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Bot, Images, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,7 @@ interface PainelLateralRedimensionavelProps {
   onAlternarPainelIa: () => void
   onAlternarPainelIlustracoes: () => void
   onReindexarSecoes: () => void
+  onRecolherAutomaticamente?: () => void
   children: ReactNode
   conteudoPainel: ReactNode
 }
@@ -40,6 +41,10 @@ interface BotaoTrilhoProps {
   ativo: boolean
   icone: LucideIcon
   onClick: () => void
+}
+
+export function obterLarguraMinimaNecessaria(larguraMinimaPainel: number): number {
+  return 560 + larguraMinimaPainel + 56
 }
 
 function BotaoTrilho({ titulo, ativo, icone: Icone, onClick }: BotaoTrilhoProps) {
@@ -103,9 +108,11 @@ export function PainelLateralRedimensionavel({
   onAlternarPainelIa,
   onAlternarPainelIlustracoes,
   onReindexarSecoes,
+  onRecolherAutomaticamente,
   children,
   conteudoPainel,
 }: PainelLateralRedimensionavelProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const ultimaLargura = useRef(larguraPadrao)
   const { largura, persistirLargura } = useLarguraPainelPersistida(
     chavePersistencia,
@@ -116,8 +123,25 @@ export function PainelLateralRedimensionavel({
   const painelExpandido = tipo !== null && !recolhido
   const rotuloPainel = tipo === 'ilustracoes' ? 'ilustrações' : 'Assistente IA'
 
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !painelExpandido) return
+
+    const larguraMinimaNecessaria = obterLarguraMinimaNecessaria(larguraMinima)
+    const observar = (largura: number) => {
+      if (largura > 0 && largura < larguraMinimaNecessaria) onRecolherAutomaticamente?.()
+    }
+    const observer = new ResizeObserver(entries => {
+      const largura = entries[0]?.contentRect.width
+      if (largura !== undefined) observar(largura)
+    })
+    observer.observe(container)
+    observar(container.getBoundingClientRect().width)
+    return () => observer.disconnect()
+  }, [larguraMinima, onRecolherAutomaticamente, painelExpandido])
+
   return (
-    <div className="flex min-w-0 items-start">
+    <div ref={containerRef} className="flex min-w-0 max-w-full items-start overflow-x-hidden">
       <ResizablePanelGroup
         orientation="horizontal"
         className="h-auto min-w-0 flex-1 items-start"
@@ -128,7 +152,7 @@ export function PainelLateralRedimensionavel({
         }}
       >
         <ResizablePanel id="editor-laudo" minSize={560}>
-          <div className="min-w-0">{children}</div>
+          <div className="min-w-0 max-w-full">{children}</div>
         </ResizablePanel>
         {painelExpandido && (
           <>

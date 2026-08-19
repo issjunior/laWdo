@@ -13,6 +13,7 @@ import type {
   SolicitacaoIa,
   SolicitacaoConsultaIa,
   ProgressoIa,
+  ProgressoConsultaIa,
 } from '../shared/types/ia.types.js';
 import type {
   DashboardResponse,
@@ -57,6 +58,13 @@ function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
     && Number.isInteger(progresso.chamadasConcluidas)
     && (progresso.chamadasConcluidas as number) >= 0
     && (progresso.chamadasConcluidas as number) <= (progresso.totalLotes as number);
+}
+
+function progressoConsultaIaValidoNoPreload(valor: unknown): valor is ProgressoConsultaIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const progresso = valor as Record<string, unknown>;
+  return typeof progresso.operationId === 'string' && Boolean(progresso.operationId)
+    && ['preparando', 'analisando', 'consolidando', 'verificando'].includes(String(progresso.fase));
 }
 
 // Tipo para entrada de log do sistema
@@ -307,6 +315,7 @@ export interface IpcAPI {
     testarConexao: () => Promise<UserResponse<ContextoIa>>;
     copiarResposta: (texto: string, html?: string) => Promise<UserResponse>;
     onProgresso: (callback: (progresso: ProgressoIa) => void) => () => void;
+    onProgressoConsulta: (callback: (progresso: ProgressoConsultaIa) => void) => () => void;
     painelAbrir: (sessionId: string) => void;
     painelFechar: () => void;
     painelPronto: () => void;
@@ -1356,6 +1365,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       };
       ipcRenderer.on('ia:progresso', listener);
       return () => ipcRenderer.removeListener('ia:progresso', listener);
+    },
+    onProgressoConsulta: (callback: (progresso: ProgressoConsultaIa) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
+        if (progressoConsultaIaValidoNoPreload(progresso)) callback(progresso);
+      };
+      ipcRenderer.on('ia:consulta-progresso', listener);
+      return () => ipcRenderer.removeListener('ia:consulta-progresso', listener);
     },
     painelAbrir: (sessionId: string) => enviarComDiagnostico('ia:painel-abrir', sessionId),
     painelFechar: () => enviarComDiagnostico('ia:painel-fechar'),

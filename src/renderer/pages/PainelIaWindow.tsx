@@ -5,6 +5,7 @@ import {
   AssistenteIaPanel,
   type ChatMessage,
 } from '@/components/ai/AssistenteIaPanel'
+import { PainelIaErrorBoundary } from '@/components/ai/PainelIaErrorBoundary'
 import {
   aplicarAtualizacaoPainelIa,
   atualizacaoPainelIaValida,
@@ -52,12 +53,14 @@ export default function PainelIaWindow() {
 
   return (
     <main className="h-screen min-w-0 bg-background">
+      <PainelIaErrorBoundary>
       <AssistenteIaPanel
         secaoTitulo={estado.titulo}
         editorId={estado.editorDisponivel ? 'editor-destacado' : ''}
         messages={mensagens}
         loading={estado.carregando}
         progresso={estado.progresso}
+        progressoConsulta={estado.progressoConsulta}
         retomada={estado.retomada}
         error={estado.erro}
         avisoLimite={estado.avisoLimite}
@@ -76,6 +79,9 @@ export default function PainelIaWindow() {
         onSelecionarModelo={(modelo) => window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_modelo', modelo })}
         onSelecionarEscopo={(indice) =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_escopo', indice })
+        }
+        onPerguntarDocumentoCompleto={(pergunta) =>
+          window.ipcAPI.ia.painelEnviarComando({ tipo: 'perguntar_documento_completo', pergunta })
         }
         onExecutarAcao={(acao) =>
           window.ipcAPI.ia.painelEnviarComando({ tipo: 'executar_acao', acao })
@@ -114,6 +120,7 @@ export default function PainelIaWindow() {
         }
         onReencaixar={() => window.ipcAPI.ia.painelReencaixar()}
       />
+      </PainelIaErrorBoundary>
     </main>
   )
 }

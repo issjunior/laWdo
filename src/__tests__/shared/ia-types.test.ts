@@ -5,6 +5,7 @@ import {
   comandoPainelIaValido,
   estadoPainelIaValido,
   perfilRespostaIaValido,
+  progressoConsultaIaValido,
   progressoIaValido,
   solicitacaoIaValida,
   type EstadoPainelIa,
@@ -96,6 +97,10 @@ describe('contratos compartilhados de IA', () => {
       tentativa: 1,
       chamadasConcluidas: 0,
     })).toBe(false);
+    expect(progressoConsultaIaValido({ operationId: 'consulta-1', fase: 'consolidando' })).toBe(true);
+    expect(progressoConsultaIaValido({ operationId: 'consulta-1', fase: 'processando' })).toBe(false);
+    expect(comandoPainelIaValido({ tipo: 'perguntar_documento_completo', pergunta: 'Quantas armas há?' })).toBe(true);
+    expect(comandoPainelIaValido({ tipo: 'perguntar_documento_completo', pergunta: '' })).toBe(false);
 
     const aplicado = aplicarAtualizacaoPainelIa(estado, {
       tipo: 'delta',

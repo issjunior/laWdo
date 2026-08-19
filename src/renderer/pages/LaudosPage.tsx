@@ -24,6 +24,7 @@ import { DataTableColumnHeader } from '@/components/data-table/data-table-column
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
+import { PainelIaErrorBoundary } from '@/components/ai/PainelIaErrorBoundary';
 import { criarChaveMemoriaConsultaIa, localizarEvidenciasConsultaIa, serializarBlocosContextoIa } from '@/lib/ia-consulta-contexto';
 import { tabelaMarkdownParaHtmlSeguro } from '@/lib/ia-resposta-formatada';
 import { navegarParaEvidenciaIa as navegarParaEvidenciaNoEditor } from '@/lib/ia-evidencia-navegacao';
@@ -38,10 +39,12 @@ import {
   type AtualizacaoPainelIa,
   type CamposEstadoPainelIa,
   type ComandoPainelIa,
+  type EstadoOperacaoPainelIa,
   type FragmentoIa,
   type LimiteUsoIa,
   type ModoInteracaoIa,
   type ProgressoIa,
+  type ProgressoConsultaIa,
   type RetomadaIa,
   type SolicitacaoIa,
 } from '@shared/types/ia.types';
@@ -537,8 +540,10 @@ export const LaudosPage: React.FC = () => {
   const [iaSheetSecaoTitulo, setIaSheetSecaoTitulo] = useState('');
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
   const [iaLoading, setIaLoading] = useState(false);
+  const [estadoOperacaoIa, setEstadoOperacaoIa] = useState<EstadoOperacaoPainelIa>('ocioso');
   const [operacaoIaAtivaId, setOperacaoIaAtivaId] = useState<string | null>(null);
   const [progressoIa, setProgressoIa] = useState<ProgressoIa | null>(null);
+  const [progressoConsultaIa, setProgressoConsultaIa] = useState<ProgressoConsultaIa | null>(null);
   const [confirmacaoImagemIaPendente, setConfirmacaoImagemIaPendente] = useState(false);
   const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
@@ -2248,6 +2253,7 @@ export const LaudosPage: React.FC = () => {
   const gerarLegendaImagemIaRef = useRef<(imagemId: string) => Promise<string | null>>(async () => null);
   const aplicarRespostaIaRef = useRef<(mensagem: ChatMessage) => void>(() => {});
   const navegarParaEvidenciaIaRef = useRef<(evidencia: BlocoContextoIa) => void>(() => {});
+  const consultarIaRef = useRef<(pergunta: string, modeloForcado?: string, escopoForcado?: -1) => void>(() => {});
   const operacaoIaAtivaRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -2258,7 +2264,13 @@ export const LaudosPage: React.FC = () => {
     const remover = window.ipcAPI.ia.onProgresso(progresso => {
       if (progresso.operationId === operacaoIaAtivaRef.current) setProgressoIa(progresso);
     });
-    return remover;
+    const removerConsulta = window.ipcAPI.ia.onProgressoConsulta(progresso => {
+      if (progresso.operationId === operacaoIaAtivaRef.current) {
+        setProgressoConsultaIa(progresso);
+        setEstadoOperacaoIa(progresso.fase);
+      }
+    });
+    return () => { remover(); removerConsulta(); };
   }, []);
 
   useEffect(() => () => {
@@ -2298,6 +2310,7 @@ export const LaudosPage: React.FC = () => {
       const estado: CamposEstadoPainelIa = {
         titulo: imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo || 'Escolha um escopo no editor',
         carregando: iaLoading,
+        estadoOperacao: estadoOperacaoIa,
         erro: iaError,
         avisoLimite: avisoLimiteIa,
         editorDisponivel,
@@ -2305,6 +2318,7 @@ export const LaudosPage: React.FC = () => {
         contextoImagem: imagemSelecionada,
         modoAplicacao: iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir',
         progresso: progressoIa,
+        progressoConsulta: progressoConsultaIa,
         planoPendente: null,
         escopoSelecionado: iaSheetSecaoIdx ?? null,
         ...(modeloIaSessao ? { modeloSelecionado: modeloIaSessao } : {}),
@@ -2320,6 +2334,7 @@ export const LaudosPage: React.FC = () => {
           acao: mensagem.acao,
           estadoConsulta: mensagem.estadoConsulta,
           modeloConsulta: mensagem.modeloConsulta,
+          perguntaConsulta: mensagem.perguntaConsulta,
           recomendacao: mensagem.recomendacao,
           evidencias: mensagem.evidencias,
           permiteAplicacao: mensagem.role === 'assistant' && mensagem.acao !== 'descrever_imagem',
@@ -2342,6 +2357,7 @@ export const LaudosPage: React.FC = () => {
         const alteracoes: Partial<CamposEstadoPainelIa> = {};
         if (estado.titulo !== anterior.titulo) alteracoes.titulo = estado.titulo;
         if (estado.carregando !== anterior.carregando) alteracoes.carregando = estado.carregando;
+        if (estado.estadoOperacao !== anterior.estadoOperacao) alteracoes.estadoOperacao = estado.estadoOperacao;
         if (estado.erro !== anterior.erro) alteracoes.erro = estado.erro;
         if (estado.avisoLimite !== anterior.avisoLimite) alteracoes.avisoLimite = estado.avisoLimite;
         if (estado.editorDisponivel !== anterior.editorDisponivel) alteracoes.editorDisponivel = estado.editorDisponivel;
@@ -2349,6 +2365,7 @@ export const LaudosPage: React.FC = () => {
         if (estado.contextoImagem !== anterior.contextoImagem) alteracoes.contextoImagem = estado.contextoImagem;
         if (estado.modoAplicacao !== anterior.modoAplicacao) alteracoes.modoAplicacao = estado.modoAplicacao;
         if (JSON.stringify(estado.progresso) !== JSON.stringify(anterior.progresso)) alteracoes.progresso = estado.progresso;
+        if (JSON.stringify(estado.progressoConsulta) !== JSON.stringify(anterior.progressoConsulta)) alteracoes.progressoConsulta = estado.progressoConsulta;
         if (estado.escopoSelecionado !== anterior.escopoSelecionado) alteracoes.escopoSelecionado = estado.escopoSelecionado;
         if (estado.modeloSelecionado !== anterior.modeloSelecionado && estado.modeloSelecionado) alteracoes.modeloSelecionado = estado.modeloSelecionado;
         if (estado.provedorIa !== anterior.provedorIa && estado.provedorIa) alteracoes.provedorIa = estado.provedorIa;
@@ -2377,6 +2394,11 @@ export const LaudosPage: React.FC = () => {
         executarAcaoIaRef.current(comando.acao);
       } else if (comando.tipo === 'enviar_pedido_livre') {
         enviarMensagemIaRef.current(comando.mensagem, comando.modo, comando.tamanho);
+      } else if (comando.tipo === 'perguntar_documento_completo') {
+        setIaSheetSecaoIdx(-1);
+        setIaSheetSecaoTitulo('Documento completo');
+        setImagemSelecionadaIaId(null);
+        consultarIaRef.current(comando.pergunta, undefined, -1);
       } else if (comando.tipo === 'reenviar_mensagem') {
         reenviarMensagemIaRef.current(comando.mensagemId);
       } else if (comando.tipo === 'cancelar_operacao') {
@@ -2423,7 +2445,7 @@ export const LaudosPage: React.FC = () => {
     });
     if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
     return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
-  }, [avisoLimiteIa, chatMessages, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, modelosIaSessao, progressoIa, provedorIaSessao, retomadaIaPendente, secoes, setModeloIaSessao]);
+  }, [avisoLimiteIa, chatMessages, estadoOperacaoIa, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, modelosIaSessao, progressoIa, progressoConsultaIa, provedorIaSessao, retomadaIaPendente, secoes, setModeloIaSessao]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2868,7 +2890,7 @@ export const LaudosPage: React.FC = () => {
   }, [editorMode]);
   navegarParaEvidenciaIaRef.current = navegarParaEvidenciaIa;
 
-  const consultarIa = async (pergunta: string, modeloForcado?: string) => {
+  const consultarIa = async (pergunta: string, modeloForcado?: string, escopoForcado?: -1) => {
     if (iaLoading) return;
     const alvo = capturarAlvoIa(true);
     if (!alvo || (alvo.tipo !== 'secao' && alvo.tipo !== 'laudo_completo')) {
@@ -2890,7 +2912,7 @@ export const LaudosPage: React.FC = () => {
       return;
     }
     const operationId = crypto.randomUUID();
-    const escopoCompleto = alvo.tipo === 'laudo_completo';
+    const escopoCompleto = escopoForcado === -1 || alvo.tipo === 'laudo_completo';
     const fontes = escopoCompleto
       ? secoes.map((secao, indice) => ({ html: secao.conteudo, id: `secao-${indice}`, titulo: secao.titulo }))
       : [{ html: alvo.conteudo, id: `secao-${alvo.indice}`, titulo: iaSheetSecaoTitulo || 'Seção selecionada' }];
@@ -2904,6 +2926,8 @@ export const LaudosPage: React.FC = () => {
     const chaveMemoria = criarChaveMemoriaConsultaIa(alvo.tipo, alvo.indice, fingerprint);
     const chatKey = alvo.indice === -1 ? SINGLE_CHAT_KEY : `secao-${alvo.indice}`;
     setIaLoading(true);
+    setEstadoOperacaoIa('preparando');
+    setProgressoConsultaIa({ operationId, fase: 'preparando' });
     setOperacaoIaAtivaId(operationId);
     setIaError(null);
     setChatMessages(atual => ({ ...atual, [chatKey]: [...(atual[chatKey] || []), { id: crypto.randomUUID(), role: 'user', content: pergunta, timestamp: Date.now(), permiteAplicacao: false }] }));
@@ -2928,9 +2952,11 @@ export const LaudosPage: React.FC = () => {
         evidencias,
         estadoConsulta: dadosResposta.estado,
         modeloConsulta: dadosResposta.modelo,
+        perguntaConsulta: pergunta,
         recomendacao: dadosResposta.recomendacao,
       }] }));
       setAvisoLimiteIa(null);
+      setEstadoOperacaoIa(dadosResposta.estado === 'respondida' ? 'concluido' : dadosResposta.estado);
     } catch (erro: unknown) {
       const codigo = erro instanceof Error ? erro.message.split(':')[0] : '';
       if (codigo === 'MODELO_INCOMPATIVEL' || codigo === 'CONFIGURACAO_AUSENTE') {
@@ -2942,8 +2968,10 @@ export const LaudosPage: React.FC = () => {
         setFallbackModeloIaPendente({ pergunta, codigo, modeloRecomendado: recomendado === modeloIaSessao ? null : recomendado });
       }
       setIaError(obterMensagemErroIa(erro));
+      setEstadoOperacaoIa(codigo === 'CANCELADO' ? 'cancelado' : 'erro');
     } finally {
       setIaLoading(false);
+      setProgressoConsultaIa(atual => atual?.operationId === operationId ? null : atual);
       setOperacaoIaAtivaId(atual => atual === operationId ? null : atual);
     }
   };
@@ -2961,6 +2989,10 @@ export const LaudosPage: React.FC = () => {
       longa: ' TAMANHO OBRIGATÓRIO: responda em 2 a 3 parágrafos.',
     } as const;
     void executarAcaoIa(acao, `${message}${instrucoesTamanho[tamanho]}`, message, tamanho);
+  };
+
+  consultarIaRef.current = (pergunta, modeloForcado, escopoForcado) => {
+    void consultarIa(pergunta, modeloForcado, escopoForcado);
   };
 
   const reenviarMensagemIa = async (mensagemId: string) => {
@@ -3294,6 +3326,7 @@ export const LaudosPage: React.FC = () => {
         ? (chatMessages[SINGLE_CHAT_KEY] || [])
         : (iaSheetSecaoIdx !== null ? chatMessages[`secao-${iaSheetSecaoIdx}`] || [] : []);
     const conteudoPainelLateral = painelLateralAtivo === 'ia' ? (
+      <PainelIaErrorBoundary>
       <AssistenteIaPanel
         secaoTitulo={imagemSelecionadaIaId ? 'Imagem selecionada' : iaSheetSecaoTitulo}
         editorId={imagemSelecionadaIaId
@@ -3323,6 +3356,7 @@ export const LaudosPage: React.FC = () => {
         modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
         loading={iaLoading}
         progresso={progressoIa}
+        progressoConsulta={progressoConsultaIa}
         escopoSelecionado={iaSheetSecaoIdx}
         error={iaError}
         avisoLimite={avisoLimiteIa}
@@ -3331,7 +3365,14 @@ export const LaudosPage: React.FC = () => {
           ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
         ]}
         onSelecionarEscopo={indice => handleOpenSheet(indice, indice === -1 ? 'Documento completo' : secoes[indice]?.titulo || '')}
+        onPerguntarDocumentoCompleto={pergunta => {
+          setIaSheetSecaoIdx(-1);
+          setIaSheetSecaoTitulo('Documento completo');
+          setImagemSelecionadaIaId(null);
+          void consultarIa(pergunta, undefined, -1);
+        }}
       />
+      </PainelIaErrorBoundary>
     ) : painelLateralAtivo === 'ilustracoes' ? (
       <IlustracoesPanel
         laudoId={editando.id}
@@ -3428,6 +3469,7 @@ export const LaudosPage: React.FC = () => {
                 handleToggleIlustracoes()
               }}
               onReindexarSecoes={handleReindexarSecoes}
+              onRecolherAutomaticamente={() => setPanelCollapsed(true)}
               conteudoPainel={conteudoPainelLateral}
             >
               <div data-diagnostico-id="laudos.editor-scroll" className="pr-2 [overflow-anchor:none]">
@@ -3440,7 +3482,7 @@ export const LaudosPage: React.FC = () => {
                   </Alert>
                 )}
                 {editorMode === 'single' ? (
-                  <div className="space-y-3 pb-4">
+                  <div className="min-w-0 space-y-3 pb-4">
                     <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                       <TinyMceEditor
                         editorId="laudo-single-editor"
@@ -3474,7 +3516,7 @@ export const LaudosPage: React.FC = () => {
                     </PlaceholderContextMenu>
                   </div>
                 ) : (
-                  <div className="space-y-6 pb-4">
+                  <div className="min-w-0 space-y-6 pb-4">
                     {secoes.map((secao, idx) => {
                       const isIlustracoes = secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES';
                       const tituloVisual = secao.nivel === 2 ? 'Seção principal' : 'Subseção';
@@ -3484,18 +3526,18 @@ export const LaudosPage: React.FC = () => {
                         open={!secoesColapsadas[idx]}
                         onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
                         className={cn(
-                          'rounded-lg',
+                          'min-w-0 max-w-full rounded-lg',
                           getClasseSecaoEstrutural(secao),
                           secao.nivel === 3 && 'ml-5'
                         )}
                       >
-                        <div className="flex items-center justify-between p-4 cursor-default">
+                        <div className="flex min-w-0 items-center justify-between p-4 cursor-default">
                           <CollapsibleTrigger asChild>
-                            <div className="flex items-center gap-3 flex-1 cursor-pointer">
+                            <div className="flex min-w-0 flex-1 items-center gap-3 cursor-pointer">
                               <div className="p-2 rounded-full bg-primary/10 text-primary">
                                 <Edit size={18} />
                               </div>
-                              <div>
+                              <div className="min-w-0">
                                 <h3 className="text-lg font-semibold">{secao.titulo}</h3>
                                 <p className="text-sm text-muted-foreground">{tituloVisual} · clique para expandir/recolher</p>
                               </div>

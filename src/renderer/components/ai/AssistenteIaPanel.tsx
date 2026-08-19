@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Bot, ChevronsRight, Send, Loader2, Check, Copy, ExternalLink, PanelRightOpen, Trash2, X, ChevronDown, MapPin } from 'lucide-react';
-import type { AcaoIa, BlocoContextoIa, EstadoConsultaIa, ModoInteracaoIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
+import type { AcaoIa, BlocoContextoIa, EstadoConsultaIa, ModoInteracaoIa, ProgressoConsultaIa, ProgressoIa, RetomadaIa } from '@shared/types/ia.types';
 
 type AcaoPainelIa = AcaoIa | 'descrever_imagem';
 
@@ -37,6 +37,7 @@ export interface ChatMessage {
   estadoConsulta?: EstadoConsultaIa;
   modeloConsulta?: string;
   recomendacao?: string;
+  perguntaConsulta?: string;
 }
 
 const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
@@ -67,6 +68,7 @@ interface AssistenteIaPanelProps {
   modoAplicacao?: 'inserir' | 'substituir';
   loading?: boolean;
   progresso?: ProgressoIa | null;
+  progressoConsulta?: ProgressoConsultaIa | null;
   error?: string | null;
   avisoLimite?: { mensagem: string; tentarNovamenteEm?: number } | null;
   opcoesEscopo?: Array<{ id: number; titulo: string }>;
@@ -88,6 +90,7 @@ interface AssistenteIaPanelProps {
   opcoesModelo?: Array<{ id: string; rotulo: string; perfil?: 'rapido' | 'equilibrado' | 'maior_precisao'; disponibilidade?: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }>;
   modeloSelecionado?: string;
   onSelecionarModelo?: (modelo: string) => void;
+  onPerguntarDocumentoCompleto?: (pergunta: string) => void;
 }
 
 type ContextoIaResposta = {
@@ -118,6 +121,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   modoAplicacao = 'inserir',
   loading = false,
   progresso = null,
+  progressoConsulta = null,
   error = null,
   avisoLimite = null,
   opcoesEscopo = [],
@@ -139,6 +143,7 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
   opcoesModelo = [],
   modeloSelecionado,
   onSelecionarModelo,
+  onPerguntarDocumentoCompleto,
 }) => {
   const [input, setInput] = useState('');
   const [modoInteracao, setModoInteracao] = useState<ModoInteracaoIa>('perguntar');
@@ -418,6 +423,19 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                         : 'Há informações conflitantes no escopo. Revise as evidências antes de usar a resposta.'}
                     </p>
                   )}
+                  {msg.role === 'assistant' && msg.estadoConsulta === 'insuficiente'
+                    && escopoSelecionado !== -1 && msg.perguntaConsulta && onPerguntarDocumentoCompleto && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => onPerguntarDocumentoCompleto(msg.perguntaConsulta!)}
+                        disabled={loading}
+                      >
+                        Perguntar ao documento completo
+                      </Button>
+                    )}
                   {msg.role === 'assistant' && msg.recomendacao && (
                     <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
                       {msg.recomendacao}
@@ -547,7 +565,11 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
             {loading && (!progresso || progresso.totalLotes === 1) && (
               <div className="flex items-center gap-2 px-1 text-muted-foreground" aria-label="Processando solicitação">
                 <Loader2 size={16} className="animate-spin" />
-                <span className="text-xs tabular-nums">{`${Math.floor(segundosEmProcessamento / 60).toString().padStart(2, '0')}:${(segundosEmProcessamento % 60).toString().padStart(2, '0')}`}</span>
+                <span className="text-xs tabular-nums">
+                  {progressoConsulta
+                    ? ({ preparando: 'Preparando consulta...', analisando: 'Analisando evidências...', consolidando: 'Consolidando fatos...', verificando: 'Verificando resposta...' } as const)[progressoConsulta.fase]
+                    : `${Math.floor(segundosEmProcessamento / 60).toString().padStart(2, '0')}:${(segundosEmProcessamento % 60).toString().padStart(2, '0')}`}
+                </span>
               </div>
             )}
 

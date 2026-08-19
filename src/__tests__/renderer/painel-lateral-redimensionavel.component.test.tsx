@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { PainelLateralRedimensionavel } from '@/components/laudo/PainelLateralRedimensionavel'
+import { obterLarguraMinimaNecessaria, PainelLateralRedimensionavel } from '@/components/laudo/PainelLateralRedimensionavel'
 
 describe('PainelLateralRedimensionavel', () => {
   it('abre o primeiro painel sem remontar o editor', () => {
@@ -108,5 +108,10 @@ describe('PainelLateralRedimensionavel', () => {
 
     expect(screen.getByText('Assistente fixo').parentElement).toHaveClass('sticky', 'top-4')
     expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
+  })
+
+  it('define uma largura mínima que preserva editor, painel e trilho', () => {
+    expect(obterLarguraMinimaNecessaria(360)).toBe(976)
+    expect(obterLarguraMinimaNecessaria(320)).toBe(936)
   })
 })
