@@ -3492,6 +3492,7 @@ export const LaudosPage: React.FC = () => {
                           setSingleEditorHtml(html);
                         }}
                         height={560}
+                        alturaAutomatica
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
                         onImageInserted={() => {
@@ -3553,6 +3554,7 @@ export const LaudosPage: React.FC = () => {
                                 initialValue={secao.conteudo}
                                 onChange={(txt, origem) => atualizarConteudoSecao(idx, txt, origem)}
                                 height={400}
+                                alturaAutomatica
                                 laudoId={editando.id}
                                 onImageInserted={() => {
                                   void reconciliarImagensDoEditor().catch(error => {

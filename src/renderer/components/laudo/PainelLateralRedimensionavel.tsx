@@ -168,7 +168,7 @@ export function PainelLateralRedimensionavel({
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="sticky top-4 h-[calc(100dvh-3rem)] min-h-[32rem] min-w-0 overflow-hidden border-l bg-background">
+              <div className="sticky top-4 h-[calc(100dvh-3rem)] min-w-0 overflow-hidden border-l bg-background">
                 {conteudoPainel}
               </div>
             </ResizablePanel>
