@@ -54,7 +54,7 @@ function BotaoTrilho({ titulo, ativo, icone: Icone, onClick }: BotaoTrilhoProps)
       variant="ghost"
       size="icon"
       className={cn(
-        'size-8 rounded-md border border-transparent',
+        'size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200',
         ativo && 'border-border bg-accent text-accent-foreground',
       )}
       aria-label={titulo}
@@ -78,7 +78,7 @@ function BotaoFerramentasTrilho({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-8 rounded-md border border-transparent"
+          className="size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200"
           aria-label="Ferramentas"
         >
           <Wrench className="size-4" />
@@ -141,7 +141,7 @@ export function PainelLateralRedimensionavel({
   }, [larguraMinima, onRecolherAutomaticamente, painelExpandido])
 
   return (
-    <div ref={containerRef} className="flex min-w-0 max-w-full items-start [overflow-x:clip]">
+    <div ref={containerRef} className="flex min-w-0 max-w-full items-start gap-2 [overflow-x:clip]">
       <ResizablePanelGroup
         orientation="horizontal"
         className={cn(
@@ -166,6 +166,7 @@ export function PainelLateralRedimensionavel({
             <ResizableHandle
               withHandle
               data-painel-lateral-sticky
+              className="bg-transparent transition-colors duration-200 after:bg-border/60 hover:bg-accent/40 data-[separator=active]:bg-primary/10"
               aria-label={`Redimensionar painel de ${rotuloPainel}`}
             />
             <ResizablePanel
@@ -180,7 +181,7 @@ export function PainelLateralRedimensionavel({
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="h-full min-w-0 overflow-hidden border-l bg-background">
+              <div className="h-full min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm ring-1 ring-black/5 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-200 dark:ring-white/5">
                 {conteudoPainel}
               </div>
             </ResizablePanel>
@@ -190,7 +191,7 @@ export function PainelLateralRedimensionavel({
 
       <aside
         aria-label="Painéis do laudo"
-        className="sticky top-4 flex w-10 shrink-0 self-start flex-col items-center gap-1 border-l bg-muted/20 px-1 py-2"
+        className="sticky top-4 flex w-10 shrink-0 self-start flex-col items-center gap-1 rounded-xl border border-border/70 bg-card/90 px-1 py-2 shadow-sm backdrop-blur-sm transition-[background-color,border-color,box-shadow] duration-200"
       >
         <BotaoTrilho
           titulo="Painel de IA"

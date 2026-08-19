@@ -109,10 +109,15 @@ describe('PainelLateralRedimensionavel', () => {
     const grupoRedimensionavel = container.querySelector('[data-slot="resizable-panel-group"]')
     const elementosSticky = container.querySelectorAll('[data-painel-lateral-sticky]')
 
-    expect(screen.getByText('Assistente fixo').parentElement).toHaveClass('h-full')
+    expect(screen.getByText('Assistente fixo').parentElement).toHaveClass(
+      'h-full',
+      'rounded-2xl',
+      'shadow-sm',
+      'motion-safe:animate-in',
+    )
     expect(screen.getByText('Assistente fixo').parentElement).not.toHaveClass('min-h-[32rem]')
-    expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
-    expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('[overflow-x:clip]')
+    expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4', 'rounded-xl', 'shadow-sm')
+    expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('gap-2', '[overflow-x:clip]')
     expect(grupoRedimensionavel).toHaveClass(
       'items-stretch',
       '!overflow-visible',
