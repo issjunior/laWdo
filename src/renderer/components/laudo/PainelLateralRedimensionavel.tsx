@@ -144,7 +144,7 @@ export function PainelLateralRedimensionavel({
     <div ref={containerRef} className="flex min-w-0 max-w-full items-start [overflow-x:clip]">
       <ResizablePanelGroup
         orientation="horizontal"
-        className="h-auto min-w-0 flex-1 items-start"
+        className="h-auto min-w-0 flex-1 items-stretch"
         onLayoutChanged={(_layout, detalhes) => {
           if (detalhes.isUserInteraction && painelExpandido) {
             persistirLargura(ultimaLargura.current)

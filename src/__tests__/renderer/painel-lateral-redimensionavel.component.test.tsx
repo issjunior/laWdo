@@ -86,7 +86,7 @@ describe('PainelLateralRedimensionavel', () => {
 
   it('mantém o conteúdo lateral fixo na viewport sem limitar a altura do editor', () => {
     vi.mocked(window.localStorage.getItem).mockReturnValue(null)
-    render(
+    const { container } = render(
       <PainelLateralRedimensionavel
         tipo="ia"
         chavePersistencia="painel-teste"
@@ -110,6 +110,7 @@ describe('PainelLateralRedimensionavel', () => {
     expect(screen.getByText('Assistente fixo').parentElement).not.toHaveClass('min-h-[32rem]')
     expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
     expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('[overflow-x:clip]')
+    expect(container.querySelector('[data-slot="resizable-panel-group"]')).toHaveClass('items-stretch')
   })
 
   it('define uma largura mínima que preserva editor, painel e trilho', () => {
