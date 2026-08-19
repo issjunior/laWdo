@@ -111,6 +111,7 @@ describe('PainelLateralRedimensionavel', () => {
     expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
     expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('[overflow-x:clip]')
     expect(container.querySelector('[data-slot="resizable-panel-group"]')).toHaveClass('items-stretch')
+    expect(screen.getByText('Assistente fixo').parentElement?.parentElement).toHaveStyle({ overflow: 'visible' })
   })
 
   it('define uma largura mínima que preserva editor, painel e trilho', () => {

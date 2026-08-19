@@ -164,6 +164,7 @@ export function PainelLateralRedimensionavel({
               minSize={larguraMinima}
               maxSize={larguraMaxima}
               groupResizeBehavior="preserve-pixel-size"
+              style={{ overflow: 'visible' }}
               onResize={(tamanho) => {
                 ultimaLargura.current = tamanho.inPixels
               }}
