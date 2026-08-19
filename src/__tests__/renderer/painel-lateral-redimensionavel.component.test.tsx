@@ -115,6 +115,7 @@ describe('PainelLateralRedimensionavel', () => {
     expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('[overflow-x:clip]')
     expect(grupoRedimensionavel).toHaveClass(
       'items-stretch',
+      '!overflow-visible',
       '[&>[data-painel-lateral-sticky]]:sticky',
       '[&>[data-painel-lateral-sticky]]:top-4',
       '[&>[data-painel-lateral-sticky]]:self-start',

@@ -145,7 +145,7 @@ export function PainelLateralRedimensionavel({
       <ResizablePanelGroup
         orientation="horizontal"
         className={cn(
-          'h-auto min-w-0 flex-1 items-stretch',
+          'h-auto min-w-0 flex-1 items-stretch !overflow-visible',
           '[&>[data-painel-lateral-sticky]]:sticky',
           '[&>[data-painel-lateral-sticky]]:top-4',
           '[&>[data-painel-lateral-sticky]]:self-start',
