@@ -109,6 +109,7 @@ describe('PainelLateralRedimensionavel', () => {
     expect(screen.getByText('Assistente fixo').parentElement).toHaveClass('sticky', 'top-4', 'h-[calc(100dvh-3rem)]')
     expect(screen.getByText('Assistente fixo').parentElement).not.toHaveClass('min-h-[32rem]')
     expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
+    expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('[overflow-x:clip]')
   })
 
   it('define uma largura mínima que preserva editor, painel e trilho', () => {

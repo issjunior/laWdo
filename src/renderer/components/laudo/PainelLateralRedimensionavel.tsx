@@ -141,7 +141,7 @@ export function PainelLateralRedimensionavel({
   }, [larguraMinima, onRecolherAutomaticamente, painelExpandido])
 
   return (
-    <div ref={containerRef} className="flex min-w-0 max-w-full items-start overflow-x-hidden">
+    <div ref={containerRef} className="flex min-w-0 max-w-full items-start [overflow-x:clip]">
       <ResizablePanelGroup
         orientation="horizontal"
         className="h-auto min-w-0 flex-1 items-start"
