@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { PainelLateralRedimensionavel } from '@/components/laudo/PainelLateralRedimensionavel'
+import { obterLarguraMinimaNecessaria, PainelLateralRedimensionavel } from '@/components/laudo/PainelLateralRedimensionavel'
 
 describe('PainelLateralRedimensionavel', () => {
   it('abre o primeiro painel sem remontar o editor', () => {
@@ -86,7 +86,7 @@ describe('PainelLateralRedimensionavel', () => {
 
   it('mantém o conteúdo lateral fixo na viewport sem limitar a altura do editor', () => {
     vi.mocked(window.localStorage.getItem).mockReturnValue(null)
-    render(
+    const { container } = render(
       <PainelLateralRedimensionavel
         tipo="ia"
         chavePersistencia="painel-teste"
@@ -106,7 +106,30 @@ describe('PainelLateralRedimensionavel', () => {
       </PainelLateralRedimensionavel>,
     )
 
-    expect(screen.getByText('Assistente fixo').parentElement).toHaveClass('sticky', 'top-4')
-    expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4')
+    const grupoRedimensionavel = container.querySelector('[data-slot="resizable-panel-group"]')
+    const elementosSticky = container.querySelectorAll('[data-painel-lateral-sticky]')
+
+    expect(screen.getByText('Assistente fixo').parentElement).toHaveClass(
+      'h-full',
+      'rounded-2xl',
+      'shadow-sm',
+      'motion-safe:animate-in',
+    )
+    expect(screen.getByText('Assistente fixo').parentElement).not.toHaveClass('min-h-[32rem]')
+    expect(screen.getByLabelText('Painéis do laudo')).toHaveClass('sticky', 'top-4', 'rounded-xl', 'shadow-sm')
+    expect(screen.getByLabelText('Painéis do laudo').parentElement).toHaveClass('gap-2', '[overflow-x:clip]')
+    expect(grupoRedimensionavel).toHaveClass(
+      'items-stretch',
+      '!overflow-visible',
+      '[&>[data-painel-lateral-sticky]]:sticky',
+      '[&>[data-painel-lateral-sticky]]:top-4',
+      '[&>[data-painel-lateral-sticky]]:self-start',
+    )
+    expect(elementosSticky).toHaveLength(2)
+  })
+
+  it('define uma largura mínima que preserva editor, painel e trilho', () => {
+    expect(obterLarguraMinimaNecessaria(360)).toBe(976)
+    expect(obterLarguraMinimaNecessaria(320)).toBe(936)
   })
 })

@@ -8,7 +8,7 @@ import type {
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
 import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
-import type { AtualizacaoPainelIa, ComandoPainelIa, LimiteUsoIa, PlanoExecucaoIaResumo, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
+import type { AtualizacaoPainelIa, ComandoPainelIa, LimiteUsoIa, PlanoExecucaoIaResumo, ProgressoConsultaIa, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -92,6 +92,7 @@ interface IpcAPIRendererLegada {
     planejar: (solicitacao: SolicitacaoIa) => Promise<{ success: boolean; data?: PlanoExecucaoIaResumo; error?: string }>;
     executar: (solicitacao: SolicitacaoIa) => Promise<RespostaExecucaoIaIpc>;
     onProgresso: (callback: (progresso: ProgressoIa) => void) => () => void;
+    onProgressoConsulta: (callback: (progresso: ProgressoConsultaIa) => void) => () => void;
     painelFechar: () => void;
     painelPronto: () => void;
     painelPublicar: (sessionId: string, atualizacao: AtualizacaoPainelIa) => void;

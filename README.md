@@ -1,27 +1,39 @@
 # laWdo
 
-Aplicação desktop para elaboração de laudos periciais.
+Aplicação desktop para gestão de REPs e elaboração de laudos periciais. O laWdo mantém os dados sob controle local, organiza o fluxo técnico e usa IA somente quando o perito decide.
 
-## Principais recursos
+[Baixar o laWdo](https://issjunior.github.io/laWdo/)
 
-- Gestão local de REPs, laudos, templates, peças, placeholders e ilustrações.
-- Editor TinyMCE com modos de documento único ou por seções, histórico de versões e exportação em PDF, DOCX e ODT.
-- Assistente IA com Groq e Gemini em dock redimensionável ou janela destacada, aplicação revisável, processamento sequencial de laudos grandes e descrição segura de imagens persistidas.
-- Operação offline-first com SQLite, backup local, logs de auditoria e integração opcional com o GDL.
+## Destaques
 
-## Acesse
+- REPs, solicitantes, tipos de exame, templates, peças e placeholders em um único ambiente.
+- Editor de laudos com TinyMCE, seções, figuras, legendas, histórico e exportação em PDF, DOCX e ODT.
+- Integração opcional com GDL para consulta de REP, peças B-602 e imagens selecionadas.
+- Assistente com Groq e Gemini, consulta fundamentada por evidências e aplicação revisável, sem salvamento automático.
+- SQLite local, backups, auditoria, atualização segura e operação offline-first.
 
-- [Página oficial do laWdo](https://issjunior.github.io/laWdo/) — apresentação e informações do sistema.
-- [Downloads e notas de atualização](https://github.com/issjunior/laWdo/releases) — instaladores e histórico de versões.
+## Download
+
+Obtenha a versão mais recente em [issjunior.github.io/laWdo](https://issjunior.github.io/laWdo/). As notas e versões publicadas também estão disponíveis nas [releases do GitHub](https://github.com/issjunior/laWdo/releases).
+
+## Desenvolvimento
+
+Requer Node.js 24 ou superior.
+
+```bash
+npm install
+npm run dev
+```
+
+Validações principais:
+
+```bash
+npm run type-check
+npm run lint
+npm test
+npm run pack
+```
 
 ## Stack
 
-- **Desktop:** Electron
-- **Interface:** React, TypeScript e Vite
-- **UI:** Tailwind CSS, shadcn/ui, Radix UI e Lucide
-- **Formulários e validação:** React Hook Form e Zod
-- **Editor:** TinyMCE
-- **Dados locais:** SQLite
-- **Testes:** Vitest e Testing Library
-- **Build e distribuição:** Electron Builder e GitHub Actions
-- **Runtime de desenvolvimento:** Node.js 24+
+Electron · React · TypeScript · Vite · Tailwind CSS · shadcn/ui · SQLite · TinyMCE · Vitest
