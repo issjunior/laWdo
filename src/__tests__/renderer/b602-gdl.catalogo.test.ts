@@ -24,12 +24,16 @@ describe('catálogo B602', () => {
     expect(() => validarCatalogoTiposPecaB602(catalogoInvalido)).toThrow('ID de campo B602 inválido ou duplicado')
   })
 
-  it('marca como round-trip confirmado somente os tipos validados por API, persistência e reabertura', () => {
-    const confirmados = CATALOGO_TIPOS_PECA_B602.filter(tipo => tipo.roundTripConfirmado).map(tipo => tipo.codigo)
-    expect(confirmados).toEqual([
+  it('separa confirmação visual de produção do round-trip ainda não comprovado por payload', () => {
+    const visualmenteConfirmados = CATALOGO_TIPOS_PECA_B602
+      .filter(tipo => tipo.schemaVisualConfirmadoProducao)
+      .map(tipo => tipo.codigo)
+    expect(visualmenteConfirmados).toEqual([
       '289', '613', '476', '272', '17', '472', '473', '101', '477',
       '475', '714', '480', '178', '104', '478', '572', '105', '106', '479',
     ])
+    expect(CATALOGO_TIPOS_PECA_B602.every(tipo => tipo.dataVerificacaoVisualProducao === '2026-08-22')).toBe(true)
+    expect(CATALOGO_TIPOS_PECA_B602.filter(tipo => tipo.roundTripApiConfirmadoProducao)).toEqual([])
   })
 
   it('reproduz os controles de texto e limites visuais de ARMA(S) DE CHOQUE', () => {

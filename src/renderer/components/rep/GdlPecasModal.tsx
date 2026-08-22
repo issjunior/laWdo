@@ -45,6 +45,8 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [ambiente, setAmbiente] = useState<'homologacao' | 'producao'>('homologacao')
+  const [ambienteCarregado, setAmbienteCarregado] = useState(false)
   const consultaExecutadaRef = useRef<string | null>(null)
 
   const consultarPecas = useCallback(async (): Promise<void> => {
@@ -87,13 +89,29 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
       return
     }
 
+    setAmbienteCarregado(false)
+    void window.ipcAPI.configuracao.obter('gdl_ambiente').then(resultado => {
+      const ambienteConfigurado = resultado.success && resultado.data === 'producao'
+        ? 'producao'
+        : 'homologacao'
+      setAmbiente(ambienteConfigurado)
+    }).catch(() => {
+      setAmbiente('homologacao')
+    }).finally(() => {
+      setAmbienteCarregado(true)
+    })
+  }, [open])
+
+  useEffect(() => {
+    if (!open || !ambienteCarregado) return
+
     const chaveConsulta = numeroRepCompleto.trim()
     if (consultaExecutadaRef.current === chaveConsulta) return
     consultaExecutadaRef.current = chaveConsulta
     setResultado(null)
     setSelecionadas(new Set())
     void consultarPecas()
-  }, [consultarPecas, numeroRepCompleto, open])
+  }, [ambienteCarregado, consultarPecas, numeroRepCompleto, open])
 
   const itens = resultado
     ? montarItensReconciliacaoPecasB602(pecasAtuais, resultado.camposEspecificos.pecas)
@@ -127,6 +145,9 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
           <DialogTitle className="flex items-center gap-2">
             <PackageSearch className="h-5 w-5 text-primary" />
             Selecionar peças do GDL
+            <Badge variant={ambiente === 'producao' ? 'destructive' : 'secondary'}>
+              {ambiente === 'producao' ? 'Produção' : 'Homologação'}
+            </Badge>
           </DialogTitle>
           <DialogDescription>
             Revise as peças disponíveis para a REP {numeroRepCompleto || 'não informada'}.
@@ -134,6 +155,13 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+          {!ambienteCarregado && (
+            <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Verificando ambiente do GDL...
+            </div>
+          )}
+
           {carregando && (
             <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />

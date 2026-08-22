@@ -87,15 +87,30 @@ Após validação funcional e autorização expressa do responsável, remover a 
 
 ### 2.3 TLS
 
-Remover todas as ocorrências de `rejectUnauthorized: false`, inclusive nas rotas auxiliares de download.
+Remover todas as ocorrências de `rejectUnauthorized: false`, inclusive nas rotas auxiliares de download. As requisições GDL usam a sessão de rede do Chromium/Electron.
 
 Regras:
 
-- usar a verificação TLS padrão do Node.js;
-- falhar de forma fechada diante de certificado inválido;
+- usar a verificação TLS padrão do Chromium/Electron;
+- falhar de forma fechada diante de certificado inválido, exceto a restrição temporária documentada abaixo;
 - nunca usar `NODE_TLS_REJECT_UNAUTHORIZED=0`;
-- não implementar fallback automático inseguro;
-- se a cadeia interna não for reconhecida, tratar a instalação da CA institucional no Windows como pré-requisito operacional, fora da lógica da aplicação.
+- não permitir bypass genérico, por ambiente ou para hosts configuráveis;
+- se a cadeia interna for corrigida, remover a restrição temporária em commit separado e restaurar a falha fechada integral.
+
+#### 2.3.1 Restrição temporária confirmada — certificado da API de Produção
+
+**Causa observada em 22/08/2026:** a API `https://www.gdl.sesp.parana` apresentou cadeia de certificado não reconhecida pela validação padrão do Node.js e do Chromium (`ERR_CERT_AUTHORITY_INVALID`, código Chromium `-202`). A versão anterior do laWdo consultava Produção porque usava `rejectUnauthorized: false`, que ignorava a validação para qualquer destino.
+
+Com autorização explícita do responsável pela validação, foi aplicada uma exceção transitória na `defaultSession` usada exclusivamente pelas requisições GDL. Ela aceita somente a combinação:
+
+- hostname exato `www.gdl.sesp.parana`;
+- código de verificação Chromium `-202` (`ERR_CERT_AUTHORITY_INVALID`).
+
+Para qualquer outro hostname ou código de certificado, o callback devolve o código original e a conexão continua bloqueada. A exceção não desativa TLS globalmente, não utiliza `NODE_TLS_REJECT_UNAUTHORIZED=0` e não afeta a regra de somente leitura. O runtime registra em log o host, emissor e impressão digital do certificado aceito, sem registrar credenciais ou payloads.
+
+**Evidência da validação:** diagnóstico assistido de 22/08/2026 confirmou consulta da REP autorizada com sucesso, sem erro de IPC/rede; o log registrou a aceitação somente para `www.gdl.sesp.parana`, emissor `AC CELEPAR RAIZ` e impressão digital SHA-256 observada no ambiente. A consulta GDL teve p95 de 1,13 s; CPU, memória e event loop permaneceram estáveis.
+
+**Risco residual e remoção:** a exceção ainda aceita uma cadeia não confiável para esse host. Antes da liberação definitiva, preferir a correção da cadeia pela infraestrutura GDL ou, se necessário, substituir a exceção por pinning de impressão digital com processo explícito de rotação. A retirada exige validação manual em Produção e commit separado.
 
 ## 3. Contrato canônico de produção
 
@@ -222,18 +237,18 @@ Todos os 19 schemas podem ser marcados como visualmente confirmados. Somente tip
 
 ## 4. Consulta, normalização e persistência
 
-### 4.1 Captura controlada da resposta real
+### 4.1 Captura controlada da resposta autorizada
 
 Depois da trava da REP e da correção TLS:
 
 1. consultar `109.026/2026` pelo fluxo IPC existente;
 2. capturar somente a resposta necessária para validar o normalizador;
 3. não registrar resposta bruta em log;
-4. gerar fixture anonimizada;
-5. remover nomes, documentos, identificadores, lacres, números de série, observações e demais valores reais;
-6. manter apenas a estrutura e valores sintéticos representativos.
+4. gerar fixture de teste diretamente a partir da resposta, pois a REP `109.026/2026` foi confirmada como integralmente fictícia pelo responsável;
+5. nunca incluir credenciais, cabeçalhos de autenticação, cookies, tokens ou metadados de sessão;
+6. manter a fixture limitada à estrutura e aos valores necessários aos testes.
 
-Nenhum payload real não anonimizado deverá ser versionado.
+Caso a REP autorizada deixe de ser fictícia, a fixture deverá voltar a ser anonimizada antes de qualquer versionamento.
 
 ### 4.2 Normalizador
 
@@ -323,7 +338,7 @@ A interface deverá:
 
 - identificar claramente **Produção** ou **Homologação**;
 - mostrar a REP alvo antes da consulta;
-- exigir confirmação consciente para consultar produção;
+- identificar visualmente o ambiente de produção antes da consulta, sem confirmação adicional por checkbox;
 - exibir peças normalizadas antes da importação;
 - destacar campos desconhecidos ou parcialmente convertidos;
 - manter as opções de mesclar/substituir já suportadas;
@@ -378,11 +393,11 @@ A interface deverá:
 - resposta de homologação resulta no mesmo modelo canônico;
 - `Nº Análises` é descartado;
 - desconhecidos vão para `extrasGdl`;
-- fixture não contém `109.026/2026` nem valores pessoais/reais;
+- fixture contém somente dados da REP fictícia autorizada e não inclui credenciais, cabeçalhos, cookies, tokens ou metadados de sessão;
 - qualquer outra REP em produção é bloqueada antes do HTTP;
 - homologação não é afetada pela trava;
-- certificado inválido encerra a consulta;
-- nenhuma opção desabilita a validação TLS;
+- certificado inválido encerra a consulta, exceto `ERR_CERT_AUTHORITY_INVALID` (`-202`) no host exato `www.gdl.sesp.parana` durante a restrição temporária aprovada;
+- nenhuma opção desabilita a validação TLS genericamente; a exceção temporária deve rejeitar outros hosts e códigos de certificado;
 - consulta não salva automaticamente o laudo;
 - não existe chamada de escrita para o GDL;
 - services, handlers IPC, preload e renderer não expõem criação, edição, exclusão ou mudança de status no GDL;
@@ -441,7 +456,7 @@ Executar:
 A integração estará pronta para liberação quando:
 
 - produção estiver claramente separada da homologação;
-- TLS estiver seguro;
+- a validação TLS estiver ativa e a restrição temporária de certificado estiver limitada, testada e registrada, ou removida após a correção da cadeia;
 - o catálogo canônico refletir os 19 tipos capturados;
 - a REP autorizada puder ser consultada e importada sem qualquer escrita no GDL;
 - uma inspeção dos serviços, canais IPC e ações da interface confirmar que a integração externa é integralmente somente leitura;
@@ -450,7 +465,7 @@ A integração estará pronta para liberação quando:
 - deduplicação, persistência, reabertura, backup e restauração das fotos estiverem validados;
 - dados legados de homologação continuarem utilizáveis;
 - testes automatizados e smoke test passarem;
-- a fixture estiver anonimizada;
+- a fixture corresponder à REP fictícia autorizada e não contiver material de autenticação ou sessão;
 - o responsável confirmar que a REP permaneceu inalterada e não concluída;
 - a remoção da trava temporária for autorizada explicitamente.
 

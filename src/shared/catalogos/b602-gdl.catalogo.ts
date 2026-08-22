@@ -22,7 +22,9 @@ export interface TipoPecaB602 {
   label: string
   aliasesGdl?: string[]
   familia: 'arma' | 'componente' | 'componente_balistico' | 'generico'
-  roundTripConfirmado: boolean
+  schemaVisualConfirmadoProducao: boolean
+  dataVerificacaoVisualProducao?: string
+  roundTripApiConfirmadoProducao: boolean
   campos: CampoPersonalizadoB602[]
 }
 
@@ -38,6 +40,12 @@ export const OPCOES_UNIDADE_MEDIDA_B602: OpcaoCampoB602[] = [
 ]
 
 export const UNIDADE_MEDIDA_PADRAO_B602 = 'UNIDADES'
+
+const CONFIRMACAO_VISUAL_PRODUCAO = {
+  schemaVisualConfirmadoProducao: true,
+  dataVerificacaoVisualProducao: '2026-08-22',
+  roundTripApiConfirmadoProducao: false,
+} as const
 
 const camposArmaBasicos = (
   codigo: string,
@@ -404,34 +412,34 @@ const camposEspingarda = (): CampoPersonalizadoB602[] => [
 ]
 
 export const CATALOGO_TIPOS_PECA_B602: TipoPecaB602[] = [
-  { codigo: '289', label: 'ARMA(S) DE CHOQUE', familia: 'arma', roundTripConfirmado: true, campos: camposArmaBasicos('289', true, [25, 50, 50]) },
-  { codigo: '613', label: 'ARMA(S) DE PRESSÃO', familia: 'arma', roundTripConfirmado: true, campos: camposArmaBasicos('613', true, [25, 50, 50]) },
+  { codigo: '289', label: 'ARMA(S) DE CHOQUE', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposArmaBasicos('289', true, [25, 50, 50]) },
+  { codigo: '613', label: 'ARMA(S) DE PRESSÃO', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposArmaBasicos('613', true, [25, 50, 50]) },
   {
-    codigo: '476', label: 'CARABINA(S)', familia: 'arma', roundTripConfirmado: true,
+    codigo: '476', label: 'CARABINA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO,
     campos: camposComInstitucional('476', true),
   },
-  { codigo: '272', label: 'CARREGADOR(ES)', familia: 'componente', roundTripConfirmado: true, campos: [] },
-  { codigo: '17', label: 'CARTUCHO(S)', familia: 'componente_balistico', roundTripConfirmado: true, campos: camposCartucho() },
-  { codigo: '472', label: 'ESPINGARDA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposEspingarda() },
-  { codigo: '473', label: 'ESPOLETA(S)', familia: 'componente', roundTripConfirmado: true, campos: [] },
+  { codigo: '272', label: 'CARREGADOR(ES)', familia: 'componente', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '17', label: 'CARTUCHO(S)', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposCartucho() },
+  { codigo: '472', label: 'ESPINGARDA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposEspingarda() },
+  { codigo: '473', label: 'ESPOLETA(S)', familia: 'componente', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
   {
-    codigo: '101', label: 'ESTOJO(S)', familia: 'componente_balistico', roundTripConfirmado: true,
+    codigo: '101', label: 'ESTOJO(S)', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO,
     campos: [campoOrigemColeta('101', true)],
   },
-  { codigo: '477', label: 'FUZIL(IS)', familia: 'arma', roundTripConfirmado: true, campos: camposComInstitucional('477', true) },
-  { codigo: '475', label: 'GARRUCHA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposComInstitucional('475', true) },
-  { codigo: '714', label: 'JET LOADER', familia: 'componente', roundTripConfirmado: true, campos: [] },
-  { codigo: '480', label: 'METRALHADORA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposMetralhadora() },
-  { codigo: '178', label: 'OUTROS', familia: 'generico', roundTripConfirmado: true, campos: [] },
-  { codigo: '104', label: 'PISTOLA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposPistola() },
-  { codigo: '478', label: 'PISTOLETE(S)', familia: 'arma', roundTripConfirmado: true, campos: [] },
-  { codigo: '572', label: 'PÓLVORA', familia: 'componente_balistico', roundTripConfirmado: true, campos: [] },
-  { codigo: '105', label: 'PROJÉTEIS', familia: 'componente_balistico', roundTripConfirmado: true, campos: [campoOrigemColeta('105', true)] },
+  { codigo: '477', label: 'FUZIL(IS)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposComInstitucional('477', true) },
+  { codigo: '475', label: 'GARRUCHA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposComInstitucional('475', true) },
+  { codigo: '714', label: 'JET LOADER', familia: 'componente', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '480', label: 'METRALHADORA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposMetralhadora() },
+  { codigo: '178', label: 'OUTROS', familia: 'generico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '104', label: 'PISTOLA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposPistola() },
+  { codigo: '478', label: 'PISTOLETE(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '572', label: 'PÓLVORA', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '105', label: 'PROJÉTEIS', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [campoOrigemColeta('105', true)] },
   {
-    codigo: '106', label: 'REVÓLVER(ES)', familia: 'arma', roundTripConfirmado: true,
+    codigo: '106', label: 'REVÓLVER(ES)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO,
     campos: camposRevolver(),
   },
-  { codigo: '479', label: 'SUBMETRALHADORA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposComInstitucional('479', true) },
+  { codigo: '479', label: 'SUBMETRALHADORA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposComInstitucional('479', true) },
 ]
 
 export function validarCatalogoTiposPecaB602(

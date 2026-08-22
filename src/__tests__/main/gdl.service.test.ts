@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 const mocks = vi.hoisted(() => ({
   obterConfiguracao: vi.fn(),
+  configurarVerificacaoCertificado: vi.fn(),
 }))
 
 vi.mock('electron', () => {
@@ -22,6 +23,12 @@ vi.mock('electron', () => {
     },
     nativeImage: {
       createFromBuffer: () => imagem,
+    },
+    session: {
+      defaultSession: {
+        fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+        setCertificateVerifyProc: mocks.configurarVerificacaoCertificado,
+      },
     },
   }
 })
@@ -160,6 +167,34 @@ describe('gdl.service', () => {
       statusCode: 200,
       ambiente: 'Produção',
     })
+
+    const verificarCertificado = mocks.configurarVerificacaoCertificado.mock.calls[0]?.[0] as ((
+      requisicao: {
+        hostname: string
+        errorCode: number
+        verificationResult: string
+        certificate: { issuerName: string; fingerprint: string }
+      },
+      callback: (resultado: number) => void,
+    ) => void) | undefined
+    expect(verificarCertificado).toBeTypeOf('function')
+
+    const callbackCertificado = vi.fn()
+    verificarCertificado?.({
+      hostname: 'www.gdl.sesp.parana',
+      errorCode: -202,
+      verificationResult: 'ERR_CERT_AUTHORITY_INVALID',
+      certificate: { issuerName: 'Autoridade interna', fingerprint: 'AA:BB' },
+    }, callbackCertificado)
+    expect(callbackCertificado).toHaveBeenLastCalledWith(0)
+
+    verificarCertificado?.({
+      hostname: 'outro.exemplo',
+      errorCode: -202,
+      verificationResult: 'ERR_CERT_AUTHORITY_INVALID',
+      certificate: { issuerName: 'Autoridade interna', fingerprint: 'CC:DD' },
+    }, callbackCertificado)
+    expect(callbackCertificado).toHaveBeenLastCalledWith(-202)
 
     statusUnidades = 503
     await expect(testarConexao('homologacao')).resolves.toMatchObject({

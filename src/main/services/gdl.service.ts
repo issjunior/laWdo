@@ -1,12 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import https from 'https';
-import http from 'http';
-import * as tls from 'node:tls';
 import { createHash } from 'crypto';
 import { Buffer } from 'node:buffer';
 import { inflateRawSync } from 'node:zlib';
-import { app, nativeImage } from 'electron';
+import { app, nativeImage, session } from 'electron';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
@@ -18,34 +15,6 @@ import type {
 } from '../../shared/types/gdl-arquivos.types.js';
 
 const log = getLogger('gdl');
-
-interface TlsComCertificadosDoSistema {
-  getCACertificates?: (tipo: 'system') => string[]
-  setDefaultCACertificates?: (certificados: string[]) => void
-}
-
-function configurarCertificadosRaizDoSistema(): void {
-  try {
-    const tlsComCertificadosDoSistema = tls as typeof tls & TlsComCertificadosDoSistema;
-    if (!tlsComCertificadosDoSistema.getCACertificates || !tlsComCertificadosDoSistema.setDefaultCACertificates) {
-      log.warn('Esta versão do runtime não expõe a store de certificados do sistema para o GDL.');
-      return;
-    }
-
-    const certificados = tlsComCertificadosDoSistema.getCACertificates('system');
-    if (certificados.length === 0) {
-      log.warn('Nenhum certificado raiz foi encontrado no repositório do sistema para o GDL.');
-      return;
-    }
-    tlsComCertificadosDoSistema.setDefaultCACertificates(certificados);
-  } catch (error) {
-    log.warn('Não foi possível carregar certificados raiz do sistema para o GDL.', {
-      error: error instanceof Error ? error.message : 'Erro inesperado',
-    });
-  }
-}
-
-configurarCertificadosRaizDoSistema();
 
 interface GdlCredenciais {
   baseUrl: string;
@@ -106,10 +75,37 @@ const GDL_ESTADO_DIR = path.join(app.getPath('userData'), 'gdl');
 const GDL_ESTADO_FILE = path.join(GDL_ESTADO_DIR, 'validacao-sessao.json');
 const TIMEOUT_DOWNLOAD_GDL_MS = 30000;
 const EXTENSOES_IMAGEM_GDL = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp']);
+const HOST_GDL_PRODUCAO_COM_CERTIFICADO_EXCEPCIONAL = 'www.gdl.sesp.parana';
 const REP_PRODUCAO_AUTORIZADA = {
   numero: 109026,
   ano: 2026,
 } as const;
+let verificacaoCertificadoGdlConfigurada = false;
+
+function obterSessaoRedeGdl() {
+  const sessaoRede = session.defaultSession;
+  if (verificacaoCertificadoGdlConfigurada) return sessaoRede;
+
+  sessaoRede.setCertificateVerifyProc((requisicao, callback) => {
+    const deveConfiar = requisicao.hostname === HOST_GDL_PRODUCAO_COM_CERTIFICADO_EXCEPCIONAL
+      && requisicao.errorCode === -202;
+
+    if (!deveConfiar) {
+      callback(requisicao.errorCode);
+      return;
+    }
+
+    log.warn('Certificado não confiável aceito exclusivamente para a API GDL de Produção.', {
+      host: HOST_GDL_PRODUCAO_COM_CERTIFICADO_EXCEPCIONAL,
+      erro: requisicao.verificationResult,
+      emissor: requisicao.certificate.issuerName,
+      impressaoDigital: requisicao.certificate.fingerprint,
+    });
+    callback(0);
+  });
+  verificacaoCertificadoGdlConfigurada = true;
+  return sessaoRede;
+}
 
 interface ArquivoRepInterno extends ArquivoRepGdl {
   indiceEntradaZip: number
@@ -277,45 +273,32 @@ function buildAuthHeader(login: string, senha: string): string {
   return `Basic ${token}`;
 }
 
-function httpsRequest(
+async function requisitarGdl(
   url: string,
   method: string,
   headers: Record<string, string>,
   body?: string,
   timeout: number = 15000,
 ): Promise<{ statusCode: number; data: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const isHttps = parsed.protocol === 'https:';
-    const lib = isHttps ? https : http;
-
-    const options: https.RequestOptions = {
-      hostname: parsed.hostname,
-      port: parsed.port || (isHttps ? 443 : 80),
-      path: parsed.pathname + parsed.search,
+  const sessaoRede = obterSessaoRedeGdl();
+  const controller = new AbortController();
+  const temporizador = setTimeout(() => controller.abort(), timeout);
+  try {
+    const resposta = await sessaoRede.fetch(url, {
       method,
       headers,
-      timeout,
-    };
-
-    const req = lib.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve({ statusCode: res.statusCode || 0, data }));
+      ...(body ? { body } : {}),
+      signal: controller.signal,
     });
-
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error(`Timeout após ${timeout}ms`));
-    });
-
-    req.on('error', (err) => reject(err));
-
-    if (body) {
-      req.write(body);
+    return { statusCode: resposta.status, data: await resposta.text() };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Timeout após ${timeout}ms`);
     }
-    req.end();
-  });
+    throw error;
+  } finally {
+    clearTimeout(temporizador);
+  }
 }
 
 function extrairExtensao(nomeArquivo: string): string {
@@ -484,32 +467,29 @@ function detectarMimeImagem(bytes: Buffer): string | null {
   return null;
 }
 
-function baixarArquivoGdl(url: string, headers: Record<string, string>): Promise<{ statusCode: number; contentType: string; bytes: Buffer }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const lib = parsed.protocol === 'https:' ? https : http;
-    const req = lib.request({
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-      path: parsed.pathname + parsed.search,
+async function baixarArquivoGdl(url: string, headers: Record<string, string>): Promise<{ statusCode: number; contentType: string; bytes: Buffer }> {
+  const sessaoRede = obterSessaoRedeGdl();
+  const controller = new AbortController();
+  const temporizador = setTimeout(() => controller.abort(), TIMEOUT_DOWNLOAD_GDL_MS);
+  try {
+    const resposta = await sessaoRede.fetch(url, {
       method: 'GET',
       headers,
-      timeout: TIMEOUT_DOWNLOAD_GDL_MS,
-    }, res => {
-      const partes: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => {
-        partes.push(chunk);
-      });
-      res.on('end', () => resolve({
-        statusCode: res.statusCode || 0,
-        contentType: typeof res.headers['content-type'] === 'string' ? res.headers['content-type'] : '',
-        bytes: Buffer.concat(partes),
-      }));
+      signal: controller.signal,
     });
-    req.on('timeout', () => req.destroy(new Error('Timeout ao baixar arquivo do GDL.')));
-    req.on('error', reject);
-    req.end();
-  });
+    return {
+      statusCode: resposta.status,
+      contentType: resposta.headers.get('content-type') || '',
+      bytes: Buffer.from(await resposta.arrayBuffer()),
+    };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error('Timeout ao baixar arquivo do GDL.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(temporizador);
+  }
 }
 
 export function extrairFiltrosParaConsultaInvestigacao(rep: GdlRepValidada): FiltroConsultaInvestigacao[] {
@@ -580,7 +560,7 @@ async function consultarEnvolvidosEmHomologacao(
       tamPagina: 10,
     });
     try {
-      const { statusCode, data } = await httpsRequest(url, 'POST', headers, corpo, 15000);
+      const { statusCode, data } = await requisitarGdl(url, 'POST', headers, corpo, 15000);
 
       if (statusCode !== 200) {
         log.warn('Consulta auxiliar de envolvidos no GDL não retornou sucesso', {
@@ -616,7 +596,7 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
       'Content-Type': 'application/json',
     };
     const inicioRede = Date.now();
-    const testeRede = await httpsRequest(endpointRede, 'GET', headersRede, undefined, 5000);
+    const testeRede = await requisitarGdl(endpointRede, 'GET', headersRede, undefined, 5000);
     const rede: GdlTesteEtapa = {
       sucesso: testeRede.statusCode >= 200 && testeRede.statusCode < 500,
       latencia: Date.now() - inicioRede,
@@ -698,7 +678,7 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
     const url = `${creds.baseUrl}/rep/obter?numero=${encodeURIComponent(numero)}&ano=${encodeURIComponent(ano)}`;
     log.debug('Consultando REP no GDL', { numero, ano });
 
-    const { statusCode, data } = await httpsRequest(url, 'GET', headers, undefined, 15000);
+    const { statusCode, data } = await requisitarGdl(url, 'GET', headers, undefined, 15000);
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
@@ -754,7 +734,7 @@ async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise
   if (credenciais.cpfUsuario) headers.cpfUsuario = credenciais.cpfUsuario.replace(/\D/g, '');
 
   const url = `${credenciais.baseUrl}/rep/obter?numero=${encodeURIComponent(numero)}&ano=${encodeURIComponent(ano)}`;
-  const resposta = await httpsRequest(url, 'GET', headers, undefined, 15000);
+  const resposta = await requisitarGdl(url, 'GET', headers, undefined, 15000);
   if (resposta.statusCode === 404) throw new Error(`REP ${numero}/${ano} não encontrada no GDL.`);
   if (resposta.statusCode === 401 || resposta.statusCode === 403) throw new Error('Autenticação rejeitada pelo GDL. Verifique login e senha.');
   if (resposta.statusCode !== 200) throw new Error(`Erro do servidor GDL (HTTP ${resposta.statusCode}).`);
@@ -879,7 +859,7 @@ export async function validarCredenciais(
     const url = `${baseUrl}/rep/obter?numero=${encodeURIComponent(numero)}&ano=${encodeURIComponent(ano)}`;
     log.debug('Validando credenciais GDL por consulta real', { numero, ano, ambiente: amb });
 
-    const { statusCode, data } = await httpsRequest(url, 'GET', headers, undefined, 15000);
+    const { statusCode, data } = await requisitarGdl(url, 'GET', headers, undefined, 15000);
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);

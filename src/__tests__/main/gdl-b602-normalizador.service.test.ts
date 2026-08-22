@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Buffer } from 'node:buffer'
 import fixture from '../fixtures/gdl/rep-190-2026.json'
 import fixtureRevolver from '../fixtures/gdl/rep-191-2026.json'
+import fixtureProducao from '../fixtures/gdl/rep-109026-2026.json'
 import {
   interpretarGdlListaRepsInvestigacaoJson,
   interpretarGdlRepJson,
@@ -80,6 +81,22 @@ describe('contrato GDL B602', () => {
     expect(() => validarGdlRep({ numero: 190, ano: 2026, pecas: 'inválido' })).toThrow()
   })
 
+  it('normaliza a fixture autorizada de Produção sem dados de autenticação ou sessão', () => {
+    const resultado = converterRepB602(validarGdlRep(fixtureProducao))
+
+    expect(resultado.camposGerais).toMatchObject({
+      numero: '109026-2026',
+      tipo_solicitacao: 'OFÍCIO REQUISITANTE',
+      numero_documento: '3216/2026',
+      b602_local_cidade: 'TELÊMACO BORBA',
+      b602_solicitante_nome: '18. SUBDIVISAO POLICIAL - DELEGACIA',
+      data_requisicao: '2026-08-22',
+    })
+    expect(resultado.camposEspecificos.pecas).toEqual([
+      expect.objectContaining({ tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }),
+    ])
+  })
+
   it('informa JSON inválido sem usar cast direto', () => {
     expect(() => interpretarGdlRepJson('{')).toThrow('O GDL retornou JSON inválido.')
   })
@@ -129,7 +146,7 @@ describe('contrato GDL B602', () => {
     const revolver = converterRepB602(validarGdlRep(fixtureRevolver)).camposEspecificos.pecas[0]
 
     expect(revolver.personalizados).toMatchObject({
-      '106:marca_arma': 'Taurus',
+      '106:marca_arma': '2',
       '106:tipo_acabamento': '44',
     })
     expect(revolver.extrasGdl).not.toHaveProperty('Marca da Arma')
@@ -275,7 +292,7 @@ describe('contrato GDL B602', () => {
         codigo: '472',
         personalizados: {
           '472:numero_serie': 'SERIE-472', '472:marca': 'MARCA 472', '472:modelo': 'MODELO 472',
-          '472:capacidade': '5', '472:marca_arma': '(Fabricante Desconhecido)', '472:status_numero_serie': '20',
+          '472:capacidade': '5', '472:marca_arma': '1376', '472:status_numero_serie': '20',
           '472:calibre_nominal': '29', '472:tipo_acabamento': '47', '472:estado_geral': '54',
           '472:funcionamento': '100', '472:fabricacao_arma': '63', '472:arma_institucional': '98',
         },
@@ -328,7 +345,7 @@ describe('contrato GDL B602', () => {
       '104:marca': 'TAURUS',
       '104:modelo': 'PT99-D',
       '104:capacidade': '',
-      '104:marca_arma': 'Taurus',
+      '104:marca_arma': '2',
       '104:status_numero_serie': '20',
       '104:calibre_nominal': '39',
       '104:tipo_acabamento': '44',

@@ -25,7 +25,7 @@ function criarPeca(sobrescritas: Partial<PecaB602> = {}): PecaB602 {
       observacao: '',
     },
     personalizados: {
-      '104:marca_arma': 'Taurus',
+      '104:marca_arma': '2',
       '104:modelo': 'G3',
       '104:numero_serie': 'ABC123',
       '104:calibre_nominal': '9mm Luger',

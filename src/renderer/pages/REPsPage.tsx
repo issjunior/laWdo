@@ -1321,7 +1321,10 @@ export const REPsPage: React.FC = () => {
       const valorPadrao = valoresPadrao[campo];
       const campoSemDadoDoUsuario = !valorAtual || valorAtual === valorPadrao;
       if (substituirDadosGdl || campoSemDadoDoUsuario) {
-        form.setValue(campo, value, { shouldValidate: true });
+        const valorNormalizado = campo === 'numero' && typeof value === 'string'
+          ? formatarNumeroREP(value)
+          : value;
+        form.setValue(campo, valorNormalizado, { shouldValidate: true });
       }
       if (value) {
         novosPreenchidos.add(key);

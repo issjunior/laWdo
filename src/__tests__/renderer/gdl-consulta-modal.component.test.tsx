@@ -148,6 +148,7 @@ describe('GdlConsultaModal', () => {
       />,
     )
 
+    await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
     await buscarRep()
 
     const checkboxes = screen.getAllByRole('checkbox')
@@ -194,5 +195,27 @@ describe('GdlConsultaModal', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(consultarRep).not.toHaveBeenCalled()
     expect(onAplicar).not.toHaveBeenCalled()
+  })
+
+  it('identifica o ambiente de Produção antes da consulta', async () => {
+    obterConfiguracao.mockResolvedValue({ success: true, data: 'producao' })
+    testarConexao.mockResolvedValue({
+      success: true,
+      data: { sucesso: true, latencia: 25, ambiente: 'producao', statusCode: 200, autenticado: true },
+    })
+    render(
+      <GdlConsultaModal
+        open
+        onOpenChange={vi.fn()}
+        onAplicar={vi.fn()}
+        temDadosExistentes={false}
+        pecasB602={[]}
+        onConfigurarCredenciais={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByText('Produção')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '109026' } })
+    expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled()
   })
 })

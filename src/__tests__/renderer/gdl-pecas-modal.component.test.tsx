@@ -29,14 +29,18 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
 
 const ipcApiOriginal = window.ipcAPI
 const consultarRep = vi.fn()
+const obterConfiguracao = vi.fn()
 
 describe('GdlPecasModal', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     consultarRep.mockResolvedValue({ success: true, data: resultadoConsulta })
+    obterConfiguracao.mockResolvedValue({ success: true, data: 'homologacao' })
     Object.defineProperty(window, 'ipcAPI', {
       value: {
         ...ipcApiOriginal,
         gdl: { ...ipcApiOriginal.gdl, consultarRep },
+        configuracao: { ...ipcApiOriginal.configuracao, obter: obterConfiguracao },
       },
       writable: true,
     })
@@ -85,5 +89,22 @@ describe('GdlPecasModal', () => {
     expect(await screen.findByText('CARABINA(S)')).toBeInTheDocument()
     expect(screen.getByRole('checkbox')).toBeChecked()
     expect(screen.getByText('Já importada')).toBeInTheDocument()
+  })
+
+  it('identifica Produção antes de consultar peças', async () => {
+    obterConfiguracao.mockResolvedValue({ success: true, data: 'producao' })
+
+    render(
+      <GdlPecasModal
+        open
+        onOpenChange={vi.fn()}
+        numeroRepCompleto="109026-2026"
+        pecasAtuais={[]}
+        onAplicar={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByText('Produção')).toBeInTheDocument()
+    await waitFor(() => expect(consultarRep).toHaveBeenCalledWith('109026', '2026'))
   })
 })

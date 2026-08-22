@@ -68,7 +68,7 @@ function normalizarValorCampoPersonalizado(
   ))
 
   if (!opcao) return valor
-  return campo.controle === 'combobox' ? opcao.label : opcao.codigo
+  return opcao.codigo
 }
 
 function obterTextoPorAlias(fonte: unknown, aliases: string[]): string {

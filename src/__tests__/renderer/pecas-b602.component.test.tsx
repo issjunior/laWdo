@@ -36,6 +36,7 @@ function criarPecaGdl(): PecaB602 {
     },
     personalizados: {
       '476:numero_serie': 'ABC123',
+      '476:funcionamento': '57',
       '476:arma_institucional': '98',
     },
     extrasGdl: {},
@@ -112,7 +113,7 @@ describe('PecasB602Fields', () => {
 
     fireEvent.change(obterControleDoCampo('Quantidade'), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar peça' }))
-    expect(screen.getByText('Arma é Institucional? é obrigatório.')).toBeInTheDocument()
+    expect(screen.getByText('Funcionamento é obrigatório.')).toBeInTheDocument()
     expect(onChange).not.toHaveBeenCalled()
   })
 
@@ -145,7 +146,7 @@ describe('PecasB602Fields', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar peça' }))
     await selecionarOpcao('Tipo do Item', 'PISTOLA(S)')
 
-    expect(screen.queryByText('Marca', { selector: 'label' })).not.toBeInTheDocument()
+    expect(screen.getByText('Marca', { selector: 'label' })).toBeInTheDocument()
     expect(obterControleDoCampo('Nº Série')).toHaveAttribute('maxlength', '25')
     expect(obterControleDoCampo('Modelo')).toHaveAttribute('maxlength', '50')
     expect(obterControleDoCampo('Capacidade')).toHaveAttribute('maxlength', '50')
@@ -156,7 +157,7 @@ describe('PecasB602Fields', () => {
     expect(marcaArma).toHaveAttribute('aria-expanded', 'true')
     await waitFor(() => expect(screen.getByPlaceholderText('Pesquisar marca...')).toBeVisible())
     const pesquisaMarca = screen.getByPlaceholderText('Pesquisar marca...')
-    expect(screen.getByText('Digite para filtrar as 1.367 marcas disponíveis.')).toBeInTheDocument()
+    expect(screen.getByText('Digite para filtrar as 1.371 marcas disponíveis.')).toBeInTheDocument()
 
     fireEvent.change(pesquisaMarca, { target: { value: 'Taurus' } })
     fireEvent.click(await screen.findByRole('option', { name: 'Taurus' }))
@@ -269,6 +270,7 @@ describe('PecasB602Fields', () => {
     await selecionarOpcao('Tipo do Item', 'CARABINA(S)')
     fireEvent.change(obterControleDoCampo('Identificação'), { target: { value: 'Carabina apreendida' } })
     fireEvent.change(obterControleDoCampo('Nº Série'), { target: { value: 'SERIE-01' } })
+    await selecionarOpcao('Funcionamento *', 'Eficiente')
     await selecionarOpcao('Arma é Institucional? *', 'Não')
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar peça' }))
 
@@ -284,6 +286,7 @@ describe('PecasB602Fields', () => {
         comuns: expect.objectContaining({ identificacao: 'Carabina apreendida', quantidade: 1 }),
         personalizados: expect.objectContaining({
           '476:numero_serie': 'SERIE-01',
+          '476:funcionamento': '57',
           '476:arma_institucional': '98',
         }),
       }),

@@ -160,7 +160,7 @@ describe('persistência B602 por IPC e SQLite', () => {
       materialIncinerado: 'S',
     })
     expect(pistolaReaberta.personalizados).toMatchObject({
-      '104:marca_arma': 'Taurus',
+      '104:marca_arma': '2',
       '104:status_numero_serie': '20',
       '104:calibre_nominal': '39',
       '104:tipo_acabamento': '44',
@@ -169,7 +169,7 @@ describe('persistência B602 por IPC e SQLite', () => {
       '104:fabricacao_arma': '63',
       '104:arma_institucional': '98',
     })
-    expect(pistolaReaberta.extrasGdl).toEqual({ Marca: 'TAURUS' })
+    expect(pistolaReaberta.extrasGdl).toEqual({})
   })
 
   it('normaliza, persiste e reabre as peças confirmadas da REP 191/2026 sem perder campos', async () => {
@@ -207,7 +207,7 @@ describe('persistência B602 por IPC e SQLite', () => {
       '106:numero_serie': 'DHGEHY54',
       '106:marca': 'TAURUS',
       '106:modelo': 'XX',
-      '106:marca_arma': 'Taurus',
+      '106:marca_arma': '2',
       '106:status_numero_serie': '20',
       '106:calibre_nominal': '26',
       '106:tipo_acabamento': '44',

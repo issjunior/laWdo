@@ -131,6 +131,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [preTeste, setPreTeste] = useState<PreTesteResultado | null>(null);
   const [preTesteTestando, setPreTesteTestando] = useState(false);
   const [ambiente, setAmbiente] = useState<string>('homologacao');
+  const [ambienteCarregado, setAmbienteCarregado] = useState(false);
 
   const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoExame<DadosImportacaoB602> | null>(null);
   const [idsPecasSelecionadas, setIdsPecasSelecionadas] = useState<Set<string>>(new Set());
@@ -192,11 +193,13 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       setCamposMapeados([]);
       setModo('mesclar');
       setPreTeste(null);
+      setAmbienteCarregado(false);
 
       (async () => {
         const rAmb = await window.ipcAPI.configuracao.obter('gdl_ambiente');
         const amb = (rAmb.success && rAmb.data) ? rAmb.data : 'homologacao';
         setAmbiente(amb);
+        setAmbienteCarregado(true);
 
         setPreTesteTestando(true);
         try {
@@ -409,6 +412,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           <DialogTitle className="flex items-center gap-2">
             <Network className="h-5 w-5 text-primary" />
             Consultar GDL
+            <Badge variant={ambiente === 'producao' ? 'destructive' : 'secondary'}>{ambienteLabel}</Badge>
             <Button
               variant="ghost"
               size="icon"
@@ -548,7 +552,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               </Button>
               <Button
                 onClick={handleBuscar}
-                disabled={!numeroRep.trim() || !anoRep.trim() || buscando}
+                disabled={!ambienteCarregado || !numeroRep.trim() || !anoRep.trim() || buscando}
                 className="gap-2"
               >
                 {buscando ? (
