@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Bot, Images, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,7 @@ interface PainelLateralRedimensionavelProps {
   onAlternarPainelIa: () => void
   onAlternarPainelIlustracoes: () => void
   onReindexarSecoes: () => void
+  onRecolherAutomaticamente?: () => void
   children: ReactNode
   conteudoPainel: ReactNode
 }
@@ -42,6 +43,10 @@ interface BotaoTrilhoProps {
   onClick: () => void
 }
 
+export function obterLarguraMinimaNecessaria(larguraMinimaPainel: number): number {
+  return 560 + larguraMinimaPainel + 56
+}
+
 function BotaoTrilho({ titulo, ativo, icone: Icone, onClick }: BotaoTrilhoProps) {
   return (
     <Button
@@ -49,7 +54,7 @@ function BotaoTrilho({ titulo, ativo, icone: Icone, onClick }: BotaoTrilhoProps)
       variant="ghost"
       size="icon"
       className={cn(
-        'size-8 rounded-md border border-transparent',
+        'size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200',
         ativo && 'border-border bg-accent text-accent-foreground',
       )}
       aria-label={titulo}
@@ -73,7 +78,7 @@ function BotaoFerramentasTrilho({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-8 rounded-md border border-transparent"
+          className="size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200"
           aria-label="Ferramentas"
         >
           <Wrench className="size-4" />
@@ -103,9 +108,11 @@ export function PainelLateralRedimensionavel({
   onAlternarPainelIa,
   onAlternarPainelIlustracoes,
   onReindexarSecoes,
+  onRecolherAutomaticamente,
   children,
   conteudoPainel,
 }: PainelLateralRedimensionavelProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const ultimaLargura = useRef(larguraPadrao)
   const { largura, persistirLargura } = useLarguraPainelPersistida(
     chavePersistencia,
@@ -116,11 +123,35 @@ export function PainelLateralRedimensionavel({
   const painelExpandido = tipo !== null && !recolhido
   const rotuloPainel = tipo === 'ilustracoes' ? 'ilustrações' : 'Assistente IA'
 
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !painelExpandido) return
+
+    const larguraMinimaNecessaria = obterLarguraMinimaNecessaria(larguraMinima)
+    const observar = (largura: number) => {
+      if (largura > 0 && largura < larguraMinimaNecessaria) onRecolherAutomaticamente?.()
+    }
+    const observer = new ResizeObserver(entries => {
+      const largura = entries[0]?.contentRect.width
+      if (largura !== undefined) observar(largura)
+    })
+    observer.observe(container)
+    observar(container.getBoundingClientRect().width)
+    return () => observer.disconnect()
+  }, [larguraMinima, onRecolherAutomaticamente, painelExpandido])
+
   return (
-    <div className="flex min-w-0 items-start">
+    <div ref={containerRef} className="flex min-w-0 max-w-full items-start gap-2 [overflow-x:clip]">
       <ResizablePanelGroup
         orientation="horizontal"
-        className="h-auto min-w-0 flex-1 items-start"
+        className={cn(
+          'h-auto min-w-0 flex-1 items-stretch !overflow-visible',
+          '[&>[data-painel-lateral-sticky]]:sticky',
+          '[&>[data-painel-lateral-sticky]]:top-4',
+          '[&>[data-painel-lateral-sticky]]:self-start',
+          '[&>[data-painel-lateral-sticky]]:!h-[calc(100dvh-3rem)]',
+          '[&>[data-painel-lateral-sticky]]:!max-h-[calc(100dvh-3rem)]',
+        )}
         onLayoutChanged={(_layout, detalhes) => {
           if (detalhes.isUserInteraction && painelExpandido) {
             persistirLargura(ultimaLargura.current)
@@ -128,14 +159,20 @@ export function PainelLateralRedimensionavel({
         }}
       >
         <ResizablePanel id="editor-laudo" minSize={560}>
-          <div className="min-w-0">{children}</div>
+          <div className="min-w-0 max-w-full">{children}</div>
         </ResizablePanel>
         {painelExpandido && (
           <>
-            <ResizableHandle withHandle aria-label={`Redimensionar painel de ${rotuloPainel}`} />
+            <ResizableHandle
+              withHandle
+              data-painel-lateral-sticky
+              className="bg-transparent transition-colors duration-200 after:bg-border/60 hover:bg-accent/40 data-[separator=active]:bg-primary/10"
+              aria-label={`Redimensionar painel de ${rotuloPainel}`}
+            />
             <ResizablePanel
               key={tipo}
               id={`painel-lateral-${tipo}`}
+              data-painel-lateral-sticky
               defaultSize={largura}
               minSize={larguraMinima}
               maxSize={larguraMaxima}
@@ -144,7 +181,7 @@ export function PainelLateralRedimensionavel({
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="sticky top-4 h-[calc(100dvh-3rem)] min-h-[32rem] min-w-0 overflow-hidden border-l bg-background">
+              <div className="h-full min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm ring-1 ring-black/5 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-200 dark:ring-white/5">
                 {conteudoPainel}
               </div>
             </ResizablePanel>
@@ -154,7 +191,7 @@ export function PainelLateralRedimensionavel({
 
       <aside
         aria-label="Painéis do laudo"
-        className="sticky top-4 flex w-10 shrink-0 self-start flex-col items-center gap-1 border-l bg-muted/20 px-1 py-2"
+        className="sticky top-4 flex w-10 shrink-0 self-start flex-col items-center gap-1 rounded-xl border border-border/70 bg-card/90 px-1 py-2 shadow-sm backdrop-blur-sm transition-[background-color,border-color,box-shadow] duration-200"
       >
         <BotaoTrilho
           titulo="Painel de IA"

@@ -110,6 +110,8 @@ interface TinyMceEditorProps {
   initialValue?: string;
   onChange: (html: string, origem?: 'usuario' | 'normalizacao-inicial') => void;
   height?: number;
+  /** Faz o editor crescer junto com o documento, deixando a rolagem a cargo da página. */
+  alturaAutomatica?: boolean;
   placeholder?: string;
   /** ID do laudo para upload de imagens. Se ausente, usa base64 (templates/cabeçalho). */
   laudoId?: string;
@@ -135,6 +137,8 @@ type ToggleCondicionalFlat = { id: string; label: string; subtitulo?: string };
 type UploadImagemHandler = NonNullable<RawEditorOptions['images_upload_handler']>;
 type PastePostprocessHandler = NonNullable<RawEditorOptions['paste_postprocess']>;
 type FilePickerHandler = NonNullable<RawEditorOptions['file_picker_callback']>;
+type OpcoesAlturaEditor = Pick<RawEditorOptions, 'resize'>
+  & Partial<Pick<RawEditorOptions, 'height' | 'min_height' | 'autoresize_bottom_margin'>>;
 type TinymceWindow = Window & {
   tinymce?: {
     get: (id?: string) => TinyMceEditorInstance | null;
@@ -169,6 +173,49 @@ const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
 ];
 
 const BADGE_BLOCO_CONDICIONAL = 'Bloco condicional';
+const PLUGINS_TINYMCE = [
+  'anchor',
+  'autolink',
+  'charmap',
+  'codesample',
+  'emoticons',
+  'image',
+  'link',
+  'lists',
+  'media',
+  'paste',
+  'searchreplace',
+  'table',
+  'visualblocks',
+  'wordcount',
+  'code',
+  'fullscreen',
+  'preview',
+  'nonbreaking',
+  'visualchars',
+  'insertdatetime',
+  'pagebreak',
+  'help',
+];
+
+export function obterOpcoesAlturaEditor(altura: number, alturaAutomatica: boolean): OpcoesAlturaEditor {
+  if (alturaAutomatica) {
+    return {
+      min_height: altura,
+      autoresize_bottom_margin: 24,
+      resize: false,
+    };
+  }
+
+  return {
+    height: altura,
+    resize: true,
+  };
+}
+
+export function obterPluginsTinyMce(alturaAutomatica: boolean): string[] {
+  return alturaAutomatica ? [...PLUGINS_TINYMCE, 'autoresize'] : [...PLUGINS_TINYMCE];
+}
 
 const RESUMOS_FIXOS_BLOCO_CONDICIONAL: Record<string, string> = {
   b602_armas_toggle: 'Mostra quando: houver armas na REP',
@@ -284,6 +331,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   initialValue,
   onChange,
   height = 300,
+  alturaAutomatica = false,
   placeholder,
   laudoId: _laudoId,
   editorId,
@@ -384,13 +432,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial',
         )}
         init={{
-          height,
+          ...obterOpcoesAlturaEditor(height, alturaAutomatica),
           menubar: false,
           placeholder,
           promotion: false,
           branding: false,
           statusbar: true,
-          resize: true,
           contextmenu: false,
           skin_url: './tinymce/skins/ui/oxide',
           content_css: './tinymce/skins/content/default/content.css',
@@ -410,30 +457,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           relative_urls: false,
           remove_script_host: false,
           convert_urls: false,
-          plugins: [
-            'anchor',
-            'autolink',
-            'charmap',
-            'codesample',
-            'emoticons',
-            'image',
-            'link',
-            'lists',
-            'media',
-            'paste',
-            'searchreplace',
-            'table',
-            'visualblocks',
-            'wordcount',
-            'code',
-            'fullscreen',
-            'preview',
-            'nonbreaking',
-            'visualchars',
-            'insertdatetime',
-            'pagebreak',
-            'help',
-          ],
+          plugins: obterPluginsTinyMce(alturaAutomatica),
           toolbar:
             'undo redo | ' +
             'bold italic underline strikethrough | forecolor backcolor removeformat | ' +

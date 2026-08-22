@@ -15,6 +15,7 @@ export type EscopoIa = typeof ESCOPOS_IA[number];
 export type ModoInteracaoIa = 'perguntar' | 'escrever' | 'reescrever';
 export type EstadoConsultaIa = 'respondida' | 'insuficiente' | 'conflitante';
 export type FaseConsultaIa = 'preparando' | 'analisando' | 'consolidando' | 'verificando';
+export type EstadoOperacaoPainelIa = 'ocioso' | 'preparando' | 'analisando' | 'consolidando' | 'verificando' | 'concluido' | 'insuficiente' | 'conflitante' | 'cancelado' | 'erro';
 
 export interface BlocoContextoIa {
   id: string;
@@ -55,6 +56,13 @@ export interface RespostaConsultaIa {
 export interface ProgressoConsultaIa {
   operationId: string;
   fase: FaseConsultaIa;
+}
+
+export function progressoConsultaIaValido(valor: unknown): valor is ProgressoConsultaIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const progresso = valor as Record<string, unknown>;
+  return typeof progresso.operationId === 'string' && Boolean(progresso.operationId)
+    && ['preparando', 'analisando', 'consolidando', 'verificando'].includes(String(progresso.fase));
 }
 
 function blocoContextoIaValido(valor: unknown): valor is BlocoContextoIa {
@@ -362,6 +370,7 @@ export interface MensagemPainelIa {
   evidencias?: BlocoContextoIa[];
   estadoConsulta?: EstadoConsultaIa;
   modeloConsulta?: string;
+  perguntaConsulta?: string;
   recomendacao?: string;
   permiteAplicacao?: boolean;
   proposalId?: string;
@@ -371,6 +380,7 @@ export interface EstadoPainelIa {
   revisao: number;
   titulo: string;
   carregando: boolean;
+  estadoOperacao?: EstadoOperacaoPainelIa;
   erro: string | null;
   avisoLimite?: { mensagem: string; tentarNovamenteEm?: number } | null;
   editorDisponivel: boolean;
@@ -378,6 +388,7 @@ export interface EstadoPainelIa {
   contextoImagem: boolean;
   modoAplicacao: 'inserir' | 'substituir';
   progresso: ProgressoIa | null;
+  progressoConsulta?: ProgressoConsultaIa | null;
   planoPendente: PlanoExecucaoIaResumo | null;
   retomada: RetomadaIa | null;
   mensagens: MensagemPainelIa[];
@@ -406,6 +417,7 @@ export type AtualizacaoPainelIa = SnapshotPainelIa | DeltaPainelIa;
 const CAMPOS_ESTADO_PAINEL_IA: Array<keyof CamposEstadoPainelIa> = [
   'titulo',
   'carregando',
+  'estadoOperacao',
   'erro',
   'avisoLimite',
   'editorDisponivel',
@@ -413,6 +425,7 @@ const CAMPOS_ESTADO_PAINEL_IA: Array<keyof CamposEstadoPainelIa> = [
   'contextoImagem',
   'modoAplicacao',
   'progresso',
+  'progressoConsulta',
   'planoPendente',
   'retomada',
   'mensagens',
@@ -434,6 +447,7 @@ function mensagensPainelIaValidas(valor: unknown): valor is MensagemPainelIa[] {
       && (item.evidencias === undefined || Array.isArray(item.evidencias))
       && (item.estadoConsulta === undefined || ['respondida', 'insuficiente', 'conflitante'].includes(String(item.estadoConsulta)))
       && (item.modeloConsulta === undefined || typeof item.modeloConsulta === 'string')
+      && (item.perguntaConsulta === undefined || typeof item.perguntaConsulta === 'string')
       && (item.recomendacao === undefined || typeof item.recomendacao === 'string');
   });
 }
@@ -471,9 +485,11 @@ function campoEstadoPainelIaValido(campo: keyof CamposEstadoPainelIa, valor: unk
     case 'editorDisponivel':
     case 'imagemSelecionada':
     case 'contextoImagem': return typeof valor === 'boolean';
+    case 'estadoOperacao': return valor === undefined || ['ocioso', 'preparando', 'analisando', 'consolidando', 'verificando', 'concluido', 'insuficiente', 'conflitante', 'cancelado', 'erro'].includes(String(valor));
     case 'erro': return valor === null || typeof valor === 'string';
     case 'modoAplicacao': return valor === 'inserir' || valor === 'substituir';
     case 'progresso': return valor === null || progressoIaValido(valor);
+    case 'progressoConsulta': return valor === undefined || valor === null || progressoConsultaIaValido(valor);
     case 'planoPendente': return valor === null || planoExecucaoIaResumoValido(valor);
     case 'retomada': return valor === null || retomadaIaValida(valor);
     case 'mensagens': return mensagensPainelIaValidas(valor);
@@ -539,6 +555,7 @@ export function aplicarAtualizacaoPainelIa(
 export type ComandoPainelIa =
   | { tipo: 'executar_acao'; acao: AcaoIa }
   | { tipo: 'enviar_pedido_livre'; mensagem: string; modo: ModoInteracaoIa; tamanho: 'automatico' | 'curta' | 'media' | 'longa' }
+  | { tipo: 'perguntar_documento_completo'; pergunta: string }
   | { tipo: 'reenviar_mensagem'; mensagemId: string }
   | { tipo: 'limpar_conversa' }
   | { tipo: 'aplicar_resposta'; mensagemId: string }
@@ -562,6 +579,7 @@ export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa 
       && (comando.modo === 'perguntar' || comando.modo === 'escrever' || comando.modo === 'reescrever')
       && ['automatico', 'curta', 'media', 'longa'].includes(String(comando.tamanho));
   }
+  if (comando.tipo === 'perguntar_documento_completo') return typeof comando.pergunta === 'string' && Boolean(comando.pergunta.trim());
   if (comando.tipo === 'aplicar_resposta' || comando.tipo === 'reenviar_mensagem') return typeof comando.mensagemId === 'string' && Boolean(comando.mensagemId);
   if (comando.tipo === 'navegar_evidencia') return blocoContextoIaValido(comando.evidencia);
   if (comando.tipo === 'cancelar_operacao'

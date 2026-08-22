@@ -2,7 +2,7 @@
 
 ## 1. Visão Geral do Produto
 
-O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma aplicação nativa de alta performance utilizando **Electron**. O objetivo é fornecer aos Peritos Criminais da Polícia Científica uma ferramenta robusta, offline-first, para a gestão de Requisições de Exame Pericial (REP) e a elaboração de laudos técnicos com auxílio de Inteligência Artificial.
+O **laWdo** é uma aplicação desktop nativa em **Electron** para Peritos Criminais da Polícia Científica. Opera com dados locais, prioriza continuidade de trabalho sem rede e reúne gestão de Requisições de Exame Pericial (REP), elaboração de laudos e assistência por Inteligência Artificial.
 
 ## 2. Objetivos Estratégicos
 
@@ -10,6 +10,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Gestão de Mídias:** Otimizar o manuseio de imagens locais, garantindo organização e numeração automática de figuras.
 - **Automação Inteligente:** Integrar modelos de linguagem (LLMs) para revisão de texto e descrição técnica de evidências fotográficas.
 - **Portabilidade de Dados:** Manter a base de dados em SQLite e imagens apartadas para backup local. Integrações de sincronização em nuvem permanecem como evolução futura.
+- **Evolução Segura:** Distribuir versões assinadas e verificáveis, com atualização guiada, preservação das alterações pendentes e backup prévio quando necessário.
 
 ## 3. Público-Alvo
 
@@ -32,6 +33,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 ### FR3: Gestão de REPs (Requisição de Exame Pericial)
 
 - **Registro de REP:** Captura de dados de acionamento, envolvidos, lacres de entrada/saída, localização com inputs personalizados a depender do tipo de exame (campos dinâmicos por categoria de exame, reutilização de formulários de Solicitante e Tipo Exame via quick-create dialogs).
+- **Consulta GDL:** Consulta configurável à GDL para preencher dados da REP, normalizar campos B-602, revisar peças e importar imagens selecionadas sem persistir miniaturas temporárias como evidência final.
 - **Indicadores:** Dashboard com indicadores de REPs pendentes, em andamento e concluídas e outros indicadores de produtividade.
 - **Timeline Dual-Track:** Linha do tempo de trilha dupla (REP azul + Laudo violeta) com eixo cronológico compartilhado, conexões direcionais entre eventos, trilha fantasma para períodos sem laudo e acesso via ícone em tabelas de REPs, Laudos e aba dedicada na página de Logs.
 - **Ciclo de Vida:** Rastreamento completo do ciclo de vida da REP (Pendente → Em Andamento → Concluído) e Laudo (Em andamento → Concluído → Entregue) com ícones visuais de status nas tabelas.
@@ -41,7 +43,7 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Estrutura Modular:** Edição do laudo dividida por seções independentes baseadas no template ou visualização do laudo sob um unico editor de texto (padrão).
 - **Rich Text Editor:** Suporte a formatação avançada, tabelas e listas via TinyMCE.
 - **Snapshots:** Histórico das últimas 3 versões salvas para recuperação de desastres.
-- **Área de Trabalho:** Trilho permanente à direita com docks redimensionáveis e mutuamente exclusivos para Assistente IA e Ilustrações, sem sobrepor ou desmontar o editor.
+- **Área de Trabalho:** Trilho permanente à direita com docks redimensionáveis e mutuamente exclusivos para Assistente IA e Ilustrações, sem sobrepor ou desmontar o editor. O conteúdo do laudo acompanha a rolagem da página; docks permanecem visíveis e se recolhem quando a largura não preserva o editor.
 
 ### FR5: Gestão de Ilustrações
 
@@ -61,6 +63,8 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 
 - **Provedores Múltiplos:** Suporte a Groq e Google Gemini, com catálogo compartilhado de modelos, capacidades de visão, limites e orçamento de contexto. A seleção e as chaves independentes são configuradas somente na página Modelos de IA.
 - **Painel Único:** Assistente disponível como dock direito redimensionável ou janela destacada reencaixável, com o mesmo contexto, histórico, progresso, confirmação e operação ativa.
+- **Consultas Fundamentadas:** Perguntas sobre seção ou documento completo retornam evidências navegáveis, estado de suficiência ou conflito e recomendação; consultas insuficientes podem escalar para o documento completo preservando a pergunta.
+- **Seleção Resiliente de Modelo:** Modelos são agrupados por perfil de velocidade/precisão e têm disponibilidade explícita. Indisponibilidade, chave ausente ou incompatibilidade preservam pergunta e escopo para escolha segura de alternativa.
 - **Transformações Controladas:** Revisão gramatical, linguagem técnico-pericial, clareza, resumo, expansão e reescrita livre sobre seleção, seção ou documento; pedidos livres também podem inserir texto no cursor originalmente capturado.
 - **Aplicação Segura:** Cada proposta permanece ligada ao alvo e ao fingerprint de origem, passa por comparação lado a lado e só altera fragmentos textuais. A estrutura HTML, figuras, formatação e tokens protegidos são revalidados, e a aplicação usa uma única operação de undo sem salvar automaticamente.
 - **Laudos Grandes:** Planejamento determinístico e processamento sequencial em lotes, com confirmação prévia, progresso, cancelamento, retomada temporária após falha e entrega atômica sem alteração parcial do documento.
@@ -90,12 +94,19 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Cabeçalho PDF:** Personalização de cabeçalho institucional com texto, upload de imagem (brasão/logo) e alinhamento configurável.
 - **Margens:** Ajuste de margens superior, inferior, esquerda e direita da página para conformidade com normas institucionais.
 
+### FR11: Atualização Segura
+
+- **Descoberta e Verificação:** Consultar apenas o feed oficial de versões, validar manifesto, assinatura, integridade, canal, plataforma e arquitetura antes de aceitar um pacote.
+- **Instalação Assistida:** Alertar sobre alterações pendentes, encerrar a aplicação de forma segura e exigir backup do banco e, quando indicado pelo release, das imagens antes da instalação.
+- **Recuperação:** Manter o backup disponível quando download, verificação ou instalação falharem; nunca substituir dados locais silenciosamente.
+
 ## 5. Requisitos Não Funcionais (NFR)
 
 - **Offline-first:** O sistema deve ser totalmente funcional sem internet, exceto pelas funções de IA.
 - **Interface Premium:** Design moderno utilizando Shadcn/ui com suporte a Dark Mode.
 - **Performance de Banco:** Queries otimizadas no SQLite para suportar milhares de registros sem lentidão.
 - **Segurança:** Criptografia de dados sensíveis, sanitização de entradas, isolamento do renderer Electron e validação de dados externos nas fronteiras IPC, JSON, banco e provedores de IA.
+- **Atualização:** Releases devem ser verificáveis e compatíveis com a plataforma instalada; falhas de atualização não podem comprometer o banco ou as imagens locais.
 
 ## 6. Stack Tecnológica Atual
 
@@ -130,4 +141,5 @@ O **laWdo** é uma evolução do sistema atual baseado em Streamlit para uma apl
 - **Configuração de Impressão:** Páginas de Cabeçalho PDF (texto, imagem brasão/logo, alinhamento) e Margens (superior, inferior, esquerda, direita).
 - **Exportação:** PDF gerado pelo Electron, DOCX e ODT; a exportação ODT é habilitada somente quando o LibreOffice está disponível.
 - **Dashboard:** Indicadores de REPs pendentes/em andamento/concluídas, produtividade e tabelas com colunas fixas (sticky) para referência.
+- **Atualização Segura:** Feed oficial de releases com manifesto assinado, verificação de compatibilidade e integridade, fechamento seguro e backup pré-instalação conforme a política do pacote.
 - **Evolução futura:** sincronização de backups com Google Drive.
