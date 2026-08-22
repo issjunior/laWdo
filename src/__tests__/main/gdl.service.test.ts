@@ -73,6 +73,7 @@ let statusFotos = 200
 let respostaRep = fixtureRep
 const corposInvestigacao: string[] = []
 const configuracoes: Record<string, string> = {}
+let requisicoesRecebidas = 0
 
 function responder(resposta: http.ServerResponse, status: number, corpo: string | Buffer): void {
   resposta.statusCode = status
@@ -81,6 +82,7 @@ function responder(resposta: http.ServerResponse, status: number, corpo: string 
 
 beforeAll(async () => {
   servidor = http.createServer((requisicao, resposta) => {
+    requisicoesRecebidas += 1
     const url = new URL(requisicao.url ?? '/', baseUrl)
     if (url.pathname.endsWith('/unidadesMedida')) {
       responder(resposta, statusUnidades, '{}')
@@ -130,6 +132,7 @@ beforeEach(() => {
   statusFotos = 200
   respostaRep = fixtureRep
   corposInvestigacao.length = 0
+  requisicoesRecebidas = 0
   Object.assign(configuracoes, {
     gdl_ambiente: 'producao',
     gdl_url_homologacao: `${baseUrl}/api`,
@@ -189,24 +192,24 @@ describe('gdl.service', () => {
 
   it('trata ausência de credenciais e respostas HTTP da consulta de REP', async () => {
     configuracoes.gdl_login_producao = ''
-    await expect(consultarRep('190', '2026')).resolves.toMatchObject({
+    await expect(consultarRep('109.026', '2026')).resolves.toMatchObject({
       sucesso: false,
       erro: 'Credenciais não configuradas.',
     })
 
     configuracoes.gdl_login_producao = 'usuario-prd'
     for (const [status, erro] of [
-      [404, 'REP 190/2026 não encontrada no GDL.'],
+      [404, 'REP 109.026/2026 não encontrada no GDL.'],
       [401, 'Autenticação rejeitada pelo GDL. Verifique login e senha.'],
       [500, 'Erro do servidor GDL (HTTP 500).'],
     ] as const) {
       statusRep = status
-      await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: false, erro })
+      await expect(consultarRep('109.026', '2026')).resolves.toMatchObject({ sucesso: false, erro })
     }
 
     statusRep = 200
     respostaRep = '{invalido'
-    await expect(consultarRep('190', '2026')).resolves.toMatchObject({
+    await expect(consultarRep('109.026', '2026')).resolves.toMatchObject({
       sucesso: false,
       erro: 'O GDL retornou JSON inválido.',
     })
@@ -216,32 +219,33 @@ describe('gdl.service', () => {
     const sucesso = await validarCredenciais(
       'producao',
       { login: ' usuario ', senha: ' senha ', cpfUsuario: '123.456.789-01' },
-      '190',
+      '109.026',
       '2026',
     )
     expect(sucesso).toMatchObject({ sucesso: true })
     expect(sucesso.dados?.codRep).toBe(1902026)
 
-    await expect(validarCredenciais('producao', { login: '', senha: '' }, '190', '2026'))
+    await expect(validarCredenciais('producao', { login: '', senha: '' }, '109.026', '2026'))
       .resolves.toMatchObject({ sucesso: false, erro: 'Credenciais não configuradas.' })
 
     for (const [status, erro] of [
-      [404, 'REP 190/2026 não encontrada no GDL.'],
+      [404, 'REP 109.026/2026 não encontrada no GDL.'],
       [403, 'Autenticação rejeitada pelo GDL. Verifique login e senha.'],
       [500, 'Erro do servidor GDL (HTTP 500).'],
     ] as const) {
       statusRep = status
-      await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '190', '2026'))
+      await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '109.026', '2026'))
         .resolves.toMatchObject({ sucesso: false, erro })
     }
 
     statusRep = 200
     respostaRep = 'não-json'
-    await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '190', '2026'))
+    await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '109.026', '2026'))
       .resolves.toMatchObject({ sucesso: false, erro: 'O GDL retornou JSON inválido.' })
   })
 
   it('lista e captura imagens do ZIP, recusando duplicadas e entradas incompatíveis', async () => {
+    configuracoes.gdl_ambiente = 'homologacao'
     const arquivos = await listarImagensRepGdl('190', '2026')
     expect(arquivos).toHaveLength(3)
     expect(arquivos.filter(arquivo => arquivo.provavelImagem)).toHaveLength(2)
@@ -276,6 +280,7 @@ describe('gdl.service', () => {
   })
 
   it('propaga os estados de erro ao baixar a Lista de Fotos', async () => {
+    configuracoes.gdl_ambiente = 'homologacao'
     for (const [status, erro] of [
       [404, 'A Lista de Fotos da REP 190/2026 não foi encontrada no GDL.'],
       [401, 'Acesso à Lista de Fotos rejeitado pelo GDL.'],
@@ -284,6 +289,35 @@ describe('gdl.service', () => {
       statusFotos = status
       await expect(listarImagensRepGdl('190', '2026')).rejects.toThrow(erro)
     }
+  })
+
+  it('bloqueia qualquer outra REP em produção antes de consultar credenciais ou emitir HTTP', async () => {
+    mocks.obterConfiguracao.mockClear()
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({
+      sucesso: false,
+      erro: 'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
+    })
+    await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '190', '2026')).resolves.toMatchObject({
+      sucesso: false,
+      erro: 'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
+    })
+    await expect(listarImagensRepGdl('190', '2026')).rejects.toThrow(
+      'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
+    )
+    await expect(capturarImagensRepGdl('190', '2026', ['a'.repeat(64)])).rejects.toThrow(
+      'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
+    )
+    expect(requisicoesRecebidas).toBe(0)
+    expect(mocks.obterConfiguracao.mock.calls).toEqual([
+      ['gdl_ambiente'],
+      ['gdl_ambiente'],
+      ['gdl_ambiente'],
+    ])
+  })
+
+  it('aceita formatos equivalentes da REP autorizada em produção', async () => {
+    await expect(consultarRep('000109.026', '2026')).resolves.toMatchObject({ sucesso: true })
+    expect(requisicoesRecebidas).toBe(1)
   })
 
   it('valida arquivos ZIP e deriva filtros únicos para a investigação', () => {

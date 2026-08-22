@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
+import * as tls from 'node:tls';
 import { createHash } from 'crypto';
 import { Buffer } from 'node:buffer';
 import { inflateRawSync } from 'node:zlib';
@@ -17,6 +18,34 @@ import type {
 } from '../../shared/types/gdl-arquivos.types.js';
 
 const log = getLogger('gdl');
+
+interface TlsComCertificadosDoSistema {
+  getCACertificates?: (tipo: 'system') => string[]
+  setDefaultCACertificates?: (certificados: string[]) => void
+}
+
+function configurarCertificadosRaizDoSistema(): void {
+  try {
+    const tlsComCertificadosDoSistema = tls as typeof tls & TlsComCertificadosDoSistema;
+    if (!tlsComCertificadosDoSistema.getCACertificates || !tlsComCertificadosDoSistema.setDefaultCACertificates) {
+      log.warn('Esta versão do runtime não expõe a store de certificados do sistema para o GDL.');
+      return;
+    }
+
+    const certificados = tlsComCertificadosDoSistema.getCACertificates('system');
+    if (certificados.length === 0) {
+      log.warn('Nenhum certificado raiz foi encontrado no repositório do sistema para o GDL.');
+      return;
+    }
+    tlsComCertificadosDoSistema.setDefaultCACertificates(certificados);
+  } catch (error) {
+    log.warn('Não foi possível carregar certificados raiz do sistema para o GDL.', {
+      error: error instanceof Error ? error.message : 'Erro inesperado',
+    });
+  }
+}
+
+configurarCertificadosRaizDoSistema();
 
 interface GdlCredenciais {
   baseUrl: string;
@@ -77,6 +106,10 @@ const GDL_ESTADO_DIR = path.join(app.getPath('userData'), 'gdl');
 const GDL_ESTADO_FILE = path.join(GDL_ESTADO_DIR, 'validacao-sessao.json');
 const TIMEOUT_DOWNLOAD_GDL_MS = 30000;
 const EXTENSOES_IMAGEM_GDL = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp']);
+const REP_PRODUCAO_AUTORIZADA = {
+  numero: 109026,
+  ano: 2026,
+} as const;
 
 interface ArquivoRepInterno extends ArquivoRepGdl {
   indiceEntradaZip: number
@@ -154,6 +187,31 @@ function normalizarAmbiente(ambiente?: string): AmbienteGdl {
 
 function getAmbienteLabel(ambiente: AmbienteGdl): string {
   return ambiente === 'producao' ? 'Produção' : 'Homologação';
+}
+
+function normalizarNumeroRep(numero: string): number | null {
+  const apenasDigitos = numero.replace(/\D/g, '');
+  if (!apenasDigitos) return null;
+  const numeroNormalizado = Number(apenasDigitos);
+  return Number.isSafeInteger(numeroNormalizado) && numeroNormalizado > 0 ? numeroNormalizado : null;
+}
+
+function normalizarAnoRep(ano: string): number | null {
+  const apenasDigitos = ano.replace(/\D/g, '');
+  if (!/^\d{4}$/.test(apenasDigitos)) return null;
+  return Number(apenasDigitos);
+}
+
+function validarRepAutorizadaEmProducao(ambiente: AmbienteGdl, numero: string, ano: string): void {
+  if (ambiente !== 'producao') return;
+
+  const numeroNormalizado = normalizarNumeroRep(numero);
+  const anoNormalizado = normalizarAnoRep(ano);
+  if (numeroNormalizado === REP_PRODUCAO_AUTORIZADA.numero && anoNormalizado === REP_PRODUCAO_AUTORIZADA.ano) {
+    return;
+  }
+
+  throw new Error('Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.');
 }
 
 function limparValidacaoSessaoInterna(ambiente: AmbienteGdl): GdlValidacaoSessao {
@@ -238,7 +296,6 @@ function httpsRequest(
       method,
       headers,
       timeout,
-      rejectUnauthorized: false,
     };
 
     const req = lib.request(options, (res) => {
@@ -438,7 +495,6 @@ function baixarArquivoGdl(url: string, headers: Record<string, string>): Promise
       method: 'GET',
       headers,
       timeout: TIMEOUT_DOWNLOAD_GDL_MS,
-      rejectUnauthorized: false,
     }, res => {
       const partes: Buffer[] = [];
       res.on('data', (chunk: Buffer) => {
@@ -624,6 +680,7 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
   let ambiente: AmbienteGdl = 'homologacao';
   try {
     ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+    validarRepAutorizadaEmProducao(ambiente, numero, ano);
     const creds = await carregarCredenciais(ambiente);
     if (!creds.login || !creds.senha) {
       limparValidacaoSessaoInterna(ambiente);
@@ -684,6 +741,7 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
 
 async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise<{ rep: GdlRepValidada; credenciais: GdlCredenciais }> {
   const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  validarRepAutorizadaEmProducao(ambiente, numero, ano);
   const credenciais = await carregarCredenciais(ambiente);
   if (!credenciais.login || !credenciais.senha) {
     throw new Error('Credenciais do GDL não configuradas.');
@@ -799,6 +857,7 @@ export async function validarCredenciais(
 ): Promise<GdlConsultaResultado> {
   const amb = normalizarAmbiente(ambiente);
   try {
+    validarRepAutorizadaEmProducao(amb, numero, ano);
     const baseUrl = await carregarBaseUrl(amb);
     const login = credenciais.login.trim();
     const senha = credenciais.senha.trim();

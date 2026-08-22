@@ -285,7 +285,7 @@ describe('contrato GDL B602', () => {
     ])
   })
 
-  it('mapeia os campos de PISTOLA e mantém Marca fora do formulário do laWdo', () => {
+  it('mapeia os campos de PISTOLA e converte o código legado de Marca da Arma', () => {
     const resultado = converterRepB602(validarGdlRep({
       codRep: 1922026,
       numero: 192,
@@ -325,6 +325,7 @@ describe('contrato GDL B602', () => {
     expect(pistola.comuns.materialIncinerado).toBe('S')
     expect(pistola.personalizados).toEqual({
       '104:numero_serie': 'SA56FG4SA5',
+      '104:marca': 'TAURUS',
       '104:modelo': 'PT99-D',
       '104:capacidade': '',
       '104:marca_arma': 'Taurus',
@@ -336,7 +337,7 @@ describe('contrato GDL B602', () => {
       '104:fabricacao_arma': '63',
       '104:arma_institucional': '98',
     })
-    expect(pistola.extrasGdl).toEqual({ Marca: 'TAURUS' })
+    expect(pistola.extrasGdl).toEqual({})
   })
 
   it('normaliza Data de Entrada para todos os tipos do catálogo B602', () => {
