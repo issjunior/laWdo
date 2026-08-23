@@ -606,7 +606,11 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
       else { const tipo = normalizarTipoImagemDocx(bloco.formato); if (tipo) filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 500, height: bloco.alturaPx || 375 } })] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
     }
   }
-  const cab = cabecalho || documento.cabecalho; const cabecalhos = cab?.texto ? { first: new Header({ children: [new Paragraph({ alignment: alinhar(cab.alinhamento), children: [new TextRun(cab.texto)] })] }) } : undefined;
+  const cab = cabecalho || documento.cabecalho;
+  const filhosCabecalho: InstanceType<typeof Paragraph>[] = [];
+  if (cab?.logoBase64) filhosCabecalho.push(new Paragraph({ alignment: alinhar(cab.alinhamento), children: [new ImageRun({ type: 'png', data: Buffer.from(cab.logoBase64, 'base64'), transformation: { width: 120, height: 60 } })] }));
+  if (cab?.texto) filhosCabecalho.push(new Paragraph({ alignment: alinhar(cab.alinhamento), children: [new TextRun(cab.texto)] }));
+  const cabecalhos = filhosCabecalho.length ? { first: new Header({ children: filhosCabecalho }) } : undefined;
   return Packer.toBuffer(new Document({ numbering: { config: [{ reference: 'numerada', levels: Array.from({ length: 9 }, (_, level) => ({ level, format: 'decimal', text: '%1.', alignment: AlignmentType.START })) }] }, styles: { default: { document: { run: { font: documento.fontePadrao, size: Math.round(documento.tamanhoPadraoPt * 2) } } } }, sections: [{ properties: { titlePage: Boolean(cabecalhos), page: { margin: Object.fromEntries(Object.entries(margens || documento.margens || {}).map(([k, v]) => [k, Math.round(Number(v) * 567)])) } }, headers: cabecalhos, children: filhos }] }));
 }
 
