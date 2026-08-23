@@ -597,7 +597,13 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
       else if (bloco.tipo === 'linha-horizontal') filhos.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } }));
       else if (bloco.tipo === 'tabela') {
         const rows = bloco.linhas.map(linha => new TableRow({ children: linha.map(celula => new TableCell({
-          children: celula.paragrafos.map(p => para(p)), columnSpan: celula.colspan, rowSpan: celula.rowspan,
+          children: (celula.blocos?.flatMap(bloco => {
+            if (bloco.tipo === 'paragrafo') return [para(bloco)];
+            if (bloco.tipo === 'figura') { const tipo = normalizarTipoImagemDocx(bloco.formato); const figura = tipo ? [new Paragraph({ alignment: alinhar(bloco.alinhamento), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 180, height: bloco.alturaPx || 135 } })] })] : []; return bloco.legenda ? [...figura, para(bloco.legenda, { alignment: AlignmentType.CENTER })] : figura; }
+            if (bloco.tipo === 'linha-horizontal') return [new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' } } })];
+            if (bloco.tipo === 'lista') return bloco.itens.map(item => para(item, bloco.ordenada ? { numbering: { reference: 'numerada', level: bloco.nivel } } : { bullet: { level: bloco.nivel } }));
+            return [];
+          }) || celula.paragrafos.map(p => para(p))), columnSpan: celula.colspan, rowSpan: celula.rowspan,
           shading: celula.corFundo ? { fill: celula.corFundo } : undefined,
           borders: { top: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, left: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, right: { style: BorderStyle.SINGLE, size: 4, color: '808080' } },
         })) }));
