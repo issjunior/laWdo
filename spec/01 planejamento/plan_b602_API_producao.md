@@ -482,3 +482,47 @@ A integração estará pronta para liberação quando:
 - Não serão inventados schemas de API para tipos ausentes da resposta autorizada.
 - Não serão versionados dados reais da REP.
 - A trava de `109.026/2026` é temporária e sua retirada exige aprovação após as fases de Peças e fotos.
+
+## 10. Estabilização pós-smoke test — editor e exportação
+
+### 10.1 Evidências diagnósticas confirmadas
+
+Após o smoke test das fotos e da reconciliação histórica, o diagnóstico assistido identificou duas oportunidades independentes do contrato GDL:
+
+- em seis sessões, houve exceção recorrente durante a aplicação visual dos placeholders do TinyMCE, apontando para o bloco iniciado em `src/renderer/pages/LaudosPage.tsx` que usava `editor.undoManager.ignore()`;
+- a API `undoManager.ignore()` existe no TinyMCE 8.8.2. A falha estava dentro da transformação visual do callback, agravada por várias tentativas concorrentes na inicialização do editor;
+- `laudo:verificarLibreOffice` levou de 9,8 a 11 segundos por iniciar uma conversão ODT real apenas para descobrir a disponibilidade do LibreOffice.
+
+Nenhuma dessas observações alterou dados do GDL, cuja integração continua integralmente somente leitura.
+
+### 10.2 Correção da apresentação de placeholders
+
+- centralizar a apresentação visual em utilitário próprio, mantendo `undoManager.ignore()` para que mudanças de apresentação não entrem no histórico de desfazer;
+- só executar quando o editor estiver inicializado, não destruído e com corpo conectado ao documento;
+- coalescer chamadas rápidas por editor e usar no máximo uma repetição controlada após 150 ms;
+- tornar a operação idempotente, removendo previews anteriores antes de criar novos;
+- isolar a transformação de cada placeholder: se uma falhar, restaurar somente seu HTML original e continuar os demais;
+- registrar aviso sanitizado com chave e etapa, sem conteúdo ou valores do laudo;
+- após a repetição, informar uma única vez ao usuário que alguns campos não puderam ser atualizados visualmente e que o conteúdo original foi preservado.
+
+### 10.3 Correção da verificação do LibreOffice
+
+- manter o canal e retorno de `laudo:verificarLibreOffice` sem alteração para renderer e preload;
+- localizar `soffice` somente em caminhos conhecidos por plataforma e nas variáveis já suportadas pelo pacote de conversão;
+- validar a instalação pela existência de um arquivo executável em caminho conhecido, sem iniciar o LibreOffice durante a abertura da tela;
+- compartilhar a mesma Promise entre consultas simultâneas e guardar o resultado durante a sessão do processo principal;
+- manter a conversão ODT real apenas na exportação, como validação final e com o tratamento de erro já existente;
+- não criar arquivos temporários nem converter documento durante a verificação de disponibilidade.
+
+**Ajuste decorrente do smoke test:** a tentativa inicial de executar `soffice --headless --version` atingiu o timeout de 3 segundos, embora a instalação estivesse funcional. A inicialização do LibreOffice é dependente do ambiente e não deve decidir a disponibilidade da ação na interface. A exportação real permanece a validação operacional e continua reportando erro ao usuário caso a conversão falhe.
+
+### 10.4 Testes e critérios adicionais
+
+- testar editor não inicializado, destruído e removido sem exceção;
+- testar placeholders de texto, pendentes, personalizados e HTML rico, confirmando idempotência e ausência de preview duplicado;
+- simular falha de um placeholder e confirmar preservação desse HTML, continuidade dos demais e aviso único após repetição;
+- testar executável LibreOffice disponível, ausente, diretório inválido e chamadas simultâneas;
+- confirmar que a verificação não chama a conversão nem cria diretórios temporários;
+- abrir o mesmo laudo três vezes em modo diagnóstico e confirmar ausência da exceção antes associada ao bloco de apresentação de placeholders;
+- confirmar que a verificação do LibreOffice conclui sem iniciar o processo de conversão;
+- confirmar que exportação ODT continua funcional com LibreOffice instalado e que PDF e DOCX permanecem inalterados.

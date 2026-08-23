@@ -49,9 +49,12 @@ vi.mock('../../main/utils/logger.js', () => ({
 }))
 
 import {
+  abrirSessaoImagensRepGdl,
   capturarImagensRepGdl,
+  capturarImagensDaSessaoGdlParaLaudo,
   consultarRep,
   extrairFiltrosParaConsultaInvestigacao,
+  fecharSessaoImagensRepGdl,
   limparValidacaoSessao,
   listarFotosDoArquivoZip,
   listarImagensRepGdl,
@@ -324,6 +327,29 @@ describe('gdl.service', () => {
       statusFotos = status
       await expect(listarImagensRepGdl('190', '2026')).rejects.toThrow(erro)
     }
+  })
+
+  it('reutiliza o ZIP temporário da sessão até o modal ser fechado', async () => {
+    configuracoes.gdl_ambiente = 'homologacao'
+    const sessao = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026')
+    const foto = sessao.arquivos.find(arquivo => arquivo.nomeArquivo === 'foto-a.png')
+    if (!foto) throw new Error('Foto esperada não foi listada.')
+
+    const captura = await capturarImagensDaSessaoGdlParaLaudo('laudo-teste', sessao.sessaoId, [foto.idSelecao], async imagem => ({
+      idSelecao: imagem.idSelecao,
+      imagemId: 'imagem-local-1',
+      nomeArquivo: imagem.nomeArquivo,
+      mimeType: imagem.mimeType,
+      tamanho: imagem.bytes.length,
+      sha256: imagem.sha256,
+      sequencia: 1,
+    }))
+    expect(captura).toMatchObject({ imagens: [{ imagemId: 'imagem-local-1' }], falhas: [], duplicadas: [] })
+
+    fecharSessaoImagensRepGdl('laudo-teste', sessao.sessaoId)
+    await expect(capturarImagensDaSessaoGdlParaLaudo('laudo-teste', sessao.sessaoId, [foto.idSelecao], async () => {
+      throw new Error('Não deve tentar salvar após fechar a sessão.')
+    })).rejects.toThrow('A sessão temporária da Lista de Fotos expirou. Consulte novamente.')
   })
 
   it('bloqueia qualquer outra REP em produção antes de consultar credenciais ou emitir HTTP', async () => {

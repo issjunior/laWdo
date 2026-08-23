@@ -1,14 +1,18 @@
 import { ipcMain } from 'electron';
+import { randomUUID } from 'crypto';
 import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
 import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
+import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
 
-function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string } | null {
-  const correspondencia = numero.trim().match(/^(\d+)\s*[/\\-]\s*(\d{4})$/);
-  return correspondencia ? { numero: correspondencia[1], ano: correspondencia[2] } : null;
+export function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string } | null {
+  const correspondencia = numero.trim().match(/^([\d.\s]+)\s*[/\\-]\s*(\d{4})$/);
+  if (!correspondencia) return null;
+  const numeroNormalizado = correspondencia[1].replace(/\D/g, '');
+  return numeroNormalizado ? { numero: numeroNormalizado, ano: correspondencia[2] } : null;
 }
 
 async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; ano: string }> {
@@ -126,23 +130,69 @@ export const registerGdlHandlers = (): void => {
   ipcMain.handle('gdl:listar-imagens-laudo', async (_event, laudoId: unknown) => {
     try {
       const { numero, ano } = await resolverRepDoLaudo(laudoId);
-      const arquivos = await gdlService.listarImagensRepGdl(numero, ano);
-      return { success: true, data: arquivos };
+      if (typeof laudoId !== 'string') return { success: false, error: 'Laudo inválido.' };
+      return { success: true, data: await gdlService.abrirSessaoImagensRepGdl(laudoId, numero, ano) };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao listar imagens da REP.' };
     }
   });
 
-  ipcMain.handle('gdl:capturar-imagens-laudo', async (_event, laudoId: unknown, idsSelecao: unknown) => {
+  ipcMain.handle('gdl:capturar-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown, idsSelecao: unknown, permitirDuplicadas: unknown) => {
     try {
-      if (!Array.isArray(idsSelecao) || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
+      if (typeof sessaoId !== 'string' || !/^[a-z0-9-]{36}$/i.test(sessaoId) || !Array.isArray(idsSelecao) || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
         return { success: false, error: 'Seleção de imagens inválida.' };
       }
-      const { numero, ano } = await resolverRepDoLaudo(laudoId);
-      const resultado = await gdlService.capturarImagensRepGdl(numero, ano, idsSelecao);
+      if (typeof laudoId !== 'string') return { success: false, error: 'Laudo inválido.' };
+      if (typeof permitirDuplicadas !== 'undefined' && typeof permitirDuplicadas !== 'boolean') {
+        return { success: false, error: 'Confirmação de duplicatas inválida.' };
+      }
+      await resolverRepDoLaudo(laudoId);
+      const existentes = await listarResumosImagensLaudo(laudoId);
+      let proximaSequencia = existentes.reduce((maior, imagem) => Math.max(maior, imagem.sequencia), 0) + 1;
+      const resultado = await gdlService.capturarImagensDaSessaoGdlParaLaudo(laudoId, sessaoId, idsSelecao, async imagem => {
+        const sequencia = proximaSequencia;
+        const persistida = await salvarImagemLaudoPorBytes(laudoId, {
+          id: randomUUID(),
+          nomeArquivo: imagem.nomeArquivo,
+          mimeType: imagem.mimeType,
+          bytes: imagem.bytes,
+          legenda: imagem.nomeArquivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim(),
+          origem: 'gdl',
+          sequencia,
+          permitirDuplicada: permitirDuplicadas === true,
+        });
+        if ('localizacao' in persistida) {
+          return {
+            idSelecao: imagem.idSelecao,
+            nomeArquivo: imagem.nomeArquivo,
+            imagemExistenteId: persistida.id,
+            localizacao: persistida.localizacao,
+          };
+        }
+        proximaSequencia += 1;
+        return {
+          idSelecao: imagem.idSelecao,
+          imagemId: persistida.id,
+          nomeArquivo: persistida.nomeArquivo,
+          mimeType: persistida.mimeType,
+          tamanho: persistida.tamanho,
+          sha256: persistida.sha256,
+          sequencia: persistida.sequencia,
+        };
+      });
       return { success: true, data: resultado };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao capturar imagens da REP.' };
     }
   });
+
+  ipcMain.handle('gdl:fechar-sessao-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || typeof sessaoId !== 'string') throw new Error('Sessão de imagens inválida.')
+      gdlService.fecharSessaoImagensRepGdl(laudoId, sessaoId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao liberar a sessão de imagens.' }
+    }
+  })
 };

@@ -33,10 +33,13 @@ import type {
 } from './types.js';
 import type { DashboardProjecoes, DashboardResumo } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
-import type { ArquivoRepGdl, ResultadoCapturaImagensRepGdl } from '../shared/types/gdl-arquivos.types.js';
+import type { ListaImagensRepGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
 import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
+  ImagemLaudoResumo,
+  MiniaturaImagemLaudo,
+  ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
 import type { RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
@@ -195,8 +198,9 @@ export interface IpcAPI {
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
     consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
-    listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ArquivoRepGdl[]>>;
-    capturarImagensLaudo: (laudoId: string, idsSelecao: string[]) => Promise<UserResponse<ResultadoCapturaImagensRepGdl>>;
+    listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ListaImagensRepGdl>>;
+    capturarImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[], permitirDuplicadas?: boolean) => Promise<UserResponse<ResultadoCapturaImagensLaudoGdl>>;
+    fecharSessaoImagensLaudo: (laudoId: string, sessaoId: string) => Promise<UserResponse>;
   };
 
   // Placeholder para outras APIs que serão implementadas
@@ -366,7 +370,10 @@ export interface IpcAPI {
 
   // Painel de Ilustrações (janela separada)
   ilustracoes: {
-    listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida[]; error?: string }>;
+    reconciliarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ResultadoReconciliacaoImagensLaudo; error?: string }>;
+    listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
+    obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+    obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
       excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
       arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
@@ -454,6 +461,7 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:consultar-rep',
   'gdl:listar-imagens-laudo',
   'gdl:capturar-imagens-laudo',
+  'gdl:fechar-sessao-imagens-laudo',
   'rep:create',
   'rep:findAll',
   'rep:findById',
@@ -602,7 +610,10 @@ const ALLOWED_CHANNELS = new Set([
 
   // Painel de Ilustrações
   'ilustracoes:open-panel',
+  'ilustracoes:reconciliar-imagens',
   'ilustracoes:listar-imagens',
+  'ilustracoes:obter-imagem',
+  'ilustracoes:obter-miniaturas',
   'ilustracoes:salvar-imagem',
     'ilustracoes:excluir-imagem',
     'ilustracoes:arquivar-imagem',
@@ -1220,13 +1231,15 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
       return invocarComDiagnostico('gdl:listar-imagens-laudo', laudoId);
     },
-    capturarImagensLaudo: (laudoId: string, idsSelecao: string[]) => {
+    capturarImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[], permitirDuplicadas?: boolean) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
+      if (typeof sessaoId !== 'string' || !sessaoId.trim()) throw new Error('Sessão de imagens inválida');
       if (!Array.isArray(idsSelecao) || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
         throw new Error('Seleção de imagens inválida');
       }
-      return invocarComDiagnostico('gdl:capturar-imagens-laudo', laudoId, idsSelecao);
+      return invocarComDiagnostico('gdl:capturar-imagens-laudo', laudoId, sessaoId, idsSelecao, permitirDuplicadas);
     },
+    fecharSessaoImagensLaudo: (laudoId: string, sessaoId: string) => invocarComDiagnostico('gdl:fechar-sessao-imagens-laudo', laudoId, sessaoId),
   },
 
   rep: {
@@ -1457,7 +1470,10 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   ilustracoes: {
+    reconciliarImagens: (laudoId: string) => invocarComDiagnostico('ilustracoes:reconciliar-imagens', laudoId),
     listarImagens: (laudoId: string) => invocarComDiagnostico('ilustracoes:listar-imagens', laudoId),
+    obterImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:obter-imagem', laudoId, imagemId),
+    obterMiniaturas: (laudoId: string, ids: string[]) => invocarComDiagnostico('ilustracoes:obter-miniaturas', laudoId, ids),
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => invocarComDiagnostico('ilustracoes:salvar-imagem', laudoId, imagem),
     excluirImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:excluir-imagem', laudoId, imagemId),
     arquivarImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:arquivar-imagem', laudoId, imagemId),

@@ -94,6 +94,10 @@ import {
 } from '@/lib/estrutura-laudo';
 import { getMargens } from '@/lib/margens';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
+import {
+  agendarVisualizacaoPlaceholders,
+  type ModoVisualizacaoPlaceholders,
+} from '@/lib/apresentacao-placeholders';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
 import {
   construirMapaPlaceholdersResolvidos,
@@ -227,90 +231,6 @@ const obterAvisoLimiteIa = (limite: LimiteUsoIa | undefined): { mensagem: string
     ...(limite?.tentarNovamenteEm !== undefined ? { tentarNovamenteEm: limite.tentarNovamenteEm } : {}),
   };
 };
-
-type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
-
-function aplicarModoVisualizacaoPlaceholders(
-  editor: TinyMceEditorInstance,
-  modo: ModoVisualizacaoPlaceholders,
-  mapa: MapaPlaceholdersResolvidos,
-  placeholdersPersonalizados: Placeholder[],
-): void {
-  const body = editor.getBody();
-  if (!body) return;
-
-  editor.undoManager.ignore(() => {
-    body.querySelectorAll('[data-placeholder-preview="true"]').forEach(preview => preview.remove());
-    body.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
-      elemento.removeAttribute('data-tooltip-xxx');
-      elemento.removeAttribute('data-origem-xxx');
-      elemento.removeAttribute('title');
-      elemento.removeAttribute('aria-label');
-    });
-    body.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(ancora => {
-      const chaveBruta = ancora.getAttribute('data-placeholder') || '';
-      const chave = chaveBruta.match(/^\{\{(.+)\}\}$/)?.[1];
-      if (!chave) return;
-      const resolvido = mapa[chave];
-      ancora.classList.remove('campo-reservado');
-      ancora.removeAttribute('data-reservado');
-      ancora.removeAttribute('data-placeholder-apresentacao');
-      ancora.style.removeProperty('display');
-
-      if (modo === 'chaves') {
-        ancora.textContent = chaveBruta;
-        return;
-      }
-
-      if (!resolvido?.preenchido) {
-        ancora.textContent = 'XXX';
-        ancora.classList.add('campo-reservado');
-        ancora.setAttribute('data-reservado', 'true');
-        ancora.setAttribute('data-placeholder-apresentacao', 'dados');
-        const aviso = descreverPlaceholderPendente(chave, placeholdersPersonalizados, mapa);
-        ancora.setAttribute('data-tooltip-xxx', 'true');
-        ancora.setAttribute('data-origem-xxx', 'rep');
-        ancora.setAttribute('title', aviso);
-        ancora.setAttribute('aria-label', aviso);
-        return;
-      }
-
-      if (resolvido.formato === 'html') {
-        const id = `placeholder-preview-${chave.replace(/[^a-z0-9_-]/gi, '-')}`;
-        ancora.setAttribute('data-placeholder-preview-id', id);
-        ancora.style.display = 'none';
-        const preview = body.ownerDocument.createElement('div');
-        preview.setAttribute('contenteditable', 'false');
-        preview.setAttribute('data-placeholder-preview', 'true');
-        preview.setAttribute('data-placeholder-preview-for', id);
-        preview.style.width = '100%';
-        preview.style.maxWidth = '100%';
-        preview.style.minWidth = '0';
-        preview.style.alignSelf = 'stretch';
-        preview.style.boxSizing = 'border-box';
-        preview.innerHTML = resolvido.valor;
-        preview.querySelectorAll('table').forEach(tabela => {
-          tabela.setAttribute('width', '100%');
-          tabela.style.setProperty('width', '100%', 'important');
-          tabela.style.setProperty('max-width', '100%', 'important');
-        });
-        ancora.parentElement?.insertAdjacentElement('afterend', preview);
-      } else {
-        ancora.textContent = resolvido.valor;
-        ancora.setAttribute('data-placeholder-apresentacao', 'dados');
-      }
-    });
-
-    body.querySelectorAll<HTMLElement>('[data-reservado="true"]:not([data-placeholder])').forEach(campo => {
-      if (campo.textContent?.trim().toUpperCase() !== 'XXX') return;
-      const aviso = 'Campo de preenchimento manual no template';
-      campo.setAttribute('data-tooltip-xxx', 'true');
-      campo.setAttribute('data-origem-xxx', 'template');
-      campo.setAttribute('title', aviso);
-      campo.setAttribute('aria-label', aviso);
-    });
-  });
-}
 
 const isRecord = (valor: unknown): valor is Record<string, unknown> => (
   typeof valor === 'object' && valor !== null
@@ -592,6 +512,7 @@ export const LaudosPage: React.FC = () => {
   const [categoriaExameId, setCategoriaExameId] = useState<string>('');
   const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
   const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
+  const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
   const [blocoParaSuprimir, setBlocoParaSuprimir] = useState<{ tipo: string; armaChave?: string; armaIndice?: number } | null>(null);
   const [quantidadeBlocosSuprimidos, setQuantidadeBlocosSuprimidos] = useState(0);
 
@@ -932,6 +853,10 @@ export const LaudosPage: React.FC = () => {
   }, [editando?.id, editorMode]);
 
   useEffect(() => {
+    avisosFalhaPlaceholdersRef.current.clear();
+  }, [editando?.id]);
+
+  useEffect(() => {
     if (!imagemSelecionadaIaId) return;
     const marcador = `data-image-id="${imagemSelecionadaIaId}"`;
     const imagemPermaneceNoLaudo = editorMode === 'single'
@@ -944,14 +869,7 @@ export const LaudosPage: React.FC = () => {
     const editor = obterEditorTinyMce(editorId);
     if (editor) {
       editor.execCommand('insertPlaceholder', false, { chave });
-      window.setTimeout(() => {
-        aplicarModoVisualizacaoPlaceholders(
-          editor,
-          modoVisualizacaoPlaceholders,
-          mapaPlaceholdersResolvidos,
-          placeholders,
-        );
-      }, 0);
+      aplicarModoNoEditor(editor);
     }
   };
 
@@ -1952,10 +1870,17 @@ export const LaudosPage: React.FC = () => {
   }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao]);
 
   const aplicarModoNoEditor = useCallback((editor: TinyMceEditorInstance) => {
-    aplicarModoVisualizacaoPlaceholders(editor, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders);
-    window.setTimeout(() => {
-      aplicarModoVisualizacaoPlaceholders(editor, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders);
-    }, 100);
+    agendarVisualizacaoPlaceholders(editor, {
+      modo: modoVisualizacaoPlaceholders,
+      valores: mapaPlaceholdersResolvidos,
+      placeholdersPersonalizados: placeholders,
+      descreverPendente: descreverPlaceholderPendente,
+      aoFalharDefinitivamente: () => {
+        if (avisosFalhaPlaceholdersRef.current.has(editor.id)) return;
+        avisosFalhaPlaceholdersRef.current.add(editor.id);
+        toast.warning('Alguns campos não puderam ser atualizados visualmente. O conteúdo original foi preservado.');
+      },
+    });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
 
   const confirmarSupressaoBloco = useCallback(() => {
@@ -2011,8 +1936,7 @@ export const LaudosPage: React.FC = () => {
         : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
       editores.filter(isTinyMceEditor).forEach(aplicarModoNoEditor);
     };
-    const tentativas = [0, 150, 500].map(atraso => window.setTimeout(aplicarAosEditores, atraso));
-    return () => tentativas.forEach(timeout => window.clearTimeout(timeout));
+    aplicarAosEditores();
   }, [aplicarModoNoEditor, editando, editorMode, secoes]);
 
   const finalizarVolta = () => {

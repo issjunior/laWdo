@@ -12,6 +12,9 @@ import { getLogger } from '../utils/logger.js';
 
 const log = getLogger('exportacao');
 
+let disponibilidadeLibreOfficeEmCache: boolean | null = null;
+let verificacaoLibreOfficeEmAndamento: Promise<boolean> | null = null;
+
 const CM_TO_INCHES = 1 / 2.54;
 
 interface ExportacaoCabecalho {
@@ -508,6 +511,56 @@ async function converterComLibreOffice(
   });
 }
 
+function obterCandidatosLibreOffice(): string[] {
+  const candidatosPorPlataforma: Record<NodeJS.Platform, string[]> = {
+    win32: [
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'LIBREO~1/program/soffice.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'LibreOffice/program/soffice.exe'),
+      path.join(process.env.PROGRAMFILES_X86 || '', 'LibreOffice/program/soffice.exe'),
+      path.join(process.env.PROGRAMFILES || '', 'LibreOffice/program/soffice.exe'),
+      process.env.LIBRE_OFFICE_EXE || '',
+      'C:/Program Files/LibreOffice/program/soffice.exe',
+    ],
+    darwin: ['/Applications/LibreOffice.app/Contents/MacOS/soffice'],
+    linux: [
+      '/usr/bin/libreoffice',
+      '/usr/bin/soffice',
+      '/snap/bin/libreoffice',
+      '/opt/libreoffice/program/soffice',
+      '/opt/libreoffice7.6/program/soffice',
+    ],
+    aix: [],
+    android: [],
+    freebsd: [],
+    haiku: [],
+    openbsd: [],
+    sunos: [],
+    cygwin: [],
+    netbsd: [],
+  };
+
+  return [...new Set((candidatosPorPlataforma[process.platform] || [])
+    .filter(Boolean)
+    .map(caminho => path.normalize(caminho)))];
+}
+
+async function localizarExecutavelLibreOffice(): Promise<string | null> {
+  for (const caminho of obterCandidatosLibreOffice()) {
+    try {
+      const estatisticas = await fs.promises.stat(caminho);
+      if (estatisticas.isFile()) return caminho;
+    } catch {
+      // Tenta o próximo caminho conhecido.
+    }
+  }
+  return null;
+}
+
+async function verificarDisponibilidadeLibreOffice(): Promise<boolean> {
+  const executavel = await localizarExecutavelLibreOffice();
+  return executavel !== null;
+}
+
 async function gerarODT(
   html: string,
   estrutura?: EstruturaExportacaoLaudo,
@@ -581,13 +634,19 @@ td, th { background: transparent !important; }`;
 }
 
 export async function verificarLibreOffice(): Promise<boolean> {
-  try {
-    const testHtml = '<html><body><p>test</p></body></html>';
-    const result = await converterComLibreOffice(Buffer.from(testHtml, 'utf-8'), 'odt');
-    return Buffer.isBuffer(result) && result.length > 0;
-  } catch {
-    return false;
-  }
+  if (disponibilidadeLibreOfficeEmCache !== null) return disponibilidadeLibreOfficeEmCache;
+  if (verificacaoLibreOfficeEmAndamento) return verificacaoLibreOfficeEmAndamento;
+
+  verificacaoLibreOfficeEmAndamento = verificarDisponibilidadeLibreOffice()
+    .then(disponivel => {
+      disponibilidadeLibreOfficeEmCache = disponivel;
+      return disponivel;
+    })
+    .finally(() => {
+      verificacaoLibreOfficeEmAndamento = null;
+    });
+
+  return verificacaoLibreOfficeEmAndamento;
 }
 
 export async function exportarLaudo(params: ExportarParams): Promise<{ success: boolean; path?: string; error?: string }> {
