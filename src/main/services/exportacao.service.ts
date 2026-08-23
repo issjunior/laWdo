@@ -109,7 +109,7 @@ function htmlDosTrechos(trechos: import('../../shared/types/exportacao.types.js'
   }).join('');
 }
 
-function converterDocumentoLegado(documento: DocumentoExportacao): EstruturaExportacaoLaudo {
+export function converterDocumentoLegado(documento: DocumentoExportacao): EstruturaExportacaoLaudo {
   const imagens: ImagemExportacao[] = [];
   const secoes: SecaoExportacao[] = documento.secoes.map(secao => ({
     titulo: secao.titulo ? secao.titulo.trechos.map(t => t.texto).join('') : '',
@@ -274,7 +274,7 @@ function mapearHeadingDocx(
   }
 }
 
-async function gerarDOCX(
+export async function gerarDOCX(
   estrutura: EstruturaExportacaoLaudo,
   cabecalho?: ExportarParams['cabecalho'],
   margens?: ExportarParams['margens']
@@ -567,6 +567,41 @@ async function verificarDisponibilidadeLibreOffice(): Promise<boolean> {
   return executavel !== null;
 }
 
+async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalho?: ExportacaoCabecalho, margens?: MargensExportacao): Promise<Buffer> {
+  const d = await import('docx');
+  const { Document, Packer, Paragraph, TextRun, ExternalHyperlink, Table, TableRow, TableCell, ImageRun, Header, AlignmentType, UnderlineType, HeadingLevel, WidthType, BorderStyle } = d;
+  const alinhar = (v?: string) => v === 'center' ? AlignmentType.CENTER : v === 'right' ? AlignmentType.RIGHT : v === 'justify' ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
+  const runs = (trechos: import('../../shared/types/exportacao.types.js').TrechoExportacao[]): ParagraphChild[] => trechos.flatMap<ParagraphChild>(t => {
+    const e = t.estilo || {}; const opcoes = { text: t.texto, break: t.quebraLinha ? 1 : undefined, bold: e.negrito, italics: e.italico, strike: e.tachado, underline: e.sublinhado ? { type: UnderlineType.SINGLE } : undefined, superScript: e.sobrescrito, subScript: e.subscrito, font: e.fonte, size: e.tamanhoPt ? Math.round(e.tamanhoPt * 2) : undefined, color: e.cor, highlight: e.realce ? 'yellow' as const : undefined };
+    return e.link ? [new ExternalHyperlink({ link: e.link, children: [new TextRun({ ...opcoes, style: 'Hyperlink' })] })] : [new TextRun(opcoes)];
+  });
+  const para = (p: import('../../shared/types/exportacao.types.js').ParagrafoExportacao, extra: object = {}) => new Paragraph({
+    children: runs(p.trechos), alignment: alinhar(p.alinhamento), heading: p.nivelTitulo ? [undefined, HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5, HeadingLevel.HEADING_6][p.nivelTitulo] : undefined,
+    indent: { left: p.recuoEsquerdoPt ? Math.round(p.recuoEsquerdoPt * 20) : undefined, right: p.recuoDireitoPt ? Math.round(p.recuoDireitoPt * 20) : undefined, firstLine: p.recuoPrimeiraLinhaPt ? Math.round(p.recuoPrimeiraLinhaPt * 20) : undefined }, spacing: { before: p.espacamentoAntesPt ? Math.round(p.espacamentoAntesPt * 20) : undefined, after: p.espacamentoDepoisPt ? Math.round(p.espacamentoDepoisPt * 20) : undefined, line: p.espacamentoLinha ? Math.round(p.espacamentoLinha * 240) : undefined },
+    border: p.citacao ? { left: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } : undefined, ...extra,
+  });
+  const filhos: FileChild[] = [];
+  for (const secao of documento.secoes) {
+    if (secao.titulo) filhos.push(para(secao.titulo));
+    for (const bloco of secao.blocos) {
+      if (bloco.tipo === 'paragrafo') filhos.push(para(bloco));
+      else if (bloco.tipo === 'lista') bloco.itens.forEach(item => filhos.push(para(item, bloco.ordenada ? { numbering: { reference: 'numerada', level: bloco.nivel } } : { bullet: { level: bloco.nivel } })));
+      else if (bloco.tipo === 'linha-horizontal') filhos.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } }));
+      else if (bloco.tipo === 'tabela') {
+        const rows = bloco.linhas.map(linha => new TableRow({ children: linha.map(celula => new TableCell({
+          children: celula.paragrafos.map(p => para(p)), columnSpan: celula.colspan, rowSpan: celula.rowspan,
+          shading: celula.corFundo ? { fill: celula.corFundo } : undefined,
+          borders: { top: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, left: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, right: { style: BorderStyle.SINGLE, size: 4, color: '808080' } },
+        })) }));
+        filhos.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+      else { const tipo = normalizarTipoImagemDocx(bloco.formato); if (tipo) filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 500, height: bloco.alturaPx || 375 } })] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
+    }
+  }
+  const cab = cabecalho || documento.cabecalho; const cabecalhos = cab?.texto ? { first: new Header({ children: [new Paragraph({ alignment: alinhar(cab.alinhamento), children: [new TextRun(cab.texto)] })] }) } : undefined;
+  return Packer.toBuffer(new Document({ numbering: { config: [{ reference: 'numerada', levels: Array.from({ length: 9 }, (_, level) => ({ level, format: 'decimal', text: '%1.', alignment: AlignmentType.START })) }] }, styles: { default: { document: { run: { font: documento.fontePadrao, size: Math.round(documento.tamanhoPadraoPt * 2) } } } }, sections: [{ properties: { titlePage: Boolean(cabecalhos), page: { margin: Object.fromEntries(Object.entries(margens || documento.margens || {}).map(([k, v]) => [k, Math.round(Number(v) * 567)])) } }, headers: cabecalhos, children: filhos }] }));
+}
+
 async function gerarODT(documento: Buffer): Promise<Buffer> {
   const libre = await import('libreoffice-convert');
   const executavel = await localizarExecutavelLibreOffice();
@@ -624,12 +659,12 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
 
       case 'docx':
         if (!documentoValido(params.estrutura)) return { success: false, error: 'Estrutura canônica do documento inválida para DOCX' };
-        buffer = await gerarDOCX(converterDocumentoLegado(params.estrutura), params.cabecalho, params.margens);
+        buffer = await gerarDOCXCanonico(params.estrutura, params.cabecalho, params.margens);
         break;
 
       case 'odt':
         if (!documentoValido(params.estrutura)) return { success: false, error: 'Estrutura canônica do documento inválida para ODT' };
-        buffer = await gerarODT(await gerarDOCX(converterDocumentoLegado(params.estrutura), params.cabecalho, params.margens));
+        buffer = await gerarODT(await gerarDOCXCanonico(params.estrutura, params.cabecalho, params.margens));
         break;
 
       default:
