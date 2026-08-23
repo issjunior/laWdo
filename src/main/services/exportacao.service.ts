@@ -129,7 +129,15 @@ export function converterDocumentoLegado(documento: DocumentoExportacao): Estrut
 function documentoValido(valor: unknown): valor is DocumentoExportacao {
   if (!valor || typeof valor !== 'object') return false;
   const d = valor as Partial<DocumentoExportacao>;
-  return d.versao === 1 && typeof d.fontePadrao === 'string' && Number.isFinite(d.tamanhoPadraoPt) && Array.isArray(d.secoes);
+  if (d.versao !== 1 || typeof d.fontePadrao !== 'string' || !Number.isFinite(d.tamanhoPadraoPt) || !Array.isArray(d.secoes)) return false;
+  return d.secoes.every(secao => secao && typeof secao === 'object' && Array.isArray(secao.blocos) && secao.blocos.every(bloco => {
+    if (!bloco || typeof bloco !== 'object' || !('tipo' in bloco)) return false;
+    if (bloco.tipo === 'paragrafo') return Array.isArray(bloco.trechos) && bloco.trechos.every(t => t && typeof t.texto === 'string');
+    if (bloco.tipo === 'lista') return typeof bloco.ordenada === 'boolean' && Number.isInteger(bloco.nivel) && Array.isArray(bloco.itens) && bloco.itens.every(item => Array.isArray(item.trechos));
+    if (bloco.tipo === 'tabela') return Array.isArray(bloco.linhas) && bloco.linhas.every(linha => Array.isArray(linha) && linha.every(celula => Array.isArray(celula.paragrafos)));
+    if (bloco.tipo === 'figura') return typeof bloco.base64 === 'string' && typeof bloco.formato === 'string';
+    return bloco.tipo === 'linha-horizontal';
+  }));
 }
 
 function removerZerosEsquerda(numero: string): string {
