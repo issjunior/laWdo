@@ -643,6 +643,9 @@ export async function verificarLibreOffice(): Promise<boolean> {
 
 export async function exportarLaudo(params: ExportarParams): Promise<{ success: boolean; path?: string; error?: string }> {
   try {
+    if (params.formato === 'odt' && !(await verificarLibreOffice())) {
+      return { success: false, error: 'LibreOffice não está disponível para exportar ODT' };
+    }
     const numeroRep = await extrairNumeroRep(params.laudoId);
     const nomePadrao = buildNomeArquivo(numeroRep, params.formato);
 
