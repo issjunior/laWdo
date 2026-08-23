@@ -610,7 +610,7 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
   return Packer.toBuffer(new Document({ numbering: { config: [{ reference: 'numerada', levels: Array.from({ length: 9 }, (_, level) => ({ level, format: 'decimal', text: '%1.', alignment: AlignmentType.START })) }] }, styles: { default: { document: { run: { font: documento.fontePadrao, size: Math.round(documento.tamanhoPadraoPt * 2) } } } }, sections: [{ properties: { titlePage: Boolean(cabecalhos), page: { margin: Object.fromEntries(Object.entries(margens || documento.margens || {}).map(([k, v]) => [k, Math.round(Number(v) * 567)])) } }, headers: cabecalhos, children: filhos }] }));
 }
 
-async function gerarODT(documento: Buffer): Promise<Buffer> {
+export async function gerarODT(documento: Buffer): Promise<Buffer> {
   const libre = await import('libreoffice-convert');
   const executavel = await localizarExecutavelLibreOffice();
   return new Promise<Buffer>((resolve, reject) => {

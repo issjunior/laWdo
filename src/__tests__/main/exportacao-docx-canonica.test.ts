@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gerarDOCXCanonico } from '../../main/services/exportacao.service.js';
+import { gerarDOCXCanonico, gerarODT, verificarLibreOffice } from '../../main/services/exportacao.service.js';
 import type { DocumentoExportacao } from '../../shared/types/exportacao.types.js';
 
 const documento: DocumentoExportacao = {
@@ -19,4 +19,14 @@ describe('gerarDOCXCanonico', () => {
     expect(Buffer.from(buffer).subarray(0, 2).toString('utf8')).toBe('PK');
     expect(buffer.byteLength).toBeGreaterThan(1_000);
   });
+});
+
+describe('gerarODT', () => {
+  it('converte o buffer DOCX canônico em pacote ODT quando o LibreOffice está disponível', async () => {
+    if (!(await verificarLibreOffice())) return;
+    const docx = await gerarDOCXCanonico(documento);
+    const odt = await gerarODT(docx);
+    expect(Buffer.from(odt).subarray(0, 2).toString('utf8')).toBe('PK');
+    expect(odt.byteLength).toBeGreaterThan(1_000);
+  }, 30_000);
 });
