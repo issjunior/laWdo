@@ -1,7 +1,7 @@
 import { app, dialog, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
+import type { DocumentoExportacao, MargensExportacao } from '../../shared/types/exportacao.types.js';
 import type {
   FileChild,
   IParagraphOptions,
@@ -21,13 +21,6 @@ interface ExportacaoCabecalho {
   logoBase64?: string;
   texto?: string;
   alinhamento?: string;
-}
-
-interface ExportacaoMargens {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
 }
 
 interface ImagemExportacao {
@@ -92,13 +85,52 @@ export interface ExportarParams {
   laudoId: string;
   formato: 'pdf' | 'docx' | 'odt';
   html: string;
-  estrutura?: EstruturaExportacaoLaudo;
+  estrutura?: DocumentoExportacao;
   cabecalho?: ExportacaoCabecalho;
-  margens?: ExportacaoMargens;
+  margens?: MargensExportacao;
   nomeArquivo?: string;
 }
 
 type TipoImagemDocx = 'jpg' | 'png' | 'gif' | 'bmp';
+
+function escaparHtml(texto: string): string {
+  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function htmlDosTrechos(trechos: import('../../shared/types/exportacao.types.js').TrechoExportacao[]): string {
+  return trechos.map(t => {
+    let html = escaparHtml(t.texto).replace(/\u00a0/g, '&nbsp;');
+    if (t.quebraLinha) html += '<br>';
+    if (t.estilo?.negrito) html = `<strong>${html}</strong>`;
+    if (t.estilo?.italico) html = `<em>${html}</em>`;
+    if (t.estilo?.sublinhado) html = `<u>${html}</u>`;
+    if (t.estilo?.tachado) html = `<s>${html}</s>`;
+    return html;
+  }).join('');
+}
+
+function converterDocumentoLegado(documento: DocumentoExportacao): EstruturaExportacaoLaudo {
+  const imagens: ImagemExportacao[] = [];
+  const secoes: SecaoExportacao[] = documento.secoes.map(secao => ({
+    titulo: secao.titulo ? secao.titulo.trechos.map(t => t.texto).join('') : '',
+    elementos: secao.blocos.flatMap<ElementoExportacao>(elemento => {
+      if (elemento.tipo === 'paragrafo') return [{ tipo: 'paragrafo' as const, html: htmlDosTrechos(elemento.trechos), alinhamento: elemento.alinhamento, nivelTitulo: elemento.nivelTitulo }];
+      if (elemento.tipo === 'lista') return [{ tipo: 'lista' as const, items: elemento.itens.map(item => htmlDosTrechos(item.trechos)), ordenada: elemento.ordenada, nivel: elemento.nivel + 1 }];
+      if (elemento.tipo === 'linha-horizontal') return [{ tipo: 'quebra' as const }];
+      if (elemento.tipo === 'tabela') return [{ tipo: 'tabela' as const, linhas: elemento.linhas.map(linha => linha.map(celula => htmlDosTrechos(celula.paragrafos.flatMap(p => p.trechos)))), cabecalho: false }];
+      const id = `figura-${imagens.length}`;
+      imagens.push({ id, base64: elemento.base64, formato: elemento.formato, legenda: elemento.legenda?.trechos.map(t => t.texto).join('') || '', numero: imagens.length + 1 });
+      return [{ tipo: 'figura' as const, imagemId: id, legenda: imagens.at(-1)?.legenda || '', numero: imagens.length }];
+    }),
+  }));
+  return { fontFamily: documento.fontePadrao, fontSize: `${documento.tamanhoPadraoPt}pt`, secoes, imagens };
+}
+
+function documentoValido(valor: unknown): valor is DocumentoExportacao {
+  if (!valor || typeof valor !== 'object') return false;
+  const d = valor as Partial<DocumentoExportacao>;
+  return d.versao === 1 && typeof d.fontePadrao === 'string' && Number.isFinite(d.tamanhoPadraoPt) && Array.isArray(d.secoes);
+}
 
 function removerZerosEsquerda(numero: string): string {
   return numero.replace(/^0+/, '') || '0';
@@ -122,13 +154,6 @@ async function extrairNumeroRep(laudoId: string): Promise<string> {
     }
   } catch { /* fallback */ }
   return laudoId;
-}
-
-function dataUriToBuffer(dataUri: string): { buffer: Buffer; formato: string } | null {
-  const match = dataUri.match(/^data:image\/(jpeg|png|jpg|gif|webp);base64,(.+)$/i);
-  if (!match) return null;
-  const formato = match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1].toLowerCase();
-  return { buffer: Buffer.from(match[2], 'base64'), formato };
 }
 
 async function gerarPDF(html: string, margens?: ExportarParams['margens'], headerTemplate?: string): Promise<Buffer> {
@@ -471,7 +496,7 @@ async function gerarDOCX(
 
   const sectionOpts: ISectionOptions = {
     children,
-    ...(propriedadesSecao ? { properties: propriedadesSecao } : {}),
+    ...(propriedadesSecao || headers ? { properties: { ...propriedadesSecao, ...(headers ? { titlePage: true } : {}) } } : {}),
     ...(headers ? { headers } : {}),
   };
 
@@ -490,25 +515,6 @@ async function gerarDOCX(
   });
 
   return await Packer.toBuffer(doc);
-}
-
-async function converterComLibreOffice(
-  documento: Buffer,
-  formato: string,
-  filtro?: string
-): Promise<Buffer> {
-  const libre = await import('libreoffice-convert');
-
-  return new Promise<Buffer>((resolve, reject) => {
-    libre.convert(documento, formato, filtro, (erro, resultado) => {
-      if (erro) {
-        reject(erro);
-        return;
-      }
-
-      resolve(resultado);
-    });
-  });
 }
 
 function obterCandidatosLibreOffice(): string[] {
@@ -561,76 +567,15 @@ async function verificarDisponibilidadeLibreOffice(): Promise<boolean> {
   return executavel !== null;
 }
 
-async function gerarODT(
-  html: string,
-  estrutura?: EstruturaExportacaoLaudo,
-  margens?: ExportarParams['margens']
-): Promise<Buffer> {
-  const tmpDir = os.tmpdir();
-  const tmpHtmlPath = path.join(tmpDir, `laudo-odt-${Date.now()}.html`);
-
-  const fontFamily = estrutura?.fontFamily || 'Calibri';
-  const fontSize = estrutura?.fontSize || '12pt';
-
-  const mt = margens?.top ?? 2.5;
-  const mr = margens?.right ?? 2.0;
-  const mb = margens?.bottom ?? 2.5;
-  const ml = margens?.left ?? 3.0;
-
-  const wrapperCss = `@page { margin-top: ${mt}cm; margin-right: ${mr}cm; margin-bottom: ${mb}cm; margin-left: ${ml}cm; }
-body { font-family: '${fontFamily}', sans-serif; font-size: ${fontSize}; line-height: 1.7; color: #000; }
-table { width: 100% !important; max-width: 100% !important; table-layout: fixed; }
-[data-laudo-secao-header] { background: transparent !important; }
-td, th { background: transparent !important; }`;
-
-  html = html.replace(
-    /(<div[^>]*data-laudo-secao-header[^>]*style=")([^"]*)("[^>]*>)/gi,
-    (_match: string, prefix: string, styles: string, suffix: string) => {
-      const cleaned = styles.replace(/background:[^;]+;?/gi, '');
-      return prefix + cleaned + suffix;
-    }
-  );
-
-  html = html.replace(/<table(?!\s[^>]*\bwidth=)/gi, '<table width="100%" ');
-
-  let htmlProcessado = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<style>${wrapperCss}</style>
-</head>
-<body>${html}</body>
-</html>`;
-
-  const dataUriRegex = /<img[^>]+src="(data:image\/[^"]+)"[^>]*>/gi;
-  const tempImages: string[] = [];
-  let imgIndex = 0;
-
-  htmlProcessado = htmlProcessado.replace(dataUriRegex, (_fullMatch: string, dataUri: string) => {
-    const parsed = dataUriToBuffer(dataUri);
-    if (!parsed) return _fullMatch;
-
-    const ext = parsed.formato === 'jpeg' ? 'jpg' : parsed.formato;
-    const tempPath = path.join(tmpDir, `laudo-img-${Date.now()}-${imgIndex++}.${ext}`);
-    fs.writeFileSync(tempPath, parsed.buffer);
-    tempImages.push(tempPath);
-    return _fullMatch.replace(dataUri, `file:///${tempPath.replace(/\\/g, '/')}`);
+async function gerarODT(documento: Buffer): Promise<Buffer> {
+  const libre = await import('libreoffice-convert');
+  const executavel = await localizarExecutavelLibreOffice();
+  return new Promise<Buffer>((resolve, reject) => {
+    libre.convertWithOptions(documento, 'odt', undefined, {
+      fileName: 'laudo.docx',
+      ...(executavel ? { sofficeBinaryPaths: [executavel] } : {}),
+    }, (erro, resultado) => erro ? reject(erro) : resolve(resultado));
   });
-
-  fs.writeFileSync(tmpHtmlPath, htmlProcessado, 'utf-8');
-
-  try {
-    const htmlBuffer = fs.readFileSync(tmpHtmlPath);
-    const odtBuffer = await converterComLibreOffice(htmlBuffer, 'odt');
-
-    log.debug('ODT gerado com sucesso via LibreOffice');
-    return odtBuffer;
-  } finally {
-    try { fs.unlinkSync(tmpHtmlPath); } catch { /* ignora */ }
-    for (const imgPath of tempImages) {
-      try { fs.unlinkSync(imgPath); } catch { /* ignora */ }
-    }
-  }
 }
 
 export async function verificarLibreOffice(): Promise<boolean> {
@@ -678,12 +623,13 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
         break;
 
       case 'docx':
-        if (!params.estrutura) return { success: false, error: 'Estrutura do documento não fornecida para DOCX' };
-        buffer = await gerarDOCX(params.estrutura, params.cabecalho, params.margens);
+        if (!documentoValido(params.estrutura)) return { success: false, error: 'Estrutura canônica do documento inválida para DOCX' };
+        buffer = await gerarDOCX(converterDocumentoLegado(params.estrutura), params.cabecalho, params.margens);
         break;
 
       case 'odt':
-        buffer = await gerarODT(params.html, params.estrutura, params.margens);
+        if (!documentoValido(params.estrutura)) return { success: false, error: 'Estrutura canônica do documento inválida para ODT' };
+        buffer = await gerarODT(await gerarDOCX(converterDocumentoLegado(params.estrutura), params.cabecalho, params.margens));
         break;
 
       default:

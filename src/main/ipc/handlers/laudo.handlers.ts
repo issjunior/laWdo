@@ -266,15 +266,19 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Exportar laudo (PDF, DOCX ou ODT)
    */
-  ipcMain.handle('laudo:exportar', async (_event, params: ExportarParams) => {
+  ipcMain.handle('laudo:exportar', async (_event, params: unknown) => {
     try {
-      if (!params.laudoId || !params.formato) {
+      if (!params || typeof params !== 'object') {
         return { success: false, error: 'Parâmetros inválidos' };
       }
-      const result = await exportarLaudo(params);
+      const entrada = params as Partial<ExportarParams>;
+      if (typeof entrada.laudoId !== 'string' || !entrada.laudoId || !['pdf', 'docx', 'odt'].includes(entrada.formato || '') || typeof entrada.html !== 'string') {
+        return { success: false, error: 'Parâmetros inválidos' };
+      }
+      const result = await exportarLaudo(entrada as ExportarParams);
       return result;
     } catch (error) {
-      logError('Erro ao exportar laudo', { laudoId: params.laudoId, formato: params.formato, error });
+      logError('Erro ao exportar laudo', { error });
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
     }
   });
