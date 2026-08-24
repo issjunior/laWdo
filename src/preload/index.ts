@@ -237,7 +237,7 @@ export interface IpcAPI {
     updateSecao: (id: string, data: IpcPayload) => Promise<UserResponse>;
     deleteSecao: (id: string) => Promise<UserResponse>;
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
-    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => Promise<UserResponse>;
+    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string, titulo?: string) => Promise<UserResponse>;
     importarArquivo: () => Promise<ImportarArquivoResponse>;
     exportarPacote: (templateId: string) => Promise<UserResponse>;
     selecionarPacote: () => Promise<PacoteTemplateResponse>;
@@ -1287,7 +1287,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     updateSecao: (id: string, data: IpcPayload) => invocarComDiagnostico('template:updateSecao', id, data),
     deleteSecao: (id: string) => invocarComDiagnostico('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => invocarComDiagnostico('template:reordenarSecoes', templateId, idsOrdenados),
-    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string) => invocarComDiagnostico('template:previewPDF', { html, margins, headerTemplate }),
+    previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string, titulo?: string) => invocarComDiagnostico('template:previewPDF', { html, margins, headerTemplate, titulo }),
     importarArquivo: () => invocarComDiagnostico('template:importarArquivo'),
     exportarPacote: (templateId: string) => invocarComDiagnostico('template:exportarPacote', templateId),
     selecionarPacote: () => invocarComDiagnostico('template:selecionarPacote'),

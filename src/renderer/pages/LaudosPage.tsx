@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2 } from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
@@ -109,6 +109,7 @@ import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { protegerFragmentosIa, restaurarFragmentosIa } from '@/lib/ia-fragmentos';
 import { resolverHtmlContextoIa, resolverTextoContextoIa } from '@/lib/ia-contexto';
 import { toast } from 'sonner';
+import { obterNomeArquivoLaudo } from '@shared/utils/nomes-documentos-rep';
 
 function buildFigureHtml(url: string, id: string, legenda: string): string {
   return (
@@ -445,11 +446,13 @@ export const LaudosPage: React.FC = () => {
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+  const [nomeArquivoPreview, setNomeArquivoPreview] = useState('laudo.pdf');
   const [carregandoPreview, setCarregandoPreview] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [libreOfficeDisponivel, setLibreOfficeDisponivel] = useState<boolean | null>(null);
   const [listaPreviewOpen, setListaPreviewOpen] = useState(false);
   const [listaPreviewBlobUrl, setListaPreviewBlobUrl] = useState('');
+  const [nomeArquivoListaPreview, setNomeArquivoListaPreview] = useState('laudo.pdf');
   const [listaPreviewLoading, setListaPreviewLoading] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -1600,7 +1603,8 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 6. Gerar PDF via IPC
-      const result = await window.ipcAPI.template.previewPDF(htmlResolvido, await getMargens(), headerTemplate || undefined);
+      const nomeArquivo = obterNomeArquivoLaudo(repData.numero || editando.rep_numero, 'pdf');
+      const result = await window.ipcAPI.template.previewPDF(htmlResolvido, await getMargens(), headerTemplate || undefined, nomeArquivo);
       if (result.success && result.data) {
         const byteChars = atob(result.data);
         const byteNums = new Array(byteChars.length);
@@ -1612,6 +1616,7 @@ export const LaudosPage: React.FC = () => {
         
         if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
         setPreviewBlobUrl(url);
+        setNomeArquivoPreview(nomeArquivo);
         setPreviewOpen(true);
       } else {
         setError(result.error || 'Erro ao gerar PDF do laudo');
@@ -1672,7 +1677,8 @@ export const LaudosPage: React.FC = () => {
       });
 
       const margins = await getMargens();
-      const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined);
+      const nomeArquivo = obterNomeArquivoLaudo(repData.numero || laudo.rep_numero, 'pdf');
+      const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined, nomeArquivo);
 
       if (result.success && result.data) {
         const byteChars = atob(result.data);
@@ -1682,6 +1688,7 @@ export const LaudosPage: React.FC = () => {
         if (listaPreviewBlobUrl) URL.revokeObjectURL(listaPreviewBlobUrl);
         const url = URL.createObjectURL(blob);
         setListaPreviewBlobUrl(url);
+        setNomeArquivoListaPreview(nomeArquivo);
         setListaPreviewOpen(true);
       } else {
         setError(result.error || 'Erro ao gerar PDF do laudo');
@@ -1692,6 +1699,16 @@ export const LaudosPage: React.FC = () => {
       setListaPreviewLoading(false);
     }
   }, [listaPreviewBlobUrl]);
+
+  const baixarPdfVisualizado = (url: string, nomeArquivo: string) => {
+    if (!url) return;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nomeArquivo;
+    link.click();
+    link.remove();
+  };
 
   const handleExportar = async (formato: 'pdf' | 'docx' | 'odt') => {
     if (!editando) return;
@@ -3558,6 +3575,10 @@ export const LaudosPage: React.FC = () => {
               )}
             </div>
             <div className="p-4 border-t flex justify-end gap-2 bg-background">
+              <Button variant="outline" onClick={() => baixarPdfVisualizado(previewBlobUrl, nomeArquivoPreview)} disabled={!previewBlobUrl}>
+                <Download className="mr-2 h-4 w-4" />
+                Baixar PDF
+              </Button>
               <Button variant="outline" onClick={() => setPreviewOpen(false)}>Fechar</Button>
             </div>
           </DialogContent>
@@ -3897,6 +3918,10 @@ export const LaudosPage: React.FC = () => {
             )}
           </div>
           <div className="p-4 border-t flex justify-end gap-2 bg-background">
+            <Button variant="outline" onClick={() => baixarPdfVisualizado(listaPreviewBlobUrl, nomeArquivoListaPreview)} disabled={!listaPreviewBlobUrl}>
+              <Download className="mr-2 h-4 w-4" />
+              Baixar PDF
+            </Button>
             <Button variant="outline" onClick={() => setListaPreviewOpen(false)}>Fechar</Button>
           </div>
         </DialogContent>

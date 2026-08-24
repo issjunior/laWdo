@@ -8,6 +8,13 @@ const capturarImagensLaudo = vi.fn()
 const fecharSessaoImagensLaudo = vi.fn()
 const idSelecao = 'a'.repeat(64)
 
+function obterCaixaDaFoto(nomeArquivo: string): HTMLElement {
+  const item = screen.getByText(nomeArquivo).closest('label')
+  const caixa = item?.querySelector<HTMLElement>('[role="checkbox"]')
+  if (!caixa) throw new Error(`Caixa de seleção não encontrada para ${nomeArquivo}`)
+  return caixa
+}
+
 describe('GdlImagensRepModal', () => {
   beforeEach(() => {
     listarImagensLaudo.mockResolvedValue({
@@ -42,13 +49,12 @@ describe('GdlImagensRepModal', () => {
 
     expect(await screen.findByText('fotografia.png')).toBeInTheDocument()
     expect(screen.getByText('Produção')).toBeInTheDocument()
-    expect(screen.getByText('109026/2026')).toBeInTheDocument()
+    expect(screen.getByText('REP 109.026-2026')).toBeInTheDocument()
+    expect(screen.getByText(/Lista de Fotos pode ter até/i)).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Prévia de fotografia.png' })).toHaveAttribute('src', 'data:image/jpeg;base64,AA==')
-    expect(screen.getByText('foto.tiff')).toBeInTheDocument()
-    const caixas = screen.getAllByRole('checkbox')
-    expect(caixas[0]).toBeEnabled()
-    expect(caixas[1]).toBeDisabled()
-    fireEvent.click(caixas[0])
+    const caixaFotografia = obterCaixaDaFoto('fotografia.png')
+    expect(caixaFotografia).toBeEnabled()
+    fireEvent.click(caixaFotografia)
     fireEvent.click(await screen.findByRole('button', { name: 'Capturar imagens (1)' }))
 
     await waitFor(() => expect(capturarImagensLaudo).toHaveBeenCalledWith('laudo-1', 'sessao-imagens-1', [idSelecao], false))
@@ -64,10 +70,21 @@ describe('GdlImagensRepModal', () => {
     expect(screen.getByRole('button', { name: 'Capturar imagens (1)' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
 
-    const caixas = screen.getAllByRole('checkbox')
-    expect(caixas[0]).toBeChecked()
-    expect(caixas[1]).not.toBeChecked()
+    expect(obterCaixaDaFoto('fotografia.png')).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Desmarcar todas' }))
     expect(screen.getByRole('button', { name: 'Capturar imagens (0)' })).toBeDisabled()
+  })
+
+  it('filtra fotos pelo nome e permite ajustar a quantidade de colunas', async () => {
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    await screen.findByText('fotografia.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Aumentar colunas' }))
+    expect(screen.getByText('3 colunas')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Buscar fotos por nome' }), { target: { value: 'tiff' } })
+
+    expect(screen.queryByText('fotografia.png')).not.toBeInTheDocument()
+    expect(screen.getByText('Nenhuma foto encontrada com os filtros selecionados.')).toBeInTheDocument()
+    expect(screen.getByText('0 de 2 foto(s) exibida(s)')).toBeInTheDocument()
   })
 })

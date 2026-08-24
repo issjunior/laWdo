@@ -105,7 +105,7 @@ describe('GdlConsultaModal', () => {
   async function buscarRep() {
     fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-    expect(await screen.findByText('190-2026', { selector: 'strong' })).toBeInTheDocument()
+    expect(await screen.findByText('190-2026', { selector: '.font-medium' })).toBeInTheDocument()
   }
 
   it('inicia com todas as peças marcadas e aplica a consulta em modo mesclar', async () => {
@@ -125,6 +125,11 @@ describe('GdlConsultaModal', () => {
     await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
     await buscarRep()
 
+    expect(screen.queryByText('Busque uma REP no GDL para preencher automaticamente o formulário.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Peças estruturadas:')).not.toBeInTheDocument()
+    expect(screen.queryByText(/campos serão preenchidos/)).not.toBeInTheDocument()
+    expect(screen.queryByText('10 permanecem vazios.')).not.toBeInTheDocument()
+    expect(screen.getByText('19/07/2026')).toBeInTheDocument()
     expect(screen.getAllByText('Arma é Institucional?:')).toHaveLength(2)
     expect(screen.getAllByText('Não')).toHaveLength(2)
     expect(screen.getAllByText('Funcionamento:')).toHaveLength(2)
@@ -204,6 +209,33 @@ describe('GdlConsultaModal', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(consultarRep).not.toHaveBeenCalled()
     expect(onAplicar).not.toHaveBeenCalled()
+  })
+
+  it('orienta o usuário quando o endereço do GDL não pode ser localizado', async () => {
+    testarConexao.mockResolvedValue({
+      success: true,
+      data: {
+        sucesso: false,
+        latencia: 0,
+        ambiente: 'Produção',
+        statusCode: 0,
+        autenticado: false,
+        erro: 'net::ERR_NAME_NOT_RESOLVED',
+      },
+    })
+    render(
+      <GdlConsultaModal
+        open
+        onOpenChange={vi.fn()}
+        onAplicar={vi.fn()}
+        temDadosExistentes={false}
+        pecasB602={[]}
+        onConfigurarCredenciais={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByText('Não foi possível localizar o endereço do GDL. Verifique a conexão com a VPN institucional e tente novamente.')).toBeInTheDocument()
+    expect(screen.queryByText('net::ERR_NAME_NOT_RESOLVED')).not.toBeInTheDocument()
   })
 
   it('identifica o ambiente de Produção antes da consulta', async () => {

@@ -2,6 +2,7 @@ import { app, dialog, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import type { DocumentoExportacao, MargensExportacao } from '../../shared/types/exportacao.types.js';
+import { obterNomeArquivoLaudo } from '../../shared/utils/nomes-documentos-rep.js';
 import type {
   FileChild,
   IParagraphOptions,
@@ -138,17 +139,6 @@ function documentoValido(valor: unknown): valor is DocumentoExportacao {
     if (bloco.tipo === 'figura') return typeof bloco.base64 === 'string' && typeof bloco.formato === 'string';
     return bloco.tipo === 'linha-horizontal';
   }));
-}
-
-function removerZerosEsquerda(numero: string): string {
-  return numero.replace(/^0+/, '') || '0';
-}
-
-function buildNomeArquivo(numeroRep: string, formato: string): string {
-  const partes = numeroRep.split('/');
-  const numero = partes.length > 1 ? removerZerosEsquerda(partes[1]) : removerZerosEsquerda(partes[0]);
-  const ano = partes.length > 1 ? partes[0] : '';
-  return ano ? `${numero}-${ano}.${formato}` : `${numero}.${formato}`;
 }
 
 async function extrairNumeroRep(laudoId: string): Promise<string> {
@@ -653,7 +643,7 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
       return { success: false, error: 'LibreOffice não está disponível para exportar ODT' };
     }
     const numeroRep = await extrairNumeroRep(params.laudoId);
-    const nomePadrao = buildNomeArquivo(numeroRep, params.formato);
+    const nomePadrao = obterNomeArquivoLaudo(numeroRep, params.formato);
 
     const filtros: Record<string, { name: string; extensions: string[] }[]> = {
       pdf: [{ name: 'Documento PDF', extensions: ['pdf'] }],
