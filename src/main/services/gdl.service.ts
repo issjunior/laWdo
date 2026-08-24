@@ -84,6 +84,7 @@ const TIMEOUT_DOWNLOAD_GDL_MS = 30000;
 const LIMITE_BYTES_ZIP_GDL = 1024 * 1024 * 1024;
 const LIMITE_BYTES_FOTO_GDL = 50 * 1024 * 1024;
 const LIMITE_RAZAO_DESCOMPRESSAO_GDL = 100;
+const LIMITE_ENTRADAS_ZIP_GDL = 1000;
 const TEMPO_SESSAO_FOTOS_GDL_MS = 15 * 60 * 1000;
 const EXTENSOES_IMAGEM_GDL = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp']);
 const HOST_GDL_PRODUCAO_COM_CERTIFICADO_EXCEPCIONAL = 'www.gdl.sesp.parana';
@@ -457,6 +458,9 @@ function lerEntradasZipDoArquivo(caminho: string): EntradaZipFoto[] {
     throw new Error('Não foi possível abrir o arquivo da Lista de Fotos retornado pelo GDL.')
   }
   const quantidade = cauda.readUInt16LE(deslocamentoEocd + 10)
+  if (quantidade > LIMITE_ENTRADAS_ZIP_GDL) {
+    throw new Error(`A Lista de Fotos ultrapassa o limite de ${LIMITE_ENTRADAS_ZIP_GDL} entradas.`)
+  }
   const tamanhoDiretorio = cauda.readUInt32LE(deslocamentoEocd + 12)
   const deslocamentoDiretorio = cauda.readUInt32LE(deslocamentoEocd + 16)
   if (tamanhoDiretorio === 0xffffffff || deslocamentoDiretorio === 0xffffffff) throw new Error('Índice ZIP64 não compatível para a Lista de Fotos.')
@@ -498,6 +502,9 @@ function lerEntradasZip(bytesZip: Buffer): EntradaZipFoto[] {
     throw new Error('Não foi possível abrir o arquivo da Lista de Fotos retornado pelo GDL.');
   }
   const quantidade = bytesZip.readUInt16LE(deslocamentoEocd + 10);
+  if (quantidade > LIMITE_ENTRADAS_ZIP_GDL) {
+    throw new Error(`A Lista de Fotos ultrapassa o limite de ${LIMITE_ENTRADAS_ZIP_GDL} entradas.`);
+  }
   let cursor = bytesZip.readUInt32LE(deslocamentoEocd + 16);
   const entradas: EntradaZipFoto[] = [];
   for (let indice = 0; indice < quantidade; indice += 1) {
@@ -635,7 +642,7 @@ export function extrairFiltrosParaConsultaInvestigacao(rep: GdlRepValidada): Fil
     : [];
 }
 
-async function consultarEnvolvidosEmHomologacao(
+async function consultarEnvolvidosNaInvestigacao(
   baseUrl: string,
   credenciais: GdlCredenciais,
   rep: GdlRepValidada,
@@ -682,7 +689,9 @@ async function consultarEnvolvidosEmHomologacao(
       }
 
       const resposta = interpretarGdlListaRepsInvestigacaoJson(data);
-      envolvidos.push(...resposta.dadosREPs.flatMap(item => item.envolvidos === undefined ? [] : [item.envolvidos]));
+      envolvidos.push(...resposta.dadosREPs
+        .filter(item => repInvestigacaoCorresponde(item, rep))
+        .flatMap(item => item.envolvidos === undefined ? [] : [item.envolvidos]));
     } catch (erro) {
       log.warn('Falha na consulta auxiliar de envolvidos no GDL', {
         codRep: rep.codRep,
@@ -793,9 +802,7 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
-      const envolvidos = ambiente === 'homologacao'
-        ? await consultarEnvolvidosEmHomologacao(creds.baseUrl, creds, parsed)
-        : [];
+      const envolvidos = await consultarEnvolvidosNaInvestigacao(creds.baseUrl, creds, parsed);
       const dadosComEnvolvidos = envolvidos.length > 0
         ? { ...parsed, envolvidos: [...parsed.envolvidos, ...envolvidos] }
         : parsed;
@@ -830,7 +837,11 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
   }
 }
 
-async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise<{ rep: GdlRepValidada; credenciais: GdlCredenciais }> {
+async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise<{
+  rep: GdlRepValidada;
+  credenciais: GdlCredenciais;
+  ambiente: AmbienteGdl;
+}> {
   const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
   validarRepAutorizadaEmProducao(ambiente, numero, ano);
   const credenciais = await carregarCredenciais(ambiente);
@@ -849,7 +860,18 @@ async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise
   if (resposta.statusCode === 404) throw new Error(`REP ${numero}/${ano} não encontrada no GDL.`);
   if (resposta.statusCode === 401 || resposta.statusCode === 403) throw new Error('Autenticação rejeitada pelo GDL. Verifique login e senha.');
   if (resposta.statusCode !== 200) throw new Error(`Erro do servidor GDL (HTTP ${resposta.statusCode}).`);
-  return { rep: interpretarGdlRepJson(resposta.data), credenciais };
+  return { rep: interpretarGdlRepJson(resposta.data), credenciais, ambiente };
+}
+
+function repInvestigacaoCorresponde(repInvestigacao: { numeroRep: string; numeroCaso: string }, rep: GdlRepValidada): boolean {
+  const numeroRepEsperado = `${rep.numero}${rep.ano}`
+  const numeroRepRetornado = repInvestigacao.numeroRep.replace(/\D/g, '')
+  if (numeroRepRetornado === numeroRepEsperado) return true
+
+  const numeroCasoRep = typeof rep.numeroCaso === 'number'
+    ? String(rep.numeroCaso)
+    : typeof rep.numeroCaso === 'string' ? rep.numeroCaso.replace(/\D/g, '') : ''
+  return !!numeroCasoRep && repInvestigacao.numeroCaso.replace(/\D/g, '') === numeroCasoRep
 }
 
 function montarUrlListaFotos(baseUrlApi: string, codRep: number, numero: string, ano: string): string {
@@ -858,8 +880,12 @@ function montarUrlListaFotos(baseUrlApi: string, codRep: number, numero: string,
   return `${urlApi.origin}${caminhoRaiz}/Rep/Controls/PictureHandler.ashx?repId=${encodeURIComponent(String(codRep))}&repNumberYear=${encodeURIComponent(`${numero}_${ano}`)}`;
 }
 
-async function baixarListaFotosRep(numero: string, ano: string): Promise<{ arquivos: ArquivoRepInterno[]; caminhoZip: string }> {
-  const { rep, credenciais } = await consultarIdentificacaoDaRep(numero, ano);
+async function baixarListaFotosRep(numero: string, ano: string): Promise<{
+  arquivos: ArquivoRepInterno[];
+  caminhoZip: string;
+  ambiente: AmbienteGdl;
+}> {
+  const { rep, credenciais, ambiente } = await consultarIdentificacaoDaRep(numero, ano);
   const url = montarUrlListaFotos(credenciais.baseUrl, rep.codRep, numero, ano);
   const resposta = await baixarArquivoGdl(url, {
     Authorization: buildAuthHeader(credenciais.login, credenciais.senha),
@@ -870,7 +896,11 @@ async function baixarListaFotosRep(numero: string, ano: string): Promise<{ arqui
   if (resposta.statusCode !== 200) throw new Error(`Erro ao obter a Lista de Fotos do GDL (HTTP ${resposta.statusCode}).`);
   if (!resposta.caminhoTemporario) throw new Error('O GDL não retornou o arquivo da Lista de Fotos.')
   try {
-    return { arquivos: criarArquivosDaListaFotos(lerEntradasZipDoArquivo(resposta.caminhoTemporario), rep.codRep), caminhoZip: resposta.caminhoTemporario }
+    return {
+      arquivos: criarArquivosDaListaFotos(lerEntradasZipDoArquivo(resposta.caminhoTemporario), rep.codRep),
+      caminhoZip: resposta.caminhoTemporario,
+      ambiente,
+    }
   } catch (error) {
     fs.unlinkSync(resposta.caminhoTemporario)
     throw error
@@ -930,7 +960,7 @@ function criarArquivosPublicosComMiniaturas(
 
 export async function abrirSessaoImagensRepGdl(laudoId: string, numero: string, ano: string): Promise<ListaImagensRepGdl> {
   limparSessoesFotosExpiradas()
-  const { arquivos, caminhoZip } = await baixarListaFotosRep(numero, ano)
+  const { arquivos, caminhoZip, ambiente } = await baixarListaFotosRep(numero, ano)
   try {
     const entradasZip = lerEntradasZipDoArquivo(caminhoZip)
     const sessaoId = randomUUID()
@@ -943,7 +973,13 @@ export async function abrirSessaoImagensRepGdl(laudoId: string, numero: string, 
       entradasZip,
       expiraEm: Date.now() + TEMPO_SESSAO_FOTOS_GDL_MS,
     })
-    return { sessaoId, arquivos: criarArquivosPublicosComMiniaturas(arquivos, entradasZip, caminhoZip) }
+    return {
+      sessaoId,
+      ambiente,
+      numeroRep: numero,
+      anoRep: ano,
+      arquivos: criarArquivosPublicosComMiniaturas(arquivos, entradasZip, caminhoZip),
+    }
   } catch (error) {
     if (fs.existsSync(caminhoZip)) fs.unlinkSync(caminhoZip)
     throw error

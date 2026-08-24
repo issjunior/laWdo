@@ -66,6 +66,14 @@ describe('contrato GDL B602', () => {
     expect(() => listarFotosDoArquivoZip(Buffer.from('erro'), 1127748)).toThrow('ZIP válido')
   })
 
+  it('rejeita ZIP com mais entradas que o limite de segurança', () => {
+    const bytesZip = Buffer.from('UEsDBBQAAAgIABen9FxnKvAQBgAAAAQAAAAKAAAAZm90by0xLmpwZ/t/4/9NAFBLAwQUAAAICAAXp/RczLJ41wYAAAAEAAAACQAAAGZvdG8udGlmZvP01GIAAFBLAwQUAAAICAAXp/Rcpb7rWwYAAAAEAAAAEAAAAHBhc3RhL2ZvdG8tMi5wbmfrDPBzBwBQSwECFAoUAAAICAAXp/RcZyrwEAYAAAAEAAAACgAAAAAAAAAAAAAApIEAAAAAZm90by0xLmpwZ1BLAQIUChQAAAgIABen9FzMsnjXBgAAAAQAAAAJAAAAAAAAAAAAAACkgS4AAABmb3RvLnRpZmZQSwECFAoUAAAICAAXp/Rcpb7rWwYAAAAEAAAAEAAAAAAAAAAAAAAApIFbAAAAcGFzdGEvZm90by0yLnBuZ1BLBQYAAAAAAwADAK0AAACPAAAAAAA=', 'base64')
+    const deslocamentoEocd = bytesZip.length - 22
+    bytesZip.writeUInt16LE(1001, deslocamentoEocd + 10)
+
+    expect(() => listarFotosDoArquivoZip(bytesZip, 1127748)).toThrow('limite de 1000 entradas')
+  })
+
   it('interpreta os tamanhos ZIP64 sem confundir o marcador com 4 GB', () => {
     const [arquivo] = listarFotosDoArquivoZip(criarZipComMetadadosZip64(), 1127748)
 

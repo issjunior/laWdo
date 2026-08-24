@@ -14,6 +14,9 @@ describe('GdlImagensRepModal', () => {
       success: true,
       data: {
         sessaoId: 'sessao-imagens-1',
+        ambiente: 'producao',
+        numeroRep: '109026',
+        anoRep: '2026',
         arquivos: [
           { idSelecao, origem: 'lista_fotos', nomeArquivo: 'fotografia.png', tamanho: 1024, dataUpload: null, provavelImagem: true, status: null, thumbnailDataUri: 'data:image/jpeg;base64,AA==' },
           { idSelecao: 'b'.repeat(64), origem: 'lista_fotos', nomeArquivo: 'foto.tiff', tamanho: 1024, dataUpload: null, provavelImagem: false, status: 'Formato não compatível para captura' },
@@ -38,6 +41,8 @@ describe('GdlImagensRepModal', () => {
     render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={onAbertoChange} onCapturadas={onCapturadas} />)
 
     expect(await screen.findByText('fotografia.png')).toBeInTheDocument()
+    expect(screen.getByText('Produção')).toBeInTheDocument()
+    expect(screen.getByText('109026/2026')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Prévia de fotografia.png' })).toHaveAttribute('src', 'data:image/jpeg;base64,AA==')
     expect(screen.getByText('foto.tiff')).toBeInTheDocument()
     const caixas = screen.getAllByRole('checkbox')

@@ -30,10 +30,25 @@ interface DuplicataComMiniaturas extends DuplicataImagemRepGdl {
   miniaturaExistente?: string
 }
 
-function dadosSessaoImagensValidos(valor: unknown): valor is { sessaoId: string; arquivos: ArquivoRepGdl[] } {
+interface DadosSessaoImagens {
+  sessaoId: string
+  ambiente: 'homologacao' | 'producao'
+  numeroRep: string
+  anoRep: string
+  arquivos: ArquivoRepGdl[]
+}
+
+function dadosSessaoImagensValidos(valor: unknown): valor is DadosSessaoImagens {
   if (!valor || typeof valor !== 'object') return false
-  const dados = valor as { sessaoId?: unknown; arquivos?: unknown }
-  return typeof dados.sessaoId === 'string' && dados.sessaoId.length > 0 && Array.isArray(dados.arquivos)
+  const dados = valor as Record<string, unknown>
+  return typeof dados.sessaoId === 'string'
+    && dados.sessaoId.length > 0
+    && (dados.ambiente === 'homologacao' || dados.ambiente === 'producao')
+    && typeof dados.numeroRep === 'string'
+    && dados.numeroRep.trim().length > 0
+    && typeof dados.anoRep === 'string'
+    && /^\d{4}$/.test(dados.anoRep)
+    && Array.isArray(dados.arquivos)
 }
 
 function formatarTamanho(tamanho: number | null): string {
@@ -51,6 +66,7 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
   const [carregando, setCarregando] = useState(false)
   const [capturando, setCapturando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [identificacaoRep, setIdentificacaoRep] = useState<Omit<DadosSessaoImagens, 'sessaoId' | 'arquivos'> | null>(null)
   const [duplicadasPendentes, setDuplicadasPendentes] = useState<DuplicataComMiniaturas[]>([])
 
   useEffect(() => {
@@ -60,6 +76,7 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
     setErro(null)
     setSelecionadas(new Set())
     setSessaoId(null)
+    setIdentificacaoRep(null)
     sessaoIdRef.current = null
     void window.ipcAPI.gdl.listarImagensLaudo(laudoId).then(resultado => {
       if (!ativo) {
@@ -72,6 +89,11 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
       }
       setSessaoId(resultado.data.sessaoId)
       sessaoIdRef.current = resultado.data.sessaoId
+      setIdentificacaoRep({
+        ambiente: resultado.data.ambiente,
+        numeroRep: resultado.data.numeroRep,
+        anoRep: resultado.data.anoRep,
+      })
       setArquivos(resultado.data.arquivos)
     }).catch(error => {
       if (ativo) setErro(error instanceof Error ? error.message : 'Não foi possível carregar a Lista de Fotos da REP.')
@@ -152,6 +174,14 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
           <DialogTitle className="flex items-center gap-2"><ImageDown className="h-5 w-5 text-primary" />Lista de Fotos da REP</DialogTitle>
           <DialogDescription>Somente as fotos da galeria do GDL são consideradas. Vídeos e anexos são ignorados.</DialogDescription>
         </DialogHeader>
+        {identificacaoRep && (
+          <Alert variant={identificacaoRep.ambiente === 'producao' ? 'destructive' : 'default'}>
+            <AlertDescription>
+              Ambiente: <strong>{identificacaoRep.ambiente === 'producao' ? 'Produção' : 'Homologação'}</strong>
+              {' · '}REP: <strong>{identificacaoRep.numeroRep}/{identificacaoRep.anoRep}</strong>
+            </AlertDescription>
+          </Alert>
+        )}
         {!carregando && !erro && idsElegiveis.length > 0 && (
           <div className="flex justify-end">
             <Button variant="outline" size="sm" onClick={alternarTodasSelecoes} disabled={capturando}>

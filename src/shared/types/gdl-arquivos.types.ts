@@ -32,6 +32,9 @@ export interface ResultadoCapturaImagensRepGdl {
 
 export interface ListaImagensRepGdl {
   sessaoId: string
+  ambiente: 'homologacao' | 'producao'
+  numeroRep: string
+  anoRep: string
   arquivos: ArquivoRepGdl[]
 }
 

@@ -108,7 +108,10 @@ beforeAll(async () => {
       requisicao.on('end', () => {
         corposInvestigacao.push(corpo)
         responder(resposta, 200, JSON.stringify({
-          dadosREPs: [{ envolvidos: { nome: 'ENVOLVIDO COMPLEMENTAR' } }],
+          dadosREPs: [
+            { numeroRep: '190/2026', envolvidos: { nome: 'ENVOLVIDO COMPLEMENTAR' } },
+            { numeroRep: '999/2026', envolvidos: { nome: 'ENVOLVIDO DE OUTRA REP' } },
+          ],
         }))
       })
       return
@@ -220,6 +223,7 @@ describe('gdl.service', () => {
     expect(resultado.sucesso).toBe(true)
     expect(resultado.ambiente).toBe('homologacao')
     expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
+    expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
     expect(corposInvestigacao).toHaveLength(2)
     expect(obterValidacaoSessao('homologacao')).toMatchObject({
       validado: true,
@@ -329,6 +333,17 @@ describe('gdl.service', () => {
     }
   })
 
+  it('consulta a REP em produção e complementa envolvidos pela listagem de investigação', async () => {
+    configuracoes.gdl_ambiente = 'producao'
+    const resultado = await consultarRep('109.026', '2026')
+
+    expect(resultado.sucesso).toBe(true)
+    expect(resultado.ambiente).toBe('producao')
+    expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
+    expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
+    expect(corposInvestigacao).toHaveLength(2)
+  })
+
   it('reutiliza o ZIP temporário da sessão até o modal ser fechado', async () => {
     configuracoes.gdl_ambiente = 'homologacao'
     const sessao = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026')
@@ -378,7 +393,7 @@ describe('gdl.service', () => {
 
   it('aceita formatos equivalentes da REP autorizada em produção', async () => {
     await expect(consultarRep('000109.026', '2026')).resolves.toMatchObject({ sucesso: true })
-    expect(requisicoesRecebidas).toBe(1)
+    expect(requisicoesRecebidas).toBe(3)
   })
 
   it('valida arquivos ZIP e deriva filtros únicos para a investigação', () => {

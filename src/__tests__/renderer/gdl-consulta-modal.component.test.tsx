@@ -26,7 +26,7 @@ function criarPeca(codigo: number, identificacao: string): PecaB602 {
       consumida: 'N',
       observacao: '',
     },
-    personalizados: { '476:arma_institucional': '98' },
+    personalizados: { '476:arma_institucional': '98', '476:funcionamento': '57' },
     extrasGdl: {},
   }
 }
@@ -41,6 +41,8 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
     data_requisicao: '2026-07-19',
     tipo_solicitacao: 'BO',
     numero_documento: '123/2026',
+    b602_local_cidade: 'CURITIBA',
+    b602_solicitante_nome: 'UNIDADE POLICIAL',
   },
   camposEspecificos: {
     pecas: [pecaUm, pecaDois],
@@ -122,6 +124,13 @@ describe('GdlConsultaModal', () => {
 
     await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
     await buscarRep()
+
+    expect(screen.getAllByText('Arma é Institucional?:')).toHaveLength(2)
+    expect(screen.getAllByText('Não')).toHaveLength(2)
+    expect(screen.getAllByText('Funcionamento:')).toHaveLength(2)
+    expect(screen.getAllByText('Eficiente')).toHaveLength(2)
+    expect(screen.getByText('Cidade:')).toBeInTheDocument()
+    expect(screen.getByText('Unidade Policial:')).toBeInTheDocument()
 
     const checkboxes = screen.getAllByRole('checkbox')
     expect(checkboxes).toHaveLength(2)

@@ -109,6 +109,13 @@ function obterLabelCampoPersonalizado(peca: PecaB602, id: string): string {
   return TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(campo => campo.id === id)?.label ?? id
 }
 
+function formatarValorCampoPersonalizado(peca: PecaB602, id: string, valor: unknown): string {
+  const campo = TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(item => item.id === id)
+  const codigo = typeof valor === 'string' || typeof valor === 'number' ? String(valor) : null
+  const opcao = codigo ? campo?.opcoes?.find(item => item.codigo === codigo) : undefined
+  return opcao?.label ?? formatarValorRevisao(valor)
+}
+
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   open,
   onOpenChange,
@@ -289,6 +296,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           tipo_solicitacao: 'Tipo de Solicitação',
           numero_documento: 'Nº da Solicitação',
           data_requisicao: 'Data de Recebimento',
+          b602_local_cidade: 'Cidade',
+          b602_solicitante_nome: 'Unidade Policial',
           b602_numero_bo: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',
           b602_numero_ip: tiposIp.length ? `Nº IP (${tiposIp.join(', ')})` : 'Nº IP',
         };
@@ -391,6 +400,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const itensReconciliacao = resultadoConsulta
     ? montarItensReconciliacaoPecasB602(pecasB602, resultadoConsulta.camposEspecificos.pecas)
     : [];
+  const avisosPreenchimentoManual = resultadoConsulta?.avisos.filter(aviso => aviso.codigo === 'ENVOLVIDOS_NAO_RETORNADOS') ?? [];
+  const avisosDestacados = resultadoConsulta?.avisos.filter(aviso => aviso.codigo !== 'ENVOLVIDOS_NAO_RETORNADOS') ?? [];
 
   const getPreTesteMensagem = (): string => {
     if (!preTeste) return 'Verificando conexão...';
@@ -596,11 +607,11 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                 </div>
               </div>
 
-              {!!resultadoConsulta?.avisos.length && (
+              {!!avisosDestacados.length && (
                 <Alert variant="default" className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
                   <AlertDescription>
-                    {resultadoConsulta.avisos.map(aviso => <p key={`${aviso.codigo}-${aviso.mensagem}`}>{aviso.mensagem}</p>)}
+                    {avisosDestacados.map(aviso => <p key={`${aviso.codigo}-${aviso.mensagem}`}>{aviso.mensagem}</p>)}
                   </AlertDescription>
                 </Alert>
               )}
@@ -629,7 +640,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                             {!!Object.keys(peca.personalizados).length && (
                               <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-2">
                                 {Object.entries(peca.personalizados).map(([id, valor]) => (
-                                  <div key={id} className="flex gap-1"><dt className="font-medium">{obterLabelCampoPersonalizado(peca, id)}:</dt><dd>{formatarValorRevisao(valor)}</dd></div>
+                                  <div key={id} className="flex gap-1"><dt className="font-medium">{obterLabelCampoPersonalizado(peca, id)}:</dt><dd>{formatarValorCampoPersonalizado(peca, id, valor)}</dd></div>
                                 ))}
                               </dl>
                             )}
@@ -655,6 +666,14 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              {!!avisosPreenchimentoManual.length && (
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {avisosPreenchimentoManual.map(aviso => (
+                    <p key={`${aviso.codigo}-${aviso.mensagem}`}>{aviso.mensagem}</p>
+                  ))}
+                </div>
+              )}
 
               {temDadosExistentes && (
                 <Alert variant="default" className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
