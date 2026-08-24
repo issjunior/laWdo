@@ -145,7 +145,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
 
     fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-    expect(await screen.findByText('109026-2026', { selector: 'strong' })).toBeInTheDocument()
+    expect(await screen.findAllByText('109026-2026', { selector: 'span' })).not.toHaveLength(0)
     expect(screen.getByRole('checkbox')).toBeChecked()
 
     fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }))

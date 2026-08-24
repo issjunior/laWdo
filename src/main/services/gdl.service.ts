@@ -88,10 +88,6 @@ const LIMITE_ENTRADAS_ZIP_GDL = 1000;
 const TEMPO_SESSAO_FOTOS_GDL_MS = 15 * 60 * 1000;
 const EXTENSOES_IMAGEM_GDL = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp']);
 const HOST_GDL_PRODUCAO_COM_CERTIFICADO_EXCEPCIONAL = 'www.gdl.sesp.parana';
-const REP_PRODUCAO_AUTORIZADA = {
-  numero: 109026,
-  ano: 2026,
-} as const;
 let verificacaoCertificadoGdlConfigurada = false;
 
 function obterSessaoRedeGdl() {
@@ -208,31 +204,6 @@ interface SessaoFotosGdl {
 }
 
 const sessoesFotosGdl = new Map<string, SessaoFotosGdl>()
-
-function normalizarNumeroRep(numero: string): number | null {
-  const apenasDigitos = numero.replace(/\D/g, '');
-  if (!apenasDigitos) return null;
-  const numeroNormalizado = Number(apenasDigitos);
-  return Number.isSafeInteger(numeroNormalizado) && numeroNormalizado > 0 ? numeroNormalizado : null;
-}
-
-function normalizarAnoRep(ano: string): number | null {
-  const apenasDigitos = ano.replace(/\D/g, '');
-  if (!/^\d{4}$/.test(apenasDigitos)) return null;
-  return Number(apenasDigitos);
-}
-
-function validarRepAutorizadaEmProducao(ambiente: AmbienteGdl, numero: string, ano: string): void {
-  if (ambiente !== 'producao') return;
-
-  const numeroNormalizado = normalizarNumeroRep(numero);
-  const anoNormalizado = normalizarAnoRep(ano);
-  if (numeroNormalizado === REP_PRODUCAO_AUTORIZADA.numero && anoNormalizado === REP_PRODUCAO_AUTORIZADA.ano) {
-    return;
-  }
-
-  throw new Error('Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.');
-}
 
 function limparValidacaoSessaoInterna(ambiente: AmbienteGdl): GdlValidacaoSessao {
   validacaoSessaoGdl[ambiente] = {
@@ -780,7 +751,6 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
   let ambiente: AmbienteGdl = 'homologacao';
   try {
     ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
-    validarRepAutorizadaEmProducao(ambiente, numero, ano);
     const creds = await carregarCredenciais(ambiente);
     if (!creds.login || !creds.senha) {
       limparValidacaoSessaoInterna(ambiente);
@@ -843,7 +813,6 @@ async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise
   ambiente: AmbienteGdl;
 }> {
   const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
-  validarRepAutorizadaEmProducao(ambiente, numero, ano);
   const credenciais = await carregarCredenciais(ambiente);
   if (!credenciais.login || !credenciais.senha) {
     throw new Error('Credenciais do GDL não configuradas.');
@@ -1158,7 +1127,6 @@ export async function validarCredenciais(
 ): Promise<GdlConsultaResultado> {
   const amb = normalizarAmbiente(ambiente);
   try {
-    validarRepAutorizadaEmProducao(amb, numero, ano);
     const baseUrl = await carregarBaseUrl(amb);
     const login = credenciais.login.trim();
     const senha = credenciais.senha.trim();

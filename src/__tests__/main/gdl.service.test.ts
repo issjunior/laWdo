@@ -84,6 +84,7 @@ let respostaRep = fixtureRep
 const corposInvestigacao: string[] = []
 const configuracoes: Record<string, string> = {}
 let requisicoesRecebidas = 0
+const requisicoesGdl: Array<{ metodo: string; caminho: string }> = []
 
 function responder(resposta: http.ServerResponse, status: number, corpo: string | Buffer): void {
   resposta.statusCode = status
@@ -94,6 +95,7 @@ beforeAll(async () => {
   servidor = http.createServer((requisicao, resposta) => {
     requisicoesRecebidas += 1
     const url = new URL(requisicao.url ?? '/', baseUrl)
+    requisicoesGdl.push({ metodo: requisicao.method || '', caminho: url.pathname })
     if (url.pathname.endsWith('/unidadesMedida')) {
       responder(resposta, statusUnidades, '{}')
       return
@@ -145,6 +147,7 @@ beforeEach(() => {
   statusFotos = 200
   respostaRep = fixtureRep
   corposInvestigacao.length = 0
+  requisicoesGdl.length = 0
   requisicoesRecebidas = 0
   Object.assign(configuracoes, {
     gdl_ambiente: 'producao',
@@ -367,33 +370,29 @@ describe('gdl.service', () => {
     })).rejects.toThrow('A sessão temporária da Lista de Fotos expirou. Consulte novamente.')
   })
 
-  it('bloqueia qualquer outra REP em produção antes de consultar credenciais ou emitir HTTP', async () => {
+  it('permite consultar outra REP em produção após a validação inicial', async () => {
     mocks.obterConfiguracao.mockClear()
     await expect(consultarRep('190', '2026')).resolves.toMatchObject({
-      sucesso: false,
-      erro: 'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
+      sucesso: true,
+      ambiente: 'producao',
     })
     await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '190', '2026')).resolves.toMatchObject({
-      sucesso: false,
-      erro: 'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
+      sucesso: true,
     })
-    await expect(listarImagensRepGdl('190', '2026')).rejects.toThrow(
-      'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
-    )
-    await expect(capturarImagensRepGdl('190', '2026', ['a'.repeat(64)])).rejects.toThrow(
-      'Durante a validação da integração, Produção permite consultar exclusivamente a REP 109.026/2026.',
-    )
-    expect(requisicoesRecebidas).toBe(0)
-    expect(mocks.obterConfiguracao.mock.calls).toEqual([
-      ['gdl_ambiente'],
-      ['gdl_ambiente'],
-      ['gdl_ambiente'],
-    ])
+    await expect(listarImagensRepGdl('190', '2026')).resolves.toEqual(expect.any(Array))
+    expect(requisicoesRecebidas).toBeGreaterThan(0)
   })
 
-  it('aceita formatos equivalentes da REP autorizada em produção', async () => {
-    await expect(consultarRep('000109.026', '2026')).resolves.toMatchObject({ sucesso: true })
-    expect(requisicoesRecebidas).toBe(3)
+  it('usa somente endpoints de consulta do GDL', async () => {
+    configuracoes.gdl_ambiente = 'producao'
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: true })
+    await expect(abrirSessaoImagensRepGdl('laudo-teste', '190', '2026')).resolves.toMatchObject({ arquivos: expect.any(Array) })
+
+    expect(requisicoesGdl).not.toHaveLength(0)
+    expect(requisicoesGdl.every(requisicao => requisicao.metodo === 'GET' || (
+      requisicao.metodo === 'POST' && requisicao.caminho.endsWith('/repsInvestigacaoPolicial/listarReps')
+    ))).toBe(true)
+    expect(requisicoesGdl.filter(requisicao => requisicao.metodo === 'POST')).toHaveLength(2)
   })
 
   it('valida arquivos ZIP e deriva filtros únicos para a investigação', () => {

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GdlImagensRepModal } from '@/components/laudo/GdlImagensRepModal'
 
 const ipcApiOriginal = window.ipcAPI
@@ -16,6 +16,13 @@ function obterCaixaDaFoto(nomeArquivo: string): HTMLElement {
 }
 
 describe('GdlImagensRepModal', () => {
+  beforeAll(() => {
+    HTMLElement.prototype.hasPointerCapture = () => false
+    HTMLElement.prototype.setPointerCapture = () => undefined
+    HTMLElement.prototype.releasePointerCapture = () => undefined
+    HTMLElement.prototype.scrollIntoView = () => undefined
+  })
+
   beforeEach(() => {
     listarImagensLaudo.mockResolvedValue({
       success: true,
@@ -81,10 +88,56 @@ describe('GdlImagensRepModal', () => {
     await screen.findByText('fotografia.png')
     fireEvent.click(screen.getByRole('button', { name: 'Aumentar colunas' }))
     expect(screen.getByText('3 colunas')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Diminuir colunas' }))
+    expect(screen.getByText('2 colunas')).toBeInTheDocument()
     fireEvent.change(screen.getByRole('textbox', { name: 'Buscar fotos por nome' }), { target: { value: 'tiff' } })
 
     expect(screen.queryByText('fotografia.png')).not.toBeInTheDocument()
     expect(screen.getByText('Nenhuma foto encontrada com os filtros selecionados.')).toBeInTheDocument()
     expect(screen.getByText('0 de 2 foto(s) exibida(s)')).toBeInTheDocument()
+  })
+
+  it('permite alternar entre fotos disponíveis e indisponíveis e alterar a ordenação', async () => {
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    await screen.findByText('fotografia.png')
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Filtrar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
+    fireEvent.click(await screen.findByRole('option', { name: 'Indisponíveis' }))
+    expect(screen.getByText('foto.tiff')).toBeInTheDocument()
+    expect(screen.queryByText('fotografia.png')).not.toBeInTheDocument()
+
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Filtrar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
+    fireEvent.click(await screen.findByRole('option', { name: 'Disponíveis' }))
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Ordenar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
+    fireEvent.click(await screen.findByRole('option', { name: 'Nome: Z a A' }))
+    expect(screen.getByText('fotografia.png')).toBeInTheDocument()
+  })
+
+  it('mostra as fotos duplicadas antes de permitir uma nova captura', async () => {
+    const obterMiniaturas = vi.fn().mockResolvedValue({
+      success: true,
+      data: [{ id: 'imagem-existente-1', thumbnailDataUri: 'data:image/jpeg;base64,BB==' }],
+    })
+    capturarImagensLaudo.mockResolvedValue({
+      success: true,
+      data: {
+        imagens: [],
+        falhas: [],
+        duplicadas: [{ idSelecao, nomeArquivo: 'fotografia.png', imagemExistenteId: 'imagem-existente-1', localizacao: 'painel' }],
+      },
+    })
+    Object.defineProperty(window, 'ipcAPI', {
+      value: { ...window.ipcAPI, ilustracoes: { ...window.ipcAPI.ilustracoes, obterMiniaturas } },
+      writable: true,
+    })
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    await screen.findByText('fotografia.png')
+    fireEvent.click(obterCaixaDaFoto('fotografia.png'))
+    fireEvent.click(screen.getByRole('button', { name: 'Capturar imagens (1)' }))
+
+    expect(await screen.findByText('Foto já incluída no laudo')).toBeInTheDocument()
+    expect(obterMiniaturas).toHaveBeenCalledWith('laudo-1', ['imagem-existente-1'])
+    expect(screen.getByRole('img', { name: 'Foto já incluída' })).toHaveAttribute('src', 'data:image/jpeg;base64,BB==')
   })
 })
