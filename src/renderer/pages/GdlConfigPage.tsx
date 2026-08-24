@@ -60,8 +60,18 @@ interface ValidacaoSessaoGdl {
   dataHora?: string;
 }
 
+const obterMensagemOrientadaErroGdl = (erro: string): string => {
+  const erroNormalizado = erro.toUpperCase();
+
+  if (erroNormalizado.includes('ERR_NAME_NOT_RESOLVED') || erroNormalizado.includes('ENOTFOUND')) {
+    return 'Não foi possível localizar o endereço do GDL. Verifique a conexão com a VPN institucional e tente novamente.';
+  }
+
+  return erro;
+};
+
 const getMensagemErro = (erro: unknown, fallback: string): string =>
-  erro instanceof Error ? erro.message : fallback;
+  obterMensagemOrientadaErroGdl(erro instanceof Error ? erro.message : fallback);
 
 export const GdlConfigPage: React.FC = () => {
   const [ambiente, setAmbiente] = useState('homologacao');
@@ -178,7 +188,7 @@ export const GdlConfigPage: React.FC = () => {
       if (r.success && r.data) {
         setDiagnostico(r.data);
       } else {
-        setErro(r.error || 'Erro ao testar conexão');
+        setErro(obterMensagemOrientadaErroGdl(r.error || 'Erro ao testar conexão'));
       }
     } catch (e: unknown) {
       setErro(getMensagemErro(e, 'Erro ao testar conexão'));
@@ -229,7 +239,7 @@ export const GdlConfigPage: React.FC = () => {
         }
         setSucessoValidacao(`Credenciais validadas com sucesso usando a REP ${numeroRepValidacao}/${anoRepValidacao}.`);
       } else {
-        setErroValidacao(r.error || 'Não foi possível validar as credenciais no GDL.');
+        setErroValidacao(obterMensagemOrientadaErroGdl(r.error || 'Não foi possível validar as credenciais no GDL.'));
       }
     } catch (e: unknown) {
       setErroValidacao(getMensagemErro(e, 'Erro ao validar credenciais no GDL.'));
@@ -443,13 +453,13 @@ export const GdlConfigPage: React.FC = () => {
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        {diagnostico.erro || 'Ainda não executado.'}
+                        {diagnostico.erro ? obterMensagemOrientadaErroGdl(diagnostico.erro) : 'Ainda não executado.'}
                       </p>
                     )}
 
                     {(diagnostico.rede?.erro || diagnostico.erro) && (
                       <p className="text-sm text-red-600">
-                        {diagnostico.rede?.erro || diagnostico.erro}
+                        {obterMensagemOrientadaErroGdl(diagnostico.rede?.erro || diagnostico.erro || '')}
                       </p>
                     )}
                   </div>

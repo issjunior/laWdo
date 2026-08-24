@@ -8,10 +8,10 @@ import {
 } from '../../shared/catalogos/b602-gdl.catalogo'
 
 describe('catálogo B602', () => {
-  it('possui exatamente os 16 códigos mapeados, sem PEÇA TESTE nem código zero', () => {
+  it('possui exatamente os 19 códigos de produção, sem PEÇA TESTE nem código zero', () => {
     const codigos = CATALOGO_TIPOS_PECA_B602.map(tipo => tipo.codigo)
-    expect(codigos).toHaveLength(16)
-    expect(new Set(codigos).size).toBe(16)
+    expect(codigos).toHaveLength(19)
+    expect(new Set(codigos).size).toBe(19)
     expect(codigos).not.toContain('0')
     expect(codigos).not.toContain('771')
     expect(() => validarCatalogoTiposPecaB602()).not.toThrow()
@@ -24,12 +24,16 @@ describe('catálogo B602', () => {
     expect(() => validarCatalogoTiposPecaB602(catalogoInvalido)).toThrow('ID de campo B602 inválido ou duplicado')
   })
 
-  it('marca como round-trip confirmado somente os tipos validados por API, persistência e reabertura', () => {
-    const confirmados = CATALOGO_TIPOS_PECA_B602.filter(tipo => tipo.roundTripConfirmado).map(tipo => tipo.codigo)
-    expect(confirmados).toEqual([
-      '289', '613', '476', '272', '472', '473', '101', '477',
-      '475', '178', '104', '478', '572', '105', '106', '479',
+  it('separa confirmação visual de produção do round-trip ainda não comprovado por payload', () => {
+    const visualmenteConfirmados = CATALOGO_TIPOS_PECA_B602
+      .filter(tipo => tipo.schemaVisualConfirmadoProducao)
+      .map(tipo => tipo.codigo)
+    expect(visualmenteConfirmados).toEqual([
+      '289', '613', '476', '272', '17', '472', '473', '101', '477',
+      '475', '714', '480', '178', '104', '478', '572', '105', '106', '479',
     ])
+    expect(CATALOGO_TIPOS_PECA_B602.every(tipo => tipo.dataVerificacaoVisualProducao === '2026-08-22')).toBe(true)
+    expect(CATALOGO_TIPOS_PECA_B602.filter(tipo => tipo.roundTripApiConfirmadoProducao)).toEqual([])
   })
 
   it('reproduz os controles de texto e limites visuais de ARMA(S) DE CHOQUE', () => {
@@ -66,12 +70,13 @@ describe('catálogo B602', () => {
     ])
   })
 
-  it('reflete a reinspeção visual de GARRUCHA e PISTOLETE', () => {
+  it('reflete a matriz visual de GARRUCHA e PISTOLETE', () => {
     const garrucha = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '475')
     const pistolete = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '478')
 
     expect(garrucha?.campos.map(campo => campo.label)).toEqual([
-      'Nº Série', 'Marca', 'Modelo', 'Fabricação da Arma',
+      'Nº Série', 'Marca', 'Modelo', 'Capacidade', 'Marca da Arma', 'Status do Número de Série',
+      'Tipo Acabamento', 'Estado Geral da Arma', 'Funcionamento', 'Fabricação da Arma', 'Arma é Institucional?',
     ])
     expect(garrucha?.campos.slice(0, 3).map(campo => campo.maxLength)).toEqual([25, 50, 50])
     expect(pistolete?.campos).toEqual([])
@@ -93,6 +98,7 @@ describe('catálogo B602', () => {
         mapeamentoApiConfirmado: true,
         opcoes: [
           { codigo: '95', label: 'DELEGACIA' },
+          { codigo: '1471', label: 'HOSPITAL' },
           { codigo: '93', label: 'LOCAL DE CRIME' },
           { codigo: '94', label: 'NECRÓPSIA' },
           { codigo: '11', label: 'Outro' },
@@ -101,21 +107,20 @@ describe('catálogo B602', () => {
     ])
   })
 
-  it('reproduz todos os campos e opções observados de PISTOLA sem mapear Marca', () => {
+  it('reproduz todos os campos e opções observados de PISTOLA', () => {
     const pistola = CATALOGO_TIPOS_PECA_B602.find(tipo => tipo.codigo === '104')
 
     expect(pistola?.campos.map(campo => campo.label)).toEqual([
-      'Nº Série', 'Modelo', 'Capacidade', 'Marca da Arma', 'Status do Número de Série',
+      'Nº Série', 'Marca', 'Modelo', 'Capacidade', 'Marca da Arma', 'Status do Número de Série',
       'Calibre Nominal Pistola', 'Tipo Acabamento', 'Estado Geral da Arma',
       'Funcionamento', 'Fabricação da Arma', 'Arma é Institucional?',
     ])
-    expect(pistola?.campos.some(campo => campo.label === 'Marca')).toBe(false)
-    expect(pistola?.campos.slice(0, 3).map(campo => campo.maxLength)).toEqual([25, 50, 50])
+    expect(pistola?.campos.slice(0, 4).map(campo => campo.maxLength)).toEqual([25, 50, 50, 50])
 
     const marcaArma = pistola?.campos.find(campo => campo.id === '104:marca_arma')
     expect(marcaArma).toMatchObject({ controle: 'combobox', obrigatorio: false })
-    expect(marcaArma?.opcoes).toHaveLength(1379)
-    expect(marcaArma?.opcoes).toContainEqual({ codigo: '1316', label: 'Taurus' })
+    expect(marcaArma?.opcoes).toHaveLength(1371)
+    expect(marcaArma?.opcoes).toContainEqual({ codigo: '2', label: 'Taurus' })
 
     expect(pistola?.campos.find(campo => campo.id === '104:status_numero_serie')?.opcoes).toEqual([
       { codigo: '19', label: 'Ilegível' },
@@ -214,10 +219,14 @@ describe('catálogo B602', () => {
 
   it('exige os campos personalizados obrigatórios na completude', () => {
     expect(pecaB602EstaCompleta({ tipoCodigo: '476', comuns: { quantidade: 1 }, personalizados: {} })).toBe(false)
-    expect(pecaB602EstaCompleta({ tipoCodigo: '476', comuns: { quantidade: 1 }, personalizados: { '476:arma_institucional': '60' } })).toBe(true)
+    expect(pecaB602EstaCompleta({
+      tipoCodigo: '476',
+      comuns: { quantidade: 1 },
+      personalizados: { '476:funcionamento': '57', '476:arma_institucional': '60' },
+    })).toBe(true)
   })
 
-  it('permite concluir manualmente cada um dos 16 tipos com seus obrigatórios preenchidos', () => {
+  it('permite concluir manualmente cada um dos 19 tipos com seus obrigatórios preenchidos', () => {
     for (const tipo of CATALOGO_TIPOS_PECA_B602) {
       const obrigatorios = tipo.campos.filter(campo => campo.obrigatorio)
       const personalizados = Object.fromEntries(obrigatorios.map(campo => [

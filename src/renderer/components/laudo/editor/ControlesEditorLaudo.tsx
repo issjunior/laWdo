@@ -248,22 +248,31 @@ export function CabecalhoEditorLaudo({
                 <FileDown className="mr-2 size-4" />
                 Baixar PDF
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onExportar('docx')}>
                 <FileText className="mr-2 size-4" />
                 Baixar Word (.docx)
+                <Badge
+                  variant="outline"
+                  title="Em desenvolvimento"
+                  className="ml-auto shrink-0 border-amber-300 bg-amber-100 px-1.5 py-0 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                >
+                  Beta
+                </Badge>
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => onExportar('odt')}
                 disabled={libreOfficeDisponivel !== true}
               >
                 <File className="mr-2 size-4" />
                 Baixar ODT (.odt)
-                {libreOfficeDisponivel !== true && (
-                  <span className="ml-auto text-[10px] text-muted-foreground">
-                    {libreOfficeDisponivel === null ? 'Verificando...' : 'Requer LibreOffice'}
-                  </span>
-                )}
+                <Badge
+                  variant="outline"
+                  title={`Em desenvolvimento${libreOfficeDisponivel !== true ? ` · ${libreOfficeDisponivel === null ? 'Verificando LibreOffice' : 'Requer LibreOffice'}` : ''}`}
+                  className="ml-auto shrink-0 border-amber-300 bg-amber-100 px-1.5 py-0 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                >
+                  Beta
+                </Badge>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

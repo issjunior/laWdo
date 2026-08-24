@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -105,8 +104,20 @@ function formatarValorRevisao(valor: unknown): string {
   return JSON.stringify(valor)
 }
 
+function formatarDataRevisao(valor: string): string {
+  const data = new Date(valor.includes('T') ? valor : `${valor}T00:00:00`)
+  return Number.isNaN(data.getTime()) ? valor : data.toLocaleDateString('pt-BR')
+}
+
 function obterLabelCampoPersonalizado(peca: PecaB602, id: string): string {
   return TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(campo => campo.id === id)?.label ?? id
+}
+
+function formatarValorCampoPersonalizado(peca: PecaB602, id: string, valor: unknown): string {
+  const campo = TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(item => item.id === id)
+  const codigo = typeof valor === 'string' || typeof valor === 'number' ? String(valor) : null
+  const opcao = codigo ? campo?.opcoes?.find(item => item.codigo === codigo) : undefined
+  return opcao?.label ?? formatarValorRevisao(valor)
 }
 
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
@@ -131,6 +142,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [preTeste, setPreTeste] = useState<PreTesteResultado | null>(null);
   const [preTesteTestando, setPreTesteTestando] = useState(false);
   const [ambiente, setAmbiente] = useState<string>('homologacao');
+  const [ambienteCarregado, setAmbienteCarregado] = useState(false);
 
   const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoExame<DadosImportacaoB602> | null>(null);
   const [idsPecasSelecionadas, setIdsPecasSelecionadas] = useState<Set<string>>(new Set());
@@ -192,11 +204,13 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       setCamposMapeados([]);
       setModo('mesclar');
       setPreTeste(null);
+      setAmbienteCarregado(false);
 
       (async () => {
         const rAmb = await window.ipcAPI.configuracao.obter('gdl_ambiente');
         const amb = (rAmb.success && rAmb.data) ? rAmb.data : 'homologacao';
         setAmbiente(amb);
+        setAmbienteCarregado(true);
 
         setPreTesteTestando(true);
         try {
@@ -286,12 +300,18 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           tipo_solicitacao: 'Tipo de Solicitação',
           numero_documento: 'Nº da Solicitação',
           data_requisicao: 'Data de Recebimento',
+          b602_local_cidade: 'Cidade',
+          b602_solicitante_nome: 'Unidade Policial',
           b602_numero_bo: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',
           b602_numero_ip: tiposIp.length ? `Nº IP (${tiposIp.join(', ')})` : 'Nº IP',
         };
         for (const [campo, valor] of Object.entries(resultado.camposGerais)) {
           if (campo.startsWith('b602_envolvidos_')) continue;
-          if (valor) mapeados.push({ campo, label: labelsCampos[campo] ?? campo, valor });
+          if (valor) mapeados.push({
+            campo,
+            label: labelsCampos[campo] ?? campo,
+            valor: campo === 'data_requisicao' ? formatarDataRevisao(valor) : valor,
+          });
         }
 
         const envolvidos = Array.from({ length: 10 }, (_, indice) => combinarEnvolvido(
@@ -301,14 +321,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           .filter(Boolean)
           .join('\n');
         if (envolvidos) mapeados.push({ campo: 'envolvidos', label: 'Envolvidos', valor: envolvidos });
-
-        const pecas = resultado.camposEspecificos.pecas;
-        if (pecas.length > 0) {
-          const listaPecas = pecas
-            .map((p) => `${p.comuns.quantidade}x ${p.tipoPeca} \u2014 ${p.comuns.identificacao || 'sem identificação'} (${p.comuns.unidadeMedida || '-'})`)
-            .join('\n');
-          mapeados.push({ campo: 'pecas', label: 'Peças estruturadas', valor: listaPecas });
-        }
 
         const todosCampos = [
           { campo: 'tipo_exame', label: 'Tipo de Exame' },
@@ -388,13 +400,19 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const itensReconciliacao = resultadoConsulta
     ? montarItensReconciliacaoPecasB602(pecasB602, resultadoConsulta.camposEspecificos.pecas)
     : [];
+  const avisosPreenchimentoManual = resultadoConsulta?.avisos.filter(aviso => aviso.codigo === 'ENVOLVIDOS_NAO_RETORNADOS') ?? [];
+  const avisosDestacados = resultadoConsulta?.avisos.filter(aviso => aviso.codigo !== 'ENVOLVIDOS_NAO_RETORNADOS') ?? [];
 
   const getPreTesteMensagem = (): string => {
     if (!preTeste) return 'Verificando conexão...';
     if (preTeste.ok) {
       return `GDL acessível na rede \u2014 ${preTeste.ambiente} (${preTeste.latencia}ms)`;
     }
-    if (preTeste.erro?.includes('Timeout') || preTeste.erro?.includes('ENOTFOUND') || preTeste.erro?.includes('ECONNREFUSED')) {
+    const erroRede = preTeste.erro?.toUpperCase() || '';
+    if (erroRede.includes('ERR_NAME_NOT_RESOLVED') || erroRede.includes('ENOTFOUND')) {
+      return 'Não foi possível localizar o endereço do GDL. Verifique a conexão com a VPN institucional e tente novamente.';
+    }
+    if (erroRede.includes('TIMEOUT') || erroRede.includes('ECONNREFUSED')) {
       return `Sem conexão com o servidor GDL (${ambienteLabel}). Verifique a VPN.`;
     }
     return preTeste.erro || `Erro de conexão com o GDL (${ambienteLabel}).`;
@@ -404,11 +422,12 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[540px] flex flex-col max-h-[85vh]">
+      <DialogContent className="sm:max-w-[780px] flex flex-col max-h-[85vh]">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Network className="h-5 w-5 text-primary" />
             Consultar GDL
+            <Badge variant={ambiente === 'producao' ? 'destructive' : 'secondary'}>{ambienteLabel}</Badge>
             <Button
               variant="ghost"
               size="icon"
@@ -420,9 +439,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               <RefreshCw className={`h-3.5 w-3.5 ${preTesteTestando ? 'animate-spin' : ''}`} />
             </Button>
           </DialogTitle>
-          <DialogDescription>
-            Busque uma REP no GDL para preencher automaticamente o formulário.
-          </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2 mb-4 shrink-0">
@@ -548,7 +564,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               </Button>
               <Button
                 onClick={handleBuscar}
-                disabled={!numeroRep.trim() || !anoRep.trim() || buscando}
+                disabled={!ambienteCarregado || !numeroRep.trim() || !anoRep.trim() || buscando}
                 className="gap-2"
               >
                 {buscando ? (
@@ -567,10 +583,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
             <div className="flex-1 overflow-y-auto min-h-0 space-y-4">
               <Alert>
                 <AlertDescription>
-                  REP <strong>{resultadoConsulta?.camposGerais.numero}</strong> encontrada.
-                  <br />
-                  <span className="text-green-600 font-medium">{camposMapeados.length} campos</span> serão preenchidos.
-                  <span className="text-muted-foreground"> {camposNaoPreenchidos.length} permanecem vazios.</span>
+                  REP <span className="font-medium">{resultadoConsulta?.camposGerais.numero}</span> encontrada.
                 </AlertDescription>
               </Alert>
 
@@ -579,7 +592,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                   <ListChecks className="h-4 w-4" />
                   Campos que serão preenchidos:
                 </Label>
-                <div className="space-y-1">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-2">
                   {camposMapeados.map((c, i) => (
                     <div key={i} className="flex items-start gap-2 text-sm">
                       <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
@@ -592,11 +605,11 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                 </div>
               </div>
 
-              {!!resultadoConsulta?.avisos.length && (
+              {!!avisosDestacados.length && (
                 <Alert variant="default" className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
                   <AlertDescription>
-                    {resultadoConsulta.avisos.map(aviso => <p key={`${aviso.codigo}-${aviso.mensagem}`}>{aviso.mensagem}</p>)}
+                    {avisosDestacados.map(aviso => <p key={`${aviso.codigo}-${aviso.mensagem}`}>{aviso.mensagem}</p>)}
                   </AlertDescription>
                 </Alert>
               )}
@@ -625,7 +638,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                             {!!Object.keys(peca.personalizados).length && (
                               <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-2">
                                 {Object.entries(peca.personalizados).map(([id, valor]) => (
-                                  <div key={id} className="flex gap-1"><dt className="font-medium">{obterLabelCampoPersonalizado(peca, id)}:</dt><dd>{formatarValorRevisao(valor)}</dd></div>
+                                  <div key={id} className="flex gap-1"><dt className="font-medium">{obterLabelCampoPersonalizado(peca, id)}:</dt><dd>{formatarValorCampoPersonalizado(peca, id, valor)}</dd></div>
                                 ))}
                               </dl>
                             )}
@@ -651,6 +664,14 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              {!!avisosPreenchimentoManual.length && (
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {avisosPreenchimentoManual.map(aviso => (
+                    <p key={`${aviso.codigo}-${aviso.mensagem}`}>{aviso.mensagem}</p>
+                  ))}
+                </div>
+              )}
 
               {temDadosExistentes && (
                 <Alert variant="default" className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">

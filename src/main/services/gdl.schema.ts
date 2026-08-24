@@ -97,6 +97,8 @@ const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(paylo
 
 const gdlRepInvestigacaoSchema = z.object({
   envolvidos: z.unknown().optional(),
+  numeroRep: textoOpcional,
+  numeroCaso: textoFlexivel,
 }).catchall(z.unknown())
 
 const gdlListaRepsInvestigacaoSchema = z.object({

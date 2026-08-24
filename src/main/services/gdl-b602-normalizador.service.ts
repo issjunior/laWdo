@@ -55,16 +55,20 @@ function obterCampoPersonalizado(
 function normalizarValorCampoPersonalizado(
   campo: CampoPersonalizadoB602,
   valor: unknown,
+  ambiente: 'homologacao' | 'producao',
 ): unknown {
   if (!campo.opcoes || (typeof valor !== 'string' && typeof valor !== 'number')) return valor
 
-  const texto = String(valor).trim()
+  const textoOriginal = String(valor).trim()
+  const texto = ambiente === 'homologacao' && campo.id.endsWith(':marca_arma') && textoOriginal === '1316'
+    ? 'Taurus'
+    : textoOriginal
   const opcao = campo.opcoes.find(item => (
     item.codigo === texto || normalizarChave(item.label) === normalizarChave(texto)
   ))
 
   if (!opcao) return valor
-  return campo.controle === 'combobox' ? opcao.label : opcao.codigo
+  return opcao.codigo
 }
 
 function obterTextoPorAlias(fonte: unknown, aliases: string[]): string {
@@ -258,7 +262,7 @@ function criarCamposComuns(peca: GdlPecaValidada): CamposComunsPecaB602 {
   }
 }
 
-function normalizarPecaB602(peca: GdlPecaValidada): PecaB602 {
+function normalizarPecaB602(peca: GdlPecaValidada, ambiente: 'homologacao' | 'producao'): PecaB602 {
   const definicao = obterTipoPecaB602PorLabel(peca.tipoPeca)
   const personalizados: Record<string, unknown> = {}
   const extrasGdl: Record<string, unknown> = {}
@@ -266,7 +270,7 @@ function normalizarPecaB602(peca: GdlPecaValidada): PecaB602 {
   for (const [chave, valor] of Object.entries(peca)) {
     if (CHAVES_COMUNS.has(normalizarNomeCampo(chave))) continue
     const campo = obterCampoPersonalizado(definicao, chave)
-    if (campo) personalizados[campo.id] = normalizarValorCampoPersonalizado(campo, valor)
+    if (campo) personalizados[campo.id] = normalizarValorCampoPersonalizado(campo, valor, ambiente)
     else extrasGdl[chave] = valor
   }
 
@@ -287,9 +291,10 @@ export function converterRepB602(
   rep: GdlRepValidada,
   metadadosIntegracaoGdl?: MetadadosIntegracaoGdl,
 ): ResultadoImportacaoExame<DadosImportacaoB602> {
+  const ambiente = metadadosIntegracaoGdl?.ultimaConsulta?.ambiente ?? 'homologacao'
   const pecas = rep.pecas
     .filter(peca => normalizarChave(peca.tipoPeca) !== 'peca teste')
-    .map(normalizarPecaB602)
+    .map(peca => normalizarPecaB602(peca, ambiente))
   const desconhecidas = pecas.filter(peca => !peca.tipoCodigo)
   const dadosSolicitacao = extrairDadosSolicitacao(rep)
   const dadosInvestigacao = extrairDadosInvestigacao(rep)

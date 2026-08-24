@@ -41,8 +41,14 @@ vi.mock('../../main/services/imagem-laudo.service.js', () => ({
   disponibilizarImagemLaudo: vi.fn(),
   excluirImagemLaudo: vi.fn(),
   listarImagensLaudo: vi.fn(),
+  listarResumosImagensLaudo: vi.fn(),
+  obterImagemLaudoPorId: vi.fn(),
+  obterMiniaturasImagensLaudo: vi.fn(),
+  reconciliarImagensLaudo: vi.fn(),
   salvarImagemLaudo: vi.fn(),
 }))
+
+vi.mock('../../main/services/laudo.service.js', () => ({ laudoService: { findById: vi.fn() } }))
 
 vi.mock('../../main/utils/logger.js', () => ({ logDebug: vi.fn(), logError: vi.fn() }))
 

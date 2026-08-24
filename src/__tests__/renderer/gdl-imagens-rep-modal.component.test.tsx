@@ -1,27 +1,48 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GdlImagensRepModal } from '@/components/laudo/GdlImagensRepModal'
 
 const ipcApiOriginal = window.ipcAPI
 const listarImagensLaudo = vi.fn()
 const capturarImagensLaudo = vi.fn()
+const fecharSessaoImagensLaudo = vi.fn()
 const idSelecao = 'a'.repeat(64)
 
+function obterCaixaDaFoto(nomeArquivo: string): HTMLElement {
+  const item = screen.getByText(nomeArquivo).closest('label')
+  const caixa = item?.querySelector<HTMLElement>('[role="checkbox"]')
+  if (!caixa) throw new Error(`Caixa de seleção não encontrada para ${nomeArquivo}`)
+  return caixa
+}
+
 describe('GdlImagensRepModal', () => {
+  beforeAll(() => {
+    HTMLElement.prototype.hasPointerCapture = () => false
+    HTMLElement.prototype.setPointerCapture = () => undefined
+    HTMLElement.prototype.releasePointerCapture = () => undefined
+    HTMLElement.prototype.scrollIntoView = () => undefined
+  })
+
   beforeEach(() => {
     listarImagensLaudo.mockResolvedValue({
       success: true,
-      data: [
-        { idSelecao, origem: 'lista_fotos', nomeArquivo: 'fotografia.png', tamanho: 1024, dataUpload: null, provavelImagem: true, status: null, thumbnailDataUri: 'data:image/jpeg;base64,AA==' },
-        { idSelecao: 'b'.repeat(64), origem: 'lista_fotos', nomeArquivo: 'foto.tiff', tamanho: 1024, dataUpload: null, provavelImagem: false, status: 'Formato não compatível para captura' },
-      ],
+      data: {
+        sessaoId: 'sessao-imagens-1',
+        ambiente: 'producao',
+        numeroRep: '109026',
+        anoRep: '2026',
+        arquivos: [
+          { idSelecao, origem: 'lista_fotos', nomeArquivo: 'fotografia.png', tamanho: 1024, dataUpload: null, provavelImagem: true, status: null, thumbnailDataUri: 'data:image/jpeg;base64,AA==' },
+          { idSelecao: 'b'.repeat(64), origem: 'lista_fotos', nomeArquivo: 'foto.tiff', tamanho: 1024, dataUpload: null, provavelImagem: false, status: 'Formato não compatível para captura' },
+        ],
+      },
     })
     capturarImagensLaudo.mockResolvedValue({
       success: true,
-      data: { imagens: [{ idSelecao, nomeArquivo: 'fotografia.png', mimeType: 'image/png', tamanho: 8, dataUri: 'data:image/png;base64,AA==', sha256: 'c'.repeat(64) }], falhas: [] },
+      data: { imagens: [{ idSelecao, nomeArquivo: 'fotografia.png', mimeType: 'image/png', tamanho: 8, dataUri: 'data:image/png;base64,AA==', sha256: 'c'.repeat(64) }], duplicadas: [], falhas: [] },
     })
     Object.defineProperty(window, 'ipcAPI', {
-      value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, listarImagensLaudo, capturarImagensLaudo } },
+      value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, listarImagensLaudo, capturarImagensLaudo, fecharSessaoImagensLaudo } },
       writable: true,
     })
   })
@@ -34,17 +55,17 @@ describe('GdlImagensRepModal', () => {
     render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={onAbertoChange} onCapturadas={onCapturadas} />)
 
     expect(await screen.findByText('fotografia.png')).toBeInTheDocument()
+    expect(screen.getByText('Produção')).toBeInTheDocument()
+    expect(screen.getByText('REP 109.026-2026')).toBeInTheDocument()
+    expect(screen.getByText(/Lista de Fotos pode ter até/i)).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Prévia de fotografia.png' })).toHaveAttribute('src', 'data:image/jpeg;base64,AA==')
-    expect(screen.getByText('foto.tiff')).toBeInTheDocument()
-    expect(screen.getAllByText('Lista de Fotos')).toHaveLength(2)
-    const caixas = screen.getAllByRole('checkbox')
-    expect(caixas[0]).toBeEnabled()
-    expect(caixas[1]).toBeDisabled()
-    fireEvent.click(caixas[0])
+    const caixaFotografia = obterCaixaDaFoto('fotografia.png')
+    expect(caixaFotografia).toBeEnabled()
+    fireEvent.click(caixaFotografia)
     fireEvent.click(await screen.findByRole('button', { name: 'Capturar imagens (1)' }))
 
-    await waitFor(() => expect(capturarImagensLaudo).toHaveBeenCalledWith('laudo-1', [idSelecao]))
-    expect(onCapturadas).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ idSelecao })]))
+    await waitFor(() => expect(capturarImagensLaudo).toHaveBeenCalledWith('laudo-1', 'sessao-imagens-1', [idSelecao], false))
+    expect(onCapturadas).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ idSelecao })]), false)
     expect(onAbertoChange).toHaveBeenCalledWith(false)
   })
 
@@ -56,10 +77,67 @@ describe('GdlImagensRepModal', () => {
     expect(screen.getByRole('button', { name: 'Capturar imagens (1)' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
 
-    const caixas = screen.getAllByRole('checkbox')
-    expect(caixas[0]).toBeChecked()
-    expect(caixas[1]).not.toBeChecked()
+    expect(obterCaixaDaFoto('fotografia.png')).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Desmarcar todas' }))
     expect(screen.getByRole('button', { name: 'Capturar imagens (0)' })).toBeDisabled()
+  })
+
+  it('filtra fotos pelo nome e permite ajustar a quantidade de colunas', async () => {
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    await screen.findByText('fotografia.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Aumentar colunas' }))
+    expect(screen.getByText('3 colunas')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Diminuir colunas' }))
+    expect(screen.getByText('2 colunas')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Buscar fotos por nome' }), { target: { value: 'tiff' } })
+
+    expect(screen.queryByText('fotografia.png')).not.toBeInTheDocument()
+    expect(screen.getByText('Nenhuma foto encontrada com os filtros selecionados.')).toBeInTheDocument()
+    expect(screen.getByText('0 de 2 foto(s) exibida(s)')).toBeInTheDocument()
+  })
+
+  it('permite alternar entre fotos disponíveis e indisponíveis e alterar a ordenação', async () => {
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    await screen.findByText('fotografia.png')
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Filtrar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
+    fireEvent.click(await screen.findByRole('option', { name: 'Indisponíveis' }))
+    expect(screen.getByText('foto.tiff')).toBeInTheDocument()
+    expect(screen.queryByText('fotografia.png')).not.toBeInTheDocument()
+
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Filtrar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
+    fireEvent.click(await screen.findByRole('option', { name: 'Disponíveis' }))
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Ordenar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
+    fireEvent.click(await screen.findByRole('option', { name: 'Nome: Z a A' }))
+    expect(screen.getByText('fotografia.png')).toBeInTheDocument()
+  })
+
+  it('mostra as fotos duplicadas antes de permitir uma nova captura', async () => {
+    const obterMiniaturas = vi.fn().mockResolvedValue({
+      success: true,
+      data: [{ id: 'imagem-existente-1', thumbnailDataUri: 'data:image/jpeg;base64,BB==' }],
+    })
+    capturarImagensLaudo.mockResolvedValue({
+      success: true,
+      data: {
+        imagens: [],
+        falhas: [],
+        duplicadas: [{ idSelecao, nomeArquivo: 'fotografia.png', imagemExistenteId: 'imagem-existente-1', localizacao: 'painel' }],
+      },
+    })
+    Object.defineProperty(window, 'ipcAPI', {
+      value: { ...window.ipcAPI, ilustracoes: { ...window.ipcAPI.ilustracoes, obterMiniaturas } },
+      writable: true,
+    })
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    await screen.findByText('fotografia.png')
+    fireEvent.click(obterCaixaDaFoto('fotografia.png'))
+    fireEvent.click(screen.getByRole('button', { name: 'Capturar imagens (1)' }))
+
+    expect(await screen.findByText('Foto já incluída no laudo')).toBeInTheDocument()
+    expect(obterMiniaturas).toHaveBeenCalledWith('laudo-1', ['imagem-existente-1'])
+    expect(screen.getByRole('img', { name: 'Foto já incluída' })).toHaveAttribute('src', 'data:image/jpeg;base64,BB==')
   })
 })

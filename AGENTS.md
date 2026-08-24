@@ -184,6 +184,20 @@ Cada feature deve ter responsabilidade única e clara, com seus próprios servi�
 
 ---
 
+## Integração GDL — invariante somente leitura
+
+O laWdo usa o GDL exclusivamente como fonte de consulta para agilizar o preenchimento do laudo. A integração não é bidirecional e nunca administra o ciclo de vida da REP.
+
+- Nunca criar, editar, sobrescrever ou excluir REP, peça, foto, anexo ou qualquer registro no GDL.
+- Nunca alterar situação, etapa ou status da REP, incluindo concluir, reabrir, cancelar, devolver, liberar ou movimentar.
+- Nunca adicionar service, handler IPC, método de preload, botão, automação de navegador ou chamada de API que produza mutação no GDL.
+- Permitir somente autenticação necessária à leitura, teste de conectividade, consultas e download de informações ou fotos.
+- Avaliar o efeito real do endpoint, não apenas o verbo HTTP: qualquer efeito de escrita é proibido, ainda que o endpoint utilize `GET`.
+- Dados importados podem ser complementados ou editados localmente no laWdo, mas nenhuma alteração local pode ser enviada ou sincronizada de volta ao GDL.
+- Em testes e validações manuais, comprovar a ausência de efeitos colaterais no GDL. Se uma operação tiver comportamento incerto, interromper o trabalho e confirmar antes de executá-la.
+
+---
+
 ## UI e componentes
 
 shadcn/ui (New York, base Zinc, ícones Lucide) com Tailwind CSS e suporte a dark mode (`class`-based).

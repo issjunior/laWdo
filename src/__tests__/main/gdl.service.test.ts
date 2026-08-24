@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 const mocks = vi.hoisted(() => ({
   obterConfiguracao: vi.fn(),
+  configurarVerificacaoCertificado: vi.fn(),
 }))
 
 vi.mock('electron', () => {
@@ -22,6 +23,12 @@ vi.mock('electron', () => {
     },
     nativeImage: {
       createFromBuffer: () => imagem,
+    },
+    session: {
+      defaultSession: {
+        fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+        setCertificateVerifyProc: mocks.configurarVerificacaoCertificado,
+      },
     },
   }
 })
@@ -42,9 +49,12 @@ vi.mock('../../main/utils/logger.js', () => ({
 }))
 
 import {
+  abrirSessaoImagensRepGdl,
   capturarImagensRepGdl,
+  capturarImagensDaSessaoGdlParaLaudo,
   consultarRep,
   extrairFiltrosParaConsultaInvestigacao,
+  fecharSessaoImagensRepGdl,
   limparValidacaoSessao,
   listarFotosDoArquivoZip,
   listarImagensRepGdl,
@@ -73,6 +83,8 @@ let statusFotos = 200
 let respostaRep = fixtureRep
 const corposInvestigacao: string[] = []
 const configuracoes: Record<string, string> = {}
+let requisicoesRecebidas = 0
+const requisicoesGdl: Array<{ metodo: string; caminho: string }> = []
 
 function responder(resposta: http.ServerResponse, status: number, corpo: string | Buffer): void {
   resposta.statusCode = status
@@ -81,7 +93,9 @@ function responder(resposta: http.ServerResponse, status: number, corpo: string 
 
 beforeAll(async () => {
   servidor = http.createServer((requisicao, resposta) => {
+    requisicoesRecebidas += 1
     const url = new URL(requisicao.url ?? '/', baseUrl)
+    requisicoesGdl.push({ metodo: requisicao.method || '', caminho: url.pathname })
     if (url.pathname.endsWith('/unidadesMedida')) {
       responder(resposta, statusUnidades, '{}')
       return
@@ -96,7 +110,10 @@ beforeAll(async () => {
       requisicao.on('end', () => {
         corposInvestigacao.push(corpo)
         responder(resposta, 200, JSON.stringify({
-          dadosREPs: [{ envolvidos: { nome: 'ENVOLVIDO COMPLEMENTAR' } }],
+          dadosREPs: [
+            { numeroRep: '190/2026', envolvidos: { nome: 'ENVOLVIDO COMPLEMENTAR' } },
+            { numeroRep: '999/2026', envolvidos: { nome: 'ENVOLVIDO DE OUTRA REP' } },
+          ],
         }))
       })
       return
@@ -130,6 +147,8 @@ beforeEach(() => {
   statusFotos = 200
   respostaRep = fixtureRep
   corposInvestigacao.length = 0
+  requisicoesGdl.length = 0
+  requisicoesRecebidas = 0
   Object.assign(configuracoes, {
     gdl_ambiente: 'producao',
     gdl_url_homologacao: `${baseUrl}/api`,
@@ -158,6 +177,34 @@ describe('gdl.service', () => {
       ambiente: 'Produção',
     })
 
+    const verificarCertificado = mocks.configurarVerificacaoCertificado.mock.calls[0]?.[0] as ((
+      requisicao: {
+        hostname: string
+        errorCode: number
+        verificationResult: string
+        certificate: { issuerName: string; fingerprint: string }
+      },
+      callback: (resultado: number) => void,
+    ) => void) | undefined
+    expect(verificarCertificado).toBeTypeOf('function')
+
+    const callbackCertificado = vi.fn()
+    verificarCertificado?.({
+      hostname: 'www.gdl.sesp.parana',
+      errorCode: -202,
+      verificationResult: 'ERR_CERT_AUTHORITY_INVALID',
+      certificate: { issuerName: 'Autoridade interna', fingerprint: 'AA:BB' },
+    }, callbackCertificado)
+    expect(callbackCertificado).toHaveBeenLastCalledWith(0)
+
+    verificarCertificado?.({
+      hostname: 'outro.exemplo',
+      errorCode: -202,
+      verificationResult: 'ERR_CERT_AUTHORITY_INVALID',
+      certificate: { issuerName: 'Autoridade interna', fingerprint: 'CC:DD' },
+    }, callbackCertificado)
+    expect(callbackCertificado).toHaveBeenLastCalledWith(-202)
+
     statusUnidades = 503
     await expect(testarConexao('homologacao')).resolves.toMatchObject({
       sucesso: false,
@@ -179,6 +226,7 @@ describe('gdl.service', () => {
     expect(resultado.sucesso).toBe(true)
     expect(resultado.ambiente).toBe('homologacao')
     expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
+    expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
     expect(corposInvestigacao).toHaveLength(2)
     expect(obterValidacaoSessao('homologacao')).toMatchObject({
       validado: true,
@@ -189,24 +237,24 @@ describe('gdl.service', () => {
 
   it('trata ausência de credenciais e respostas HTTP da consulta de REP', async () => {
     configuracoes.gdl_login_producao = ''
-    await expect(consultarRep('190', '2026')).resolves.toMatchObject({
+    await expect(consultarRep('109.026', '2026')).resolves.toMatchObject({
       sucesso: false,
       erro: 'Credenciais não configuradas.',
     })
 
     configuracoes.gdl_login_producao = 'usuario-prd'
     for (const [status, erro] of [
-      [404, 'REP 190/2026 não encontrada no GDL.'],
+      [404, 'REP 109.026/2026 não encontrada no GDL.'],
       [401, 'Autenticação rejeitada pelo GDL. Verifique login e senha.'],
       [500, 'Erro do servidor GDL (HTTP 500).'],
     ] as const) {
       statusRep = status
-      await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: false, erro })
+      await expect(consultarRep('109.026', '2026')).resolves.toMatchObject({ sucesso: false, erro })
     }
 
     statusRep = 200
     respostaRep = '{invalido'
-    await expect(consultarRep('190', '2026')).resolves.toMatchObject({
+    await expect(consultarRep('109.026', '2026')).resolves.toMatchObject({
       sucesso: false,
       erro: 'O GDL retornou JSON inválido.',
     })
@@ -216,32 +264,33 @@ describe('gdl.service', () => {
     const sucesso = await validarCredenciais(
       'producao',
       { login: ' usuario ', senha: ' senha ', cpfUsuario: '123.456.789-01' },
-      '190',
+      '109.026',
       '2026',
     )
     expect(sucesso).toMatchObject({ sucesso: true })
     expect(sucesso.dados?.codRep).toBe(1902026)
 
-    await expect(validarCredenciais('producao', { login: '', senha: '' }, '190', '2026'))
+    await expect(validarCredenciais('producao', { login: '', senha: '' }, '109.026', '2026'))
       .resolves.toMatchObject({ sucesso: false, erro: 'Credenciais não configuradas.' })
 
     for (const [status, erro] of [
-      [404, 'REP 190/2026 não encontrada no GDL.'],
+      [404, 'REP 109.026/2026 não encontrada no GDL.'],
       [403, 'Autenticação rejeitada pelo GDL. Verifique login e senha.'],
       [500, 'Erro do servidor GDL (HTTP 500).'],
     ] as const) {
       statusRep = status
-      await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '190', '2026'))
+      await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '109.026', '2026'))
         .resolves.toMatchObject({ sucesso: false, erro })
     }
 
     statusRep = 200
     respostaRep = 'não-json'
-    await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '190', '2026'))
+    await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '109.026', '2026'))
       .resolves.toMatchObject({ sucesso: false, erro: 'O GDL retornou JSON inválido.' })
   })
 
   it('lista e captura imagens do ZIP, recusando duplicadas e entradas incompatíveis', async () => {
+    configuracoes.gdl_ambiente = 'homologacao'
     const arquivos = await listarImagensRepGdl('190', '2026')
     expect(arquivos).toHaveLength(3)
     expect(arquivos.filter(arquivo => arquivo.provavelImagem)).toHaveLength(2)
@@ -276,6 +325,7 @@ describe('gdl.service', () => {
   })
 
   it('propaga os estados de erro ao baixar a Lista de Fotos', async () => {
+    configuracoes.gdl_ambiente = 'homologacao'
     for (const [status, erro] of [
       [404, 'A Lista de Fotos da REP 190/2026 não foi encontrada no GDL.'],
       [401, 'Acesso à Lista de Fotos rejeitado pelo GDL.'],
@@ -284,6 +334,65 @@ describe('gdl.service', () => {
       statusFotos = status
       await expect(listarImagensRepGdl('190', '2026')).rejects.toThrow(erro)
     }
+  })
+
+  it('consulta a REP em produção e complementa envolvidos pela listagem de investigação', async () => {
+    configuracoes.gdl_ambiente = 'producao'
+    const resultado = await consultarRep('109.026', '2026')
+
+    expect(resultado.sucesso).toBe(true)
+    expect(resultado.ambiente).toBe('producao')
+    expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
+    expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
+    expect(corposInvestigacao).toHaveLength(2)
+  })
+
+  it('reutiliza o ZIP temporário da sessão até o modal ser fechado', async () => {
+    configuracoes.gdl_ambiente = 'homologacao'
+    const sessao = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026')
+    const foto = sessao.arquivos.find(arquivo => arquivo.nomeArquivo === 'foto-a.png')
+    if (!foto) throw new Error('Foto esperada não foi listada.')
+
+    const captura = await capturarImagensDaSessaoGdlParaLaudo('laudo-teste', sessao.sessaoId, [foto.idSelecao], async imagem => ({
+      idSelecao: imagem.idSelecao,
+      imagemId: 'imagem-local-1',
+      nomeArquivo: imagem.nomeArquivo,
+      mimeType: imagem.mimeType,
+      tamanho: imagem.bytes.length,
+      sha256: imagem.sha256,
+      sequencia: 1,
+    }))
+    expect(captura).toMatchObject({ imagens: [{ imagemId: 'imagem-local-1' }], falhas: [], duplicadas: [] })
+
+    fecharSessaoImagensRepGdl('laudo-teste', sessao.sessaoId)
+    await expect(capturarImagensDaSessaoGdlParaLaudo('laudo-teste', sessao.sessaoId, [foto.idSelecao], async () => {
+      throw new Error('Não deve tentar salvar após fechar a sessão.')
+    })).rejects.toThrow('A sessão temporária da Lista de Fotos expirou. Consulte novamente.')
+  })
+
+  it('permite consultar outra REP em produção após a validação inicial', async () => {
+    mocks.obterConfiguracao.mockClear()
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({
+      sucesso: true,
+      ambiente: 'producao',
+    })
+    await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '190', '2026')).resolves.toMatchObject({
+      sucesso: true,
+    })
+    await expect(listarImagensRepGdl('190', '2026')).resolves.toEqual(expect.any(Array))
+    expect(requisicoesRecebidas).toBeGreaterThan(0)
+  })
+
+  it('usa somente endpoints de consulta do GDL', async () => {
+    configuracoes.gdl_ambiente = 'producao'
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: true })
+    await expect(abrirSessaoImagensRepGdl('laudo-teste', '190', '2026')).resolves.toMatchObject({ arquivos: expect.any(Array) })
+
+    expect(requisicoesGdl).not.toHaveLength(0)
+    expect(requisicoesGdl.every(requisicao => requisicao.metodo === 'GET' || (
+      requisicao.metodo === 'POST' && requisicao.caminho.endsWith('/repsInvestigacaoPolicial/listarReps')
+    ))).toBe(true)
+    expect(requisicoesGdl.filter(requisicao => requisicao.metodo === 'POST')).toHaveLength(2)
   })
 
   it('valida arquivos ZIP e deriva filtros únicos para a investigação', () => {

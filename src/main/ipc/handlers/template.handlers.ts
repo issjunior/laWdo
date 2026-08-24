@@ -15,6 +15,9 @@ const mensagemErro = (error: unknown): string =>
 const nomeArquivoSeguro = (nome: string): string =>
   nome.replace(/[<>:"/\\|?*]/g, '').trim() || 'template-laWdo';
 
+const escaparTextoHtml = (texto: string): string =>
+  texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 export const registerTemplateHandlers = (): void => {
   ipcMain.handle('template:exportarPacote', async (event, templateId: string) => {
     try {
@@ -227,11 +230,14 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Gerar PDF de preview do laudo (exibido no Dialog via protocolo customizado) */
-  ipcMain.handle('template:previewPDF', async (_event, opts: { html: string; margins?: { top: number; right: number; bottom: number; left: number }; headerTemplate?: string }) => {
+  ipcMain.handle('template:previewPDF', async (_event, opts: { html: string; margins?: { top: number; right: number; bottom: number; left: number }; headerTemplate?: string; titulo?: string }) => {
     let win: BrowserWindow | null = null;
     let tmpPath: string | null = null;
     try {
       const { html, margins, headerTemplate } = opts;
+      const titulo = typeof opts.titulo === 'string' && opts.titulo.trim()
+        ? escaparTextoHtml(opts.titulo.trim())
+        : 'Pré-visualização do Laudo';
        const hasMargins = margins && (margins.top > 0 || margins.right > 0 || margins.bottom > 0 || margins.left > 0);
       const bodyPadding = hasMargins ? '0 0 12px 0' : '50px 60px';
       const leftPad = hasMargins ? `${margins!.left}cm` : '60px';
@@ -241,6 +247,7 @@ export const registerTemplateHandlers = (): void => {
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<title>${titulo}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {

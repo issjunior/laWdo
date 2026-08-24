@@ -70,7 +70,7 @@ describe('placeholders B602 canônicos', () => {
             observacao: '',
           },
           personalizados: {
-            '104:marca_arma': 'Taurus',
+            '104:marca_arma': '2',
             '104:modelo': 'G3',
             '104:calibre_nominal': '9mm Luger',
             '104:numero_serie': 'ABC123',

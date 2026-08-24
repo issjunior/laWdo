@@ -94,7 +94,7 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
         </Select>
       </div>
       {definicao && <>
-        {!definicao.roundTripConfirmado && <Alert><AlertDescription>Schema visual confirmado; round-trip da API ainda pendente.</AlertDescription></Alert>}
+        {!definicao.roundTripApiConfirmadoProducao && <Alert><AlertDescription>{definicao.schemaVisualConfirmadoProducao ? 'Schema visual confirmado em Produção; round-trip da API ainda pendente.' : 'Schema visual e round-trip da API ainda pendentes.'}</AlertDescription></Alert>}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2"><Label>Identificação</Label><Input value={editando.comuns.identificacao} onChange={e => atualizarComum('identificacao', e.target.value)} /></div>
           <div className="space-y-2"><Label>Quantidade</Label><Input type="number" min={1} value={editando.comuns.quantidade} onChange={e => atualizarComum('quantidade', Number(e.target.value))} /></div>

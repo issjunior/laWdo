@@ -204,7 +204,7 @@ describe('secao-builder.service', () => {
           tipoPeca: 'PISTOLA(S)',
           comuns: { quantidade: 1, identificacao: 'Pistola', lacreEntrada: 'L1' },
           personalizados: {
-            '104:marca_arma': 'Taurus',
+            '104:marca_arma': '2',
             '104:funcionamento': 'Eficiente',
           },
           extrasGdl: {},

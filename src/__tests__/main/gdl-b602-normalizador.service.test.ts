@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Buffer } from 'node:buffer'
 import fixture from '../fixtures/gdl/rep-190-2026.json'
 import fixtureRevolver from '../fixtures/gdl/rep-191-2026.json'
+import fixtureProducao from '../fixtures/gdl/rep-109026-2026.json'
 import {
   interpretarGdlListaRepsInvestigacaoJson,
   interpretarGdlRepJson,
@@ -65,6 +66,14 @@ describe('contrato GDL B602', () => {
     expect(() => listarFotosDoArquivoZip(Buffer.from('erro'), 1127748)).toThrow('ZIP válido')
   })
 
+  it('rejeita ZIP com mais entradas que o limite de segurança', () => {
+    const bytesZip = Buffer.from('UEsDBBQAAAgIABen9FxnKvAQBgAAAAQAAAAKAAAAZm90by0xLmpwZ/t/4/9NAFBLAwQUAAAICAAXp/RczLJ41wYAAAAEAAAACQAAAGZvdG8udGlmZvP01GIAAFBLAwQUAAAICAAXp/Rcpb7rWwYAAAAEAAAAEAAAAHBhc3RhL2ZvdG8tMi5wbmfrDPBzBwBQSwECFAoUAAAICAAXp/RcZyrwEAYAAAAEAAAACgAAAAAAAAAAAAAApIEAAAAAZm90by0xLmpwZ1BLAQIUChQAAAgIABen9FzMsnjXBgAAAAQAAAAJAAAAAAAAAAAAAACkgS4AAABmb3RvLnRpZmZQSwECFAoUAAAICAAXp/Rcpb7rWwYAAAAEAAAAEAAAAAAAAAAAAAAApIFbAAAAcGFzdGEvZm90by0yLnBuZ1BLBQYAAAAAAwADAK0AAACPAAAAAAA=', 'base64')
+    const deslocamentoEocd = bytesZip.length - 22
+    bytesZip.writeUInt16LE(1001, deslocamentoEocd + 10)
+
+    expect(() => listarFotosDoArquivoZip(bytesZip, 1127748)).toThrow('limite de 1000 entradas')
+  })
+
   it('interpreta os tamanhos ZIP64 sem confundir o marcador com 4 GB', () => {
     const [arquivo] = listarFotosDoArquivoZip(criarZipComMetadadosZip64(), 1127748)
 
@@ -78,6 +87,22 @@ describe('contrato GDL B602', () => {
 
   it('rejeita payload estruturalmente inválido', () => {
     expect(() => validarGdlRep({ numero: 190, ano: 2026, pecas: 'inválido' })).toThrow()
+  })
+
+  it('normaliza a fixture autorizada de Produção sem dados de autenticação ou sessão', () => {
+    const resultado = converterRepB602(validarGdlRep(fixtureProducao))
+
+    expect(resultado.camposGerais).toMatchObject({
+      numero: '109026-2026',
+      tipo_solicitacao: 'OFÍCIO REQUISITANTE',
+      numero_documento: '3216/2026',
+      b602_local_cidade: 'TELÊMACO BORBA',
+      b602_solicitante_nome: '18. SUBDIVISAO POLICIAL - DELEGACIA',
+      data_requisicao: '2026-08-22',
+    })
+    expect(resultado.camposEspecificos.pecas).toEqual([
+      expect.objectContaining({ tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }),
+    ])
   })
 
   it('informa JSON inválido sem usar cast direto', () => {
@@ -129,7 +154,7 @@ describe('contrato GDL B602', () => {
     const revolver = converterRepB602(validarGdlRep(fixtureRevolver)).camposEspecificos.pecas[0]
 
     expect(revolver.personalizados).toMatchObject({
-      '106:marca_arma': 'Taurus',
+      '106:marca_arma': '2',
       '106:tipo_acabamento': '44',
     })
     expect(revolver.extrasGdl).not.toHaveProperty('Marca da Arma')
@@ -275,7 +300,7 @@ describe('contrato GDL B602', () => {
         codigo: '472',
         personalizados: {
           '472:numero_serie': 'SERIE-472', '472:marca': 'MARCA 472', '472:modelo': 'MODELO 472',
-          '472:capacidade': '5', '472:marca_arma': '(Fabricante Desconhecido)', '472:status_numero_serie': '20',
+          '472:capacidade': '5', '472:marca_arma': '1376', '472:status_numero_serie': '20',
           '472:calibre_nominal': '29', '472:tipo_acabamento': '47', '472:estado_geral': '54',
           '472:funcionamento': '100', '472:fabricacao_arma': '63', '472:arma_institucional': '98',
         },
@@ -285,7 +310,7 @@ describe('contrato GDL B602', () => {
     ])
   })
 
-  it('mapeia os campos de PISTOLA e mantém Marca fora do formulário do laWdo', () => {
+  it('mapeia os campos de PISTOLA e converte o código legado de Marca da Arma', () => {
     const resultado = converterRepB602(validarGdlRep({
       codRep: 1922026,
       numero: 192,
@@ -325,9 +350,10 @@ describe('contrato GDL B602', () => {
     expect(pistola.comuns.materialIncinerado).toBe('S')
     expect(pistola.personalizados).toEqual({
       '104:numero_serie': 'SA56FG4SA5',
+      '104:marca': 'TAURUS',
       '104:modelo': 'PT99-D',
       '104:capacidade': '',
-      '104:marca_arma': 'Taurus',
+      '104:marca_arma': '2',
       '104:status_numero_serie': '20',
       '104:calibre_nominal': '39',
       '104:tipo_acabamento': '44',
@@ -336,7 +362,7 @@ describe('contrato GDL B602', () => {
       '104:fabricacao_arma': '63',
       '104:arma_institucional': '98',
     })
-    expect(pistola.extrasGdl).toEqual({ Marca: 'TAURUS' })
+    expect(pistola.extrasGdl).toEqual({})
   })
 
   it('normaliza Data de Entrada para todos os tipos do catálogo B602', () => {

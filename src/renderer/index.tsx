@@ -5,6 +5,9 @@ import './styles/globals.css';
 import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
+  ImagemLaudoResumo,
+  MiniaturaImagemLaudo,
+  ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
 import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
@@ -43,7 +46,10 @@ interface IpcGrupoLegado {
 }
 
 interface IpcIlustracoesLegado {
-  listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida[]; error?: string }>;
+  reconciliarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ResultadoReconciliacaoImagensLaudo; error?: string }>;
+  listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
+  obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+  obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
   salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
   excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
   arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;

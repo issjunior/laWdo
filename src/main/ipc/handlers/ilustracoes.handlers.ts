@@ -6,9 +6,13 @@ import {
   arquivarImagemLaudo,
   disponibilizarImagemLaudo,
   excluirImagemLaudo,
-  listarImagensLaudo,
+  listarResumosImagensLaudo,
+  obterImagemLaudoPorId,
+  obterMiniaturasImagensLaudo,
+  reconciliarImagensLaudo,
   salvarImagemLaudo,
 } from '../../services/imagem-laudo.service.js';
+import { laudoService } from '../../services/laudo.service.js';
 import type { SalvarImagemLaudoEntrada } from '../../../shared/types/imagem-laudo.types.js';
 import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
 
@@ -25,12 +29,41 @@ let criandoPanelWindow = false;
 export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions): void {
   const { preloadPath, rendererHtmlPath, isDev } = options;
 
+  ipcMain.handle('ilustracoes:reconciliar-imagens', async (_event, laudoId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
+      const laudo = await laudoService.findById(laudoId)
+      if (!laudo) throw new Error('Laudo não encontrado.')
+      return { success: true, data: await reconciliarImagensLaudo(laudoId, laudo.conteudo) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao reconciliar as imagens do laudo.' }
+    }
+  })
+
   ipcMain.handle('ilustracoes:listar-imagens', async (_event, laudoId: unknown) => {
     try {
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
-      return { success: true, data: await listarImagensLaudo(laudoId) }
+      return { success: true, data: await listarResumosImagensLaudo(laudoId) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao listar imagens do laudo.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:obter-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
+      return { success: true, data: await obterImagemLaudoPorId(laudoId, imagemId) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao carregar a imagem do laudo.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:obter-miniaturas', async (_event, laudoId: unknown, ids: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || !Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Imagens inválidas.')
+      return { success: true, data: await obterMiniaturasImagensLaudo(laudoId, ids) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao carregar as miniaturas.' }
     }
   })
 

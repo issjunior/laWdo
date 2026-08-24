@@ -22,7 +22,9 @@ export interface TipoPecaB602 {
   label: string
   aliasesGdl?: string[]
   familia: 'arma' | 'componente' | 'componente_balistico' | 'generico'
-  roundTripConfirmado: boolean
+  schemaVisualConfirmadoProducao: boolean
+  dataVerificacaoVisualProducao?: string
+  roundTripApiConfirmadoProducao: boolean
   campos: CampoPersonalizadoB602[]
 }
 
@@ -38,6 +40,12 @@ export const OPCOES_UNIDADE_MEDIDA_B602: OpcaoCampoB602[] = [
 ]
 
 export const UNIDADE_MEDIDA_PADRAO_B602 = 'UNIDADES'
+
+const CONFIRMACAO_VISUAL_PRODUCAO = {
+  schemaVisualConfirmadoProducao: true,
+  dataVerificacaoVisualProducao: '2026-08-22',
+  roundTripApiConfirmadoProducao: false,
+} as const
 
 const camposArmaBasicos = (
   codigo: string,
@@ -74,9 +82,11 @@ const camposArmaBasicos = (
 ]
 
 const opcoesFabricacao: OpcaoCampoB602[] = [
-  ['61', 'argentina'], ['62', 'austríaca'], ['63', 'brasileira'], ['64', 'canadense'],
-  ['66', 'czechoslovakia'], ['67', 'espanhola'], ['68', 'filipena'], ['69', 'finlandesa'],
-  ['70', 'italiana'], ['71', 'mexicana'], ['10', 'Não Aparente'], ['65', 'sul-coreana'],
+  ['103', 'Alemã'], ['61', 'argentina'], ['62', 'austríaca'], ['104', 'Belga'],
+  ['63', 'brasileira'], ['64', 'canadense'], ['105', 'Chinesa'], ['66', 'czechoslovakia'],
+  ['67', 'espanhola'], ['106', 'Estadunidense'], ['68', 'filipena'], ['69', 'finlandesa'],
+  ['107', 'Francesa'], ['108', 'Israelense'], ['70', 'italiana'], ['71', 'mexicana'],
+  ['10', 'Não Aparente'], ['109', 'Russa'], ['65', 'sul-coreana'], ['110', 'Turca'],
 ].map(([codigo, label]) => ({ codigo, label }))
 
 const opcoesArmaInstitucional: OpcaoCampoB602[] = [
@@ -87,6 +97,7 @@ const opcoesArmaInstitucional: OpcaoCampoB602[] = [
 
 const opcoesOrigemColeta: OpcaoCampoB602[] = [
   { codigo: '95', label: 'DELEGACIA' },
+  { codigo: '1471', label: 'HOSPITAL' },
   { codigo: '93', label: 'LOCAL DE CRIME' },
   { codigo: '94', label: 'NECRÓPSIA' },
   { codigo: '11', label: 'Outro' },
@@ -104,6 +115,54 @@ const campoOrigemColeta = (
   mapeamentoApiConfirmado,
   opcoes: opcoesOrigemColeta,
 })
+
+const opcoesMarcaCartucho: OpcaoCampoB602[] = [
+  ['12', 'Aguila'], ['1', 'CBC'], ['15', 'Federal'], ['18', 'FMFLB'], ['10', 'Não Aparente'],
+  ['17', 'PMC'], ['13', 'S&B'], ['14', 'SP'], ['16', 'Winchester'],
+].map(([codigo, label]) => ({ codigo, label }))
+
+const opcoesCalibreNominalCartucho: OpcaoCampoB602[] = [
+  ['24', '.22 Curto'], ['23', '.22LR'], ['42', '.25ACP'], ['37', '.32ACP'], ['25', '.32S&W'],
+  ['48', '.32S&WL'], ['28', '.357 Magnum'], ['38', '.380ACP'], ['26', '.38SPL'], ['40', '.40S&W'],
+  ['41', '.45ACP'], ['49', '.9mm Luger'], ['29', '12GA'], ['30', '16GA'], ['31', '20GA'],
+  ['32', '24GA'], ['33', '28GA'], ['34', '32GA'], ['35', '36GA'], ['27', '38 Curto'], ['36', '40GA'],
+].map(([codigo, label]) => ({ codigo, label }))
+
+const camposCartucho = (): CampoPersonalizadoB602[] => [
+  {
+    id: '17:marca_cartucho', chaveGdl: 'Marca de Cartucho', label: 'Marca de Cartucho',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: opcoesMarcaCartucho,
+  },
+  {
+    id: '17:calibre_nominal_cartucho', chaveGdl: 'Calibre Nominal Cartucho', label: 'Calibre Nominal Cartucho',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: opcoesCalibreNominalCartucho,
+  },
+]
+
+const camposMetralhadora = (): CampoPersonalizadoB602[] => [
+  ...camposArmaBasicos('480', true, [25, 50, 50]),
+  {
+    id: '480:marca_arma', chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
+    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: [...OPCOES_MARCA_ARMA_B602],
+  },
+  {
+    id: '480:tipo_acabamento', chaveGdl: 'Tipo Acabamento', label: 'Tipo Acabamento',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: opcoesTipoAcabamento,
+  },
+  {
+    id: '480:estado_geral', chaveGdl: 'Estado Geral da Arma', label: 'Estado Geral da Arma',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: opcoesEstadoGeralArma,
+  },
+  {
+    id: '480:funcionamento', chaveGdl: 'Funcionamento', label: 'Funcionamento',
+    controle: 'select', obrigatorio: true, mapeamentoApiConfirmado: true, opcoes: opcoesFuncionamentoArma,
+  },
+  {
+    id: '480:fabricacao_arma', chaveGdl: 'Fabricação da Arma', label: 'Fabricação da Arma',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: opcoesFabricacao,
+  },
+  campoArmaInstitucional('480', true),
+]
 
 const campoArmaInstitucional = (
   codigo: string,
@@ -123,24 +182,36 @@ const camposComInstitucional = (
   mapeamentoApiConfirmado: boolean = false,
 ): CampoPersonalizadoB602[] => [
   ...camposArmaBasicos(codigo, mapeamentoApiConfirmado, [25, 50, 50]),
-  campoArmaInstitucional(codigo, mapeamentoApiConfirmado),
-]
-
-const camposComFabricacao = (
-  codigo: string,
-  limitesCaracteres?: readonly [numeroSerie: number, marca: number, modelo: number],
-  mapeamentoApiConfirmado: boolean = false,
-): CampoPersonalizadoB602[] => [
-  ...camposArmaBasicos(codigo, mapeamentoApiConfirmado, limitesCaracteres),
   {
-    id: `${codigo}:fabricacao_arma`,
-    chaveGdl: 'Fabricação da Arma',
-    label: 'Fabricação da Arma',
-    controle: 'select',
-    obrigatorio: false,
-    mapeamentoApiConfirmado,
-    opcoes: opcoesFabricacao,
+    id: `${codigo}:capacidade`, chaveGdl: 'Capacidade', label: 'Capacidade', controle: 'texto',
+    obrigatorio: false, maxLength: 50, mapeamentoApiConfirmado,
   },
+  {
+    id: `${codigo}:marca_arma`, chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
+    obrigatorio: false, mapeamentoApiConfirmado, opcoes: [...OPCOES_MARCA_ARMA_B602],
+  },
+  {
+    id: `${codigo}:status_numero_serie`, chaveGdl: 'Status do Número de Série',
+    label: 'Status do Número de Série', controle: 'select', obrigatorio: false,
+    mapeamentoApiConfirmado, opcoes: opcoesStatusNumeroSerie,
+  },
+  {
+    id: `${codigo}:tipo_acabamento`, chaveGdl: 'Tipo Acabamento', label: 'Tipo Acabamento',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado, opcoes: opcoesTipoAcabamento,
+  },
+  {
+    id: `${codigo}:estado_geral`, chaveGdl: 'Estado Geral da Arma', label: 'Estado Geral da Arma',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado, opcoes: opcoesEstadoGeralArma,
+  },
+  {
+    id: `${codigo}:funcionamento`, chaveGdl: 'Funcionamento', label: 'Funcionamento',
+    controle: 'select', obrigatorio: true, mapeamentoApiConfirmado, opcoes: opcoesFuncionamentoArma,
+  },
+  {
+    id: `${codigo}:fabricacao_arma`, chaveGdl: 'Fabricação da Arma', label: 'Fabricação da Arma',
+    controle: 'select', obrigatorio: false, mapeamentoApiConfirmado, opcoes: opcoesFabricacao,
+  },
+  campoArmaInstitucional(codigo, mapeamentoApiConfirmado),
 ]
 
 const opcoesStatusNumeroSerie: OpcaoCampoB602[] = [
@@ -205,6 +276,10 @@ const camposPistola = (): CampoPersonalizadoB602[] => [
   {
     id: '104:numero_serie', chaveGdl: 'Nº Série', label: 'Nº Série', controle: 'texto',
     obrigatorio: false, maxLength: 25, mapeamentoApiConfirmado: true,
+  },
+  {
+    id: '104:marca', chaveGdl: 'Marca', label: 'Marca', controle: 'texto',
+    obrigatorio: false, maxLength: 50, mapeamentoApiConfirmado: true,
   },
   {
     id: '104:modelo', chaveGdl: 'Modelo', label: 'Modelo', controle: 'texto',
@@ -337,38 +412,41 @@ const camposEspingarda = (): CampoPersonalizadoB602[] => [
 ]
 
 export const CATALOGO_TIPOS_PECA_B602: TipoPecaB602[] = [
-  { codigo: '289', label: 'ARMA(S) DE CHOQUE', familia: 'arma', roundTripConfirmado: true, campos: camposArmaBasicos('289', true, [25, 50, 50]) },
-  { codigo: '613', label: 'ARMA(S) DE PRESSÃO', familia: 'arma', roundTripConfirmado: true, campos: camposArmaBasicos('613', true, [25, 50, 50]) },
+  { codigo: '289', label: 'ARMA(S) DE CHOQUE', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposArmaBasicos('289', true, [25, 50, 50]) },
+  { codigo: '613', label: 'ARMA(S) DE PRESSÃO', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposArmaBasicos('613', true, [25, 50, 50]) },
   {
-    codigo: '476', label: 'CARABINA(S)', familia: 'arma', roundTripConfirmado: true,
+    codigo: '476', label: 'CARABINA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO,
     campos: camposComInstitucional('476', true),
   },
-  { codigo: '272', label: 'CARREGADOR(ES)', familia: 'componente', roundTripConfirmado: true, campos: [] },
-  { codigo: '472', label: 'ESPINGARDA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposEspingarda() },
-  { codigo: '473', label: 'ESPOLETA(S)', familia: 'componente', roundTripConfirmado: true, campos: [] },
+  { codigo: '272', label: 'CARREGADOR(ES)', familia: 'componente', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '17', label: 'CARTUCHO(S)', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposCartucho() },
+  { codigo: '472', label: 'ESPINGARDA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposEspingarda() },
+  { codigo: '473', label: 'ESPOLETA(S)', familia: 'componente', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
   {
-    codigo: '101', label: 'ESTOJO(S)', familia: 'componente_balistico', roundTripConfirmado: true,
+    codigo: '101', label: 'ESTOJO(S)', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO,
     campos: [campoOrigemColeta('101', true)],
   },
-  { codigo: '477', label: 'FUZIL(IS)', familia: 'arma', roundTripConfirmado: true, campos: camposComInstitucional('477', true) },
-  { codigo: '475', label: 'GARRUCHA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposComFabricacao('475', [25, 50, 50], true) },
-  { codigo: '178', label: 'OUTROS', familia: 'generico', roundTripConfirmado: true, campos: [] },
-  { codigo: '104', label: 'PISTOLA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposPistola() },
-  { codigo: '478', label: 'PISTOLETE(S)', familia: 'arma', roundTripConfirmado: true, campos: [] },
-  { codigo: '572', label: 'PÓLVORA', familia: 'componente_balistico', roundTripConfirmado: true, campos: [] },
-  { codigo: '105', label: 'PROJÉTEIS', familia: 'componente_balistico', roundTripConfirmado: true, campos: [campoOrigemColeta('105', true)] },
+  { codigo: '477', label: 'FUZIL(IS)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposComInstitucional('477', true) },
+  { codigo: '475', label: 'GARRUCHA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposComInstitucional('475', true) },
+  { codigo: '714', label: 'JET LOADER', familia: 'componente', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '480', label: 'METRALHADORA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposMetralhadora() },
+  { codigo: '178', label: 'OUTROS', familia: 'generico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '104', label: 'PISTOLA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposPistola() },
+  { codigo: '478', label: 'PISTOLETE(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '572', label: 'PÓLVORA', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [] },
+  { codigo: '105', label: 'PROJÉTEIS', familia: 'componente_balistico', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: [campoOrigemColeta('105', true)] },
   {
-    codigo: '106', label: 'REVÓLVER(ES)', familia: 'arma', roundTripConfirmado: true,
+    codigo: '106', label: 'REVÓLVER(ES)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO,
     campos: camposRevolver(),
   },
-  { codigo: '479', label: 'SUBMETRALHADORA(S)', familia: 'arma', roundTripConfirmado: true, campos: camposComInstitucional('479', true) },
+  { codigo: '479', label: 'SUBMETRALHADORA(S)', familia: 'arma', ...CONFIRMACAO_VISUAL_PRODUCAO, campos: camposComInstitucional('479', true) },
 ]
 
 export function validarCatalogoTiposPecaB602(
   catalogo: TipoPecaB602[] = CATALOGO_TIPOS_PECA_B602,
 ): void {
-  if (catalogo.length !== 16) {
-    throw new Error(`O catálogo B602 deve possuir exatamente 16 tipos; recebeu ${catalogo.length}.`)
+  if (catalogo.length !== 19) {
+    throw new Error(`O catálogo B602 deve possuir exatamente 19 tipos; recebeu ${catalogo.length}.`)
   }
 
   const codigos = new Set<string>()

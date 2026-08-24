@@ -58,6 +58,7 @@ import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/vali
 import type { CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
 import { buildHeaderTemplate } from '@/lib/pdf-header';
 import { getMargens } from '@/lib/margens';
+import { obterNomeArquivoRep } from '@shared/utils/nomes-documentos-rep';
 import { toast } from 'sonner';
 import type {
   DadosImportacaoB602,
@@ -1010,7 +1011,8 @@ export const REPsPage: React.FC = () => {
       html = html.replace('</h2>', `</h2>\n<p style="font-size:14px;color:#555;margin-top:0;margin-bottom:16px">Tipo de exame: ${tipoExameHeader}</p>`);
 
       const margins = await getMargens();
-      const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined);
+      const titulo = obterNomeArquivoRep(repData.numero || 'sem-numero', 'pdf');
+      const result = await window.ipcAPI.template.previewPDF(html, margins, headerTemplate || undefined, titulo);
 
       if (result.success && result.data) {
         const byteChars = atob(result.data);
@@ -1321,7 +1323,10 @@ export const REPsPage: React.FC = () => {
       const valorPadrao = valoresPadrao[campo];
       const campoSemDadoDoUsuario = !valorAtual || valorAtual === valorPadrao;
       if (substituirDadosGdl || campoSemDadoDoUsuario) {
-        form.setValue(campo, value, { shouldValidate: true });
+        const valorNormalizado = campo === 'numero' && typeof value === 'string'
+          ? formatarNumeroREP(value)
+          : value;
+        form.setValue(campo, valorNormalizado, { shouldValidate: true });
       }
       if (value) {
         novosPreenchidos.add(key);

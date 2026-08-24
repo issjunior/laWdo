@@ -44,7 +44,7 @@ function criarPeca(): PecaB602 {
 const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
   codigoExame: 'B-602',
   camposGerais: {
-    numero: '190-2026',
+    numero: '109026-2026',
     data_requisicao: '2026-07-19',
     tipo_solicitacao: 'BO',
     numero_documento: '123/2026',
@@ -143,18 +143,18 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Nova REP' }))
     fireEvent.click(screen.getByRole('button', { name: 'GDL' }))
 
-    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } })
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-    expect(await screen.findByText('190-2026', { selector: 'strong' })).toBeInTheDocument()
+    expect(await screen.findAllByText('109026-2026', { selector: 'span' })).not.toHaveLength(0)
     expect(screen.getByRole('checkbox')).toBeChecked()
 
     fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }))
 
-    await waitFor(() => expect(screen.getByDisplayValue('190-2026')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByDisplayValue('109.026-2026')).toBeInTheDocument())
     expect(await screen.findByText('CARABINA(S)')).toBeInTheDocument()
     expect(screen.getByText('Importada do GDL')).toBeInTheDocument()
     expect(screen.getByText(/CARABINA INTEGRADA/)).toBeInTheDocument()
-    expect(consultarRep).toHaveBeenCalledWith('190', '2026')
+    expect(consultarRep).toHaveBeenCalledWith('109026', '2026')
     expect(criarRep).not.toHaveBeenCalled()
   })
 })

@@ -1,7 +1,8 @@
 import { app, dialog, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
+import type { DocumentoExportacao, MargensExportacao } from '../../shared/types/exportacao.types.js';
+import { obterNomeArquivoLaudo } from '../../shared/utils/nomes-documentos-rep.js';
 import type {
   FileChild,
   IParagraphOptions,
@@ -12,19 +13,15 @@ import { getLogger } from '../utils/logger.js';
 
 const log = getLogger('exportacao');
 
+let disponibilidadeLibreOfficeEmCache: boolean | null = null;
+let verificacaoLibreOfficeEmAndamento: Promise<boolean> | null = null;
+
 const CM_TO_INCHES = 1 / 2.54;
 
 interface ExportacaoCabecalho {
   logoBase64?: string;
   texto?: string;
   alinhamento?: string;
-}
-
-interface ExportacaoMargens {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
 }
 
 interface ImagemExportacao {
@@ -89,23 +86,59 @@ export interface ExportarParams {
   laudoId: string;
   formato: 'pdf' | 'docx' | 'odt';
   html: string;
-  estrutura?: EstruturaExportacaoLaudo;
+  estrutura?: DocumentoExportacao;
   cabecalho?: ExportacaoCabecalho;
-  margens?: ExportacaoMargens;
+  margens?: MargensExportacao;
   nomeArquivo?: string;
 }
 
 type TipoImagemDocx = 'jpg' | 'png' | 'gif' | 'bmp';
 
-function removerZerosEsquerda(numero: string): string {
-  return numero.replace(/^0+/, '') || '0';
+function escaparHtml(texto: string): string {
+  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function buildNomeArquivo(numeroRep: string, formato: string): string {
-  const partes = numeroRep.split('/');
-  const numero = partes.length > 1 ? removerZerosEsquerda(partes[1]) : removerZerosEsquerda(partes[0]);
-  const ano = partes.length > 1 ? partes[0] : '';
-  return ano ? `${numero}-${ano}.${formato}` : `${numero}.${formato}`;
+function htmlDosTrechos(trechos: import('../../shared/types/exportacao.types.js').TrechoExportacao[]): string {
+  return trechos.map(t => {
+    let html = escaparHtml(t.texto).replace(/\u00a0/g, '&nbsp;');
+    if (t.quebraLinha) html += '<br>';
+    if (t.estilo?.negrito) html = `<strong>${html}</strong>`;
+    if (t.estilo?.italico) html = `<em>${html}</em>`;
+    if (t.estilo?.sublinhado) html = `<u>${html}</u>`;
+    if (t.estilo?.tachado) html = `<s>${html}</s>`;
+    return html;
+  }).join('');
+}
+
+export function converterDocumentoLegado(documento: DocumentoExportacao): EstruturaExportacaoLaudo {
+  const imagens: ImagemExportacao[] = [];
+  const secoes: SecaoExportacao[] = documento.secoes.map(secao => ({
+    titulo: secao.titulo ? secao.titulo.trechos.map(t => t.texto).join('') : '',
+    elementos: secao.blocos.flatMap<ElementoExportacao>(elemento => {
+      if (elemento.tipo === 'paragrafo') return [{ tipo: 'paragrafo' as const, html: htmlDosTrechos(elemento.trechos), alinhamento: elemento.alinhamento, nivelTitulo: elemento.nivelTitulo }];
+      if (elemento.tipo === 'lista') return [{ tipo: 'lista' as const, items: elemento.itens.map(item => htmlDosTrechos(item.trechos)), ordenada: elemento.ordenada, nivel: elemento.nivel + 1 }];
+      if (elemento.tipo === 'linha-horizontal') return [{ tipo: 'quebra' as const }];
+      if (elemento.tipo === 'tabela') return [{ tipo: 'tabela' as const, linhas: elemento.linhas.map(linha => linha.map(celula => htmlDosTrechos(celula.paragrafos.flatMap(p => p.trechos)))), cabecalho: false }];
+      const id = `figura-${imagens.length}`;
+      imagens.push({ id, base64: elemento.base64, formato: elemento.formato, legenda: elemento.legenda?.trechos.map(t => t.texto).join('') || '', numero: imagens.length + 1 });
+      return [{ tipo: 'figura' as const, imagemId: id, legenda: imagens.at(-1)?.legenda || '', numero: imagens.length }];
+    }),
+  }));
+  return { fontFamily: documento.fontePadrao, fontSize: `${documento.tamanhoPadraoPt}pt`, secoes, imagens };
+}
+
+function documentoValido(valor: unknown): valor is DocumentoExportacao {
+  if (!valor || typeof valor !== 'object') return false;
+  const d = valor as Partial<DocumentoExportacao>;
+  if (d.versao !== 1 || typeof d.fontePadrao !== 'string' || !Number.isFinite(d.tamanhoPadraoPt) || !Array.isArray(d.secoes)) return false;
+  return d.secoes.every(secao => secao && typeof secao === 'object' && Array.isArray(secao.blocos) && secao.blocos.every(bloco => {
+    if (!bloco || typeof bloco !== 'object' || !('tipo' in bloco)) return false;
+    if (bloco.tipo === 'paragrafo') return Array.isArray(bloco.trechos) && bloco.trechos.every(t => t && typeof t.texto === 'string');
+    if (bloco.tipo === 'lista') return typeof bloco.ordenada === 'boolean' && Number.isInteger(bloco.nivel) && Array.isArray(bloco.itens) && bloco.itens.every(item => Array.isArray(item.trechos));
+    if (bloco.tipo === 'tabela') return Array.isArray(bloco.linhas) && bloco.linhas.every(linha => Array.isArray(linha) && linha.every(celula => Array.isArray(celula.paragrafos)));
+    if (bloco.tipo === 'figura') return typeof bloco.base64 === 'string' && typeof bloco.formato === 'string';
+    return bloco.tipo === 'linha-horizontal';
+  }));
 }
 
 async function extrairNumeroRep(laudoId: string): Promise<string> {
@@ -119,13 +152,6 @@ async function extrairNumeroRep(laudoId: string): Promise<string> {
     }
   } catch { /* fallback */ }
   return laudoId;
-}
-
-function dataUriToBuffer(dataUri: string): { buffer: Buffer; formato: string } | null {
-  const match = dataUri.match(/^data:image\/(jpeg|png|jpg|gif|webp);base64,(.+)$/i);
-  if (!match) return null;
-  const formato = match[1].toLowerCase() === 'jpg' ? 'jpeg' : match[1].toLowerCase();
-  return { buffer: Buffer.from(match[2], 'base64'), formato };
 }
 
 async function gerarPDF(html: string, margens?: ExportarParams['margens'], headerTemplate?: string): Promise<Buffer> {
@@ -246,7 +272,7 @@ function mapearHeadingDocx(
   }
 }
 
-async function gerarDOCX(
+export async function gerarDOCX(
   estrutura: EstruturaExportacaoLaudo,
   cabecalho?: ExportarParams['cabecalho'],
   margens?: ExportarParams['margens']
@@ -468,7 +494,7 @@ async function gerarDOCX(
 
   const sectionOpts: ISectionOptions = {
     children,
-    ...(propriedadesSecao ? { properties: propriedadesSecao } : {}),
+    ...(propriedadesSecao || headers ? { properties: { ...propriedadesSecao, ...(headers ? { titlePage: true } : {}) } } : {}),
     ...(headers ? { headers } : {}),
   };
 
@@ -489,111 +515,135 @@ async function gerarDOCX(
   return await Packer.toBuffer(doc);
 }
 
-async function converterComLibreOffice(
-  documento: Buffer,
-  formato: string,
-  filtro?: string
-): Promise<Buffer> {
-  const libre = await import('libreoffice-convert');
+function obterCandidatosLibreOffice(): string[] {
+  const candidatosPorPlataforma: Record<NodeJS.Platform, string[]> = {
+    win32: [
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'LIBREO~1/program/soffice.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'LibreOffice/program/soffice.exe'),
+      path.join(process.env.PROGRAMFILES_X86 || '', 'LibreOffice/program/soffice.exe'),
+      path.join(process.env.PROGRAMFILES || '', 'LibreOffice/program/soffice.exe'),
+      process.env.LIBRE_OFFICE_EXE || '',
+      'C:/Program Files/LibreOffice/program/soffice.exe',
+    ],
+    darwin: ['/Applications/LibreOffice.app/Contents/MacOS/soffice'],
+    linux: [
+      '/usr/bin/libreoffice',
+      '/usr/bin/soffice',
+      '/snap/bin/libreoffice',
+      '/opt/libreoffice/program/soffice',
+      '/opt/libreoffice7.6/program/soffice',
+    ],
+    aix: [],
+    android: [],
+    freebsd: [],
+    haiku: [],
+    openbsd: [],
+    sunos: [],
+    cygwin: [],
+    netbsd: [],
+  };
 
-  return new Promise<Buffer>((resolve, reject) => {
-    libre.convert(documento, formato, filtro, (erro, resultado) => {
-      if (erro) {
-        reject(erro);
-        return;
-      }
-
-      resolve(resultado);
-    });
-  });
+  return [...new Set((candidatosPorPlataforma[process.platform] || [])
+    .filter(Boolean)
+    .map(caminho => path.normalize(caminho)))];
 }
 
-async function gerarODT(
-  html: string,
-  estrutura?: EstruturaExportacaoLaudo,
-  margens?: ExportarParams['margens']
-): Promise<Buffer> {
-  const tmpDir = os.tmpdir();
-  const tmpHtmlPath = path.join(tmpDir, `laudo-odt-${Date.now()}.html`);
-
-  const fontFamily = estrutura?.fontFamily || 'Calibri';
-  const fontSize = estrutura?.fontSize || '12pt';
-
-  const mt = margens?.top ?? 2.5;
-  const mr = margens?.right ?? 2.0;
-  const mb = margens?.bottom ?? 2.5;
-  const ml = margens?.left ?? 3.0;
-
-  const wrapperCss = `@page { margin-top: ${mt}cm; margin-right: ${mr}cm; margin-bottom: ${mb}cm; margin-left: ${ml}cm; }
-body { font-family: '${fontFamily}', sans-serif; font-size: ${fontSize}; line-height: 1.7; color: #000; }
-table { width: 100% !important; max-width: 100% !important; table-layout: fixed; }
-[data-laudo-secao-header] { background: transparent !important; }
-td, th { background: transparent !important; }`;
-
-  html = html.replace(
-    /(<div[^>]*data-laudo-secao-header[^>]*style=")([^"]*)("[^>]*>)/gi,
-    (_match: string, prefix: string, styles: string, suffix: string) => {
-      const cleaned = styles.replace(/background:[^;]+;?/gi, '');
-      return prefix + cleaned + suffix;
-    }
-  );
-
-  html = html.replace(/<table(?!\s[^>]*\bwidth=)/gi, '<table width="100%" ');
-
-  let htmlProcessado = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<style>${wrapperCss}</style>
-</head>
-<body>${html}</body>
-</html>`;
-
-  const dataUriRegex = /<img[^>]+src="(data:image\/[^"]+)"[^>]*>/gi;
-  const tempImages: string[] = [];
-  let imgIndex = 0;
-
-  htmlProcessado = htmlProcessado.replace(dataUriRegex, (_fullMatch: string, dataUri: string) => {
-    const parsed = dataUriToBuffer(dataUri);
-    if (!parsed) return _fullMatch;
-
-    const ext = parsed.formato === 'jpeg' ? 'jpg' : parsed.formato;
-    const tempPath = path.join(tmpDir, `laudo-img-${Date.now()}-${imgIndex++}.${ext}`);
-    fs.writeFileSync(tempPath, parsed.buffer);
-    tempImages.push(tempPath);
-    return _fullMatch.replace(dataUri, `file:///${tempPath.replace(/\\/g, '/')}`);
-  });
-
-  fs.writeFileSync(tmpHtmlPath, htmlProcessado, 'utf-8');
-
-  try {
-    const htmlBuffer = fs.readFileSync(tmpHtmlPath);
-    const odtBuffer = await converterComLibreOffice(htmlBuffer, 'odt');
-
-    log.debug('ODT gerado com sucesso via LibreOffice');
-    return odtBuffer;
-  } finally {
-    try { fs.unlinkSync(tmpHtmlPath); } catch { /* ignora */ }
-    for (const imgPath of tempImages) {
-      try { fs.unlinkSync(imgPath); } catch { /* ignora */ }
+async function localizarExecutavelLibreOffice(): Promise<string | null> {
+  for (const caminho of obterCandidatosLibreOffice()) {
+    try {
+      const estatisticas = await fs.promises.stat(caminho);
+      if (estatisticas.isFile()) return caminho;
+    } catch {
+      // Tenta o próximo caminho conhecido.
     }
   }
+  return null;
+}
+
+async function verificarDisponibilidadeLibreOffice(): Promise<boolean> {
+  const executavel = await localizarExecutavelLibreOffice();
+  return executavel !== null;
+}
+
+export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalho?: ExportacaoCabecalho, margens?: MargensExportacao): Promise<Buffer> {
+  const d = await import('docx');
+  const { Document, Packer, Paragraph, TextRun, ExternalHyperlink, Table, TableRow, TableCell, ImageRun, Header, AlignmentType, UnderlineType, HeadingLevel, WidthType, BorderStyle } = d;
+  const alinhar = (v?: string) => v === 'center' ? AlignmentType.CENTER : v === 'right' ? AlignmentType.RIGHT : v === 'justify' ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
+  const runs = (trechos: import('../../shared/types/exportacao.types.js').TrechoExportacao[]): ParagraphChild[] => trechos.flatMap<ParagraphChild>(t => {
+    const e = t.estilo || {}; const opcoes = { text: t.texto, break: t.quebraLinha ? 1 : undefined, bold: e.negrito, italics: e.italico, strike: e.tachado, underline: e.sublinhado ? { type: UnderlineType.SINGLE } : undefined, superScript: e.sobrescrito, subScript: e.subscrito, font: e.fonte, size: e.tamanhoPt ? Math.round(e.tamanhoPt * 2) : undefined, color: e.cor, highlight: e.realce ? 'yellow' as const : undefined };
+    return e.link ? [new ExternalHyperlink({ link: e.link, children: [new TextRun({ ...opcoes, style: 'Hyperlink' })] })] : [new TextRun(opcoes)];
+  });
+  const para = (p: import('../../shared/types/exportacao.types.js').ParagrafoExportacao, extra: object = {}) => new Paragraph({
+    children: runs(p.trechos), alignment: alinhar(p.alinhamento), heading: p.nivelTitulo ? [undefined, HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5, HeadingLevel.HEADING_6][p.nivelTitulo] : undefined,
+    indent: { left: p.recuoEsquerdoPt ? Math.round(p.recuoEsquerdoPt * 20) : undefined, right: p.recuoDireitoPt ? Math.round(p.recuoDireitoPt * 20) : undefined, firstLine: p.recuoPrimeiraLinhaPt ? Math.round(p.recuoPrimeiraLinhaPt * 20) : undefined }, spacing: { before: p.espacamentoAntesPt ? Math.round(p.espacamentoAntesPt * 20) : undefined, after: p.espacamentoDepoisPt ? Math.round(p.espacamentoDepoisPt * 20) : undefined, line: p.espacamentoLinha ? Math.round(p.espacamentoLinha * 240) : undefined },
+    border: p.citacao ? { left: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } : undefined, ...extra,
+  });
+  const filhos: FileChild[] = [];
+  for (const secao of documento.secoes) {
+    if (secao.titulo) filhos.push(para(secao.titulo));
+    for (const bloco of secao.blocos) {
+      if (bloco.tipo === 'paragrafo') filhos.push(para(bloco));
+      else if (bloco.tipo === 'lista') bloco.itens.forEach(item => filhos.push(para(item, bloco.ordenada ? { numbering: { reference: 'numerada', level: bloco.nivel } } : { bullet: { level: bloco.nivel } })));
+      else if (bloco.tipo === 'linha-horizontal') filhos.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } }));
+      else if (bloco.tipo === 'tabela') {
+        const rows = bloco.linhas.map(linha => new TableRow({ children: linha.map(celula => new TableCell({
+          children: (celula.blocos?.flatMap(bloco => {
+            if (bloco.tipo === 'paragrafo') return [para(bloco)];
+            if (bloco.tipo === 'figura') { const tipo = normalizarTipoImagemDocx(bloco.formato); const figura = tipo ? [new Paragraph({ alignment: alinhar(bloco.alinhamento), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 180, height: bloco.alturaPx || 135 } })] })] : []; return bloco.legenda ? [...figura, para(bloco.legenda, { alignment: AlignmentType.CENTER })] : figura; }
+            if (bloco.tipo === 'linha-horizontal') return [new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' } } })];
+            if (bloco.tipo === 'lista') return bloco.itens.map(item => para(item, bloco.ordenada ? { numbering: { reference: 'numerada', level: bloco.nivel } } : { bullet: { level: bloco.nivel } }));
+            return [];
+          }) || celula.paragrafos.map(p => para(p))), columnSpan: celula.colspan, rowSpan: celula.rowspan,
+          shading: celula.corFundo ? { fill: celula.corFundo } : undefined,
+          borders: { top: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, left: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, right: { style: BorderStyle.SINGLE, size: 4, color: '808080' } },
+        })) }));
+        filhos.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+      else { const tipo = normalizarTipoImagemDocx(bloco.formato); if (tipo) filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 500, height: bloco.alturaPx || 375 } })] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
+    }
+  }
+  const cab = cabecalho || documento.cabecalho;
+  const filhosCabecalho: InstanceType<typeof Paragraph>[] = [];
+  if (cab?.logoBase64) filhosCabecalho.push(new Paragraph({ alignment: alinhar(cab.alinhamento), children: [new ImageRun({ type: 'png', data: Buffer.from(cab.logoBase64, 'base64'), transformation: { width: 120, height: 60 } })] }));
+  if (cab?.texto) filhosCabecalho.push(new Paragraph({ alignment: alinhar(cab.alinhamento), children: [new TextRun(cab.texto)] }));
+  const cabecalhos = filhosCabecalho.length ? { first: new Header({ children: filhosCabecalho }) } : undefined;
+  return Packer.toBuffer(new Document({ numbering: { config: [{ reference: 'numerada', levels: Array.from({ length: 9 }, (_, level) => ({ level, format: 'decimal', text: '%1.', alignment: AlignmentType.START })) }] }, styles: { default: { document: { run: { font: documento.fontePadrao, size: Math.round(documento.tamanhoPadraoPt * 2) } } } }, sections: [{ properties: { titlePage: Boolean(cabecalhos), page: { margin: Object.fromEntries(Object.entries(margens || documento.margens || {}).map(([k, v]) => [k, Math.round(Number(v) * 567)])) } }, headers: cabecalhos, children: filhos }] }));
+}
+
+export async function gerarODT(documento: Buffer): Promise<Buffer> {
+  const libre = await import('libreoffice-convert');
+  const executavel = await localizarExecutavelLibreOffice();
+  return new Promise<Buffer>((resolve, reject) => {
+    libre.convertWithOptions(documento, 'odt', undefined, {
+      fileName: 'laudo.docx',
+      ...(executavel ? { sofficeBinaryPaths: [executavel] } : {}),
+    }, (erro, resultado) => erro ? reject(erro) : resolve(resultado));
+  });
 }
 
 export async function verificarLibreOffice(): Promise<boolean> {
-  try {
-    const testHtml = '<html><body><p>test</p></body></html>';
-    const result = await converterComLibreOffice(Buffer.from(testHtml, 'utf-8'), 'odt');
-    return Buffer.isBuffer(result) && result.length > 0;
-  } catch {
-    return false;
-  }
+  if (disponibilidadeLibreOfficeEmCache !== null) return disponibilidadeLibreOfficeEmCache;
+  if (verificacaoLibreOfficeEmAndamento) return verificacaoLibreOfficeEmAndamento;
+
+  verificacaoLibreOfficeEmAndamento = verificarDisponibilidadeLibreOffice()
+    .then(disponivel => {
+      disponibilidadeLibreOfficeEmCache = disponivel;
+      return disponivel;
+    })
+    .finally(() => {
+      verificacaoLibreOfficeEmAndamento = null;
+    });
+
+  return verificacaoLibreOfficeEmAndamento;
 }
 
 export async function exportarLaudo(params: ExportarParams): Promise<{ success: boolean; path?: string; error?: string }> {
   try {
+    if (params.formato === 'odt' && !(await verificarLibreOffice())) {
+      return { success: false, error: 'LibreOffice não está disponível para exportar ODT' };
+    }
     const numeroRep = await extrairNumeroRep(params.laudoId);
-    const nomePadrao = buildNomeArquivo(numeroRep, params.formato);
+    const nomePadrao = obterNomeArquivoLaudo(numeroRep, params.formato);
 
     const filtros: Record<string, { name: string; extensions: string[] }[]> = {
       pdf: [{ name: 'Documento PDF', extensions: ['pdf'] }],
@@ -619,12 +669,13 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
         break;
 
       case 'docx':
-        if (!params.estrutura) return { success: false, error: 'Estrutura do documento não fornecida para DOCX' };
-        buffer = await gerarDOCX(params.estrutura, params.cabecalho, params.margens);
+        if (!documentoValido(params.estrutura)) return { success: false, error: 'Estrutura canônica do documento inválida para DOCX' };
+        buffer = await gerarDOCXCanonico(params.estrutura, params.cabecalho, params.margens);
         break;
 
       case 'odt':
-        buffer = await gerarODT(params.html, params.estrutura, params.margens);
+        if (!documentoValido(params.estrutura)) return { success: false, error: 'Estrutura canônica do documento inválida para ODT' };
+        buffer = await gerarODT(await gerarDOCXCanonico(params.estrutura, params.cabecalho, params.margens));
         break;
 
       default:

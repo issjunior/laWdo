@@ -1,0 +1,28 @@
+{
+  "codRep": 109026,
+  "numero": 109026,
+  "ano": 2026,
+  "origens": [
+    {
+      "tipo": "OFÍCIO REQUISITANTE",
+      "numero": "3216/2026",
+      "ano": 2026,
+      "cidade": "TELÊMACO BORBA",
+      "orgaoOrigem": "18. SUBDIVISAO POLICIAL - DELEGACIA"
+    }
+  ],
+  "andamentos": [
+    {
+      "dataHora": "2026-08-22T00:00:00"
+    }
+  ],
+  "pecas": [
+    {
+      "codPeca": 1,
+      "tipoPeca": "PISTOLA(S)",
+      "identificacao": "TAURUS",
+      "quantidade": 1,
+      "unidadeMedida": "UNIDADES"
+    }
+  ]
+}

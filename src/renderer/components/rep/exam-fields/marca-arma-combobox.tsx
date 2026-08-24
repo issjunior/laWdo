@@ -32,29 +32,24 @@ function normalizarBusca(valor: string): string {
 export const MarcaArmaCombobox: React.FC<MarcaArmaComboboxProps> = ({ opcoes, value, onChange }) => {
   const [aberto, setAberto] = useState(false)
   const [busca, setBusca] = useState('')
-  const opcoesUnicas = useMemo(() => {
-    const marcasVistas = new Set<string>()
-    return opcoes.filter(opcao => {
-      const marcaNormalizada = normalizarBusca(opcao.label)
-      if (marcasVistas.has(marcaNormalizada)) return false
-      marcasVistas.add(marcaNormalizada)
-      return true
-    })
-  }, [opcoes])
   const buscaNormalizada = normalizarBusca(busca)
   const opcoesFiltradas = useMemo(() => {
     const encontradas = buscaNormalizada
-      ? opcoesUnicas.filter(opcao => normalizarBusca(opcao.label).includes(buscaNormalizada))
-      : opcoesUnicas
+      ? opcoes.filter(opcao => (
+        normalizarBusca(opcao.label).includes(buscaNormalizada)
+        || opcao.codigo.includes(buscaNormalizada)
+      ))
+      : opcoes
     return encontradas.slice(0, LIMITE_OPCOES_VISIVEIS)
-  }, [buscaNormalizada, opcoesUnicas])
-  const possuiCorrespondenciaExata = opcoesUnicas.some(
+  }, [buscaNormalizada, opcoes])
+  const possuiCorrespondenciaExata = opcoes.some(
     opcao => normalizarBusca(opcao.label) === buscaNormalizada,
   )
   const textoLivre = busca.trim()
+  const opcaoSelecionada = opcoes.find(opcao => opcao.codigo === value)
 
-  const selecionarMarca = (marca: string) => {
-    onChange(marca)
+  const selecionarMarca = (valor: string) => {
+    onChange(valor)
     setAberto(false)
     setBusca('')
   }
@@ -77,7 +72,7 @@ export const MarcaArmaCombobox: React.FC<MarcaArmaComboboxProps> = ({ opcoes, va
           className="w-full justify-between font-normal"
         >
           <span className={cn('truncate', !value && 'text-muted-foreground')}>
-            {value || 'Selecione ou digite...'}
+            {opcaoSelecionada?.label ?? (value || 'Selecione ou digite...')}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -95,14 +90,14 @@ export const MarcaArmaCombobox: React.FC<MarcaArmaComboboxProps> = ({ opcoes, va
               {opcoesFiltradas.map(opcao => (
                 <CommandItem
                   key={opcao.codigo}
-                  value={opcao.label}
-                  onSelect={() => selecionarMarca(opcao.label)}
+                  value={`${opcao.codigo} ${opcao.label}`}
+                  onSelect={() => selecionarMarca(opcao.codigo)}
                 >
                   {opcao.label}
                   <Check
                     className={cn(
                       'ml-auto h-4 w-4',
-                      value === opcao.label ? 'opacity-100' : 'opacity-0',
+                      value === opcao.codigo ? 'opacity-100' : 'opacity-0',
                     )}
                   />
                 </CommandItem>
@@ -113,9 +108,9 @@ export const MarcaArmaCombobox: React.FC<MarcaArmaComboboxProps> = ({ opcoes, va
                 </CommandItem>
               )}
             </CommandGroup>
-            {!buscaNormalizada && opcoesUnicas.length > LIMITE_OPCOES_VISIVEIS && (
+            {!buscaNormalizada && opcoes.length > LIMITE_OPCOES_VISIVEIS && (
               <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-                Digite para filtrar as {opcoesUnicas.length.toLocaleString('pt-BR')} marcas disponíveis.
+                Digite para filtrar as {opcoes.length.toLocaleString('pt-BR')} marcas disponíveis.
               </p>
             )}
           </CommandList>

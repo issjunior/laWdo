@@ -29,3 +29,34 @@ export interface ResultadoCapturaImagensRepGdl {
   imagens: ImagemRepGdlCapturada[]
   falhas: FalhaCapturaImagemRepGdl[]
 }
+
+export interface ListaImagensRepGdl {
+  sessaoId: string
+  ambiente: 'homologacao' | 'producao'
+  numeroRep: string
+  anoRep: string
+  arquivos: ArquivoRepGdl[]
+}
+
+export interface ImagemRepGdlAdicionadaAoLaudo {
+  idSelecao: string
+  imagemId: string
+  nomeArquivo: string
+  mimeType: string
+  tamanho: number
+  sha256: string
+  sequencia: number
+}
+
+export interface ResultadoCapturaImagensLaudoGdl {
+  imagens: ImagemRepGdlAdicionadaAoLaudo[]
+  falhas: FalhaCapturaImagemRepGdl[]
+  duplicadas: DuplicataImagemRepGdl[]
+}
+
+export interface DuplicataImagemRepGdl {
+  idSelecao: string
+  nomeArquivo: string
+  imagemExistenteId: string
+  localizacao: 'painel' | 'laudo'
+}
