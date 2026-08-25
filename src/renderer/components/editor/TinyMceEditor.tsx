@@ -3,6 +3,7 @@ import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
 import { encontrarAcaoSupressaoBloco, sincronizarAcoesSupressaoBlocos } from '@/lib/blocos-periciais';
+import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
 
@@ -19,6 +20,10 @@ function buildFigureInnerHtml(url: string, id: string, legenda: string): string 
 /** Markup completo da figura com <br> ao final — ideal para insertContent */
 function buildFigureHtml(url: string, id: string, legenda: string): string {
   return buildFigureInnerHtml(url, id, legenda) + '<br>';
+}
+
+function imagemEhMarcadorQuebraPagina(img: HTMLImageElement): boolean {
+  return img.classList.contains('mce-pagebreak');
 }
 
 /** Converte um <img> órfão em um elemento <figure class="laudo-figure"> com id e figcaption */
@@ -43,7 +48,7 @@ function processarImagensPuras(raiz: Node): number {
 
   for (const img of imagens) {
     const htmlImg = img as HTMLImageElement;
-    if (htmlImg.closest('.laudo-figure')) continue;
+    if (htmlImg.closest('.laudo-figure') || imagemEhMarcadorQuebraPagina(htmlImg)) continue;
     if (!htmlImg.src || (!htmlImg.src.startsWith('data:') && !htmlImg.src.startsWith('http') && !htmlImg.src.startsWith('blob:'))) continue;
 
     const figure = wrapImgAsFigure(htmlImg);
@@ -62,6 +67,7 @@ function scanEditorForRawImages(editor: TinyMceEditorInstance): number {
   const rawImages = Array.from(body.querySelectorAll('img')).filter(
     (img) =>
       !img.closest('.laudo-figure') &&
+      !imagemEhMarcadorQuebraPagina(img) &&
       (img.src?.startsWith('data:') || img.src?.startsWith('http') || img.src?.startsWith('blob:'))
   ) as HTMLImageElement[];
 
@@ -174,16 +180,11 @@ const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
 
 const BADGE_BLOCO_CONDICIONAL = 'Bloco condicional';
 const PLUGINS_TINYMCE = [
-  'anchor',
   'autolink',
   'charmap',
-  'codesample',
-  'emoticons',
   'image',
   'link',
   'lists',
-  'media',
-  'paste',
   'searchreplace',
   'table',
   'visualblocks',
@@ -193,10 +194,24 @@ const PLUGINS_TINYMCE = [
   'preview',
   'nonbreaking',
   'visualchars',
-  'insertdatetime',
   'pagebreak',
   'help',
 ];
+
+export const MEDIDAS_RECUO_PRIMEIRA_LINHA = [
+  { texto: '1,25 cm', valor: '35.43pt' },
+  { texto: '1 cm', valor: '28.35pt' },
+  { texto: '1,5 cm', valor: '42.52pt' },
+  { texto: 'Sem recuo', valor: undefined },
+] as const;
+
+const FONTES_EDITOR = [
+  { texto: 'Arial', familia: 'Arial, Helvetica, sans-serif' },
+  { texto: 'Calibri', familia: 'Calibri, Carlito, sans-serif' },
+  { texto: 'Georgia', familia: 'Georgia, serif' },
+  { texto: 'Times New Roman', familia: 'Times New Roman, Times, serif' },
+  { texto: 'Verdana', familia: 'Verdana, Geneva, sans-serif' },
+] as const;
 
 export function obterOpcoesAlturaEditor(altura: number, alturaAutomatica: boolean): OpcoesAlturaEditor {
   if (alturaAutomatica) {
@@ -215,6 +230,18 @@ export function obterOpcoesAlturaEditor(altura: number, alturaAutomatica: boolea
 
 export function obterPluginsTinyMce(alturaAutomatica: boolean): string[] {
   return alturaAutomatica ? [...PLUGINS_TINYMCE, 'autoresize'] : [...PLUGINS_TINYMCE];
+}
+
+export function obterToolbarTinyMce(exibirControlesCondicionais: boolean): string {
+  return [
+    'undo redo blocks',
+    'bold italic underline',
+    'align bullist numlist outdent indent recuoprimeiralinha lineheight',
+    'fonte fontsize forecolor backcolor removeformat',
+    'searchreplace link image table charmap nonbreaking pagebreak fullscreen',
+    exibirControlesCondicionais ? 'condbloco suprimirblocopericial' : '',
+    'maisferramentas',
+  ].filter(Boolean).join(' | ');
 }
 
 const RESUMOS_FIXOS_BLOCO_CONDICIONAL: Record<string, string> = {
@@ -442,8 +469,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           skin_url: './tinymce/skins/ui/oxide',
           content_css: './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
+          language: 'pt_BR',
+          language_url: './tinymce/langs/pt_BR.js',
           toolbar_mode: 'wrap',
           line_height_formats: '1 1.1 1.2 1.3 1.4 1.5 2',
+          pagebreak_separator: MARCADOR_QUEBRA_PAGINA,
+          pagebreak_split_block: true,
+          formats: {
+            recuoPrimeiraLinha: { selector: 'p', styles: { 'text-indent': '%value' } },
+          },
           image_advtab: true,
           image_title: true,
 
@@ -458,15 +492,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           remove_script_host: false,
           convert_urls: false,
           plugins: obterPluginsTinyMce(alturaAutomatica),
-          toolbar:
-            'undo redo | ' +
-            'bold italic underline strikethrough | forecolor backcolor removeformat | ' +
-            'fontfamily fontsize lineheight styles | subscript superscript | ' +
-            'charmap | link image table | blockquote hr | ' +
-            'alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | ' +
-            'searchreplace visualblocks nonbreaking code | fullscreen preview | ' +
-            (condToggles && condToggles.length > 0 ? 'condbloco suprimirblocopericial | ' : '') +
-            'help',
+          toolbar: obterToolbarTinyMce(Boolean(condToggles?.length)),
           content_style: `
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -485,6 +511,26 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             }
             body.dark-content figure figcaption { color: #8a8f97; }
             body.dark-content hr { border-color: #6d737b; }
+            [data-quebra-pagina="true"] {
+              display: block;
+              height: 0;
+              margin: 18px 0;
+              border-top: 2px dashed #64748b;
+              break-after: page;
+            }
+            [data-quebra-pagina="true"]::after {
+              content: "Quebra de página";
+              position: relative;
+              top: -11px;
+              display: table;
+              margin: 0 auto;
+              padding: 0 6px;
+              background: #fff;
+              color: #475569;
+              font-size: 11px;
+            }
+            body.dark-content [data-quebra-pagina="true"] { border-color: #94a3b8; }
+            body.dark-content [data-quebra-pagina="true"]::after { background: #222f3e; color: #cbd5e1; }
             body.dark-content code { background-color: #6d737b; }
             body.dark-content .mce-content-body:not([dir=rtl]) blockquote { border-color: #6d737b; }
             body.dark-content .mce-content-body[dir=rtl] blockquote { border-color: #6d737b; }
@@ -675,6 +721,53 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: TinyMceEditorInstance) => {
+            const aplicarRecuoPrimeiraLinha = (valor?: string) => {
+              editor.undoManager.transact(() => {
+                if (valor) {
+                  editor.formatter.apply('recuoPrimeiraLinha', { value: valor });
+                } else {
+                  editor.formatter.remove('recuoPrimeiraLinha');
+                }
+              });
+            };
+
+            editor.ui.registry.addMenuButton('recuoprimeiralinha', {
+              text: 'Parágrafo',
+              tooltip: 'Recuo da primeira linha (padrão: 1,25 cm)',
+              fetch: callback => callback(MEDIDAS_RECUO_PRIMEIRA_LINHA.map(({ texto, valor }) => ({
+                type: 'togglemenuitem' as const,
+                text: texto,
+                onAction: () => aplicarRecuoPrimeiraLinha(valor),
+                onSetup: (api: Ui.Menu.ToggleMenuItemInstanceApi) => {
+                  const sincronizar = () => api.setActive(valor
+                    ? editor.formatter.match('recuoPrimeiraLinha', { value: valor })
+                    : !editor.formatter.match('recuoPrimeiraLinha'));
+                  sincronizar();
+                  editor.on('NodeChange', sincronizar);
+                },
+              }))),
+            });
+
+            editor.ui.registry.addMenuButton('fonte', {
+              text: 'Fonte',
+              tooltip: 'Selecionar fonte',
+              fetch: callback => callback(FONTES_EDITOR.map(({ texto, familia }) => ({
+                type: 'menuitem' as const,
+                text: texto,
+                onAction: () => editor.execCommand('FontName', false, familia),
+              }))),
+            });
+
+            editor.ui.registry.addMenuButton('maisferramentas', {
+              icon: 'more-drawer',
+              tooltip: 'Mais ferramentas',
+              fetch: callback => callback([
+                { type: 'nestedmenuitem', text: 'Texto avançado', getSubmenuItems: () => ['strikethrough subscript superscript blockquote hr'] },
+                { type: 'nestedmenuitem', text: 'Revisão e inspeção', getSubmenuItems: () => ['pastetext visualblocks visualchars wordcount code'] },
+                { type: 'nestedmenuitem', text: 'Visualização e ajuda', getSubmenuItems: () => ['preview help'] },
+              ]),
+            });
+
             editor.addCommand('insertPlaceholder', ((_ui, placeholder) => {
               const html = `<span contenteditable="false" class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
@@ -932,7 +1025,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                       if (node.nodeType !== 1) continue;
                       const el = node as Element;
 
-                      if (el.tagName === 'IMG' && !el.closest('.laudo-figure')) {
+                      if (el.tagName === 'IMG' && !el.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(el as HTMLImageElement)) {
                         const src = (el as HTMLImageElement).src;
                         if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
                           rawImages.push(el as HTMLImageElement);
@@ -940,7 +1033,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                       }
 
                       el.querySelectorAll('img').forEach(nestedImg => {
-                        if (!nestedImg.closest('.laudo-figure')) {
+                        if (!nestedImg.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(nestedImg as HTMLImageElement)) {
                           const src = (nestedImg as HTMLImageElement).src;
                           if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
                             rawImages.push(nestedImg as HTMLImageElement);

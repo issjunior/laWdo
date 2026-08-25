@@ -30,4 +30,16 @@ describe('parseHtmlParaEstrutura', () => {
     }
     expect(blocos).toEqual(expect.arrayContaining([expect.objectContaining({ tipo: 'linha-horizontal' }), expect.objectContaining({ tipo: 'figura', larguraPx: 320, alturaPx: 180 })]));
   });
+
+  it('normaliza marcadores legados e preserva a quebra de página entre blocos', () => {
+    const documento = parseHtmlParaEstrutura(
+      '<p style="text-indent:28.35pt">Antes</p><!-- pagebreak --><p>Depois</p>'
+    );
+
+    expect(documento.secoes[0].blocos).toEqual([
+      expect.objectContaining({ tipo: 'paragrafo', recuoPrimeiraLinhaPt: 28.35 }),
+      { tipo: 'quebra-pagina' },
+      expect.objectContaining({ tipo: 'paragrafo' }),
+    ]);
+  });
 });

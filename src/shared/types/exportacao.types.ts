@@ -18,7 +18,8 @@ export interface CelulaTabelaExportacao { paragrafos: ParagrafoExportacao[]; blo
 export interface TabelaExportacao { tipo: 'tabela'; linhas: CelulaTabelaExportacao[][]; largurasPercentuais?: number[]; }
 export interface FiguraExportacao { tipo: 'figura'; base64: string; formato: string; larguraPx?: number; alturaPx?: number; alinhamento?: AlinhamentoDocumento; legenda?: ParagrafoExportacao; }
 export interface LinhaHorizontalExportacao { tipo: 'linha-horizontal'; }
-export type BlocoExportacao = ParagrafoExportacao | ListaExportacao | TabelaExportacao | FiguraExportacao | LinhaHorizontalExportacao;
+export interface QuebraPaginaExportacao { tipo: 'quebra-pagina'; }
+export type BlocoExportacao = ParagrafoExportacao | ListaExportacao | TabelaExportacao | FiguraExportacao | LinhaHorizontalExportacao | QuebraPaginaExportacao;
 export interface SecaoExportacao { titulo?: ParagrafoExportacao; blocos: BlocoExportacao[]; }
 export interface CabecalhoExportacao { logoBase64?: string; texto?: string; alinhamento?: AlinhamentoDocumento; }
 export interface MargensExportacao { top: number; right: number; bottom: number; left: number; }
