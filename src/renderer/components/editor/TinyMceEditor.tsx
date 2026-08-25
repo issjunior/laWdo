@@ -121,6 +121,8 @@ interface TinyMceEditorProps {
   placeholder?: string;
   /** ID do laudo para upload de imagens. Se ausente, usa base64 (templates/cabeçalho). */
   laudoId?: string;
+  /** Número da REP exibido somente acima da toolbar no modo tela cheia. */
+  repNumero?: string;
   /** ID único para a instância do editor (necessário com múltiplos editores na mesma página) */
   editorId?: string;
   /** Callback disparado quando uma imagem é inserida via botão de imagem do editor */
@@ -151,6 +153,41 @@ type TinymceWindow = Window & {
   };
 };
 type ComandoTinyMce<T> = (_ui: boolean, data: T) => void;
+
+const CLASSE_IDENTIFICACAO_FULLSCREEN = 'laudo-identificacao-fullscreen';
+
+export function obterRotuloIdentificacaoFullscreen(repNumero?: string): string | null {
+  const numeroNormalizado = repNumero?.trim();
+  return numeroNormalizado ? `Laudo · REP ${numeroNormalizado}` : null;
+}
+
+export function sincronizarIdentificacaoFullscreen(
+  container: HTMLElement,
+  emTelaCheia: boolean,
+  repNumero?: string,
+): void {
+  const identificacaoExistente = container.querySelector<HTMLElement>(`.${CLASSE_IDENTIFICACAO_FULLSCREEN}`);
+  const rotulo = emTelaCheia ? obterRotuloIdentificacaoFullscreen(repNumero) : null;
+
+  if (!rotulo) {
+    identificacaoExistente?.remove();
+    return;
+  }
+
+  const areaEdicao = container.querySelector<HTMLElement>('.tox-edit-area');
+  if (!areaEdicao) return;
+
+  const areaUtil = areaEdicao.closest<HTMLElement>('.tox-sidebar-wrap') ?? areaEdicao;
+
+  const identificacao = identificacaoExistente ?? document.createElement('div');
+  identificacao.className = CLASSE_IDENTIFICACAO_FULLSCREEN;
+  identificacao.setAttribute('role', 'status');
+  identificacao.textContent = rotulo;
+
+  if (!identificacaoExistente) {
+    areaUtil.before(identificacao);
+  }
+}
 
 interface PlaceholderPayload {
   chave: string;
@@ -189,13 +226,9 @@ const PLUGINS_TINYMCE = [
   'table',
   'visualblocks',
   'wordcount',
-  'code',
   'fullscreen',
-  'preview',
   'nonbreaking',
-  'visualchars',
   'pagebreak',
-  'help',
 ];
 
 export const MEDIDAS_RECUO_PRIMEIRA_LINHA = [
@@ -211,6 +244,17 @@ const FONTES_EDITOR = [
   { texto: 'Georgia', familia: 'Georgia, serif' },
   { texto: 'Times New Roman', familia: 'Times New Roman, Times, serif' },
   { texto: 'Verdana', familia: 'Verdana, Geneva, sans-serif' },
+] as const;
+
+const FORMATOS_BLOCO_EDITOR = [
+  { texto: 'Parágrafo', formato: 'p' },
+  { texto: 'Título 1', formato: 'h1' },
+  { texto: 'Título 2', formato: 'h2' },
+  { texto: 'Título 3', formato: 'h3' },
+  { texto: 'Título 4', formato: 'h4' },
+  { texto: 'Título 5', formato: 'h5' },
+  { texto: 'Título 6', formato: 'h6' },
+  { texto: 'Pré-formatado', formato: 'pre' },
 ] as const;
 
 export function obterOpcoesAlturaEditor(altura: number, alturaAutomatica: boolean): OpcoesAlturaEditor {
@@ -234,13 +278,15 @@ export function obterPluginsTinyMce(alturaAutomatica: boolean): string[] {
 
 export function obterToolbarTinyMce(exibirControlesCondicionais: boolean): string {
   return [
-    'undo redo blocks',
-    'bold italic underline',
-    'align bullist numlist outdent indent recuoprimeiralinha lineheight',
+    'undo redo formatacao',
+    'bold italic underline strikethrough subscript superscript',
     'fonte fontsize forecolor backcolor removeformat',
-    'searchreplace link image table charmap nonbreaking pagebreak fullscreen',
+    'align bullist numlist',
+    'outdent indent lineheight recuoprimeiralinha',
+    'blockquote hr',
+    'searchreplace pastetext visualblocks',
+    'link image table charmap nonbreaking pagebreak fullscreen',
     exibirControlesCondicionais ? 'condbloco suprimirblocopericial' : '',
-    'maisferramentas',
   ].filter(Boolean).join(' | ');
 }
 
@@ -361,6 +407,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   alturaAutomatica = false,
   placeholder,
   laudoId: _laudoId,
+  repNumero,
   editorId,
   onImageInserted,
   placeholderChaves,
@@ -372,6 +419,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   ...rest
 }) => {
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
+  const repNumeroRef = useRef(repNumero);
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
   const onSolicitarSupressaoBlocoRef = useRef(onSolicitarSupressaoBloco);
   const editorProntoParaAlteracoesRef = useRef(false);
@@ -384,6 +432,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useEffect(() => {
     placeholderChavesRef.current = placeholderChaves;
   }, [placeholderChaves]);
+
+  useEffect(() => {
+    repNumeroRef.current = repNumero;
+  }, [repNumero]);
 
   useEffect(() => {
     onSolicitarSupressaoBlocoRef.current = onSolicitarSupressaoBloco;
@@ -721,6 +773,32 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: TinyMceEditorInstance) => {
+            editor.on('FullscreenStateChanged', evento => {
+              sincronizarIdentificacaoFullscreen(
+                editor.getContainer(),
+                evento.state,
+                repNumeroRef.current,
+              );
+            });
+
+            editor.ui.registry.addMenuButton('formatacao', {
+              text: 'Formatação',
+              tooltip: 'Formato do bloco',
+              fetch: callback => callback(FORMATOS_BLOCO_EDITOR.map(({ texto, formato }) => ({
+                type: 'togglemenuitem' as const,
+                text: texto,
+                onAction: () => editor.execCommand('FormatBlock', false, formato),
+                onSetup: (api: Ui.Menu.ToggleMenuItemInstanceApi) => {
+                  const sincronizar = () => api.setActive(
+                    editor.queryCommandValue('FormatBlock').toLowerCase() === formato
+                  );
+                  sincronizar();
+                  editor.on('NodeChange', sincronizar);
+                  return () => editor.off('NodeChange', sincronizar);
+                },
+              }))),
+            });
+
             const aplicarRecuoPrimeiraLinha = (valor?: string) => {
               editor.undoManager.transact(() => {
                 if (valor) {
@@ -756,16 +834,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 text: texto,
                 onAction: () => editor.execCommand('FontName', false, familia),
               }))),
-            });
-
-            editor.ui.registry.addMenuButton('maisferramentas', {
-              icon: 'more-drawer',
-              tooltip: 'Mais ferramentas',
-              fetch: callback => callback([
-                { type: 'nestedmenuitem', text: 'Texto avançado', getSubmenuItems: () => ['strikethrough subscript superscript blockquote hr'] },
-                { type: 'nestedmenuitem', text: 'Revisão e inspeção', getSubmenuItems: () => ['pastetext visualblocks visualchars wordcount code'] },
-                { type: 'nestedmenuitem', text: 'Visualização e ajuda', getSubmenuItems: () => ['preview help'] },
-              ]),
             });
 
             editor.addCommand('insertPlaceholder', ((_ui, placeholder) => {

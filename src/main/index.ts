@@ -425,6 +425,7 @@ const createWindow = async (): Promise<void> => {
     title: 'laWdo',
     show: false, // Mostrar apenas quando estiver pronto
   });
+  mainWindow.removeMenu();
   observarEstadoJanelaPrincipal(mainWindow);
   registrarEventoDiagnostico('janela', 'info', { evento: 'aberta' }, mainWindow);
 

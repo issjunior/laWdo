@@ -3436,6 +3436,7 @@ export const LaudosPage: React.FC = () => {
                         alturaAutomatica
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
+                        repNumero={editando.rep_numero}
                         onImageInserted={() => {
                           void reconciliarImagensDoEditor().catch(error => {
                             toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
@@ -3497,6 +3498,7 @@ export const LaudosPage: React.FC = () => {
                                 height={400}
                                 alturaAutomatica
                                 laudoId={editando.id}
+                                repNumero={editando.rep_numero}
                                 onImageInserted={() => {
                                   void reconciliarImagensDoEditor().catch(error => {
                                     toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
