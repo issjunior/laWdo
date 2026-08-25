@@ -311,8 +311,25 @@
       "descricao": "Exportacao do laudo e resolucao de placeholders.",
       "globsCodigo": [
         "src/renderer/lib/exportacao-placeholders.ts",
+        "src/renderer/lib/exportacao-parser.ts",
+        "src/shared/types/exportacao.types.ts",
+        "src/shared/utils/quebra-pagina.ts",
         "src/renderer/pages/LaudosPage.tsx",
-        "src/main/services/laudo.service.ts"
+        "src/main/services/laudo.service.ts",
+        "src/main/services/exportacao.service.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/editor_texto.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Configuracao compartilhada do TinyMCE, recuo, quebra de pagina, tema e tela cheia.",
+      "globsCodigo": [
+        "src/renderer/components/editor/TinyMceEditor.tsx",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/styles/globals.css",
+        "src/shared/utils/quebra-pagina.ts",
+        "src/__tests__/renderer/tiny-mce-editor-*.test.ts"
       ]
     },
     {
