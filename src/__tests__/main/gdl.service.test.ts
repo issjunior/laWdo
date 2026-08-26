@@ -79,12 +79,13 @@ let servidor: http.Server
 let baseUrl = ''
 let statusUnidades = 200
 let statusRep = 200
+const statusRepPorBusca = new Map<string, number>()
 let statusFotos = 200
 let respostaRep = fixtureRep
 const corposInvestigacao: string[] = []
 const configuracoes: Record<string, string> = {}
 let requisicoesRecebidas = 0
-const requisicoesGdl: Array<{ metodo: string; caminho: string }> = []
+const requisicoesGdl: Array<{ metodo: string; caminho: string; busca: string }> = []
 
 function responder(resposta: http.ServerResponse, status: number, corpo: string | Buffer): void {
   resposta.statusCode = status
@@ -95,13 +96,13 @@ beforeAll(async () => {
   servidor = http.createServer((requisicao, resposta) => {
     requisicoesRecebidas += 1
     const url = new URL(requisicao.url ?? '/', baseUrl)
-    requisicoesGdl.push({ metodo: requisicao.method || '', caminho: url.pathname })
+    requisicoesGdl.push({ metodo: requisicao.method || '', caminho: url.pathname, busca: url.search })
     if (url.pathname.endsWith('/unidadesMedida')) {
       responder(resposta, statusUnidades, '{}')
       return
     }
     if (url.pathname.endsWith('/rep/obter')) {
-      responder(resposta, statusRep, respostaRep)
+      responder(resposta, statusRepPorBusca.get(url.search) ?? statusRep, respostaRep)
       return
     }
     if (url.pathname.endsWith('/repsInvestigacaoPolicial/listarReps')) {
@@ -144,6 +145,7 @@ afterAll(async () => {
 beforeEach(() => {
   statusUnidades = 200
   statusRep = 200
+  statusRepPorBusca.clear()
   statusFotos = 200
   respostaRep = fixtureRep
   corposInvestigacao.length = 0
@@ -260,6 +262,17 @@ describe('gdl.service', () => {
     })
   })
 
+  it('identifica REP não encontrada quando o GDL responde 401 à consulta com credenciais já validadas', async () => {
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: true })
+    statusRepPorBusca.set('?numero=12869&ano=2024', 401)
+
+    await expect(consultarRep('12869', '2024')).resolves.toMatchObject({
+      sucesso: false,
+      erro: 'REP 12869/2024 não encontrada no GDL.',
+    })
+    expect(obterValidacaoSessao('producao')).toMatchObject({ validado: true, numeroRep: '190', anoRep: '2026' })
+  })
+
   it('valida credenciais por consulta real e normaliza o CPF', async () => {
     const sucesso = await validarCredenciais(
       'producao',
@@ -269,6 +282,8 @@ describe('gdl.service', () => {
     )
     expect(sucesso).toMatchObject({ sucesso: true })
     expect(sucesso.dados?.codRep).toBe(1902026)
+    expect(requisicoesGdl.find(requisicao => requisicao.caminho.endsWith('/rep/obter'))?.busca)
+      .toBe('?numero=109026&ano=2026')
 
     await expect(validarCredenciais('producao', { login: '', senha: '' }, '109.026', '2026'))
       .resolves.toMatchObject({ sucesso: false, erro: 'Credenciais não configuradas.' })

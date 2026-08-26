@@ -2,6 +2,7 @@ import { app, dialog, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import type { DocumentoExportacao, MargensExportacao } from '../../shared/types/exportacao.types.js';
+import { normalizarQuebrasPaginaHtml } from '../../shared/utils/quebra-pagina.js';
 import { obterNomeArquivoLaudo } from '../../shared/utils/nomes-documentos-rep.js';
 import type {
   FileChild,
@@ -118,6 +119,7 @@ export function converterDocumentoLegado(documento: DocumentoExportacao): Estrut
       if (elemento.tipo === 'paragrafo') return [{ tipo: 'paragrafo' as const, html: htmlDosTrechos(elemento.trechos), alinhamento: elemento.alinhamento, nivelTitulo: elemento.nivelTitulo }];
       if (elemento.tipo === 'lista') return [{ tipo: 'lista' as const, items: elemento.itens.map(item => htmlDosTrechos(item.trechos)), ordenada: elemento.ordenada, nivel: elemento.nivel + 1 }];
       if (elemento.tipo === 'linha-horizontal') return [{ tipo: 'quebra' as const }];
+      if (elemento.tipo === 'quebra-pagina') return [{ tipo: 'quebra' as const }];
       if (elemento.tipo === 'tabela') return [{ tipo: 'tabela' as const, linhas: elemento.linhas.map(linha => linha.map(celula => htmlDosTrechos(celula.paragrafos.flatMap(p => p.trechos)))), cabecalho: false }];
       const id = `figura-${imagens.length}`;
       imagens.push({ id, base64: elemento.base64, formato: elemento.formato, legenda: elemento.legenda?.trechos.map(t => t.texto).join('') || '', numero: imagens.length + 1 });
@@ -137,6 +139,7 @@ function documentoValido(valor: unknown): valor is DocumentoExportacao {
     if (bloco.tipo === 'lista') return typeof bloco.ordenada === 'boolean' && Number.isInteger(bloco.nivel) && Array.isArray(bloco.itens) && bloco.itens.every(item => Array.isArray(item.trechos));
     if (bloco.tipo === 'tabela') return Array.isArray(bloco.linhas) && bloco.linhas.every(linha => Array.isArray(linha) && linha.every(celula => Array.isArray(celula.paragrafos)));
     if (bloco.tipo === 'figura') return typeof bloco.base64 === 'string' && typeof bloco.formato === 'string';
+    if (bloco.tipo === 'quebra-pagina') return true;
     return bloco.tipo === 'linha-horizontal';
   }));
 }
@@ -187,9 +190,10 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
   .laudo-figure { text-align: center; margin: 12px auto; page-break-inside: avoid; }
   figcaption { font-size: 12px; color: #444; font-weight: bold; margin-top: 4px; }
+  [data-quebra-pagina="true"] { break-after: page; page-break-after: always; height: 0; }
 </style>
 </head>
-<body>${html}</body>
+<body>${normalizarQuebrasPaginaHtml(html)}</body>
 </html>`;
 
     win = new BrowserWindow({
@@ -567,7 +571,7 @@ async function verificarDisponibilidadeLibreOffice(): Promise<boolean> {
 
 export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalho?: ExportacaoCabecalho, margens?: MargensExportacao): Promise<Buffer> {
   const d = await import('docx');
-  const { Document, Packer, Paragraph, TextRun, ExternalHyperlink, Table, TableRow, TableCell, ImageRun, Header, AlignmentType, UnderlineType, HeadingLevel, WidthType, BorderStyle } = d;
+  const { Document, Packer, Paragraph, TextRun, ExternalHyperlink, Table, TableRow, TableCell, ImageRun, Header, PageBreak, AlignmentType, UnderlineType, HeadingLevel, WidthType, BorderStyle } = d;
   const alinhar = (v?: string) => v === 'center' ? AlignmentType.CENTER : v === 'right' ? AlignmentType.RIGHT : v === 'justify' ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
   const runs = (trechos: import('../../shared/types/exportacao.types.js').TrechoExportacao[]): ParagraphChild[] => trechos.flatMap<ParagraphChild>(t => {
     const e = t.estilo || {}; const opcoes = { text: t.texto, break: t.quebraLinha ? 1 : undefined, bold: e.negrito, italics: e.italico, strike: e.tachado, underline: e.sublinhado ? { type: UnderlineType.SINGLE } : undefined, superScript: e.sobrescrito, subScript: e.subscrito, font: e.fonte, size: e.tamanhoPt ? Math.round(e.tamanhoPt * 2) : undefined, color: e.cor, highlight: e.realce ? 'yellow' as const : undefined };
@@ -584,6 +588,7 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
     for (const bloco of secao.blocos) {
       if (bloco.tipo === 'paragrafo') filhos.push(para(bloco));
       else if (bloco.tipo === 'lista') bloco.itens.forEach(item => filhos.push(para(item, bloco.ordenada ? { numbering: { reference: 'numerada', level: bloco.nivel } } : { bullet: { level: bloco.nivel } })));
+      else if (bloco.tipo === 'quebra-pagina') filhos.push(new Paragraph({ children: [new PageBreak()] }));
       else if (bloco.tipo === 'linha-horizontal') filhos.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } }));
       else if (bloco.tipo === 'tabela') {
         const rows = bloco.linhas.map(linha => new TableRow({ children: linha.map(celula => new TableCell({

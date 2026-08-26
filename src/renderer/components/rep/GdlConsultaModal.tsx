@@ -30,6 +30,8 @@ import {
   ArrowRight,
   ArrowLeft,
   ListChecks,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { z } from 'zod';
 import type {
@@ -37,7 +39,6 @@ import type {
   PecaB602,
   ResultadoImportacaoExame,
 } from '@shared/types/b602-gdl.types';
-import { TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo';
 import { combinarEnvolvido } from '@shared/utils/envolvido';
 import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils';
 
@@ -45,6 +46,19 @@ const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
 
 const ANO_ATUAL = new Date().getFullYear();
 const ANOS_OPCOES = Array.from({ length: 10 }, (_, i) => (ANO_ATUAL - i).toString());
+
+const formatarNumeroRep = (valor: string): string => {
+  const digitos = valor.replace(/\D/g, '').slice(0, 6);
+  return digitos.length > 3 ? `${digitos.slice(0, -3)}.${digitos.slice(-3)}` : digitos;
+};
+
+const formatarIdentificacaoRep = (valor: string): string => {
+  const digitos = valor.replace(/\D/g, '').slice(0, 10);
+  if (digitos.length <= 4) return `REP ${digitos}`;
+
+  const ano = digitos.slice(-4);
+  return `REP ${formatarNumeroRep(digitos.slice(0, -4))}-${ano}`;
+};
 
 interface CampoMapeado {
   campo: string;
@@ -98,26 +112,9 @@ interface GdlTesteRespostaApi {
 const getMensagemErro = (erro: unknown, fallback: string): string =>
   erro instanceof Error ? erro.message : fallback;
 
-function formatarValorRevisao(valor: unknown): string {
-  if (typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean') return String(valor)
-  if (valor === null || valor === undefined) return 'Não informado'
-  return JSON.stringify(valor)
-}
-
 function formatarDataRevisao(valor: string): string {
   const data = new Date(valor.includes('T') ? valor : `${valor}T00:00:00`)
   return Number.isNaN(data.getTime()) ? valor : data.toLocaleDateString('pt-BR')
-}
-
-function obterLabelCampoPersonalizado(peca: PecaB602, id: string): string {
-  return TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(campo => campo.id === id)?.label ?? id
-}
-
-function formatarValorCampoPersonalizado(peca: PecaB602, id: string, valor: unknown): string {
-  const campo = TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(item => item.id === id)
-  const codigo = typeof valor === 'string' || typeof valor === 'number' ? String(valor) : null
-  const opcao = codigo ? campo?.opcoes?.find(item => item.codigo === codigo) : undefined
-  return opcao?.label ?? formatarValorRevisao(valor)
 }
 
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
@@ -400,8 +397,18 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const itensReconciliacao = resultadoConsulta
     ? montarItensReconciliacaoPecasB602(pecasB602, resultadoConsulta.camposEspecificos.pecas)
     : [];
+  const todasPecasSelecionadas = itensReconciliacao.length > 0
+    && itensReconciliacao.every(item => idsPecasSelecionadas.has(item.chave));
+  const alternarTodasSelecoesPecas = () => {
+    setIdsPecasSelecionadas(todasPecasSelecionadas
+      ? new Set()
+      : new Set(itensReconciliacao.map(item => item.chave)));
+  };
   const avisosPreenchimentoManual = resultadoConsulta?.avisos.filter(aviso => aviso.codigo === 'ENVOLVIDOS_NAO_RETORNADOS') ?? [];
-  const avisosDestacados = resultadoConsulta?.avisos.filter(aviso => aviso.codigo !== 'ENVOLVIDOS_NAO_RETORNADOS') ?? [];
+  const avisosDestacados = resultadoConsulta?.avisos.filter(aviso => (
+    aviso.codigo !== 'ENVOLVIDOS_NAO_RETORNADOS'
+    && aviso.codigo !== 'FUNCIONAMENTO_NAO_TESTADO_PADRAO'
+  )) ?? [];
 
   const getPreTesteMensagem = (): string => {
     if (!preTeste) return 'Verificando conexão...';
@@ -422,7 +429,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[780px] flex flex-col max-h-[85vh]">
+      <DialogContent className="flex w-[calc(100vw-2rem)] max-w-none flex-col max-h-[85vh] sm:max-w-[960px]">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Network className="h-5 w-5 text-primary" />
@@ -457,7 +464,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
         {passo === 'busca' && (
           <>
-            <div className="flex-1 overflow-y-auto min-h-0 space-y-4">
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-4 px-1">
               {preTeste && (
                 <Alert variant={preTeste.ok ? 'default' : 'destructive'}>
                   <div className="flex items-start gap-2">
@@ -503,9 +510,10 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                   <Label htmlFor="gdl-numero-rep">Nº da REP</Label>
                   <Input
                     id="gdl-numero-rep"
-                    value={numeroRep}
+                    value={formatarNumeroRep(numeroRep)}
                     onChange={e => setNumeroRep(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
+                    inputMode="numeric"
                   />
                 </div>
                 <div className="space-y-2">
@@ -580,19 +588,17 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
         {passo === 'revisao' && (
           <>
-            <div className="flex-1 overflow-y-auto min-h-0 space-y-4">
-              <Alert>
-                <AlertDescription>
-                  REP <span className="font-medium">{resultadoConsulta?.camposGerais.numero}</span> encontrada.
-                </AlertDescription>
-              </Alert>
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-4 px-1">
+              <div className="rounded-md border bg-muted/40 px-4 py-3 text-center text-base">
+                <span className="font-bold text-primary">{formatarIdentificacaoRep(resultadoConsulta?.camposGerais.numero ?? '')}</span>
+              </div>
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-1">
                   <ListChecks className="h-4 w-4" />
                   Campos que serão preenchidos:
                 </Label>
-                <div className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-y-1 lg:grid-cols-2 lg:gap-x-8">
                   {camposMapeados.map((c, i) => (
                     <div key={i} className="flex items-start gap-2 text-sm">
                       <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
@@ -616,39 +622,29 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
               {!!itensReconciliacao.length && (
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Revisão das peças do GDL</Label>
-                  <p className="text-xs text-muted-foreground">Todas as peças retornadas pelo GDL começam marcadas. Em “Substituir”, desmarcar uma peça importada a remove apenas do laWdo.</p>
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={alternarTodasSelecoesPecas}>
+                      {todasPecasSelecionadas ? <Square className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+                      {todasPecasSelecionadas ? 'Desmarcar todas' : 'Selecionar todas'}
+                    </Button>
+                  </div>
                   <div className="space-y-2">
-                    {itensReconciliacao.map(({ chave, peca, jaImportada, retornadaPeloGdl }) => (
+                    {itensReconciliacao.map(({ chave, peca }, indice) => (
                       <label key={chave} className="block cursor-pointer rounded-md border border-border bg-card p-3 transition-colors hover:bg-muted/50">
                         <div className="flex items-start gap-3">
                           <Checkbox
                             checked={idsPecasSelecionadas.has(chave)}
                             onCheckedChange={() => alternarSelecaoPeca(chave)}
-                            className="mt-1"
+                            className="shrink-0 self-center"
                           />
-                          <div className="min-w-0 flex-1 space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium">{peca.tipoPeca}</span>
-                              <Badge variant="secondary">{peca.comuns.quantidade} {peca.comuns.unidadeMedida || 'unidade(s)'}</Badge>
-                              {jaImportada && <Badge variant="outline">Já importada</Badge>}
-                              {!retornadaPeloGdl && <Badge variant="destructive">Não retornou nesta consulta</Badge>}
-                            </div>
-                            <p className="text-sm text-muted-foreground">{peca.comuns.identificacao || 'Sem identificação'}</p>
-                            {!!Object.keys(peca.personalizados).length && (
-                              <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-2">
-                                {Object.entries(peca.personalizados).map(([id, valor]) => (
-                                  <div key={id} className="flex gap-1"><dt className="font-medium">{obterLabelCampoPersonalizado(peca, id)}:</dt><dd>{formatarValorCampoPersonalizado(peca, id, valor)}</dd></div>
-                                ))}
-                              </dl>
-                            )}
-                            {!!Object.keys(peca.extrasGdl).length && (
-                              <div className="rounded bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                                <p className="font-medium">Campos não mapeados — serão preservados</p>
-                                {Object.entries(peca.extrasGdl).map(([chave, valor]) => <p key={chave}>{chave}: {formatarValorRevisao(valor)}</p>)}
-                              </div>
-                            )}
-                          </div>
+                          <dl className="grid min-w-0 flex-1 grid-cols-[0.35fr_1.1fr_1.8fr_1fr_1.1fr_1.1fr] gap-x-3 text-sm">
+                            <div className="flex min-w-0 items-center justify-center"><dt className="sr-only">Ordem da peça</dt><dd>{indice + 1}</dd></div>
+                            <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">Tipo do Item</dt><dd className="truncate font-medium" title={peca.tipoPeca || 'Não informado'}>{peca.tipoPeca || 'Não informado'}</dd></div>
+                            <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">Identificação</dt><dd className="truncate" title={peca.comuns.identificacao || 'Não informada'}>{peca.comuns.identificacao || 'Não informada'}</dd></div>
+                            <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">Quantidade</dt><dd className="truncate">{peca.comuns.quantidade} {peca.comuns.unidadeMedida || 'unidade(s)'}</dd></div>
+                            <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">Lacre Entrada</dt><dd className="truncate" title={peca.comuns.lacreEntrada || 'Não informado'}>{peca.comuns.lacreEntrada || 'Não informado'}</dd></div>
+                            <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">Lacre Saída</dt><dd className="truncate" title={peca.comuns.lacreSaida || 'Não informado'}>{peca.comuns.lacreSaida || 'Não informado'}</dd></div>
+                          </dl>
                         </div>
                       </label>
                     ))}

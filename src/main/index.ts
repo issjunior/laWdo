@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
 import { setupDatabase } from './database/index.js';
+import { closeDatabase } from './database/sqlite.js';
 import { getLogger, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
 import { atualizacaoService } from './services/atualizacao.service.js';
@@ -41,7 +42,7 @@ let sessaoDiagnostico: DiagnosticoSessaoService | null = null;
 let pipeDiagnostico: DiagnosticoPipeService | null = null;
 let capturaDiagnostico: DiagnosticoCapturaService | null = null;
 let sourceMapsDiagnostico: DiagnosticoSourceMapService | null = null;
-let encerramentoDiagnosticoEmAndamento = false;
+let encerramentoAplicativoEmAndamento = false;
 let temporizadorAtrasoEventLoopDiagnostico: NodeJS.Timeout | null = null;
 let atrasoEventLoopDiagnostico: number | null = null;
 
@@ -425,6 +426,7 @@ const createWindow = async (): Promise<void> => {
     title: 'laWdo',
     show: false, // Mostrar apenas quando estiver pronto
   });
+  mainWindow.removeMenu();
   observarEstadoJanelaPrincipal(mainWindow);
   registrarEventoDiagnostico('janela', 'info', { evento: 'aberta' }, mainWindow);
 
@@ -556,10 +558,13 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', evento => {
-  if (encerramentoDiagnosticoEmAndamento || !sessaoDiagnostico) return;
+  if (encerramentoAplicativoEmAndamento) return;
   evento.preventDefault();
-  encerramentoDiagnosticoEmAndamento = true;
-  void encerrarDiagnosticoAssistido().finally(() => app.exit(0));
+  encerramentoAplicativoEmAndamento = true;
+  void Promise.all([
+    encerrarDiagnosticoAssistido(),
+    closeDatabase().catch(error => log.error('Erro ao fechar banco de dados no encerramento', error)),
+  ]).finally(() => app.exit(0));
 });
 
 app.on('activate', () => {

@@ -798,9 +798,20 @@ export const REPsPage: React.FC = () => {
     }
 
     window.setTimeout(() => {
+      if (pendencia.campo === 'b602_pecas_validas') {
+        const primeiraPecaIncompleta = pecasB602.find(peca => !pecaB602EstaCompleta(peca));
+        const idAlvo = primeiraPecaIncompleta
+          ? `peca-b602-${primeiraPecaIncompleta.idLocal}`
+          : 'adicionar-peca-b602';
+        const alvo = document.getElementById(idAlvo);
+        alvo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alvo?.focus({ preventScroll: true });
+        return;
+      }
+
       form.setFocus(pendencia.campo);
     }, 250);
-  }, [form]);
+  }, [form, pecasB602]);
 
   // Seções dinâmicas baseadas no tipo de exame
   const examSections = useMemo(() => {
@@ -1344,7 +1355,15 @@ export const REPsPage: React.FC = () => {
     setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
 
     setCamposPreenchidosGdl(novosPreenchidos);
-    const avisosImportacao = resultado.avisos.map(aviso => aviso.mensagem);
+    const avisoFuncionamento = resultado.avisos.find(
+      aviso => aviso.codigo === 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',
+    );
+    if (avisoFuncionamento) {
+      toast.info(avisoFuncionamento.mensagem, { duration: 12000 });
+    }
+    const avisosImportacao = resultado.avisos
+      .filter(aviso => aviso.codigo !== 'FUNCIONAMENTO_NAO_TESTADO_PADRAO')
+      .map(aviso => aviso.mensagem);
     if (avisosImportacao.length > 0) {
       setSuccess(avisosImportacao.join(' '));
       setTimeout(() => setSuccess(null), 12000);

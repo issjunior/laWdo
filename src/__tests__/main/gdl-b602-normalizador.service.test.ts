@@ -127,6 +127,7 @@ describe('contrato GDL B602', () => {
       '476:numero_serie': 'SERIE-ANONIMIZADA',
       '476:marca': 'MARCA TESTE',
       '476:modelo': 'MODELO TESTE',
+      '476:funcionamento': '100',
       '476:arma_institucional': '97',
     })
     expect(estojo.tipoCodigo).toBe('101')
@@ -148,6 +149,10 @@ describe('contrato GDL B602', () => {
       '106:arma_institucional': '98',
     })
     expect(revolver.extrasGdl).toEqual({})
+    expect(resultado.avisos).toContainEqual(expect.objectContaining({
+      codigo: 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',
+      contexto: { quantidadePecas: 1 },
+    }))
   })
 
   it('mapeia Marca da Arma e Tipo Acabamento confirmados na REP 191/2026', () => {
@@ -293,9 +298,9 @@ describe('contrato GDL B602', () => {
       extras: peca.extrasGdl,
     }))).toEqual([
       { codigo: '613', personalizados: { '613:numero_serie': 'SERIE-613', '613:marca': 'MARCA 613', '613:modelo': 'MODELO 613' }, extras: {} },
-      { codigo: '477', personalizados: { '477:numero_serie': 'SERIE-477', '477:marca': 'MARCA 477', '477:modelo': 'MODELO 477', '477:arma_institucional': '98' }, extras: {} },
-      { codigo: '479', personalizados: { '479:numero_serie': 'SERIE-479', '479:marca': 'MARCA 479', '479:modelo': 'MODELO 479', '479:arma_institucional': '98' }, extras: {} },
-      { codigo: '475', personalizados: { '475:numero_serie': 'SERIE-475', '475:marca': 'MARCA 475', '475:modelo': 'MODELO 475', '475:fabricacao_arma': '63' }, extras: {} },
+      { codigo: '477', personalizados: { '477:numero_serie': 'SERIE-477', '477:marca': 'MARCA 477', '477:modelo': 'MODELO 477', '477:funcionamento': '100', '477:arma_institucional': '98' }, extras: {} },
+      { codigo: '479', personalizados: { '479:numero_serie': 'SERIE-479', '479:marca': 'MARCA 479', '479:modelo': 'MODELO 479', '479:funcionamento': '100', '479:arma_institucional': '98' }, extras: {} },
+      { codigo: '475', personalizados: { '475:numero_serie': 'SERIE-475', '475:marca': 'MARCA 475', '475:modelo': 'MODELO 475', '475:funcionamento': '100', '475:fabricacao_arma': '63' }, extras: {} },
       {
         codigo: '472',
         personalizados: {
@@ -308,6 +313,10 @@ describe('contrato GDL B602', () => {
       },
       { codigo: '105', personalizados: { '105:origem_coleta': '95' }, extras: {} },
     ])
+    expect(resultado.avisos).toContainEqual(expect.objectContaining({
+      codigo: 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',
+      contexto: { quantidadePecas: 3 },
+    }))
   })
 
   it('mapeia os campos de PISTOLA e converte o código legado de Marca da Arma', () => {

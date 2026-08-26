@@ -4,6 +4,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { REPsPage } from '@/pages/REPsPage'
 import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '@shared/types/b602-gdl.types'
 
+const { toastInfo } = vi.hoisted(() => ({ toastInfo: vi.fn() }))
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), info: toastInfo, success: vi.fn(), warning: vi.fn() },
+}))
+
 vi.mock('@/components/data-table/data-table', () => ({
   DataTable: () => <div data-testid="tabela-reps" />,
 }))
@@ -67,7 +73,11 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
       inqueritosPoliciais: [],
     },
   },
-  avisos: [],
+  avisos: [{
+    codigo: 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',
+    mensagem: 'O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.',
+    contexto: { quantidadePecas: 1 },
+  }],
 }
 
 const ipcApiOriginal = window.ipcAPI
@@ -85,6 +95,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
   beforeEach(() => {
     criarRep.mockResolvedValue({ success: true, data: { id: 'rep-criada' } })
     consultarRep.mockResolvedValue({ success: true, data: resultadoConsulta })
+    toastInfo.mockReset()
 
     Object.defineProperty(window, 'ipcAPI', {
       value: {
@@ -154,6 +165,10 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     expect(await screen.findByText('CARABINA(S)')).toBeInTheDocument()
     expect(screen.getByText('Importada do GDL')).toBeInTheDocument()
     expect(screen.getByText(/CARABINA INTEGRADA/)).toBeInTheDocument()
+    expect(toastInfo).toHaveBeenCalledWith(
+      'O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.',
+      { duration: 12000 },
+    )
     expect(consultarRep).toHaveBeenCalledWith('109026', '2026')
     expect(criarRep).not.toHaveBeenCalled()
   })

@@ -21,6 +21,7 @@ const electronAPIMock = {
   logWarning: vi.fn(() => Promise.resolve()),
   openDevTools: vi.fn(),
   restartApp: vi.fn(),
+  closeApp: vi.fn(() => Promise.resolve()),
   clearCache: vi.fn(),
   executeQuery: vi.fn(() => Promise.resolve([])),
   backupDatabase: vi.fn(() => Promise.resolve(true)),

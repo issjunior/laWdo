@@ -89,6 +89,17 @@ async function selecionarOpcao(labelCampo: string, opcao: string) {
 }
 
 describe('PecasB602Fields', () => {
+  it('identifica visualmente a peça incompleta para navegação da pendência', () => {
+    const pecaIncompleta = criarPecaGdl()
+    delete pecaIncompleta.personalizados['476:funcionamento']
+
+    render(<EditorControlado pecasIniciais={[pecaIncompleta]} />)
+
+    const peca = document.getElementById('peca-b602-peca-gdl-1001')
+    expect(peca).toHaveTextContent('Pendente')
+    expect(peca).toHaveClass('border-amber-400')
+  })
+
   it('aciona a revisão das peças disponíveis no GDL', () => {
     const onRevisarPecasGdl = vi.fn()
     render(<EditorControlado onRevisarPecasGdl={onRevisarPecasGdl} />)

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Eye, EyeOff, Loader2, LogIn, Moon, Sun } from 'lucide-react'
+import { Eye, EyeOff, Loader2, LogIn, Moon, Power, Sun } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { FlickeringGrid } from '@/components/ui/flickering-grid'
@@ -49,6 +49,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (data: LoginInput) => {
     await onSubmit(data)
+  }
+
+  const handleFecharAplicativo = () => {
+    void window.ipcAPI.closeApp()
   }
 
   return (
@@ -166,6 +170,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                       Entrar
                     </>
                   )}
+                </Button>
+
+                <Button type="button" variant="outline" className="w-full" onClick={handleFecharAplicativo}>
+                  <Power className="mr-2 h-4 w-4" />
+                  Fechar
                 </Button>
               </form>
             </Form>

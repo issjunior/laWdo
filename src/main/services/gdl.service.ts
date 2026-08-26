@@ -792,6 +792,18 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
     }
 
     if (statusCode === 401 || statusCode === 403) {
+      const credenciaisConfirmadas = await credenciaisConfirmadasPorRepValidada(
+        ambiente,
+        creds,
+        headers,
+        numero,
+        ano,
+      );
+      if (credenciaisConfirmadas) {
+        log.debug('REP não encontrada no GDL após confirmação das credenciais', { statusCode, numero, ano, ambiente });
+        return { sucesso: false, dados: null, erro: `REP ${numero}/${ano} não encontrada no GDL.` };
+      }
+
       limparValidacaoSessaoInterna(ambiente);
       log.error('Autenticação GDL rejeitada', { statusCode, numero, ano, ambiente });
       return { sucesso: false, dados: null, erro: 'Autenticação rejeitada pelo GDL. Verifique login e senha.' };
@@ -804,6 +816,33 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
     const ambLabel = getAmbienteLabel(ambiente);
     log.error(`Falha ao consultar REP ${numero}/${ano} no GDL (${ambLabel})`, { erro: mensagem, numero, ano });
     return { sucesso: false, dados: null, erro: mensagem };
+  }
+}
+
+async function credenciaisConfirmadasPorRepValidada(
+  ambiente: AmbienteGdl,
+  credenciais: GdlCredenciais,
+  headers: Record<string, string>,
+  numeroConsultado: string,
+  anoConsultado: string,
+): Promise<boolean> {
+  const validacao = obterValidacaoSessao(ambiente);
+  if (!validacao.validado || !validacao.numeroRep || !validacao.anoRep) return false;
+
+  const referenciaIgualAConsulta = validacao.numeroRep.replace(/\D/g, '') === numeroConsultado.replace(/\D/g, '')
+    && validacao.anoRep === anoConsultado;
+  if (referenciaIgualAConsulta) return false;
+
+  try {
+    const url = `${credenciais.baseUrl}/rep/obter?numero=${encodeURIComponent(validacao.numeroRep.replace(/\D/g, ''))}&ano=${encodeURIComponent(validacao.anoRep)}`;
+    const resposta = await requisitarGdl(url, 'GET', headers, undefined, 15000);
+    return resposta.statusCode === 200;
+  } catch (erro) {
+    log.warn('Não foi possível confirmar as credenciais GDL pela REP validada', {
+      ambiente,
+      erro: erro instanceof Error ? erro.message : String(erro),
+    });
+    return false;
   }
 }
 
@@ -1145,7 +1184,8 @@ export async function validarCredenciais(
       headers.cpfUsuario = cpfUsuario;
     }
 
-    const url = `${baseUrl}/rep/obter?numero=${encodeURIComponent(numero)}&ano=${encodeURIComponent(ano)}`;
+    const numeroNormalizado = numero.replace(/\D/g, '');
+    const url = `${baseUrl}/rep/obter?numero=${encodeURIComponent(numeroNormalizado)}&ano=${encodeURIComponent(ano)}`;
     log.debug('Validando credenciais GDL por consulta real', { numero, ano, ambiente: amb });
 
     const { statusCode, data } = await requisitarGdl(url, 'GET', headers, undefined, 15000);
