@@ -70,4 +70,22 @@ describe('LoginForm', () => {
     )
     expect(screen.getByRole('button', { name: 'Entrando...' })).toBeDisabled()
   })
+
+  it('fecha o aplicativo pelo botão da tela de login', () => {
+    const closeApp = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window.ipcAPI, { closeApp })
+    render(
+      <LoginForm
+        loading={false}
+        error={null}
+        isDarkMode={false}
+        onToggleTheme={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }))
+
+    expect(closeApp).toHaveBeenCalledTimes(1)
+  })
 })

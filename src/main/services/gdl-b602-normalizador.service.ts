@@ -262,7 +262,15 @@ function criarCamposComuns(peca: GdlPecaValidada): CamposComunsPecaB602 {
   }
 }
 
-function normalizarPecaB602(peca: GdlPecaValidada, ambiente: 'homologacao' | 'producao'): PecaB602 {
+interface ResultadoNormalizacaoPecaB602 {
+  peca: PecaB602
+  funcionamentoPreenchidoComoNaoTestado: boolean
+}
+
+function normalizarPecaB602(
+  peca: GdlPecaValidada,
+  ambiente: 'homologacao' | 'producao',
+): ResultadoNormalizacaoPecaB602 {
   const definicao = obterTipoPecaB602PorLabel(peca.tipoPeca)
   const personalizados: Record<string, unknown> = {}
   const extrasGdl: Record<string, unknown> = {}
@@ -274,16 +282,35 @@ function normalizarPecaB602(peca: GdlPecaValidada, ambiente: 'homologacao' | 'pr
     else extrasGdl[chave] = valor
   }
 
+  const campoFuncionamento = definicao?.campos.find(campo => (
+    campo.chaveGdl === 'Funcionamento' && campo.obrigatorio
+  ))
+  const opcaoNaoTestado = campoFuncionamento?.opcoes?.find(opcao => (
+    normalizarChave(opcao.label) === 'nao testado'
+  ))
+  const funcionamentoPreenchidoComoNaoTestado = Boolean(
+    campoFuncionamento
+    && opcaoNaoTestado
+    && !personalizados[campoFuncionamento.id],
+  )
+
+  if (funcionamentoPreenchidoComoNaoTestado && campoFuncionamento && opcaoNaoTestado) {
+    personalizados[campoFuncionamento.id] = opcaoNaoTestado.codigo
+  }
+
   return {
-    idLocal: randomUUID(),
-    origem: 'gdl',
-    alteradaLocalmente: false,
-    codPecaGdl: peca.codPeca,
-    tipoCodigo: definicao?.codigo ?? '',
-    tipoPeca: peca.tipoPeca,
-    comuns: criarCamposComuns(peca),
-    personalizados,
-    extrasGdl,
+    peca: {
+      idLocal: randomUUID(),
+      origem: 'gdl',
+      alteradaLocalmente: false,
+      codPecaGdl: peca.codPeca,
+      tipoCodigo: definicao?.codigo ?? '',
+      tipoPeca: peca.tipoPeca,
+      comuns: criarCamposComuns(peca),
+      personalizados,
+      extrasGdl,
+    },
+    funcionamentoPreenchidoComoNaoTestado,
   }
 }
 
@@ -292,9 +319,13 @@ export function converterRepB602(
   metadadosIntegracaoGdl?: MetadadosIntegracaoGdl,
 ): ResultadoImportacaoExame<DadosImportacaoB602> {
   const ambiente = metadadosIntegracaoGdl?.ultimaConsulta?.ambiente ?? 'homologacao'
-  const pecas = rep.pecas
+  const pecasNormalizadas = rep.pecas
     .filter(peca => normalizarChave(peca.tipoPeca) !== 'peca teste')
     .map(peca => normalizarPecaB602(peca, ambiente))
+  const pecas = pecasNormalizadas.map(resultado => resultado.peca)
+  const quantidadeFuncionamentosPreenchidos = pecasNormalizadas.filter(
+    resultado => resultado.funcionamentoPreenchidoComoNaoTestado,
+  ).length
   const desconhecidas = pecas.filter(peca => !peca.tipoCodigo)
   const dadosSolicitacao = extrairDadosSolicitacao(rep)
   const dadosInvestigacao = extrairDadosInvestigacao(rep)
@@ -325,6 +356,11 @@ export function converterRepB602(
       ? { ...metadadosIntegracaoGdl, dadosSolicitacao, dadosInvestigacao }
       : undefined,
     avisos: [
+      ...(quantidadeFuncionamentosPreenchidos > 0 ? [{
+        codigo: 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',
+        mensagem: 'O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.',
+        contexto: { quantidadePecas: quantidadeFuncionamentosPreenchidos },
+      }] : []),
       ...desconhecidas.map(peca => ({
         codigo: 'TIPO_PECA_NAO_CONFIRMADO',
         mensagem: `O tipo ${peca.tipoPeca} ainda não possui round-trip confirmado.`,

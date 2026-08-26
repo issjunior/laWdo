@@ -221,7 +221,7 @@ const registerSystemHandlers = (): void => {
   // Fechar aplicativo
   ipcMain.handle('close-app', async () => {
     log.debug('Fechando aplicativo...');
-    app.quit();
+    setImmediate(() => app.quit());
     return { success: true };
   });
 };

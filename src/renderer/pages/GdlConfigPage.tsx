@@ -6,6 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,6 +39,7 @@ import { toast } from 'sonner';
 const URL_HOMOLOGACAO = 'iishml01.pr.gov.br';
 const URL_PRODUCAO = 'www.gdl.sesp.parana';
 const ANO_ATUAL = new Date().getFullYear().toString();
+const ANOS_OPCOES = Array.from({ length: 10 }, (_, indice) => (Number(ANO_ATUAL) - indice).toString());
 
 interface TesteDiagnostico {
   sucesso: boolean;
@@ -70,6 +78,13 @@ const obterMensagemOrientadaErroGdl = (erro: string): string => {
   return erro;
 };
 
+const formatarNumeroRep = (valor: string): string => {
+  const digitos = valor.replace(/\D/g, '').slice(0, 6);
+  return digitos.length > 3 ? `${digitos.slice(0, -3)}.${digitos.slice(-3)}` : digitos;
+};
+
+const formatarRep = (numero: string, ano: string): string => `${formatarNumeroRep(numero)}/${ano.replace(/\D/g, '').slice(0, 4)}`;
+
 const getMensagemErro = (erro: unknown, fallback: string): string =>
   obterMensagemOrientadaErroGdl(erro instanceof Error ? erro.message : fallback);
 
@@ -88,6 +103,9 @@ export const GdlConfigPage: React.FC = () => {
   const [modalValidacaoOpen, setModalValidacaoOpen] = useState(false);
   const [numeroRepValidacao, setNumeroRepValidacao] = useState('');
   const [anoRepValidacao, setAnoRepValidacao] = useState(ANO_ATUAL);
+  const [anoManualValidacao, setAnoManualValidacao] = useState(false);
+  const [anoManualValorValidacao, setAnoManualValorValidacao] = useState('');
+  const [erroAnoManualValidacao, setErroAnoManualValidacao] = useState<string | null>(null);
   const [validandoCredenciais, setValidandoCredenciais] = useState(false);
   const [erroValidacao, setErroValidacao] = useState<string | null>(null);
   const [sucessoValidacao, setSucessoValidacao] = useState<string | null>(null);
@@ -202,7 +220,35 @@ export const GdlConfigPage: React.FC = () => {
     setSucessoValidacao(null);
     setNumeroRepValidacao('');
     setAnoRepValidacao(ANO_ATUAL);
+    setAnoManualValidacao(false);
+    setAnoManualValorValidacao('');
+    setErroAnoManualValidacao(null);
     setModalValidacaoOpen(true);
+  };
+
+  const handleAnoValidacaoChange = (valor: string) => {
+    if (valor === 'manual') {
+      setAnoManualValidacao(true);
+      setAnoRepValidacao('');
+      setAnoManualValorValidacao('');
+    } else {
+      setAnoManualValidacao(false);
+      setAnoRepValidacao(valor);
+      setAnoManualValorValidacao('');
+    }
+    setErroAnoManualValidacao(null);
+  };
+
+  const handleAnoManualValidacaoChange = (valor: string) => {
+    const digitos = valor.replace(/\D/g, '').slice(0, 4);
+    setAnoManualValorValidacao(digitos);
+    if (digitos.length === 4) {
+      setAnoRepValidacao(digitos);
+      setErroAnoManualValidacao(null);
+    } else {
+      setAnoRepValidacao('');
+      setErroAnoManualValidacao(digitos ? 'Ano deve ter 4 dígitos.' : null);
+    }
   };
 
   const handleValidarCredenciais = async () => {
@@ -237,7 +283,7 @@ export const GdlConfigPage: React.FC = () => {
         if (rSessao.success && rSessao.data) {
           setValidacaoSessao(rSessao.data as ValidacaoSessaoGdl);
         }
-        setSucessoValidacao(`Credenciais validadas com sucesso usando a REP ${numeroRepValidacao}/${anoRepValidacao}.`);
+        setSucessoValidacao(`Credenciais validadas com sucesso usando a REP ${formatarRep(numeroRepValidacao, anoRepValidacao)}.`);
       } else {
         setErroValidacao(obterMensagemOrientadaErroGdl(r.error || 'Não foi possível validar as credenciais no GDL.'));
       }
@@ -250,6 +296,7 @@ export const GdlConfigPage: React.FC = () => {
 
   const isHomologacao = ambiente === 'homologacao';
   const ambienteLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
+  const valorSelectAnoValidacao = anoManualValidacao ? 'manual' : (anoRepValidacao || undefined);
   const formatarEndpoint = (endpoint: string) => endpoint ? endpoint.replace(endpoint.split('/api')[0], '') : '—';
   const formatarDataHora = (dataHora?: string) => {
     if (!dataHora) return '—';
@@ -496,7 +543,7 @@ export const GdlConfigPage: React.FC = () => {
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {validacaoSessao?.validado
-                      ? `Credenciais validadas nesta sessão com a REP ${validacaoSessao.numeroRep}/${validacaoSessao.anoRep}.`
+                      ? `Credenciais validadas nesta sessão com a REP ${formatarRep(validacaoSessao.numeroRep || '', validacaoSessao.anoRep || '')}.`
                       : 'A validação de credenciais acontece quando uma REP válida é consultada com sucesso no ambiente atual.'}
                   </p>
                   {validacaoSessao?.validado && (
@@ -532,19 +579,39 @@ export const GdlConfigPage: React.FC = () => {
                 <Input
                   id="validacao-numero-rep"
                   value={numeroRepValidacao}
-                  onChange={(e) => setNumeroRepValidacao(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="12345"
+                  onChange={(e) => setNumeroRepValidacao(formatarNumeroRep(e.target.value))}
+                  placeholder="123.456"
+                  inputMode="numeric"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="validacao-ano-rep">Ano</Label>
-                <Input
-                  id="validacao-ano-rep"
-                  value={anoRepValidacao}
-                  onChange={(e) => setAnoRepValidacao(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="2026"
-                  maxLength={4}
-                />
+                <Select value={valorSelectAnoValidacao} onValueChange={handleAnoValidacaoChange}>
+                  <SelectTrigger id="validacao-ano-rep">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent className="!max-h-[150px]">
+                    {ANOS_OPCOES.map(ano => (
+                      <SelectItem key={ano} value={ano}>{ano}</SelectItem>
+                    ))}
+                    <SelectItem value="manual">Digitar manualmente...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {anoManualValidacao && (
+                  <div className="pt-2">
+                    <Input
+                      value={anoManualValorValidacao}
+                      onChange={e => handleAnoManualValidacaoChange(e.target.value)}
+                      placeholder="Ex: 2024"
+                      maxLength={4}
+                      inputMode="numeric"
+                      className={erroAnoManualValidacao ? 'border-destructive' : ''}
+                    />
+                    {erroAnoManualValidacao && (
+                      <p className="mt-1 text-xs text-destructive">{erroAnoManualValidacao}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -105,7 +105,7 @@ describe('GdlConsultaModal', () => {
   async function buscarRep() {
     fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-    expect(await screen.findByText('190-2026', { selector: '.font-medium' })).toBeInTheDocument()
+    expect(await screen.findAllByText('190-2026')).not.toHaveLength(0)
   }
 
   it('inicia com todas as peças marcadas e aplica a consulta em modo mesclar', async () => {
@@ -129,17 +129,22 @@ describe('GdlConsultaModal', () => {
     expect(screen.queryByText('Peças estruturadas:')).not.toBeInTheDocument()
     expect(screen.queryByText(/campos serão preenchidos/)).not.toBeInTheDocument()
     expect(screen.queryByText('10 permanecem vazios.')).not.toBeInTheDocument()
+    expect(screen.getByText('REP 190-2026')).toHaveClass('font-bold', 'text-primary')
+    expect(screen.queryByText('Revisão das peças do GDL')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
+    expect(screen.queryByText('ID', { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText('19/07/2026')).toBeInTheDocument()
-    expect(screen.getAllByText('Arma é Institucional?:')).toHaveLength(2)
-    expect(screen.getAllByText('Não')).toHaveLength(2)
-    expect(screen.getAllByText('Funcionamento:')).toHaveLength(2)
-    expect(screen.getAllByText('Eficiente')).toHaveLength(2)
     expect(screen.getByText('Cidade:')).toBeInTheDocument()
     expect(screen.getByText('Unidade Policial:')).toBeInTheDocument()
 
     const checkboxes = screen.getAllByRole('checkbox')
     expect(checkboxes).toHaveLength(2)
     expect(checkboxes.every(checkbox => checkbox.getAttribute('data-state') === 'checked')).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desmarcar todas' }))
+    expect(checkboxes.every(checkbox => checkbox.getAttribute('data-state') === 'unchecked')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Selecionar todas' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar todas' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }))
 
@@ -257,6 +262,36 @@ describe('GdlConsultaModal', () => {
 
     expect(await screen.findByText('Produção')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '109026' } })
+    expect(screen.getByLabelText('Nº da REP')).toHaveValue('109.026')
     expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled()
+  })
+
+  it('reserva o aviso de Funcionamento para a confirmação após preencher o formulário', async () => {
+    consultarRep.mockResolvedValueOnce({
+      success: true,
+      data: {
+        ...resultadoConsulta,
+        avisos: [{
+          codigo: 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',
+          mensagem: 'O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.',
+          contexto: { quantidadePecas: 1 },
+        }],
+      },
+    })
+    render(
+      <GdlConsultaModal
+        open
+        onOpenChange={vi.fn()}
+        onAplicar={vi.fn()}
+        temDadosExistentes={false}
+        pecasB602={[]}
+        onConfigurarCredenciais={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
+    await buscarRep()
+
+    expect(screen.queryByText('O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.')).not.toBeInTheDocument()
   })
 })

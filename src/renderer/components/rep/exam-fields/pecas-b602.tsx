@@ -14,6 +14,7 @@ import {
   OPCOES_UNIDADE_MEDIDA_B602,
   TIPOS_PECA_B602_POR_CODIGO,
   UNIDADE_MEDIDA_PADRAO_B602,
+  pecaB602EstaCompleta,
 } from '@shared/catalogos/b602-gdl.catalogo'
 
 interface PecasB602FieldsProps {
@@ -94,7 +95,6 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
         </Select>
       </div>
       {definicao && <>
-        {!definicao.roundTripApiConfirmadoProducao && <Alert><AlertDescription>{definicao.schemaVisualConfirmadoProducao ? 'Schema visual confirmado em Produção; round-trip da API ainda pendente.' : 'Schema visual e round-trip da API ainda pendentes.'}</AlertDescription></Alert>}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2"><Label>Identificação</Label><Input value={editando.comuns.identificacao} onChange={e => atualizarComum('identificacao', e.target.value)} /></div>
           <div className="space-y-2"><Label>Quantidade</Label><Input type="number" min={1} value={editando.comuns.quantidade} onChange={e => atualizarComum('quantidade', Number(e.target.value))} /></div>
@@ -131,12 +131,21 @@ export const PecasB602Fields: React.FC<PecasB602FieldsProps> = ({ pecas, onChang
 
   return <div className="space-y-3">
     {pecas.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma peça adicionada.</p>}
-    {pecas.map(peca => <div key={peca.idLocal} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-      <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{peca.tipoPeca}</span><Badge variant="secondary">{peca.origem === 'gdl' ? 'Importada do GDL' : 'Manual'}</Badge>{peca.alteradaLocalmente && <Badge variant="outline">Alterada localmente</Badge>}</div><p className="truncate text-sm text-muted-foreground">{peca.comuns.identificacao || 'Sem identificação'} · {peca.comuns.quantidade} {peca.comuns.unidadeMedida}</p></div>
-      <div className="flex shrink-0 gap-1"><Button type="button" variant="ghost" size="icon" onClick={() => setEditando(structuredClone(peca))} title="Editar"><Edit size={16} /></Button><Button type="button" variant="ghost" size="icon" onClick={() => excluir(peca)} title="Excluir"><Trash2 size={16} /></Button></div>
-    </div>)}
+    {pecas.map(peca => {
+      const estaIncompleta = !pecaB602EstaCompleta(peca)
+
+      return <div
+        key={peca.idLocal}
+        id={`peca-b602-${peca.idLocal}`}
+        tabIndex={-1}
+        className={`flex items-center justify-between gap-3 rounded-lg border p-3 outline-none ${estaIncompleta ? 'border-amber-400 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20' : ''}`}
+      >
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{peca.tipoPeca}</span><Badge variant="secondary">{peca.origem === 'gdl' ? 'Importada do GDL' : 'Manual'}</Badge>{estaIncompleta && <Badge variant="outline" className="border-amber-400 text-amber-800 dark:border-amber-700 dark:text-amber-300">Pendente</Badge>}{peca.alteradaLocalmente && <Badge variant="outline">Alterada localmente</Badge>}</div><p className="truncate text-sm text-muted-foreground">{peca.comuns.identificacao || 'Sem identificação'} · {peca.comuns.quantidade} {peca.comuns.unidadeMedida}</p></div>
+        <div className="flex shrink-0 gap-1"><Button type="button" variant="ghost" size="icon" onClick={() => setEditando(structuredClone(peca))} title="Editar"><Edit size={16} /></Button><Button type="button" variant="ghost" size="icon" onClick={() => excluir(peca)} title="Excluir"><Trash2 size={16} /></Button></div>
+      </div>
+    })}
     <div className="flex flex-wrap gap-2">
-      <Button type="button" variant="outline" className="gap-2" onClick={() => setEditando(criarPecaVazia())}><Plus size={16} />Adicionar peça</Button>
+      <Button id="adicionar-peca-b602" type="button" variant="outline" className="gap-2" onClick={() => setEditando(criarPecaVazia())}><Plus size={16} />Adicionar peça</Button>
       {onRevisarPecasGdl && <Button type="button" variant="outline" className="gap-2" onClick={onRevisarPecasGdl}><RefreshCw size={16} />Selecionar peças do GDL</Button>}
     </div>
   </div>
