@@ -29,6 +29,8 @@ describe('dashboard.service', () => {
       .mockResolvedValueOnce([
         { tipoExameId: 'te-1', tipoExameNome: 'Balística', totalLaudos: 2, tempoMedioDias: 6.4 },
       ])
+      .mockResolvedValueOnce([{ total: 2 }])
+      .mockResolvedValueOnce([{ total: 3 }])
       .mockResolvedValueOnce([
         {
           id: 'rep-1',
@@ -63,6 +65,8 @@ describe('dashboard.service', () => {
       { status: 'Concluído', total: 7 },
       { status: 'Entregue', total: 8 },
     ])
+    expect(resumo.laudosConcluidosAguardandoEntrega).toBe(2)
+    expect(resumo.laudosEmAndamentoSemAlteracao).toBe(3)
     expect(resumo.tempoMedioPorTipoExame[0]?.tempoMedioDias).toBe(6.4)
     expect(resumo.repsRecentes[0]?.numero).toBe('045-2026')
     expect(resumo.laudosRecentes[0]?.rep_numero).toBe('045-2026')

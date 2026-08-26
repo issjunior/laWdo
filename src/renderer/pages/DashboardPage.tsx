@@ -279,6 +279,8 @@ const normalizarDashboardResumo = (valor: unknown): DashboardResumo => {
       : [],
     repsPrazoProximo: Math.max(0, Math.round(obterNumero(payload.repsPrazoProximo))),
     repsPrazoVencido: Math.max(0, Math.round(obterNumero(payload.repsPrazoVencido))),
+    laudosConcluidosAguardandoEntrega: Math.max(0, Math.round(obterNumero(payload.laudosConcluidosAguardandoEntrega))),
+    laudosEmAndamentoSemAlteracao: Math.max(0, Math.round(obterNumero(payload.laudosEmAndamentoSemAlteracao))),
     laudosPorStatus: Array.isArray(payload.laudosPorStatus)
       ? payload.laudosPorStatus.map(normalizarKpiStatus).filter((item): item is DashboardKpiStatus => item !== null)
       : [],

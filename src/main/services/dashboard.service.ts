@@ -10,6 +10,12 @@ import type {
   DashboardSerieAnual,
   DashboardSerieMensal,
   DashboardTempoMedioTipoExame,
+  DashboardConsultaLaudosEntrada,
+  DashboardConsultaLaudosResultado,
+  DashboardLaudoConsulta,
+  DashboardProducaoLaudosEntrada,
+  DashboardProducaoLaudosResultado,
+  DashboardIndicadorCicloProducao,
 } from '../../types/dashboard.js'
 
 const log = getLogger('database')
@@ -51,6 +57,9 @@ type LinhaSerieMensal = {
 
 const STATUS_REP = ['Pendente', 'Em Andamento', 'Concluído'] as const
 const STATUS_LAUDO = ['Em andamento', 'Concluído', 'Entregue'] as const
+
+const TAMANHO_PAGINA_PADRAO = 10
+const TAMANHO_PAGINA_MAXIMO = 100
 
 const toInt = (valor: unknown, fallback = 0): number => {
   if (typeof valor === 'number' && Number.isFinite(valor)) {
@@ -288,6 +297,8 @@ export class DashboardService {
         prazoVencidoRaw,
         laudosPorStatusRaw,
         tempoMedioRaw,
+        laudosAguardandoEntregaRaw,
+        laudosSemAlteracaoRaw,
         repsRecentesRaw,
         laudosRecentesRaw,
       ] = await Promise.all([
@@ -329,6 +340,17 @@ export class DashboardService {
             AND julianday(l.data_conclusao) >= julianday(l.data_inicio)
           GROUP BY te.id, te.nome
           ORDER BY te.nome COLLATE NOCASE ASC
+        `),
+        executeQuery<{ total: number | string | null }>(`
+          SELECT COUNT(*) AS total
+          FROM laudos
+          WHERE status = 'Concluído' AND data_entrega IS NULL
+        `),
+        executeQuery<{ total: number | string | null }>(`
+          SELECT COUNT(*) AS total
+          FROM laudos
+          WHERE status = 'Em andamento'
+            AND julianday('now', 'localtime') - julianday(updated_at) >= 7
         `),
         executeQuery<LinhaRepRecente>(`
           SELECT
@@ -403,6 +425,8 @@ export class DashboardService {
         repsPrazoProximo: toInt(prazoProximoRaw[0]?.total),
         repsPrazoVencido: toInt(prazoVencidoRaw[0]?.total),
         laudosPorStatus: preencherStatus(laudosPorStatusRaw, STATUS_LAUDO),
+        laudosConcluidosAguardandoEntrega: toInt(laudosAguardandoEntregaRaw[0]?.total),
+        laudosEmAndamentoSemAlteracao: toInt(laudosSemAlteracaoRaw[0]?.total),
         tempoMedioPorTipoExame,
         repsRecentes,
         laudosRecentes,
@@ -411,6 +435,94 @@ export class DashboardService {
       log.error('Erro ao consolidar resumo do dashboard', error)
       throw error
     }
+  }
+
+  async consultarLaudos(entrada: DashboardConsultaLaudosEntrada): Promise<DashboardConsultaLaudosResultado> {
+    const pagina = Math.max(1, Math.floor(entrada.pagina ?? 1))
+    const tamanhoPagina = Math.min(TAMANHO_PAGINA_MAXIMO, Math.max(1, Math.floor(entrada.tamanhoPagina ?? TAMANHO_PAGINA_PADRAO)))
+    const colunaData = {
+      criacao: 'l.created_at',
+      alteracao: 'l.updated_at',
+      conclusao: 'l.data_conclusao',
+      entrega: 'l.data_entrega',
+    }[entrada.tipoData]
+    const clausulas = [`${colunaData} IS NOT NULL`]
+    const parametros: (string | number)[] = []
+
+    if (entrada.busca?.trim()) {
+      clausulas.push("(r.numero LIKE ? OR te.codigo LIKE ? OR te.nome LIKE ?)")
+      const termo = `%${entrada.busca.trim()}%`
+      parametros.push(termo, termo, termo)
+    }
+    if (entrada.dataInicial) {
+      clausulas.push(`date(${colunaData}) >= date(?)`)
+      parametros.push(entrada.dataInicial)
+    }
+    if (entrada.dataFinal) {
+      clausulas.push(`date(${colunaData}) <= date(?)`)
+      parametros.push(entrada.dataFinal)
+    }
+
+    const de = `FROM laudos l JOIN reps r ON r.id = l.rep_id LEFT JOIN tipos_exame te ON te.id = r.tipo_exame_id WHERE ${clausulas.join(' AND ')}`
+    const [linhas, totalRaw, statusRaw] = await Promise.all([
+      executeQuery<DashboardLaudoConsulta>(`
+        SELECT l.id, l.rep_id AS repId, r.numero AS repNumero, te.id AS tipoExameId,
+          te.codigo AS tipoExameCodigo, COALESCE(te.nome, 'Tipo de exame não informado') AS tipoExameNome,
+          l.status, l.created_at AS createdAt, l.updated_at AS updatedAt, l.data_conclusao AS dataConclusao,
+          l.data_entrega AS dataEntrega, ${colunaData} AS dataOrdenacao
+        ${de} ORDER BY datetime(${colunaData}) DESC LIMIT ? OFFSET ?
+      `, [...parametros, tamanhoPagina, (pagina - 1) * tamanhoPagina]),
+      executeQuery<{ total: number | string | null }>(`SELECT COUNT(*) AS total ${de}`, parametros),
+      executeQuery<LinhaContagemStatus>(`SELECT l.status, COUNT(*) AS total ${de} GROUP BY l.status`, parametros),
+    ])
+
+    return {
+      itens: linhas.map(linha => ({ ...linha, tipoExameId: linha.tipoExameId ?? null, tipoExameCodigo: linha.tipoExameCodigo ?? null })),
+      total: toInt(totalRaw[0]?.total),
+      pagina,
+      tamanhoPagina,
+      porStatus: preencherStatus(statusRaw, STATUS_LAUDO),
+    }
+  }
+
+  async obterProducaoLaudos(entrada: DashboardProducaoLaudosEntrada): Promise<DashboardProducaoLaudosResultado[]> {
+    const clausulas = ["l.status IN ('Concluído', 'Entregue')", 'l.data_conclusao IS NOT NULL', 'l.data_inicio IS NOT NULL', 'r.created_at IS NOT NULL']
+    const parametros: string[] = []
+    if (entrada.tipoExameId) {
+      clausulas.push('te.id = ?')
+      parametros.push(entrada.tipoExameId)
+    }
+    if (entrada.dataInicial) {
+      clausulas.push('date(l.data_conclusao) >= date(?)')
+      parametros.push(entrada.dataInicial)
+    }
+    if (entrada.dataFinal) {
+      clausulas.push('date(l.data_conclusao) <= date(?)')
+      parametros.push(entrada.dataFinal)
+    }
+    const linhas = await executeQuery<{ id: string; codigo: string | null; nome: string | null; repDias: number | string; laudoDias: number | string }>(`
+      SELECT te.id, te.codigo, te.nome,
+        julianday(l.data_conclusao) - julianday(r.created_at) AS repDias,
+        julianday(l.data_conclusao) - julianday(l.data_inicio) AS laudoDias
+      FROM laudos l JOIN reps r ON r.id = l.rep_id JOIN tipos_exame te ON te.id = r.tipo_exame_id
+      WHERE ${clausulas.join(' AND ')}
+        AND julianday(l.data_conclusao) >= julianday(r.created_at)
+        AND julianday(l.data_conclusao) >= julianday(l.data_inicio)
+      ORDER BY te.nome COLLATE NOCASE ASC
+    `, parametros)
+    const porNatureza = new Map<string, typeof linhas>()
+    for (const linha of linhas) porNatureza.set(linha.id, [...(porNatureza.get(linha.id) ?? []), linha])
+    const resumir = (valores: number[]): DashboardIndicadorCicloProducao => {
+      const ordenados = valores.sort((a, b) => a - b)
+      const meio = Math.floor(ordenados.length / 2)
+      const mediana = ordenados.length % 2 ? ordenados[meio] : ((ordenados[meio - 1] ?? 0) + (ordenados[meio] ?? 0)) / 2
+      return { quantidade: ordenados.length, mediaDias: Number((ordenados.reduce((soma, valor) => soma + valor, 0) / ordenados.length).toFixed(1)), medianaDias: Number(mediana.toFixed(1)) }
+    }
+    return Array.from(porNatureza.values()).map(grupo => ({
+      natureza: { id: grupo[0].id, codigo: grupo[0].codigo, nome: grupo[0].nome ?? 'Tipo de exame não informado' },
+      repAteConclusao: resumir(grupo.map(item => toFloat(item.repDias)).filter(item => item >= 0)),
+      laudoAteConclusao: resumir(grupo.map(item => toFloat(item.laudoDias)).filter(item => item >= 0)),
+    }))
   }
 
   async obterProjecoes(): Promise<DashboardProjecoes> {
