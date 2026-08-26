@@ -64,6 +64,7 @@ export interface GdlConsultaResultado {
   sucesso: boolean;
   dados: GdlRepValidada | null;
   ambiente?: AmbienteGdl;
+  naturezaExame?: string;
   erro?: string;
 }
 
@@ -613,21 +614,31 @@ export function extrairFiltrosParaConsultaInvestigacao(rep: GdlRepValidada): Fil
     : [];
 }
 
-async function consultarEnvolvidosNaInvestigacao(
+interface DadosInvestigacaoComplementares {
+  envolvidos: unknown[];
+  naturezaExame?: string;
+}
+
+export function extrairCodigoNaturezaExame(naturezaExame: string): string | null {
+  const correspondencia = naturezaExame.trim().toUpperCase().match(/^([A-Z])\s*-?\s*(\d{3})\b/);
+  return correspondencia ? `${correspondencia[1]}-${correspondencia[2]}` : null;
+}
+
+async function consultarDadosNaInvestigacao(
   baseUrl: string,
   credenciais: GdlCredenciais,
   rep: GdlRepValidada,
-): Promise<unknown[]> {
+): Promise<DadosInvestigacaoComplementares> {
   const cpfUsuario = credenciais.cpfUsuario?.replace(/\D/g, '') || '';
   if (!/^\d{11}$/.test(cpfUsuario)) {
     log.warn('Consulta de envolvidos ignorada: CPF do usuário ausente ou inválido', { codRep: rep.codRep });
-    return [];
+    return { envolvidos: [] };
   }
 
   const filtros = extrairFiltrosParaConsultaInvestigacao(rep);
   if (filtros.length === 0) {
     log.debug('Consulta de envolvidos ignorada: REP sem origem consultável', { codRep: rep.codRep });
-    return [];
+    return { envolvidos: [] };
   }
 
   const headers: Record<string, string> = {
@@ -638,6 +649,7 @@ async function consultarEnvolvidosNaInvestigacao(
 
   const url = `${baseUrl}/repsInvestigacaoPolicial/listarReps`;
   const envolvidos: unknown[] = [];
+  const naturezasExame = new Set<string>();
 
   for (const filtro of filtros) {
     const corpo = JSON.stringify({
@@ -660,9 +672,12 @@ async function consultarEnvolvidosNaInvestigacao(
       }
 
       const resposta = interpretarGdlListaRepsInvestigacaoJson(data);
-      envolvidos.push(...resposta.dadosREPs
-        .filter(item => repInvestigacaoCorresponde(item, rep))
-        .flatMap(item => item.envolvidos === undefined ? [] : [item.envolvidos]));
+      const repsCorrespondentes = resposta.dadosREPs
+        .filter(item => repInvestigacaoCorresponde(item, rep));
+      envolvidos.push(...repsCorrespondentes.flatMap(item => item.envolvidos === undefined ? [] : [item.envolvidos]));
+      repsCorrespondentes.forEach(item => {
+        if (item.naturezaExame.trim()) naturezasExame.add(item.naturezaExame.trim());
+      });
     } catch (erro) {
       log.warn('Falha na consulta auxiliar de envolvidos no GDL', {
         codRep: rep.codRep,
@@ -671,7 +686,13 @@ async function consultarEnvolvidosNaInvestigacao(
     }
   }
 
-  return envolvidos;
+  if (naturezasExame.size > 1) {
+    log.warn('A consulta auxiliar retornou mais de uma natureza de exame para a REP', {
+      codRep: rep.codRep,
+      quantidadeNaturezas: naturezasExame.size,
+    });
+  }
+  return { envolvidos, naturezaExame: naturezasExame.values().next().value };
 }
 
 export async function testarConexao(ambiente: string): Promise<GdlTesteResultado> {
@@ -772,18 +793,24 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
-      const envolvidos = await consultarEnvolvidosNaInvestigacao(creds.baseUrl, creds, parsed);
-      const dadosComEnvolvidos = envolvidos.length > 0
-        ? { ...parsed, envolvidos: [...parsed.envolvidos, ...envolvidos] }
+      const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, parsed);
+      const dadosComEnvolvidos = dadosComplementares.envolvidos.length > 0
+        ? { ...parsed, envolvidos: [...parsed.envolvidos, ...dadosComplementares.envolvidos] }
         : parsed;
       registrarValidacaoSessao(ambiente, numero, ano);
       log.debug('REP consultada no GDL com sucesso', {
         numero,
         ano,
         codRep: dadosComEnvolvidos.codRep,
-        envolvidosEncontrados: envolvidos.length,
+        envolvidosEncontrados: dadosComplementares.envolvidos.length,
+        naturezaExameEncontrada: Boolean(dadosComplementares.naturezaExame),
       });
-      return { sucesso: true, dados: dadosComEnvolvidos, ambiente };
+      return {
+        sucesso: true,
+        dados: dadosComEnvolvidos,
+        ambiente,
+        naturezaExame: dadosComplementares.naturezaExame,
+      };
     }
 
     if (statusCode === 404) {

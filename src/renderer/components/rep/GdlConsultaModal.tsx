@@ -32,8 +32,10 @@ import {
   ListChecks,
   CheckSquare,
   Square,
+  Mail,
 } from 'lucide-react';
 import { z } from 'zod';
+import { toast } from 'sonner';
 import type {
   DadosImportacaoB602,
   PecaB602,
@@ -43,6 +45,7 @@ import { combinarEnvolvido } from '@shared/utils/envolvido';
 import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
+const EMAIL_SUPORTE_LAWDO = 'izaias.santos@policiacientifica.pr.gov.br';
 
 const ANO_ATUAL = new Date().getFullYear();
 const ANOS_OPCOES = Array.from({ length: 10 }, (_, i) => (ANO_ATUAL - i).toString());
@@ -58,6 +61,20 @@ const formatarIdentificacaoRep = (valor: string): string => {
 
   const ano = digitos.slice(-4);
   return `REP ${formatarNumeroRep(digitos.slice(0, -4))}-${ano}`;
+};
+
+const separarAvisoNaturezaEmDesenvolvimento = (mensagem: string) => {
+  const correspondencia = mensagem.match(
+    /^(O formulário para a natureza de exame )(.+?)( ainda está em desenvolvimento no laWdo\. Os dados não foram importados\.)$/,
+  );
+
+  if (!correspondencia) return null;
+
+  return {
+    prefixo: correspondencia[1],
+    naturezaExame: correspondencia[2],
+    sufixo: correspondencia[3],
+  };
 };
 
 interface CampoMapeado {
@@ -145,6 +162,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [idsPecasSelecionadas, setIdsPecasSelecionadas] = useState<Set<string>>(new Set());
   const [camposMapeados, setCamposMapeados] = useState<CampoMapeado[]>([]);
   const [camposNaoPreenchidos, setCamposNaoPreenchidos] = useState<string[]>([]);
+  const avisoNaturezaEmDesenvolvimento = erro
+    ? separarAvisoNaturezaEmDesenvolvimento(erro)
+    : null;
 
   const montarPreTeste = (data: GdlTesteRespostaApi): PreTesteResultado => ({
     ok: data.sucesso,
@@ -320,7 +340,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
         if (envolvidos) mapeados.push({ campo: 'envolvidos', label: 'Envolvidos', valor: envolvidos });
 
         const todosCampos = [
-          { campo: 'tipo_exame', label: 'Tipo de Exame' },
           { campo: 'autoridade_solicitante', label: 'Autoridade Solicitante' },
           { campo: 'local_fato', label: 'Local do Fato' },
           { campo: 'latitude', label: 'Latitude' },
@@ -435,6 +454,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
             <Network className="h-5 w-5 text-primary" />
             Consultar GDL
             <Badge variant={ambiente === 'producao' ? 'destructive' : 'secondary'}>{ambienteLabel}</Badge>
+            {resultadoConsulta?.naturezaExameGdl && (
+              <Badge variant="outline">{resultadoConsulta.naturezaExameGdl}</Badge>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -553,10 +575,36 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               {erro && (
                 <Alert variant="destructive">
                   <AlertDescription className="space-y-2">
-                    <p>{erro}</p>
+                    <p>
+                      {avisoNaturezaEmDesenvolvimento ? (
+                        <>
+                          {avisoNaturezaEmDesenvolvimento.prefixo}
+                          <strong className="font-semibold">
+                            {avisoNaturezaEmDesenvolvimento.naturezaExame}
+                          </strong>
+                          {avisoNaturezaEmDesenvolvimento.sufixo}
+                        </>
+                      ) : (
+                        erro
+                      )}
+                    </p>
                     {erro.includes('Credenciais não configuradas') && (
                       <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>
                         Configurar credenciais
+                      </Button>
+                    )}
+                    {erro.includes('ainda está em desenvolvimento no laWdo') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(EMAIL_SUPORTE_LAWDO);
+                          toast.success(`E-mail copiado: ${EMAIL_SUPORTE_LAWDO}`);
+                        }}
+                      >
+                        <Mail className="h-4 w-4" />
+                        Dúvidas/Sugestões
                       </Button>
                     )}
                   </AlertDescription>

@@ -49,6 +49,7 @@ function criarPeca(): PecaB602 {
 
 const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
   codigoExame: 'B-602',
+  naturezaExameGdl: 'B602 - EXAME BALÍSTICO',
   camposGerais: {
     numero: '109026-2026',
     data_requisicao: '2026-07-19',
@@ -162,6 +163,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }))
 
     await waitFor(() => expect(screen.getByDisplayValue('109.026-2026')).toBeInTheDocument())
+    expect(screen.getByRole('combobox', { name: /tipo de exame/i })).toHaveTextContent('B-602 - Balística')
     expect(await screen.findByText('CARABINA(S)')).toBeInTheDocument()
     expect(screen.getByText('Importada do GDL')).toBeInTheDocument()
     expect(screen.getByText(/CARABINA INTEGRADA/)).toBeInTheDocument()

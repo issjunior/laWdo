@@ -53,6 +53,7 @@ import {
   capturarImagensRepGdl,
   capturarImagensDaSessaoGdlParaLaudo,
   consultarRep,
+  extrairCodigoNaturezaExame,
   extrairFiltrosParaConsultaInvestigacao,
   fecharSessaoImagensRepGdl,
   limparValidacaoSessao,
@@ -112,7 +113,7 @@ beforeAll(async () => {
         corposInvestigacao.push(corpo)
         responder(resposta, 200, JSON.stringify({
           dadosREPs: [
-            { numeroRep: '190/2026', envolvidos: { nome: 'ENVOLVIDO COMPLEMENTAR' } },
+            { numeroRep: '190/2026', naturezaExame: 'B602 - EXAME BALÍSTICO', envolvidos: { nome: 'ENVOLVIDO COMPLEMENTAR' } },
             { numeroRep: '999/2026', envolvidos: { nome: 'ENVOLVIDO DE OUTRA REP' } },
           ],
         }))
@@ -229,6 +230,7 @@ describe('gdl.service', () => {
     expect(resultado.ambiente).toBe('homologacao')
     expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
     expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
+    expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
     expect(corposInvestigacao).toHaveLength(2)
     expect(obterValidacaoSessao('homologacao')).toMatchObject({
       validado: true,
@@ -411,6 +413,8 @@ describe('gdl.service', () => {
   })
 
   it('valida arquivos ZIP e deriva filtros únicos para a investigação', () => {
+    expect(extrairCodigoNaturezaExame('B612 - EXAME DE CONFRONTO BALÍSTICO')).toBe('B-612')
+    expect(extrairCodigoNaturezaExame('Natureza não identificada')).toBeNull()
     expect(() => listarFotosDoArquivoZip(Buffer.from('invalido'), 1)).toThrow(
       'O GDL não retornou um arquivo ZIP válido para a Lista de Fotos.',
     )
