@@ -66,6 +66,7 @@ export interface DadosInvestigacaoGdl {
 
 export interface ResultadoImportacaoExame<TDados> {
   codigoExame: string
+  naturezaExameGdl?: string
   camposGerais: Record<string, string>
   camposEspecificos: TDados
   avisos: AvisoImportacao[]

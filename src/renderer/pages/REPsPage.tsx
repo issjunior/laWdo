@@ -1308,22 +1308,25 @@ export const REPsPage: React.FC = () => {
     const novosPreenchidos = new Set<string>();
     const substituirDadosGdl = modo === 'substituir'
       || !formularioTemDadosRelevantesParaGdl(form.getValues(), pecasB602);
-    if (resultado.codigoExame !== 'B-602') {
+    const codigoExameGdl = resultado.codigoExame.trim().toUpperCase();
+    if (codigoExameGdl !== 'B-602') {
       setError(`O exame ${resultado.codigoExame} ainda não possui adaptador de formulário.`);
       return;
     }
 
-    const tipoB602 = tiposExame.find(tipo => tipo.codigo === 'B-602');
-    if (!tipoB602) {
-      setError('O tipo de exame B-602 não está cadastrado localmente.');
+    const tipoExameGdl = tiposExame.find(
+      tipo => tipo.codigo.trim().toUpperCase() === codigoExameGdl,
+    );
+    if (!tipoExameGdl) {
+      setError(`O tipo de exame ${resultado.codigoExame} não está cadastrado localmente.`);
       return;
     }
-    if (tipoExameSelecionado && tipoExameSelecionado.codigo !== 'B-602') {
-      setError('A consulta retornou dados B-602. Confirme a troca do tipo de exame antes de aplicar.');
+    if (tipoExameSelecionado && tipoExameSelecionado.id !== tipoExameGdl.id) {
+      setError(`A consulta retornou dados ${resultado.codigoExame}. Confirme a troca do tipo de exame antes de aplicar.`);
       return;
     }
     if (!tipoExameSelecionado) {
-      form.setValue('tipo_exame_id', tipoB602.id, { shouldValidate: true });
+      form.setValue('tipo_exame_id', tipoExameGdl.id, { shouldValidate: true });
     }
 
     const valoresPadrao = emptyForm();

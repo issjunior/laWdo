@@ -36,6 +36,7 @@ const pecaDois = criarPeca(1002, 'CARABINA DOIS')
 
 const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
   codigoExame: 'B-602',
+  naturezaExameGdl: 'B602 - EXAME BALÍSTICO',
   camposGerais: {
     numero: '190-2026',
     data_requisicao: '2026-07-19',
@@ -130,12 +131,14 @@ describe('GdlConsultaModal', () => {
     expect(screen.queryByText(/campos serão preenchidos/)).not.toBeInTheDocument()
     expect(screen.queryByText('10 permanecem vazios.')).not.toBeInTheDocument()
     expect(screen.getByText('REP 190-2026')).toHaveClass('font-bold', 'text-primary')
+    expect(screen.getByText('B602 - EXAME BALÍSTICO')).toBeInTheDocument()
     expect(screen.queryByText('Revisão das peças do GDL')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
     expect(screen.queryByText('ID', { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText('19/07/2026')).toBeInTheDocument()
     expect(screen.getByText('Cidade:')).toBeInTheDocument()
     expect(screen.getByText('Unidade Policial:')).toBeInTheDocument()
+    expect(screen.queryByText('Tipo de Exame')).not.toBeInTheDocument()
 
     const checkboxes = screen.getAllByRole('checkbox')
     expect(checkboxes).toHaveLength(2)
@@ -264,6 +267,30 @@ describe('GdlConsultaModal', () => {
     fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '109026' } })
     expect(screen.getByLabelText('Nº da REP')).toHaveValue('109.026')
     expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled()
+  })
+
+  it('oferece o e-mail de suporte quando a natureza ainda não possui formulário', async () => {
+    consultarRep.mockResolvedValueOnce({
+      success: false,
+      error: 'O formulário para a natureza de exame B-612 - EXAME DE CONFRONTO BALÍSTICO ainda está em desenvolvimento no laWdo. Os dados não foram importados.',
+    })
+    render(
+      <GdlConsultaModal
+        open
+        onOpenChange={vi.fn()}
+        onAplicar={vi.fn()}
+        temDadosExistentes={false}
+        pecasB602={[]}
+        onConfigurarCredenciais={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
+    fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+
+    expect(await screen.findByText('B-612 - EXAME DE CONFRONTO BALÍSTICO')).toHaveClass('font-semibold')
+    expect(screen.getByRole('button', { name: 'Dúvidas/Sugestões' })).toBeInTheDocument()
   })
 
   it('reserva o aviso de Funcionamento para a confirmação após preencher o formulário', async () => {

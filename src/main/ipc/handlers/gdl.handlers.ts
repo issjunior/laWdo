@@ -105,10 +105,22 @@ export const registerGdlHandlers = (): void => {
       if (!resultado.sucesso || !resultado.dados) {
         return { success: false, error: resultado.erro || 'Erro ao consultar REP no GDL' };
       }
+      const naturezaExameGdl = resultado.naturezaExame?.trim() || '';
+      const codigoExame = gdlService.extrairCodigoNaturezaExame(naturezaExameGdl);
+      if (!codigoExame) {
+        return { success: false, error: 'O GDL não retornou uma natureza de exame identificável para esta REP.' };
+      }
+      if (codigoExame !== 'B-602') {
+        return {
+          success: false,
+          error: `O formulário para a natureza de exame ${naturezaExameGdl} ainda está em desenvolvimento no laWdo. Os dados não foram importados.`,
+        };
+      }
 
       return {
         success: true,
-        data: converterRepGdl('B-602', resultado.dados, {
+        data: {
+          ...converterRepGdl(codigoExame, resultado.dados, {
           origemInicial: 'gdl',
           ultimaConsulta: {
             ambiente: resultado.ambiente ?? 'homologacao',
@@ -116,7 +128,9 @@ export const registerGdlHandlers = (): void => {
             anoRep: sanitizeInput(ano),
             consultadoEm: new Date().toISOString(),
           },
-        }),
+          }),
+          naturezaExameGdl,
+        },
       };
     } catch (error) {
       logError(`Falha ao consultar REP ${sanitizeInput(numero)}/${sanitizeInput(ano)} no GDL`, error);
