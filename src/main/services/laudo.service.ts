@@ -47,8 +47,17 @@ class LaudoService extends BaseService<LaudoRow> {
         throw new Error('Já existe um laudo para esta REP');
       }
 
+      const template = await templateService.findById(params.template_id);
+      if (!template) throw new Error('Template não encontrado');
+      if (template.origem === 'integrado' && !template.disponivel_novos_laudos) {
+        throw new Error('O template integrado está indisponível para novos laudos. Verifique o tipo de exame associado.');
+      }
+
       // Buscar seções do template
       const secoes = await templateService.findSecoesByTemplate(params.template_id);
+      if (template.origem === 'integrado' && secoes.length === 0) {
+        throw new Error('O template integrado está inconsistente e não possui seções. Nenhum laudo foi criado.');
+      }
 
       // Buscar campos_especificos da REP
       const [rep] = await executeQuery<{ campos_especificos?: string | null }>(

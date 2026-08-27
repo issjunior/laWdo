@@ -2,10 +2,11 @@ import { ipcMain, BrowserWindow, app, dialog } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { auditDelete, auditExport } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
-import { templateService } from '../../services/template.service.js';
+import { templateService, type SalvarTemplateCompletoInput } from '../../services/template.service.js';
 import path from 'path';
 import fs from 'fs';
 import { exportarPacoteTemplate, importarPacoteTemplate, lerPreviaPacoteTemplate } from '../../services/template-pacote.service.js';
+import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincronizar-templates-integrados.js';
 
 const CM_TO_INCHES = 1 / 2.54;
 
@@ -19,6 +20,8 @@ const escaparTextoHtml = (texto: string): string =>
   texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export const registerTemplateHandlers = (): void => {
+  ipcMain.handle('template:statusIntegrados', async () => ({ success: true, data: obterEstadoTemplatesIntegrados() }));
+
   ipcMain.handle('template:exportarPacote', async (event, templateId: string) => {
     try {
       const janela = BrowserWindow.fromWebContents(event.sender);
@@ -63,6 +66,42 @@ export const registerTemplateHandlers = (): void => {
   ipcMain.handle('template:importarPacote', async (_event, caminho: string, criarTipo: boolean) => {
     if (typeof caminho !== 'string' || typeof criarTipo !== 'boolean') return { success: false, error: 'Dados de importação inválidos' };
     return importarPacoteTemplate(caminho, criarTipo);
+  });
+
+  ipcMain.handle('template:clonar', async (_event, templateId: string) => {
+    try {
+      if (typeof templateId !== 'string' || !templateId) return { success: false, error: 'Template inválido' };
+      const template = await templateService.clonar(templateId);
+      return { success: true, data: template, message: 'Cópia personalizada criada com sucesso' };
+    } catch (error) {
+      logError('Erro ao clonar template', error);
+      return { success: false, error: mensagemErro(error) };
+    }
+  });
+
+  ipcMain.handle('template:salvarCompleto', async (_event, dados: SalvarTemplateCompletoInput) => {
+    try {
+      if (!dados || typeof dados.nome !== 'string' || typeof dados.tipo_exame_id !== 'string' || !Array.isArray(dados.secoes)) {
+        return { success: false, error: 'Dados do template inválidos' };
+      }
+      const template = await templateService.salvarCompleto({
+        ...dados,
+        nome: sanitizeInput(dados.nome.trim()),
+        descricao: dados.descricao ? sanitizeInput(dados.descricao) : null,
+        secoes: dados.secoes.map(secao => ({
+          ...secao,
+          nome: sanitizeInput(secao.nome.trim()),
+          conteudo: secao.conteudo ?? null,
+          condicao: secao.condicao ?? null,
+          repetir_para: secao.repetir_para ?? null,
+          repetir_titulo: secao.repetir_titulo ?? null,
+        })),
+      });
+      return { success: true, data: template, message: 'Template salvo com sucesso' };
+    } catch (error) {
+      logError('Erro ao salvar template completo', error);
+      return { success: false, error: mensagemErro(error) };
+    }
   });
 
   /** Listar todos os templates (com contagem de seções) */

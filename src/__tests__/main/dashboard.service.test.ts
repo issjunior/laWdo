@@ -77,6 +77,41 @@ describe('dashboard.service', () => {
     expect(executeQueryMock.mock.calls[0]?.[1]).toEqual(['2026-01-01', '2026-01-31', '10', '0']);
   });
 
+  it('normaliza paginação, aplica filtros e preenche status sem resultado', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ total: 'invalido' }])
+      .mockResolvedValueOnce([{ status: 'Em andamento', total: '2' }]);
+    const resultado = await new DashboardService().consultarLaudos({
+      tipoData: 'alteracao',
+      busca: ' BAL ',
+      pagina: 0,
+      tamanhoPagina: 999,
+      dataInicial: '2026-02-01',
+      dataFinal: '2026-02-28',
+    });
+    expect(resultado).toEqual({
+      itens: [],
+      total: 0,
+      pagina: 1,
+      tamanhoPagina: 100,
+      porStatus: [
+        { status: 'Em andamento', total: 2 },
+        { status: 'Concluído', total: 0 },
+        { status: 'Entregue', total: 0 },
+      ],
+    });
+    expect(executeQueryMock.mock.calls[0]?.[1]).toEqual([
+      '%BAL%', '%BAL%', '%BAL%', '2026-02-01', '2026-02-28', '100', '0',
+    ]);
+  });
+
+  it('não consulta auditoria quando o laudo não existe', async () => {
+    executeQueryMock.mockResolvedValueOnce([]);
+    await expect(new DashboardService().obterCronologiaLaudo('ausente')).resolves.toBeNull();
+    expect(executeQueryMock).toHaveBeenCalledTimes(1);
+  });
+
   it('reconstrói transições usando somente a auditoria vinculada ao laudo', async () => {
     executeQueryMock
       .mockResolvedValueOnce([
@@ -116,6 +151,26 @@ describe('dashboard.service', () => {
     expect(executeQueryMock.mock.calls[1]?.[0]).toContain('entidade_id = ?');
   });
 
+  it('preserva transição auditável com JSON inválido e ignora data ausente', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        {
+          id: 'l-1', repId: 'r-1', repNumero: '001', tipoExameId: null,
+          tipoExameCodigo: null, tipoExameNome: 'Exame', status: 'Em andamento',
+          createdAt: '2026-01-01', updatedAt: '2026-01-02', dataConclusao: null,
+          dataEntrega: null, dataOrdenacao: '2026-01-02',
+        },
+      ])
+      .mockResolvedValueOnce([
+        { created_at: '2026-01-02', dados_anteriores: '{invalido', dados_novos: '{"status":12}' },
+        { created_at: null, dados_anteriores: '{"status":"Pendente"}', dados_novos: '{"status":"Em andamento"}' },
+      ]);
+    const resultado = await new DashboardService().obterCronologiaLaudo('l-1');
+    expect(resultado?.transicoes).toEqual([
+      { data: '2026-01-02', statusAnterior: null, statusNovo: null },
+    ]);
+  });
+
   it('calcula média e mediana para ciclos de produção', async () => {
     executeQueryMock
       .mockResolvedValueOnce([{ id: 'te-1', codigo: 'BAL', nome: 'Balística' }])
@@ -139,5 +194,24 @@ describe('dashboard.service', () => {
         laudoAteConclusao: { quantidade: 0, mediaDias: 0, medianaDias: 0 },
       },
     ]);
+  });
+
+  it('filtra ciclos negativos e aplica filtros de produção na consulta', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([{ id: 'te-1', codigo: null, nome: null }])
+      .mockResolvedValueOnce([
+        { id: 'te-1', codigo: null, nome: null, repDias: -1, laudoDias: 'invalido' },
+        { id: 'te-1', codigo: null, nome: null, repDias: 5, laudoDias: 2 },
+      ]);
+    await expect(new DashboardService().obterProducaoLaudos({
+      tipoExameId: 'te-1', dataInicial: '2026-01-01', dataFinal: '2026-01-31',
+    })).resolves.toEqual([
+      {
+        natureza: { id: 'te-1', codigo: null, nome: 'Tipo de exame não informado' },
+        repAteConclusao: { quantidade: 1, mediaDias: 5, medianaDias: 5 },
+        laudoAteConclusao: { quantidade: 2, mediaDias: 1, medianaDias: 1 },
+      },
+    ]);
+    expect(executeQueryMock.mock.calls[0]?.[1]).toEqual(['te-1', '2026-01-01', '2026-01-31']);
   });
 });
