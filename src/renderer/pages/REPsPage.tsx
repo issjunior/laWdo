@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useForm, type Path, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/forms/form';
@@ -550,8 +550,21 @@ const RepStepSection: React.FC<{ stepId: string; children: React.ReactNode }> = 
 
 export const REPsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [reps, setReps] = useState<REP[]>([]);
   const [loading, setLoading] = useState(true);
+  const filtroDashboard = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const repsFiltradasDashboard = useMemo(() => {
+    const status = filtroDashboard.get('status');
+    const prioridade = filtroDashboard.get('prioridade');
+    if (status) return reps.filter(rep => rep.status === status);
+    if (prioridade === 'vencida') return reps.filter(rep => rep.status !== 'Concluído' && Boolean(rep.prazo) && new Date(rep.prazo ?? '') < new Date());
+    if (prioridade === 'proxima') {
+      const hoje = new Date(); const limite = new Date(); limite.setDate(hoje.getDate() + 7);
+      return reps.filter(rep => rep.status !== 'Concluído' && Boolean(rep.prazo) && new Date(rep.prazo ?? '') >= hoje && new Date(rep.prazo ?? '') <= limite);
+    }
+    return reps;
+  }, [filtroDashboard, reps]);
   const [showForm, setShowForm] = useState(false);
   const [editingRep, setEditingRep] = useState<REP | null>(null);
   const [pecasB602, setPecasB602] = useState<PecaB602[]>([]);
@@ -1514,15 +1527,16 @@ export const REPsPage: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>Lista de REPs</CardTitle>
-            <CardDescription>{reps.length} registro(s)</CardDescription>
+            <CardDescription>{repsFiltradasDashboard.length} registro(s)</CardDescription>
           </CardHeader>
           <CardContent>
+            {filtroDashboard.size > 0 && <div className="mb-4 flex items-center justify-between rounded-md border border-primary/20 bg-accent/60 p-3 text-sm"><span>Filtro aplicado pelo dashboard.</span><Button variant="outline" size="sm" onClick={() => navigate('/reps')}>Limpar filtro</Button></div>}
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Carregando...</div>
             ) : (
               <DataTable
                 columns={columnDefs}
-                data={reps}
+                data={repsFiltradasDashboard}
                 searchColumn="numero"
                 searchPlaceholder="Buscar por REP, envolvido ou BO..."
               />

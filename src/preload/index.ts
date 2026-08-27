@@ -36,7 +36,7 @@ import type {
   DashboardConsultaLaudosResultado,
   DashboardProducaoLaudosEntrada,
   DashboardProducaoLaudosResultado,
-  DashboardProjecoes,
+  DashboardCronologiaLaudo,
   DashboardResumo,
 } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
@@ -189,7 +189,7 @@ export interface IpcAPI {
 
   dashboard: {
     resumo: () => Promise<DashboardResponse<DashboardResumo>>;
-    projecoes: () => Promise<DashboardResponse<DashboardProjecoes>>;
+    cronologiaLaudo: (laudoId: string) => Promise<DashboardResponse<DashboardCronologiaLaudo | null>>;
     consultarLaudos: (entrada: DashboardConsultaLaudosEntrada) => Promise<DashboardResponse<DashboardConsultaLaudosResultado>>;
     producaoLaudos: (entrada?: DashboardProducaoLaudosEntrada) => Promise<DashboardResponse<DashboardProducaoLaudosResultado[]>>;
   };
@@ -479,7 +479,7 @@ const ALLOWED_CHANNELS = new Set([
   'rep:delete',
   'rep:updateStatus',
   'dashboard:resumo',
-  'dashboard:projecoes',
+  'dashboard:cronologia-laudo',
   'dashboard:consultar-laudos',
   'dashboard:producao-laudos',
 
@@ -1265,7 +1265,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   dashboard: {
     resumo: () => invocarComDiagnostico('dashboard:resumo'),
-    projecoes: () => invocarComDiagnostico('dashboard:projecoes'),
+    cronologiaLaudo: (laudoId: string) => invocarComDiagnostico('dashboard:cronologia-laudo', laudoId),
     consultarLaudos: (entrada: DashboardConsultaLaudosEntrada) => invocarComDiagnostico('dashboard:consultar-laudos', entrada),
     producaoLaudos: (entrada?: DashboardProducaoLaudosEntrada) => invocarComDiagnostico('dashboard:producao-laudos', entrada),
   },

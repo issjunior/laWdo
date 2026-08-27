@@ -53,12 +53,13 @@ export const registerDashboardHandlers = (): void => {
     }
   })
 
-  ipcMain.handle('dashboard:projecoes', async () => {
+  ipcMain.handle('dashboard:cronologia-laudo', async (_event, laudoId: unknown) => {
     try {
-      const data = await dashboardService.obterProjecoes()
+      if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido')
+      const data = await dashboardService.obterCronologiaLaudo(laudoId)
       return { success: true, data }
     } catch (error) {
-      logError('Erro ao buscar projeções do dashboard', error)
+      logError('Erro ao consultar cronologia do laudo no dashboard', error)
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }
     }
   })

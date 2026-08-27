@@ -1,1176 +1,964 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import {
   AlertTriangle,
-  ArrowRight,
   BarChart3,
-  CalendarRange,
+  CalendarSearch,
   ChevronDown,
   Clock3,
-  FileText,
-  Gauge,
-  LineChart,
+  ExternalLink,
   RefreshCcw,
-  Siren,
-} from 'lucide-react'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Skeleton } from '@/components/ui/skeleton'
-import { obterIconeMenuPorRota } from '@/lib/menu-config'
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import logo from '@/assets/logo.png';
 import type {
-  DashboardIndicadorConfiabilidade,
+  DashboardConsultaLaudosEntrada,
+  DashboardConsultaLaudosResultado,
+  DashboardCronologiaLaudo,
   DashboardKpiStatus,
-  DashboardLaudoRecente,
-  DashboardRepRecente,
-  DashboardProjecoes,
+  DashboardLaudoConsulta,
+  DashboardProducaoLaudosEntrada,
+  DashboardProducaoLaudosResultado,
   DashboardResumo,
-  DashboardSerieAnual,
-  DashboardSerieMensal,
-  DashboardTempoMedioTipoExame,
-} from '../../types/dashboard.js'
+  DashboardTipoDataConsulta,
+} from '../../types/dashboard.js';
 
-type RespostaDashboard<T> = {
-  success: boolean
-  data?: T
-  error?: string
-}
-
-type RegistroDesconhecido = Record<string, unknown>
-type ModoLayoutDashboard = 'compacto' | 'padrao' | 'amplo'
-
-const classesAnimacao = [
-  '[animation-delay:0ms]',
-  '[animation-delay:60ms]',
-  '[animation-delay:120ms]',
-  '[animation-delay:180ms]',
-  '[animation-delay:240ms]',
-  '[animation-delay:300ms]',
-] as const
-
-const CHAVE_PROJECOES_EXPANDIDO = 'dashboard_projecoes_expandido'
-
-const IconeRepMenu = obterIconeMenuPorRota('/reps', FileText)
-const IconeLaudoMenu = obterIconeMenuPorRota('/laudos', FileText)
-
-const classesConfiabilidade: Record<DashboardIndicadorConfiabilidade['nivel'], string> = {
-  alta: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700',
-  moderada: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700',
-  baixa: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700',
-  insuficiente: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-700',
-}
-
-const configStatus: Record<string, { titulo: string; destaque: string; icone: typeof FileText }> = {
-  Pendente: {
-    titulo: 'REPs pendentes',
-    destaque: 'text-slate-700 dark:text-slate-200',
-    icone: IconeRepMenu,
-  },
-  'Em Andamento': {
-    titulo: 'REPs em andamento',
-    destaque: 'text-amber-700 dark:text-amber-300',
-    icone: IconeRepMenu,
-  },
-  'Concluído': {
-    titulo: 'Concluído',
-    destaque: 'text-emerald-700 dark:text-emerald-300',
-    icone: IconeLaudoMenu,
-  },
-  'Em andamento': {
-    titulo: 'Laudos em andamento',
-    destaque: 'text-amber-700 dark:text-amber-300',
-    icone: IconeLaudoMenu,
-  },
-  Entregue: {
-    titulo: 'Laudos entregues',
-    destaque: 'text-blue-700 dark:text-blue-300',
-    icone: IconeLaudoMenu,
-  },
-}
-
-const formatadorMesAno = new Intl.DateTimeFormat('pt-BR', {
-  month: 'short',
-  year: 'numeric',
-})
-
-const isRecord = (valor: unknown): valor is RegistroDesconhecido =>
-  typeof valor === 'object' && valor !== null
-
-const obterNumero = (valor: unknown): number => {
-  if (typeof valor === 'number' && Number.isFinite(valor)) {
-    return valor
-  }
-
-  if (typeof valor === 'string') {
-    const numero = Number(valor)
-    return Number.isFinite(numero) ? numero : 0
-  }
-
-  return 0
-}
-
-const obterFloat = (valor: unknown): number => {
-  if (typeof valor === 'number' && Number.isFinite(valor)) {
-    return valor
-  }
-
-  if (typeof valor === 'string') {
-    const numero = Number(valor)
-    return Number.isFinite(numero) ? numero : 0
-  }
-
-  return 0
-}
-
-const obterTexto = (valor: unknown, fallback = ''): string =>
-  typeof valor === 'string' ? valor : fallback
-
-const formatarDataRelativa = (valor: string): string => {
-  const data = new Date(valor)
-  if (Number.isNaN(data.getTime())) {
-    return 'data indisponível'
-  }
-
-  const diferencaDias = Math.max(0, Math.floor((Date.now() - data.getTime()) / 86400000))
-  if (diferencaDias === 0) return 'atualizado hoje'
-  if (diferencaDias === 1) return 'atualizado há 1 dia'
-  return `atualizado há ${diferencaDias} dias`
-}
-
-const formatarDuracaoDias = (dias: number): string => {
-  if (!Number.isFinite(dias) || dias <= 0) return '0 dia'
-  if (dias === 1) return '1 dia'
-  const valor = Number.isInteger(dias) ? dias.toString() : dias.toFixed(1).replace('.', ',')
-  return `${valor} dias`
-}
-
-const formatarMesAno = (referencia: string): string => {
-  const [anoTexto, mesTexto] = referencia.split('-')
-  const ano = Number(anoTexto)
-  const mes = Number(mesTexto)
-
-  if (!Number.isInteger(ano) || !Number.isInteger(mes)) {
-    return referencia
-  }
-
-  return formatadorMesAno.format(new Date(Date.UTC(ano, mes - 1, 1)))
-}
-
-const formatarPeriodoMensal = (serie: DashboardSerieMensal | null): string => {
-  if (!serie) return 'Sem estimativa'
-  return formatadorMesAno.format(new Date(Date.UTC(serie.ano, serie.mes - 1, 1)))
-}
-
-const formatarPeriodoAnual = (serie: DashboardSerieAnual | null): string => {
-  if (!serie) return 'Sem estimativa'
-  return String(serie.ano)
-}
-
-const formatarCoberturaHistorica = (indicador: DashboardIndicadorConfiabilidade): string =>
-  `${Math.round(indicador.coberturaHistorica * 100)}%`
-
-const normalizarKpiStatus = (valor: unknown): DashboardKpiStatus | null => {
-  if (!isRecord(valor)) return null
-
-  return {
-    status: obterTexto(valor.status, 'Sem status'),
-    total: Math.max(0, Math.round(obterNumero(valor.total))),
-  }
-}
-
-const normalizarTempoMedio = (valor: unknown): DashboardTempoMedioTipoExame | null => {
-  if (!isRecord(valor)) return null
-
-  return {
-    tipoExameId: typeof valor.tipoExameId === 'string' ? valor.tipoExameId : null,
-    tipoExameNome: obterTexto(valor.tipoExameNome, 'Tipo de exame não informado'),
-    totalLaudos: Math.max(0, Math.round(obterNumero(valor.totalLaudos))),
-    tempoMedioDias: Number(obterFloat(valor.tempoMedioDias).toFixed(1)),
-  }
-}
-
-const normalizarLaudoRecente = (valor: unknown): DashboardLaudoRecente | null => {
-  if (!isRecord(valor)) return null
-  const id = obterTexto(valor.id)
-  if (!id) return null
-
-  return {
-    id,
-    rep_numero: obterTexto(valor.rep_numero, 'REP sem número'),
-    tipo_exame_nome: obterTexto(valor.tipo_exame_nome, 'Tipo de exame não informado'),
-    status: obterTexto(valor.status, 'Sem status'),
-    updated_at: obterTexto(valor.updated_at),
-  }
-}
-
-const normalizarRepRecente = (valor: unknown): DashboardRepRecente | null => {
-  if (!isRecord(valor)) return null
-  const id = obterTexto(valor.id)
-  if (!id) return null
-
-  return {
-    id,
-    numero: obterTexto(valor.numero, 'REP sem número'),
-    tipo_exame_nome: obterTexto(valor.tipo_exame_nome, 'Tipo de exame não informado'),
-    status: obterTexto(valor.status, 'Sem status'),
-    updated_at: obterTexto(valor.updated_at),
-  }
-}
-
-const normalizarSerieMensal = (valor: unknown): DashboardSerieMensal | null => {
-  if (!isRecord(valor)) return null
-
-  const referencia = obterTexto(valor.referencia)
-  if (!referencia) return null
-
-  return {
-    referencia,
-    ano: Math.max(0, Math.round(obterNumero(valor.ano))),
-    mes: Math.max(0, Math.round(obterNumero(valor.mes))),
-    totalConcluidos: Math.max(0, Math.round(obterNumero(valor.totalConcluidos))),
-  }
-}
-
-const normalizarSerieAnual = (valor: unknown): DashboardSerieAnual | null => {
-  if (!isRecord(valor)) return null
-
-  return {
-    ano: Math.max(0, Math.round(obterNumero(valor.ano))),
-    totalConcluidos: Math.max(0, Math.round(obterNumero(valor.totalConcluidos))),
-    mesesComDados: Math.max(0, Math.round(obterNumero(valor.mesesComDados))),
-  }
-}
-
-const normalizarIndicador = (valor: unknown): DashboardIndicadorConfiabilidade => {
-  if (!isRecord(valor)) {
+type Resposta<T> = { success: boolean; data?: T; error?: string };
+type TipoGrafico = 'barras' | 'rosca' | 'empilhado';
+type SecaoDashboard = 'situacao' | 'cronologia' | 'producao';
+type SecoesExpandidas = Record<SecaoDashboard, boolean>;
+const CHAVE_GRAFICO = 'dashboard_tipo_grafico';
+const CHAVE_SECOES = 'dashboard_secoes_expandidas';
+const secoesPadrao: SecoesExpandidas = { situacao: true, cronologia: true, producao: true };
+const cores = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+];
+const texto = (valor: unknown) => (typeof valor === 'string' ? valor : '');
+const numero = (valor: unknown) =>
+  Number.isFinite(Number(valor)) ? Math.max(0, Math.round(Number(valor))) : 0;
+const registro = (valor: unknown): valor is Record<string, unknown> =>
+  typeof valor === 'object' && valor !== null;
+const obterSecoesExpandidas = (): SecoesExpandidas => {
+  try {
+    const valor: unknown = JSON.parse(window.localStorage.getItem(CHAVE_SECOES) ?? '');
+    if (!registro(valor)) return secoesPadrao;
     return {
-      dadosInsuficientes: true,
-      mesesHistoricos: 0,
-      mesesComDados: 0,
-      coberturaHistorica: 0,
-      nivel: 'insuficiente',
-      mensagem: 'Dados insuficientes para estimativa confiável.',
-    }
+      situacao: typeof valor.situacao === 'boolean' ? valor.situacao : secoesPadrao.situacao,
+      cronologia:
+        typeof valor.cronologia === 'boolean' ? valor.cronologia : secoesPadrao.cronologia,
+      producao: typeof valor.producao === 'boolean' ? valor.producao : secoesPadrao.producao,
+    };
+  } catch {
+    return secoesPadrao;
   }
-
-  const nivel = valor.nivel
-  const nivelNormalizado = nivel === 'alta' || nivel === 'moderada' || nivel === 'baixa' || nivel === 'insuficiente'
-    ? nivel
-    : 'insuficiente'
-
+};
+const dataOpcional = (valor: unknown) => (typeof valor === 'string' && valor ? valor : null);
+const normalizarResumo = (valor: unknown): DashboardResumo => {
+  const dados = registro(valor) ? valor : {};
+  const status = (item: unknown): DashboardKpiStatus | null =>
+    registro(item) && texto(item.status)
+      ? { status: texto(item.status), total: numero(item.total) }
+      : null;
   return {
-    dadosInsuficientes: Boolean(valor.dadosInsuficientes),
-    mesesHistoricos: Math.max(0, Math.round(obterNumero(valor.mesesHistoricos))),
-    mesesComDados: Math.max(0, Math.round(obterNumero(valor.mesesComDados))),
-    coberturaHistorica: Number(obterFloat(valor.coberturaHistorica).toFixed(2)),
-    nivel: nivelNormalizado,
-    mensagem: obterTexto(valor.mensagem, 'Dados insuficientes para estimativa confiável.'),
-  }
-}
-
-const normalizarDashboardResumo = (valor: unknown): DashboardResumo => {
-  const payload = isRecord(valor) ? valor : {}
-
+    repsPorStatus: Array.isArray(dados.repsPorStatus)
+      ? dados.repsPorStatus.map(status).filter((item): item is DashboardKpiStatus => item !== null)
+      : [],
+    laudosPorStatus: Array.isArray(dados.laudosPorStatus)
+      ? dados.laudosPorStatus
+          .map(status)
+          .filter((item): item is DashboardKpiStatus => item !== null)
+      : [],
+    repsPrazoVencido: numero(dados.repsPrazoVencido),
+    repsPrazoProximo: numero(dados.repsPrazoProximo),
+    laudosConcluidosAguardandoEntrega: numero(dados.laudosConcluidosAguardandoEntrega),
+    laudosEmAndamentoSemAlteracao: numero(dados.laudosEmAndamentoSemAlteracao),
+  };
+};
+const normalizarLaudo = (valor: unknown): DashboardLaudoConsulta | null => {
+  if (!registro(valor) || !texto(valor.id) || !texto(valor.repId) || !texto(valor.repNumero))
+    return null;
   return {
-    repsPorStatus: Array.isArray(payload.repsPorStatus)
-      ? payload.repsPorStatus.map(normalizarKpiStatus).filter((item): item is DashboardKpiStatus => item !== null)
-      : [],
-    repsPrazoProximo: Math.max(0, Math.round(obterNumero(payload.repsPrazoProximo))),
-    repsPrazoVencido: Math.max(0, Math.round(obterNumero(payload.repsPrazoVencido))),
-    laudosConcluidosAguardandoEntrega: Math.max(0, Math.round(obterNumero(payload.laudosConcluidosAguardandoEntrega))),
-    laudosEmAndamentoSemAlteracao: Math.max(0, Math.round(obterNumero(payload.laudosEmAndamentoSemAlteracao))),
-    laudosPorStatus: Array.isArray(payload.laudosPorStatus)
-      ? payload.laudosPorStatus.map(normalizarKpiStatus).filter((item): item is DashboardKpiStatus => item !== null)
-      : [],
-    tempoMedioPorTipoExame: Array.isArray(payload.tempoMedioPorTipoExame)
-      ? payload.tempoMedioPorTipoExame
-        .map(normalizarTempoMedio)
-        .filter((item): item is DashboardTempoMedioTipoExame => item !== null)
-      : [],
-    repsRecentes: Array.isArray(payload.repsRecentes)
-      ? payload.repsRecentes
-        .map(normalizarRepRecente)
-        .filter((item): item is DashboardRepRecente => item !== null)
-      : [],
-    laudosRecentes: Array.isArray(payload.laudosRecentes)
-      ? payload.laudosRecentes
-        .map(normalizarLaudoRecente)
-        .filter((item): item is DashboardLaudoRecente => item !== null)
-      : [],
-  }
-}
-
-const normalizarDashboardProjecoes = (valor: unknown): DashboardProjecoes => {
-  const payload = isRecord(valor) ? valor : {}
-  const baseHistorica = isRecord(payload.baseHistoricaAnalisada) ? payload.baseHistoricaAnalisada : {}
-
+    id: texto(valor.id),
+    repId: texto(valor.repId),
+    repNumero: texto(valor.repNumero),
+    tipoExameId: dataOpcional(valor.tipoExameId),
+    tipoExameCodigo: dataOpcional(valor.tipoExameCodigo),
+    tipoExameNome: texto(valor.tipoExameNome) || 'Tipo de exame não informado',
+    status: texto(valor.status),
+    createdAt: dataOpcional(valor.createdAt),
+    updatedAt: dataOpcional(valor.updatedAt),
+    dataConclusao: dataOpcional(valor.dataConclusao),
+    dataEntrega: dataOpcional(valor.dataEntrega),
+    dataOrdenacao: dataOpcional(valor.dataOrdenacao),
+  };
+};
+const normalizarConsulta = (valor: unknown): DashboardConsultaLaudosResultado | null => {
+  if (!registro(valor)) return null;
   return {
-    historicoMensal: Array.isArray(payload.historicoMensal)
-      ? payload.historicoMensal
-        .map(normalizarSerieMensal)
-        .filter((item): item is DashboardSerieMensal => item !== null)
+    itens: Array.isArray(valor.itens)
+      ? valor.itens
+          .map(normalizarLaudo)
+          .filter((item): item is DashboardLaudoConsulta => item !== null)
       : [],
-    resumoAnual: Array.isArray(payload.resumoAnual)
-      ? payload.resumoAnual
-        .map(normalizarSerieAnual)
-        .filter((item): item is DashboardSerieAnual => item !== null)
+    total: numero(valor.total),
+    pagina: Math.max(1, numero(valor.pagina)),
+    tamanhoPagina: Math.max(1, numero(valor.tamanhoPagina)),
+    porStatus: Array.isArray(valor.porStatus)
+      ? valor.porStatus
+          .map(item =>
+            registro(item) && texto(item.status)
+              ? { status: texto(item.status), total: numero(item.total) }
+              : null
+          )
+          .filter((item): item is DashboardKpiStatus => item !== null)
       : [],
-    projecaoMensalEstimada: normalizarSerieMensal(payload.projecaoMensalEstimada),
-    projecaoAnualEstimada: normalizarSerieAnual(payload.projecaoAnualEstimada),
-    baseHistoricaAnalisada: {
-      primeiroMes: typeof baseHistorica.primeiroMes === 'string' ? baseHistorica.primeiroMes : null,
-      ultimoMes: typeof baseHistorica.ultimoMes === 'string' ? baseHistorica.ultimoMes : null,
-      totalLaudosConcluidos: Math.max(0, Math.round(obterNumero(baseHistorica.totalLaudosConcluidos))),
-    },
-    indicadorConfiabilidade: normalizarIndicador(payload.indicadorConfiabilidade),
-  }
-}
-
-const obterConfigStatus = (status: string) => {
-  return configStatus[status] ?? {
-    titulo: status,
-    destaque: 'text-foreground',
-    icone: FileText,
-  }
-}
-
-const obterClasseBadgeStatus = (status: string): string => {
-  if (status === 'Concluído') {
-    return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700'
-  }
-
-  if (status === 'Entregue') {
-    return 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700'
-  }
-
-  return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700'
-}
-
-const dashboardVazio = (dados: DashboardResumo | null): boolean => Boolean(
-  dados &&
-  dados.repsPorStatus.every(item => item.total === 0) &&
-  dados.laudosPorStatus.every(item => item.total === 0) &&
-  dados.repsRecentes.length === 0 &&
-  dados.laudosRecentes.length === 0 &&
-  dados.tempoMedioPorTipoExame.length === 0,
-)
-
-const obterModoLayoutDashboard = (largura: number, altura: number): ModoLayoutDashboard => {
-  if (largura >= 1680 && altura >= 920) {
-    return 'amplo'
-  }
-
-  if (largura < 1360 || altura < 860) {
-    return 'compacto'
-  }
-
-  return 'padrao'
-}
-
-const obterLimiteRecentes = (modo: ModoLayoutDashboard): number => {
-  if (modo === 'compacto') return 2
-  if (modo === 'padrao') return 3
-  return 4
-}
-
-const obterLimiteTempoMedio = (modo: ModoLayoutDashboard): number => {
-  if (modo === 'compacto') return 3
-  if (modo === 'padrao') return 4
-  return 6
-}
-
-const fallbackBloco = (titulo: string) => (
-  <Card className="border-red-300/80 bg-red-50/50 dark:border-red-700 dark:bg-red-950/20">
-    <CardContent className="p-5">
-      <p className="font-semibold text-red-900 dark:text-red-200">{titulo}</p>
-      <p className="text-sm text-red-900/80 dark:text-red-200/80">
-        Este bloco falhou ao renderizar, mas o restante da dashboard continua disponível.
-      </p>
-    </CardContent>
-  </Card>
-)
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-3xl border border-border/80 bg-card/90 p-6">
-        <Skeleton className="h-5 w-72 bg-muted" />
-        <Skeleton className="h-10 w-48 bg-muted" />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
-        {Array.from({ length: 7 }).map((_, index) => (
-          <Skeleton key={index} className="h-32 rounded-2xl bg-muted" />
-        ))}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Skeleton className="h-32 rounded-2xl bg-muted" />
-        <Skeleton className="h-32 rounded-2xl bg-muted" />
-      </div>
-
-      <Skeleton className="h-80 rounded-3xl bg-muted" />
-
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Skeleton className="h-64 rounded-3xl bg-muted" />
-        <Skeleton className="h-64 rounded-3xl bg-muted" />
-      </div>
-    </div>
-  )
-}
-
-function DashboardErro({
-  mensagem,
-  onTentarNovamente,
-}: {
-  mensagem: string
-  onTentarNovamente: () => void
-}) {
-  return (
-    <Card className="border-red-300/80 bg-red-50/60 dark:border-red-700 dark:bg-red-950/20">
-      <CardContent className="flex flex-col items-start gap-4 p-8 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl border border-red-300/80 bg-white/70 p-3 dark:border-red-700 dark:bg-red-950/30">
-            <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-300" />
-          </div>
-          <div className="space-y-1">
-            <p className="font-semibold text-red-900 dark:text-red-200">Não foi possível carregar o dashboard</p>
-            <p className="text-sm text-red-900/80 dark:text-red-200/80">{mensagem}</p>
-          </div>
-        </div>
-        <Button variant="outline" onClick={onTentarNovamente}>
-          <RefreshCcw className="h-4 w-4" />
-          Tentar novamente
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
-function DashboardVazio() {
-  return (
-    <Card className="border-border/80 bg-card/95">
-      <CardContent className="p-8">
-        <div className="mx-auto max-w-2xl space-y-4 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-border/80 bg-primary/10 text-primary">
-            <BarChart3 className="h-6 w-6" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-semibold text-foreground">Dashboard pronto para começar</h2>
-            <p className="text-sm text-muted-foreground">
-              Ainda não há dados suficientes no banco para exibir indicadores operacionais.
-            </p>
-          </div>
-          <div className="grid gap-3 text-left md:grid-cols-2">
-            <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                <IconeRepMenu className="h-4 w-4 text-primary" />
-                REPs
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Cadastre as primeiras requisições para acompanhar status e prazos.
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                <IconeLaudoMenu className="h-4 w-4 text-primary" />
-                Laudos
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Laudos concluídos passam a alimentar tempo médio de ciclo e projeções.
-              </p>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function GridKpis({
-  itens,
-  modo,
-}: {
-  itens: DashboardKpiStatus[]
-  modo: ModoLayoutDashboard
-}) {
-  const classeGrid = modo === 'compacto'
-    ? 'grid-cols-3 gap-2'
-    : 'xl:grid-cols-3 gap-3'
-  const classeCard = modo === 'compacto' ? 'p-3' : 'p-4'
-  const classeTitulo = modo === 'compacto'
-    ? 'text-[10px] tracking-[0.1em]'
-    : 'text-[11px] tracking-[0.12em]'
-  const classeValor = modo === 'compacto' ? 'text-xl' : 'text-2xl'
-  const classeIconeWrapper = modo === 'compacto' ? 'rounded-lg p-2' : 'rounded-lg p-2.5'
-  const classeIcone = modo === 'compacto' ? 'h-4 w-4' : 'h-4.5 w-4.5'
-
-  return (
-    <div className={`grid ${classeGrid}`}>
-      {itens.map((item, index) => {
-        const config = obterConfigStatus(item.status)
-        const Icone = config.icone
-
-        return (
-          <Card
-            key={`${item.status}-${index}`}
-            className={`animate-fade-in border-border/80 bg-card/95 ${classesAnimacao[index] ?? ''}`}
-          >
-            <CardContent className={`flex items-start justify-between gap-3 ${classeCard}`}>
-              <div className="min-w-0 space-y-1.5">
-                <p className={`font-semibold uppercase text-muted-foreground ${classeTitulo}`}>
-                  {config.titulo}
-                </p>
-                <p className={`${classeValor} font-bold leading-none ${config.destaque}`}>
-                  {item.total}
-                </p>
-              </div>
-              <div className={`border border-border/70 bg-muted/50 ${classeIconeWrapper}`}>
-                <Icone className={`${classeIcone} ${config.destaque}`} />
-              </div>
-            </CardContent>
-          </Card>
+  };
+};
+const normalizarProducao = (valor: unknown): DashboardProducaoLaudosResultado[] =>
+  Array.isArray(valor)
+    ? valor.flatMap(item => {
+        if (!registro(item) || !registro(item.natureza) || !texto(item.natureza.id)) return [];
+        const ciclo = (dados: unknown) =>
+          registro(dados)
+            ? {
+                quantidade: numero(dados.quantidade),
+                mediaDias: Number(Number(dados.mediaDias || 0).toFixed(1)),
+                medianaDias: Number(Number(dados.medianaDias || 0).toFixed(1)),
+              }
+            : { quantidade: 0, mediaDias: 0, medianaDias: 0 };
+        return [
+          {
+            natureza: {
+              id: texto(item.natureza.id),
+              codigo: dataOpcional(item.natureza.codigo),
+              nome: texto(item.natureza.nome) || 'Tipo de exame não informado',
+            },
+            repAteConclusao: ciclo(item.repAteConclusao),
+            laudoAteConclusao: ciclo(item.laudoAteConclusao),
+          },
+        ];
+      })
+    : [];
+const normalizarCronologia = (valor: unknown): DashboardCronologiaLaudo | null => {
+  if (!registro(valor)) return null;
+  const laudo = normalizarLaudo(valor.laudo);
+  if (!laudo) return null;
+  return {
+    laudo,
+    marcos: Array.isArray(valor.marcos)
+      ? valor.marcos.flatMap(marco =>
+          registro(marco) && texto(marco.nome)
+            ? [{ nome: texto(marco.nome), data: dataOpcional(marco.data) }]
+            : []
         )
-      })}
-    </div>
-  )
-}
+      : [],
+    transicoes: Array.isArray(valor.transicoes)
+      ? valor.transicoes.flatMap(evento =>
+          registro(evento) && texto(evento.data)
+            ? [
+                {
+                  data: texto(evento.data),
+                  statusAnterior: dataOpcional(evento.statusAnterior),
+                  statusNovo: dataOpcional(evento.statusNovo),
+                },
+              ]
+            : []
+        )
+      : [],
+  };
+};
+const formatarData = (valor: string | null) =>
+  valor
+    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(
+        new Date(valor)
+      )
+    : 'Não registrado';
+const formatarDia = (valor: string) =>
+  new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(`${valor}T00:00:00`));
+const rotuloTipoData: Record<DashboardTipoDataConsulta, string> = {
+  criacao: 'Criação',
+  alteracao: 'Alteração',
+  conclusao: 'Conclusão',
+  entrega: 'Entrega/envio',
+};
+const descreverPeriodo = (dataInicial?: string, dataFinal?: string) => {
+  if (dataInicial && dataFinal) return `${formatarDia(dataInicial)} a ${formatarDia(dataFinal)}`;
+  if (dataInicial) return `a partir de ${formatarDia(dataInicial)}`;
+  if (dataFinal) return `até ${formatarDia(dataFinal)}`;
+  return 'todo o período';
+};
 
-function KpiCards({
-  reps,
-  laudos,
-  modo,
-}: {
-  reps: DashboardKpiStatus[]
-  laudos: DashboardKpiStatus[]
-  modo: ModoLayoutDashboard
-}) {
-  const classeContainer = modo === 'amplo' ? '2xl:grid-cols-2' : 'gap-3'
-  const classeHeader = modo === 'compacto' ? 'pb-1.5 pt-5' : 'pb-2 pt-5'
-  const classeTitulo = modo === 'compacto' ? 'text-base' : 'text-lg'
-  const classeCardContent = modo === 'compacto' ? 'pt-0 pb-5' : 'pt-0 pb-5'
-
-  return (
-    <div className={`grid gap-4 ${classeContainer}`}>
-      <Card className="border-border/80 bg-card/95">
-        <CardHeader className={classeHeader}>
-          <CardTitle className={`flex items-center gap-2 ${classeTitulo}`}>
-            <IconeRepMenu className="h-5 w-5 text-primary" />
-            REPs
-          </CardTitle>
-        </CardHeader>
-        <CardContent className={classeCardContent}>
-          <GridKpis itens={reps} modo={modo} />
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/80 bg-card/95">
-        <CardHeader className={classeHeader}>
-          <CardTitle className={`flex items-center gap-2 ${classeTitulo}`}>
-            <IconeLaudoMenu className="h-5 w-5 text-primary" />
-            Laudos
-          </CardTitle>
-        </CardHeader>
-        <CardContent className={classeCardContent}>
-          <GridKpis itens={laudos} modo={modo} />
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function AlertaPrazo({
-  prazoProximo,
-  prazoVencido,
-}: {
-  prazoProximo: number
-  prazoVencido: number
-}) {
-  if (prazoProximo <= 0 && prazoVencido <= 0) {
-    return null
-  }
-
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {prazoProximo > 0 && (
-        <Card className="animate-fade-in border-amber-300/80 bg-amber-50/70 dark:border-amber-700 dark:bg-amber-950/20">
-          <CardContent className="flex items-start justify-between p-5">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800 dark:text-amber-300">
-                Prazo próximo
-              </p>
-              <p className="text-3xl font-bold text-amber-900 dark:text-amber-200">{prazoProximo}</p>
-              <p className="text-sm text-amber-900/80 dark:text-amber-200/80">
-                REPs ativas vencendo nos próximos 7 dias.
-              </p>
-            </div>
-            <div className="rounded-xl border border-amber-300/80 bg-white/60 p-3 dark:border-amber-700 dark:bg-amber-950/30">
-              <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-300" />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {prazoVencido > 0 && (
-        <Card className="animate-fade-in border-red-300/80 bg-red-50/70 dark:border-red-700 dark:bg-red-950/20">
-          <CardContent className="flex items-start justify-between p-5">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-800 dark:text-red-300">
-                Prazo vencido
-              </p>
-              <p className="text-3xl font-bold text-red-900 dark:text-red-200">{prazoVencido}</p>
-              <p className="text-sm text-red-900/80 dark:text-red-200/80">
-                REPs ativas já ultrapassaram o prazo previsto.
-              </p>
-            </div>
-            <div className="rounded-xl border border-red-300/80 bg-white/60 p-3 dark:border-red-700 dark:bg-red-950/30">
-              <Siren className="h-5 w-5 text-red-700 dark:text-red-300" />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function LaudosRecentes({
-  laudos,
-  onAbrirLaudos,
-  modo,
-}: {
-  laudos: DashboardLaudoRecente[]
-  onAbrirLaudos: () => void
-  modo: ModoLayoutDashboard
-}) {
-  const laudosExibidos = laudos.slice(0, obterLimiteRecentes(modo))
-  const compacto = modo === 'compacto'
-
-  return (
-    <Card className="animate-fade-in border-border/80 bg-card/95">
-      <CardHeader className={`flex flex-row items-center justify-between gap-4 ${compacto ? 'pb-2 pt-5' : 'pb-3 pt-5'}`}>
-        <div className="space-y-1">
-          <CardTitle className={compacto ? 'text-base' : 'text-lg'}>Laudos recentes</CardTitle>
-          <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
-            Últimos laudos atualizados para retomada rápida.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={onAbrirLaudos}>
-          Abrir Laudos
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className={`space-y-2.5 ${compacto ? 'pt-0 pb-5' : 'pt-0 pb-5'}`}>
-        {laudos.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-            Nenhum laudo recente encontrado.
-          </div>
-        ) : (
-          laudosExibidos.map(laudo => (
-            <button
-              key={laudo.id}
-              type="button"
-              onClick={onAbrirLaudos}
-              className={`flex w-full items-center justify-between rounded-xl border border-border/70 bg-background/60 text-left transition-colors hover:bg-accent/70 ${compacto ? 'p-3' : 'p-4'}`}
-            >
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`rounded-lg bg-primary/10 text-primary ${compacto ? 'p-1.5' : 'p-2'}`}>
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className={`font-semibold text-foreground ${compacto ? 'text-sm' : ''}`}>REP {laudo.rep_numero}</p>
-                    <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>{laudo.tipo_exame_nome}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock3 className="h-3.5 w-3.5" />
-                  <span>{formatarDataRelativa(laudo.updated_at)}</span>
-                </div>
-              </div>
-              <Badge className={obterClasseBadgeStatus(laudo.status)}>
-                {laudo.status}
-              </Badge>
-            </button>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function RepsRecentes({
-  reps,
-  onAbrirReps,
-  modo,
-}: {
-  reps: DashboardRepRecente[]
-  onAbrirReps: () => void
-  modo: ModoLayoutDashboard
-}) {
-  const repsExibidas = reps.slice(0, obterLimiteRecentes(modo))
-  const compacto = modo === 'compacto'
-
-  return (
-    <Card className="animate-fade-in border-border/80 bg-card/95">
-      <CardHeader className={`flex flex-row items-center justify-between gap-4 ${compacto ? 'pb-2 pt-5' : 'pb-3 pt-5'}`}>
-        <div className="space-y-1">
-          <CardTitle className={compacto ? 'text-base' : 'text-lg'}>REPs recentes</CardTitle>
-          <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
-            Últimas requisições atualizadas para retomada rápida.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={onAbrirReps}>
-          Abrir REPs
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className={`space-y-2.5 ${compacto ? 'pt-0 pb-5' : 'pt-0 pb-5'}`}>
-        {reps.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-            Nenhuma REP recente encontrada.
-          </div>
-        ) : (
-          repsExibidas.map(rep => (
-            <button
-              key={rep.id}
-              type="button"
-              onClick={onAbrirReps}
-              className={`flex w-full items-center justify-between rounded-xl border border-border/70 bg-background/60 text-left transition-colors hover:bg-accent/70 ${compacto ? 'p-3' : 'p-4'}`}
-            >
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`rounded-lg bg-primary/10 text-primary ${compacto ? 'p-1.5' : 'p-2'}`}>
-                    <IconeRepMenu className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className={`font-semibold text-foreground ${compacto ? 'text-sm' : ''}`}>REP {rep.numero}</p>
-                    <p className={`${compacto ? 'text-xs' : 'text-sm'} text-muted-foreground`}>{rep.tipo_exame_nome}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock3 className="h-3.5 w-3.5" />
-                  <span>{formatarDataRelativa(rep.updated_at)}</span>
-                </div>
-              </div>
-              <Badge className={obterClasseBadgeStatus(rep.status)}>
-                {rep.status}
-              </Badge>
-            </button>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function TempoMedioCiclo({
-  itens,
-  modo,
-}: {
-  itens: DashboardTempoMedioTipoExame[]
-  modo: ModoLayoutDashboard
-}) {
-  const itensExibidos = itens.slice(0, obterLimiteTempoMedio(modo))
-  const compacto = modo === 'compacto'
-
-  return (
-    <Card className="animate-fade-in border-border/80 bg-card/95">
-      <CardHeader className={compacto ? 'pb-2 pt-5' : 'pb-3 pt-5'}>
-        <CardTitle className={`flex items-center gap-2 ${compacto ? 'text-base' : 'text-lg'}`}>
-          <Gauge className="h-5 w-5 text-primary" />
-          Tempo médio de ciclo
-        </CardTitle>
-      </CardHeader>
-      <CardContent className={`space-y-2.5 ${compacto ? 'pt-0 pb-5' : 'pt-0 pb-5'}`}>
-        {itens.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-            Ainda não há laudos concluídos suficientes para calcular o tempo médio de ciclo.
-          </div>
-        ) : (
-          itensExibidos.map(item => (
-            <div
-              key={`${item.tipoExameId ?? item.tipoExameNome}`}
-              className={`flex items-center justify-between rounded-xl border border-border/70 bg-background/60 ${compacto ? 'px-3 py-2.5' : 'px-4 py-3'}`}
-            >
-              <div>
-                <p className={`font-medium text-foreground ${compacto ? 'text-sm' : ''}`}>{item.tipoExameNome}</p>
-                <p className="text-xs text-muted-foreground">
-                  {item.totalLaudos} laudo{item.totalLaudos === 1 ? '' : 's'} concluído{item.totalLaudos === 1 ? '' : 's'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className={`${compacto ? 'text-base' : 'text-lg'} font-semibold text-foreground`}>
-                  {formatarDuracaoDias(item.tempoMedioDias)}
-                </p>
-              </div>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function CardProjecoes({
-  expandido,
-  onExpandidoChange,
+function GraficoStatus({
+  titulo,
   dados,
-  carregando,
-  erro,
+  aoSelecionar,
+  tipo,
 }: {
-  expandido: boolean
-  onExpandidoChange: (expandido: boolean) => void
-  dados: DashboardProjecoes | null
-  carregando: boolean
-  erro: string | null
+  titulo: string;
+  dados: DashboardKpiStatus[];
+  aoSelecionar: (status: string) => void;
+  tipo: TipoGrafico;
 }) {
-  const historicoMensal = dados?.historicoMensal ?? []
-  const resumoAnual = dados?.resumoAnual ?? []
-  const indicador = dados?.indicadorConfiabilidade
-
+  const preenchidos = dados.map((item, indice) => ({ ...item, cor: cores[indice % cores.length] }));
+  const dadosEmpilhados = [
+    preenchidos.reduce<Record<string, string | number>>(
+      (acumulado, item) => ({ ...acumulado, [item.status]: item.total }),
+      { grupo: 'Quantidade' }
+    ),
+  ];
+  const vazio = preenchidos.every(item => item.total === 0);
   return (
-    <Collapsible
-      open={expandido}
-      onOpenChange={onExpandidoChange}
-      className="rounded-3xl border border-border/80 bg-card/95 shadow-sm"
-    >
-      <div className="flex items-center justify-between gap-4 p-5">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <LineChart className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold text-foreground">Projeções</h2>
+    <Card>
+      <CardHeader className="space-y-1 p-4 pb-2">
+        <CardTitle>{titulo}</CardTitle>
+        <CardDescription>
+          {vazio
+            ? 'Sem dados para o período atual.'
+            : 'Selecione um segmento para filtrar a lista correspondente.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="h-56 p-4 pt-0">
+        {vazio ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            Nenhum registro encontrado.
           </div>
-          <p className="text-sm text-muted-foreground">
-            Estimativas com base nos laudos concluídos do histórico.
-          </p>
-        </div>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-            aria-label={expandido ? 'Recolher projeções' : 'Expandir projeções'}
-          >
-            {expandido ? 'Recolher' : 'Expandir'}
-            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${expandido ? 'rotate-180' : ''}`} />
-          </button>
-        </CollapsibleTrigger>
-      </div>
-
-      <CollapsibleContent forceMount className={expandido ? 'border-t border-border/80' : 'hidden'}>
-        <div className="space-y-6 p-5">
-          {carregando && (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Skeleton className="h-56 rounded-2xl bg-muted" />
-              <Skeleton className="h-56 rounded-2xl bg-muted" />
-              <Skeleton className="h-72 rounded-2xl bg-muted lg:col-span-2" />
-            </div>
-          )}
-
-          {!carregando && erro && (
-            <Card className="border-red-300/80 bg-red-50/60 dark:border-red-700 dark:bg-red-950/20">
-              <CardContent className="flex items-start gap-3 p-6">
-                <AlertTriangle className="mt-0.5 h-5 w-5 text-red-700 dark:text-red-300" />
-                <div>
-                  <p className="font-semibold text-red-900 dark:text-red-200">Falha ao carregar projeções</p>
-                  <p className="text-sm text-red-900/80 dark:text-red-200/80">{erro}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {!carregando && !erro && dados && (
-            <>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card className="border-border/80 bg-card/95">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Projeção mensal</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className={indicador?.dadosInsuficientes ? 'opacity-65' : ''}>
-                      <p className="text-sm text-muted-foreground">Projeção estimada</p>
-                      <p className="text-3xl font-bold text-foreground">
-                        {dados.projecaoMensalEstimada?.totalConcluidos ?? 0}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatarPeriodoMensal(dados.projecaoMensalEstimada)}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-                      <p className="text-sm font-medium text-foreground">Base histórica analisada</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {dados.baseHistoricaAnalisada.primeiroMes
-                          ? `${formatarMesAno(dados.baseHistoricaAnalisada.primeiroMes)} até ${formatarMesAno(dados.baseHistoricaAnalisada.ultimoMes ?? dados.baseHistoricaAnalisada.primeiroMes)}`
-                          : 'Sem base histórica disponível'}
-                      </p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {dados.baseHistoricaAnalisada.totalLaudosConcluidos} laudos concluídos observados
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border/80 bg-card/95">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Projeção anual</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className={indicador?.dadosInsuficientes ? 'opacity-65' : ''}>
-                      <p className="text-sm text-muted-foreground">Projeção estimada</p>
-                      <p className="text-3xl font-bold text-foreground">
-                        {dados.projecaoAnualEstimada?.totalConcluidos ?? 0}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatarPeriodoAnual(dados.projecaoAnualEstimada)}
-                      </p>
-                    </div>
-                    {indicador && (
-                      <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={classesConfiabilidade[indicador.nivel]}>
-                            {indicador.dadosInsuficientes ? 'Base insuficiente' : 'Base suficiente'}
-                          </Badge>
-                          <Badge variant="outline">
-                            Cobertura {formatarCoberturaHistorica(indicador)}
-                          </Badge>
-                        </div>
-                        <p className="mt-3 text-sm text-muted-foreground">{indicador.mensagem}</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card className="border-border/80 bg-card/95">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <CalendarRange className="h-4 w-4 text-primary" />
-                    Histórico mensal observado
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 lg:grid-cols-2">
-                  {historicoMensal.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground lg:col-span-2">
-                      Nenhum laudo concluído encontrado no histórico.
-                    </div>
-                  ) : (
-                    historicoMensal.map(item => (
-                      <div
-                        key={item.referencia}
-                        className="flex items-center justify-between rounded-xl border border-border/70 bg-background/60 px-4 py-3"
-                      >
-                        <span className="text-sm font-medium text-foreground">{formatarMesAno(item.referencia)}</span>
-                        <span className="text-sm text-muted-foreground">{item.totalConcluidos} concluído(s)</span>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/80 bg-card/95">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Consolidado anual observado</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  {resumoAnual.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground md:col-span-2">
-                      Nenhum consolidado anual disponível.
-                    </div>
-                  ) : (
-                    resumoAnual.map(item => (
-                      <div
-                        key={item.ano}
-                        className="rounded-xl border border-border/70 bg-background/60 px-4 py-3"
-                      >
-                        <p className="font-semibold text-foreground">{item.ano}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {item.totalConcluidos} concluído(s) em {item.mesesComDados} mês(es) com dados
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  )
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            {tipo === 'rosca' ? (
+              <PieChart>
+                <Pie
+                  data={preenchidos}
+                  dataKey="total"
+                  nameKey="status"
+                  innerRadius={58}
+                  outerRadius={90}
+                  onClick={item => aoSelecionar(texto(item.status))}
+                >
+                  {preenchidos.map(item => (
+                    <Cell key={item.status} fill={item.cor} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  reverseDirection={{ x: true, y: true }}
+                  cursor={false}
+                  offset={8}
+                />
+                <Legend />
+              </PieChart>
+            ) : tipo === 'empilhado' ? (
+              <BarChart data={dadosEmpilhados}>
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="grupo" width={90} />
+                <Tooltip
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  reverseDirection={{ x: true, y: true }}
+                  cursor={false}
+                  offset={8}
+                />
+                <Legend />
+                {preenchidos.map(item => (
+                  <Bar
+                    key={item.status}
+                    dataKey={item.status}
+                    stackId="status"
+                    fill={item.cor}
+                    onClick={() => aoSelecionar(item.status)}
+                  />
+                ))}
+              </BarChart>
+            ) : (
+              <BarChart data={preenchidos} layout="vertical">
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="status" width={110} />
+                <Tooltip
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  reverseDirection={{ x: true, y: true }}
+                  cursor={false}
+                  offset={8}
+                />
+                <Legend />
+                <Bar
+                  dataKey="total"
+                  name="Quantidade"
+                  onClick={item => aoSelecionar(texto(item.status))}
+                >
+                  {preenchidos.map(item => (
+                    <Cell key={item.status} fill={item.cor} />
+                  ))}
+                </Bar>
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function DashboardPage() {
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const [dadosResumo, setDadosResumo] = useState<DashboardResumo | null>(null)
-  const [carregandoResumo, setCarregandoResumo] = useState(true)
-  const [erroResumo, setErroResumo] = useState<string | null>(null)
-  const [dadosProjecoes, setDadosProjecoes] = useState<DashboardProjecoes | null>(null)
-  const [carregandoProjecoes, setCarregandoProjecoes] = useState(false)
-  const [erroProjecoes, setErroProjecoes] = useState<string | null>(null)
-  const [projecoesExpandidas, setProjecoesExpandidas] = useState<boolean>(() => {
+  const navegar = useNavigate();
+  const [resumo, setResumo] = useState<DashboardResumo | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [tipoGrafico, setTipoGrafico] = useState<TipoGrafico>(() => {
+    const valor = window.localStorage.getItem(CHAVE_GRAFICO);
+    return valor === 'barras' || valor === 'empilhado' ? valor : 'rosca';
+  });
+  const [filtros, setFiltros] = useState<DashboardConsultaLaudosEntrada>({
+    tipoData: 'criacao',
+    pagina: 1,
+    tamanhoPagina: 10,
+  });
+  const [consulta, setConsulta] = useState<DashboardConsultaLaudosResultado | null>(null);
+  const [buscaLaudo, setBuscaLaudo] = useState('');
+  const [resultadoBuscaLaudo, setResultadoBuscaLaudo] =
+    useState<DashboardConsultaLaudosResultado | null>(null);
+  const [consultando, setConsultando] = useState(false);
+  const [erroConsulta, setErroConsulta] = useState<string | null>(null);
+  const [erroProducao, setErroProducao] = useState<string | null>(null);
+  const [erroCronologia, setErroCronologia] = useState<string | null>(null);
+  const [carregandoProducao, setCarregandoProducao] = useState(false);
+  const [cronologia, setCronologia] = useState<DashboardCronologiaLaudo | null>(null);
+  const [graficoConsultaAberto, setGraficoConsultaAberto] = useState(false);
+  const [producao, setProducao] = useState<DashboardProducaoLaudosResultado[]>([]);
+  const [naturezasProducao, setNaturezasProducao] = useState<
+    DashboardProducaoLaudosResultado['natureza'][]
+  >([]);
+  const [filtrosProducao, setFiltrosProducao] = useState<DashboardProducaoLaudosEntrada>({});
+  const [secoesExpandidas, setSecoesExpandidas] = useState<SecoesExpandidas>(() =>
+    obterSecoesExpandidas()
+  );
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    setErro(null);
     try {
-      return localStorage.getItem(CHAVE_PROJECOES_EXPANDIDO) === 'true'
-    } catch {
-      return false
-    }
-  })
-  const [modoLayout, setModoLayout] = useState<ModoLayoutDashboard>(() =>
-    obterModoLayoutDashboard(window.innerWidth, window.innerHeight),
-  )
-
-  const carregarResumo = useCallback(async () => {
-    setCarregandoResumo(true)
-    setErroResumo(null)
-
-    try {
-      const resposta = await window.ipcAPI.dashboard.resumo() as RespostaDashboard<DashboardResumo>
-      if (!resposta.success) {
-        throw new Error(resposta.error || 'Não foi possível carregar o dashboard')
-      }
-
-      setDadosResumo(normalizarDashboardResumo(resposta.data))
+      const resposta = (await window.ipcAPI.dashboard.resumo()) as Resposta<DashboardResumo>;
+      if (!resposta.success) throw new Error(resposta.error);
+      setResumo(normalizarResumo(resposta.data));
     } catch (error) {
-      setErroResumo(error instanceof Error ? error.message : 'Erro inesperado ao carregar o dashboard')
+      setErro(error instanceof Error ? error.message : 'Erro ao carregar dashboard');
     } finally {
-      setCarregandoResumo(false)
+      setCarregando(false);
     }
-  }, [])
-
-  useEffect(() => {
-    void carregarResumo()
-  }, [carregarResumo, pathname])
-
-  useEffect(() => {
-    const onFocus = () => {
-      if (document.visibilityState === 'visible') {
-        void carregarResumo()
+  }, []);
+  const carregarProducao = useCallback(async (entrada: DashboardProducaoLaudosEntrada = {}) => {
+    setCarregandoProducao(true);
+    setErroProducao(null);
+    try {
+      const resposta = (await window.ipcAPI.dashboard.producaoLaudos(entrada)) as Resposta<unknown>;
+      if (!resposta.success)
+        throw new Error(resposta.error || 'Erro ao consultar produção de laudos');
+      const dados = normalizarProducao(resposta.data);
+      setProducao(dados);
+      if (!entrada.tipoExameId && !entrada.dataInicial && !entrada.dataFinal) {
+        setNaturezasProducao(dados.map(item => item.natureza));
       }
+    } catch (error) {
+      setErroProducao(
+        error instanceof Error ? error.message : 'Erro ao consultar produção de laudos'
+      );
+    } finally {
+      setCarregandoProducao(false);
     }
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void carregarResumo()
-      }
-    }
-
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [carregarResumo])
-
+  }, []);
   useEffect(() => {
-    const onResize = () => {
-      setModoLayout(obterModoLayoutDashboard(window.innerWidth, window.innerHeight))
+    void carregar();
+    void carregarProducao();
+  }, [carregar, carregarProducao]);
+  const consultar = async (pagina = 1) => {
+    setConsultando(true);
+    setErroConsulta(null);
+    const entrada = { ...filtros, pagina };
+    try {
+      const resposta = (await window.ipcAPI.dashboard.consultarLaudos(
+        entrada
+      )) as Resposta<unknown>;
+      if (!resposta.success) throw new Error(resposta.error || 'Erro ao consultar laudos');
+      setConsulta(normalizarConsulta(resposta.data));
+    } catch (error) {
+      setConsulta(null);
+      setErroConsulta(error instanceof Error ? error.message : 'Erro ao consultar laudos');
+    } finally {
+      setConsultando(false);
     }
-
-    window.addEventListener('resize', onResize)
-    return () => {
-      window.removeEventListener('resize', onResize)
+  };
+  const consultarPorLaudo = async () => {
+    setErroConsulta(null);
+    setConsultando(true);
+    try {
+      const resposta = (await window.ipcAPI.dashboard.consultarLaudos({
+        tipoData: 'criacao',
+        busca: buscaLaudo,
+        pagina: 1,
+        tamanhoPagina: 10,
+      })) as Resposta<unknown>;
+      if (!resposta.success) throw new Error(resposta.error || 'Erro ao consultar laudos');
+      setResultadoBuscaLaudo(normalizarConsulta(resposta.data));
+    } catch (error) {
+      setResultadoBuscaLaudo(null);
+      setErroConsulta(error instanceof Error ? error.message : 'Erro ao consultar laudos');
+    } finally {
+      setConsultando(false);
     }
-  }, [])
-
-  useEffect(() => {
-    if (!projecoesExpandidas || dadosProjecoes) {
-      return
-    }
-
-    let ativo = true
-
-    const carregarProjecoes = async () => {
-      setCarregandoProjecoes(true)
-      setErroProjecoes(null)
-
-      try {
-        const resposta = await window.ipcAPI.dashboard.projecoes() as RespostaDashboard<DashboardProjecoes>
-        if (!resposta.success) {
-          throw new Error(resposta.error || 'Não foi possível carregar as projeções')
-        }
-
-        if (ativo) {
-          setDadosProjecoes(normalizarDashboardProjecoes(resposta.data))
-        }
-      } catch (error) {
-        if (ativo) {
-          setErroProjecoes(error instanceof Error ? error.message : 'Erro inesperado ao carregar projeções')
-        }
-      } finally {
-        if (ativo) {
-          setCarregandoProjecoes(false)
-        }
-      }
-    }
-
-    void carregarProjecoes()
-
-    return () => {
-      ativo = false
-    }
-  }, [dadosProjecoes, projecoesExpandidas])
-
-  const handleExpandidoChange = (expandido: boolean) => {
-    setProjecoesExpandidas(expandido)
-    localStorage.setItem(CHAVE_PROJECOES_EXPANDIDO, String(expandido))
-  }
-
-  const vazio = dashboardVazio(dadosResumo)
-  const layoutCompacto = modoLayout === 'compacto'
-  const classeListasRecentes = modoLayout === 'compacto' ? '2xl:grid-cols-2' : 'xl:grid-cols-2'
-  const classePainel = layoutCompacto ? 'space-y-4' : 'space-y-6'
-
+  };
+  const abrirCronologia = async (laudoId: string) => {
+    setErroCronologia(null);
+    const resposta = (await window.ipcAPI.dashboard.cronologiaLaudo(laudoId)) as Resposta<unknown>;
+    const dados = resposta.success ? normalizarCronologia(resposta.data) : null;
+    if (dados) setCronologia(dados);
+    else setErroCronologia(resposta.error || 'Não foi possível carregar a cronologia do laudo');
+  };
+  const selecionarGrafico = (status: string, rota: '/reps' | '/laudos') =>
+    navegar(`${rota}?status=${encodeURIComponent(status)}`);
+  const prioridades = useMemo(
+    () =>
+      resumo
+        ? [
+            {
+              titulo: 'REPs vencidas',
+              total: resumo.repsPrazoVencido,
+              rota: '/reps?prioridade=vencida',
+            },
+            {
+              titulo: 'REPs vencendo em até 7 dias',
+              total: resumo.repsPrazoProximo,
+              rota: '/reps?prioridade=proxima',
+            },
+            {
+              titulo: 'Laudos concluídos aguardando entrega',
+              total: resumo.laudosConcluidosAguardandoEntrega,
+              rota: '/laudos?prioridade=aguardando-entrega',
+            },
+            {
+              titulo: 'Laudos sem alteração há 7 dias',
+              total: resumo.laudosEmAndamentoSemAlteracao,
+              rota: '/laudos?prioridade=sem-alteracao',
+            },
+          ]
+        : [],
+    [resumo]
+  );
+  const mudarGrafico = (valor: TipoGrafico) => {
+    setTipoGrafico(valor);
+    window.localStorage.setItem(CHAVE_GRAFICO, valor);
+  };
+  const alternarSecao = (secao: SecaoDashboard) => {
+    const proximas = { ...secoesExpandidas, [secao]: !secoesExpandidas[secao] };
+    window.localStorage.setItem(CHAVE_SECOES, JSON.stringify(proximas));
+    setSecoesExpandidas(proximas);
+  };
+  if (carregando) return <div className="p-6 text-muted-foreground">Carregando dashboard...</div>;
+  if (erro)
+    return (
+      <Card className="m-6 border-destructive">
+        <CardContent className="flex items-center gap-3 p-6">
+          <AlertTriangle />
+          <span>{erro}</span>
+          <Button variant="outline" onClick={() => void carregar()}>
+            <RefreshCcw />
+            Tentar novamente
+          </Button>
+        </CardContent>
+      </Card>
+    );
   return (
-    <div className={classePainel}>
-      {carregandoResumo && !dadosResumo && <DashboardSkeleton />}
-
-      {!carregandoResumo && erroResumo && !dadosResumo && (
-        <DashboardErro mensagem={erroResumo} onTentarNovamente={() => void carregarResumo()} />
-      )}
-
-      {!carregandoResumo && !erroResumo && dadosResumo && vazio && <DashboardVazio />}
-
-      {!carregandoResumo && dadosResumo && !vazio && (
-        <div className={classePainel}>
-          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os indicadores principais.')}>
-            <KpiCards reps={dadosResumo.repsPorStatus} laudos={dadosResumo.laudosPorStatus} modo={modoLayout} />
-          </ErrorBoundary>
-
-          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os alertas de prazo.')}>
-            <AlertaPrazo
-              prazoProximo={dadosResumo.repsPrazoProximo}
-              prazoVencido={dadosResumo.repsPrazoVencido}
+    <div className="relative isolate min-h-full overflow-hidden">
+      <img
+        src={logo}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-1/2 z-0 w-[min(42rem,72vw)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.035] grayscale dark:opacity-[0.06]"
+      />
+      <div className="container relative z-10 mx-auto space-y-3 p-3 md:p-4">
+        <Card>
+          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
+            <div className="space-y-0.5">
+              <CardTitle className="flex gap-2">
+                <BarChart3 />
+                Situação atual
+              </CardTitle>
+              <CardDescription>
+                Status das REPs e laudos, com prioridades operacionais.
+              </CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={secoesExpandidas.situacao}
+              onClick={() => alternarSecao('situacao')}
+            >
+              {secoesExpandidas.situacao ? 'Recolher' : 'Expandir'}
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${secoesExpandidas.situacao ? 'rotate-180' : ''}`}
+              />
+            </Button>
+          </CardHeader>
+          {secoesExpandidas.situacao && (
+            <CardContent className="space-y-3 p-4 pt-2">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="tipo-grafico">Visualização</Label>
+                <Select
+                  value={tipoGrafico}
+                  onValueChange={valor => mudarGrafico(valor as TipoGrafico)}
+                >
+                  <SelectTrigger id="tipo-grafico" className="h-9 w-52">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="barras">Barras horizontais</SelectItem>
+                    <SelectItem value="rosca">Rosca</SelectItem>
+                    <SelectItem value="empilhado">Barras empilhadas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <GraficoStatus
+                  titulo="Status das REPs"
+                  dados={resumo?.repsPorStatus ?? []}
+                  tipo={tipoGrafico}
+                  aoSelecionar={status => selecionarGrafico(status, '/reps')}
+                />
+                <GraficoStatus
+                  titulo="Status dos laudos"
+                  dados={resumo?.laudosPorStatus ?? []}
+                  tipo={tipoGrafico}
+                  aoSelecionar={status => selecionarGrafico(status, '/laudos')}
+                />
+              </div>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                {prioridades.map(item => (
+                  <button
+                    key={item.titulo}
+                    type="button"
+                    onClick={() => navegar(item.rota)}
+                    className="rounded-lg border bg-card p-3 text-left transition-colors hover:bg-accent"
+                  >
+                    <p className="text-2xl font-bold">{item.total}</p>
+                    <p className="text-sm text-muted-foreground">{item.titulo}</p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+        <Card>
+          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
+            <div className="space-y-0.5">
+              <CardTitle className="flex gap-2">
+                <CalendarSearch />
+                Consulta cronológica
+              </CardTitle>
+              <CardDescription>
+                Por período, com a distribuição de todos os resultados filtrados.
+              </CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={secoesExpandidas.cronologia}
+              onClick={() => alternarSecao('cronologia')}
+            >
+              {secoesExpandidas.cronologia ? 'Recolher' : 'Expandir'}
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${secoesExpandidas.cronologia ? 'rotate-180' : ''}`}
+              />
+            </Button>
+          </CardHeader>
+          {secoesExpandidas.cronologia && (
+            <CardContent className="p-4 pt-0">
+              <Tabs defaultValue="periodo">
+                <TabsList>
+                  <TabsTrigger value="periodo">Por período</TabsTrigger>
+                  <TabsTrigger value="laudo">Por laudo</TabsTrigger>
+                </TabsList>
+                <TabsContent value="periodo" className="space-y-4">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(14rem,0.7fr)_minmax(28rem,1.3fr)]">
+                    <Card className="border-border/80 bg-muted/20 shadow-none">
+                      <CardContent className="space-y-2 p-4">
+                        <Label htmlFor="busca-cronologica">Busca</Label>
+                        <Input
+                          id="busca-cronologica"
+                          placeholder="REP, código ou natureza"
+                          value={filtros.busca ?? ''}
+                          onChange={evento =>
+                            setFiltros({ ...filtros, busca: evento.target.value })
+                          }
+                        />
+                      </CardContent>
+                    </Card>
+                    <Card className="border-primary/20 bg-accent/30 shadow-none">
+                      <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="marco-cronologico">Marco consultado</Label>
+                          <Select
+                            value={filtros.tipoData}
+                            onValueChange={valor =>
+                              setFiltros({
+                                ...filtros,
+                                tipoData: valor as DashboardTipoDataConsulta,
+                              })
+                            }
+                          >
+                            <SelectTrigger id="marco-cronologico">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="criacao">Criação</SelectItem>
+                              <SelectItem value="alteracao">Alteração</SelectItem>
+                              <SelectItem value="conclusao">Conclusão</SelectItem>
+                              <SelectItem value="entrega">Entrega/envio</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="inicio-cronologico">Data inicial</Label>
+                          <Input
+                            id="inicio-cronologico"
+                            type="date"
+                            value={filtros.dataInicial ?? ''}
+                            onChange={evento =>
+                              setFiltros({
+                                ...filtros,
+                                dataInicial: evento.target.value || undefined,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="fim-cronologico">Data final</Label>
+                          <Input
+                            id="fim-cronologico"
+                            type="date"
+                            value={filtros.dataFinal ?? ''}
+                            onChange={evento =>
+                              setFiltros({
+                                ...filtros,
+                                dataFinal: evento.target.value || undefined,
+                              })
+                            }
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  <Button onClick={() => void consultar()} disabled={consultando}>
+                    {consultando ? 'Consultando...' : 'Consultar'}
+                  </Button>
+                  {erroConsulta && <p className="text-sm text-destructive">{erroConsulta}</p>}
+                  {consulta && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          {consulta.total} resultado(s)
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={consulta.total === 0}
+                          onClick={() => setGraficoConsultaAberto(true)}
+                        >
+                          Gerar gráfico
+                        </Button>
+                      </div>
+                      {consulta.itens.length ? (
+                        consulta.itens.map(item => (
+                          <button
+                            type="button"
+                            key={item.id}
+                            onClick={() => void abrirCronologia(item.id)}
+                            className="flex w-full justify-between rounded border p-3 text-left hover:bg-accent"
+                          >
+                            <span>
+                              REP {item.repNumero} · {item.tipoExameNome}
+                            </span>
+                            <span>
+                              {item.status} · {formatarData(item.dataOrdenacao)}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="rounded border border-dashed p-4 text-sm text-muted-foreground">
+                          Nenhum laudo encontrado para os filtros informados.
+                        </p>
+                      )}
+                      {consulta.total > consulta.tamanhoPagina && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            disabled={consulta.pagina === 1}
+                            onClick={() => void consultar(consulta.pagina - 1)}
+                          >
+                            Anterior
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={consulta.pagina * consulta.tamanhoPagina >= consulta.total}
+                            onClick={() => void consultar(consulta.pagina + 1)}
+                          >
+                            Próxima
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="laudo" className="space-y-4">
+                  <div className="flex gap-3 rounded-lg border border-primary/20 bg-accent/30 p-4">
+                    <Input
+                      placeholder="Número da REP, código ou natureza"
+                      value={buscaLaudo}
+                      onChange={evento => setBuscaLaudo(evento.target.value)}
+                    />
+                    <Button
+                      disabled={!buscaLaudo.trim() || consultando}
+                      onClick={() => void consultarPorLaudo()}
+                    >
+                      {consultando ? 'Buscando...' : 'Buscar laudo'}
+                    </Button>
+                    {erroConsulta && <p className="text-sm text-destructive">{erroConsulta}</p>}
+                  </div>
+                  {resultadoBuscaLaudo && (
+                    <div className="space-y-2">
+                      {resultadoBuscaLaudo.itens.length ? (
+                        resultadoBuscaLaudo.itens.map(item => (
+                          <button
+                            type="button"
+                            key={item.id}
+                            onClick={() => void abrirCronologia(item.id)}
+                            className="flex w-full justify-between rounded border p-3 text-left transition-colors hover:bg-accent"
+                          >
+                            <span>
+                              REP {item.repNumero} · {item.tipoExameNome}
+                            </span>
+                            <span className="text-sm text-muted-foreground">{item.status}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="rounded border border-dashed p-4 text-sm text-muted-foreground">
+                          Nenhum laudo encontrado para esta busca.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+              {erroCronologia && <p className="mt-3 text-sm text-destructive">{erroCronologia}</p>}
+            </CardContent>
+          )}
+        </Card>
+        <Card>
+          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
+            <div className="space-y-0.5">
+              <CardTitle className="flex gap-2">
+                <Clock3 />
+                Produção de laudos
+              </CardTitle>
+              <CardDescription>
+                Ciclos em dias corridos para todo o histórico concluído.
+              </CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={secoesExpandidas.producao}
+              onClick={() => alternarSecao('producao')}
+            >
+              {secoesExpandidas.producao ? 'Recolher' : 'Expandir'}
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${secoesExpandidas.producao ? 'rotate-180' : ''}`}
+              />
+            </Button>
+          </CardHeader>
+          {secoesExpandidas.producao && (
+            <CardContent className="space-y-3 p-4 pt-0">
+              <div className="grid gap-3 rounded-lg border border-primary/20 bg-accent/30 p-4 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="natureza-producao">Natureza</Label>
+                  <Select
+                    value={filtrosProducao.tipoExameId ?? 'todos'}
+                    onValueChange={valor =>
+                      setFiltrosProducao({
+                        ...filtrosProducao,
+                        tipoExameId: valor === 'todos' ? undefined : valor,
+                      })
+                    }
+                  >
+                    <SelectTrigger id="natureza-producao">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas as naturezas</SelectItem>
+                      {naturezasProducao.map(natureza => (
+                        <SelectItem key={natureza.id} value={natureza.id}>
+                          {natureza.codigo ? `${natureza.codigo} — ` : ''}
+                          {natureza.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inicio-producao">Conclusão inicial</Label>
+                  <Input
+                    id="inicio-producao"
+                    type="date"
+                    value={filtrosProducao.dataInicial ?? ''}
+                    onChange={evento =>
+                      setFiltrosProducao({
+                        ...filtrosProducao,
+                        dataInicial: evento.target.value || undefined,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fim-producao">Conclusão final</Label>
+                  <Input
+                    id="fim-producao"
+                    type="date"
+                    value={filtrosProducao.dataFinal ?? ''}
+                    onChange={evento =>
+                      setFiltrosProducao({
+                        ...filtrosProducao,
+                        dataFinal: evento.target.value || undefined,
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full"
+                    disabled={carregandoProducao}
+                    onClick={() => void carregarProducao(filtrosProducao)}
+                  >
+                    {carregandoProducao ? 'Consultando...' : 'Aplicar filtros'}
+                  </Button>
+                </div>
+              </div>
+              {erroProducao && <p className="text-sm text-destructive">{erroProducao}</p>}
+              <div className="grid gap-3 md:grid-cols-2">
+                {producao.length ? (
+                  producao.map(item => (
+                    <div key={item.natureza.id} className="rounded border p-4">
+                      <p className="font-medium">
+                        {item.natureza.codigo ? `${item.natureza.codigo} — ` : ''}
+                        {item.natureza.nome}
+                      </p>
+                      <p className="mt-2 text-sm">
+                        REP até conclusão: média {item.repAteConclusao.mediaDias.toFixed(1)} ·
+                        mediana {item.repAteConclusao.medianaDias.toFixed(1)} (
+                        {item.repAteConclusao.quantidade})
+                      </p>
+                      <p className="text-sm">
+                        Laudo até conclusão: média {item.laudoAteConclusao.mediaDias.toFixed(1)} ·
+                        mediana {item.laudoAteConclusao.medianaDias.toFixed(1)} (
+                        {item.laudoAteConclusao.quantidade})
+                      </p>
+                      {item.repAteConclusao.quantidade === 1 && (
+                        <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                          A amostra possui apenas um laudo.
+                        </p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma amostra válida encontrada.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+        <Dialog open={graficoConsultaAberto} onOpenChange={setGraficoConsultaAberto}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>
+                Distribuição por status — {rotuloTipoData[filtros.tipoData]} ·{' '}
+                {descreverPeriodo(filtros.dataInicial, filtros.dataFinal)} ({consulta?.total ?? 0}{' '}
+                laudos)
+              </DialogTitle>
+            </DialogHeader>
+            <GraficoStatus
+              titulo="Resultado da consulta"
+              dados={consulta?.porStatus ?? []}
+              tipo={tipoGrafico}
+              aoSelecionar={() => undefined}
             />
-          </ErrorBoundary>
-
-          <div className={`grid gap-4 ${classeListasRecentes}`}>
-            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar as REPs recentes.')}>
-              <RepsRecentes reps={dadosResumo.repsRecentes} onAbrirReps={() => navigate('/reps')} modo={modoLayout} />
-            </ErrorBoundary>
-            <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar os laudos recentes.')}>
-              <LaudosRecentes laudos={dadosResumo.laudosRecentes} onAbrirLaudos={() => navigate('/laudos')} modo={modoLayout} />
-            </ErrorBoundary>
-          </div>
-
-          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar o tempo médio de ciclo.')}>
-            <TempoMedioCiclo itens={dadosResumo.tempoMedioPorTipoExame} modo={modoLayout} />
-          </ErrorBoundary>
-
-          <ErrorBoundary fallback={fallbackBloco('Falha ao renderizar as projeções.')}>
-            <CardProjecoes
-              expandido={projecoesExpandidas}
-              onExpandidoChange={handleExpandidoChange}
-              dados={dadosProjecoes}
-              carregando={carregandoProjecoes}
-              erro={erroProjecoes}
-            />
-          </ErrorBoundary>
-        </div>
-      )}
+          </DialogContent>
+        </Dialog>
+        <Dialog open={Boolean(cronologia)} onOpenChange={aberto => !aberto && setCronologia(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cronologia — REP {cronologia?.laudo.repNumero}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              {cronologia && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navegar(`/laudos/${cronologia.laudo.id}/wizard`)}
+                >
+                  <ExternalLink />
+                  Abrir laudo
+                </Button>
+              )}
+              {cronologia?.marcos.map(marco => (
+                <div key={marco.nome}>
+                  <p className="font-medium">{marco.nome}</p>
+                  <p className="text-sm text-muted-foreground">{formatarData(marco.data)}</p>
+                </div>
+              ))}
+              <div>
+                <p className="font-medium">Transições auditadas</p>
+                {cronologia?.transicoes.length ? (
+                  cronologia.transicoes.map(evento => (
+                    <p
+                      key={`${evento.data}-${evento.statusNovo}`}
+                      className="text-sm text-muted-foreground"
+                    >
+                      {formatarData(evento.data)}: {evento.statusAnterior ?? '?'} →{' '}
+                      {evento.statusNovo ?? '?'}
+                    </p>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma transição auditada utilizável.
+                  </p>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
-  )
+  );
 }
-

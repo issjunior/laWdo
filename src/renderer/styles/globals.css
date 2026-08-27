@@ -60,6 +60,12 @@
     --ring: 224 76% 48%;
     --radius: 0.5rem;
 
+    /* Gráficos: escala azul coerente com a identidade visual do laWdo */
+    --chart-1: 224 76% 48%;
+    --chart-2: 204 86% 42%;
+    --chart-3: 174 58% 38%;
+    --chart-4: 252 66% 56%;
+
     /* Sidebar: navy escuro para máxima separação visual */
     --sidebar-background: 222 45% 18%;   /* #1a2540 */
     --sidebar-foreground: 210 40% 88%;   /* #cddaed */
@@ -100,6 +106,10 @@
     --border: 222 20% 24%;          /* #313b4e — bordas mais visíveis */
     --input: 222 20% 22%;           /* #2c3545 */
     --ring: 213 94% 68%;
+    --chart-1: 213 94% 68%;
+    --chart-2: 197 86% 64%;
+    --chart-3: 174 62% 54%;
+    --chart-4: 252 82% 74%;
     --sidebar-background: 222 30% 11%;
     --sidebar-foreground: 210 40% 93%;
     --sidebar-primary: 213 94% 68%;
