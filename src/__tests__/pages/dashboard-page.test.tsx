@@ -237,6 +237,10 @@ describe('DashboardPage', () => {
     expect(consultarLaudos).toHaveBeenLastCalledWith(
       expect.objectContaining({ pagina: 2 })
     );
+    for (const botao of screen.getAllByRole('button', { name: 'Recolher' })) {
+      fireEvent.click(botao);
+    }
+    expect(screen.getAllByRole('button', { name: 'Expandir' })).toHaveLength(3);
   });
 
   it('busca por laudo e comunica falhas de carregamento', async () => {
