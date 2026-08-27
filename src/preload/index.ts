@@ -238,6 +238,7 @@ export interface IpcAPI {
     findAll: () => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse>;
     findByTipoExame: (tipoExameId: string) => Promise<UserResponse>;
+    statusIntegrados: () => Promise<UserResponse>;
     create: (data: IpcPayload) => Promise<UserResponse>;
     update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
@@ -251,6 +252,8 @@ export interface IpcAPI {
     exportarPacote: (templateId: string) => Promise<UserResponse>;
     selecionarPacote: () => Promise<PacoteTemplateResponse>;
     importarPacote: (caminho: string, criarTipo: boolean) => Promise<PacoteTemplateResponse>;
+    clonar: (templateId: string) => Promise<UserResponse>;
+    salvarCompleto: (data: IpcPayload) => Promise<UserResponse>;
   };
 
   // Laudos
@@ -503,6 +506,7 @@ const ALLOWED_CHANNELS = new Set([
   'template:findAll',
   'template:findById',
   'template:findByTipoExame',
+  'template:statusIntegrados',
   'template:create',
   'template:update',
   'template:delete',
@@ -516,6 +520,8 @@ const ALLOWED_CHANNELS = new Set([
   'template:exportarPacote',
   'template:selecionarPacote',
   'template:importarPacote',
+  'template:clonar',
+  'template:salvarCompleto',
 
   // Laudos
   'laudo:findById',
@@ -1292,6 +1298,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findAll: () => invocarComDiagnostico('template:findAll'),
     findById: (id: string) => invocarComDiagnostico('template:findById', id),
     findByTipoExame: (tipoExameId: string) => invocarComDiagnostico('template:findByTipoExame', tipoExameId),
+    statusIntegrados: () => invocarComDiagnostico('template:statusIntegrados'),
     create: (data: IpcPayload) => invocarComDiagnostico('template:create', data),
     update: (id: string, data: IpcPayload) => invocarComDiagnostico('template:update', id, data),
     delete: (id: string) => invocarComDiagnostico('template:delete', id),
@@ -1305,6 +1312,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     exportarPacote: (templateId: string) => invocarComDiagnostico('template:exportarPacote', templateId),
     selecionarPacote: () => invocarComDiagnostico('template:selecionarPacote'),
     importarPacote: (caminho: string, criarTipo: boolean) => invocarComDiagnostico('template:importarPacote', caminho, criarTipo),
+    clonar: (templateId: string) => invocarComDiagnostico('template:clonar', templateId),
+    salvarCompleto: (data: IpcPayload) => invocarComDiagnostico('template:salvarCompleto', data),
   },
 
   laudo: {

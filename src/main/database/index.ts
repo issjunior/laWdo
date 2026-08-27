@@ -8,6 +8,7 @@ import {
   executeNonQuery,
 } from './sqlite.js';
 import { atualizarMarcadoresTemplateB602 } from './template-b602.migration.js';
+import { sincronizarTemplatesIntegrados } from '../templates/integrados/sincronizar-templates-integrados.js';
 
 const log = getLogger('database');
 
@@ -16,7 +17,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 31;
+const CURRENT_SCHEMA_VERSION = 32;
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -46,6 +47,12 @@ export const setupDatabase = async (): Promise<void> => {
     } else {
       log.debug(`Banco de dados encontrado: ${DB_PATH}`);
       await checkAndApplyMigrations();
+    }
+
+    const resultadosTemplates = await sincronizarTemplatesIntegrados();
+    const falhasTemplates = resultadosTemplates.filter(resultado => resultado.status === 'falha');
+    if (falhasTemplates.length > 0) {
+      log.warn('Alguns templates integrados permaneceram indisponíveis', { falhasTemplates });
     }
 
     // Testar conexão
@@ -271,6 +278,12 @@ const createDatabaseSchema = async (): Promise<void> => {
         tipo_exame_id TEXT,
         nome TEXT NOT NULL,
         descricao TEXT,
+        origem TEXT NOT NULL DEFAULT 'usuario',
+        chave_integrada TEXT,
+        versao_integrada INTEGER,
+        checksum_integrado TEXT,
+        disponivel_novos_laudos INTEGER NOT NULL DEFAULT 1,
+        derivado_de_chave TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id)
@@ -292,6 +305,10 @@ const createDatabaseSchema = async (): Promise<void> => {
         ordem INTEGER NOT NULL DEFAULT 0,
         parent_id TEXT,
         conteudo TEXT,
+        condicao TEXT,
+        repetir_para TEXT,
+        repetir_titulo TEXT,
+        chave_integrada TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE,
@@ -299,6 +316,10 @@ const createDatabaseSchema = async (): Promise<void> => {
       )
     `);
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_secoes_template_parent ON secoes_template(parent_id)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_secoes_template_template ON secoes_template(template_id)');
+    await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_templates_tipo_disponivel ON templates(tipo_exame_id, disponivel_novos_laudos)');
+    await executeNonQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_templates_integrados_chave_versao ON templates(chave_integrada, versao_integrada) WHERE chave_integrada IS NOT NULL');
+    await executeNonQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_secoes_integradas_template_chave ON secoes_template(template_id, chave_integrada) WHERE chave_integrada IS NOT NULL');
 
     // Criar índices
     await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_reps_status ON reps(status)');
@@ -1918,6 +1939,46 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.debug(`Migration v31: ${atualizadas} seção(ões) do template padrão B-602 atualizada(s)`);
     } catch (error) {
       log.error('Erro ao aplicar migration versão 31 do template B-602', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 32: metadados e índices de templates integrados
+  if (fromVersion < 32) {
+    try {
+      const colunasTemplates = await executeQuery<{ name: string }>('PRAGMA table_info(templates)');
+      const nomesTemplates = new Set(colunasTemplates.map(coluna => coluna.name));
+      const novasColunasTemplates = [
+        ['origem', "TEXT NOT NULL DEFAULT 'usuario'"],
+        ['chave_integrada', 'TEXT'],
+        ['versao_integrada', 'INTEGER'],
+        ['checksum_integrado', 'TEXT'],
+        ['disponivel_novos_laudos', 'INTEGER NOT NULL DEFAULT 1'],
+        ['derivado_de_chave', 'TEXT'],
+      ] as const;
+      for (const [nome, definicao] of novasColunasTemplates) {
+        if (!nomesTemplates.has(nome)) await executeNonQuery(`ALTER TABLE templates ADD COLUMN ${nome} ${definicao}`);
+      }
+
+      const colunasSecoes = await executeQuery<{ name: string }>('PRAGMA table_info(secoes_template)');
+      const nomesSecoes = new Set(colunasSecoes.map(coluna => coluna.name));
+      const novasColunasSecoes = [
+        ['condicao', 'TEXT'],
+        ['repetir_para', 'TEXT'],
+        ['repetir_titulo', 'TEXT'],
+        ['chave_integrada', 'TEXT'],
+      ] as const;
+      for (const [nome, definicao] of novasColunasSecoes) {
+        if (!nomesSecoes.has(nome)) await executeNonQuery(`ALTER TABLE secoes_template ADD COLUMN ${nome} ${definicao}`);
+      }
+
+      await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_secoes_template_template ON secoes_template(template_id)');
+      await executeNonQuery('CREATE INDEX IF NOT EXISTS idx_templates_tipo_disponivel ON templates(tipo_exame_id, disponivel_novos_laudos)');
+      await executeNonQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_templates_integrados_chave_versao ON templates(chave_integrada, versao_integrada) WHERE chave_integrada IS NOT NULL');
+      await executeNonQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_secoes_integradas_template_chave ON secoes_template(template_id, chave_integrada) WHERE chave_integrada IS NOT NULL');
+      log.debug('Migration v32: suporte a templates integrados criado');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 32', error);
       throw error;
     }
   }

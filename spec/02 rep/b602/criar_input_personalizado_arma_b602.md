@@ -17,14 +17,18 @@ Os marcadores legados `b602_arma_N_func_toggle` e `b602_arma_N_coleta_toggle` co
 
 Os blocos versionados não carregam `h3` próprio: o heading estrutural da arma é a fonte do título. Tipos fora da família arma não entram na repetição e não ativam esses blocos.
 
+## Template integrado e sincronização
+
+A definição canônica do template `Laudo Padrão B-602` está no catálogo integrado do main process e contém a seção repetível `DAS ARMAS`. Na inicialização, a sincronização integrada valida e calcula seu checksum antes de adotá-lo ou instalá-lo; a adoção preserva os IDs físicos do template legado compatível e de suas seções.
+
+A migration v31 permanece responsável por normalizar os marcadores da seção repetível existente. A v32 introduz metadados de origem, versão, checksum e chave integrada, sem reescrever conteúdo de templates que não coincida exatamente com a definição canônica.
+
 ## Sincronização e migração
 
 Ao sincronizar seção derivada, `laudoService` indexa blocos periciais por `data-arma-chave:data-bloco-pericial` e reaproveita o HTML atual quando a peça ainda existe. Assim preserva texto editado e a supressão recuperável, sem transferir conteúdo para outra arma.
 
-A migration v31 atualiza somente a seção `DAS ARMAS` repetível por `armas` do template padrão `Laudo padrão B602` associado ao código `B-602`. Ela verifica a existência de `secoes_template`, altera apenas marcadores reconhecidos e falha a migration se a atualização não puder ser concluída. Templates e laudos fora desse alvo não são migrados automaticamente.
+Atualização de REP e sincronização de laudo não formam uma transação única; falha na sincronização é registrada sem desfazer a REP. A expansão é em memória e cresce com a quantidade de seções e armas.
 
 ## Limites e verificação
 
-Atualização de REP e sincronização de laudo não formam uma transação única; falha na sincronização é registrada sem desfazer a REP. A expansão é em memória e cresce com a quantidade de seções e armas.
-
-Testes de `secao-builder.service`, da projeção B-602 e da migration v31 cobrem elegibilidade, normalização dos marcadores, atributos de identidade, compatibilidade legada e o conteúdo atualizado do template padrão.
+Testes de `secao-builder.service`, da projeção B-602 e da migration v31 cobrem elegibilidade, normalização dos marcadores, atributos de identidade, compatibilidade legada e o conteúdo atualizado do template padrão. `templates-integrados.test.ts` protege a definição B-602, a repetição por armas e a estabilidade do checksum diante de artefatos transitórios do editor.
