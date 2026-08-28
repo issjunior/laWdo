@@ -334,6 +334,22 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     expect(screen.getByRole('combobox', { name: 'Contexto atual da IA' })).toBeInTheDocument()
   })
 
+  it('mantém cabeçalho e composição fixos, com rolagem apenas nas mensagens', () => {
+    const { container } = render(
+      <AssistenteIaPanel
+        secaoTitulo="PREÂMBULO"
+        editorId="secao-0"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+      />,
+    )
+
+    expect(container.querySelector('[data-diagnostico-id="painel-ia.mensagens"]')).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto')
+    expect(screen.getByText('Assistente IA').closest('header')).toHaveClass('shrink-0')
+    expect(screen.getByText('A IA pode cometer erros. Sempre revise antes de aplicar ao laudo.').parentElement).toHaveClass('shrink-0')
+  })
+
   it('agrupa modelos por perfil', () => {
     render(
       <AssistenteIaPanel

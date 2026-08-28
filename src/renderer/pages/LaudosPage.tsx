@@ -2295,7 +2295,7 @@ export const LaudosPage: React.FC = () => {
         })),
         escopos: [
           { id: -1, titulo: 'Documento completo' },
-          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `${indice + 1}. Seção: ${secao.titulo}` })),
         ],
       };
       const anterior = ultimoEstadoPainelIaRef.current;
@@ -3296,7 +3296,7 @@ export const LaudosPage: React.FC = () => {
         avisoLimite={avisoLimiteIa}
         opcoesEscopo={[
           { id: -1, titulo: 'Documento completo' },
-          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `${indice + 1}. Seção: ${secao.titulo}` })),
         ]}
         onSelecionarEscopo={indice => handleOpenSheet(indice, indice === -1 ? 'Documento completo' : secoes[indice]?.titulo || '')}
         onPerguntarDocumentoCompleto={pergunta => {

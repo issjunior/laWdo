@@ -289,13 +289,13 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
               <p className="text-xs text-muted-foreground truncate">Contexto atual: Imagem selecionada</p>
             ) : (
               <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                <span className="shrink-0">Contexto atual:</span>
+                <span className="w-24 shrink-0 whitespace-nowrap">Contexto atual:</span>
                 <Select
                   value={escopoSelecionado === null ? undefined : String(escopoSelecionado)}
                   onValueChange={valor => onSelecionarEscopo?.(Number(valor))}
                   disabled={loading || !onSelecionarEscopo}
                 >
-                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-xs shadow-sm focus:ring-1" aria-label="Contexto atual da IA">
+                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-left text-xs shadow-sm focus:ring-1 [&>span]:text-left" aria-label="Contexto atual da IA">
                     <SelectValue placeholder={secaoTitulo || 'Escolha uma seção'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -310,9 +310,9 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
             )}
             {opcoesModelo.length > 0 && (
               <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                <span className="shrink-0">Modelo:</span>
+                <span className="w-24 shrink-0 whitespace-nowrap">Modelo:</span>
                 <Select value={modeloSelecionado} onValueChange={onSelecionarModelo} disabled={loading || !onSelecionarModelo}>
-                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-xs shadow-sm focus:ring-1" aria-label="Modelo da IA para esta sessão">
+                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-left text-xs shadow-sm focus:ring-1 [&>span]:text-left" aria-label="Modelo da IA para esta sessão">
                     <SelectValue placeholder="Modelo configurado" />
                   </SelectTrigger>
                   <SelectContent>
