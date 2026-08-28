@@ -124,6 +124,7 @@ export interface IpcAPI {
   restartApp: () => Promise<void>;
   closeApp: () => Promise<void>;
   openDevTools: () => void;
+  atualizarBarraTitulo: (cores: { cor: string; corSimbolo: string }) => Promise<void>;
 
   // Banco de dados
   executeQuery: (query: string, params?: IpcParams) => Promise<IpcResult>;
@@ -416,6 +417,7 @@ const ALLOWED_CHANNELS = new Set([
   'restart-app',
   'close-app',
   'open-dev-tools',
+  'janela:atualizar-barra-titulo',
 
   // Banco de dados
   'execute-query',
@@ -938,6 +940,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   restartApp: () => invokeSeguro<void>('restart-app'),
   closeApp: () => invokeSeguro<void>('close-app'),
   openDevTools: () => sendSeguro('open-dev-tools'),
+  atualizarBarraTitulo: cores => invokeSeguro<void>('janela:atualizar-barra-titulo', cores),
 
   // Banco de dados
   executeQuery: (query: string, params?: IpcParams) => {

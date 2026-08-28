@@ -119,7 +119,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
 
   return (
     <>
-      <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+      <Sidebar collapsible="icon" className="top-11 h-[calc(100svh-2.75rem)] border-r border-sidebar-border">
         <SidebarHeader className="flex items-center justify-between px-4 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-6">
           <div className="flex w-full flex-col items-center">
             <img

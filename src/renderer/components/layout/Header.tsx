@@ -137,22 +137,22 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   };
 
   return (
-    <header className="header flex min-h-12 shrink-0 items-center border-b border-border px-3 py-2">
-      <div className="header-content justify-between w-full flex items-center">
+    <header className="barra-titulo-janela flex h-11 shrink-0 items-center border-b border-sidebar-border bg-sidebar px-3 pr-[148px] text-sidebar-foreground">
+      <div className="flex w-full min-w-0 items-center">
         <div className="flex min-w-0 items-center gap-3">
-          <SidebarTrigger className="-ml-1" />
-          <p className="truncate text-sm font-medium text-foreground">
+          <SidebarTrigger className="-ml-1 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
+          <p className="truncate text-sm font-medium text-sidebar-foreground">
             {saudacao}
           </p>
         </div>
         
-        <div className="flex items-center gap-6 ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           {/* Escolha de Tema */}
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleDarkMode}
-            className="transition-transform duration-300"
+            className="text-sidebar-foreground transition-transform duration-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             title={isDarkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
           >
             {isDarkMode ? (
@@ -166,12 +166,12 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           <Dialog>
             <DialogTrigger asChild>
               <button
-                className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
+                className="flex items-center gap-2 rounded-md p-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 title="Informações"
                 aria-label="Informações"
               >
-                <Info size={18} className="text-muted-foreground" />
-                <span className="hidden md:inline text-muted-foreground font-medium">Informações</span>
+                <Info size={18} />
+                <span className="hidden lg:inline font-medium">Informações</span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[480px]">
@@ -265,12 +265,12 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           <Dialog>
             <DialogTrigger asChild>
               <button
-                className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
+                className="flex items-center gap-2 rounded-md p-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 title={dadosAtualizacao ? `Nova versão disponível: v${dadosAtualizacao.versao}` : 'Atualizações'}
                 aria-label={dadosAtualizacao ? `Atualizações. Nova versão disponível: ${dadosAtualizacao.versao}` : 'Atualizações'}
               >
-                <Download size={18} className={atualizacaoDisponivel ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />
-                {atualizacaoDisponivel && <span className="text-muted-foreground font-medium">Atualização</span>}
+                <Download size={18} className={atualizacaoDisponivel ? 'text-emerald-300' : undefined} />
+                {atualizacaoDisponivel && <span className="font-medium">Atualização</span>}
                 {atualizacaoDisponivel && <Badge className="bg-emerald-600 hover:bg-emerald-600">Nova versão</Badge>}
               </button>
             </DialogTrigger>
@@ -354,11 +354,11 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
 
           <button 
             onClick={onLogout} 
-            className="p-2 hover:bg-destructive/10 hover:text-destructive rounded-md transition-colors flex items-center gap-2 text-sm" 
+            className="flex items-center gap-2 rounded-md p-2 text-sm transition-colors hover:bg-destructive/20 hover:text-destructive-foreground"
             title="Logout"
           >
             <LogOut size={18} />
-            <span className="hidden md:inline font-medium">Logout</span>
+            <span className="hidden lg:inline font-medium">Logout</span>
           </button>
         </div>
       </div>
