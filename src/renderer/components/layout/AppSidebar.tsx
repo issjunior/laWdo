@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from '@/components/ui/avatar';
 import { AvatarUploadDialog } from '@/components/avatar/AvatarUploadDialog';
+import { Badge } from '@/components/ui/badge';
 import logoSidebar from '@/assets/logo-sidebar.png';
 import { itensMenu } from '@/lib/menu-config';
 
@@ -158,12 +159,21 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : (
-                        <Collapsible defaultOpen className="group/collapsible">
+                        <Collapsible defaultOpen={item.abertoPorPadrao ?? true} className="group/collapsible">
                           <CollapsibleTrigger asChild>
                             <SidebarMenuButton className="group-data-[collapsible=icon]:mx-auto">
                               <item.icon className="h-4 w-4" />
                               <span>{item.title}</span>
-                              <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                              {item.beta && (
+                                <Badge
+                                  variant="outline"
+                                  title="Em desenvolvimento"
+                                  className="ml-auto shrink-0 border-amber-300 bg-amber-100 px-1.5 py-0 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                                >
+                                  Beta
+                                </Badge>
+                              )}
+                              <ChevronRight className={`${item.beta ? 'ml-2' : 'ml-auto'} h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90`} />
                             </SidebarMenuButton>
                           </CollapsibleTrigger>
                           <CollapsibleContent>

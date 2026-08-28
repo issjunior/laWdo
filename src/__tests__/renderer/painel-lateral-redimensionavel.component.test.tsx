@@ -128,6 +128,47 @@ describe('PainelLateralRedimensionavel', () => {
     expect(screen.getByText('Editor expansível').parentElement).not.toHaveClass('overflow-y-auto')
   })
 
+  it('limita a altura do painel ao espaço visível abaixo de sua posição', () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null)
+    const conteudoPrincipal = document.createElement('main')
+    conteudoPrincipal.id = 'conteudo-principal'
+    conteudoPrincipal.getBoundingClientRect = () => new DOMRect(0, 100, 1200, 700)
+    document.body.append(conteudoPrincipal)
+
+    try {
+      render(
+        <PainelLateralRedimensionavel
+          tipo="ia"
+          chavePersistencia="painel-teste"
+          larguraPadrao={460}
+          larguraMinima={360}
+          larguraMaxima={640}
+          recolhido={false}
+          iaDestacada={false}
+          ilustracoesEmJanela={false}
+          operacaoEmAndamento={false}
+          onAlternarPainelIa={vi.fn()}
+          onAlternarPainelIlustracoes={vi.fn()}
+          onReindexarSecoes={vi.fn()}
+          conteudoPainel={<div>Assistente visível</div>}
+        >
+          <div>Editor</div>
+        </PainelLateralRedimensionavel>,
+      )
+
+      const painel = screen.getByText('Assistente visível').parentElement
+      const painelRedimensionavel = painel?.parentElement
+      expect(painel).not.toBeNull()
+      painel!.getBoundingClientRect = () => new DOMRect(800, 220, 400, 400)
+
+      fireEvent.scroll(conteudoPrincipal)
+
+      expect(painelRedimensionavel).toHaveStyle({ height: '580px' })
+    } finally {
+      conteudoPrincipal.remove()
+    }
+  })
+
   it('define uma largura mínima que preserva editor, painel e trilho', () => {
     expect(obterLarguraMinimaNecessaria(360)).toBe(976)
     expect(obterLarguraMinimaNecessaria(320)).toBe(936)

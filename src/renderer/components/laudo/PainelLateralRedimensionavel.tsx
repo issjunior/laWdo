@@ -113,6 +113,7 @@ export function PainelLateralRedimensionavel({
   conteudoPainel,
 }: PainelLateralRedimensionavelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const painelRef = useRef<HTMLDivElement>(null)
   const [alturaDisponivel, setAlturaDisponivel] = useState<number>()
   const ultimaLargura = useRef(larguraPadrao)
   const { largura, persistirLargura } = useLarguraPainelPersistida(
@@ -143,13 +144,29 @@ export function PainelLateralRedimensionavel({
 
   useEffect(() => {
     const conteudoPrincipal = document.getElementById('conteudo-principal')
-    if (!conteudoPrincipal) return
-    const atualizarAltura = () => setAlturaDisponivel(conteudoPrincipal.clientHeight || undefined)
+    const painel = painelRef.current
+    if (!conteudoPrincipal || !painel || !painelExpandido) return
+
+    const atualizarAltura = () => {
+      const areaRolagem = conteudoPrincipal.getBoundingClientRect()
+      const areaPainel = painel.getBoundingClientRect()
+      const inicioVisivel = Math.max(areaRolagem.top, areaPainel.top)
+      const altura = Math.max(0, Math.floor(areaRolagem.bottom - inicioVisivel))
+
+      setAlturaDisponivel(atual => atual === altura ? atual : altura)
+    }
+
     atualizarAltura()
     const observador = new ResizeObserver(atualizarAltura)
     observador.observe(conteudoPrincipal)
-    return () => observador.disconnect()
-  }, [])
+    observador.observe(painel)
+    conteudoPrincipal.addEventListener('scroll', atualizarAltura, { passive: true })
+
+    return () => {
+      observador.disconnect()
+      conteudoPrincipal.removeEventListener('scroll', atualizarAltura)
+    }
+  }, [painelExpandido])
 
   return (
     <div ref={containerRef} className="flex min-w-0 max-w-full items-start gap-2 [overflow-x:clip]">
@@ -187,7 +204,7 @@ export function PainelLateralRedimensionavel({
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm ring-1 ring-black/5 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-200 dark:ring-white/5">
+              <div ref={painelRef} className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm ring-1 ring-black/5 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-200 dark:ring-white/5">
                 {conteudoPainel}
               </div>
             </ResizablePanel>

@@ -19,6 +19,8 @@ import {
 type ItemMenuBase = {
   title: string
   icon: LucideIcon
+  abertoPorPadrao?: boolean
+  beta?: boolean
 }
 
 type ItemMenuFolha = ItemMenuBase & {
@@ -65,6 +67,8 @@ export const itensMenu: ItemMenu[] = [
   {
     title: 'Wizard',
     icon: Wand2,
+    abertoPorPadrao: false,
+    beta: true,
     items: [
       { title: 'Categorias', path: '/categorias-pecas', icon: Layers },
       { title: 'Peças', path: '/pecas', icon: Package },
