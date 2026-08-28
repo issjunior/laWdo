@@ -220,7 +220,9 @@ const initApp = async () => {
         closeApp: async () => undefined,
         dashboard: {
           resumo: async () => ({ success: true, data: null }),
-          projecoes: async () => ({ success: true, data: null }),
+          consultarLaudos: async () => ({ success: true, data: null }),
+          cronologiaLaudo: async () => ({ success: true, data: null }),
+          producaoLaudos: async () => ({ success: true, data: null }),
         },
         user: {
           findAll: async () => ({ success: true, data: [] }),

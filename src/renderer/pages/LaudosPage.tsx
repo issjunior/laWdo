@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 import { useAtalhoSalvarLaudo } from '@/hooks/useAtalhoSalvarLaudo';
 import { useModelosIaSessao } from '@/hooks/useModelosIaSessao';
@@ -354,6 +354,7 @@ interface LaudoItem {
   data_inicio: string;
   data_conclusao?: string;
   data_entrega?: string;
+  updated_at?: string;
   rep_numero: string;
   template_nome: string;
   status_rep: string;
@@ -418,8 +419,21 @@ interface FallbackModeloIaPendente {
 
 export const LaudosPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setTemporariamenteRecolhida } = useSidebar();
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
+  const filtroDashboard = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const laudosFiltradosDashboard = useMemo(() => {
+    const status = filtroDashboard.get('status');
+    const prioridade = filtroDashboard.get('prioridade');
+    if (status) return laudos.filter(laudo => laudo.status === status);
+    if (prioridade === 'aguardando-entrega') return laudos.filter(laudo => laudo.status === 'Concluído' && !laudo.data_entrega);
+    if (prioridade === 'sem-alteracao') {
+      const limite = new Date(); limite.setDate(limite.getDate() - 7);
+      return laudos.filter(laudo => laudo.status === 'Em andamento' && Boolean(laudo.updated_at) && new Date(laudo.updated_at ?? '') <= limite);
+    }
+    return laudos;
+  }, [filtroDashboard, laudos]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<LaudoItem | null>(null);
   const [secoes, setSecoes] = useState<SecaoEditor[]>([]);
@@ -577,21 +591,21 @@ export const LaudosPage: React.FC = () => {
   const [tabFiltro, setTabFiltro] = useState<string>('todos');
 
   const contagem = useMemo(() => ({
-    todos: laudos.length,
-    em_andamento: laudos.filter(l => l.status === 'Em andamento').length,
-    concluidos: laudos.filter(l => l.status === 'Concluído').length,
-    entregues: laudos.filter(l => l.status === 'Entregue').length,
-  }), [laudos]);
+    todos: laudosFiltradosDashboard.length,
+    em_andamento: laudosFiltradosDashboard.filter(l => l.status === 'Em andamento').length,
+    concluidos: laudosFiltradosDashboard.filter(l => l.status === 'Concluído').length,
+    entregues: laudosFiltradosDashboard.filter(l => l.status === 'Entregue').length,
+  }), [laudosFiltradosDashboard]);
 
   const laudosFiltrados = useMemo(() => {
-    if (tabFiltro === 'todos') return laudos;
+    if (tabFiltro === 'todos') return laudosFiltradosDashboard;
     const statusMap: Record<string, string> = {
       'em_andamento': 'Em andamento',
       'concluidos': 'Concluído',
       'entregues': 'Entregue',
     };
-    return laudos.filter(l => l.status === statusMap[tabFiltro]);
-  }, [laudos, tabFiltro]);
+    return laudosFiltradosDashboard.filter(l => l.status === statusMap[tabFiltro]);
+  }, [laudosFiltradosDashboard, tabFiltro]);
 
   const tituloTab: Record<string, string> = {
     todos: 'Todos os Laudos',
@@ -3769,6 +3783,7 @@ export const LaudosPage: React.FC = () => {
           <CardDescription>{laudosFiltrados.length} laudo(s)</CardDescription>
         </CardHeader>
         <CardContent>
+          {filtroDashboard.size > 0 && <div className="mb-4 flex items-center justify-between rounded-md border border-primary/20 bg-accent/60 p-3 text-sm"><span>Filtro aplicado pelo dashboard.</span><Button variant="outline" size="sm" onClick={() => navigate('/laudos')}>Limpar filtro</Button></div>}
           {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
           {success && <Alert className="mb-4 bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
 
