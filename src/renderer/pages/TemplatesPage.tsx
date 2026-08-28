@@ -64,6 +64,23 @@ interface TemplateItem {
   tipo_exame_nome?: string;
   tipo_exame_codigo?: string;
   created_at: string;
+  origem?: 'integrado' | 'usuario' | 'importado' | 'clonado';
+  chave_integrada?: string | null;
+  versao_integrada?: number | null;
+}
+
+interface EstadoTemplateIntegrado {
+  chave: string;
+  versao: number;
+  status: string;
+  mensagem?: string;
+}
+
+function rotuloOrigemTemplate(template: TemplateItem): string | null {
+  if (template.origem === 'integrado') return `Modelo laWdo · v${template.versao_integrada || 1}`;
+  if (template.origem === 'importado') return 'Importado';
+  if (template.origem === 'clonado') return 'Personalizado';
+  return null;
 }
 
 interface TipoExameItem {
@@ -542,7 +559,7 @@ export const TemplatesPage: React.FC = () => {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
-  const [secoesDb, setSecoesDb] = useState<SecaoItem[]>([]);
+  const [, setSecoesDb] = useState<SecaoItem[]>([]);
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -555,6 +572,7 @@ export const TemplatesPage: React.FC = () => {
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [avisoIntegrados, setAvisoIntegrados] = useState<string | null>(null);
 
   const placeholderChaves = useMemo(
     () => Array.from(new Set([
@@ -603,11 +621,19 @@ export const TemplatesPage: React.FC = () => {
     }
   }, []);
 
+  const carregarEstadoIntegrados = useCallback(async () => {
+    const resposta = await window.ipcAPI.template.statusIntegrados();
+    if (!resposta.success || !Array.isArray(resposta.data)) return;
+    const falhas = (resposta.data as EstadoTemplateIntegrado[]).filter(item => item.status === 'falha' || item.status === 'indisponivel');
+    setAvisoIntegrados(falhas.length ? falhas.map(item => item.mensagem || `Template ${item.chave} indisponível`).join(' ') : null);
+  }, []);
+
   useEffect(() => {
     carregarTemplates();
     carregarTiposExame();
     carregarPlaceholders();
-  }, [carregarTemplates, carregarTiposExame, carregarPlaceholders]);
+    carregarEstadoIntegrados();
+  }, [carregarTemplates, carregarTiposExame, carregarPlaceholders, carregarEstadoIntegrados]);
 
   const tipoExameCodigo = useMemo(() => {
     if (!templateForm.tipo_exame_id) return '';
@@ -790,6 +816,10 @@ export const TemplatesPage: React.FC = () => {
   };
 
   const handleEditar = useCallback(async (template: TemplateItem) => {
+    if (template.origem === 'integrado') {
+      toast.error('Este template é integrado ao laWdo. Crie uma cópia personalizada para editar.');
+      return;
+    }
     setEditingTemplateId(template.id);
     setTemplateForm({
       nome: template.nome,
@@ -827,68 +857,20 @@ export const TemplatesPage: React.FC = () => {
 
   const handleClonar = useCallback(async (template: TemplateItem) => {
     try {
-      // Buscar as seções do template original
-      const secResult = await window.ipcAPI.template.findSecoes(template.id);
-      const secoesOriginais: SecaoItem[] =
-        secResult.success && secResult.data ? secResult.data : [];
-
-      const nomeClonado = `${template.nome} - (Cópia)`;
-
-      // Criar novo template com nome "{original} - (Cópia)"
-      const createR = await window.ipcAPI.template.create({
-        nome: nomeClonado,
-        tipo_exame_id: template.tipo_exame_id,
-        descricao: template.descricao || null,
-      });
+      const createR = await window.ipcAPI.template.clonar(template.id);
       if (!createR.success || !createR.data) {
         toast.error(createR.error || 'Erro ao criar cópia do template');
         return;
       }
 
       const novoId: string = createR.data.id;
-
-      // Copiar as seções preservando hierarquia pai/filho
-      const mapaIds = new Map<string, string>();
-      const secoesOrdenadas = [...secoesOriginais].sort((a, b) => a.ordem - b.ordem);
-
-      for (const sec of secoesOrdenadas.filter(s => !s.parent_id)) {
-        const r = await window.ipcAPI.template.createSecao({
-          template_id: novoId,
-          nome: sec.nome,
-          ordem: sec.ordem,
-          parent_id: null,
-          conteudo: sec.conteudo || '',
-          condicao: sec.condicao || null,
-          repetir_para: sec.repetir_para || null,
-          repetir_titulo: sec.repetir_titulo || null,
-        });
-        if (r.success && r.data?.id) {
-          mapaIds.set(sec.id, r.data.id);
-        }
-      }
-
-      for (const sec of secoesOrdenadas.filter(s => s.parent_id)) {
-        await window.ipcAPI.template.createSecao({
-          template_id: novoId,
-          nome: sec.nome,
-          ordem: sec.ordem,
-          parent_id: sec.parent_id ? mapaIds.get(sec.parent_id) || null : null,
-          conteudo: sec.conteudo || '',
-          condicao: sec.condicao || null,
-          repetir_para: sec.repetir_para || null,
-          repetir_titulo: sec.repetir_titulo || null,
-        });
-      }
-
-      // Atualizar lista em segundo plano
-      carregarTemplates();
-
-      // Abrir o template clonado no modo edição
+      const copia = createR.data as TemplateItem;
+      await carregarTemplates();
       setEditingTemplateId(novoId);
       setTemplateForm({
-        nome: nomeClonado,
-        tipo_exame_id: template.tipo_exame_id,
-        descricao: template.descricao || '',
+        nome: copia.nome,
+        tipo_exame_id: copia.tipo_exame_id,
+        descricao: copia.descricao || '',
       });
       setErrors({});
 
@@ -1050,123 +1032,30 @@ export const TemplatesPage: React.FC = () => {
         return;
       }
 
-      // Salvar template
-      let templateId = editingTemplateId;
-      if (editingTemplateId) {
-        const r = await window.ipcAPI.template.update(editingTemplateId, {
-          nome: templateForm.nome,
-          tipo_exame_id: templateForm.tipo_exame_id,
-          descricao: templateForm.descricao || null,
-        });
-        if (!r.success) { toast.error(r.error); setSubmitting(false); return; }
-      } else {
-        const r = await window.ipcAPI.template.create({
-          nome: templateForm.nome,
-          tipo_exame_id: templateForm.tipo_exame_id,
-          descricao: templateForm.descricao || null,
-        });
-        if (!r.success) { toast.error(r.error); setSubmitting(false); return; }
-        templateId = r.data.id;
+      const r = await window.ipcAPI.template.salvarCompleto({
+        id: editingTemplateId || undefined,
+        nome: templateForm.nome,
+        tipo_exame_id: templateForm.tipo_exame_id,
+        descricao: templateForm.descricao || null,
+        secoes: secoesParaSalvar.map(secao => ({
+          id: secao.id,
+          chave_local: secao.chave_local,
+          nome: secao.nome.trim(),
+          parent_id: secao.parent_id || null,
+          conteudo: secao.conteudo,
+          condicao: secao.condicao || null,
+          repetir_para: secao.repetir_para || null,
+          repetir_titulo: secao.repetir_titulo || null,
+        })),
+      });
+      if (!r.success || !r.data) {
+        toast.error(r.error || 'Erro ao salvar template');
+        return;
       }
-
-      // Salvar seções (excluir as removidas, atualizar/criar as atuais)
-      if (templateId) {
-        // Remover seções que não estão mais na lista
-        const idsAtuais = secoesParaSalvar.filter(s => s.id).map(s => s.id!);
-        for (const s of secoesDb) {
-          if (!idsAtuais.includes(s.id)) {
-            await window.ipcAPI.template.deleteSecao(s.id);
-          }
-        }
-
-        // Criar/atualizar seções em duas etapas para resolver parent_id de seções novas
-        const idsOrdenados: string[] = [];
-        const mapaIds = new Map<string, string>();
-
-        for (const sec of secoesParaSalvar) {
-          if (sec.id) {
-            mapaIds.set(sec.id, sec.id);
-          }
-        }
-
-        for (let i = 0; i < secoesParaSalvar.length; i++) {
-          const sec = secoesParaSalvar[i];
-          if (!sec.nome.trim() || sec.parent_id) continue;
-
-          if (sec.id) {
-            await window.ipcAPI.template.updateSecao(sec.id, {
-              nome: sec.nome.trim(),
-              conteudo: sec.conteudo,
-              ordem: i,
-              parent_id: null,
-              condicao: sec.condicao || null,
-              repetir_para: sec.repetir_para || null,
-              repetir_titulo: sec.repetir_titulo || null,
-            });
-          } else {
-            const r = await window.ipcAPI.template.createSecao({
-              template_id: templateId,
-              nome: sec.nome.trim(),
-              ordem: i,
-              parent_id: null,
-              conteudo: sec.conteudo,
-              condicao: sec.condicao || null,
-              repetir_para: sec.repetir_para || null,
-              repetir_titulo: sec.repetir_titulo || null,
-            });
-            if (r.success) {
-              mapaIds.set(sec.chave_local, r.data.id);
-            }
-          }
-        }
-
-        for (let i = 0; i < secoesParaSalvar.length; i++) {
-          const sec = secoesParaSalvar[i];
-          if (!sec.nome.trim() || !sec.parent_id) continue;
-
-          const parentIdResolvido = mapaIds.get(sec.parent_id) || null;
-          if (sec.id) {
-            await window.ipcAPI.template.updateSecao(sec.id, {
-              nome: sec.nome.trim(),
-              conteudo: sec.conteudo,
-              ordem: i,
-              parent_id: parentIdResolvido,
-              condicao: sec.condicao || null,
-              repetir_para: sec.repetir_para || null,
-              repetir_titulo: sec.repetir_titulo || null,
-            });
-          } else {
-            const r = await window.ipcAPI.template.createSecao({
-              template_id: templateId,
-              nome: sec.nome.trim(),
-              ordem: i,
-              parent_id: parentIdResolvido,
-              conteudo: sec.conteudo,
-              condicao: sec.condicao || null,
-              repetir_para: sec.repetir_para || null,
-              repetir_titulo: sec.repetir_titulo || null,
-            });
-            if (r.success) {
-              mapaIds.set(sec.chave_local, r.data.id);
-            }
-          }
-        }
-
-        for (const sec of secoesParaSalvar) {
-          const secaoId = sec.id || mapaIds.get(sec.chave_local);
-          if (secaoId) {
-            idsOrdenados.push(secaoId);
-          }
-        }
-
-        // Reordenar
-        if (idsOrdenados.length > 0) {
-          await window.ipcAPI.template.reordenarSecoes(templateId, idsOrdenados);
-        }
-      }
+      const templateId: string = r.data.id;
 
       toast.success(editingTemplateId ? 'Template atualizado com sucesso!' : 'Template criado com sucesso!');
-      carregarTemplates();
+      await carregarTemplates();
 
       if (!editingTemplateId) {
         setEditingTemplateId(templateId);
@@ -1371,7 +1260,14 @@ export const TemplatesPage: React.FC = () => {
       ),
       cell: ({ row }) => (
         <div>
-          <p className="font-medium">{row.getValue('nome')}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium">{row.getValue('nome')}</p>
+            {rotuloOrigemTemplate(row.original) && (
+              <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                {rotuloOrigemTemplate(row.original)}
+              </span>
+            )}
+          </div>
           {row.original.descricao && (
             <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{row.original.descricao}</p>
           )}
@@ -1423,7 +1319,7 @@ export const TemplatesPage: React.FC = () => {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
+                <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar" disabled={t.origem === 'integrado'}>
                   <Edit size={14} />
                 </Button>
               </TooltipTrigger>
@@ -1437,13 +1333,13 @@ export const TemplatesPage: React.FC = () => {
                   className="text-red-600"
                   onClick={() => handleExcluir(t.id)}
                   aria-label="Excluir"
-                  disabled={t.id === 'tpl-nao-definido'}
+                  disabled={t.id === 'tpl-nao-definido' || t.origem === 'integrado'}
                 >
                   <Trash2 size={14} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p className="text-xs">{t.id === 'tpl-nao-definido' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}</p>
+                <p className="text-xs">{t.id === 'tpl-nao-definido' || t.origem === 'integrado' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1506,6 +1402,12 @@ export const TemplatesPage: React.FC = () => {
           </div>
         </div>
 
+        {avisoIntegrados && (
+          <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Alguns templates integrados precisam de atenção: {avisoIntegrados}
+          </div>
+        )}
+
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
@@ -1552,7 +1454,14 @@ export const TemplatesPage: React.FC = () => {
                     <CardContent className="p-5 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-base truncate">{t.nome}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-base truncate">{t.nome}</h3>
+                            {rotuloOrigemTemplate(t) && (
+                              <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                {rotuloOrigemTemplate(t)}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">{t.tipo_exame_codigo ? `${t.tipo_exame_codigo} - ${t.tipo_exame_nome || '—'}` : (t.tipo_exame_nome || '—')}</p>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
@@ -1562,7 +1471,7 @@ export const TemplatesPage: React.FC = () => {
                           <Button variant="ghost" size="sm" onClick={() => handleClonar(t)} aria-label="Clonar template" title="Clonar template">
                             <Copy size={14} />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditar(t)} aria-label="Editar" disabled={t.origem === 'integrado'} title={t.origem === 'integrado' ? 'Template integrado — crie uma cópia para editar' : 'Editar'}>
                             <Edit size={14} />
                           </Button>
                           <Button
@@ -1571,8 +1480,8 @@ export const TemplatesPage: React.FC = () => {
                             className="text-red-600"
                             onClick={() => handleExcluir(t.id)}
                             aria-label="Excluir"
-                            disabled={t.id === 'tpl-nao-definido'}
-                            title={t.id === 'tpl-nao-definido' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}
+                            disabled={t.id === 'tpl-nao-definido' || t.origem === 'integrado'}
+                            title={t.id === 'tpl-nao-definido' || t.origem === 'integrado' ? 'Template do sistema — não pode ser excluído' : 'Excluir'}
                           >
                             <Trash2 size={14} />
                           </Button>

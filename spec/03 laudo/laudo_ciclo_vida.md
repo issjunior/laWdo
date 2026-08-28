@@ -2,7 +2,9 @@
 
 ## Criação
 
-`criarLaudoInicial()` impede duplicidade por `rep_id`, busca as seções do template, lê `campos_especificos`, filtra seções ativas, expande repetições e grava o HTML com status `Em andamento`, `tipo_criacao = 'template'`, `versao = 1` e `data_inicio`. Na ausência de conteúdo, usa `<p>Laudo em elaboracao.</p>`.
+`criarLaudoInicial()` impede duplicidade por `rep_id`, valida que o template existe e, quando sua origem é `integrado`, exige que ele esteja disponível para novos laudos. Também rejeita template integrado sem seções, evitando criar um laudo vazio por falha de catálogo ou sincronização.
+
+Após as validações, busca as seções do template, lê `campos_especificos`, filtra seções ativas, expande repetições e grava o HTML com status `Em andamento`, `tipo_criacao = 'template'`, `versao = 1` e `data_inicio`. Na ausência de conteúdo de template não integrado, usa `<p>Laudo em elaboracao.</p>`.
 
 ## Edição e painéis laterais
 

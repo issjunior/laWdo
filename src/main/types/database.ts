@@ -98,6 +98,12 @@ export interface TemplateRow extends DatabaseRow {
   tipo_exame_id: string | null
   nome: string
   descricao?: string
+  origem?: 'integrado' | 'usuario' | 'importado' | 'clonado'
+  chave_integrada?: string | null
+  versao_integrada?: number | null
+  checksum_integrado?: string | null
+  disponivel_novos_laudos?: number | boolean
+  derivado_de_chave?: string | null
   created_at: string
   updated_at: string
 }
@@ -113,6 +119,7 @@ export interface SecaoTemplateRow extends DatabaseRow {
   condicao?: string | null
   repetir_para?: string | null
   repetir_titulo?: string | null
+  chave_integrada?: string | null
   created_at: string
   updated_at: string
 }

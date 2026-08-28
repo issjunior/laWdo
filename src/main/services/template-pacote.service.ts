@@ -106,7 +106,7 @@ export async function importarPacoteTemplate(caminho: string, criarTipo: boolean
       let contador = 2;
       while ((await executeQuery<{ id: string }>('SELECT id FROM templates WHERE tipo_exame_id = ? AND nome = ?', [tipo.id, nomeImportado])).length > 0) nomeImportado = `${base} ${contador++}`;
       const templateId = randomUUID();
-      await executeNonQuery('INSERT INTO templates (id, tipo_exame_id, nome, descricao, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)', [templateId, tipo.id, nomeImportado, pacote.template.descricao ?? null]);
+      await executeNonQuery("INSERT INTO templates (id, tipo_exame_id, nome, descricao, origem, created_at, updated_at) VALUES (?, ?, ?, ?, 'importado', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", [templateId, tipo.id, nomeImportado, pacote.template.descricao ?? null]);
       const ids = new Map(pacote.secoes.map(secao => [secao.id_origem, randomUUID()]));
       for (const secao of pacote.secoes) {
         await executeNonQuery('INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)', [ids.get(secao.id_origem), templateId, secao.nome, secao.ordem, secao.parent_id_origem ? ids.get(secao.parent_id_origem) : null, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null]);
