@@ -489,7 +489,6 @@ export const LaudosPage: React.FC = () => {
     modeloIaSessao,
     setModeloIaSessao,
     provedorIaSessao,
-    modelosIaSessao,
   } = useModelosIaSessao(editando?.id);
   const [fallbackModeloIaPendente, setFallbackModeloIaPendente] = useState<FallbackModeloIaPendente | null>(null);
   const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
@@ -2278,7 +2277,6 @@ export const LaudosPage: React.FC = () => {
         escopoSelecionado: iaSheetSecaoIdx ?? null,
         ...(modeloIaSessao ? { modeloSelecionado: modeloIaSessao } : {}),
         ...(provedorIaSessao ? { provedorIa: provedorIaSessao } : {}),
-        modelosIa: modelosIaSessao.map(modelo => ({ ...modelo, provedor: provedorIaSessao || 'gemini' })),
         retomada: retomadaIaPendente?.retomada || null,
         mensagens: obterMensagensVisiveis().map(mensagem => ({
           id: mensagem.id,
@@ -2324,7 +2322,6 @@ export const LaudosPage: React.FC = () => {
         if (estado.escopoSelecionado !== anterior.escopoSelecionado) alteracoes.escopoSelecionado = estado.escopoSelecionado;
         if (estado.modeloSelecionado !== anterior.modeloSelecionado && estado.modeloSelecionado) alteracoes.modeloSelecionado = estado.modeloSelecionado;
         if (estado.provedorIa !== anterior.provedorIa && estado.provedorIa) alteracoes.provedorIa = estado.provedorIa;
-        if (JSON.stringify(estado.modelosIa) !== JSON.stringify(anterior.modelosIa)) alteracoes.modelosIa = estado.modelosIa;
         if (JSON.stringify(estado.retomada) !== JSON.stringify(anterior.retomada)) alteracoes.retomada = estado.retomada;
         if (JSON.stringify(estado.mensagens) !== JSON.stringify(anterior.mensagens)) alteracoes.mensagens = estado.mensagens;
         if (JSON.stringify(estado.escopos) !== JSON.stringify(anterior.escopos)) alteracoes.escopos = estado.escopos;
@@ -2372,9 +2369,7 @@ export const LaudosPage: React.FC = () => {
           setIaError(null);
         }
       } else if (comando.tipo === 'selecionar_modelo' && provedorIaSessao) {
-        const modelo = modelosIaSessao.find(item => item.id === comando.modelo);
-        if (listarModelosIa(provedorIaSessao).some(item => item.id === comando.modelo)
-          && modelo?.disponibilidade !== 'removido' && modelo?.disponibilidade !== 'sem_chave') setModeloIaSessao(comando.modelo);
+        if (listarModelosIa(provedorIaSessao).some(item => item.id === comando.modelo)) setModeloIaSessao(comando.modelo);
       } else if (comando.tipo === 'solicitar_ressincronizacao') {
         if (sessaoPainelIaRef.current) publicarEstado(sessaoPainelIaRef.current, true);
       } else if (comando.tipo === 'aplicar_resposta') {
@@ -2400,7 +2395,7 @@ export const LaudosPage: React.FC = () => {
     });
     if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
     return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
-  }, [avisoLimiteIa, chatMessages, estadoOperacaoIa, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, modelosIaSessao, progressoIa, progressoConsultaIa, provedorIaSessao, retomadaIaPendente, secoes, setModeloIaSessao]);
+  }, [avisoLimiteIa, chatMessages, estadoOperacaoIa, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, progressoIa, progressoConsultaIa, provedorIaSessao, retomadaIaPendente, secoes, setModeloIaSessao]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2853,19 +2848,6 @@ export const LaudosPage: React.FC = () => {
       return;
     }
     const modeloSelecionado = modeloForcado || modeloIaSessao;
-    const disponibilidadeModelo = modeloSelecionado
-      ? modelosIaSessao.find(modelo => modelo.id === modeloSelecionado)?.disponibilidade
-      : undefined;
-    if (disponibilidadeModelo === 'removido' || disponibilidadeModelo === 'sem_chave') {
-      const codigo = disponibilidadeModelo === 'removido' ? 'MODELO_REMOVIDO' : 'CONFIGURACAO_AUSENTE';
-      const recomendado = provedorIaSessao
-        ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloSelecionado
-          && modelosIaSessao.find(item => item.id === modelo.id)?.disponibilidade === 'disponivel')?.id
-          || obterModeloPadraoIa(provedorIaSessao).id
-        : null;
-      setFallbackModeloIaPendente({ pergunta, codigo, modeloRecomendado: recomendado === modeloSelecionado ? null : recomendado });
-      return;
-    }
     const operationId = crypto.randomUUID();
     const escopoCompleto = escopoForcado === -1 || alvo.tipo === 'laudo_completo';
     const fontes = escopoCompleto
@@ -2916,8 +2898,7 @@ export const LaudosPage: React.FC = () => {
       const codigo = erro instanceof Error ? erro.message.split(':')[0] : '';
       if (codigo === 'MODELO_INCOMPATIVEL' || codigo === 'CONFIGURACAO_AUSENTE') {
         const recomendado = provedorIaSessao
-          ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloIaSessao
-            && modelosIaSessao.find(item => item.id === modelo.id)?.disponibilidade !== 'removido')?.id
+          ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloIaSessao)?.id
             || obterModeloPadraoIa(provedorIaSessao).id
           : null;
         setFallbackModeloIaPendente({ pergunta, codigo, modeloRecomendado: recomendado === modeloIaSessao ? null : recomendado });
@@ -3303,9 +3284,7 @@ export const LaudosPage: React.FC = () => {
         contextoImagem={Boolean(imagemSelecionadaIaId)}
         onNavegarEvidencia={navegarParaEvidenciaIa}
         modeloSelecionado={modeloIaSessao || undefined}
-        opcoesModelo={modelosIaSessao.length > 0
-          ? modelosIaSessao.map(modelo => ({ ...modelo, perfil: provedorIaSessao ? listarModelosIa(provedorIaSessao).find(item => item.id === modelo.id)?.perfil : undefined }))
-          : (provedorIaSessao ? listarModelosIa(provedorIaSessao).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, perfil: modelo.perfil, disponibilidade: 'nao_verificado' as const })) : [])}
+        opcoesModelo={provedorIaSessao ? listarModelosIa(provedorIaSessao).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, perfil: modelo.perfil })) : []}
         onSelecionarModelo={modelo => setModeloIaSessao(modelo)}
         onApplyResponse={handleApplyResponse}
         modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}

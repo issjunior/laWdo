@@ -335,23 +335,6 @@ describe('ia-execucao.service — descrição de imagem', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('cruza o catálogo local com a disponibilidade remota sem trocar o modelo automaticamente', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      data: [{ id: 'gemini-2.5-flash' }],
-    }), { status: 200 }))
-
-    const modelos = await new IaExecucaoService().listarModelosDisponiveis()
-
-    expect(modelos).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'gemini-2.5-flash', disponibilidade: 'disponivel' }),
-      expect.objectContaining({ id: 'gemini-2.5-pro', disponibilidade: 'removido' }),
-    ]))
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://generativelanguage.googleapis.com/v1beta/openai/models',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer chave-teste' }) }),
-    )
-  })
-
   it('extrai blocos extensos em paralelo limitado e consolida sem reenviar o documento completo', async () => {
     const consultaExtensa = {
       ...solicitacaoConsulta,

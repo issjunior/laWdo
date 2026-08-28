@@ -312,7 +312,29 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     expect(onSelecionarEscopo).toHaveBeenCalledWith(-1)
   })
 
-  it('agrupa modelos por perfil e desabilita os indisponíveis', () => {
+  it('mantém a seleção de escopo exclusivamente no seletor do cabeçalho', () => {
+    render(
+      <AssistenteIaPanel
+        secaoTitulo="PREÂMBULO"
+        editorId="secao-0"
+        messages={[]}
+        onSendMessage={vi.fn()}
+        onApplyResponse={vi.fn()}
+        escopoSelecionado={0}
+        opcoesEscopo={[
+          { id: -1, titulo: 'Documento completo' },
+          { id: 0, titulo: 'Seção: PREÂMBULO' },
+        ]}
+        onSelecionarEscopo={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('Escolha o escopo que a IA poderá usar')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Documento completo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Contexto atual da IA' })).toBeInTheDocument()
+  })
+
+  it('agrupa modelos por perfil', () => {
     render(
       <AssistenteIaPanel
         secaoTitulo="Documento completo"
@@ -322,8 +344,8 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
         onApplyResponse={vi.fn()}
         modeloSelecionado="flash"
         opcoesModelo={[
-          { id: 'flash', rotulo: 'Flash', perfil: 'rapido', disponibilidade: 'disponivel' },
-          { id: 'pro', rotulo: 'Pro', perfil: 'maior_precisao', disponibilidade: 'removido' },
+          { id: 'flash', rotulo: 'Flash', perfil: 'rapido' },
+          { id: 'pro', rotulo: 'Pro', perfil: 'maior_precisao' },
         ]}
         onSelecionarModelo={vi.fn()}
       />,
@@ -332,7 +354,7 @@ describe('AssistenteIaPanel — descrição de imagem', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'Modelo da IA para esta sessão' }))
     expect(screen.getByText('Rápido')).toBeInTheDocument()
     expect(screen.getByText('Maior precisão')).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /Pro.*Removido/ })).toHaveAttribute('data-disabled')
+    expect(screen.getByRole('option', { name: 'Pro' })).not.toHaveAttribute('data-disabled')
   })
 
   it('oferece continuar do lote preservado após uma falha', () => {
