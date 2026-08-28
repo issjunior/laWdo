@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
-  ModeloIaDisponivel,
   PerfilRespostaIa,
   PlanoExecucaoIaResumo,
   RespostaDescricaoImagemIa,
@@ -125,6 +124,7 @@ export interface IpcAPI {
   restartApp: () => Promise<void>;
   closeApp: () => Promise<void>;
   openDevTools: () => void;
+  atualizarBarraTitulo: (cores: { cor: string; corSimbolo: string }) => Promise<void>;
 
   // Banco de dados
   executeQuery: (query: string, params?: IpcParams) => Promise<IpcResult>;
@@ -324,7 +324,6 @@ export interface IpcAPI {
     planejar: (solicitacao: SolicitacaoIa) => Promise<UserResponse<PlanoExecucaoIaResumo>>;
     executar: (solicitacao: SolicitacaoIa) => Promise<RespostaExecucaoIaIpc>;
     consultar: (solicitacao: SolicitacaoConsultaIa) => Promise<UserResponse<RespostaConsultaIa>>;
-    listarModelos: () => Promise<UserResponse<ModeloIaDisponivel[]>>;
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => Promise<UserResponse<RespostaDescricaoImagemIa>>;
     cancelar: (operationId: string) => Promise<UserResponse>;
     descartarRetomada: (retomadaId: string) => Promise<UserResponse>;
@@ -418,6 +417,7 @@ const ALLOWED_CHANNELS = new Set([
   'restart-app',
   'close-app',
   'open-dev-tools',
+  'janela:atualizar-barra-titulo',
 
   // Banco de dados
   'execute-query',
@@ -582,7 +582,6 @@ const ALLOWED_CHANNELS = new Set([
   'ia:planejar',
   'ia:executar',
   'ia:consultar',
-  'ia:listar-modelos',
   'ia:cancelar',
   'ia:descartar-retomada',
   'ia:testar-conexao',
@@ -941,6 +940,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   restartApp: () => invokeSeguro<void>('restart-app'),
   closeApp: () => invokeSeguro<void>('close-app'),
   openDevTools: () => sendSeguro('open-dev-tools'),
+  atualizarBarraTitulo: cores => invokeSeguro<void>('janela:atualizar-barra-titulo', cores),
 
   // Banco de dados
   executeQuery: (query: string, params?: IpcParams) => {
@@ -1388,7 +1388,6 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     planejar: (solicitacao: SolicitacaoIa) => invocarComDiagnostico('ia:planejar', solicitacao),
     executar: (solicitacao: SolicitacaoIa) => invocarComDiagnostico('ia:executar', solicitacao),
     consultar: (solicitacao: SolicitacaoConsultaIa) => invocarComDiagnostico('ia:consultar', solicitacao),
-    listarModelos: () => invocarComDiagnostico('ia:listar-modelos'),
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => invocarComDiagnostico('ia:descrever-imagem', solicitacao),
     cancelar: (operationId: string) => invocarComDiagnostico('ia:cancelar', operationId),
     descartarRetomada: (retomadaId: string) => invocarComDiagnostico('ia:descartar-retomada', retomadaId),

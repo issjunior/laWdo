@@ -48,19 +48,21 @@ const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; curren
   currentUser,
 }) => {
   return (
-    <SidebarProvider>
-      <AppSidebar currentUser={currentUser} onLogout={onLogout} />
-      <SidebarInset>
-        <div className="flex flex-col h-screen overflow-hidden bg-background">
-          <Header onLogout={onLogout} currentUser={currentUser} />
-          <main id="conteudo-principal" data-diagnostico-id="layout.conteudo-principal" className="min-h-0 flex-1 overflow-y-auto p-6">
-            <div className="mx-auto h-full min-h-0 max-w-[1600px]">
-              {children}
-            </div>
-          </main>
-          <Footer />
-        </div>
-      </SidebarInset>
+    <SidebarProvider className="h-screen min-h-0 flex-col overflow-hidden bg-sidebar">
+      <Header onLogout={onLogout} currentUser={currentUser} />
+      <div className="flex min-h-0 flex-1">
+        <AppSidebar currentUser={currentUser} onLogout={onLogout} />
+        <SidebarInset>
+          <div className="flex h-full flex-col overflow-hidden bg-background">
+            <main id="conteudo-principal" data-diagnostico-id="layout.conteudo-principal" className="min-h-0 flex-1 overflow-y-auto p-6">
+              <div className="mx-auto h-full min-h-0 max-w-[1600px]">
+                {children}
+              </div>
+            </main>
+            <Footer />
+          </div>
+        </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 };

@@ -557,6 +557,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               color: #fff;
             }
             body.dark-content a { color: #4099ff; }
+            body.dark-content table th,
+            body.dark-content table td {
+              background-color: transparent !important;
+              color: #fff !important;
+              border-color: #6d737b !important;
+            }
             body.dark-content table[border]:not([border="0"]):not([style*="border-color"]) th,
             body.dark-content table[border]:not([border="0"]):not([style*="border-color"]) td {
               border-color: #6d737b;

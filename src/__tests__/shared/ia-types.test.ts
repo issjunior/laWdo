@@ -57,8 +57,6 @@ describe('contratos compartilhados de IA', () => {
     expect(estadoPainelIaValido(estado)).toBe(true);
     expect(estadoPainelIaValido({ ...estado, escopoSelecionado: undefined })).toBe(false);
     expect(estadoPainelIaValido({ ...estado, avisoLimite: { mensagem: 'Limite confirmado', tentarNovamenteEm: undefined } })).toBe(true);
-    expect(estadoPainelIaValido({ ...estado, modelosIa: [{ id: 'gemini-2.5-flash', rotulo: 'Gemini Flash', provedor: 'gemini', disponibilidade: 'disponivel' }] })).toBe(true);
-    expect(estadoPainelIaValido({ ...estado, modelosIa: [{ id: 'gemini-2.5-flash', rotulo: 'Gemini Flash', provedor: 'gemini', disponibilidade: 'desconhecido' }] })).toBe(false);
     expect(estadoPainelIaValido({ ...estado, mensagens: [{ content: 'Sem identidade' }] })).toBe(false);
     expect(atualizacaoPainelIaValida({ tipo: 'snapshot', estado })).toBe(true);
     expect(atualizacaoPainelIaValida({

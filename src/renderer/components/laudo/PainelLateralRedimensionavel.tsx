@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bot, Images, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -113,6 +113,8 @@ export function PainelLateralRedimensionavel({
   conteudoPainel,
 }: PainelLateralRedimensionavelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const painelRef = useRef<HTMLDivElement>(null)
+  const [alturaDisponivel, setAlturaDisponivel] = useState<number>()
   const ultimaLargura = useRef(larguraPadrao)
   const { largura, persistirLargura } = useLarguraPainelPersistida(
     chavePersistencia,
@@ -140,17 +142,38 @@ export function PainelLateralRedimensionavel({
     return () => observer.disconnect()
   }, [larguraMinima, onRecolherAutomaticamente, painelExpandido])
 
+  useEffect(() => {
+    const conteudoPrincipal = document.getElementById('conteudo-principal')
+    const painel = painelRef.current
+    if (!conteudoPrincipal || !painel || !painelExpandido) return
+
+    const atualizarAltura = () => {
+      const areaRolagem = conteudoPrincipal.getBoundingClientRect()
+      const areaPainel = painel.getBoundingClientRect()
+      const inicioVisivel = Math.max(areaRolagem.top, areaPainel.top)
+      const altura = Math.max(0, Math.floor(areaRolagem.bottom - inicioVisivel))
+
+      setAlturaDisponivel(atual => atual === altura ? atual : altura)
+    }
+
+    atualizarAltura()
+    const observador = new ResizeObserver(atualizarAltura)
+    observador.observe(conteudoPrincipal)
+    observador.observe(painel)
+    conteudoPrincipal.addEventListener('scroll', atualizarAltura, { passive: true })
+
+    return () => {
+      observador.disconnect()
+      conteudoPrincipal.removeEventListener('scroll', atualizarAltura)
+    }
+  }, [painelExpandido])
+
   return (
     <div ref={containerRef} className="flex min-w-0 max-w-full items-start gap-2 [overflow-x:clip]">
       <ResizablePanelGroup
         orientation="horizontal"
         className={cn(
-          'h-auto min-w-0 flex-1 items-stretch !overflow-visible',
-          '[&>[data-painel-lateral-sticky]]:sticky',
-          '[&>[data-painel-lateral-sticky]]:top-4',
-          '[&>[data-painel-lateral-sticky]]:self-start',
-          '[&>[data-painel-lateral-sticky]]:!h-[calc(100dvh-3rem)]',
-          '[&>[data-painel-lateral-sticky]]:!max-h-[calc(100dvh-3rem)]',
+          'h-auto min-h-0 min-w-0 flex-1 items-stretch !overflow-visible',
         )}
         onLayoutChanged={(_layout, detalhes) => {
           if (detalhes.isUserInteraction && painelExpandido) {
@@ -165,23 +188,23 @@ export function PainelLateralRedimensionavel({
           <>
             <ResizableHandle
               withHandle
-              data-painel-lateral-sticky
               className="bg-transparent transition-colors duration-200 after:bg-border/60 hover:bg-accent/40 data-[separator=active]:bg-primary/10"
               aria-label={`Redimensionar painel de ${rotuloPainel}`}
             />
             <ResizablePanel
               key={tipo}
               id={`painel-lateral-${tipo}`}
-              data-painel-lateral-sticky
               defaultSize={largura}
               minSize={larguraMinima}
               maxSize={larguraMaxima}
+              className="sticky top-0 min-h-0 self-start"
+              style={alturaDisponivel ? { height: `${alturaDisponivel}px` } : undefined}
               groupResizeBehavior="preserve-pixel-size"
               onResize={(tamanho) => {
                 ultimaLargura.current = tamanho.inPixels
               }}
             >
-              <div className="h-full min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm ring-1 ring-black/5 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-200 dark:ring-white/5">
+              <div ref={painelRef} className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm ring-1 ring-black/5 backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-200 dark:ring-white/5">
                 {conteudoPainel}
               </div>
             </ResizablePanel>
@@ -191,7 +214,7 @@ export function PainelLateralRedimensionavel({
 
       <aside
         aria-label="Painéis do laudo"
-        className="sticky top-4 flex w-10 shrink-0 self-start flex-col items-center gap-1 rounded-xl border border-border/70 bg-card/90 px-1 py-2 shadow-sm backdrop-blur-sm transition-[background-color,border-color,box-shadow] duration-200"
+        className="sticky top-0 flex w-10 shrink-0 self-start flex-col items-center gap-1 rounded-xl border border-border/70 bg-card/90 px-1 py-2 shadow-sm backdrop-blur-sm transition-[background-color,border-color,box-shadow] duration-200"
       >
         <BotaoTrilho
           titulo="Painel de IA"

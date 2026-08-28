@@ -694,8 +694,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     .sort((a, b) => a.sequencia - b.sequencia);
 
   return (
-    <div className="flex flex-col h-full bg-muted/20">
-      <div className="p-4 border-b space-y-3 bg-background relative">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/20">
+      <div className="shrink-0 space-y-3 border-b bg-background p-4 relative">
         <h2 className="pr-24 text-sm font-semibold">Painel de Ilustrações</h2>
 
         {(onPopOut || onRecolher || onFechar) && (

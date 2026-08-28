@@ -399,14 +399,6 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     }
   });
 
-  ipcMain.handle('ia:listar-modelos', async () => {
-    try {
-      return { success: true, data: await iaExecucaoService.listarModelosDisponiveis() };
-    } catch (error: unknown) {
-      return { success: false, error: error instanceof Error ? error.message : 'ERRO_INTERNO' };
-    }
-  });
-
   ipcMain.handle('ia:descrever-imagem', async (event, solicitacao: unknown) => {
     try {
       if (!solicitacaoDescricaoImagemValida(solicitacao)) return { success: false, error: 'ENTRADA_INVALIDA' };

@@ -199,6 +199,21 @@ const registerDiagnosticoInternoHandlers = (): void => {
  * Handlers do sistema
  */
 const registerSystemHandlers = (): void => {
+  ipcMain.handle('janela:atualizar-barra-titulo', (event, cores: unknown) => {
+    if (process.platform !== 'win32' && process.platform !== 'linux') return;
+    if (!cores || typeof cores !== 'object') return;
+    const { cor, corSimbolo } = cores as Record<string, unknown>;
+    const corHslValida = (valor: unknown): valor is string => typeof valor === 'string'
+      && /^hsl\(\d{1,3}\s+\d{1,3}%\s+\d{1,3}%\)$/.test(valor);
+    if (!corHslValida(cor) || !corHslValida(corSimbolo)) return;
+
+    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay({
+      color: cor,
+      symbolColor: corSimbolo,
+      height: 44,
+    });
+  });
+
   // Reiniciar aplicativo
   ipcMain.handle('restart-app', async () => {
     log.debug('Reiniciando aplicativo...');

@@ -14,7 +14,6 @@ import {
 import type {
   ContextoIa,
   LimiteUsoIa,
-  ModeloIaDisponivel,
   PerfilRespostaIa,
   PlanoExecucaoIaResumo,
   ProgressoIa,
@@ -368,47 +367,10 @@ export class IaExecucaoService {
   private readonly abortadores = new Map<string, AbortController>();
   private readonly operacoesCanceladas = new Set<string>();
   private readonly checkpoints = new Map<string, CheckpointExecucaoIa>();
-  private cacheModelos: { expiraEm: number; modelos: ModeloIaDisponivel[] } | null = null;
   private registradorDiagnostico?: (dados: Record<string, unknown>) => void;
 
   configurarRegistradorDiagnostico(registrador?: (dados: Record<string, unknown>) => void): void {
     this.registradorDiagnostico = registrador;
-  }
-
-  async listarModelosDisponiveis(): Promise<ModeloIaDisponivel[]> {
-    if (this.cacheModelos && this.cacheModelos.expiraEm > Date.now()) return this.cacheModelos.modelos;
-    const contexto = await this.obterContexto();
-    if (!contexto.provedor) return [];
-    const catalogo = listarModelosIa(contexto.provedor);
-    const chave = await configuracaoService.obter(contexto.provedor === 'groq' ? 'api_key_groq' : 'api_key_gemini');
-    if (!chave) return catalogo.map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, provedor: modelo.provedor, disponibilidade: 'sem_chave' }));
-    const abortador = new AbortController();
-    const temporizador = setTimeout(() => abortador.abort(), 250);
-    try {
-      const url = contexto.provedor === 'groq'
-        ? 'https://api.groq.com/openai/v1/models'
-        : 'https://generativelanguage.googleapis.com/v1beta/openai/models';
-      const resposta = await fetch(url, { headers: { Authorization: `Bearer ${chave}` }, signal: abortador.signal });
-      if (!resposta.ok) throw new Error(`HTTP_${resposta.status}`);
-      const corpo: unknown = await resposta.json();
-      const ids = corpo && typeof corpo === 'object' && Array.isArray((corpo as { data?: unknown }).data)
-        ? new Set((corpo as { data: unknown[] }).data.flatMap(item => item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string' ? [(item as { id: string }).id] : []))
-        : null;
-      if (!ids) throw new Error('RESPOSTA_INVALIDA');
-      const modelos = catalogo.map(modelo => ({
-        id: modelo.id,
-        rotulo: modelo.rotulo,
-        provedor: modelo.provedor,
-        disponibilidade: ids.has(modelo.id) ? 'disponivel' as const : 'removido' as const,
-      }));
-      this.cacheModelos = { expiraEm: Date.now() + 60_000, modelos };
-      return modelos;
-    } catch (erro: unknown) {
-      log.warn('Não foi possível verificar disponibilidade dos modelos de IA', { provedor: contexto.provedor, motivo: erro instanceof Error ? erro.message : 'erro_desconhecido' });
-      return catalogo.map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, provedor: modelo.provedor, disponibilidade: 'nao_verificado' }));
-    } finally {
-      clearTimeout(temporizador);
-    }
   }
 
   async obterPerfil(): Promise<PerfilRespostaIa> {
