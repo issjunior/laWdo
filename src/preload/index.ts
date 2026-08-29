@@ -48,7 +48,7 @@ import type {
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
-import type { RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
+import type { ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
 
 // O preload sandboxado não pode carregar módulos locais em tempo de execução.
 function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
@@ -74,6 +74,14 @@ function progressoConsultaIaValidoNoPreload(valor: unknown): valor is ProgressoC
   const progresso = valor as Record<string, unknown>;
   return typeof progresso.operationId === 'string' && Boolean(progresso.operationId)
     && ['preparando', 'analisando', 'consolidando', 'verificando'].includes(String(progresso.fase));
+}
+
+function progressoAtualizacaoValidoNoPreload(valor: unknown): valor is ProgressoAtualizacao {
+  if (!valor || typeof valor !== 'object') return false;
+  const progresso = valor as Record<string, unknown>;
+  return Number.isInteger(progresso.percentual) && (progresso.percentual as number) >= 0 && (progresso.percentual as number) <= 100
+    && ['verificando', 'baixando', 'validando', 'copiando', 'confirmando', 'backup', 'agendando', 'abrindo_instalador'].includes(String(progresso.etapa))
+    && typeof progresso.descricao === 'string';
 }
 
 // Tipo para entrada de log do sistema
@@ -361,6 +369,7 @@ export interface IpcAPI {
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
     selecionarOffline: () => Promise<RespostaAtualizacao>;
+    onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
     onSolicitarReinicio: (callback: () => boolean) => () => void;
   };
 
@@ -1456,6 +1465,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     instalarAgora: () => invokeSeguro<RespostaAtualizacao>('atualizacao:instalar-agora'),
     agendar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:agendar'),
     selecionarOffline: () => invokeSeguro<RespostaAtualizacao>('atualizacao:selecionar-offline'),
+    onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
+        if (progressoAtualizacaoValidoNoPreload(progresso)) callback(progresso);
+      };
+      ipcRenderer.on('atualizacao:progresso', listener);
+      return () => ipcRenderer.removeListener('atualizacao:progresso', listener);
+    },
     onSolicitarReinicio: (callback: () => boolean) => {
       const listener = (_event: Electron.IpcRendererEvent, id: unknown) => {
         if (typeof id !== 'string') return;

@@ -9,6 +9,22 @@ export type EstadoAtualizacao =
   | 'concluida'
   | 'falhou';
 
+export type EtapaProgressoAtualizacao =
+  | 'verificando'
+  | 'baixando'
+  | 'validando'
+  | 'copiando'
+  | 'confirmando'
+  | 'backup'
+  | 'agendando'
+  | 'abrindo_instalador';
+
+export interface ProgressoAtualizacao {
+  percentual: number;
+  etapa: EtapaProgressoAtualizacao;
+  descricao: string;
+}
+
 export type PlataformaAtualizacao = 'windows' | 'linux' | 'macos';
 export type ArquiteturaAtualizacao = 'x64' | 'arm64';
 export type FormatoAtualizacao = 'nsis' | 'AppImage' | 'deb' | 'dmg' | 'zip';
@@ -51,6 +67,7 @@ export interface EstadoAtualizacaoResposta {
   atualizacaoDisponivel?: AtualizacaoDisponivel;
   caminhoDownload?: string;
   progresso?: number;
+  progressoDetalhado?: ProgressoAtualizacao;
   erro?: string;
   verificadoEm?: string;
 }
