@@ -12,6 +12,7 @@ import type {
   EstadoAtualizacaoResposta,
   ManifestoAtualizacao,
   PlataformaAtualizacao,
+  ProgressoAtualizacao,
 } from '../../shared/atualizacao/atualizacao.types.js';
 import { getLogger } from '../utils/logger.js';
 import { backupAtualizacaoService } from './backup-atualizacao.service.js';
@@ -119,7 +120,9 @@ export class AtualizacaoService {
   private caminhoDownload?: string;
   private erro?: string;
   private progresso?: number;
+  private progressoDetalhado?: ProgressoAtualizacao;
   private verificadoEm?: string;
+  private readonly ouvintesProgresso = new Set<(progresso: ProgressoAtualizacao) => void>();
 
   constructor() {
     this.verificadoEm = this.carregarUltimaVerificacao();
@@ -138,19 +141,26 @@ export class AtualizacaoService {
   }
 
   obterEstado(): EstadoAtualizacaoResposta {
-    return { estado: this.estado, versaoInstalada: app.getVersion(), atualizacaoDisponivel: this.atualizacaoDisponivel, caminhoDownload: this.caminhoDownload, progresso: this.progresso, erro: this.erro, verificadoEm: this.verificadoEm };
+    return { estado: this.estado, versaoInstalada: app.getVersion(), atualizacaoDisponivel: this.atualizacaoDisponivel, caminhoDownload: this.caminhoDownload, progresso: this.progresso, progressoDetalhado: this.progressoDetalhado, erro: this.erro, verificadoEm: this.verificadoEm };
+  }
+
+  onProgresso(ouvinte: (progresso: ProgressoAtualizacao) => void): () => void {
+    this.ouvintesProgresso.add(ouvinte);
+    return () => this.ouvintesProgresso.delete(ouvinte);
   }
 
   async verificar(manual = false): Promise<EstadoAtualizacaoResposta> {
     if (this.estado === 'verificando' || this.estado === 'baixando' || this.estado === 'instalando') throw new Error('Há uma operação de atualização em andamento.');
     if (!manual && this.verificadoEm && Date.now() - Date.parse(this.verificadoEm) < UM_DIA_EM_MS) return this.obterEstado();
     this.definirEstado('verificando');
+    this.definirProgresso(5, 'verificando', 'Consultando atualizações disponíveis.');
     try {
       const plataforma = plataformaAtual();
       const arquitetura = process.arch === 'arm64' ? 'arm64' : 'x64';
       const indiceUrl = `${URL_FEED}/${plataforma}-${arquitetura}.json`;
       const [manifestoResposta, assinaturaResposta] = await Promise.all([fetch(indiceUrl), fetch(`${indiceUrl}.sig`)]);
       if (!manifestoResposta.ok || !assinaturaResposta.ok) throw new Error('Índice de atualização indisponível.');
+      this.definirProgresso(45, 'validando', 'Validando a atualização encontrada.');
       const manifestoBruto = await manifestoResposta.json() as unknown;
       const assinatura = (await assinaturaResposta.text()).trim();
       const manifesto = normalizarManifesto(manifestoBruto);
@@ -168,6 +178,7 @@ export class AtualizacaoService {
       this.atualizacaoDisponivel = { versao: manifesto.versao, dataPublicacao: manifesto.dataPublicacao, notas: manifesto.notas, versaoSchema: manifesto.versaoSchema, requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens, artefato };
       this.caminhoDownload = undefined;
       this.definirEstado('disponivel');
+      this.definirProgresso(100, 'validando', 'Atualização pronta para baixar.');
     } catch (erro) {
       this.definirFalha(erro);
     }
@@ -177,6 +188,7 @@ export class AtualizacaoService {
   async baixar(): Promise<EstadoAtualizacaoResposta> {
     if (this.estado !== 'disponivel' || !this.atualizacaoDisponivel) throw new Error('Não há atualização disponível para download.');
     this.definirEstado('baixando');
+    this.definirProgresso(0, 'baixando', 'Iniciando download do pacote.');
     try {
       const resposta = await fetch(this.atualizacaoDisponivel.artefato.url);
       if (!resposta.ok || !resposta.body) throw new Error('Não foi possível baixar o instalador.');
@@ -193,17 +205,18 @@ export class AtualizacaoService {
         recebido += bytes.length;
         hash.update(bytes);
         if (!arquivo.write(bytes)) await new Promise<void>(resolve => arquivo.once('drain', resolve));
-        this.progresso = Math.min(100, Math.round((recebido / this.atualizacaoDisponivel.artefato.tamanho) * 100));
+        this.definirProgresso(Math.min(95, Math.round((recebido / this.atualizacaoDisponivel.artefato.tamanho) * 95)), 'baixando', 'Baixando o pacote de atualização.');
       }
       await new Promise<void>((resolve, reject) => arquivo.end((erro?: Error | null) => erro ? reject(erro) : resolve()));
       const artefato = this.atualizacaoDisponivel.artefato;
+      this.definirProgresso(96, 'validando', 'Validando a integridade do pacote.');
       if (recebido !== artefato.tamanho || hash.digest('hex') !== artefato.hashSha256) {
         fs.rmSync(temporario, { force: true });
         throw new Error('Arquivo baixado não corresponde ao manifesto.');
       }
       fs.renameSync(temporario, destino);
       this.caminhoDownload = destino;
-      this.progresso = 100;
+      this.definirProgresso(100, 'validando', 'Pacote baixado e validado.');
       this.definirEstado('baixada');
     } catch (erro) {
       this.definirFalha(erro);
@@ -213,10 +226,12 @@ export class AtualizacaoService {
 
   async carregarAtualizacaoOffline(caminhoManifesto: string): Promise<EstadoAtualizacaoResposta> {
     this.definirEstado('verificando');
+    this.definirProgresso(5, 'verificando', 'Lendo a atualização offline.');
     try {
       const diretorio = path.dirname(caminhoManifesto);
       const assinatura = fs.readFileSync(path.join(diretorio, `${path.basename(caminhoManifesto)}.sig`), 'utf8').trim();
       const manifesto = normalizarManifesto(JSON.parse(fs.readFileSync(caminhoManifesto, 'utf8')) as unknown);
+      this.definirProgresso(25, 'validando', 'Validando a assinatura do pacote offline.');
       if (!verify(null, Buffer.from(serializarCanonico(manifesto), 'utf8'), createPublicKey(chavePublicaRelease), Buffer.from(assinatura, 'base64'))) throw new Error('Assinatura do manifesto offline inválida.');
       if (compararVersoes(manifesto.versao, app.getVersion()) <= 0) throw new Error('A atualização offline não é mais recente que a versão instalada.');
       const plataforma = plataformaAtual();
@@ -224,14 +239,17 @@ export class AtualizacaoService {
       const artefato = manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura);
       if (!artefato) throw new Error('O manifesto offline não possui pacote compatível com este dispositivo.');
       const origem = path.join(diretorio, artefato.nome);
+      this.definirProgresso(40, 'validando', 'Conferindo a integridade do pacote offline.');
       this.validarArquivo(artefato, origem, false);
       fs.mkdirSync(this.diretorioAtualizacoes, { recursive: true });
       const destino = path.join(this.diretorioAtualizacoes, artefato.nome);
-      fs.copyFileSync(origem, destino);
+      this.definirProgresso(45, 'copiando', 'Copiando o pacote para o laWdo.');
+      await this.copiarArquivoComProgresso(origem, destino, artefato.tamanho);
+      this.definirProgresso(95, 'validando', 'Validando a cópia do pacote offline.');
       this.validarArquivoLocal(artefato, destino);
       this.atualizacaoDisponivel = { versao: manifesto.versao, dataPublicacao: manifesto.dataPublicacao, notas: manifesto.notas, versaoSchema: manifesto.versaoSchema, requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens, artefato };
       this.caminhoDownload = destino;
-      this.progresso = 100;
+      this.definirProgresso(100, 'validando', 'Pacote offline validado.');
       this.definirEstado('baixada');
     } catch (erro) { this.definirFalha(erro); }
     return this.obterEstado();
@@ -249,13 +267,16 @@ export class AtualizacaoService {
     }
     this.definirEstado('instalando');
     try {
+      this.definirProgresso(10, 'confirmando', 'Verificando se é seguro fechar o laWdo.');
       await solicitarAutorizacao();
+      this.definirProgresso(35, 'backup', 'Criando backup antes da atualização.');
       if (this.atualizacaoDisponivel.requerBackupCompletoImagens) {
         await backupAtualizacaoService.criarBackupCompleto(this.atualizacaoDisponivel.versao);
       } else {
         await backupAtualizacaoService.criarSnapshot(this.atualizacaoDisponivel.versao);
       }
       this.definirEstado('aguardando_reinicio');
+      this.definirProgresso(100, 'agendando', 'Atualização preparada para o próximo reinício.');
     } catch (erro) {
       this.definirFalha(erro);
     }
@@ -268,8 +289,11 @@ export class AtualizacaoService {
     }
     this.definirEstado('instalando');
     try {
+      this.definirProgresso(10, 'confirmando', 'Verificando se é seguro fechar o laWdo.');
       await solicitarAutorizacao();
+      this.definirProgresso(35, 'backup', 'Criando backup antes da atualização.');
       await this.criarBackupObrigatorio();
+      this.definirProgresso(90, 'abrindo_instalador', 'Abrindo o instalador. O laWdo será fechado.');
       await this.executarInstalador(this.atualizacaoDisponivel.artefato, this.caminhoDownload);
       this.definirEstado('concluida');
     } catch (erro) {
@@ -299,6 +323,7 @@ export class AtualizacaoService {
     fs.writeFileSync(temporario, JSON.stringify(pendencia), 'utf8');
     fs.renameSync(temporario, this.caminhoPendencia);
     this.definirEstado('aguardando_reinicio');
+    this.definirProgresso(100, 'agendando', 'Atualização agendada para o próximo reinício.');
     return this.obterEstado();
   }
 
@@ -401,6 +426,34 @@ export class AtualizacaoService {
   private definirEstado(estado: EstadoAtualizacao): void {
     this.estado = estado;
     this.erro = undefined;
+  }
+
+  private definirProgresso(percentual: number, etapa: ProgressoAtualizacao['etapa'], descricao: string): void {
+    const progresso = { percentual: Math.max(0, Math.min(100, Math.round(percentual))), etapa, descricao };
+    this.progresso = progresso.percentual;
+    this.progressoDetalhado = progresso;
+    for (const ouvinte of this.ouvintesProgresso) ouvinte(progresso);
+  }
+
+  private async copiarArquivoComProgresso(origem: string, destino: string, tamanho: number): Promise<void> {
+    const temporario = `${destino}.parcial`;
+    const leitura = fs.createReadStream(origem);
+    const escrita = fs.createWriteStream(temporario, { flags: 'w' });
+    let copiado = 0;
+    try {
+      for await (const parte of leitura) {
+        const bytes = Buffer.isBuffer(parte) ? parte : Buffer.from(parte);
+        copiado += bytes.length;
+        if (!escrita.write(bytes)) await new Promise<void>(resolve => escrita.once('drain', resolve));
+        this.definirProgresso(45 + Math.round((copiado / tamanho) * 50), 'copiando', 'Copiando o pacote para o laWdo.');
+      }
+      await new Promise<void>((resolve, reject) => escrita.end((erro?: Error | null) => erro ? reject(erro) : resolve()));
+      fs.renameSync(temporario, destino);
+    } catch (erro) {
+      escrita.destroy();
+      fs.rmSync(temporario, { force: true });
+      throw erro;
+    }
   }
 
   private carregarUltimaVerificacao(): string | undefined {
