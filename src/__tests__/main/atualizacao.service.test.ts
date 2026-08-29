@@ -39,6 +39,37 @@ describe('AtualizacaoService', () => {
     await expect(service.baixar()).rejects.toThrow('Não há atualização disponível para download.');
   });
 
+  it('deve publicar progresso crescente durante o download e a validação', async () => {
+    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-progresso-atualizacao-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    const conteudo = Buffer.from('pacote de atualização válido');
+    const service = new AtualizacaoService();
+    const interno = service as unknown as {
+      estado: EstadoAtualizacao;
+      atualizacaoDisponivel: AtualizacaoDisponivel;
+    };
+    interno.estado = 'disponivel';
+    interno.atualizacaoDisponivel = {
+      versao: '0.1.2', dataPublicacao: '2026-07-24T00:00:00.000Z', notas: 'Teste', versaoSchema: 1,
+      requerBackupCompletoImagens: false,
+      artefato: {
+        plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome: 'laWdo-0.1.2-setup.exe',
+        tamanho: conteudo.length, hashSha256: createHash('sha256').update(conteudo).digest('hex'), url: 'https://example.invalid/arquivo',
+      },
+    };
+    const percentuais: number[] = [];
+    service.onProgresso(progresso => percentuais.push(progresso.percentual));
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(conteudo));
+
+    const estado = await service.baixar();
+
+    expect(estado.estado).toBe('baixada');
+    expect(percentuais[0]).toBe(0);
+    expect(percentuais.at(-1)).toBe(100);
+    expect(percentuais.every((valor, indice) => indice === 0 || valor >= percentuais[indice - 1])).toBe(true);
+    fs.rmSync(diretorio, { recursive: true, force: true });
+  });
+
   it('deve recusar atualização offline com assinatura inválida', async () => {
     const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-atualizacao-offline-'));
     const caminhoManifesto = path.join(diretorio, 'manifesto.json');

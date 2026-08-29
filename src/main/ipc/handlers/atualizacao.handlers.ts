@@ -1,4 +1,4 @@
-import { dialog, ipcMain, type WebContents } from 'electron';
+import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { atualizacaoService } from '../../services/atualizacao.service.js';
 
@@ -30,6 +30,11 @@ function solicitarAutorizacaoReinicio(webContents: WebContents): Promise<void> {
 }
 
 export function registerAtualizacaoHandlers(): void {
+  atualizacaoService.onProgresso(progresso => {
+    for (const janela of BrowserWindow.getAllWindows()) {
+      if (!janela.isDestroyed()) janela.webContents.send('atualizacao:progresso', progresso);
+    }
+  });
   ipcMain.handle('atualizacao:estado', () => ({ success: true, data: atualizacaoService.obterEstado() }));
   ipcMain.handle('atualizacao:verificar', async () => {
     try { return { success: true, data: await atualizacaoService.verificar(true) }; } catch (erro) { return respostaErro(erro); }

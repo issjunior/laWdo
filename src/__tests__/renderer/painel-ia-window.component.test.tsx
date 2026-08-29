@@ -188,7 +188,7 @@ describe('PainelIaWindow', () => {
     expect(document.body).not.toHaveTextContent('Estado atrasado');
   });
 
-  it('recebe a disponibilidade do editor proprietário ao listar modelos', () => {
+  it('lista os modelos do catálogo do provedor selecionado', () => {
     renderizarJanela();
     const estado: EstadoPainelIa = {
       revisao: 1,
@@ -206,14 +206,10 @@ describe('PainelIaWindow', () => {
       escopos: [],
       provedorIa: 'gemini',
       modeloSelecionado: 'gemini-2.5-flash',
-      modelosIa: [
-        { id: 'gemini-2.5-flash', rotulo: 'Gemini 2.5 Flash', provedor: 'gemini', disponibilidade: 'disponivel' },
-        { id: 'gemini-2.5-pro', rotulo: 'Gemini 2.5 Pro', provedor: 'gemini', disponibilidade: 'removido' },
-      ],
     };
 
     act(() => receberEstado?.({ tipo: 'snapshot', estado }));
     fireEvent.click(screen.getByRole('combobox', { name: 'Modelo da IA para esta sessão' }));
-    expect(screen.getByRole('option', { name: /Gemini 2.5 Pro.*Removido/ })).toHaveAttribute('data-disabled');
+    expect(screen.getByRole('option', { name: /Gemini 2.5 Pro/ })).not.toHaveAttribute('data-disabled');
   });
 });

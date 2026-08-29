@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import {
   Info,
@@ -101,6 +102,14 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     return () => window.clearInterval(intervalo);
   }, []);
 
+  useEffect(() => {
+    const api = window.ipcAPI.atualizacao;
+    if (!api) return;
+    return api.onProgresso(progresso => {
+      setAtualizacao(atual => atual ? { ...atual, progresso: progresso.percentual, progressoDetalhado: progresso } : atual);
+    });
+  }, []);
+
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
     setIsDarkMode(newMode);
@@ -110,6 +119,17 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   const saudacao = formatarSaudacao(extrairNomeUsuario(currentUser));
   const atualizacaoDisponivel = atualizacao?.estado === 'disponivel' || atualizacao?.estado === 'baixando' || atualizacao?.estado === 'baixada' || atualizacao?.estado === 'aguardando_reinicio';
   const dadosAtualizacao = atualizacao?.atualizacaoDisponivel;
+  const progressoAtualizacao = atualizacao?.progressoDetalhado;
+
+  const formatarPacote = () => {
+    if (!dadosAtualizacao) return '';
+    const plataforma = {
+      windows: 'Windows',
+      linux: 'Linux',
+      macos: 'macOS',
+    }[dadosAtualizacao.artefato.plataforma];
+    return `${plataforma} ${dadosAtualizacao.artefato.arquitetura} · ${(dadosAtualizacao.artefato.tamanho / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+  };
 
   const executarAcaoAtualizacao = async (acao: 'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'offline') => {
     const api = window.ipcAPI.atualizacao;
@@ -137,22 +157,22 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   };
 
   return (
-    <header className="header flex min-h-12 shrink-0 items-center border-b border-border px-3 py-2">
-      <div className="header-content justify-between w-full flex items-center">
+    <header className="barra-titulo-janela flex h-11 shrink-0 items-center border-b border-sidebar-border bg-sidebar px-3 pr-[148px] text-sidebar-foreground">
+      <div className="flex w-full min-w-0 items-center">
         <div className="flex min-w-0 items-center gap-3">
-          <SidebarTrigger className="-ml-1" />
-          <p className="truncate text-sm font-medium text-foreground">
+          <SidebarTrigger className="-ml-1 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
+          <p className="truncate text-sm font-medium text-sidebar-foreground">
             {saudacao}
           </p>
         </div>
         
-        <div className="flex items-center gap-6 ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           {/* Escolha de Tema */}
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleDarkMode}
-            className="transition-transform duration-300"
+            className="text-sidebar-foreground transition-transform duration-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             title={isDarkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
           >
             {isDarkMode ? (
@@ -166,12 +186,12 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           <Dialog>
             <DialogTrigger asChild>
               <button
-                className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
+                className="flex items-center gap-2 rounded-md p-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 title="Informações"
                 aria-label="Informações"
               >
-                <Info size={18} className="text-muted-foreground" />
-                <span className="hidden md:inline text-muted-foreground font-medium">Informações</span>
+                <Info size={18} />
+                <span className="hidden lg:inline font-medium">Informações</span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[480px]">
@@ -265,12 +285,12 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           <Dialog>
             <DialogTrigger asChild>
               <button
-                className="p-2 hover:bg-accent rounded-md transition-colors flex items-center gap-2 text-sm"
+                className="flex items-center gap-2 rounded-md p-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 title={dadosAtualizacao ? `Nova versão disponível: v${dadosAtualizacao.versao}` : 'Atualizações'}
                 aria-label={dadosAtualizacao ? `Atualizações. Nova versão disponível: ${dadosAtualizacao.versao}` : 'Atualizações'}
               >
-                <Download size={18} className={atualizacaoDisponivel ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />
-                {atualizacaoDisponivel && <span className="text-muted-foreground font-medium">Atualização</span>}
+                <Download size={18} className={atualizacaoDisponivel ? 'text-emerald-300' : undefined} />
+                {atualizacaoDisponivel && <span className="font-medium">Atualização</span>}
                 {atualizacaoDisponivel && <Badge className="bg-emerald-600 hover:bg-emerald-600">Nova versão</Badge>}
               </button>
             </DialogTrigger>
@@ -308,37 +328,46 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                   <div className="space-y-2 pt-2 border-t border-border">
                     <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Detalhes da atualização</h4>
                     <div className="space-y-2 text-xs text-muted-foreground">
+                    <p><span className="font-medium text-foreground">Versão que será instalada:</span> v{dadosAtualizacao.versao}</p>
                     <p><span className="font-medium text-foreground">Publicada:</span> {new Intl.DateTimeFormat('pt-BR').format(new Date(dadosAtualizacao.dataPublicacao))}</p>
-                    <p><span className="font-medium text-foreground">Pacote:</span> {dadosAtualizacao.artefato.formato} · {(dadosAtualizacao.artefato.tamanho / 1024 / 1024).toFixed(1)} MB</p>
+                    <p><span className="font-medium text-foreground">Sistema:</span> {formatarPacote()}</p>
                     <p className="whitespace-pre-wrap"><span className="font-medium text-foreground">Notas:</span> {dadosAtualizacao.notas}</p>
                     </div>
                   </div>
                 )}
                 {atualizacao?.erro && <p className="flex items-center gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" />{atualizacao.erro}</p>}
-                {atualizacao?.estado === 'baixando' && <p className="text-xs text-muted-foreground">Baixando e validando: {atualizacao.progresso ?? 0}%</p>}
+                {progressoAtualizacao && ['verificando', 'baixando', 'instalando', 'aguardando_reinicio'].includes(atualizacao?.estado ?? '') && (
+                  <div className="space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-3" aria-live="polite">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-medium text-foreground">{progressoAtualizacao.descricao}</span>
+                      <span className="font-semibold tabular-nums text-primary">{progressoAtualizacao.percentual}%</span>
+                    </div>
+                    <Progress value={progressoAtualizacao.percentual} aria-label={progressoAtualizacao.descricao} />
+                  </div>
+                )}
                 {atualizacao?.estado === 'baixada' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Download className="h-3.5 w-3.5" />Pacote validado. O backup será criado antes da instalação.</p>}
-                {atualizacao?.estado === 'aguardando_reinicio' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Clock3 className="h-3.5 w-3.5" />Instalação agendada para a próxima inicialização.</p>}
+                {atualizacao?.estado === 'aguardando_reinicio' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Clock3 className="h-3.5 w-3.5" />Instalação agendada. Na próxima abertura, o laWdo validará o pacote e criará o backup antes de iniciar o instalador.</p>}
                 <div className="space-y-2 pt-2 border-t border-border">
                   <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Ações</h4>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('verificar')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button size="sm" variant="outline" className="w-full" onClick={() => void executarAcaoAtualizacao('verificar')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
                       <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${acaoAtualizacao === 'verificar' ? 'animate-spin' : ''}`} /> Verificar atualizações
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('offline')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
+                    <Button size="sm" variant="outline" className="w-full" onClick={() => void executarAcaoAtualizacao('offline')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
                       <Download className="mr-1.5 h-3.5 w-3.5" /> Atualização offline
                     </Button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {atualizacao?.estado === 'disponivel' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>
+                  <div className="grid grid-cols-1 gap-2">
+                    {atualizacao?.estado === 'disponivel' && <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>
                       <Download className="mr-1.5 h-3.5 w-3.5" /> Baixar agora
                     </Button>}
-                    {atualizacao?.estado === 'baixada' && <Button size="sm" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
+                    {atualizacao?.estado === 'baixada' && <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
                       <Download className="mr-1.5 h-3.5 w-3.5" /> Instalar agora
                     </Button>}
-                    {atualizacao?.estado === 'baixada' && (dadosAtualizacao?.artefato.formato === 'nsis' || dadosAtualizacao?.artefato.formato === 'AppImage') && <Button size="sm" variant="outline" onClick={() => void executarAcaoAtualizacao('agendar')} disabled={acaoAtualizacao !== null}>
+                    {atualizacao?.estado === 'baixada' && (dadosAtualizacao?.artefato.formato === 'nsis' || dadosAtualizacao?.artefato.formato === 'AppImage') && <Button size="sm" variant="outline" className="w-full" onClick={() => void executarAcaoAtualizacao('agendar')} disabled={acaoAtualizacao !== null}>
                       <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Instalar na próxima inicialização
                     </Button>}
-                    {dadosAtualizacao && atualizacao?.estado !== 'baixada' && <Button size="sm" variant="ghost" onClick={() => void executarAcaoAtualizacao('adiar')} disabled={acaoAtualizacao !== null}>
+                    {dadosAtualizacao && atualizacao?.estado !== 'baixada' && <Button size="sm" variant="ghost" className="w-full" onClick={() => void executarAcaoAtualizacao('adiar')} disabled={acaoAtualizacao !== null}>
                       <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Lembrar depois
                     </Button>}
                   </div>
@@ -354,11 +383,11 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
 
           <button 
             onClick={onLogout} 
-            className="p-2 hover:bg-destructive/10 hover:text-destructive rounded-md transition-colors flex items-center gap-2 text-sm" 
+            className="flex items-center gap-2 rounded-md p-2 text-sm transition-colors hover:bg-destructive/20 hover:text-destructive-foreground"
             title="Logout"
           >
             <LogOut size={18} />
-            <span className="hidden md:inline font-medium">Logout</span>
+            <span className="hidden lg:inline font-medium">Logout</span>
           </button>
         </div>
       </div>

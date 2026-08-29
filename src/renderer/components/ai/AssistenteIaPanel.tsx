@@ -87,7 +87,7 @@ interface AssistenteIaPanelProps {
   imagemSelecionada?: boolean;
   contextoImagem?: boolean;
   onNavegarEvidencia?: (evidencia: BlocoContextoIa) => void;
-  opcoesModelo?: Array<{ id: string; rotulo: string; perfil?: 'rapido' | 'equilibrado' | 'maior_precisao'; disponibilidade?: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave' }>;
+  opcoesModelo?: Array<{ id: string; rotulo: string; perfil?: 'rapido' | 'equilibrado' | 'maior_precisao' }>;
   modeloSelecionado?: string;
   onSelecionarModelo?: (modelo: string) => void;
   onPerguntarDocumentoCompleto?: (pergunta: string) => void;
@@ -289,13 +289,13 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
               <p className="text-xs text-muted-foreground truncate">Contexto atual: Imagem selecionada</p>
             ) : (
               <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                <span className="shrink-0">Contexto atual:</span>
+                <span className="w-24 shrink-0 whitespace-nowrap">Contexto atual:</span>
                 <Select
                   value={escopoSelecionado === null ? undefined : String(escopoSelecionado)}
                   onValueChange={valor => onSelecionarEscopo?.(Number(valor))}
                   disabled={loading || !onSelecionarEscopo}
                 >
-                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-xs shadow-sm focus:ring-1" aria-label="Contexto atual da IA">
+                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-left text-xs shadow-sm focus:ring-1 [&>span]:text-left" aria-label="Contexto atual da IA">
                     <SelectValue placeholder={secaoTitulo || 'Escolha uma seção'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -310,9 +310,9 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
             )}
             {opcoesModelo.length > 0 && (
               <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                <span className="shrink-0">Modelo:</span>
+                <span className="w-24 shrink-0 whitespace-nowrap">Modelo:</span>
                 <Select value={modeloSelecionado} onValueChange={onSelecionarModelo} disabled={loading || !onSelecionarModelo}>
-                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-xs shadow-sm focus:ring-1" aria-label="Modelo da IA para esta sessão">
+                  <SelectTrigger className="h-7 min-w-0 flex-1 border bg-background px-2 text-left text-xs shadow-sm focus:ring-1 [&>span]:text-left" aria-label="Modelo da IA para esta sessão">
                     <SelectValue placeholder="Modelo configurado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -322,8 +322,8 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                       const rotuloPerfil = perfil === 'rapido' ? 'Rápido' : perfil === 'equilibrado' ? 'Equilibrado' : 'Maior precisão';
                       return <SelectGroup key={perfil}>
                         <SelectLabel>{rotuloPerfil}</SelectLabel>
-                        {modelos.map(modelo => <SelectItem key={modelo.id} value={modelo.id} className="text-xs" disabled={modelo.disponibilidade === 'removido' || modelo.disponibilidade === 'sem_chave'}>
-                          {modelo.rotulo}{modelo.disponibilidade === 'nao_verificado' ? ' · Não verificado' : modelo.disponibilidade === 'removido' ? ' · Removido' : modelo.disponibilidade === 'sem_chave' ? ' · Sem chave' : ''}
+                        {modelos.map(modelo => <SelectItem key={modelo.id} value={modelo.id} className="text-xs">
+                          {modelo.rotulo}
                         </SelectItem>)}
                       </SelectGroup>;
                     })}
@@ -341,26 +341,6 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
           className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
         >
           <div className="space-y-4">
-            {!imagemSelecionada && !loading && messages.length === 0 && opcoesEscopo.length > 0 && (
-              <div className="space-y-3 py-4">
-                <p className="text-sm font-medium">Escolha o escopo que a IA poderá usar</p>
-                <p className="text-xs text-muted-foreground">Nenhum conteúdo é enviado até uma ação ser solicitada.</p>
-                <div className="flex flex-col gap-2">
-                  {opcoesEscopo.map(opcao => (
-                    <Button
-                      key={opcao.id}
-                      type="button"
-                      variant={opcao.id === escopoSelecionado ? 'secondary' : 'outline'}
-                      className="justify-start"
-                      onClick={() => onSelecionarEscopo?.(opcao.id)}
-                      disabled={!onSelecionarEscopo}
-                    >
-                      {opcao.titulo}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
             {(editorId || imagemSelecionada) && messages.length === 0 && !loading && (
               <div className="space-y-5 py-4">
                 <div className="text-center text-muted-foreground text-sm">

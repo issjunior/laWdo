@@ -425,6 +425,16 @@ const createWindow = async (): Promise<void> => {
     icon: caminhoIcone,
     title: 'laWdo',
     show: false, // Mostrar apenas quando estiver pronto
+    ...(process.platform === 'win32' || process.platform === 'linux'
+      ? {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            color: '#1a2540',
+            symbolColor: '#e4edf8',
+            height: 44,
+          },
+        }
+      : {}),
   });
   mainWindow.removeMenu();
   observarEstadoJanelaPrincipal(mainWindow);

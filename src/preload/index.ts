@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
-  ModeloIaDisponivel,
   PerfilRespostaIa,
   PlanoExecucaoIaResumo,
   RespostaDescricaoImagemIa,
@@ -49,7 +48,7 @@ import type {
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
-import type { RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
+import type { ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
 
 // O preload sandboxado não pode carregar módulos locais em tempo de execução.
 function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
@@ -75,6 +74,14 @@ function progressoConsultaIaValidoNoPreload(valor: unknown): valor is ProgressoC
   const progresso = valor as Record<string, unknown>;
   return typeof progresso.operationId === 'string' && Boolean(progresso.operationId)
     && ['preparando', 'analisando', 'consolidando', 'verificando'].includes(String(progresso.fase));
+}
+
+function progressoAtualizacaoValidoNoPreload(valor: unknown): valor is ProgressoAtualizacao {
+  if (!valor || typeof valor !== 'object') return false;
+  const progresso = valor as Record<string, unknown>;
+  return Number.isInteger(progresso.percentual) && (progresso.percentual as number) >= 0 && (progresso.percentual as number) <= 100
+    && ['verificando', 'baixando', 'validando', 'copiando', 'confirmando', 'backup', 'agendando', 'abrindo_instalador'].includes(String(progresso.etapa))
+    && typeof progresso.descricao === 'string';
 }
 
 // Tipo para entrada de log do sistema
@@ -125,6 +132,7 @@ export interface IpcAPI {
   restartApp: () => Promise<void>;
   closeApp: () => Promise<void>;
   openDevTools: () => void;
+  atualizarBarraTitulo: (cores: { cor: string; corSimbolo: string }) => Promise<void>;
 
   // Banco de dados
   executeQuery: (query: string, params?: IpcParams) => Promise<IpcResult>;
@@ -324,7 +332,6 @@ export interface IpcAPI {
     planejar: (solicitacao: SolicitacaoIa) => Promise<UserResponse<PlanoExecucaoIaResumo>>;
     executar: (solicitacao: SolicitacaoIa) => Promise<RespostaExecucaoIaIpc>;
     consultar: (solicitacao: SolicitacaoConsultaIa) => Promise<UserResponse<RespostaConsultaIa>>;
-    listarModelos: () => Promise<UserResponse<ModeloIaDisponivel[]>>;
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => Promise<UserResponse<RespostaDescricaoImagemIa>>;
     cancelar: (operationId: string) => Promise<UserResponse>;
     descartarRetomada: (retomadaId: string) => Promise<UserResponse>;
@@ -362,6 +369,7 @@ export interface IpcAPI {
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
     selecionarOffline: () => Promise<RespostaAtualizacao>;
+    onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
     onSolicitarReinicio: (callback: () => boolean) => () => void;
   };
 
@@ -418,6 +426,7 @@ const ALLOWED_CHANNELS = new Set([
   'restart-app',
   'close-app',
   'open-dev-tools',
+  'janela:atualizar-barra-titulo',
 
   // Banco de dados
   'execute-query',
@@ -582,7 +591,6 @@ const ALLOWED_CHANNELS = new Set([
   'ia:planejar',
   'ia:executar',
   'ia:consultar',
-  'ia:listar-modelos',
   'ia:cancelar',
   'ia:descartar-retomada',
   'ia:testar-conexao',
@@ -941,6 +949,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   restartApp: () => invokeSeguro<void>('restart-app'),
   closeApp: () => invokeSeguro<void>('close-app'),
   openDevTools: () => sendSeguro('open-dev-tools'),
+  atualizarBarraTitulo: cores => invokeSeguro<void>('janela:atualizar-barra-titulo', cores),
 
   // Banco de dados
   executeQuery: (query: string, params?: IpcParams) => {
@@ -1388,7 +1397,6 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     planejar: (solicitacao: SolicitacaoIa) => invocarComDiagnostico('ia:planejar', solicitacao),
     executar: (solicitacao: SolicitacaoIa) => invocarComDiagnostico('ia:executar', solicitacao),
     consultar: (solicitacao: SolicitacaoConsultaIa) => invocarComDiagnostico('ia:consultar', solicitacao),
-    listarModelos: () => invocarComDiagnostico('ia:listar-modelos'),
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => invocarComDiagnostico('ia:descrever-imagem', solicitacao),
     cancelar: (operationId: string) => invocarComDiagnostico('ia:cancelar', operationId),
     descartarRetomada: (retomadaId: string) => invocarComDiagnostico('ia:descartar-retomada', retomadaId),
@@ -1457,6 +1465,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     instalarAgora: () => invokeSeguro<RespostaAtualizacao>('atualizacao:instalar-agora'),
     agendar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:agendar'),
     selecionarOffline: () => invokeSeguro<RespostaAtualizacao>('atualizacao:selecionar-offline'),
+    onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
+        if (progressoAtualizacaoValidoNoPreload(progresso)) callback(progresso);
+      };
+      ipcRenderer.on('atualizacao:progresso', listener);
+      return () => ipcRenderer.removeListener('atualizacao:progresso', listener);
+    },
     onSolicitarReinicio: (callback: () => boolean) => {
       const listener = (_event: Electron.IpcRendererEvent, id: unknown) => {
         if (typeof id !== 'string') return;

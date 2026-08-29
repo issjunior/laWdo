@@ -137,6 +137,19 @@
   }
 }
 
+.barra-titulo-janela {
+  app-region: drag;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.barra-titulo-janela button,
+.barra-titulo-janela a,
+.barra-titulo-janela [role="button"] {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
 /* ═══ Light Mode Enhancements ════════════════════════════════════════════════ */
 
 /* Elevação dos Cards shadcn no tema light: sombra + borda mais visível */

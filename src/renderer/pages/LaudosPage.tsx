@@ -14,8 +14,9 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download } from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
@@ -108,6 +109,11 @@ import {
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { protegerFragmentosIa, restaurarFragmentosIa } from '@/lib/ia-fragmentos';
 import { resolverHtmlContextoIa, resolverTextoContextoIa } from '@/lib/ia-contexto';
+import {
+  identificarPendenciasConclusaoLaudo,
+  possuiPendenciasConclusaoLaudo,
+  type PendenciasConclusaoLaudo,
+} from '@/lib/pendencias-conclusao-laudo';
 import { toast } from 'sonner';
 import { obterNomeArquivoLaudo } from '@shared/utils/nomes-documentos-rep';
 
@@ -368,6 +374,12 @@ interface LaudoItem {
   wizard_id?: string;
 }
 
+interface AtualizacaoStatusPendente {
+  laudo: LaudoItem;
+  novoStatus: string;
+  pendencias: PendenciasConclusaoLaudo;
+}
+
 type SecaoEditor = SecaoEstruturalLaudo;
 
 interface RespostaIaPendente {
@@ -489,7 +501,6 @@ export const LaudosPage: React.FC = () => {
     modeloIaSessao,
     setModeloIaSessao,
     provedorIaSessao,
-    modelosIaSessao,
   } = useModelosIaSessao(editando?.id);
   const [fallbackModeloIaPendente, setFallbackModeloIaPendente] = useState<FallbackModeloIaPendente | null>(null);
   const [iaSheetMode, setIaSheetMode] = useState<AcaoIa | null>(null);
@@ -501,6 +512,7 @@ export const LaudosPage: React.FC = () => {
   const reconciliacaoImagensRef = useRef<Promise<void> | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [atualizacaoStatusPendente, setAtualizacaoStatusPendente] = useState<AtualizacaoStatusPendente | null>(null);
   const [laudoParaExcluir, setLaudoParaExcluir] = useState<LaudoItem | null>(null);
   const [senhaExclusao, setSenhaExclusao] = useState('');
   const [senhaExclusaoErro, setSenhaExclusaoErro] = useState('');
@@ -2278,7 +2290,6 @@ export const LaudosPage: React.FC = () => {
         escopoSelecionado: iaSheetSecaoIdx ?? null,
         ...(modeloIaSessao ? { modeloSelecionado: modeloIaSessao } : {}),
         ...(provedorIaSessao ? { provedorIa: provedorIaSessao } : {}),
-        modelosIa: modelosIaSessao.map(modelo => ({ ...modelo, provedor: provedorIaSessao || 'gemini' })),
         retomada: retomadaIaPendente?.retomada || null,
         mensagens: obterMensagensVisiveis().map(mensagem => ({
           id: mensagem.id,
@@ -2297,7 +2308,7 @@ export const LaudosPage: React.FC = () => {
         })),
         escopos: [
           { id: -1, titulo: 'Documento completo' },
-          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `${indice + 1}. Seção: ${secao.titulo}` })),
         ],
       };
       const anterior = ultimoEstadoPainelIaRef.current;
@@ -2324,7 +2335,6 @@ export const LaudosPage: React.FC = () => {
         if (estado.escopoSelecionado !== anterior.escopoSelecionado) alteracoes.escopoSelecionado = estado.escopoSelecionado;
         if (estado.modeloSelecionado !== anterior.modeloSelecionado && estado.modeloSelecionado) alteracoes.modeloSelecionado = estado.modeloSelecionado;
         if (estado.provedorIa !== anterior.provedorIa && estado.provedorIa) alteracoes.provedorIa = estado.provedorIa;
-        if (JSON.stringify(estado.modelosIa) !== JSON.stringify(anterior.modelosIa)) alteracoes.modelosIa = estado.modelosIa;
         if (JSON.stringify(estado.retomada) !== JSON.stringify(anterior.retomada)) alteracoes.retomada = estado.retomada;
         if (JSON.stringify(estado.mensagens) !== JSON.stringify(anterior.mensagens)) alteracoes.mensagens = estado.mensagens;
         if (JSON.stringify(estado.escopos) !== JSON.stringify(anterior.escopos)) alteracoes.escopos = estado.escopos;
@@ -2372,9 +2382,7 @@ export const LaudosPage: React.FC = () => {
           setIaError(null);
         }
       } else if (comando.tipo === 'selecionar_modelo' && provedorIaSessao) {
-        const modelo = modelosIaSessao.find(item => item.id === comando.modelo);
-        if (listarModelosIa(provedorIaSessao).some(item => item.id === comando.modelo)
-          && modelo?.disponibilidade !== 'removido' && modelo?.disponibilidade !== 'sem_chave') setModeloIaSessao(comando.modelo);
+        if (listarModelosIa(provedorIaSessao).some(item => item.id === comando.modelo)) setModeloIaSessao(comando.modelo);
       } else if (comando.tipo === 'solicitar_ressincronizacao') {
         if (sessaoPainelIaRef.current) publicarEstado(sessaoPainelIaRef.current, true);
       } else if (comando.tipo === 'aplicar_resposta') {
@@ -2400,7 +2408,7 @@ export const LaudosPage: React.FC = () => {
     });
     if (sessaoPainelIaRef.current && painelIaProntoRef.current) publicarEstado(sessaoPainelIaRef.current);
     return () => { removerPronto(); removerComando(); removerReencaixar(); removerFechado(); };
-  }, [avisoLimiteIa, chatMessages, estadoOperacaoIa, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, modelosIaSessao, progressoIa, progressoConsultaIa, provedorIaSessao, retomadaIaPendente, secoes, setModeloIaSessao]);
+  }, [avisoLimiteIa, chatMessages, estadoOperacaoIa, iaError, iaLoading, iaSheetMode, iaSheetSecaoIdx, iaSheetSecaoTitulo, imagemSelecionadaIaId, modeloIaSessao, progressoIa, progressoConsultaIa, provedorIaSessao, retomadaIaPendente, secoes, setModeloIaSessao]);
 
   const obterDescricaoAcaoIa = (acao: AcaoIa) => {
     const descricoes: Record<AcaoIa, string> = {
@@ -2853,19 +2861,6 @@ export const LaudosPage: React.FC = () => {
       return;
     }
     const modeloSelecionado = modeloForcado || modeloIaSessao;
-    const disponibilidadeModelo = modeloSelecionado
-      ? modelosIaSessao.find(modelo => modelo.id === modeloSelecionado)?.disponibilidade
-      : undefined;
-    if (disponibilidadeModelo === 'removido' || disponibilidadeModelo === 'sem_chave') {
-      const codigo = disponibilidadeModelo === 'removido' ? 'MODELO_REMOVIDO' : 'CONFIGURACAO_AUSENTE';
-      const recomendado = provedorIaSessao
-        ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloSelecionado
-          && modelosIaSessao.find(item => item.id === modelo.id)?.disponibilidade === 'disponivel')?.id
-          || obterModeloPadraoIa(provedorIaSessao).id
-        : null;
-      setFallbackModeloIaPendente({ pergunta, codigo, modeloRecomendado: recomendado === modeloSelecionado ? null : recomendado });
-      return;
-    }
     const operationId = crypto.randomUUID();
     const escopoCompleto = escopoForcado === -1 || alvo.tipo === 'laudo_completo';
     const fontes = escopoCompleto
@@ -2916,8 +2911,7 @@ export const LaudosPage: React.FC = () => {
       const codigo = erro instanceof Error ? erro.message.split(':')[0] : '';
       if (codigo === 'MODELO_INCOMPATIVEL' || codigo === 'CONFIGURACAO_AUSENTE') {
         const recomendado = provedorIaSessao
-          ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloIaSessao
-            && modelosIaSessao.find(item => item.id === modelo.id)?.disponibilidade !== 'removido')?.id
+          ? listarModelosIa(provedorIaSessao).find(modelo => modelo.id !== modeloIaSessao)?.id
             || obterModeloPadraoIa(provedorIaSessao).id
           : null;
         setFallbackModeloIaPendente({ pergunta, codigo, modeloRecomendado: recomendado === modeloIaSessao ? null : recomendado });
@@ -3072,7 +3066,7 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleUpdateStatus = useCallback(async (laudo: LaudoItem, novoStatus: string) => {
+  const atualizarStatus = useCallback(async (laudo: LaudoItem, novoStatus: string) => {
     try {
       setError(null);
       const r = await window.ipcAPI.laudo.updateStatus(laudo.id, novoStatus);
@@ -3085,6 +3079,25 @@ export const LaudosPage: React.FC = () => {
       setError(obterMensagemErro(e, 'Erro ao atualizar status'));
     }
   }, [carregarLaudos]);
+
+  const handleUpdateStatus = useCallback((laudo: LaudoItem, novoStatus: string) => {
+    if (novoStatus === 'Concluído' || novoStatus === 'Entregue') {
+      const pendencias = identificarPendenciasConclusaoLaudo(laudo.conteudo);
+      if (possuiPendenciasConclusaoLaudo(pendencias)) {
+        setAtualizacaoStatusPendente({ laudo, novoStatus, pendencias });
+        return;
+      }
+    }
+
+    void atualizarStatus(laudo, novoStatus);
+  }, [atualizarStatus]);
+
+  const confirmarAtualizacaoStatus = useCallback(() => {
+    const pendencia = atualizacaoStatusPendente;
+    if (!pendencia) return;
+    setAtualizacaoStatusPendente(null);
+    void atualizarStatus(pendencia.laudo, pendencia.novoStatus);
+  }, [atualizacaoStatusPendente, atualizarStatus]);
 
   const getProximoStatus = (status: string): { label: string; value: string; icon: typeof CheckCircle } | null => {
     if (status === 'Em andamento') return { label: 'Concluir', value: 'Concluído', icon: CheckCircle };
@@ -3303,9 +3316,7 @@ export const LaudosPage: React.FC = () => {
         contextoImagem={Boolean(imagemSelecionadaIaId)}
         onNavegarEvidencia={navegarParaEvidenciaIa}
         modeloSelecionado={modeloIaSessao || undefined}
-        opcoesModelo={modelosIaSessao.length > 0
-          ? modelosIaSessao.map(modelo => ({ ...modelo, perfil: provedorIaSessao ? listarModelosIa(provedorIaSessao).find(item => item.id === modelo.id)?.perfil : undefined }))
-          : (provedorIaSessao ? listarModelosIa(provedorIaSessao).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, perfil: modelo.perfil, disponibilidade: 'nao_verificado' as const })) : [])}
+        opcoesModelo={provedorIaSessao ? listarModelosIa(provedorIaSessao).map(modelo => ({ id: modelo.id, rotulo: modelo.rotulo, perfil: modelo.perfil })) : []}
         onSelecionarModelo={modelo => setModeloIaSessao(modelo)}
         onApplyResponse={handleApplyResponse}
         modoAplicacao={iaSheetMode && iaSheetMode !== 'inserir' ? 'substituir' : 'inserir'}
@@ -3317,7 +3328,7 @@ export const LaudosPage: React.FC = () => {
         avisoLimite={avisoLimiteIa}
         opcoesEscopo={[
           { id: -1, titulo: 'Documento completo' },
-          ...secoes.map((secao, indice) => ({ id: indice, titulo: `Seção: ${secao.titulo}` })),
+          ...secoes.map((secao, indice) => ({ id: indice, titulo: `${indice + 1}. Seção: ${secao.titulo}` })),
         ]}
         onSelecionarEscopo={indice => handleOpenSheet(indice, indice === -1 ? 'Documento completo' : secoes[indice]?.titulo || '')}
         onPerguntarDocumentoCompleto={pergunta => {
@@ -3806,6 +3817,54 @@ export const LaudosPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={atualizacaoStatusPendente !== null} onOpenChange={aberto => {
+        if (!aberto) setAtualizacaoStatusPendente(null);
+      }}>
+        <AlertDialogContent className="max-w-2xl gap-5">
+          <AlertDialogHeader className="space-y-1">
+            <AlertDialogTitle className="flex items-center gap-2 text-xl">
+              <CircleAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              Há revisões a fazer
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <Alert className="border-amber-200 bg-amber-50 py-3 text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+                  <AlertDescription className="text-center">
+                    Revise as pendências abaixo antes de {atualizacaoStatusPendente?.novoStatus === 'Entregue' ? 'entregá-lo' : 'concluí-lo'}.
+                  </AlertDescription>
+                </Alert>
+                <div className="overflow-hidden rounded-md border">
+                  <Table className="text-sm">
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="h-10 px-3">Seção</TableHead>
+                        <TableHead className="h-10 whitespace-nowrap px-3 text-center">Padrão XXX</TableHead>
+                        <TableHead className="h-10 whitespace-nowrap px-3 text-center">Figura-modelo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {atualizacaoStatusPendente?.pendencias.secoes.map((secao, indice) => (
+                        <TableRow key={`${secao.titulo}-${indice}`}>
+                          <TableCell className="p-3 font-medium">{secao.titulo}</TableCell>
+                          <TableCell className="whitespace-nowrap p-3 text-center">{secao.camposReservados || '—'}</TableCell>
+                          <TableCell className="whitespace-nowrap p-3 text-center">{secao.figurasDummy || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarAtualizacaoStatus}>
+              {atualizacaoStatusPendente?.novoStatus === 'Entregue' ? 'Entregar mesmo assim' : 'Concluir mesmo assim'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog de confirmação para exclusão de laudo */}
       <Dialog open={deleteDialogOpen} onOpenChange={(open) => {

@@ -74,7 +74,6 @@ export default function PainelIaWindow() {
           id: modelo.id,
           rotulo: modelo.rotulo,
           perfil: modelo.perfil,
-          disponibilidade: estado.modelosIa?.find(item => item.id === modelo.id)?.disponibilidade || 'nao_verificado',
         })) : []}
         onSelecionarModelo={(modelo) => window.ipcAPI.ia.painelEnviarComando({ tipo: 'selecionar_modelo', modelo })}
         onSelecionarEscopo={(indice) =>

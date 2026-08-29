@@ -12,6 +12,7 @@ import type {
 } from '@shared/types/imagem-laudo.types';
 import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
 import type { AtualizacaoPainelIa, ComandoPainelIa, LimiteUsoIa, PlanoExecucaoIaResumo, ProgressoConsultaIa, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
+import type { ProgressoAtualizacao } from '@shared/atualizacao/atualizacao.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -120,6 +121,7 @@ interface IpcAPIRendererLegada {
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
     selecionarOffline: () => Promise<RespostaAtualizacao>;
+    onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
     onSolicitarReinicio: (callback: () => boolean) => () => void;
   };
   log: IpcGrupoLegado;

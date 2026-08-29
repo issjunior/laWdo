@@ -396,7 +396,6 @@ export interface EstadoPainelIa {
   escopoSelecionado?: number | null;
   modeloSelecionado?: string;
   provedorIa?: 'groq' | 'gemini';
-  modelosIa?: ModeloIaDisponivel[];
 }
 
 export type CamposEstadoPainelIa = Omit<EstadoPainelIa, 'revisao'>;
@@ -432,7 +431,6 @@ const CAMPOS_ESTADO_PAINEL_IA: Array<keyof CamposEstadoPainelIa> = [
   'escopos',
   'modeloSelecionado',
   'provedorIa',
-  'modelosIa',
 ];
 
 function mensagensPainelIaValidas(valor: unknown): valor is MensagemPainelIa[] {
@@ -457,17 +455,6 @@ function escoposPainelIaValidos(valor: unknown): valor is EstadoPainelIa['escopo
     if (!escopo || typeof escopo !== 'object') return false;
     const item = escopo as Record<string, unknown>;
     return Number.isInteger(item.id) && typeof item.titulo === 'string';
-  });
-}
-
-function modelosIaPainelValidos(valor: unknown): valor is ModeloIaDisponivel[] {
-  return Array.isArray(valor) && valor.every(modelo => {
-    if (!modelo || typeof modelo !== 'object') return false;
-    const item = modelo as Record<string, unknown>;
-    return typeof item.id === 'string' && Boolean(item.id)
-      && typeof item.rotulo === 'string'
-      && (item.provedor === 'groq' || item.provedor === 'gemini')
-      && ['disponivel', 'nao_verificado', 'removido', 'sem_chave'].includes(String(item.disponibilidade));
   });
 }
 
@@ -497,7 +484,6 @@ function campoEstadoPainelIaValido(campo: keyof CamposEstadoPainelIa, valor: unk
     case 'escopoSelecionado': return valor === null || Number.isInteger(valor);
     case 'modeloSelecionado': return valor === undefined || (typeof valor === 'string' && Boolean(valor));
     case 'provedorIa': return valor === undefined || valor === 'groq' || valor === 'gemini';
-    case 'modelosIa': return valor === undefined || modelosIaPainelValidos(valor);
   }
 }
 
@@ -591,11 +577,4 @@ export function comandoPainelIaValido(valor: unknown): valor is ComandoPainelIa 
     || comando.tipo === 'solicitar_ressincronizacao') return true;
   if (comando.tipo === 'selecionar_escopo') return Number.isInteger(comando.indice);
   return comando.tipo === 'selecionar_modelo' && typeof comando.modelo === 'string' && Boolean(comando.modelo.trim()) && comando.modelo.length <= 200;
-}
-
-export interface ModeloIaDisponivel {
-  id: string;
-  rotulo: string;
-  provedor: 'groq' | 'gemini';
-  disponibilidade: 'disponivel' | 'nao_verificado' | 'removido' | 'sem_chave';
 }

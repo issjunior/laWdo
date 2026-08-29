@@ -80,4 +80,20 @@ describe('rolagem do painel de ilustrações', () => {
     expect(screen.getByLabelText('Figura 1, exemplo')).toBeInTheDocument()
     expect(screen.queryByText('Fig. Exemplo')).not.toBeInTheDocument()
   })
+
+  it('restringe a rolagem ao conteúdo para manter o painel completo visível', () => {
+    render(
+      <IlustracoesPanel
+        laudoId="laudo-1"
+        onInsertImage={vi.fn()}
+        onRefreshHtml={vi.fn()}
+      />,
+    )
+
+    const cabecalho = screen.getByRole('heading', { name: 'Painel de Ilustrações' }).parentElement
+    const painel = cabecalho?.parentElement
+
+    expect(painel).toHaveClass('h-full', 'min-h-0', 'flex-col', 'overflow-hidden')
+    expect(cabecalho).toHaveClass('shrink-0')
+  })
 })

@@ -93,8 +93,8 @@ const IlustracoesPanelWindow: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <header className="flex items-center justify-between px-4 py-3 border-b bg-card flex-shrink-0">
+    <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background">
+      <header className="flex shrink-0 items-center justify-between border-b bg-card px-4 py-3">
         <div>
           <h1 className="text-sm font-semibold">Painel de Ilustrações</h1>
           {tituloLaudo && (
