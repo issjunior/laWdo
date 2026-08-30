@@ -378,15 +378,17 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
           </Tooltip>
         </TooltipProvider>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-        onClick={onPreview}
-        title="Ampliar"
-      >
-        <Maximize2 size={14} />
-      </Button>
+      {!imagem.dummy && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={onPreview}
+          title="Ampliar"
+        >
+          <Maximize2 size={14} />
+        </Button>
+      )}
       {onGerarLegenda && (
         <Button
           variant="ghost"
@@ -473,7 +475,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const hashesGdlCapturados = useRef(new Set<string>());
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
-  const [imagemEmVisualizacao, setImagemEmVisualizacao] = useState<ImagemLaudo | null>(null);
+  const [imagensEmVisualizacao, setImagensEmVisualizacao] = useState<ImagemLaudo[]>([]);
   const [lightboxEditorIndex, setLightboxEditorIndex] = useState(-1);
 
   const [lensZoom, setLensZoom] = useState(2);
@@ -692,11 +694,26 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 
   const filteredImagens = [...imagens]
     .sort((a, b) => a.sequencia - b.sequencia);
+  const figurasReaisNoEditor = (figurasNoEditor || []).filter(figura => !figura.dummy);
+
+  const abrirCarrosselImagens = (imagemId: string) => {
+    const imagensReais = filteredImagens.filter(imagem => !imagem.dummy);
+    const indice = imagensReais.findIndex(imagem => imagem.id === imagemId);
+    if (indice < 0) return;
+
+    void Promise.all(imagensReais.map(carregarImagemCompleta)).then(carregadas => {
+      setImagensEmVisualizacao(carregadas);
+      setLightboxIndex(indice);
+    }).catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível abrir as imagens.'));
+  };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/20">
-      <div className="shrink-0 space-y-3 border-b bg-background p-4 relative">
-        <h2 className="pr-24 text-sm font-semibold">Painel de Ilustrações</h2>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-border/80 bg-muted/20">
+      <div className="relative shrink-0 space-y-3 border-b bg-background p-4">
+        <div className="flex min-w-0 items-center gap-2 pr-24 text-base font-semibold">
+          <ImageIcon className="size-4 shrink-0 text-primary" />
+          <h2 className="truncate">Painel de Ilustrações</h2>
+        </div>
 
         {(onPopOut || onRecolher || onFechar) && (
           <div className="absolute right-3 top-3 flex items-center gap-1">
@@ -750,20 +767,46 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           </TooltipProvider>
         </div>
 
-        <Button className="w-full gap-2" variant="outline" asChild>
-          <label className="cursor-pointer">
-            <Plus size={16} /> Carregar Imagens
-            <input type="file" multiple accept="image/*" className="hidden" onChange={handleUpload} />
-          </label>
-        </Button>
-        <Button className="w-full gap-2" variant="outline" onClick={() => setModalGdlAberto(true)}>
-          <ImageDown size={16} /> Buscar imagens da REP
-        </Button>
-        {onInsertAll && imagens.length > 0 && (
-          <Button variant="secondary" className="w-full gap-2" onClick={() => { void handleInsertAll(); }}>
-            <ImageIcon size={16} /> Inserir Todas no Laudo
-          </Button>
-        )}
+        <TooltipProvider delayDuration={200}>
+          <div className="grid grid-cols-3 gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button className="h-14 min-w-0 flex-col gap-1 px-2" variant="outline" asChild>
+                  <label className="cursor-pointer" aria-label="Carregar imagens">
+                    <Plus size={16} className="shrink-0" />
+                    <span className="whitespace-nowrap text-xs font-medium">Carregar</span>
+                    <input type="file" multiple accept="image/*" className="hidden" onChange={handleUpload} />
+                  </label>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Carregar imagens localmente</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button className="h-14 min-w-0 flex-col gap-1 px-2" variant="outline" onClick={() => setModalGdlAberto(true)} aria-label="Buscar imagens da REP">
+                  <ImageDown size={16} className="shrink-0" />
+                  <span className="whitespace-nowrap text-xs font-medium">Buscar REP</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Buscar imagens da REP</TooltipContent>
+            </Tooltip>
+
+            {onInsertAll && imagens.length > 0 ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="secondary" className="h-14 min-w-0 flex-col gap-1 px-2" onClick={() => { void handleInsertAll(); }} aria-label="Inserir todas as imagens no laudo">
+                    <ImageIcon size={16} className="shrink-0" />
+                    <span className="whitespace-nowrap text-xs font-medium">Inserir</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Inserir todas as imagens no laudo</TooltipContent>
+              </Tooltip>
+            ) : (
+              <div aria-hidden="true" />
+            )}
+          </div>
+        </TooltipProvider>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
@@ -806,11 +849,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                       }}
                       onPreview={index => {
                         const imagem = filteredImagens[index];
-                        if (!imagem) return;
-                        void carregarImagemCompleta(imagem).then(carregada => {
-                          setImagemEmVisualizacao(carregada);
-                          setLightboxIndex(0);
-                        }).catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível abrir a imagem.'));
+                        if (imagem) abrirCarrosselImagens(imagem.id);
                       }}
                     />
                   </motion.div>
@@ -865,7 +904,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                 ativo={fig.id === figuraAtivaId}
                 onDelete={handleDeleteFiguraEditor}
                 onUpdateLegenda={onUpdateLegendaInEditor || (() => {})}
-                onPreview={() => setLightboxEditorIndex(idx)}
+                onPreview={() => setLightboxEditorIndex(figurasReaisNoEditor.findIndex(figura => figura.id === fig.id))}
                 onScrollToFigure={onScrollToFigure}
                 onReplaceImage={(id) => {
                   setImagemSubstituicaoId(null);
@@ -879,12 +918,23 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         </div>
       )}
 
+      <div className="shrink-0 border-t bg-background px-4 py-3">
+        <p className="text-[10px] text-muted-foreground">
+          Revise as imagens e legendas antes de inseri-las no laudo.
+        </p>
+      </div>
+
       <Lightbox
         open={lightboxIndex >= 0}
-        index={0}
-        close={() => { setLightboxIndex(-1); setImagemEmVisualizacao(null); }}
-        slides={imagemEmVisualizacao ? [{ src: imagemEmVisualizacao.url, title: imagemEmVisualizacao.legenda }] : []}
-        plugins={[Zoom]}
+        index={lightboxIndex}
+        close={() => { setLightboxIndex(-1); setImagensEmVisualizacao([]); }}
+        slides={imagensEmVisualizacao.map(imagem => ({
+          src: imagem.url,
+          description: imagem.legenda || undefined,
+        }))}
+        plugins={[Zoom, Captions, Counter]}
+        styles={{ toolbar: { top: '44px' } }}
+        captions={{ descriptionTextAlign: 'center' }}
       />
 
       <GdlImagensRepModal
@@ -902,6 +952,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         onAbertoChange={(aberto) => { setSeletorSubstituicaoAberto(aberto); if (!aberto) { setFiguraSubstituicaoId(null); setImagemSubstituicaoId(null); } }}
         onSelecionar={setImagemSubstituicaoId}
         onBuscarGdl={() => { setSeletorSubstituicaoAberto(false); setModalGdlAberto(true); }}
+        onGerarLegenda={onGerarLegenda}
         onConfirmar={(legenda) => {
           const imagem = filteredImagens.find(item => item.id === imagemSubstituicaoId);
           if (!figuraSubstituicaoId || !imagem) return;
@@ -951,11 +1002,12 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           open={lightboxEditorIndex >= 0}
           index={lightboxEditorIndex}
           close={() => setLightboxEditorIndex(-1)}
-          slides={figurasNoEditor.map(img => {
+          slides={figurasReaisNoEditor.map(img => {
             const num = img.numero_figura.toString().padStart(2, '0')
             return { src: img.url, description: img.legenda ? `Figura ${num}: ${img.legenda}` : `Figura ${num}` }
           })}
           plugins={[Captions, Counter]}
+          styles={{ toolbar: { top: '44px' } }}
           captions={{ descriptionTextAlign: "center" }}
           render={{
             slide: ({ slide, offset, rect }) => {

@@ -16,24 +16,6 @@ Aplicação desktop para gestão de REPs e elaboração de laudos periciais. O l
 
 Obtenha a versão mais recente em [issjunior.github.io/laWdo](https://issjunior.github.io/laWdo/). As notas e versões publicadas também estão disponíveis nas [releases do GitHub](https://github.com/issjunior/laWdo/releases).
 
-## Desenvolvimento
-
-Requer Node.js 24 ou superior.
-
-```bash
-npm install
-npm run dev
-```
-
-Validações principais:
-
-```bash
-npm run type-check
-npm run lint
-npm test
-npm run pack
-```
-
 ## Stack
 
 Electron · React · TypeScript · Vite · Tailwind CSS · shadcn/ui · SQLite · TinyMCE · Vitest

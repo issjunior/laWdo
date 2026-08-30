@@ -116,6 +116,9 @@ function avaliarToggleSecao(toggleId: string, camposEspecificos: Record<string, 
 
   const chaveColecao = chave.replace(/_toggle$/, '');
   const projecaoB602 = projetarB602ParaLaudo(b602);
+  if (chaveColecao === 'lacres_saida') {
+    return projecaoB602.armas.length > 0 || projecaoB602.estojos.length > 0;
+  }
   if (chaveColecao === 'armas') return projecaoB602.armas.length > 0;
   if (chaveColecao === 'cartuchos') return projecaoB602.cartuchos.length > 0;
   if (chaveColecao === 'estojos') return projecaoB602.estojos.length > 0;
@@ -135,6 +138,18 @@ function normalizarCondicaoPorArma(toggleId: string, idx: number): string {
     .replace(/b602_arma_N_coleta_toggle/g, `b602_arma_${idx}_coleta_toggle`)
     .replace(/b602_arma_N_funcionamento_eficiencia_v2/g, `b602_arma_${idx}_funcionamento_eficiencia_v2`)
     .replace(/b602_arma_N_coleta_padroes_v2/g, `b602_arma_${idx}_coleta_padroes_v2`);
+}
+
+function identificarFigurasDummy(html: string, secaoId: string, indiceArma: number): string {
+  let indiceFigura = 0;
+  return html.replace(/<figure\b([^>]*\bdata-dummy="true"[^>]*)>/gi, (figure, atributos: string) => {
+    indiceFigura += 1;
+    const id = `dummy-${secaoId}-${indiceArma}-${indiceFigura}`;
+    const atributosComId = /\bdata-image-id="[^"]*"/i.test(atributos)
+      ? atributos.replace(/\bdata-image-id="[^"]*"/i, `data-image-id="${id}"`)
+      : `${atributos} data-image-id="${id}"`;
+    return figure.replace(atributos, atributosComId);
+  });
 }
 
 function avaliarCondicaoBloco(
@@ -304,6 +319,7 @@ export function expandirSecoesRepetiveis(
         camposEspecificos,
         { indiceArma: idx, arma: armaAtual }
       );
+      const conteudoComFigurasIdentificadas = identificarFigurasDummy(conteudo, secao.id, idx);
 
       partes.push(
         criarHeading({
@@ -319,8 +335,8 @@ export function expandirSecoesRepetiveis(
         })
       );
 
-      if (temConteudoUtil(conteudo)) {
-        const conteudoComChave = conteudo.replace(
+      if (temConteudoUtil(conteudoComFigurasIdentificadas) || /<figure\b/i.test(conteudoComFigurasIdentificadas)) {
+        const conteudoComChave = conteudoComFigurasIdentificadas.replace(
           /(<div\b[^>]*\bdata-bloco-pericial="[^"]+"[^>]*)>/gi,
           (_match, atributos: string) => {
             const comChave = /\bdata-arma-chave=/i.test(atributos)

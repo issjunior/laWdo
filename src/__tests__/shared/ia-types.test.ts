@@ -3,8 +3,10 @@ import {
   aplicarAtualizacaoPainelIa,
   atualizacaoPainelIaValida,
   comandoPainelIaValido,
+  configuracaoImagemIaValida,
   estadoPainelIaValido,
   perfilRespostaIaValido,
+  qualidadeImagemIaValida,
   progressoConsultaIaValido,
   progressoIaValido,
   solicitacaoIaValida,
@@ -20,6 +22,10 @@ describe('contratos compartilhados de IA', () => {
       instrucoesPersonalizadas: '',
     })).toBe(true);
     expect(perfilRespostaIaValido({ versao: 1, tom: 'livre' })).toBe(false);
+    expect(qualidadeImagemIaValida('equilibrada')).toBe(true);
+    expect(qualidadeImagemIaValida('sem_reducao')).toBe(false);
+    expect(configuracaoImagemIaValida({ versao: 1, qualidade: 'economica' })).toBe(true);
+    expect(configuracaoImagemIaValida({ versao: 1, qualidade: 'minima' })).toBe(false);
 
     const solicitacao = {
       operationId: 'operacao-1',

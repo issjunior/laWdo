@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const configuracaoObterMock = vi.fn()
 const configuracaoSalvarMock = vi.fn()
 const obterImagemLaudoPorIdMock = vi.fn()
+const obterMiniaturasImagensLaudoMock = vi.fn()
 const fetchMock = vi.fn()
 const logInfoMock = vi.fn()
 const logWarnMock = vi.fn()
@@ -16,6 +17,7 @@ vi.mock('../../main/services/configuracao.service.js', () => ({
 
 vi.mock('../../main/services/imagem-laudo.service.js', () => ({
   obterImagemLaudoPorId: (...args: unknown[]) => obterImagemLaudoPorIdMock(...args),
+  obterMiniaturasImagensLaudo: (...args: unknown[]) => obterMiniaturasImagensLaudoMock(...args),
 }))
 
 vi.mock('../../main/utils/logger.js', () => ({
@@ -67,15 +69,22 @@ const criarImagem = (origem: 'local' | 'gdl' = 'local', mimeType = 'image/jpeg',
   createdAt: '2026-07-30T12:00:00.000Z',
 })
 
+const criarMiniatura = () => ({
+  id: 'imagem-1',
+  thumbnailDataUri: 'data:image/jpeg;base64,bWluaWF0dXJh',
+})
+
 describe('ia-execucao.service — descrição de imagem', () => {
   beforeEach(() => {
     configuracaoObterMock.mockReset()
     configuracaoSalvarMock.mockReset()
     obterImagemLaudoPorIdMock.mockReset()
+    obterMiniaturasImagensLaudoMock.mockReset()
     fetchMock.mockReset()
     logInfoMock.mockReset()
     logWarnMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    obterMiniaturasImagensLaudoMock.mockResolvedValue([criarMiniatura()])
 
     configuracaoObterMock.mockImplementation(async (chave: string) => {
       const configuracoes: Record<string, string> = {
@@ -102,8 +111,13 @@ describe('ia-execucao.service — descrição de imagem', () => {
     expect(resposta).toEqual({
       operationId: 'operacao-1',
       descricao: 'Imagem contendo um objeto metálico sobre uma superfície clara.',
+      miniaturaDataUri: 'data:image/jpeg;base64,bWluaWF0dXJh',
     })
     expect(obterImagemLaudoPorIdMock).toHaveBeenCalledWith('laudo-1', 'imagem-1')
+    expect(obterMiniaturasImagensLaudoMock).toHaveBeenCalledWith('laudo-1', ['imagem-1'], {
+      larguraMaxima: 768,
+      qualidadeJpeg: 80,
+    })
 
     const [, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit]
     const corpo = JSON.parse(String(opcoes.body)) as {
@@ -115,7 +129,7 @@ describe('ia-execucao.service — descrição de imagem', () => {
     expect(conteudoUsuario).toHaveLength(2)
     expect(conteudoUsuario[1]).toEqual({
       type: 'image_url',
-      image_url: { url: 'data:image/jpeg;base64,YWJj' },
+      image_url: { url: 'data:image/jpeg;base64,bWluaWF0dXJh' },
     })
     expect(String(opcoes.body)).not.toContain('{{')
     expect(String(opcoes.body)).not.toContain('fragmentos')
@@ -661,20 +675,24 @@ describe('ia-execucao.service — descrição de imagem', () => {
     )
   })
 
-  it('deve rejeitar formato incompatível antes de chamar o provedor', async () => {
+  it('deve impedir o envio quando não for possível preparar uma miniatura', async () => {
     obterImagemLaudoPorIdMock.mockResolvedValue(criarImagem('local', 'image/bmp'))
+    obterMiniaturasImagensLaudoMock.mockResolvedValue([])
 
     await expect(new IaExecucaoService().descreverImagem(solicitacao))
-      .rejects.toThrow('FORMATO_IMAGEM_NAO_SUPORTADO')
+      .rejects.toThrow('IMAGEM_NAO_VINCULADA')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('deve rejeitar imagem maior que o limite do provedor', async () => {
+  it('deve enviar a miniatura mesmo quando a imagem original excede o limite do provedor', async () => {
     obterImagemLaudoPorIdMock.mockResolvedValue(criarImagem('gdl', 'image/jpeg', 16 * 1024 * 1024))
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: 'Imagem reduzida para análise.' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
 
     await expect(new IaExecucaoService().descreverImagem(solicitacao))
-      .rejects.toThrow('IMAGEM_MUITO_GRANDE')
-    expect(fetchMock).not.toHaveBeenCalled()
+      .resolves.toEqual(expect.objectContaining({ descricao: 'Imagem reduzida para análise.' }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('deve bloquear descrição de imagem enquanto o modo protegido estiver ativo', async () => {

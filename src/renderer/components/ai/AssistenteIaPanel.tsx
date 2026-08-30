@@ -38,6 +38,7 @@ export interface ChatMessage {
   modeloConsulta?: string;
   recomendacao?: string;
   perguntaConsulta?: string;
+  miniaturaDataUri?: string;
 }
 
 const rotulosAcaoIa: Record<AcaoPainelIa, string> = {
@@ -359,7 +360,9 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   )}
                   <div>
                     <p className="mb-2 text-xs font-medium text-muted-foreground">Imagem</p>
-                    <Button type="button" variant="outline" size="sm" disabled={controlesBloqueados || !imagemSelecionada} onClick={onDescreverImagens}>{imagemSelecionada ? 'Descrever imagem selecionada' : 'Selecione uma imagem no laudo'}</Button>
+                    <div className="flex justify-end">
+                      <Button type="button" size="sm" disabled={controlesBloqueados || !imagemSelecionada} onClick={onDescreverImagens}>{imagemSelecionada ? 'Descrever imagem selecionada' : 'Selecione uma imagem no laudo'}</Button>
+                    </div>
                   </div>
                   {editorId && (
                     <div>
@@ -376,9 +379,11 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
             )}
 
             {imagemSelecionada && messages.length > 0 && !loading && (
-              <Button type="button" variant="outline" size="sm" onClick={onDescreverImagens}>
-                Descrever novamente
-              </Button>
+              <div className="flex justify-end">
+                <Button type="button" size="sm" onClick={onDescreverImagens}>
+                  Descrever novamente
+                </Button>
+              </div>
             )}
 
             {messages.map((msg, idx) => (
@@ -396,6 +401,13 @@ export const AssistenteIaPanel: React.FC<AssistenteIaPanelProps> = ({
                   {msg.role === 'assistant' && extrairTabelaMarkdownIa(msg.content)
                     ? <TabelaResposta texto={msg.content} />
                     : <div className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">{msg.content}</div>}
+                  {msg.role === 'user' && msg.miniaturaDataUri && (
+                    <img
+                      src={msg.miniaturaDataUri}
+                      alt="Miniatura da imagem enviada para descrição"
+                      className="mt-3 max-h-48 w-full rounded-lg border border-primary-foreground/30 bg-black/10 object-contain"
+                    />
+                  )}
                   {msg.role === 'assistant' && msg.estadoConsulta && msg.estadoConsulta !== 'respondida' && (
                     <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
                       {msg.estadoConsulta === 'insuficiente'
