@@ -493,7 +493,6 @@ export const LaudosPage: React.FC = () => {
   const [operacaoIaAtivaId, setOperacaoIaAtivaId] = useState<string | null>(null);
   const [progressoIa, setProgressoIa] = useState<ProgressoIa | null>(null);
   const [progressoConsultaIa, setProgressoConsultaIa] = useState<ProgressoConsultaIa | null>(null);
-  const [confirmacaoImagemIaPendente, setConfirmacaoImagemIaPendente] = useState(false);
   const [retomadaIaPendente, setRetomadaIaPendente] = useState<RetomadaIaPendente | null>(null);
   const [iaError, setIaError] = useState<string | null>(null);
   const [avisoLimiteIa, setAvisoLimiteIa] = useState<{ mensagem: string; tentarNovamenteEm?: number } | null>(null);
@@ -2185,8 +2184,10 @@ export const LaudosPage: React.FC = () => {
       const alvo = event.target as HTMLElement;
       const figura = alvo.closest<HTMLElement>('.laudo-figure[data-image-id]');
       const imagemId = figura?.getAttribute('data-image-id') || null;
-      setImagemSelecionadaIaId(imagemId);
-      if (imagemId) setFiguraAtivaId(imagemId);
+      if (imagemId) {
+        setImagemSelecionadaIaId(imagemId);
+        setFiguraAtivaId(imagemId);
+      }
     });
   };
 
@@ -2302,6 +2303,7 @@ export const LaudosPage: React.FC = () => {
           modeloConsulta: mensagem.modeloConsulta,
           perguntaConsulta: mensagem.perguntaConsulta,
           recomendacao: mensagem.recomendacao,
+          miniaturaDataUri: mensagem.miniaturaDataUri,
           evidencias: mensagem.evidencias,
           permiteAplicacao: mensagem.role === 'assistant' && mensagem.acao !== 'descrever_imagem',
           proposalId: mensagem.proposalId,
@@ -2609,17 +2611,12 @@ export const LaudosPage: React.FC = () => {
     );
   };
 
-  const descreverImagemSelecionadaIa = async (confirmada = false) => {
+  const descreverImagemSelecionadaIa = async () => {
     const laudoId = editando?.id;
     if (!imagemSelecionadaIaId || !laudoId) {
       setIaError('Clique em uma imagem do laudo antes de solicitar sua descrição.');
       return;
     }
-    if (!confirmada) {
-      setConfirmacaoImagemIaPendente(true);
-      return;
-    }
-
     try {
       await reconciliarImagensDoEditor();
     } catch (error: unknown) {
@@ -2678,6 +2675,15 @@ export const LaudosPage: React.FC = () => {
         setIaError('A resposta recebida não corresponde à solicitação atual.');
         return;
       }
+
+      setChatMessages(prev => ({
+        ...prev,
+        [chatKey]: (prev[chatKey] || []).map(mensagem =>
+          mensagem.id === userMsg.id
+            ? { ...mensagem, miniaturaDataUri: resposta.data?.miniaturaDataUri }
+            : mensagem
+        ),
+      }));
 
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -3694,26 +3700,6 @@ export const LaudosPage: React.FC = () => {
                   Reenviar com o modelo recomendado
                 </AlertDialogAction>
               )}
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <AlertDialog open={confirmacaoImagemIaPendente} onOpenChange={setConfirmacaoImagemIaPendente}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Descrever a imagem selecionada?</AlertDialogTitle>
-              <AlertDialogDescription>
-                A imagem será enviada ao provedor de IA configurado para produzir uma descrição técnica. A descrição não altera o laudo e ficará disponível apenas para cópia manual.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => {
-                setConfirmacaoImagemIaPendente(false);
-                void descreverImagemSelecionadaIa(true);
-              }}>
-                Descrever imagem
-              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

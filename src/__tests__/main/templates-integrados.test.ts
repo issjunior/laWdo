@@ -7,11 +7,20 @@ describe('catálogo de templates integrados', () => {
   it('mantém o B602 estruturado, com seção repetível por arma', () => {
     expect(() => validarTemplateIntegrado(laudoPadraoB602V1)).not.toThrow();
     expect(laudoPadraoB602V1.chave).toBe('laudo-padrao-b602');
+    expect(laudoPadraoB602V1.versao).toBe(1);
     expect(laudoPadraoB602V1.secoes).toHaveLength(8);
     expect(laudoPadraoB602V1.secoes.find(secao => secao.chave === 'das-armas')).toMatchObject({
       chavePai: 'dos-exames',
       repetirPara: 'armas',
     });
+    expect(laudoPadraoB602V1.secoes.find(secao => secao.chave === 'material-apresentado')?.conteudo.match(/data-dummy="true"/g))
+      .toHaveLength(2);
+    expect(laudoPadraoB602V1.secoes.find(secao => secao.chave === 'das-armas')?.conteudo.match(/data-dummy="true"/g))
+      .toHaveLength(2);
+    expect(laudoPadraoB602V1.secoes.find(secao => secao.chave === 'das-armas')?.conteudo)
+      .toMatch(/b602_arma_N_coleta_padroes_v2[\s\S]*<\/div>\n<table[\s\S]*dummy-b602-arma-1/);
+    expect(laudoPadraoB602V1.secoes.find(secao => secao.chave === 'dos-exames')?.conteudo)
+      .toContain('<h3>DOS CARTUCHOS</h3>');
   });
 
   it('gera checksum estável para artefatos temporários de imagem', () => {

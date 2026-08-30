@@ -93,6 +93,10 @@ async function inserirTemplateIntegrado(template: DefinicaoTemplateIntegrado, ti
     ) VALUES (?, ?, ?, ?, 'integrado', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     [templateId, tipo.id, template.nome, template.descricao ?? null, template.chave, template.versao, checksum, disponivel],
   );
+  await inserirSecoesTemplateIntegrado(template, templateId);
+}
+
+async function inserirSecoesTemplateIntegrado(template: DefinicaoTemplateIntegrado, templateId: string): Promise<void> {
   const ids = new Map(template.secoes.map(secao => [secao.chave, randomUUID()]));
   for (const secao of template.secoes) {
     await executeNonQuery(
@@ -107,6 +111,16 @@ async function inserirTemplateIntegrado(template: DefinicaoTemplateIntegrado, ti
       ],
     );
   }
+}
+
+async function atualizarTemplateIntegrado(template: DefinicaoTemplateIntegrado, tipo: TipoExamePersistido, checksum: string, templateId: string): Promise<void> {
+  await executeNonQuery(
+    `UPDATE templates SET tipo_exame_id = ?, nome = ?, descricao = ?, checksum_integrado = ?,
+      disponivel_novos_laudos = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [tipo.id, template.nome, template.descricao ?? null, checksum, Number(tipo.ativo) === 1 ? 1 : 0, templateId],
+  );
+  await executeNonQuery('DELETE FROM secoes_template WHERE template_id = ?', [templateId]);
+  await inserirSecoesTemplateIntegrado(template, templateId);
 }
 
 async function adotarLegado(template: DefinicaoTemplateIntegrado, tipo: TipoExamePersistido, checksum: string): Promise<boolean> {
@@ -140,7 +154,7 @@ async function adotarLegado(template: DefinicaoTemplateIntegrado, tipo: TipoExam
   return true;
 }
 
-async function sincronizarTemplate(template: DefinicaoTemplateIntegrado): Promise<ResultadoSincronizacaoTemplateIntegrado> {
+async function sincronizarTemplate(template: DefinicaoTemplateIntegrado, sobrescreverIntegrados: boolean): Promise<ResultadoSincronizacaoTemplateIntegrado> {
   validarTemplateIntegrado(template);
   const checksum = calcularChecksumTemplateIntegrado(template);
   return withTransaction(async () => {
@@ -152,7 +166,8 @@ async function sincronizarTemplate(template: DefinicaoTemplateIntegrado): Promis
     const disponivel = Number(tipo.ativo) === 1 ? 1 : 0;
     if (atuais[0]) {
       if (atuais[0].checksum_integrado !== checksum) {
-        throw new Error(`Checksum divergente na versão integrada ${template.chave} v${template.versao}; a versão anterior foi preservada`);
+        if (!sobrescreverIntegrados) throw new Error(`Checksum divergente na versão integrada ${template.chave} v${template.versao}; a versão anterior foi preservada`);
+        await atualizarTemplateIntegrado(template, tipo, checksum, atuais[0].id);
       }
       await executeNonQuery('UPDATE templates SET disponivel_novos_laudos = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [disponivel, atuais[0].id]);
       await executeNonQuery(
@@ -171,7 +186,7 @@ async function sincronizarTemplate(template: DefinicaoTemplateIntegrado): Promis
   });
 }
 
-export async function sincronizarTemplatesIntegrados(): Promise<ResultadoSincronizacaoTemplateIntegrado[]> {
+export async function sincronizarTemplatesIntegrados(opcoes: { sobrescreverIntegrados?: boolean } = {}): Promise<ResultadoSincronizacaoTemplateIntegrado[]> {
   const inicio = Date.now();
   const resultados: ResultadoSincronizacaoTemplateIntegrado[] = [];
   const chaves = new Set<string>();
@@ -179,7 +194,7 @@ export async function sincronizarTemplatesIntegrados(): Promise<ResultadoSincron
     try {
       if (chaves.has(template.chave)) throw new Error(`Chave integrada duplicada: ${template.chave}`);
       chaves.add(template.chave);
-      resultados.push(await sincronizarTemplate(template));
+      resultados.push(await sincronizarTemplate(template, opcoes.sobrescreverIntegrados === true));
     } catch (error) {
       const mensagem = error instanceof Error ? error.message : 'Erro inesperado';
       log.error('Falha ao sincronizar template integrado', { chave: template.chave, versao: template.versao, error });

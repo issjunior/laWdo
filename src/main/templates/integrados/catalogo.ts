@@ -1,4 +1,4 @@
-import { laudoPadraoB602V1 } from './b602/laudo-padrao-b602.v1.js';
+import { laudoPadraoB602V2 } from './b602/laudo-padrao-b602.v2.js';
 import type { DefinicaoTemplateIntegrado } from './tipos.js';
 
-export const catalogoTemplatesIntegrados: readonly DefinicaoTemplateIntegrado[] = [laudoPadraoB602V1];
+export const catalogoTemplatesIntegrados: readonly DefinicaoTemplateIntegrado[] = [laudoPadraoB602V2];

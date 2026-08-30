@@ -10,7 +10,7 @@ export interface PlaceholderPersonalizadoVisualizacao {
 export interface ValorPlaceholderVisualizacao {
   valor: string;
   preenchido: boolean;
-  formato: 'texto' | 'html';
+  formato: 'texto' | 'html' | 'html-inline';
 }
 
 export interface ResultadoAplicacaoPlaceholders {
@@ -120,6 +120,9 @@ export function aplicarVisualizacaoPlaceholders(
             ancora.setAttribute('data-placeholder-preview-id', id);
             ancora.style.display = 'none';
             ancora.parentElement?.insertAdjacentElement('afterend', preview);
+          } else if (resolvido.formato === 'html-inline') {
+            ancora.innerHTML = resolvido.valor;
+            ancora.setAttribute('data-placeholder-apresentacao', 'dados');
           } else {
             ancora.textContent = resolvido.valor;
             ancora.setAttribute('data-placeholder-apresentacao', 'dados');

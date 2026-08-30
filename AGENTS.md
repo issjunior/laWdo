@@ -32,6 +32,13 @@ O ambiente de desenvolvimento requer Node.js 24 ou superior, conforme `package.j
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
 
+### Criação e manutenção de testes
+
+- Não criar nem alterar testes automaticamente durante implementações em andamento.
+- Criar ou ajustar testes somente quando o usuário solicitar explicitamente ou quando o agente recomendar a mudança de forma explícita, informando antes a justificativa e o escopo.
+- É permitido executar os testes existentes como validação ou diagnóstico. Se falharem, registrar o resultado e a causa provável, sem modificar os testes sem atender à regra acima.
+- Enquanto o contrato de uma feature ainda estiver em definição, priorizar a implementação; só propor testes quando o comportamento estiver suficientemente estabilizado ou houver risco relevante de regressão.
+
 ### Diagnóstico assistido por IA
 
 No desenvolvimento local, `npm run dev:diagnostico` habilita o modo de diagnóstico assistido com source maps. Ele nunca é habilitado pelo `npm run dev`, pelo `npm start` nem no aplicativo empacotado. Depois de `npm run build`, execute `npm run diagnostico:configurar-codex` e reinicie o Codex para registrar o servidor MCP local.

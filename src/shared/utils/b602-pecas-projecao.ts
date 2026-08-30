@@ -76,6 +76,7 @@ function projetarEstojo(peca: PecaB602): Record<string, unknown> {
     espoleta: obterPersonalizado(peca, ['espoleta']),
     estojo: peca.comuns.identificacao,
     observacao: peca.comuns.observacao,
+    lacre_saida: peca.comuns.lacreSaida,
   }
 }
 
@@ -98,6 +99,7 @@ function projetarArma(peca: PecaB602, indice: number): ArmaProjetadaB602 {
     quantidade: String(peca.comuns.quantidade),
     dito_oficio: peca.comuns.identificacao,
     numero_lacre: peca.comuns.lacreEntrada,
+    lacre_saida: peca.comuns.lacreSaida,
     func_toggle: funcionamento ? 'on' : 'off',
     coleta_toggle: 'off',
   }

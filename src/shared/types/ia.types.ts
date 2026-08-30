@@ -161,6 +161,28 @@ export function deveMascararConteudoIa(configuracao: ConfiguracaoPrivacidadeIa):
   return !configuracao.enviarConteudoIntegral;
 }
 
+export type QualidadeImagemIa = 'original' | 'alta' | 'equilibrada' | 'economica';
+
+export interface ConfiguracaoImagemIa {
+  versao: 1;
+  qualidade: QualidadeImagemIa;
+}
+
+export const CONFIGURACAO_IMAGEM_IA_PADRAO: ConfiguracaoImagemIa = {
+  versao: 1,
+  qualidade: 'equilibrada',
+};
+
+export function qualidadeImagemIaValida(valor: unknown): valor is QualidadeImagemIa {
+  return ['original', 'alta', 'equilibrada', 'economica'].includes(String(valor));
+}
+
+export function configuracaoImagemIaValida(valor: unknown): valor is ConfiguracaoImagemIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const configuracao = valor as Record<string, unknown>;
+  return configuracao.versao === 1 && qualidadeImagemIaValida(configuracao.qualidade);
+}
+
 export interface FragmentoIa {
   id: string;
   texto: string;
@@ -356,6 +378,7 @@ export function progressoIaValido(valor: unknown): valor is ProgressoIa {
 export interface RespostaDescricaoImagemIa {
   operationId: string;
   descricao: string;
+  miniaturaDataUri: string;
 }
 
 export type AcaoPainelIa = AcaoIa | 'descrever_imagem';
@@ -374,6 +397,7 @@ export interface MensagemPainelIa {
   recomendacao?: string;
   permiteAplicacao?: boolean;
   proposalId?: string;
+  miniaturaDataUri?: string;
 }
 
 export interface EstadoPainelIa {
@@ -442,6 +466,7 @@ function mensagensPainelIaValidas(valor: unknown): valor is MensagemPainelIa[] {
       && (item.role === 'user' || item.role === 'assistant')
       && typeof item.content === 'string'
       && typeof item.timestamp === 'number'
+      && (item.miniaturaDataUri === undefined || typeof item.miniaturaDataUri === 'string')
       && (item.evidencias === undefined || Array.isArray(item.evidencias))
       && (item.estadoConsulta === undefined || ['respondida', 'insuficiente', 'conflitante'].includes(String(item.estadoConsulta)))
       && (item.modeloConsulta === undefined || typeof item.modeloConsulta === 'string')

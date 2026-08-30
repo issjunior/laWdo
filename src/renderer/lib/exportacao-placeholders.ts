@@ -95,7 +95,7 @@ export interface ExportacaoContext {
   tipoExameCodigo?: string;
 }
 
-export type FormatoValorPlaceholder = 'texto' | 'html';
+export type FormatoValorPlaceholder = 'texto' | 'html' | 'html-inline';
 
 export interface ValorPlaceholderResolvido {
   chave: string;
@@ -108,6 +108,54 @@ export type MapaPlaceholdersResolvidos = Record<string, ValorPlaceholderResolvid
 
 function ehHtmlEstrutural(valor: string): boolean {
   return /<(table|div|figure)\b/i.test(valor);
+}
+
+function ehHtmlInline(valor: string): boolean {
+  return /<span\b[^>]*\bcampo-reservado\b/i.test(valor);
+}
+
+function escaparHtml(texto: string): string {
+  return texto
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function juntarComE(itens: string[]): string {
+  if (itens.length <= 1) return itens[0] || '';
+  if (itens.length === 2) return `${itens[0]} e ${itens[1]}`;
+  return `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`;
+}
+
+function formatarNumeroLacre(valor: unknown): string {
+  const lacre = typeof valor === 'string' ? valor.trim() : '';
+  return lacre ? escaparHtml(lacre) : criarCampoReservado();
+}
+
+function criarResumoLacresSaidaB602(
+  armas: Array<Record<string, unknown>>,
+  estojos: Array<Record<string, unknown>>,
+): string {
+  const partes: string[] = [];
+
+  if (armas.length > 0) {
+    const lacresArmas = armas.map((arma, indice) => (
+      `nº ${formatarNumeroLacre(arma.lacre_saida)}, referente à Arma “${numToLetra(indice)}”`
+    ));
+    partes.push(`${armas.length === 1 ? 'o lacre' : 'os lacres'} ${juntarComE(lacresArmas)}`);
+  }
+
+  if (estojos.length > 0) {
+    const lacresEstojos = estojos.map(estojo => `nº ${formatarNumeroLacre(estojo.lacre_saida)}`);
+    const referencia = estojos.length === 1
+      ? 'referente ao Estojo recebido deflagrado'
+      : 'referentes aos Estojos recebidos deflagrados';
+    partes.push(`${estojos.length === 1 ? 'o lacre' : 'os lacres'} ${juntarComE(lacresEstojos)}, ${referencia}`);
+  }
+
+  return juntarComE(partes);
 }
 
 export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string> {
@@ -324,6 +372,11 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
             mapping[`b602_arma_${idx}_coleta_toggle`] = String(arma.coleta_toggle || 'off');
           });
         }
+
+        const resumoLacresSaida = criarResumoLacresSaidaB602(armas, estojos);
+        if (resumoLacresSaida) {
+          mapping['b602_resumo_lacres_saida'] = resumoLacresSaida;
+        }
       }
 
       const i801 = especificos.i801 as Record<string, unknown> | undefined;
@@ -352,7 +405,7 @@ export function construirMapaPlaceholdersResolvidos(ctx: ExportacaoContext): Map
       chave,
       valor,
       preenchido: Boolean(valorNormalizado) && valorNormalizado !== '-',
-      formato: ehHtmlEstrutural(valor) ? 'html' : 'texto',
+      formato: ehHtmlEstrutural(valor) ? 'html' : (ehHtmlInline(valor) ? 'html-inline' : 'texto'),
     }];
   }));
 }

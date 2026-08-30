@@ -196,11 +196,14 @@ export async function listarImagensLaudo(laudoIdEntrada: string): Promise<Imagem
 export async function obterMiniaturasImagensLaudo(
   laudoIdEntrada: string,
   idsEntrada: string[],
+  opcoes: { larguraMaxima?: number; qualidadeJpeg?: number } = {},
 ): Promise<MiniaturaImagemLaudo[]> {
   const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
   const ids = [...new Set(idsEntrada.map(id => validarIdentificador(id, 'Imagem')))]
   if (ids.length > 30) throw new Error('Solicite no máximo 30 miniaturas por vez.')
   if (ids.length === 0) return []
+  const larguraMaxima = Math.min(2_048, Math.max(1, Math.trunc(opcoes.larguraMaxima ?? 300)))
+  const qualidadeJpeg = Math.min(100, Math.max(1, Math.trunc(opcoes.qualidadeJpeg ?? 75)))
   const marcadores = ids.map(() => '?').join(', ')
   const registros = await executeQuery<ImagemLaudoRow>(
     `SELECT * FROM imagens_laudo WHERE laudo_id = ? AND id IN (${marcadores})`,
@@ -212,9 +215,9 @@ export async function obterMiniaturasImagensLaudo(
       const imagem = nativeImage.createFromPath(caminhoAbsoluto(registro.caminho_relativo))
       if (imagem.isEmpty()) throw new Error('Arquivo de imagem inválido.')
       const dimensoes = imagem.getSize()
-      const largura = Math.min(300, Math.max(1, dimensoes.width))
+      const largura = Math.min(larguraMaxima, Math.max(1, dimensoes.width))
       const altura = Math.max(1, Math.round(dimensoes.height * (largura / Math.max(1, dimensoes.width))))
-      const bytes = imagem.resize({ width: largura, height: altura, quality: 'good' }).toJPEG(75)
+      const bytes = imagem.resize({ width: largura, height: altura, quality: 'good' }).toJPEG(qualidadeJpeg)
       miniaturas.push({ id: registro.id, thumbnailDataUri: `data:image/jpeg;base64,${bytes.toString('base64')}` })
     } catch (error) {
       log.warn('Miniatura da imagem do laudo ausente ou ilegível', { laudoId, imagemId: registro.id, error })

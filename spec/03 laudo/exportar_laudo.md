@@ -4,7 +4,7 @@
 
 `exportacao-placeholders.ts` constrói o mapa de valores a partir da REP e de seu contexto. No B-602, `projetarB602ParaLaudo()` é a fonte derivada de material, cartuchos, estojos e armas; novas gravações usam `b602.pecas`, e arrays legados são apenas fallback de leitura.
 
-`construirMapaPlaceholdersResolvidos()` expõe, por chave, valor, preenchimento e formato (`texto` ou `html`). Editor e exportação devem consumir esse mesmo mapa; não duplicar a resolução em componentes.
+`construirMapaPlaceholdersResolvidos()` expõe, por chave, valor, preenchimento e formato (`texto`, `html` estrutural ou `html-inline`). O resumo de lacres de saída B-602 é um valor inline: armas são referenciadas individualmente por letra, estojos são agrupados, e cada lacre ausente gera `XXX` reservado. Editor e exportação devem consumir esse mesmo mapa; não duplicar a resolução em componentes.
 
 ## Estrutura canônica de exportação
 

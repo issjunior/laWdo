@@ -1,17 +1,20 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { configuracaoService } from './configuracao.service.js';
-import { obterImagemLaudoPorId } from './imagem-laudo.service.js';
+import { obterImagemLaudoPorId, obterMiniaturasImagensLaudo } from './imagem-laudo.service.js';
 import { getLogger } from '../utils/logger.js';
 import { planejarExecucaoIa, recomporFragmentosPlanejadosIa } from '../../shared/ia-planejamento.js';
 import { calcularOrcamentoEntradaIa, listarModelosIa, obterModeloIa } from '../../shared/catalogos/modelos-ia.catalogo.js';
 import {
+  CONFIGURACAO_IMAGEM_IA_PADRAO,
   CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
+  configuracaoImagemIaValida,
   PERFIL_RESPOSTA_IA_PADRAO,
   configuracaoPrivacidadeIaValida,
   deveMascararConteudoIa,
   perfilRespostaIaValido,
 } from '../../shared/types/ia.types.js';
 import type {
+  ConfiguracaoImagemIa,
   ContextoIa,
   LimiteUsoIa,
   PerfilRespostaIa,
@@ -395,6 +398,17 @@ export class IaExecucaoService {
       return deveMascararConteudoIa(configuracaoPrivacidadeIaValida(configuracao) ? configuracao : CONFIGURACAO_PRIVACIDADE_IA_PADRAO);
     } catch {
       return true;
+    }
+  }
+
+  private async obterConfiguracaoImagem(): Promise<ConfiguracaoImagemIa> {
+    const valor = await configuracaoService.obter('qualidade_imagem_ia');
+    if (!valor) return CONFIGURACAO_IMAGEM_IA_PADRAO;
+    try {
+      const configuracao: unknown = JSON.parse(valor);
+      return configuracaoImagemIaValida(configuracao) ? configuracao : CONFIGURACAO_IMAGEM_IA_PADRAO;
+    } catch {
+      return CONFIGURACAO_IMAGEM_IA_PADRAO;
     }
   }
 
@@ -848,8 +862,28 @@ export class IaExecucaoService {
 
     const imagem = await obterImagemLaudoPorId(solicitacao.laudoId, solicitacao.imagemId);
     const modelo = obterModeloIa(contexto.provedor, contexto.modelo);
-    if (!modelo.mimesImagem.includes(imagem.mimeType)) throw new Error('FORMATO_IMAGEM_NAO_SUPORTADO');
-    if (imagem.tamanho > modelo.limiteBytesImagem) throw new Error('IMAGEM_MUITO_GRANDE');
+    const configuracaoImagem = await this.obterConfiguracaoImagem();
+    const opcoesReducao: Record<Exclude<ConfiguracaoImagemIa['qualidade'], 'original'>, { larguraMaxima: number; qualidadeJpeg: number }> = {
+      alta: { larguraMaxima: 1_536, qualidadeJpeg: 88 },
+      equilibrada: { larguraMaxima: 768, qualidadeJpeg: 80 },
+      economica: { larguraMaxima: 512, qualidadeJpeg: 70 },
+    };
+    const imagemParaEnvio = configuracaoImagem.qualidade === 'original'
+      ? (() => {
+          if (!modelo.mimesImagem.includes(imagem.mimeType)) throw new Error('FORMATO_IMAGEM_NAO_SUPORTADO');
+          if (imagem.tamanho > modelo.limiteBytesImagem) throw new Error('IMAGEM_MUITO_GRANDE');
+          return imagem.dataUri;
+        })()
+      : (() => {
+          if (!modelo.mimesImagem.includes('image/jpeg')) throw new Error('MODELO_INCOMPATIVEL');
+          return null;
+        })();
+    const miniatura = configuracaoImagem.qualidade === 'original'
+      ? null
+      : (await obterMiniaturasImagensLaudo(solicitacao.laudoId, [solicitacao.imagemId], opcoesReducao[configuracaoImagem.qualidade]))[0];
+    if (configuracaoImagem.qualidade !== 'original' && !miniatura) throw new Error('IMAGEM_NAO_VINCULADA');
+    const dataUriEnviada = imagemParaEnvio || miniatura?.thumbnailDataUri;
+    if (!dataUriEnviada) throw new Error('IMAGEM_NAO_VINCULADA');
 
     log.info('Iniciando descrição de imagem por IA', {
       operationId: solicitacao.operationId,
@@ -858,6 +892,8 @@ export class IaExecucaoService {
       origem: imagem.origem,
       mimeType: imagem.mimeType,
       tamanho: imagem.tamanho,
+      qualidadeImagem: configuracaoImagem.qualidade,
+      tamanhoEnviado: Math.round((dataUriEnviada.length * 3) / 4),
       sha256: imagem.sha256.slice(0, 12),
       blocosMultimodais: 2,
     });
@@ -881,7 +917,7 @@ export class IaExecucaoService {
               type: 'text',
               text: instrucao,
             },
-            { type: 'image_url', image_url: { url: imagem.dataUri } },
+            { type: 'image_url', image_url: { url: dataUriEnviada } },
           ],
         },
       ],
@@ -905,7 +941,7 @@ export class IaExecucaoService {
       modelo: contexto.modelo,
       tamanhoResposta: descricao.length,
     });
-    return { operationId: solicitacao.operationId, descricao };
+    return { operationId: solicitacao.operationId, descricao, miniaturaDataUri: dataUriEnviada };
   }
 }
 

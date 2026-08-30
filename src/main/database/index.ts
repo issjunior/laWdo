@@ -49,7 +49,7 @@ export const setupDatabase = async (): Promise<void> => {
       await checkAndApplyMigrations();
     }
 
-    const resultadosTemplates = await sincronizarTemplatesIntegrados();
+    const resultadosTemplates = await sincronizarTemplatesIntegrados({ sobrescreverIntegrados: !app.isPackaged });
     const falhasTemplates = resultadosTemplates.filter(resultado => resultado.status === 'falha');
     if (falhasTemplates.length > 0) {
       log.warn('Alguns templates integrados permaneceram indisponíveis', { falhasTemplates });

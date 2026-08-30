@@ -217,4 +217,20 @@ describe('secao-builder.service', () => {
     expect(html).toContain('Funcionamento confirmado');
     expect(html).toContain('data-cond-bloco="b602_arma_1_func_toggle"');
   });
+
+  it('atribui identificadores distintos às figuras dummy de cada arma repetida', () => {
+    const secoes = [{
+      id: 'sec-armas', template_id: 'tpl-1', nome: 'DA ARMA', ordem: 0,
+      repetir_para: 'armas', repetir_titulo: 'ARMA {{b602_arma_1_tipo}}',
+      conteudo: '<figure class="laudo-figure" data-image-id="dummy" data-dummy="true"><img src="x"/></figure>',
+      created_at: '', updated_at: '',
+    }];
+
+    const html = expandirSecoesRepetiveis(secoes, {
+      b602: { armas: [{ tipo: 'Pistola' }, { tipo: 'Revólver' }] },
+    }).get('armas') || '';
+
+    expect(html).toContain('data-image-id="dummy-sec-armas-1-1"');
+    expect(html).toContain('data-image-id="dummy-sec-armas-2-1"');
+  });
 });
