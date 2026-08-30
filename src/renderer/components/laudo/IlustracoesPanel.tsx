@@ -710,10 +710,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-border/80 bg-muted/20">
       <div className="relative shrink-0 space-y-3 border-b bg-background p-4">
-        <div className="flex min-w-0 items-center gap-2 pr-24 text-base font-semibold">
+        <h2 className="flex min-w-0 items-center gap-2 pr-24 text-base font-semibold">
           <ImageIcon className="size-4 shrink-0 text-primary" />
-          <h2 className="truncate">Painel de Ilustrações</h2>
-        </div>
+          <span className="truncate">Painel de Ilustrações</span>
+        </h2>
 
         {(onPopOut || onRecolher || onFechar) && (
           <div className="absolute right-3 top-3 flex items-center gap-1">
