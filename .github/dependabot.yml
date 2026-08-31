@@ -1,21 +1,21 @@
 version: 2
 
-updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+multi-ecosystem-groups:
+  atualizacoes-mensais:
     target-branch: "main"
+    open-pull-requests-limit: 1
     schedule:
       interval: "monthly"
       day: "1"
       time: "09:00"
       timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 1
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    patterns: ["*"]
+    multi-ecosystem-group: "atualizacoes-mensais"
     groups:
-      npm-versoes:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types: ["major", "minor", "patch"]
       npm-seguranca:
         applies-to: "security-updates"
         patterns:
@@ -23,19 +23,9 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: "main"
-    schedule:
-      interval: "monthly"
-      day: "1"
-      time: "09:30"
-      timezone: "America/Sao_Paulo"
-    open-pull-requests-limit: 1
+    patterns: ["*"]
+    multi-ecosystem-group: "atualizacoes-mensais"
     groups:
-      github-actions-versoes:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types: ["major", "minor", "patch"]
       github-actions-seguranca:
         applies-to: "security-updates"
         patterns:
