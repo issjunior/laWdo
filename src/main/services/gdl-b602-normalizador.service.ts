@@ -104,8 +104,17 @@ function origemPertenceFamiliaPreferencial(origem: ReferenciaOrigemGdl): boolean
   return tipo.startsWith('bo') || tipo.startsWith('ip') || tipo.startsWith('oficio')
 }
 
+function origemPertenceFamiliaOficio(origem: ReferenciaOrigemGdl): boolean {
+  const tipo = normalizarChave(origem.tipo).replace(/[\s/_-]/g, '')
+  return tipo.startsWith('oficio')
+}
+
 function selecionarOrigemInicial(origens: ReferenciaOrigemGdl[]): ReferenciaOrigemGdl | undefined {
-  return origens.find(origemPertenceFamiliaPreferencial) ?? origens[0]
+  const oficios = origens.filter(origemPertenceFamiliaOficio)
+  if (oficios.length > 0) return oficios[oficios.length - 1]
+
+  const boletinsOuInqueritos = origens.filter(origemPertenceFamiliaPreferencial)
+  return boletinsOuInqueritos[boletinsOuInqueritos.length - 1]
 }
 
 function extrairDadosSolicitacao(rep: GdlRepValidada): DadosSolicitacaoGdl {

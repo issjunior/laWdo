@@ -36,6 +36,7 @@ export interface AvisoImportacao {
 
 export interface MetadadosIntegracaoGdl {
   origemInicial: 'manual' | 'gdl'
+  origemSolicitacaoSelecionada?: ReferenciaOrigemGdl
   dadosSolicitacao?: DadosSolicitacaoGdl
   dadosInvestigacao?: DadosInvestigacaoGdl
   ultimaConsulta?: {

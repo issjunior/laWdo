@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -33,15 +34,20 @@ import {
   CheckSquare,
   Square,
   Mail,
+  FileText,
+  MapPin,
+  UsersRound,
+  ClipboardList,
 } from 'lucide-react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import type {
   DadosImportacaoB602,
   PecaB602,
+  ReferenciaOrigemGdl,
   ResultadoImportacaoExame,
 } from '@shared/types/b602-gdl.types';
-import { combinarEnvolvido } from '@shared/utils/envolvido';
+import { combinarEnvolvido, separarEnvolvido } from '@shared/utils/envolvido';
 import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
@@ -81,6 +87,17 @@ interface CampoMapeado {
   campo: string;
   label: string;
   valor: string;
+}
+
+interface OrigemCandidata {
+  indice: number;
+  origem: ReferenciaOrigemGdl;
+}
+
+interface EnvolvidoRevisao {
+  qualificacao: string;
+  nome: string;
+  preenchidoAutomaticamente: boolean;
 }
 
 interface GdlConsultaModalProps {
@@ -134,6 +151,150 @@ function formatarDataRevisao(valor: string): string {
   return Number.isNaN(data.getTime()) ? valor : data.toLocaleDateString('pt-BR')
 }
 
+function normalizarTipoOrigem(tipo: string): string {
+  return tipo.normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[\s/_-]/g, '')
+}
+
+function origemPertenceFamiliaPreferencial(origem: ReferenciaOrigemGdl): boolean {
+  const tipo = normalizarTipoOrigem(origem.tipo)
+  return tipo.startsWith('bo') || tipo.startsWith('ip') || tipo.startsWith('oficio')
+}
+
+function obterOrigensCandidatas(origens: ReferenciaOrigemGdl[]): OrigemCandidata[] {
+  const preferenciais = origens.filter(origemPertenceFamiliaPreferencial)
+  const origemBase = preferenciais.length > 0 ? preferenciais : origens
+
+  return origemBase.map(origem => ({ indice: origens.indexOf(origem), origem }))
+}
+
+function obterIndiceOrigemSelecionada(resultado: ResultadoImportacaoExame<DadosImportacaoB602>): number | null {
+  const { tipo_solicitacao: tipo, numero_documento: numero, data_documento: dataDocumento } = resultado.camposGerais
+  const indice = resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis.findIndex(origem => (
+    origem.tipo === tipo
+    && origem.numero === numero
+    && (origem.dataDocumento ?? '') === (dataDocumento ?? '')
+  ))
+  return indice >= 0 ? indice : null
+}
+
+function formatarOpcaoOrigem(origem: ReferenciaOrigemGdl): string {
+  const partes = [origem.tipo, origem.numero]
+  if (origem.dataDocumento) partes.push(formatarDataRevisao(origem.dataDocumento))
+  return partes.join(' — ')
+}
+
+function montarCamposMapeados(
+  resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
+  origemSelecionada?: ReferenciaOrigemGdl,
+): CampoMapeado[] {
+  const camposGerais: Record<string, string> = {
+    ...resultado.camposGerais,
+    ...(origemSelecionada ? {
+      tipo_solicitacao: origemSelecionada.tipo,
+      numero_documento: origemSelecionada.numero,
+      data_documento: origemSelecionada.dataDocumento ?? '',
+    } : {}),
+  }
+  const tiposBo = [...new Set(resultado.camposEspecificos.dadosInvestigacao.boletinsOcorrencia.map(referencia => referencia.tipo))]
+  const tiposIp = [...new Set(resultado.camposEspecificos.dadosInvestigacao.inqueritosPoliciais.map(referencia => referencia.tipo))]
+  const labelsCampos: Record<string, string> = {
+    numero: 'Nº da REP',
+    tipo_solicitacao: 'Tipo de Solicitação',
+    numero_documento: 'Nº da Solicitação',
+    data_documento: 'Data do Documento',
+    data_requisicao: 'Data de Recebimento',
+    observacoes: 'Quesito Aberto',
+    b602_local_cidade: 'Cidade',
+    b602_solicitante_nome: 'Unidade Policial',
+    autoridade_solicitante: 'Autoridade Solicitante',
+    local_fato: 'Local do Fato',
+    latitude: 'Latitude',
+    longitude: 'Longitude',
+    b602_numero_bo: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',
+    b602_numero_ip: tiposIp.length ? `Nº IP (${tiposIp.join(', ')})` : 'Nº IP',
+  }
+  const campos = Object.entries(camposGerais)
+    .filter(([campo, valor]) => !campo.startsWith('b602_envolvidos_') && Boolean(valor))
+    .map(([campo, valor]) => ({
+      campo,
+      label: labelsCampos[campo] ?? campo,
+      valor: campo === 'data_requisicao' || campo === 'data_documento'
+        ? formatarDataRevisao(valor)
+        : valor,
+    }))
+
+  const envolvidos = Array.from({ length: 10 }, (_, indice) => combinarEnvolvido(
+    camposGerais[`b602_envolvidos_qualificacao_${indice}`] || '',
+    camposGerais[`b602_envolvidos_${indice}`] || '',
+  ))
+    .filter(Boolean)
+    .join('\n')
+  if (envolvidos) campos.push({ campo: 'envolvidos', label: 'Envolvidos', valor: envolvidos })
+
+  return campos
+}
+
+function montarCamposNaoPreenchidos(camposMapeados: CampoMapeado[]): string[] {
+  const todosCampos = [
+    { campo: 'autoridade_solicitante', label: 'Autoridade Solicitante' },
+    { campo: 'local_fato', label: 'Local do Fato' },
+    { campo: 'latitude', label: 'Latitude' },
+    { campo: 'longitude', label: 'Longitude' },
+    { campo: 'envolvidos', label: 'Envolvidos' },
+    { campo: 'b602_numero_bo', label: 'Nº BO' },
+    { campo: 'b602_numero_ip', label: 'Nº IP' },
+    { campo: 'veiculo', label: 'Veículo' },
+    { campo: 'placa', label: 'Placa' },
+    { campo: 'chassi', label: 'Chassi' },
+    { campo: 'motor', label: 'Motor' },
+  ]
+
+  return todosCampos
+    .filter(({ campo }) => !camposMapeados.some(mapeado => mapeado.campo === campo))
+    .map(({ label }) => label)
+}
+
+function montarEnvolvidosRevisao(
+  resultado: ResultadoImportacaoExame<DadosImportacaoB602> | null,
+): EnvolvidoRevisao[] {
+  if (!resultado) return []
+
+  const envolvidosGdl = resultado.camposEspecificos.dadosInvestigacao.envolvidos
+  const quantidade = Math.max(envolvidosGdl.length, 10)
+  return Array.from({ length: quantidade }, (_, indice) => {
+    const valorOriginal = envolvidosGdl[indice] ?? ''
+    const partesOriginais = separarEnvolvido(valorOriginal)
+    const nomePreenchido = resultado.camposGerais[`b602_envolvidos_${indice}`]?.trim() ?? ''
+    const qualificacaoPreenchida = resultado.camposGerais[`b602_envolvidos_qualificacao_${indice}`]?.trim() ?? ''
+    const nome = nomePreenchido || partesOriginais.nome
+    const qualificacao = qualificacaoPreenchida || partesOriginais.qualificacao
+    return {
+      qualificacao,
+      nome,
+      preenchidoAutomaticamente: indice < 10 && Boolean(nomePreenchido),
+    }
+  }).filter(envolvido => Boolean(envolvido.nome))
+}
+
+function ListaCamposRevisao({ campos }: { campos: CampoMapeado[] }): React.ReactElement | null {
+  if (campos.length === 0) return null
+
+  return (
+    <dl className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+      {campos.map(campo => (
+        <div key={campo.campo} className="min-w-0">
+          <dt className="text-xs font-medium text-muted-foreground">{campo.label}</dt>
+          <dd className="mt-0.5 break-words text-sm font-medium">{campo.valor}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   open,
   onOpenChange,
@@ -160,6 +321,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
   const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoExame<DadosImportacaoB602> | null>(null);
   const [idsPecasSelecionadas, setIdsPecasSelecionadas] = useState<Set<string>>(new Set());
+  const [indiceOrigemSelecionada, setIndiceOrigemSelecionada] = useState<number | null>(null);
   const [camposMapeados, setCamposMapeados] = useState<CampoMapeado[]>([]);
   const [camposNaoPreenchidos, setCamposNaoPreenchidos] = useState<string[]>([]);
   const avisoNaturezaEmDesenvolvimento = erro
@@ -218,7 +380,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       setAplicando(false);
       setResultadoConsulta(null);
       setIdsPecasSelecionadas(new Set());
+      setIndiceOrigemSelecionada(null);
       setCamposMapeados([]);
+      setCamposNaoPreenchidos([]);
       setModo('mesclar');
       setPreTeste(null);
       setAmbienteCarregado(false);
@@ -302,66 +466,18 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       const r = await window.ipcAPI.gdl.consultarRep(numeroRep.trim(), anoRep.trim());
       if (r.success && r.data) {
         const resultado: ResultadoImportacaoExame<DadosImportacaoB602> = r.data;
+        const indiceOrigemInicial = obterIndiceOrigemSelecionada(resultado);
+        const origemInicial = indiceOrigemInicial === null
+          ? undefined
+          : resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis[indiceOrigemInicial];
+        const mapeados = montarCamposMapeados(resultado, origemInicial);
         setResultadoConsulta(resultado);
+        setIndiceOrigemSelecionada(indiceOrigemInicial);
         setIdsPecasSelecionadas(new Set(
           resultado.camposEspecificos.pecas.map(peca => `gdl-${peca.codPecaGdl ?? peca.idLocal}`),
         ));
-
-        const mapeados: CampoMapeado[] = [];
-        const naoPreenchidos: string[] = [];
-
-        const tiposBo = [...new Set(resultado.camposEspecificos.dadosInvestigacao.boletinsOcorrencia.map(referencia => referencia.tipo))];
-        const tiposIp = [...new Set(resultado.camposEspecificos.dadosInvestigacao.inqueritosPoliciais.map(referencia => referencia.tipo))];
-        const labelsCampos: Record<string, string> = {
-          numero: 'Nº REP',
-          tipo_solicitacao: 'Tipo de Solicitação',
-          numero_documento: 'Nº da Solicitação',
-          data_requisicao: 'Data de Recebimento',
-          observacoes: 'Quesito Aberto',
-          b602_local_cidade: 'Cidade',
-          b602_solicitante_nome: 'Unidade Policial',
-          b602_numero_bo: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',
-          b602_numero_ip: tiposIp.length ? `Nº IP (${tiposIp.join(', ')})` : 'Nº IP',
-        };
-        for (const [campo, valor] of Object.entries(resultado.camposGerais)) {
-          if (campo.startsWith('b602_envolvidos_')) continue;
-          if (valor) mapeados.push({
-            campo,
-            label: labelsCampos[campo] ?? campo,
-            valor: campo === 'data_requisicao' ? formatarDataRevisao(valor) : valor,
-          });
-        }
-
-        const envolvidos = Array.from({ length: 10 }, (_, indice) => combinarEnvolvido(
-          resultado.camposGerais[`b602_envolvidos_qualificacao_${indice}`] || '',
-          resultado.camposGerais[`b602_envolvidos_${indice}`] || '',
-        ))
-          .filter(Boolean)
-          .join('\n');
-        if (envolvidos) mapeados.push({ campo: 'envolvidos', label: 'Envolvidos', valor: envolvidos });
-
-        const todosCampos = [
-          { campo: 'autoridade_solicitante', label: 'Autoridade Solicitante' },
-          { campo: 'local_fato', label: 'Local do Fato' },
-          { campo: 'latitude', label: 'Latitude' },
-          { campo: 'longitude', label: 'Longitude' },
-          { campo: 'envolvidos', label: 'Envolvidos' },
-          { campo: 'b602_numero_bo', label: 'Nº BO' },
-          { campo: 'b602_numero_ip', label: 'Nº IP' },
-          { campo: 'veiculo', label: 'Veículo' },
-          { campo: 'placa', label: 'Placa' },
-          { campo: 'chassi', label: 'Chassi' },
-          { campo: 'motor', label: 'Motor' },
-        ];
-
-        for (const { campo, label } of todosCampos) {
-          if (!mapeados.some(m => m.campo === campo)) {
-            naoPreenchidos.push(label);
-          }
-        }
-
         setCamposMapeados(mapeados);
-        setCamposNaoPreenchidos(naoPreenchidos);
+        setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados));
         setPasso('revisao');
       } else {
         setErro(r.error || 'Erro ao consultar REP');
@@ -377,19 +493,37 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     if (!resultadoConsulta) return;
     setAplicando(true);
     try {
+      const origemSelecionada = indiceOrigemSelecionada === null
+        ? undefined
+        : resultadoConsulta.camposEspecificos.dadosSolicitacao.origensDisponiveis[indiceOrigemSelecionada];
+      const resultadoComOrigem = origemSelecionada ? {
+        ...resultadoConsulta,
+        camposGerais: {
+          ...resultadoConsulta.camposGerais,
+          tipo_solicitacao: origemSelecionada.tipo,
+          numero_documento: origemSelecionada.numero,
+          data_documento: origemSelecionada.dataDocumento ?? '',
+        },
+        ...(resultadoConsulta.metadadosIntegracaoGdl ? {
+          metadadosIntegracaoGdl: {
+            ...resultadoConsulta.metadadosIntegracaoGdl,
+            origemSolicitacaoSelecionada: origemSelecionada,
+          },
+        } : {}),
+      } : resultadoConsulta;
       const itensReconciliacao = montarItensReconciliacaoPecasB602(
         pecasB602,
-        resultadoConsulta.camposEspecificos.pecas,
+        resultadoComOrigem.camposEspecificos.pecas,
       );
       const pecasImportadasSelecionadas = itensReconciliacao
         .filter(item => idsPecasSelecionadas.has(item.chave))
         .map(item => item.peca);
 
       await onAplicar({
-        ...resultadoConsulta,
+        ...resultadoComOrigem,
         camposEspecificos: {
-          ...resultadoConsulta.camposEspecificos,
-          pecas: resultadoConsulta.camposEspecificos.pecas.filter(peca => idsPecasSelecionadas.has(`gdl-${peca.codPecaGdl ?? peca.idLocal}`)),
+          ...resultadoComOrigem.camposEspecificos,
+          pecas: resultadoComOrigem.camposEspecificos.pecas.filter(peca => idsPecasSelecionadas.has(`gdl-${peca.codPecaGdl ?? peca.idLocal}`)),
         },
       }, modo, pecasImportadasSelecionadas);
       onOpenChange(false);
@@ -413,6 +547,18 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     onOpenChange(false);
   };
 
+  const handleSelecionarOrigem = (valor: string) => {
+    if (!resultadoConsulta) return
+    const indice = Number(valor)
+    const origem = resultadoConsulta.camposEspecificos.dadosSolicitacao.origensDisponiveis[indice]
+    if (!Number.isInteger(indice) || !origem) return
+
+    const campos = montarCamposMapeados(resultadoConsulta, origem)
+    setIndiceOrigemSelecionada(indice)
+    setCamposMapeados(campos)
+    setCamposNaoPreenchidos(montarCamposNaoPreenchidos(campos))
+  }
+
   const ambienteLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
   const itensReconciliacao = resultadoConsulta
     ? montarItensReconciliacaoPecasB602(pecasB602, resultadoConsulta.camposEspecificos.pecas)
@@ -429,6 +575,30 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     aviso.codigo !== 'ENVOLVIDOS_NAO_RETORNADOS'
     && aviso.codigo !== 'FUNCIONAMENTO_NAO_TESTADO_PADRAO'
   )) ?? [];
+  const origensDisponiveis = resultadoConsulta?.camposEspecificos.dadosSolicitacao.origensDisponiveis ?? [];
+  const origensCandidatas = obterOrigensCandidatas(origensDisponiveis);
+  const haOrigemPreferencial = origensDisponiveis.some(origemPertenceFamiliaPreferencial);
+  const exigeSelecaoOrigem = origensDisponiveis.length > 0 && !haOrigemPreferencial;
+  const envolvidosRevisao = montarEnvolvidosRevisao(resultadoConsulta);
+  const obterCamposDoGrupo = (campos: string[]): CampoMapeado[] => (
+    camposMapeados.filter(campo => campos.includes(campo.campo))
+  );
+  const camposIdentificacao = obterCamposDoGrupo(['numero', 'data_requisicao']);
+  const camposSolicitacao = obterCamposDoGrupo(['tipo_solicitacao', 'numero_documento', 'data_documento']);
+  const camposSolicitanteLocal = obterCamposDoGrupo([
+    'b602_solicitante_nome', 'autoridade_solicitante', 'b602_local_cidade', 'local_fato', 'latitude', 'longitude',
+  ]);
+  const camposInvestigacao = obterCamposDoGrupo(['b602_numero_bo', 'b602_numero_ip']);
+  const camposJaAgrupados = new Set([
+    ...camposIdentificacao,
+    ...camposSolicitacao,
+    ...camposSolicitanteLocal,
+    ...camposInvestigacao,
+  ].map(campo => campo.campo));
+  const camposAdicionais = camposMapeados.filter(campo => (
+    !camposJaAgrupados.has(campo.campo) && campo.campo !== 'envolvidos' && campo.campo !== 'observacoes'
+  ));
+  const quesitoAberto = camposMapeados.find(campo => campo.campo === 'observacoes');
 
   const getPreTesteMensagem = (): string => {
     if (!preTeste) return 'Verificando conexão...';
@@ -645,18 +815,131 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-1">
                   <ListChecks className="h-4 w-4" />
-                  Campos que serão preenchidos:
+                  Campos que serão preenchidos
                 </Label>
-                <div className="grid grid-cols-1 gap-y-1 lg:grid-cols-2 lg:gap-x-8">
-                  {camposMapeados.map((c, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm">
-                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                      <div>
-                        <span className="font-medium">{c.label}:</span>{' '}
-                        <span className="text-muted-foreground whitespace-pre-wrap">{c.valor}</span>
-                      </div>
-                    </div>
-                  ))}
+
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <Card className="shadow-none">
+                    <CardHeader className="p-4 pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <FileText className="h-4 w-4 text-primary" />
+                        Identificação da REP
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <ListaCamposRevisao campos={camposIdentificacao} />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-none">
+                    <CardHeader className="p-4 pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <ClipboardList className="h-4 w-4 text-primary" />
+                        Origem da Solicitação
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 p-4 pt-0">
+                      {origensCandidatas.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="gdl-origem-solicitacao">Origem utilizada no formulário</Label>
+                          <Select
+                            value={indiceOrigemSelecionada === null ? undefined : String(indiceOrigemSelecionada)}
+                            onValueChange={handleSelecionarOrigem}
+                          >
+                            <SelectTrigger id="gdl-origem-solicitacao" aria-describedby={exigeSelecaoOrigem ? 'gdl-origem-ajuda' : undefined}>
+                              <SelectValue placeholder="Selecione a origem..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {origensCandidatas.map(({ indice, origem }) => (
+                                <SelectItem key={indice} value={String(indice)}>{formatarOpcaoOrigem(origem)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {exigeSelecaoOrigem && (
+                            <p id="gdl-origem-ajuda" className="text-xs text-amber-700 dark:text-amber-400">
+                              O GDL não retornou BO, IP ou Ofício. Escolha uma origem para continuar.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      <ListaCamposRevisao campos={camposSolicitacao} />
+                    </CardContent>
+                  </Card>
+
+                  {camposSolicitanteLocal.length > 0 && (
+                    <Card className="shadow-none">
+                      <CardHeader className="p-4 pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <MapPin className="h-4 w-4 text-primary" />
+                          Solicitante e Local
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <ListaCamposRevisao campos={camposSolicitanteLocal} />
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {camposInvestigacao.length > 0 && (
+                    <Card className="shadow-none">
+                      <CardHeader className="p-4 pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <ListChecks className="h-4 w-4 text-primary" />
+                          Investigação
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <ListaCamposRevisao campos={camposInvestigacao} />
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {camposAdicionais.length > 0 && (
+                    <Card className="shadow-none lg:col-span-2">
+                      <CardHeader className="p-4 pb-3">
+                        <CardTitle className="text-base">Outras informações</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <ListaCamposRevisao campos={camposAdicionais} />
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {envolvidosRevisao.length > 0 && (
+                    <Card className="shadow-none lg:col-span-2">
+                      <CardHeader className="p-4 pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <UsersRound className="h-4 w-4 text-primary" />
+                          Envolvidos ({envolvidosRevisao.length})
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <ol className="space-y-2">
+                          {envolvidosRevisao.map((envolvido, indice) => (
+                            <li key={`${envolvido.nome}-${indice}`} className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                              <span className="text-muted-foreground">{indice + 1}.</span>
+                              {envolvido.qualificacao && <Badge variant="secondary">{envolvido.qualificacao}</Badge>}
+                              <span className="min-w-0 flex-1 break-words font-medium">{envolvido.nome}</span>
+                              <Badge variant={envolvido.preenchidoAutomaticamente ? 'default' : 'outline'} className="shrink-0">
+                                {envolvido.preenchidoAutomaticamente ? 'Preenchido' : 'Manual'}
+                              </Badge>
+                            </li>
+                          ))}
+                        </ol>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {quesitoAberto && (
+                    <Card className="shadow-none lg:col-span-2">
+                      <CardHeader className="p-4 pb-3">
+                        <CardTitle className="text-base">Quesito Aberto</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6">{quesitoAberto.valor}</p>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </div>
 
@@ -671,7 +954,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
               {!!itensReconciliacao.length && (
                 <div className="space-y-2">
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-sm font-medium">Peças encontradas ({itensReconciliacao.length})</Label>
                     <Button variant="outline" size="sm" onClick={alternarTodasSelecoesPecas}>
                       {todasPecasSelecionadas ? <Square className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
                       {todasPecasSelecionadas ? 'Desmarcar todas' : 'Selecionar todas'}
@@ -702,7 +986,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               )}
 
               <div className="space-y-1">
-                <Label className="text-sm font-medium">Campos que permanecem vazios (preenchimento manual):</Label>
+                <Label className="text-sm font-medium">Preenchimento manual necessário</Label>
                 <div className="flex flex-wrap gap-1">
                   {camposNaoPreenchidos.map((c, i) => (
                     <Badge key={i} variant="secondary" className="text-xs">{c}</Badge>
@@ -757,7 +1041,11 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
               </Button>
-              <Button onClick={handleAplicar} disabled={aplicando} className="gap-2">
+              <Button
+                onClick={handleAplicar}
+                disabled={aplicando || (exigeSelecaoOrigem && indiceOrigemSelecionada === null)}
+                className="gap-2"
+              >
                 {temDadosExistentes ? 'Aplicar ao Formulário' : 'Preencher formulário'}
                 <ArrowRight className="h-4 w-4" />
               </Button>

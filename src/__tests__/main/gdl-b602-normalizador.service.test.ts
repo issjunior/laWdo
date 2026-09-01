@@ -504,10 +504,10 @@ describe('contrato GDL B602', () => {
     expect(pistola.extrasGdl).toEqual({})
   })
 
-  it('preserva BO como tipo de solicitação canônico do GDL', () => {
+  it('usa a última origem BO ou IP quando a REP não possui Ofício', () => {
     const resultado = converterRepB602(validarGdlRep(fixture))
 
-    expect(resultado.camposGerais.tipo_solicitacao).toBe('BO')
+    expect(resultado.camposGerais.tipo_solicitacao).toBe('IP/PM')
     expect(resultado.camposGerais.b602_local_cidade).toBe('LONDRINA')
     expect(resultado.camposGerais.autoridade_solicitante).toBe('AUTORIDADE TESTE')
     expect(resultado.camposGerais.b602_numero_bo).toBe('123/2026')
@@ -536,7 +536,7 @@ describe('contrato GDL B602', () => {
     ])
   })
 
-  it('sugere a primeira origem das famílias BO, IP ou OFÍCIO e preserva todas as demais opções', () => {
+  it('prioriza o último Ofício e preserva todas as demais opções', () => {
     const rep = validarGdlRep({
       ...fixture,
       origens: [
@@ -544,19 +544,48 @@ describe('contrato GDL B602', () => {
         { tipo: 'IP/PM', numero: '2', ano: 2026, cidade: 'LONDRINA' },
         { tipo: 'OFÍCIO REQUISITANTE', numero: '3', ano: 2026, cidade: 'LONDRINA' },
         { tipo: 'BO/PM', numero: '4', ano: 2026, cidade: 'LONDRINA' },
+        { tipo: 'OFÍCIO COMPLEMENTAR', numero: '5', ano: 2026, cidade: 'LONDRINA' },
       ],
     })
 
     const resultado = converterRepB602(rep)
 
-    expect(resultado.camposGerais.tipo_solicitacao).toBe('IP/PM')
-    expect(resultado.camposGerais.numero_documento).toBe('2/2026')
+    expect(resultado.camposGerais.tipo_solicitacao).toBe('OFÍCIO COMPLEMENTAR')
+    expect(resultado.camposGerais.numero_documento).toBe('5/2026')
     expect(resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis).toEqual([
       { tipo: 'PROCESSO', numero: '1/2026' },
       { tipo: 'IP/PM', numero: '2/2026' },
       { tipo: 'OFÍCIO REQUISITANTE', numero: '3/2026' },
       { tipo: 'BO/PM', numero: '4/2026' },
+      { tipo: 'OFÍCIO COMPLEMENTAR', numero: '5/2026' },
     ])
+  })
+
+  it('prioriza a última origem BO ou IP quando não há Ofício', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixture,
+      origens: [
+        { tipo: 'BO', numero: '1', ano: 2026, cidade: 'LONDRINA' },
+        { tipo: 'IP/PM', numero: '2', ano: 2026, cidade: 'LONDRINA' },
+        { tipo: 'BO/PM', numero: '3', ano: 2026, cidade: 'LONDRINA' },
+      ],
+    }))
+
+    expect(resultado.camposGerais.tipo_solicitacao).toBe('BO/PM')
+    expect(resultado.camposGerais.numero_documento).toBe('3/2026')
+  })
+
+  it('não seleciona automaticamente uma origem fora das famílias preferenciais', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixture,
+      origens: [{ tipo: 'PROCESSO', numero: '1', ano: 2026, cidade: 'LONDRINA' }],
+    }))
+
+    expect(resultado.camposGerais).toMatchObject({
+      tipo_solicitacao: '',
+      numero_documento: '',
+      data_documento: '',
+    })
   })
 
   it('propaga apenas os metadados seguros da consulta', () => {

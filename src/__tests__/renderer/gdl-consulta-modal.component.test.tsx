@@ -42,8 +42,12 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
     data_requisicao: '2026-07-19',
     tipo_solicitacao: 'BO',
     numero_documento: '123/2026',
+    data_documento: '2026-07-18',
+    observacoes: 'QUESITO DE TESTE',
     b602_local_cidade: 'CURITIBA',
     b602_solicitante_nome: 'UNIDADE POLICIAL',
+    b602_envolvidos_qualificacao_0: 'VÍTIMA:',
+    b602_envolvidos_0: 'PESSOA TESTE',
   },
   camposEspecificos: {
     pecas: [pecaUm, pecaDois],
@@ -51,10 +55,10 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
       orgao: 'UNIDADE POLICIAL',
       responsavel: '',
       autoridade: '',
-      origensDisponiveis: [{ tipo: 'BO', numero: '123/2026' }],
+      origensDisponiveis: [{ tipo: 'BO', numero: '123/2026', dataDocumento: '2026-07-18' }],
     },
     dadosInvestigacao: {
-      envolvidos: [],
+      envolvidos: ['VÍTIMA: PESSOA TESTE'],
       boletinsOcorrencia: [{ tipo: 'BO', numero: '123/2026' }],
       inqueritosPoliciais: [],
     },
@@ -136,8 +140,15 @@ describe('GdlConsultaModal', () => {
     expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
     expect(screen.queryByText('ID', { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText('19/07/2026')).toBeInTheDocument()
-    expect(screen.getByText('Cidade:')).toBeInTheDocument()
-    expect(screen.getByText('Unidade Policial:')).toBeInTheDocument()
+    expect(screen.getByText('Identificação da REP')).toBeInTheDocument()
+    expect(screen.getByText('Origem da Solicitação')).toBeInTheDocument()
+    expect(screen.getByText('Data do Documento')).toBeInTheDocument()
+    expect(screen.getByText('18/07/2026')).toBeInTheDocument()
+    expect(screen.getByText('Solicitante e Local')).toBeInTheDocument()
+    expect(screen.getByText('Envolvidos (1)')).toBeInTheDocument()
+    expect(screen.getByText('PESSOA TESTE')).toBeInTheDocument()
+    expect(screen.getByText('Quesito Aberto')).toBeInTheDocument()
+    expect(screen.getByText('QUESITO DE TESTE')).toBeInTheDocument()
     expect(screen.queryByText('Tipo de Exame')).not.toBeInTheDocument()
 
     const checkboxes = screen.getAllByRole('checkbox')
@@ -195,6 +206,59 @@ describe('GdlConsultaModal', () => {
       'substituir',
       [pecaUm],
     )
+  })
+
+  it('exige uma origem no fallback e aplica tipo, número e data da escolha', async () => {
+    const onAplicar = vi.fn()
+    const resultadoSemFamiliaPreferencial: ResultadoImportacaoExame<DadosImportacaoB602> = {
+      ...resultadoConsulta,
+      camposGerais: {
+        ...resultadoConsulta.camposGerais,
+        tipo_solicitacao: '',
+        numero_documento: '',
+        data_documento: '',
+      },
+      camposEspecificos: {
+        ...resultadoConsulta.camposEspecificos,
+        dadosSolicitacao: {
+          ...resultadoConsulta.camposEspecificos.dadosSolicitacao,
+          origensDisponiveis: [
+            { tipo: 'PROCESSO', numero: '1/2026', dataDocumento: '2026-07-01' },
+            { tipo: 'REQUISIÇÃO', numero: '2/2026', dataDocumento: '2026-07-02' },
+          ],
+        },
+      },
+    }
+    consultarRep.mockResolvedValueOnce({ success: true, data: resultadoSemFamiliaPreferencial })
+    render(
+      <GdlConsultaModal
+        open
+        onOpenChange={vi.fn()}
+        onAplicar={onAplicar}
+        temDadosExistentes={false}
+        pecasB602={[]}
+        onConfigurarCredenciais={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
+    await buscarRep()
+
+    const preencher = screen.getByRole('button', { name: 'Preencher formulário' })
+    expect(preencher).toBeDisabled()
+    fireEvent.click(screen.getByLabelText('Origem utilizada no formulário'))
+    fireEvent.click(await screen.findByRole('option', { name: 'REQUISIÇÃO — 2/2026 — 02/07/2026' }))
+    expect(preencher).toBeEnabled()
+    fireEvent.click(preencher)
+
+    await waitFor(() => expect(onAplicar).toHaveBeenCalledOnce())
+    expect(onAplicar).toHaveBeenCalledWith(expect.objectContaining({
+      camposGerais: expect.objectContaining({
+        tipo_solicitacao: 'REQUISIÇÃO',
+        numero_documento: '2/2026',
+        data_documento: '2026-07-02',
+      }),
+    }), 'mesclar', [pecaUm, pecaDois])
   })
 
   it('fecha sem consultar ou aplicar quando o usuário cancela', async () => {
