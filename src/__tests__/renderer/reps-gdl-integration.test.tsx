@@ -54,7 +54,8 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
     numero: '109026-2026',
     data_requisicao: '2026-07-19',
     tipo_solicitacao: 'BO',
-    numero_documento: '123/2026',
+    numero_documento: '3216-2026/JO',
+    observacoes: 'Quesito aberto importado do GDL',
     b602_numero_bo: '123/2026',
     b602_envolvidos_0: 'PESSOA TESTE',
     b602_local_cidade: 'CURITIBA',
@@ -158,11 +159,14 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
     expect(await screen.findAllByText('109026-2026', { selector: 'span' })).not.toHaveLength(0)
+    expect(screen.getByText('3216-2026/JO')).toBeInTheDocument()
     expect(screen.getByRole('checkbox')).toBeChecked()
 
     fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }))
 
     await waitFor(() => expect(screen.getByDisplayValue('109.026-2026')).toBeInTheDocument())
+    expect(screen.getByDisplayValue('3216-2026/JO')).toBeInTheDocument()
+    expect(screen.getByLabelText('Quesito Aberto')).toHaveValue('Quesito aberto importado do GDL')
     expect(screen.getByRole('combobox', { name: /tipo de exame/i })).toHaveTextContent('B-602 - Balística')
     expect(await screen.findByText('CARABINA(S)')).toBeInTheDocument()
     expect(screen.getByText('Importada do GDL')).toBeInTheDocument()
@@ -173,5 +177,32 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     )
     expect(consultarRep).toHaveBeenCalledWith('109026', '2026')
     expect(criarRep).not.toHaveBeenCalled()
+  })
+
+  it('preserva o quesito local ao mesclar uma consulta GDL', async () => {
+    render(<MemoryRouter><REPsPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova REP' }))
+    fireEvent.change(screen.getByLabelText('Quesito Aberto'), { target: { value: 'Quesito editado localmente.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'GDL' }))
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Aplicar ao Formulário' }))
+
+    expect(screen.getByLabelText('Quesito Aberto')).toHaveValue('Quesito editado localmente.')
+  })
+
+  it('substitui o quesito local quando o usuário escolhe substituir', async () => {
+    render(<MemoryRouter><REPsPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova REP' }))
+    fireEvent.change(screen.getByLabelText('Quesito Aberto'), { target: { value: 'Quesito editado localmente.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'GDL' }))
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    fireEvent.click((await screen.findAllByRole('radio'))[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar ao Formulário' }))
+
+    expect(screen.getByLabelText('Quesito Aberto')).toHaveValue('Quesito aberto importado do GDL')
   })
 })

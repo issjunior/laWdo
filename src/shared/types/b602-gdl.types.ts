@@ -56,6 +56,8 @@ export interface DadosSolicitacaoGdl {
 export interface ReferenciaOrigemGdl {
   tipo: string
   numero: string
+  dataDocumento?: string
+  iniciais?: string
 }
 
 export interface DadosInvestigacaoGdl {

@@ -317,6 +317,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           tipo_solicitacao: 'Tipo de Solicitação',
           numero_documento: 'Nº da Solicitação',
           data_requisicao: 'Data de Recebimento',
+          observacoes: 'Quesito Aberto',
           b602_local_cidade: 'Cidade',
           b602_solicitante_nome: 'Unidade Policial',
           b602_numero_bo: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',

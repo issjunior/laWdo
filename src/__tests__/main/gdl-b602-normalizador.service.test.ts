@@ -95,7 +95,9 @@ describe('contrato GDL B602', () => {
     expect(resultado.camposGerais).toMatchObject({
       numero: '109026-2026',
       tipo_solicitacao: 'OFÍCIO REQUISITANTE',
-      numero_documento: '3216/2026',
+      numero_documento: '3216-2026/JO',
+      data_documento: '2026-08-22',
+      observacoes: 'REP DE TESTE PARA O SISTEMA LAWDO',
       b602_local_cidade: 'TELÊMACO BORBA',
       b602_solicitante_nome: '18. SUBDIVISAO POLICIAL - DELEGACIA',
       data_requisicao: '2026-08-22',
@@ -103,6 +105,54 @@ describe('contrato GDL B602', () => {
     expect(resultado.camposEspecificos.pecas).toEqual([
       expect.objectContaining({ tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }),
     ])
+  })
+
+  it('preserva o formato existente do número quando a origem não informa iniciais ou data', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1002026,
+      numero: 100,
+      ano: 2026,
+      origens: [{ tipo: 'OFÍCIO REQUISITANTE', numero: '123', ano: 2026, cidade: 'LONDRINA' }],
+      pecas: [],
+    }))
+
+    expect(resultado.camposGerais).toMatchObject({
+      numero_documento: '123/2026',
+      data_documento: '',
+    })
+    expect(resultado.camposGerais).not.toHaveProperty('observacoes')
+  })
+
+  it('normaliza aliases do quesito aberto para as observações locais', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1022026,
+      numero: 102,
+      ano: 2026,
+      origens: [],
+      pecas: [],
+      txtOpenQuestion: 'DESCREVER O MATERIAL ENCAMINHADO.',
+    }))
+
+    expect(resultado.camposGerais.observacoes).toBe('DESCREVER O MATERIAL ENCAMINHADO.')
+  })
+
+  it('mantém os dados da origem selecionada ao priorizar uma solicitação compatível', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1012026,
+      numero: 101,
+      ano: 2026,
+      origens: [
+        { typeOrigin: 'PROCESSO', numberOrigin: '1', yearOrigin: 2026, dateOrigin: '01/08/2026', initialsOrigin: 'PR' },
+        { typeOrigin: 'OFÍCIO REQUISITANTE', numberOrigin: '3216/2026', yearOrigin: null, dateOrigin: '22/08/2026', initialsOrigin: 'JO' },
+      ],
+      pecas: [],
+    }))
+
+    expect(resultado.camposGerais).toMatchObject({
+      tipo_solicitacao: 'OFÍCIO REQUISITANTE',
+      numero_documento: '3216-2026/JO',
+      data_documento: '2026-08-22',
+    })
   })
 
   it('informa JSON inválido sem usar cast direto', () => {

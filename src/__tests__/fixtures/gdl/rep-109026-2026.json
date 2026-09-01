@@ -2,12 +2,15 @@
   "codRep": 109026,
   "numero": 109026,
   "ano": 2026,
+  "quesitoAberto": "REP DE TESTE PARA O SISTEMA LAWDO",
   "origens": [
     {
       "tipo": "OFÍCIO REQUISITANTE",
       "numero": "3216/2026",
       "ano": 2026,
       "cidade": "TELÊMACO BORBA",
+      "data": "22/08/2026",
+      "iniciais": "JO",
       "orgaoOrigem": "18. SUBDIVISAO POLICIAL - DELEGACIA"
     }
   ],

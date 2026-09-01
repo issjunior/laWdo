@@ -280,10 +280,10 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
     } catch {}
   }
 
-  // OBSERVAÇÕES
+  // QUESITO ABERTO
   if (rep.observacoes) {
     html += `<table style="${REP_TABLE_STYLES.table}">`;
-    html += buildRepTableTitle('OBSERVAÇÕES', 1);
+    html += buildRepTableTitle('QUESITO ABERTO', 1);
     html += `<tr><td style="${REP_TABLE_STYLES.td}">${rep.observacoes}</td></tr>`;
     html += `</table>`;
   }
@@ -611,7 +611,7 @@ export const REPsPage: React.FC = () => {
     local_fato: z.string().max(500, 'Local do fato deve ter no máximo 500 caracteres').optional(),
     latitude: z.string().optional(),
     longitude: z.string().optional(),
-    observacoes: z.string().max(1000, 'Observações devem ter no máximo 1000 caracteres').optional(),
+    observacoes: z.string().max(1000, 'Quesito aberto deve ter no máximo 1000 caracteres').optional(),
     numeracao_veiculo: z.string().max(25, 'Máximo 25 caracteres').optional(),
     numeracao_placa: z.string().regex(/^[A-Za-z]{3}-?(\d{4}|\d[A-Za-z]\d{2})$/, 'Formato inválido. Use ABC1234, ABC-1234, ABC1B23 ou ABC-1B23').optional().or(z.literal('')),
     numeracao_fabricacao: z.string().regex(/^\d{4}\/\d{4}$/, 'Formato inválido. Use ano/ano (ex: 2020/2021)').optional().or(z.literal('')),
@@ -1433,7 +1433,7 @@ export const REPsPage: React.FC = () => {
         <DataTableColumnHeader column={column} title="Nº da Solicitação" />
       ),
       cell: ({ row }) => (
-        <span className="max-w-[200px] truncate block">{row.getValue('numero_documento') || '-'}</span>
+        <span className="block break-words">{row.getValue('numero_documento') || '-'}</span>
       ),
     },
     {
@@ -2044,9 +2044,9 @@ export const REPsPage: React.FC = () => {
                           name="observacoes"
                           render={({ field }) => (
                             <FormItem>
-                              <LabelWithPlaceholder field="observacoes" mostrar={mostrarPlaceholders}>Observações</LabelWithPlaceholder>
+                              <LabelWithPlaceholder field="observacoes" mostrar={mostrarPlaceholders}>Quesito Aberto</LabelWithPlaceholder>
                               <FormControl>
-                                <Textarea placeholder="Observações gerais..." rows={3} className={getGdlFieldStyle('observacoes')} {...field} />
+                                <Textarea placeholder="Quesito aberto da REP..." rows={3} className={getGdlFieldStyle('observacoes')} {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>

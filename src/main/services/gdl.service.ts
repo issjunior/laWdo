@@ -297,6 +297,49 @@ async function requisitarGdl(
   }
 }
 
+function decodificarEntidadesHtml(texto: string): string {
+  return texto
+    .replace(/&#(\d+);/g, (_entidade, codigo: string) => String.fromCodePoint(Number(codigo)))
+    .replace(/&#x([0-9a-f]+);/gi, (_entidade, codigo: string) => String.fromCodePoint(Number.parseInt(codigo, 16)))
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&');
+}
+
+export function extrairQuesitoAbertoDaPaginaGdl(conteudo: string): string {
+  const correspondencia = conteudo.match(
+    /<textarea\b[^>]*(?:id|name)=["'][^"']*txtOpenQuestion["'][^>]*>([\s\S]*?)<\/textarea>/i,
+  );
+  return correspondencia ? decodificarEntidadesHtml(correspondencia[1]).trim() : '';
+}
+
+async function consultarQuesitoAbertoDaPaginaGdl(
+  credenciais: GdlCredenciais,
+  codRep: number,
+): Promise<string> {
+  const baseAplicacao = credenciais.baseUrl.replace(/\/api$/i, '');
+  const url = `${baseAplicacao}/REP/Default.aspx?rep_id=${encodeURIComponent(String(codRep))}`;
+  const headers: Record<string, string> = {
+    Authorization: buildAuthHeader(credenciais.login, credenciais.senha),
+    Accept: 'text/html',
+  };
+  if (credenciais.cpfUsuario) headers.cpfUsuario = credenciais.cpfUsuario.replace(/\D/g, '');
+
+  try {
+    const resposta = await requisitarGdl(url, 'GET', headers, undefined, 15000);
+    if (resposta.statusCode !== 200) return '';
+    return extrairQuesitoAbertoDaPaginaGdl(resposta.data);
+  } catch (erro) {
+    log.warn('Não foi possível complementar o Quesito Aberto pela página da REP GDL.', {
+      codRep,
+      erro: erro instanceof Error ? erro.message : String(erro),
+    });
+    return '';
+  }
+}
+
 function extrairExtensao(nomeArquivo: string): string {
   const partes = nomeArquivo.toLowerCase().split('.');
   return partes.length > 1 ? partes.at(-1) || '' : '';
@@ -793,10 +836,13 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
-      const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, parsed);
+      const quesitoAberto = parsed.quesitoAberto
+        || await consultarQuesitoAbertoDaPaginaGdl(creds, parsed.codRep);
+      const repComQuesito = quesitoAberto ? { ...parsed, quesitoAberto } : parsed;
+      const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, repComQuesito);
       const dadosComEnvolvidos = dadosComplementares.envolvidos.length > 0
-        ? { ...parsed, envolvidos: [...parsed.envolvidos, ...dadosComplementares.envolvidos] }
-        : parsed;
+        ? { ...repComQuesito, envolvidos: [...repComQuesito.envolvidos, ...dadosComplementares.envolvidos] }
+        : repComQuesito;
       registrarValidacaoSessao(ambiente, numero, ano);
       log.debug('REP consultada no GDL com sucesso', {
         numero,
