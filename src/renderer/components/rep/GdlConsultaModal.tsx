@@ -63,10 +63,10 @@ const formatarNumeroRep = (valor: string): string => {
 
 const formatarIdentificacaoRep = (valor: string): string => {
   const digitos = valor.replace(/\D/g, '').slice(0, 10);
-  if (digitos.length <= 4) return `REP ${digitos}`;
+  if (digitos.length <= 4) return `REP: ${digitos}`;
 
   const ano = digitos.slice(-4);
-  return `REP ${formatarNumeroRep(digitos.slice(0, -4))}-${ano}`;
+  return `REP: ${formatarNumeroRep(digitos.slice(0, -4))}-${ano}`;
 };
 
 const separarAvisoNaturezaEmDesenvolvimento = (mensagem: string) => {
@@ -284,11 +284,11 @@ function ListaCamposRevisao({ campos }: { campos: CampoMapeado[] }): React.React
   if (campos.length === 0) return null
 
   return (
-    <dl className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+    <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
       {campos.map(campo => (
         <div key={campo.campo} className="min-w-0">
           <dt className="text-xs font-medium text-muted-foreground">{campo.label}</dt>
-          <dd className="mt-0.5 break-words text-sm font-medium">{campo.valor}</dd>
+          <dd className="break-words text-sm font-medium leading-5">{campo.valor}</dd>
         </div>
       ))}
     </dl>
@@ -619,7 +619,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex w-[calc(100vw-2rem)] max-w-none flex-col max-h-[85vh] sm:max-w-[960px]">
+      <DialogContent className="flex w-[calc(100vw-2rem)] max-w-[1440px] flex-col max-h-[calc(100vh-2rem)] sm:max-h-[92vh]">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Network className="h-5 w-5 text-primary" />
@@ -807,51 +807,57 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
         {passo === 'revisao' && (
           <>
-            <div className="flex-1 overflow-y-auto min-h-0 space-y-4 px-1">
-              <div className="rounded-md border bg-muted/40 px-4 py-3 text-center text-base">
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-3 px-1">
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-center text-base">
                 <span className="font-bold text-primary">{formatarIdentificacaoRep(resultadoConsulta?.camposGerais.numero ?? '')}</span>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label className="text-sm font-medium flex items-center gap-1">
                   <ListChecks className="h-4 w-4" />
                   Campos que serão preenchidos
                 </Label>
 
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
                   <Card className="shadow-none">
-                    <CardHeader className="p-4 pb-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
+                    <CardHeader className="p-3 pb-2">
+                      <CardTitle className="flex items-center gap-1.5 text-sm">
                         <FileText className="h-4 w-4 text-primary" />
                         Identificação da REP
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-0">
+                    <CardContent className="p-3 pt-0">
                       <ListaCamposRevisao campos={camposIdentificacao} />
                     </CardContent>
                   </Card>
 
-                  <Card className="shadow-none">
-                    <CardHeader className="p-4 pb-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
+                  <Card className="shadow-none xl:col-span-2">
+                    <CardHeader className="p-3 pb-2">
+                      <CardTitle className="flex items-center gap-1.5 text-sm">
                         <ClipboardList className="h-4 w-4 text-primary" />
                         Origem da Solicitação
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 p-4 pt-0">
+                    <CardContent className="space-y-2 p-3 pt-0">
                       {origensCandidatas.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="gdl-origem-solicitacao">Origem utilizada no formulário</Label>
+                        <div className="space-y-1">
+                          <Label htmlFor="gdl-origem-solicitacao" className="text-xs">Origem utilizada no formulário</Label>
                           <Select
                             value={indiceOrigemSelecionada === null ? undefined : String(indiceOrigemSelecionada)}
                             onValueChange={handleSelecionarOrigem}
                           >
-                            <SelectTrigger id="gdl-origem-solicitacao" aria-describedby={exigeSelecaoOrigem ? 'gdl-origem-ajuda' : undefined}>
+                            <SelectTrigger
+                              id="gdl-origem-solicitacao"
+                              aria-describedby={exigeSelecaoOrigem ? 'gdl-origem-ajuda' : undefined}
+                              className="h-auto min-h-9 items-start py-1.5 [&>span]:line-clamp-none [&>span]:whitespace-normal [&>span]:pr-2 [&>span]:text-left [&>span]:leading-4"
+                            >
                               <SelectValue placeholder="Selecione a origem..." />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="w-[min(90vw,900px)] max-w-[calc(100vw-2rem)]">
                               {origensCandidatas.map(({ indice, origem }) => (
-                                <SelectItem key={indice} value={String(indice)}>{formatarOpcaoOrigem(origem)}</SelectItem>
+                                <SelectItem key={indice} value={String(indice)} className="whitespace-normal py-2 leading-4">
+                                  {formatarOpcaoOrigem(origem)}
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -868,13 +874,13 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
                   {camposSolicitanteLocal.length > 0 && (
                     <Card className="shadow-none">
-                      <CardHeader className="p-4 pb-3">
-                        <CardTitle className="flex items-center gap-2 text-base">
+                      <CardHeader className="p-3 pb-2">
+                        <CardTitle className="flex items-center gap-1.5 text-sm">
                           <MapPin className="h-4 w-4 text-primary" />
                           Solicitante e Local
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="p-4 pt-0">
+                      <CardContent className="p-3 pt-0">
                         <ListaCamposRevisao campos={camposSolicitanteLocal} />
                       </CardContent>
                     </Card>
@@ -882,43 +888,47 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
                   {camposInvestigacao.length > 0 && (
                     <Card className="shadow-none">
-                      <CardHeader className="p-4 pb-3">
-                        <CardTitle className="flex items-center gap-2 text-base">
+                      <CardHeader className="p-3 pb-2">
+                        <CardTitle className="flex items-center gap-1.5 text-sm">
                           <ListChecks className="h-4 w-4 text-primary" />
                           Investigação
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="p-4 pt-0">
+                      <CardContent className="p-3 pt-0">
                         <ListaCamposRevisao campos={camposInvestigacao} />
                       </CardContent>
                     </Card>
                   )}
 
                   {camposAdicionais.length > 0 && (
-                    <Card className="shadow-none lg:col-span-2">
-                      <CardHeader className="p-4 pb-3">
-                        <CardTitle className="text-base">Outras informações</CardTitle>
+                    <Card className="shadow-none md:col-span-2 xl:col-span-4">
+                      <CardHeader className="p-3 pb-2">
+                        <CardTitle className="text-sm">Outras informações</CardTitle>
                       </CardHeader>
-                      <CardContent className="p-4 pt-0">
+                      <CardContent className="p-3 pt-0">
                         <ListaCamposRevisao campos={camposAdicionais} />
                       </CardContent>
                     </Card>
                   )}
 
                   {envolvidosRevisao.length > 0 && (
-                    <Card className="shadow-none lg:col-span-2">
-                      <CardHeader className="p-4 pb-3">
-                        <CardTitle className="flex items-center gap-2 text-base">
+                    <Card className="shadow-none md:col-span-2 xl:col-span-4">
+                      <CardHeader className="p-3 pb-2">
+                        <CardTitle className="flex items-center gap-1.5 text-sm">
                           <UsersRound className="h-4 w-4 text-primary" />
                           Envolvidos ({envolvidosRevisao.length})
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="p-4 pt-0">
-                        <ol className="space-y-2">
+                      <CardContent className="p-3 pt-0">
+                        <ol className="space-y-1.5">
                           {envolvidosRevisao.map((envolvido, indice) => (
-                            <li key={`${envolvido.nome}-${indice}`} className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                            <li key={`${envolvido.nome}-${indice}`} className="grid grid-cols-[1.25rem_7rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5 text-sm">
                               <span className="text-muted-foreground">{indice + 1}.</span>
-                              {envolvido.qualificacao && <Badge variant="secondary">{envolvido.qualificacao}</Badge>}
+                              {envolvido.qualificacao ? (
+                                <Badge variant="secondary" className="w-28 justify-center text-center">{envolvido.qualificacao}</Badge>
+                              ) : (
+                                <span className="w-28" aria-hidden />
+                              )}
                               <span className="min-w-0 flex-1 break-words font-medium">{envolvido.nome}</span>
                               <Badge variant={envolvido.preenchidoAutomaticamente ? 'default' : 'outline'} className="shrink-0">
                                 {envolvido.preenchidoAutomaticamente ? 'Preenchido' : 'Manual'}
@@ -931,11 +941,11 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                   )}
 
                   {quesitoAberto && (
-                    <Card className="shadow-none lg:col-span-2">
-                      <CardHeader className="p-4 pb-3">
-                        <CardTitle className="text-base">Quesito Aberto</CardTitle>
+                    <Card className="shadow-none md:col-span-2 xl:col-span-4">
+                      <CardHeader className="p-3 pb-2">
+                        <CardTitle className="text-sm">Quesito Aberto</CardTitle>
                       </CardHeader>
-                      <CardContent className="p-4 pt-0">
+                      <CardContent className="p-3 pt-0">
                         <p className="whitespace-pre-wrap break-words text-sm leading-6">{quesitoAberto.valor}</p>
                       </CardContent>
                     </Card>

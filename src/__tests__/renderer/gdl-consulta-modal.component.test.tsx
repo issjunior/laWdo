@@ -134,7 +134,7 @@ describe('GdlConsultaModal', () => {
     expect(screen.queryByText('Peças estruturadas:')).not.toBeInTheDocument()
     expect(screen.queryByText(/campos serão preenchidos/)).not.toBeInTheDocument()
     expect(screen.queryByText('10 permanecem vazios.')).not.toBeInTheDocument()
-    expect(screen.getByText('REP 190-2026')).toHaveClass('font-bold', 'text-primary')
+    expect(screen.getByText('REP: 190-2026')).toHaveClass('font-bold', 'text-primary')
     expect(screen.getByText('B602 - EXAME BALÍSTICO')).toBeInTheDocument()
     expect(screen.queryByText('Revisão das peças do GDL')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
