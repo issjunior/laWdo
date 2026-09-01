@@ -53,6 +53,7 @@ import {
   capturarImagensRepGdl,
   capturarImagensDaSessaoGdlParaLaudo,
   consultarRep,
+  extrairQuesitoAbertoDaPaginaGdl,
   extrairCodigoNaturezaExame,
   extrairFiltrosParaConsultaInvestigacao,
   fecharSessaoImagensRepGdl,
@@ -83,6 +84,7 @@ let statusRep = 200
 const statusRepPorBusca = new Map<string, number>()
 let statusFotos = 200
 let respostaRep = fixtureRep
+let respostaPaginaRep = '<textarea id="Content_RepMain_txtOpenQuestion">QUESITO &amp; TESTE</textarea>'
 const corposInvestigacao: string[] = []
 const configuracoes: Record<string, string> = {}
 let requisicoesRecebidas = 0
@@ -104,6 +106,10 @@ beforeAll(async () => {
     }
     if (url.pathname.endsWith('/rep/obter')) {
       responder(resposta, statusRepPorBusca.get(url.search) ?? statusRep, respostaRep)
+      return
+    }
+    if (url.pathname.endsWith('/REP/Default.aspx')) {
+      responder(resposta, 200, respostaPaginaRep)
       return
     }
     if (url.pathname.endsWith('/repsInvestigacaoPolicial/listarReps')) {
@@ -149,6 +155,7 @@ beforeEach(() => {
   statusRepPorBusca.clear()
   statusFotos = 200
   respostaRep = fixtureRep
+  respostaPaginaRep = '<textarea id="Content_RepMain_txtOpenQuestion">QUESITO &amp; TESTE</textarea>'
   corposInvestigacao.length = 0
   requisicoesGdl.length = 0
   requisicoesRecebidas = 0
@@ -229,6 +236,7 @@ describe('gdl.service', () => {
     expect(resultado.sucesso).toBe(true)
     expect(resultado.ambiente).toBe('homologacao')
     expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
+    expect(resultado.dados?.quesitoAberto).toBe('QUESITO & TESTE')
     expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
     expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
     expect(corposInvestigacao).toHaveLength(2)
@@ -237,6 +245,13 @@ describe('gdl.service', () => {
       numeroRep: '190',
       anoRep: '2026',
     })
+  })
+
+  it('extrai e decodifica o Quesito Aberto da página de visualização da REP', () => {
+    expect(extrairQuesitoAbertoDaPaginaGdl(
+      '<textarea name="ctl00$Content$RepMain$txtOpenQuestion">REP DE TESTE &#x50;ARA O LAWDO</textarea>',
+    )).toBe('REP DE TESTE PARA O LAWDO')
+    expect(extrairQuesitoAbertoDaPaginaGdl('<html>Sem quesito</html>')).toBe('')
   })
 
   it('trata ausência de credenciais e respostas HTTP da consulta de REP', async () => {

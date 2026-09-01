@@ -26,12 +26,31 @@ function aplicarAliasesDeCapitalizacao(payload: unknown, aliases: Record<string,
   return saida
 }
 
-const gdlOrigemSchema = z.object({
+const gdlOrigemSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(payload, {
+  tipoorigem: 'tipo',
+  typeorigin: 'tipo',
+  numeroorigem: 'numero',
+  numberorigin: 'numero',
+  anoorigem: 'ano',
+  yearorigin: 'ano',
+  cidadeorigem: 'cidade',
+  cityorigin: 'cidade',
+  data: 'dataDocumento',
+  datadocumento: 'dataDocumento',
+  dataorigem: 'dataDocumento',
+  datadaorigem: 'dataDocumento',
+  dateorigin: 'dataDocumento',
+  iniciais: 'iniciais',
+  iniciaisorigem: 'iniciais',
+  initialsorigin: 'iniciais',
+}), z.object({
   tipo: textoOpcional,
   numero: textoOpcional,
   ano: textoFlexivel,
   cidade: textoOpcional,
-}).passthrough()
+  dataDocumento: textoOpcional,
+  iniciais: textoOpcional,
+}).passthrough())
 
 const gdlAndamentoSchema = z.object({
   dataHora: textoOpcional,
@@ -81,6 +100,10 @@ const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(paylo
   arquivosadicionais: 'arquivosAdicionais',
   anexoeletronico: 'anexoEletronico',
   tipoanexoeletronico: 'tipoAnexoEletronico',
+  quesitoaberto: 'quesitoAberto',
+  questaoaberta: 'quesitoAberto',
+  openquestion: 'quesitoAberto',
+  txtopenquestion: 'quesitoAberto',
 }), z.object({
   codRep: numeroFlexivel,
   numero: numeroFlexivel,
@@ -89,6 +112,7 @@ const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(paylo
   envolvidos: z.array(z.unknown()).default([]),
   pecas: z.array(gdlPecaSchema).default([]),
   andamentos: z.array(gdlAndamentoSchema).default([]),
+  quesitoAberto: textoOpcional,
   anexoEletronico: z.union([z.boolean(), z.string(), z.number()]).nullish().transform(valor => valor ?? false),
   tipoAnexoEletronico: z.union([z.string(), z.number()]).nullish().transform(valor => valor == null ? null : String(valor)),
   anexosEletronicos: z.array(gdlArquivoRepSchema).default([]),

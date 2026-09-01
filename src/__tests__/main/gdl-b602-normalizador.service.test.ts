@@ -95,7 +95,9 @@ describe('contrato GDL B602', () => {
     expect(resultado.camposGerais).toMatchObject({
       numero: '109026-2026',
       tipo_solicitacao: 'OFÍCIO REQUISITANTE',
-      numero_documento: '3216/2026',
+      numero_documento: '3216-2026/JO',
+      data_documento: '2026-08-22',
+      observacoes: 'REP DE TESTE PARA O SISTEMA LAWDO',
       b602_local_cidade: 'TELÊMACO BORBA',
       b602_solicitante_nome: '18. SUBDIVISAO POLICIAL - DELEGACIA',
       data_requisicao: '2026-08-22',
@@ -103,6 +105,54 @@ describe('contrato GDL B602', () => {
     expect(resultado.camposEspecificos.pecas).toEqual([
       expect.objectContaining({ tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }),
     ])
+  })
+
+  it('preserva o formato existente do número quando a origem não informa iniciais ou data', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1002026,
+      numero: 100,
+      ano: 2026,
+      origens: [{ tipo: 'OFÍCIO REQUISITANTE', numero: '123', ano: 2026, cidade: 'LONDRINA' }],
+      pecas: [],
+    }))
+
+    expect(resultado.camposGerais).toMatchObject({
+      numero_documento: '123/2026',
+      data_documento: '',
+    })
+    expect(resultado.camposGerais).not.toHaveProperty('observacoes')
+  })
+
+  it('normaliza aliases do quesito aberto para as observações locais', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1022026,
+      numero: 102,
+      ano: 2026,
+      origens: [],
+      pecas: [],
+      txtOpenQuestion: 'DESCREVER O MATERIAL ENCAMINHADO.',
+    }))
+
+    expect(resultado.camposGerais.observacoes).toBe('DESCREVER O MATERIAL ENCAMINHADO.')
+  })
+
+  it('mantém os dados da origem selecionada ao priorizar uma solicitação compatível', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      codRep: 1012026,
+      numero: 101,
+      ano: 2026,
+      origens: [
+        { typeOrigin: 'PROCESSO', numberOrigin: '1', yearOrigin: 2026, dateOrigin: '01/08/2026', initialsOrigin: 'PR' },
+        { typeOrigin: 'OFÍCIO REQUISITANTE', numberOrigin: '3216/2026', yearOrigin: null, dateOrigin: '22/08/2026', initialsOrigin: 'JO' },
+      ],
+      pecas: [],
+    }))
+
+    expect(resultado.camposGerais).toMatchObject({
+      tipo_solicitacao: 'OFÍCIO REQUISITANTE',
+      numero_documento: '3216-2026/JO',
+      data_documento: '2026-08-22',
+    })
   })
 
   it('informa JSON inválido sem usar cast direto', () => {
@@ -454,10 +504,10 @@ describe('contrato GDL B602', () => {
     expect(pistola.extrasGdl).toEqual({})
   })
 
-  it('preserva BO como tipo de solicitação canônico do GDL', () => {
+  it('usa a última origem BO ou IP quando a REP não possui Ofício', () => {
     const resultado = converterRepB602(validarGdlRep(fixture))
 
-    expect(resultado.camposGerais.tipo_solicitacao).toBe('BO')
+    expect(resultado.camposGerais.tipo_solicitacao).toBe('IP/PM')
     expect(resultado.camposGerais.b602_local_cidade).toBe('LONDRINA')
     expect(resultado.camposGerais.autoridade_solicitante).toBe('AUTORIDADE TESTE')
     expect(resultado.camposGerais.b602_numero_bo).toBe('123/2026')
@@ -486,7 +536,7 @@ describe('contrato GDL B602', () => {
     ])
   })
 
-  it('sugere a primeira origem das famílias BO, IP ou OFÍCIO e preserva todas as demais opções', () => {
+  it('prioriza o último Ofício e preserva todas as demais opções', () => {
     const rep = validarGdlRep({
       ...fixture,
       origens: [
@@ -494,19 +544,48 @@ describe('contrato GDL B602', () => {
         { tipo: 'IP/PM', numero: '2', ano: 2026, cidade: 'LONDRINA' },
         { tipo: 'OFÍCIO REQUISITANTE', numero: '3', ano: 2026, cidade: 'LONDRINA' },
         { tipo: 'BO/PM', numero: '4', ano: 2026, cidade: 'LONDRINA' },
+        { tipo: 'OFÍCIO COMPLEMENTAR', numero: '5', ano: 2026, cidade: 'LONDRINA' },
       ],
     })
 
     const resultado = converterRepB602(rep)
 
-    expect(resultado.camposGerais.tipo_solicitacao).toBe('IP/PM')
-    expect(resultado.camposGerais.numero_documento).toBe('2/2026')
+    expect(resultado.camposGerais.tipo_solicitacao).toBe('OFÍCIO COMPLEMENTAR')
+    expect(resultado.camposGerais.numero_documento).toBe('5/2026')
     expect(resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis).toEqual([
       { tipo: 'PROCESSO', numero: '1/2026' },
       { tipo: 'IP/PM', numero: '2/2026' },
       { tipo: 'OFÍCIO REQUISITANTE', numero: '3/2026' },
       { tipo: 'BO/PM', numero: '4/2026' },
+      { tipo: 'OFÍCIO COMPLEMENTAR', numero: '5/2026' },
     ])
+  })
+
+  it('prioriza a última origem BO ou IP quando não há Ofício', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixture,
+      origens: [
+        { tipo: 'BO', numero: '1', ano: 2026, cidade: 'LONDRINA' },
+        { tipo: 'IP/PM', numero: '2', ano: 2026, cidade: 'LONDRINA' },
+        { tipo: 'BO/PM', numero: '3', ano: 2026, cidade: 'LONDRINA' },
+      ],
+    }))
+
+    expect(resultado.camposGerais.tipo_solicitacao).toBe('BO/PM')
+    expect(resultado.camposGerais.numero_documento).toBe('3/2026')
+  })
+
+  it('não seleciona automaticamente uma origem fora das famílias preferenciais', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixture,
+      origens: [{ tipo: 'PROCESSO', numero: '1', ano: 2026, cidade: 'LONDRINA' }],
+    }))
+
+    expect(resultado.camposGerais).toMatchObject({
+      tipo_solicitacao: '',
+      numero_documento: '',
+      data_documento: '',
+    })
   })
 
   it('propaga apenas os metadados seguros da consulta', () => {

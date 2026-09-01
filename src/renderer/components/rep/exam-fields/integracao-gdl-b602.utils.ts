@@ -4,6 +4,8 @@ import type { MetadadosIntegracaoGdl, PecaB602 } from '@shared/types/b602-gdl.ty
 const referenciaOrigemGdlSchema = z.object({
   tipo: z.string(),
   numero: z.string(),
+  dataDocumento: z.string().optional(),
+  iniciais: z.string().optional(),
 })
 
 const dadosSolicitacaoGdlSchema = z.object({
@@ -25,6 +27,7 @@ const dadosInvestigacaoGdlSchema = z.object({
 
 const metadadosIntegracaoGdlSchema = z.object({
   origemInicial: z.enum(['manual', 'gdl']),
+  origemSolicitacaoSelecionada: referenciaOrigemGdlSchema.optional(),
   dadosSolicitacao: dadosSolicitacaoGdlSchema.optional(),
   dadosInvestigacao: dadosInvestigacaoGdlSchema.optional(),
   ultimaConsulta: z.object({

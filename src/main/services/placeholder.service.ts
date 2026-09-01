@@ -100,7 +100,7 @@ const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   { chave: 'data_acionamento_local', valor: '', descricao: 'Data/Hora do acionamento (exames de local)', categoria_id: 'cat-rep' },
   { chave: 'data_chegada_local', valor: '', descricao: 'Data/Hora de chegada ao local (exames de local)', categoria_id: 'cat-rep' },
   { chave: 'data_saida_local', valor: '', descricao: 'Data/Hora de saída do local (exames de local)', categoria_id: 'cat-rep' },
-  { chave: 'observacoes_rep', valor: '', descricao: 'Observações gerais da REP', categoria_id: 'cat-rep' },
+  { chave: 'observacoes_rep', valor: '', descricao: 'Quesito aberto da REP', categoria_id: 'cat-rep' },
   // Relacionamentos (3)
   { chave: 'solicitante_nome', valor: '', descricao: 'Nome do órgão solicitante', categoria_id: 'cat-rep' },
   { chave: 'tipo_exame_nome', valor: '', descricao: 'Nome do tipo de exame', categoria_id: 'cat-rep' },
@@ -269,6 +269,11 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
 
         if (existing.length === 0) {
           await this.create(p);
+        } else if (p.chave === 'observacoes_rep') {
+          await executeNonQuery(
+            'UPDATE placeholders SET descricao = ?, updated_at = ? WHERE chave = ?',
+            [p.descricao, new Date().toISOString(), p.chave]
+          );
         }
       }
       for (const p of CAMPOS_ESPECIFICOS_PLACEHOLDERS) {

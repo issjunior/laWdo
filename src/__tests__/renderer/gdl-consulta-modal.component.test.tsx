@@ -42,8 +42,12 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
     data_requisicao: '2026-07-19',
     tipo_solicitacao: 'BO',
     numero_documento: '123/2026',
+    data_documento: '2026-07-18',
+    observacoes: 'QUESITO DE TESTE',
     b602_local_cidade: 'CURITIBA',
     b602_solicitante_nome: 'UNIDADE POLICIAL',
+    b602_envolvidos_qualificacao_0: 'VÍTIMA:',
+    b602_envolvidos_0: 'PESSOA TESTE',
   },
   camposEspecificos: {
     pecas: [pecaUm, pecaDois],
@@ -51,10 +55,10 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
       orgao: 'UNIDADE POLICIAL',
       responsavel: '',
       autoridade: '',
-      origensDisponiveis: [{ tipo: 'BO', numero: '123/2026' }],
+      origensDisponiveis: [{ tipo: 'BO', numero: '123/2026', dataDocumento: '2026-07-18' }],
     },
     dadosInvestigacao: {
-      envolvidos: [],
+      envolvidos: ['VÍTIMA: PESSOA TESTE'],
       boletinsOcorrencia: [{ tipo: 'BO', numero: '123/2026' }],
       inqueritosPoliciais: [],
     },
@@ -130,22 +134,32 @@ describe('GdlConsultaModal', () => {
     expect(screen.queryByText('Peças estruturadas:')).not.toBeInTheDocument()
     expect(screen.queryByText(/campos serão preenchidos/)).not.toBeInTheDocument()
     expect(screen.queryByText('10 permanecem vazios.')).not.toBeInTheDocument()
-    expect(screen.getByText('REP 190-2026')).toHaveClass('font-bold', 'text-primary')
+    expect(screen.getByText('190-2026')).toBeInTheDocument()
     expect(screen.getByText('B602 - EXAME BALÍSTICO')).toBeInTheDocument()
     expect(screen.queryByText('Revisão das peças do GDL')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
     expect(screen.queryByText('ID', { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText('19/07/2026')).toBeInTheDocument()
-    expect(screen.getByText('Cidade:')).toBeInTheDocument()
-    expect(screen.getByText('Unidade Policial:')).toBeInTheDocument()
+    expect(screen.getByText('Identificação da REP')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Solicitação' })).toBeInTheDocument()
+    expect(screen.getByText('Data do Documento')).toBeInTheDocument()
+    expect(screen.getByText('18/07/2026')).toBeInTheDocument()
+    expect(screen.queryByText('Solicitante e Local')).not.toBeInTheDocument()
+    expect(screen.getByText('Envolvidos (1)')).toBeInTheDocument()
+    expect(screen.getByText('PESSOA TESTE')).toBeInTheDocument()
+    expect(screen.getByText('Quesito Aberto')).toBeInTheDocument()
+    expect(screen.getByText('QUESITO DE TESTE')).toBeInTheDocument()
+    expect(screen.getByText('Peças Encontradas (2)')).toBeInTheDocument()
     expect(screen.queryByText('Tipo de Exame')).not.toBeInTheDocument()
 
-    const checkboxes = screen.getAllByRole('checkbox')
-    expect(checkboxes).toHaveLength(2)
-    expect(checkboxes.every(checkbox => checkbox.getAttribute('data-state') === 'checked')).toBe(true)
+    const [checkboxEnvolvido, ...checkboxesPecas] = screen.getAllByRole('checkbox')
+    expect(checkboxEnvolvido).toBeChecked()
+    expect(checkboxesPecas).toHaveLength(2)
+    expect(checkboxesPecas.every(checkbox => checkbox.getAttribute('data-state') === 'checked')).toBe(true)
 
     fireEvent.click(screen.getByRole('button', { name: 'Desmarcar todas' }))
-    expect(checkboxes.every(checkbox => checkbox.getAttribute('data-state') === 'unchecked')).toBe(true)
+    expect(checkboxEnvolvido).toBeChecked()
+    expect(checkboxesPecas.every(checkbox => checkbox.getAttribute('data-state') === 'unchecked')).toBe(true)
     expect(screen.getByRole('button', { name: 'Selecionar todas' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Selecionar todas' }))
 
@@ -173,13 +187,13 @@ describe('GdlConsultaModal', () => {
     await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
     await buscarRep()
 
-    const checkboxes = screen.getAllByRole('checkbox')
-    expect(checkboxes).toHaveLength(3)
-    expect(checkboxes[0]).toBeChecked()
-    expect(checkboxes[1]).toBeChecked()
-    expect(checkboxes[2]).not.toBeChecked()
+    const [checkboxEnvolvido, checkboxPecaUm, checkboxPecaDois, checkboxPecaAusente] = screen.getAllByRole('checkbox')
+    expect(checkboxEnvolvido).toBeChecked()
+    expect(checkboxPecaUm).toBeChecked()
+    expect(checkboxPecaDois).toBeChecked()
+    expect(checkboxPecaAusente).not.toBeChecked()
 
-    fireEvent.click(checkboxes[1])
+    fireEvent.click(checkboxPecaDois)
     fireEvent.click(screen.getByRole('radio', { name: 'Substituir dados do GDL' }))
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar ao Formulário' }))
 
@@ -195,6 +209,59 @@ describe('GdlConsultaModal', () => {
       'substituir',
       [pecaUm],
     )
+  })
+
+  it('exige uma origem no fallback e aplica tipo, número e data da escolha', async () => {
+    const onAplicar = vi.fn()
+    const resultadoSemFamiliaPreferencial: ResultadoImportacaoExame<DadosImportacaoB602> = {
+      ...resultadoConsulta,
+      camposGerais: {
+        ...resultadoConsulta.camposGerais,
+        tipo_solicitacao: '',
+        numero_documento: '',
+        data_documento: '',
+      },
+      camposEspecificos: {
+        ...resultadoConsulta.camposEspecificos,
+        dadosSolicitacao: {
+          ...resultadoConsulta.camposEspecificos.dadosSolicitacao,
+          origensDisponiveis: [
+            { tipo: 'PROCESSO', numero: '1/2026', dataDocumento: '2026-07-01' },
+            { tipo: 'REQUISIÇÃO', numero: '2/2026', dataDocumento: '2026-07-02' },
+          ],
+        },
+      },
+    }
+    consultarRep.mockResolvedValueOnce({ success: true, data: resultadoSemFamiliaPreferencial })
+    render(
+      <GdlConsultaModal
+        open
+        onOpenChange={vi.fn()}
+        onAplicar={onAplicar}
+        temDadosExistentes={false}
+        pecasB602={[]}
+        onConfigurarCredenciais={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
+    await buscarRep()
+
+    const preencher = screen.getByRole('button', { name: 'Preencher formulário' })
+    expect(preencher).toBeDisabled()
+    fireEvent.click(screen.getByLabelText('Origem utilizada no formulário'))
+    fireEvent.click(await screen.findByRole('option', { name: 'REQUISIÇÃO — 2/2026 — 02/07/2026' }))
+    expect(preencher).toBeEnabled()
+    fireEvent.click(preencher)
+
+    await waitFor(() => expect(onAplicar).toHaveBeenCalledOnce())
+    expect(onAplicar).toHaveBeenCalledWith(expect.objectContaining({
+      camposGerais: expect.objectContaining({
+        tipo_solicitacao: 'REQUISIÇÃO',
+        numero_documento: '2/2026',
+        data_documento: '2026-07-02',
+      }),
+    }), 'mesclar', [pecaUm, pecaDois])
   })
 
   it('fecha sem consultar ou aplicar quando o usuário cancela', async () => {

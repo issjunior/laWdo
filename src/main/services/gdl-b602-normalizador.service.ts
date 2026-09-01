@@ -86,16 +86,15 @@ function obterTextoPorAlias(fonte: unknown, aliases: string[]): string {
 
 function extrairOrigensDisponiveis(rep: GdlRepValidada): ReferenciaOrigemGdl[] {
   const origens = rep.origens
-    .map(origem => ({
-      tipo: origem.tipo.trim(),
-      numero: formatarNumeroOrigem(origem.numero, origem.ano),
-    }))
+    .map(criarReferenciaOrigem)
     .filter(origem => Boolean(origem.tipo))
 
   return origens.filter((origem, indice) => (
     origens.findIndex(outra => (
       normalizarChave(outra.tipo) === normalizarChave(origem.tipo)
       && outra.numero === origem.numero
+      && outra.dataDocumento === origem.dataDocumento
+      && outra.iniciais === origem.iniciais
     )) === indice
   ))
 }
@@ -105,8 +104,17 @@ function origemPertenceFamiliaPreferencial(origem: ReferenciaOrigemGdl): boolean
   return tipo.startsWith('bo') || tipo.startsWith('ip') || tipo.startsWith('oficio')
 }
 
+function origemPertenceFamiliaOficio(origem: ReferenciaOrigemGdl): boolean {
+  const tipo = normalizarChave(origem.tipo).replace(/[\s/_-]/g, '')
+  return tipo.startsWith('oficio')
+}
+
 function selecionarOrigemInicial(origens: ReferenciaOrigemGdl[]): ReferenciaOrigemGdl | undefined {
-  return origens.find(origemPertenceFamiliaPreferencial) ?? origens[0]
+  const oficios = origens.filter(origemPertenceFamiliaOficio)
+  if (oficios.length > 0) return oficios[oficios.length - 1]
+
+  const boletinsOuInqueritos = origens.filter(origemPertenceFamiliaPreferencial)
+  return boletinsOuInqueritos[boletinsOuInqueritos.length - 1]
 }
 
 function extrairDadosSolicitacao(rep: GdlRepValidada): DadosSolicitacaoGdl {
@@ -186,15 +194,47 @@ function tipoOrigemCorresponde(tipo: string, tipoEsperado: 'bo' | 'ip'): boolean
   return normalizado.startsWith(tipoEsperado)
 }
 
-function formatarNumeroOrigem(numero: string, ano: string): string {
-  if (!numero || !ano || numero.endsWith(`/${ano}`)) return numero
-  return `${numero}/${ano}`
+function formatarNumeroOrigem(numero: string, ano: string, iniciais: string = ''): string {
+  if (!numero) return numero
+  const numeroComAno = numero.match(/^(.*?)[/-](\d{4})$/)
+  const anoEfetivo = ano || numeroComAno?.[2] || ''
+  if (!anoEfetivo) return numero
+  if (iniciais) {
+    const numeroSemAno = numeroComAno?.[1] || numero
+    return `${numeroSemAno}-${anoEfetivo}/${iniciais}`
+  }
+  if (numeroComAno) return numero
+  return `${numero}/${anoEfetivo}`
+}
+
+function normalizarDataDocumento(valor: string): string {
+  const texto = valor.trim()
+  const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/)
+  const brasileira = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  const partes = iso ? [iso[1], iso[2], iso[3]] : brasileira ? [brasileira[3], brasileira[2], brasileira[1]] : undefined
+  if (!partes) return ''
+
+  const [ano, mes, dia] = partes.map(Number)
+  const data = new Date(Date.UTC(ano, mes - 1, dia))
+  if (data.getUTCFullYear() !== ano || data.getUTCMonth() !== mes - 1 || data.getUTCDate() !== dia) return ''
+  return `${partes[0]}-${partes[1]}-${partes[2]}`
+}
+
+function criarReferenciaOrigem(origem: GdlRepValidada['origens'][number]): ReferenciaOrigemGdl {
+  const iniciais = origem.iniciais.trim()
+  const dataDocumento = normalizarDataDocumento(origem.dataDocumento)
+  return {
+    tipo: origem.tipo.trim(),
+    numero: formatarNumeroOrigem(origem.numero, origem.ano, iniciais),
+    ...(dataDocumento ? { dataDocumento } : {}),
+    ...(iniciais ? { iniciais } : {}),
+  }
 }
 
 function extrairReferenciasOrigem(rep: GdlRepValidada, tipoEsperado: 'bo' | 'ip'): ReferenciaOrigemGdl[] {
   return rep.origens
     .filter(origem => tipoOrigemCorresponde(origem.tipo, tipoEsperado))
-    .map(origem => ({ tipo: origem.tipo, numero: formatarNumeroOrigem(origem.numero, origem.ano) }))
+    .map(criarReferenciaOrigem)
     .filter(origem => Boolean(origem.numero))
 }
 
@@ -337,6 +377,8 @@ export function converterRepB602(
       numero: `${rep.numero}-${rep.ano}`,
       tipo_solicitacao: origemInicial?.tipo ?? '',
       numero_documento: origemInicial?.numero ?? '',
+      data_documento: origemInicial?.dataDocumento ?? '',
+      ...(rep.quesitoAberto ? { observacoes: rep.quesitoAberto } : {}),
       b602_local_cidade: rep.origens[0]?.cidade ?? '',
       b602_numero_bo: obterNumeroUnico(boletinsOcorrencia),
       b602_numero_ip: obterNumeroUnico(inqueritosPoliciais),
