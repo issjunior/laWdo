@@ -129,6 +129,9 @@ jobs:
             --title "Atualizar versão para v$VERSAO" \
             --body "Atualização automática de package.json e package-lock.json iniciada pelo workflow Preparar release.")"
           gh pr merge "$url_pr" --repo "$GITHUB_REPOSITORY" --merge
+          if ! git push origin --delete "$ramo"; then
+            echo "::warning::A branch temporária $ramo foi integrada, mas não pôde ser removida automaticamente."
+          fi
           git fetch origin main
           commit="$(git rev-parse origin/main)"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
