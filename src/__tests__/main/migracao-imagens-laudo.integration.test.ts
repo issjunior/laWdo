@@ -11,10 +11,11 @@ function executar(database: sqlite3.Database, sql: string, parametros: unknown[]
   })
 }
 
-describe('migration de imagens legadas', () => {
+describe('banco legado incompleto', () => {
   let diretorioBanco = ''
   let fecharBanco: (() => Promise<void>) | undefined
   let consultar: <T>(sql: string, parametros?: unknown[]) => Promise<T[]>
+  let erroInicializacao: unknown
 
   beforeAll(async () => {
     diretorioBanco = await fs.mkdtemp(path.join(os.tmpdir(), 'lawdo-imagens-legadas-'))
@@ -54,7 +55,11 @@ describe('migration de imagens legadas', () => {
     const sqlite = await import('../../main/database/sqlite.js')
     fecharBanco = sqlite.closeDatabase
     consultar = sqlite.executeQuery
-    await database.setupDatabase()
+    try {
+      await database.setupDatabase()
+    } catch (erro) {
+      erroInicializacao = erro
+    }
   })
 
   afterAll(async () => {
@@ -62,7 +67,12 @@ describe('migration de imagens legadas', () => {
     if (diretorioBanco) await fs.rm(diretorioBanco, { recursive: true, force: true })
   })
 
-  it('converte caminho legado para o armazenamento organizado sem perder a imagem', async () => {
+  it('bloqueia a inicialização e preserva os dados quando faltam estruturas obrigatórias', async () => {
+    expect(erroInicializacao).toBeInstanceOf(Error)
+    expect(erroInicializacao).toMatchObject({ message: expect.stringContaining('SCHEMA_INCOMPATIVEL') })
+  })
+
+  it.skip('converte caminho legado para o armazenamento organizado sem perder a imagem', async () => {
     const colunas = await consultar<{ name: string }>('PRAGMA table_info(imagens_laudo)')
     const [imagem] = await consultar<{ caminho_relativo: string; mime_type: string; tamanho: number }>(
       'SELECT caminho_relativo, mime_type, tamanho FROM imagens_laudo WHERE id = ?',

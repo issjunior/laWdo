@@ -17,7 +17,84 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 32;
+const CURRENT_SCHEMA_VERSION = 33;
+
+interface ResultadoIntegridadeSchema {
+  tabelasVerificadas: string[];
+  reparosAplicados: string[];
+}
+
+const TABELAS_OBRIGATORIAS = [
+  'schema_version', 'users', 'solicitantes', 'tipos_exame', 'reps', 'laudos',
+  'imagens_laudo', 'categorias_placeholders', 'placeholders', 'logs_auditoria',
+  'templates', 'secoes_template', 'configuracoes', 'wizards', 'etapas_wizard',
+  'opcoes_etapa', 'pecas', 'regras_wizard', 'respostas_wizard', 'categorias_pecas',
+] as const;
+
+const criarTabelaConfiguracoes = async (): Promise<void> => {
+  await executeNonQuery(`
+    CREATE TABLE IF NOT EXISTS configuracoes (
+      chave TEXT PRIMARY KEY,
+      valor TEXT,
+      tipo TEXT NOT NULL DEFAULT 'texto',
+      descricao TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+};
+
+const criarEstruturasComplementares = async (): Promise<void> => {
+  await executeNonQuery(`CREATE TABLE IF NOT EXISTS categorias_pecas (
+    id TEXT PRIMARY KEY, chave TEXT NOT NULL UNIQUE, label TEXT NOT NULL UNIQUE, descricao TEXT,
+    cor TEXT, icone TEXT, parent_id TEXT, is_sistema INTEGER NOT NULL DEFAULT 0,
+    ordem INTEGER NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES categorias_pecas(id) ON DELETE SET NULL
+  )`);
+  await executeNonQuery(`CREATE TABLE IF NOT EXISTS wizards (
+    id TEXT PRIMARY KEY, tipo_exame_id TEXT NOT NULL, template_id TEXT NOT NULL, nome TEXT NOT NULL,
+    descricao TEXT, ativo INTEGER NOT NULL DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tipo_exame_id) REFERENCES tipos_exame(id), FOREIGN KEY (template_id) REFERENCES templates(id)
+  )`);
+  await executeNonQuery(`CREATE TABLE IF NOT EXISTS etapas_wizard (
+    id TEXT PRIMARY KEY, wizard_id TEXT NOT NULL, etapa_pai_id TEXT, pergunta TEXT NOT NULL,
+    descricao_ajuda TEXT, tipo_input TEXT NOT NULL DEFAULT 'select', nivel INTEGER NOT NULL DEFAULT 0,
+    ordem INTEGER NOT NULL DEFAULT 0, obrigatorio INTEGER NOT NULL DEFAULT 1,
+    multipla_escolha INTEGER NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (wizard_id) REFERENCES wizards(id) ON DELETE CASCADE,
+    FOREIGN KEY (etapa_pai_id) REFERENCES etapas_wizard(id) ON DELETE SET NULL
+  )`);
+  await executeNonQuery(`CREATE TABLE IF NOT EXISTS opcoes_etapa (
+    id TEXT PRIMARY KEY, etapa_id TEXT NOT NULL, label TEXT NOT NULL, valor TEXT NOT NULL,
+    etapa_filha_id TEXT, ordem INTEGER NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (etapa_id) REFERENCES etapas_wizard(id) ON DELETE CASCADE,
+    FOREIGN KEY (etapa_filha_id) REFERENCES etapas_wizard(id) ON DELETE SET NULL
+  )`);
+  await executeNonQuery(`CREATE TABLE IF NOT EXISTS pecas (
+    id TEXT PRIMARY KEY, nome TEXT NOT NULL, descricao TEXT, conteudo TEXT NOT NULL, categoria_id TEXT,
+    tags TEXT, ativo INTEGER NOT NULL DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (categoria_id) REFERENCES categorias_pecas(id) ON DELETE SET NULL
+  )`);
+  await executeNonQuery(`CREATE TABLE IF NOT EXISTS regras_wizard (
+    id TEXT PRIMARY KEY, wizard_id TEXT NOT NULL, peca_id TEXT NOT NULL, secao_template_id TEXT,
+    condicoes TEXT NOT NULL DEFAULT '{}', ordem INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (wizard_id) REFERENCES wizards(id) ON DELETE CASCADE,
+    FOREIGN KEY (peca_id) REFERENCES pecas(id) ON DELETE CASCADE,
+    FOREIGN KEY (secao_template_id) REFERENCES secoes_template(id) ON DELETE SET NULL
+  )`);
+  await executeNonQuery(`CREATE TABLE IF NOT EXISTS respostas_wizard (
+    id TEXT PRIMARY KEY, laudo_id TEXT NOT NULL, etapa_id TEXT NOT NULL, opcao_id TEXT,
+    valor_texto TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (laudo_id) REFERENCES laudos(id) ON DELETE CASCADE,
+    FOREIGN KEY (etapa_id) REFERENCES etapas_wizard(id),
+    FOREIGN KEY (opcao_id) REFERENCES opcoes_etapa(id) ON DELETE SET NULL
+  )`);
+};
 
 /**
  * Configura e inicializa o banco de dados SQLite
@@ -43,10 +120,18 @@ export const setupDatabase = async (): Promise<void> => {
     if (!dbExists) {
       log.debug(`Banco de dados não encontrado. Criando novo: ${DB_PATH}`);
       await createDatabaseSchema();
-      await setSchemaVersion(CURRENT_SCHEMA_VERSION);
+      await aplicarMigracoesERegistrarVersao(0);
     } else {
       log.debug(`Banco de dados encontrado: ${DB_PATH}`);
       await checkAndApplyMigrations();
+    }
+
+    const integridade = await garantirIntegridadeSchema();
+    if (integridade.reparosAplicados.length > 0) {
+      log.warn('Estruturas ausentes do banco foram reparadas automaticamente', {
+        tabelasVerificadas: integridade.tabelasVerificadas,
+        reparosAplicados: integridade.reparosAplicados,
+      });
     }
 
     const resultadosTemplates = await sincronizarTemplatesIntegrados({ sobrescreverIntegrados: !app.isPackaged });
@@ -271,6 +356,8 @@ const createDatabaseSchema = async (): Promise<void> => {
       )
     `);
 
+    await criarTabelaConfiguracoes();
+
     // Tabela de templates de laudo
     await executeNonQuery(`
       CREATE TABLE IF NOT EXISTS templates (
@@ -350,6 +437,11 @@ const setSchemaVersion = async (version: number): Promise<void> => {
   log.debug(`Schema version definida para ${version}`);
 };
 
+const aplicarMigracoesERegistrarVersao = async (fromVersion: number): Promise<void> => {
+  await applyMigrations(fromVersion);
+  await setSchemaVersion(CURRENT_SCHEMA_VERSION);
+};
+
 /**
  * Obtém a versão atual do schema
  */
@@ -365,6 +457,66 @@ export const getSchemaVersion = async (): Promise<number> => {
   }
 };
 
+const INDICES_OBRIGATORIOS = [
+  'CREATE INDEX IF NOT EXISTS idx_reps_status ON reps(status)',
+  'CREATE INDEX IF NOT EXISTS idx_reps_solicitante ON reps(solicitante_id)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_status ON laudos(status)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_rep ON laudos(rep_id)',
+  'CREATE INDEX IF NOT EXISTS idx_imagens_laudo_laudo ON imagens_laudo(laudo_id, sequencia)',
+  'CREATE INDEX IF NOT EXISTS idx_imagens_laudo_caminho ON imagens_laudo(caminho_relativo)',
+  'CREATE INDEX IF NOT EXISTS idx_categorias_placeholders_parent ON categorias_placeholders(parent_id)',
+  'CREATE INDEX IF NOT EXISTS idx_secoes_template_parent ON secoes_template(parent_id)',
+  'CREATE INDEX IF NOT EXISTS idx_secoes_template_template ON secoes_template(template_id)',
+  'CREATE INDEX IF NOT EXISTS idx_templates_tipo_disponivel ON templates(tipo_exame_id, disponivel_novos_laudos)',
+  'CREATE INDEX IF NOT EXISTS idx_respostas_wizard_laudo ON respostas_wizard(laudo_id)',
+  'CREATE INDEX IF NOT EXISTS idx_regras_wizard_wizard ON regras_wizard(wizard_id)',
+  'CREATE INDEX IF NOT EXISTS idx_etapas_wizard_wizard ON etapas_wizard(wizard_id)',
+  'CREATE INDEX IF NOT EXISTS idx_opcoes_etapa_etapa ON opcoes_etapa(etapa_id)',
+  'CREATE INDEX IF NOT EXISTS idx_wizards_tipo_exame ON wizards(tipo_exame_id)',
+  'CREATE INDEX IF NOT EXISTS idx_pecas_categoria_id ON pecas(categoria_id)',
+  'CREATE INDEX IF NOT EXISTS idx_categorias_pecas_parent ON categorias_pecas(parent_id)',
+] as const;
+
+const listarTabelas = async (): Promise<Set<string>> => {
+  const tabelas = await executeQuery<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'");
+  return new Set(tabelas.map(tabela => tabela.name));
+};
+
+const garantirColuna = async (tabela: string, coluna: string, definicao: string): Promise<boolean> => {
+  const colunas = await executeQuery<{ name: string }>(`PRAGMA table_info(${tabela})`);
+  if (colunas.some(item => item.name === coluna)) return false;
+  await executeNonQuery(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${definicao}`);
+  return true;
+};
+
+export const garantirIntegridadeSchema = async (): Promise<ResultadoIntegridadeSchema> => {
+  let tabelas = await listarTabelas();
+  let ausentes = TABELAS_OBRIGATORIAS.filter(tabela => !tabelas.has(tabela));
+  const reparosAplicados: string[] = [];
+
+  if (ausentes.length > 0) {
+    await criarTabelaConfiguracoes();
+    await criarEstruturasComplementares();
+    reparosAplicados.push(...ausentes);
+    tabelas = await listarTabelas();
+    ausentes = TABELAS_OBRIGATORIAS.filter(tabela => !tabelas.has(tabela));
+  }
+
+  if (await garantirColuna('laudos', 'status', "TEXT NOT NULL DEFAULT 'Em andamento'")) {
+    reparosAplicados.push('laudos.status');
+  }
+
+  if (ausentes.length > 0) {
+    throw new Error(`SCHEMA_INCOMPATIVEL: estruturas ausentes: ${ausentes.join(', ')}`);
+  }
+
+  for (const indice of INDICES_OBRIGATORIOS) {
+    await executeNonQuery(indice);
+  }
+
+  return { tabelasVerificadas: [...TABELAS_OBRIGATORIAS], reparosAplicados };
+};
+
 /**
  * Verifica e aplica migrations se necessário
  */
@@ -374,10 +526,7 @@ const checkAndApplyMigrations = async (): Promise<void> => {
   if (currentVersion < CURRENT_SCHEMA_VERSION) {
     log.debug(`Aplicando migrations da versão ${currentVersion} para ${CURRENT_SCHEMA_VERSION}...`);
 
-    // Aqui você pode adicionar lógica de migrations específicas
-    await applyMigrations(currentVersion);
-
-    await setSchemaVersion(CURRENT_SCHEMA_VERSION);
+    await aplicarMigracoesERegistrarVersao(currentVersion);
     log.debug('Migrations aplicadas com sucesso');
   } else {
     log.debug(`Schema está atualizado (versão ${currentVersion})`);
@@ -1979,6 +2128,17 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.debug('Migration v32: suporte a templates integrados criado');
     } catch (error) {
       log.error('Erro ao aplicar migration versão 32', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 33: reparar a tabela de configurações ausente em bancos v32
+  if (fromVersion < 33) {
+    try {
+      await criarTabelaConfiguracoes();
+      log.debug('Migration v33: tabela configuracoes validada');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 33', error);
       throw error;
     }
   }

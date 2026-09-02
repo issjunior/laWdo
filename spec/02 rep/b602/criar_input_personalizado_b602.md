@@ -11,7 +11,7 @@ O B-602 usa o mesmo formulário para criação manual e dados importados do GDL.
 | órgão/unidade | `b602_solicitante_nome` | `b602.solicitante_nome` |
 | metadados da consulta | `MetadadosIntegracaoGdl` | `integracaoGdl` |
 
-`PecaB602` separa identidade local, origem manual/GDL, `codPecaGdl`, alteração local, tipo, campos comuns, personalizados e `extrasGdl`. Campos externos inesperados permanecem em `extrasGdl`; não devem virar campos de domínio sem confirmação explícita.
+`PecaB602` separa identidade local, origem manual/GDL, `codPecaGdl`, alteração local, tipo, campos comuns, personalizados e `extrasGdl`. Campos externos inesperados permanecem em `extrasGdl`; não devem virar campos de domínio sem confirmação explícita. Os metadados também podem registrar `origemSolicitacaoSelecionada` com `tipo`, `numero`, `dataDocumento?` e `iniciais?`; é histórico local da escolha feita na revisão, não uma escrita no GDL.
 
 ## Catálogo e formulário
 
@@ -26,6 +26,8 @@ O editor dinâmico usa `texto`, `select`, `checkbox` exclusivo e `combobox`. `Ma
 O main valida o JSON externo com Zod e `converterRepB602()` resolve o tipo por label/alias normalizado. Somente campos marcados como confirmados no catálogo vão a `personalizados`; os demais permanecem em `extrasGdl`. Selects e checkboxes aceitam código ou label e são convertidos ao código canônico; o combobox conserva o label.
 
 `prepareForApi()` passa peças e metadados ao contexto de serialização; `b602Service` grava o formato canônico. Na leitura, peças passam por validação estrutural mínima e metadados por schema Zod. O nome legado `origensCandidatasSolicitacao` é aceito apenas na leitura e normalizado para `origensDisponiveis`.
+
+Na revisão da consulta, BO, IP e Ofício são origens preferenciais. Caso o GDL forneça origens, mas nenhuma seja preferencial, a pessoa usuária deve selecionar uma candidata antes de aplicar. A revisão também permite optar pelos envolvidos, mas só os índices de 0 a 9 são preenchíveis automaticamente; os demais continuam visíveis e exigem preenchimento manual se necessários.
 
 `mesclarPecasB602DoGdl()` usa `codPecaGdl` para preservar `idLocal`. Mesclar conserva valores locais não vazios e alterações locais; Substituir atualiza correspondências e pode remover peças GDL desmarcadas, sem remover peças manuais. Nenhuma dessas operações escreve no GDL.
 
