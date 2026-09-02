@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, globalShortcut, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, shell, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -551,7 +551,12 @@ app.whenReady().then(async () => {
 
     log.debug('Aplicação Electron inicializada com sucesso');
   } catch (error) {
-    console.error('❌ Erro ao inicializar aplicação:', error);
+    const mensagemTecnica = error instanceof Error ? error.message : 'Erro inesperado';
+    log.error('Erro ao inicializar aplicação', { mensagem: mensagemTecnica });
+    dialog.showErrorBox(
+      'Não foi possível preparar os dados locais',
+      'O laWdo não conseguiu preparar o banco de dados local e será fechado para preservar seus dados. Nenhuma consulta ao GDL foi realizada. Reinicie o aplicativo; se o problema persistir, entre em contato com o suporte e informe o horário da falha.'
+    );
     app.quit();
   }
 });

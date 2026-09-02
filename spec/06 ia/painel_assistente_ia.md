@@ -10,7 +10,7 @@ A mensagem exibida no balão do usuário é sempre o texto original digitado. Pa
 
 A página Modelos de IA persiste o perfil versionado `perfil_resposta_ia` com tom, detalhamento, instruções personalizadas e temperatura de 0 a 1, em passos de 0,1. O serviço inclui pedido do usuário, perfil e temperatura no corpo de cada chamada, mantendo a instrução fixa de segurança acima de conteúdo de documento. Perfil inválido ou ausente usa padrão conservador.
 
-O catálogo classifica cada modelo em `rápido`, `equilibrado` ou `maior precisão`; o seletor agrupa por esse perfil e mostra a disponibilidade recebida na sessão. Modelos `removido` ou `sem_chave` não são enviados. Se a seleção se tornar inválida ou incompatível, a pergunta e o escopo são preservados para cancelar, escolher outro modelo, abrir configurações ou reenviar com a alternativa recomendada.
+O catálogo local classifica cada modelo em `rápido`, `equilibrado` ou `maior precisão`, e o seletor o agrupa por esse perfil para o provedor configurado. A sessão e a janela destacada derivam as opções desse catálogo; não há consulta nem estado de disponibilidade remota por modelo. O main ainda recusa um ID fora do catálogo do provedor ou ausência de configuração. Nessas falhas, a pergunta e o escopo são preservados para cancelar, abrir configurações ou reenviar com outra alternativa local.
 
 ## Consulta, evidências e progresso
 
@@ -36,4 +36,4 @@ O alvo é capturado antes da chamada. Placeholders e valores imutáveis são tok
 
 Descrição de imagem recebe somente IDs e é validada contra `imagens_laudo`. O modo normal devolve texto para cópia; o modo `legenda` é usado pelo Painel de Ilustrações e impõe uma linha técnico-pericial de até 15 palavras. Mudanças devem alinhar tipos shared, preload, canais permitidos, handler, serviço, controlador e ambas as projeções do painel.
 
-Testes cobrem contratos, lotes, consultas e evidências, falhas, comandos remotos, aplicação e layout; múltiplos monitores continuam sendo verificação manual ampla.
+Testes cobrem contratos, lotes, consultas e evidências, falhas, comandos remotos, aplicação e layout; múltiplos monitores continuam sendo verificação manual ampla. No dock, cabeçalho e aviso de revisão permanecem fixos, e somente a lista de mensagens rola; isso é compartilhado com as regras de altura visível dos painéis em `spec/04 layout/componentes_ui_base.md`.

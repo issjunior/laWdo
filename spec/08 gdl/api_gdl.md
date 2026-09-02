@@ -1,5 +1,13 @@
 # Integração atual com a API GDL
 
+## Dependência do banco local
+
+Antes de registrar handlers, sincronizar templates ou iniciar qualquer consulta ao GDL, `setupDatabase()` prepara o SQLite. A tabela `configuracoes` é obrigatória porque guarda URLs e credenciais da integração.
+
+Em instalação nova, o schema-base é criado e as migrations são executadas antes do registro da versão atual. Em atualização, a migration v33 garante `configuracoes` e a verificação de integridade recompõe estruturas complementares e índices ausentes. A versão só é registrada depois que as migrations terminam.
+
+Se ainda faltarem estruturas obrigatórias, a inicialização falha para preservar os dados locais; o processo principal informa o erro e encerra o aplicativo. Nessa condição, nenhum handler nem consulta ao GDL é iniciado.
+
 ## Limite e fluxos
 
 A integração é exclusivamente de leitura no GDL. Há dois consumidores ativos:
@@ -14,6 +22,14 @@ Fotos da REP: Painel de Ilustrações → preload → gdl.handlers
 ```
 
 `gdl.service.ts` controla HTTP, credenciais e leitura do arquivo retornado; o renderer não recebe JSON bruto, credenciais, URL de download, caminho local ou identificadores remotos.
+
+## Importação de REP B-602
+
+`gdl:consultar-rep` normaliza o número informado, consulta somente os endpoints de leitura do GDL e exige uma natureza de exame identificável. No estado atual, somente o código `B-602` pode ser aplicado ao formulário: natureza ausente ou outro código interrompe a importação sem preencher dados locais.
+
+O modal apresenta uma revisão antes da escrita. Ele separa identificação, solicitação e investigação, permite selecionar as peças reconciliadas e no máximo os dez primeiros envolvidos. Quando o GDL retorna origens de solicitação, BO, IP e Ofício têm preferência; se houver origens mas nenhuma delas pertencer a essas famílias, uma delas precisa ser escolhida para habilitar a aplicação.
+
+A escolha é preservada apenas nos metadados locais da integração como `origemSolicitacaoSelecionada` (`tipo`, `numero`, e opcionalmente `dataDocumento` e `iniciais`). Ela não altera o registro nem a situação da REP no GDL. O texto local `observacoes` é apresentado como **Quesito aberto** na REP e na visualização gerada.
 
 ## Lista de Fotos, thumbnails e captura
 

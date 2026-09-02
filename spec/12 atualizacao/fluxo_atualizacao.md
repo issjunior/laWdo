@@ -34,6 +34,8 @@ Mudanças em manifesto, assinatura, canais, nomes de plataforma, arquitetura, fo
 
 O estado canônico da execução é mantido em memória pelo singleton `atualizacaoService`. Persistem em `userData`: `atualizacao-pendente.json`, usado para instalação automática na próxima inicialização; `atualizacao-ultima-verificacao.json`, que guarda `verificadoEm` em ISO 8601; e os pacotes copiados para `atualizacoes`. Esses arquivos são persistência do processo principal, não o `localStorage` do renderer.
 
+Além do percentual legado, a resposta de estado pode conter `progressoDetalhado` com percentual inteiro, etapa e descrição. As etapas válidas são `verificando`, `baixando`, `validando`, `copiando`, `confirmando`, `backup`, `agendando` e `abrindo_instalador`.
+
 ## Estado e concorrência
 
 Os estados públicos são:
@@ -49,6 +51,8 @@ baixada -> aguardando_reinicio
 `verificar` recusa nova operação durante verificação, download ou instalação. `baixar` exige estado `disponivel`; instalação e agendamento exigem `baixada`. O controle é uma máquina de estados em memória, não um mutex geral: a seleção offline define `verificando` diretamente e a proteção contra concorrência também depende de a interface manter apenas uma ação local ativa.
 
 Falhas capturadas pelo serviço normalmente retornam uma resposta com `estado: falhou` e a mensagem em `erro`; o handler pode continuar retornando `success: true` porque a chamada IPC foi concluída. Erros lançados antes do bloco interno são convertidos pelo handler em `success: false`. Consumidores devem observar tanto `success` quanto `data.estado` e `data.erro`.
+
+O serviço publica cada transição de progresso para todas as janelas não destruídas. O preload valida faixa, etapa e descrição antes de repassar `atualizacao:progresso`; o `Header` assina esse evento e combina o valor ao estado já carregado. O evento informa progresso da operação atual, não é log persistente nem mecanismo de retomada.
 
 ## Verificação online
 
@@ -94,6 +98,8 @@ A autorização não salva nem descarta conteúdo: apenas permite ou bloqueia. D
 | Linux/AppImage | exige `APPIMAGE` absoluto; cria script que substitui, torna executável e reabre | suportado |
 | Linux/DEB | abre o pacote pelo sistema para instalação manual | não suportado |
 | macOS/DMG ou ZIP | abre o pacote pelo sistema para instalação manual | não suportado |
+
+No instalador NSIS do Windows, a desinstalação manual oferece uma seção opcional para apagar os dados locais do laWdo, após confirmação explícita. Ela remove diretórios de dados do produto no escopo de instalação, incluindo laudos, imagens, configurações, credenciais, logs e pacotes locais. Atualizações (`isUpdated`) não exibem nem executam essa remoção; o fluxo de atualização preserva dados e continua exigindo o backup prévio normal.
 
 O agendamento grava `atualizacao-pendente.json` por arquivo temporário e renomeação, depois muda para `aguardando_reinicio`. Na abertura seguinte, antes do banco, o registro é normalizado, o pacote controlado é revalidado e o backup é criado. O arquivo de pendência é removido antes de chamar o instalador; se a chamada falhar depois da remoção, não há retry automático. Falhas são registradas e a inicialização normal prossegue.
 

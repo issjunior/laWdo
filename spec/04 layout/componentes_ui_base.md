@@ -19,7 +19,7 @@
 
 O layout do laudo mantém um trilho direito permanente e mostra um único dock integrado por vez. IA usa largura de 360 a 640 px e Ilustrações de 320 a 720 px. `use-largura-painel-persistida.ts` normaliza e persiste a largura em pixels somente após interação; aberto/recolhido não é persistido.
 
-O conteúdo do laudo usa a rolagem da página, enquanto divisor e conteúdo lateral ficam `sticky`, a 1 rem do topo e com altura máxima de `100dvh - 3rem`. A rolagem de coleções internas, como a fila de ilustrações e as mensagens da IA, permanece contida no painel. Isso impede que a expansão do editor limite a viewport do dock, sem criar uma segunda rolagem para o documento.
+O conteúdo do laudo usa a rolagem da página. Cada dock e o trilho ficam `sticky` no topo do conteúdo, mas a altura do painel é recalculada pelo espaço realmente visível abaixo da sua posição, em vez de usar uma altura fixa da viewport. Cabeçalhos, controles e avisos ficam fora da rolagem; somente coleções internas, como a fila de ilustrações e as mensagens da IA, rolam com `overscroll` contido. Isso impede que a expansão do editor limite a viewport do dock, sem criar uma segunda rolagem para o documento.
 
 O editor nunca recebe menos de 560 px. Quando um dock aberto não cabe junto ao editor e ao trilho, `PainelLateralRedimensionavel` calcula `560 + largura mínima do painel + 56` e pede ao controlador que o recolha via `ResizeObserver`. Esse recolhimento é uma proteção responsiva local: não altera a largura persistida, não desmonta o editor e o dock pode ser aberto novamente quando houver espaço.
 

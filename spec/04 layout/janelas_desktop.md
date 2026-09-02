@@ -4,6 +4,8 @@
 
 A janela principal é criada em `src/main/index.ts`. O estado local `janela_principal_estado`, na tabela `configuracoes`, é administrado por `src/main/utils/estado-janela-principal.ts`. Ele é salvo com debounce de 300 ms em mover, redimensionar, maximizar, restaurar e no fechamento. Falha de leitura, JSON inválido ou falha de gravação é registrada e não impede a abertura.
 
+Em Windows e Linux, a janela principal usa `titleBarStyle: hidden` com `titleBarOverlay` de 44 px; macOS conserva o comportamento nativo padrão. O renderer pode solicitar apenas as cores da sobreposição pelo canal `janela:atualizar-barra-titulo`. O main ignora outras plataformas e payloads que não contenham duas cores HSL estritas (`cor` e `corSimbolo`), e atualiza somente a janela remetente. Assim, o renderer não recebe controle direto da janela Electron.
+
 O formato ativo é versão 2:
 
 ```json

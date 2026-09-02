@@ -24,7 +24,9 @@ O laudo combina template, dados da REP e intervenções do usuário. Alteraçõe
 
 ## Status e exclusão
 
-`updateStatus()` aceita `Em andamento`, `Concluido` e `Entregue`, preenche as respectivas datas de conclusão ou entrega e atualiza `updated_at`. A exclusão remove diretório físico, imagens e linha do banco; operações relacionadas não são transacionais. Ao sair do laudo, referências de painel, seleção de imagem e operações de IA da sessão são encerradas ou descartadas.
+`updateStatus()` aceita `Em andamento`, `Concluido` e `Entregue`, preenche as respectivas datas de conclusão ou entrega e atualiza `updated_at`. Antes de pedir conclusão ou entrega, o renderer analisa o HTML: campos reservados visíveis (inclusive `XXX` legado, sem contar atributos, scripts ou estilos) e figuras marcadas com `data-dummy="true"` geram pendências agrupadas por seção. Havendo pendências, a ação pede confirmação explícita; ela não é bloqueada pelo main nem altera o conteúdo automaticamente.
+
+A exclusão remove diretório físico, imagens e linha do banco; operações relacionadas não são transacionais. Ao sair do laudo, referências de painel, seleção de imagem e operações de IA da sessão são encerradas ou descartadas.
 
 ## Limitações e verificação
 

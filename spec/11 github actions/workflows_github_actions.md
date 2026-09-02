@@ -36,7 +36,7 @@ Mudanças em versão do manifesto, serialização canônica, chave, canal, plata
 | Automação | Gatilho | Responsabilidade | Escrita externa |
 |---|---|---|---|
 | CI | `workflow_dispatch`, `pull_request` para `main` e `push` em `main` | validar tipos, lint, cobertura, scripts de release e build | nenhuma |
-| Dependabot Updates | agenda de `.github/dependabot.yml` | abrir PRs de atualização para npm e GitHub Actions | PRs na `main`, gerenciados pelo GitHub |
+| Dependabot Updates | agenda de `.github/dependabot.yml` | abrir PRs mensais conjuntos de atualização para npm e GitHub Actions | PRs na `main`, gerenciados pelo GitHub |
 | Preparar release | `workflow_dispatch` | validar a solicitação, construir pacotes, assinar o manifesto e criar release em rascunho | tag e rascunho no GitHub Releases |
 | Promover release | `workflow_dispatch` | promover, reprocessar ou suspender uma release e implantar o feed assinado | release pública e GitHub Pages |
 
@@ -76,14 +76,15 @@ Limitação atual: `actions/checkout@v7` e `actions/setup-node@v7` são referenc
 
 ## Dependabot Updates
 
-**Dependabot Updates** é uma automação hospedada pelo GitHub, não um quarto arquivo em `.github/workflows/`. `.github/dependabot.yml` define dois ecossistemas, ambos direcionados à `main`, no fuso `America/Sao_Paulo`:
+**Dependabot Updates** é uma automação hospedada pelo GitHub, não um quarto arquivo em `.github/workflows/`. `.github/dependabot.yml` define o grupo multi-ecossistema `atualizacoes-mensais`, direcionado à `main`, no fuso `America/Sao_Paulo`:
 
-| Ecossistema | Agenda | Limite de PRs abertos | Agrupamento |
+| Escopo | Agenda | Limite de PRs abertos | Agrupamento |
 |---|---|---:|---|
-| npm | dia 1 de cada mês, 09:00 | 1 | todas as dependências de versão agrupam `major`/`minor`/`patch`; segurança forma grupo próprio |
-| github-actions | dia 1 de cada mês, 09:30 | 1 | todas as Actions de versão agrupam `major`/`minor`/`patch`; segurança forma grupo próprio |
+| npm + github-actions | dia 1 de cada mês, 09:00 | 1 para o grupo | atualizações de versão entram no mesmo PR multi-ecossistema |
+| segurança npm | conforme o Dependabot | — | grupo `npm-seguranca` |
+| segurança GitHub Actions | conforme o Dependabot | — | grupo `github-actions-seguranca` |
 
-Atualizações major, minor e patch pertencem ao mesmo grupo mensal de cada ecossistema. Os PRs resultantes seguem o mesmo fluxo de revisão e CI dos demais PRs. A configuração não habilita auto-merge nem concede acesso a segredos.
+As atualizações de versão de npm e GitHub Actions pertencem ao mesmo PR mensal. As atualizações de segurança permanecem agrupadas separadamente por ecossistema. Os PRs resultantes seguem o mesmo fluxo de revisão e CI dos demais PRs. A configuração não habilita auto-merge nem concede acesso a segredos.
 
 ## Preparar release
 
