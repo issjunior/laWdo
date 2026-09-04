@@ -6,6 +6,8 @@ import { inflateRawSync } from 'node:zlib';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { app, nativeImage, session } from 'electron';
+import type { Session } from 'electron';
+import { consultarPaginaRepGdl } from './gdl-pagina.service.js';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
@@ -89,11 +91,10 @@ const LIMITE_ENTRADAS_ZIP_GDL = 1000;
 const TEMPO_SESSAO_FOTOS_GDL_MS = 15 * 60 * 1000;
 const EXTENSOES_IMAGEM_GDL = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp']);
 const HOST_GDL_PRODUCAO_COM_CERTIFICADO_EXCEPCIONAL = 'www.gdl.sesp.parana';
-let verificacaoCertificadoGdlConfigurada = false;
+const sessoesComCertificadoConfigurado = new WeakSet<Session>();
 
-function obterSessaoRedeGdl() {
-  const sessaoRede = session.defaultSession;
-  if (verificacaoCertificadoGdlConfigurada) return sessaoRede;
+function obterSessaoRedeGdl(sessaoRede: Session = session.defaultSession) {
+  if (sessoesComCertificadoConfigurado.has(sessaoRede)) return sessaoRede;
 
   sessaoRede.setCertificateVerifyProc((requisicao, callback) => {
     const deveConfiar = requisicao.hostname === HOST_GDL_PRODUCAO_COM_CERTIFICADO_EXCEPCIONAL
@@ -112,7 +113,7 @@ function obterSessaoRedeGdl() {
     });
     callback(0);
   });
-  verificacaoCertificadoGdlConfigurada = true;
+  sessoesComCertificadoConfigurado.add(sessaoRede);
   return sessaoRede;
 }
 
@@ -275,7 +276,7 @@ async function requisitarGdl(
   headers: Record<string, string>,
   body?: string,
   timeout: number = 15000,
-): Promise<{ statusCode: number; data: string }> {
+): Promise<{ statusCode: number; data: string; redirecionado: boolean; paginaAutenticacao: boolean }> {
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
   const temporizador = setTimeout(() => controller.abort(), timeout);
@@ -286,7 +287,12 @@ async function requisitarGdl(
       ...(body ? { body } : {}),
       signal: controller.signal,
     });
-    return { statusCode: resposta.status, data: await resposta.text() };
+    return {
+      statusCode: resposta.status,
+      data: await resposta.text(),
+      redirecionado: resposta.redirected,
+      paginaAutenticacao: /\/(?:Account\/|Login(?:\.aspx)?(?:\/|$))/i.test(new URL(resposta.url || url).pathname),
+    };
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error(`Timeout após ${timeout}ms`);
@@ -315,28 +321,56 @@ export function extrairQuesitoAbertoDaPaginaGdl(conteudo: string): string {
   return correspondencia ? decodificarEntidadesHtml(correspondencia[1]).trim() : '';
 }
 
-async function consultarQuesitoAbertoDaPaginaGdl(
+export function extrairDataEntradaSolicitacaoDaPaginaGdl(conteudo: string): string {
+  const correspondencia = conteudo.match(
+    /<input\b(?=[^>]*(?:id|name)=["'][^"']*txtDateEntry["'])(?=[^>]*\bvalue=["']([^"']*)["'])[^>]*>/i,
+  );
+  const valor = correspondencia ? decodificarEntidadesHtml(correspondencia[1]).trim() : '';
+  const dataIso = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dataIso) return `${dataIso[1]}-${dataIso[2]}-${dataIso[3]}`;
+
+  const dataBrasileira = valor.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s|$)/);
+  return dataBrasileira ? `${dataBrasileira[3]}-${dataBrasileira[2]}-${dataBrasileira[1]}` : '';
+}
+
+interface DadosComplementaresDaPaginaGdl {
+  quesitoAberto: string;
+  dataEntradaSolicitacao: string;
+}
+
+async function consultarDadosComplementaresDaPaginaGdl(
   credenciais: GdlCredenciais,
   codRep: number,
-): Promise<string> {
-  const baseAplicacao = credenciais.baseUrl.replace(/\/api$/i, '');
-  const url = `${baseAplicacao}/REP/Default.aspx?rep_id=${encodeURIComponent(String(codRep))}`;
-  const headers: Record<string, string> = {
-    Authorization: buildAuthHeader(credenciais.login, credenciais.senha),
-    Accept: 'text/html',
-  };
-  if (credenciais.cpfUsuario) headers.cpfUsuario = credenciais.cpfUsuario.replace(/\D/g, '');
-
+): Promise<DadosComplementaresDaPaginaGdl> {
   try {
-    const resposta = await requisitarGdl(url, 'GET', headers, undefined, 15000);
-    if (resposta.statusCode !== 200) return '';
-    return extrairQuesitoAbertoDaPaginaGdl(resposta.data);
+    const resposta = await consultarPaginaRepGdl(credenciais, codRep, obterSessaoRedeGdl);
+    const campoDataPresente = /<input\b[^>]*(?:id|name)=["'][^"']*txtDateEntry["']/i.test(resposta.data);
+    const campoQuesitoPresente = /<textarea\b[^>]*(?:id|name)=["'][^"']*txtOpenQuestion["']/i.test(resposta.data);
+    const dadosPagina = resposta.statusCode === 200 && !resposta.paginaAutenticacao
+      ? {
+        quesitoAberto: extrairQuesitoAbertoDaPaginaGdl(resposta.data),
+        dataEntradaSolicitacao: extrairDataEntradaSolicitacaoDaPaginaGdl(resposta.data),
+      }
+      : { quesitoAberto: '', dataEntradaSolicitacao: '' };
+    if (!dadosPagina.dataEntradaSolicitacao || !campoQuesitoPresente) {
+      log.warn('Leitura complementar da REP GDL incompleta.', {
+        codRep,
+        statusCode: resposta.statusCode,
+        redirecionado: resposta.redirecionado,
+        paginaAutenticacao: resposta.paginaAutenticacao,
+        campoDataPresente,
+        campoQuesitoPresente,
+        dataExtraida: Boolean(dadosPagina.dataEntradaSolicitacao),
+        quesitoExtraido: Boolean(dadosPagina.quesitoAberto),
+      });
+    }
+    return dadosPagina;
   } catch (erro) {
-    log.warn('Não foi possível complementar o Quesito Aberto pela página da REP GDL.', {
+    log.warn('Não foi possível complementar dados da página da REP GDL.', {
       codRep,
       erro: erro instanceof Error ? erro.message : String(erro),
     });
-    return '';
+    return { quesitoAberto: '', dataEntradaSolicitacao: '' };
   }
 }
 
@@ -836,13 +870,17 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
-      const quesitoAberto = parsed.quesitoAberto
-        || await consultarQuesitoAbertoDaPaginaGdl(creds, parsed.codRep);
-      const repComQuesito = quesitoAberto ? { ...parsed, quesitoAberto } : parsed;
-      const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, repComQuesito);
+      const dadosPagina = await consultarDadosComplementaresDaPaginaGdl(creds, parsed.codRep);
+      const quesitoAberto = parsed.quesitoAberto || dadosPagina.quesitoAberto;
+      const repComComplementos = {
+        ...parsed,
+        ...(quesitoAberto ? { quesitoAberto } : {}),
+        dataEntradaSolicitacao: dadosPagina.dataEntradaSolicitacao,
+      };
+      const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, repComComplementos);
       const dadosComEnvolvidos = dadosComplementares.envolvidos.length > 0
-        ? { ...repComQuesito, envolvidos: [...repComQuesito.envolvidos, ...dadosComplementares.envolvidos] }
-        : repComQuesito;
+        ? { ...repComComplementos, envolvidos: [...repComComplementos.envolvidos, ...dadosComplementares.envolvidos] }
+        : repComComplementos;
       registrarValidacaoSessao(ambiente, numero, ano);
       log.debug('REP consultada no GDL com sucesso', {
         numero,

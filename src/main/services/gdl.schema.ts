@@ -113,6 +113,7 @@ const gdlRepSchema = z.preprocess(payload => aplicarAliasesDeCapitalizacao(paylo
   pecas: z.array(gdlPecaSchema).default([]),
   andamentos: z.array(gdlAndamentoSchema).default([]),
   quesitoAberto: textoOpcional,
+  dataEntradaSolicitacao: textoOpcional,
   anexoEletronico: z.union([z.boolean(), z.string(), z.number()]).nullish().transform(valor => valor ?? false),
   tipoAnexoEletronico: z.union([z.string(), z.number()]).nullish().transform(valor => valor == null ? null : String(valor)),
   anexosEletronicos: z.array(gdlArquivoRepSchema).default([]),
