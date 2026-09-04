@@ -14,22 +14,38 @@ A integração é exclusivamente de leitura no GDL. Há dois consumidores ativos
 
 ```text
 Consulta de REP: modal → preload → gdl.handlers → gdl.service
-  → /api/rep/obter → schemas Zod → adaptador B-602 → REPsPage
+  → /api/rep/obter + página web da REP → schemas Zod
+  → adaptador B-602 → REPsPage
 
 Fotos da REP: Painel de Ilustrações → preload → gdl.handlers
   → resolve laudo → REP → gdl.service → Lista de Fotos ZIP
   → thumbnails temporárias ou imagens validadas → fila persistida do laudo
 ```
 
-`gdl.service.ts` controla HTTP, credenciais e leitura do arquivo retornado; o renderer não recebe JSON bruto, credenciais, URL de download, caminho local ou identificadores remotos.
+`gdl.service.ts` controla HTTP, credenciais e leitura dos retornos; o renderer não recebe JSON bruto, credenciais, URL de download, caminho local ou identificadores remotos.
+
+## Consulta complementar da página da REP
+
+Depois de `GET /api/rep/obter`, o main consulta a página da REP pelo identificador `codRep` apenas para completar dados que a API pode não trazer. A sessão web é isolada por ambiente e assinatura das credenciais, aceita somente login e a URL exata da REP, inclui cookies na sessão e aplica timeout de 15 segundos. Falha de login bloqueia novas tentativas por um minuto, mas não altera nem invalida a consulta já feita pela API.
+
+A página é uma fronteira HTML não confiável. O aplicativo extrai e normaliza somente:
+
+| Campo da página | Destino local | Regra |
+|---|---|---|
+| `txtOpenQuestion` | `quesitoAberto` → `observacoes` | O valor da API tem precedência; o texto da página é fallback. |
+| `txtDateEntry` | `dataEntradaSolicitacao` → `data_requisicao` | Aceita início ISO ou `DD/MM/AAAA` e persiste `AAAA-MM-DD`; ausência não é inferida pelo histórico. |
+
+Se a página não retornar a data ou não contiver os campos esperados, a consulta segue com dados parciais, registra aviso técnico e a importação B-602 informa que a Data de recebimento deve ser preenchida manualmente.
 
 ## Importação de REP B-602
 
-`gdl:consultar-rep` normaliza o número informado, consulta somente os endpoints de leitura do GDL e exige uma natureza de exame identificável. No estado atual, somente o código `B-602` pode ser aplicado ao formulário: natureza ausente ou outro código interrompe a importação sem preencher dados locais.
+`gdl:consultar-rep` normaliza o número informado, consulta somente endpoints e página de leitura do GDL e exige uma natureza de exame identificável. No estado atual, somente o código `B-602` pode ser aplicado ao formulário: natureza ausente ou outro código interrompe a importação sem preencher dados locais.
 
 O modal apresenta uma revisão antes da escrita. Ele separa identificação, solicitação e investigação, permite selecionar as peças reconciliadas e no máximo os dez primeiros envolvidos. Quando o GDL retorna origens de solicitação, BO, IP e Ofício têm preferência; se houver origens mas nenhuma delas pertencer a essas famílias, uma delas precisa ser escolhida para habilitar a aplicação.
 
-A escolha é preservada apenas nos metadados locais da integração como `origemSolicitacaoSelecionada` (`tipo`, `numero`, e opcionalmente `dataDocumento` e `iniciais`). Ela não altera o registro nem a situação da REP no GDL. O texto local `observacoes` é apresentado como **Quesito aberto** na REP e na visualização gerada.
+A escolha é preservada apenas nos metadados locais da integração como `origemSolicitacaoSelecionada` (`tipo`, `numero`, e opcionalmente `dataDocumento` e `iniciais`). `quesitoAberto` vira a observação local da REP. A data de entrada preenche `data_requisicao`, inclusive a data de recebimento exibida na REP. Nenhum desses dados altera o registro nem a situação da REP no GDL.
+
+O histórico `andamentos` também é lido, mas não substitui a Data de Entrada/Solicitação. Para novas importações, o normalizador procura a descrição exatamente normalizada `Status alterado para Laudo em Execução`, ignorando diferenças de caixa, acento e espaços; datas inválidas são descartadas e a ocorrência cronologicamente mais recente é salva somente como `integracaoGdl.dataExecucaoLaudo`. Esse metadado é destinado ao placeholder por extenso e não modifica `data_requisicao`. REPs existentes não são reconsultadas nem migradas.
 
 ## Lista de Fotos, thumbnails e captura
 
@@ -41,4 +57,6 @@ A captura rebaixa e revalida a lista, deduplica IDs e extrai somente itens selec
 
 ## Fronteira externa e verificação
 
-A API não é alterada pelo aplicativo. 401/403, 404 e respostas inesperadas recebem mensagens específicas; falhas de captura são isoladas por item. A listagem/captura de imagens é coberta no renderer pelo modal; a rede real continua dependente de homologação controlada.
+A API e a página do GDL não são alteradas pelo aplicativo. 401/403, 404 e respostas inesperadas recebem mensagens específicas; falhas de captura são isoladas por item. A listagem/captura de imagens é coberta no renderer pelo modal; a rede real continua dependente de homologação controlada.
+
+Os testes do normalizador cobrem Data de Entrada/Solicitação, Quesito Aberto, seleção do último andamento de execução, normalização da descrição e descarte de data inválida. A autenticação web, o HTML real e a disponibilidade de produção continuam dependentes do GDL.

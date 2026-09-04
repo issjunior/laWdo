@@ -6,6 +6,12 @@
 
 `construirMapaPlaceholdersResolvidos()` expõe, por chave, valor, preenchimento e formato (`texto`, `html` estrutural ou `html-inline`). O resumo de lacres de saída B-602 é um valor inline: armas são referenciadas individualmente por letra, estojos são agrupados, e cada lacre ausente gera `XXX` reservado. Editor e exportação devem consumir esse mesmo mapa; não duplicar a resolução em componentes.
 
+### Datas da REP importada do GDL
+
+`data_recebimento_rep` sempre formata `rep.data_requisicao`, que representa a Data de Entrada/Solicitação importada ou informada manualmente. Somente `data_extenso_recebimento_rep` tem uma fonte alternativa: quando `campos_especificos` contém `integracaoGdl.dataExecucaoLaudo` como texto não vazio, ela formata essa data por extenso; caso contrário, usa `data_requisicao`.
+
+A leitura do JSON é defensiva: JSON inválido, estrutura ausente ou valor não textual não interrompem a exportação e ativam o fallback. O metadado é criado apenas em novas importações GDL quando existe andamento válido de execução; exportar não consulta nem altera o GDL e REPs anteriores continuam no fallback.
+
 ## Estrutura canônica de exportação
 
 `parseHtmlParaEstrutura()` converte o HTML já resolvido em `DocumentoExportacao` (`versao: 1`). Parágrafos carregam estilos, alinhamento, espaçamentos e `recuoPrimeiraLinhaPt`; uma quebra de página é o bloco `{ tipo: 'quebra-pagina' }`.
@@ -27,9 +33,10 @@ PDF e preview aplicam `break-after: page` e `page-break-after: always` ao marcad
 - O HTML persistido mantém as chaves canônicas; valores resolvidos e prévias não devem ser gravados.
 - O valor de HTML vem exclusivamente do resolvedor, nunca de atributo ou DOM do editor.
 - Dados desconhecidos do GDL não se tornam placeholders automaticamente.
+- A data de execução GDL afeta somente `data_extenso_recebimento_rep`; não altera a data de recebimento, a REP persistida fora do metadado nem o GDL.
 - Ausência de peça ou de valor não interrompe a exportação.
 - Recuo e quebra de página devem atravessar parser e conversores sem se degradar em texto ou HTML comum.
 
 ## Verificação
 
-`exportacao-parser.test.ts` cobre `text-indent`, o comentário legado e a ordem do bloco de quebra. `exportacao-docx-canonica.test.ts` inspeciona o XML do pacote para `w:firstLine` e `w:type="page"`, além da conversão ODT quando o LibreOffice está disponível. Os testes de exportação também cobrem placeholders B-602, tabelas, valores ausentes, blocos suprimidos e preenchimento de blocos periciais vazios.
+`exportacao-parser.test.ts` cobre `text-indent`, o comentário legado e a ordem do bloco de quebra. `exportacao-docx-canonica.test.ts` inspeciona o XML do pacote para `w:firstLine` e `w:type="page"`, além da conversão ODT quando o LibreOffice está disponível. Os testes de exportação também cobrem placeholders B-602, tabelas, valores ausentes, blocos suprimidos, preenchimento de blocos periciais vazios e o fallback/precedência de `data_extenso_recebimento_rep`.

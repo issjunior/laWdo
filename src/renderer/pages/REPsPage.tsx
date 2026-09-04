@@ -102,10 +102,23 @@ interface TipoExameResumo extends RegistroNome {
   codigo: string;
 }
 
-type TemplateResumo = RegistroNome;
+interface TemplateResumo extends RegistroNome {
+  chave_integrada?: string | null;
+}
 type LaudoResumo = { rep_id: string };
 type RegistroRep = REP & Record<string, ValorDesconhecido>;
 type CampoRep = Path<REPFormData>;
+
+const CODIGO_EXAME_B602 = 'B-602';
+const CHAVE_TEMPLATE_PADRAO_B602 = 'laudo-padrao-b602';
+const NOME_TEMPLATE_PADRAO_B602 = 'Laudo Padrão B-602';
+
+function obterTemplatePadraoB602(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
+  if (codigoExame !== CODIGO_EXAME_B602) return undefined;
+
+  return templates.find(template => template.chave_integrada === CHAVE_TEMPLATE_PADRAO_B602)
+    ?? templates.find(template => template.nome === NOME_TEMPLATE_PADRAO_B602);
+}
 
 function ehRegistro(valor: unknown): valor is Record<string, unknown> {
   return typeof valor === 'object' && valor !== null
@@ -784,11 +797,14 @@ export const REPsPage: React.FC = () => {
       if (r.success && r.data) {
         const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
         setTemplatesVinculados(ordenados);
+        const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
+        const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+        if (templatePadrao) form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
       } else {
         setTemplatesVinculados([]);
       }
     })();
-  }, [form, tipoExameId, showForm]);
+  }, [form, tipoExameId, showForm, tiposExame]);
 
 
 
@@ -1071,10 +1087,13 @@ export const REPsPage: React.FC = () => {
         if (r.success && r.data) {
           const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           setCriarLaudoTemplates(ordenados);
+          const codigoExame = tiposExame.find(tipo => tipo.id === rep.tipo_exame_id)?.codigo;
+          const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+          if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
         }
       })();
     }
-  }, []);
+  }, [tiposExame]);
 
   const handleCriarLaudoConfirmar = async () => {
     if (!criarLaudoRep || !criarLaudoTemplateId) return;
@@ -1119,6 +1138,9 @@ export const REPsPage: React.FC = () => {
     if (r.success && r.data) {
       const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       setCriarLaudoTemplates(ordenados);
+      const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
+      const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+      if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
     } else {
       setCriarLaudoTemplates([]);
     }

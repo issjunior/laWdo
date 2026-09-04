@@ -27,6 +27,7 @@ const dadosInvestigacaoGdlSchema = z.object({
 
 const metadadosIntegracaoGdlSchema = z.object({
   origemInicial: z.enum(['manual', 'gdl']),
+  dataExecucaoLaudo: z.string().optional(),
   origemSolicitacaoSelecionada: referenciaOrigemGdlSchema.optional(),
   dadosSolicitacao: dadosSolicitacaoGdlSchema.optional(),
   dadosInvestigacao: dadosInvestigacaoGdlSchema.optional(),

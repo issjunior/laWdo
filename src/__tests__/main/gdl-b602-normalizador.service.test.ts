@@ -89,8 +89,15 @@ describe('contrato GDL B602', () => {
     expect(() => validarGdlRep({ numero: 190, ano: 2026, pecas: 'inválido' })).toThrow()
   })
 
-  it('normaliza a fixture autorizada de Produção sem dados de autenticação ou sessão', () => {
-    const resultado = converterRepB602(validarGdlRep(fixtureProducao))
+  it('usa o último andamento de execução do laudo no metadado da importação', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixtureProducao,
+      dataEntradaSolicitacao: '2026-08-23',
+      andamentos: [
+        { dataHora: '2026-08-22T08:00:00', descricao: 'Status alterado para Laudo em Execução' },
+        { dataHora: '2026-08-25T09:30:00', descricao: '  STATUS ALTERADO PARA LAUDO EM EXECUCAO  ' },
+      ],
+    }), { origemInicial: 'gdl' })
 
     expect(resultado.camposGerais).toMatchObject({
       numero: '109026-2026',
@@ -100,11 +107,36 @@ describe('contrato GDL B602', () => {
       observacoes: 'REP DE TESTE PARA O SISTEMA LAWDO',
       b602_local_cidade: 'TELÊMACO BORBA',
       b602_solicitante_nome: '18. SUBDIVISAO POLICIAL - DELEGACIA',
-      data_requisicao: '2026-08-22',
+      data_requisicao: '2026-08-23',
+    })
+    expect(resultado.metadadosIntegracaoGdl).toMatchObject({
+      dataExecucaoLaudo: '2026-08-25',
     })
     expect(resultado.camposEspecificos.pecas).toEqual([
       expect.objectContaining({ tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }),
     ])
+  })
+
+  it('deixa a data de recebimento vazia e avisa quando a página não a retorna', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixtureProducao,
+      dataEntradaSolicitacao: '',
+      andamentos: [{ dataHora: '2026-08-22T08:00:00', descricao: 'REP aberta' }],
+    }))
+
+    expect(resultado.camposGerais.data_requisicao).toBe('')
+    expect(resultado.avisos).toContainEqual(expect.objectContaining({
+      codigo: 'DATA_ENTRADA_SOLICITACAO_NAO_RETORNADA',
+    }))
+  })
+
+  it('ignora andamento de execução sem data válida', () => {
+    const resultado = converterRepB602(validarGdlRep({
+      ...fixtureProducao,
+      andamentos: [{ dataHora: '2026-02-30T10:00:00', descricao: 'Status alterado para Laudo em Execução' }],
+    }), { origemInicial: 'gdl' })
+
+    expect(resultado.metadadosIntegracaoGdl).not.toHaveProperty('dataExecucaoLaudo')
   })
 
   it('preserva o formato existente do número quando a origem não informa iniciais ou data', () => {

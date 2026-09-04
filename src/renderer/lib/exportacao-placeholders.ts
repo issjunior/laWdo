@@ -58,6 +58,19 @@ interface RepExportacaoData {
   campos_especificos?: string;
 }
 
+function extrairDataExecucaoLaudo(camposEspecificos: string | undefined): string | undefined {
+  if (!camposEspecificos) return undefined;
+
+  try {
+    const conteudo: unknown = JSON.parse(camposEspecificos);
+    if (!isRecord(conteudo) || !isRecord(conteudo.integracaoGdl)) return undefined;
+    const data = conteudo.integracaoGdl.dataExecucaoLaudo;
+    return typeof data === 'string' && data.trim() ? data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 interface PeritoSessaoData {
   nome?: string;
   cargo?: string;
@@ -161,6 +174,8 @@ function criarResumoLacresSaidaB602(
 export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string> {
   const repData = ctx.repData;
   const perito = lerPeritoSessao();
+  const dataExtensoRecebimentoRep = extrairDataExecucaoLaudo(repData.campos_especificos)
+    || repData.data_requisicao;
 
   const mapping: Record<string, string> = {
     'rep_numero': repData.numero || '',
@@ -214,7 +229,7 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
     'perito_matricula': perito?.matricula || '',
 
     'data_atual': new Date().toLocaleDateString('pt-BR'),
-    'data_extenso_recebimento_rep': formatarDataExtenso(repData.data_requisicao),
+    'data_extenso_recebimento_rep': formatarDataExtenso(dataExtensoRecebimentoRep),
   };
 
   if (repData.campos_especificos) {

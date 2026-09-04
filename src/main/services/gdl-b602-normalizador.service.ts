@@ -21,6 +21,37 @@ function normalizarChave(valor: string): string {
   return valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
 }
 
+const DESCRICAO_STATUS_LAUDO_EM_EXECUCAO = 'status alterado para laudo em execucao'
+
+function normalizarDescricaoAndamento(valor: string): string {
+  return normalizarChave(valor).replace(/\s+/g, ' ')
+}
+
+function extrairDataExecucaoLaudo(rep: GdlRepValidada): string | undefined {
+  const andamentosValidos = rep.andamentos.flatMap(andamento => {
+    if (normalizarDescricaoAndamento(andamento.descricao) !== DESCRICAO_STATUS_LAUDO_EM_EXECUCAO) return []
+
+    const textoDataHora = andamento.dataHora.trim()
+    const correspondencia = textoDataHora.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s)/)
+    const instante = Date.parse(textoDataHora)
+    if (!correspondencia || Number.isNaN(instante)) return []
+
+    const [, ano, mes, dia] = correspondencia
+    const data = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)))
+    if (
+      data.getUTCFullYear() !== Number(ano)
+      || data.getUTCMonth() !== Number(mes) - 1
+      || data.getUTCDate() !== Number(dia)
+    ) return []
+
+    return [{ instante, data: `${ano}-${mes}-${dia}` }]
+  })
+
+  return andamentosValidos
+    .sort((primeiro, segundo) => segundo.instante - primeiro.instante)[0]
+    ?.data
+}
+
 function normalizarNomeCampo(valor: string): string {
   return normalizarChave(valor).replace(/[^a-z0-9]/g, '')
 }
@@ -369,6 +400,7 @@ export function converterRepB602(
   const desconhecidas = pecas.filter(peca => !peca.tipoCodigo)
   const dadosSolicitacao = extrairDadosSolicitacao(rep)
   const dadosInvestigacao = extrairDadosInvestigacao(rep)
+  const dataExecucaoLaudo = extrairDataExecucaoLaudo(rep)
   const { envolvidos, boletinsOcorrencia, inqueritosPoliciais } = dadosInvestigacao
   const origemInicial = selecionarOrigemInicial(dadosSolicitacao.origensDisponiveis)
   return {
@@ -391,13 +423,22 @@ export function converterRepB602(
         ]
       })),
       autoridade_solicitante: dadosSolicitacao.autoridade,
-      data_requisicao: rep.andamentos[0]?.dataHora?.split('T')[0] ?? '',
+      data_requisicao: rep.dataEntradaSolicitacao,
     },
     camposEspecificos: { pecas, dadosSolicitacao, dadosInvestigacao },
     metadadosIntegracaoGdl: metadadosIntegracaoGdl
-      ? { ...metadadosIntegracaoGdl, dadosSolicitacao, dadosInvestigacao }
+      ? {
+        ...metadadosIntegracaoGdl,
+        ...(dataExecucaoLaudo ? { dataExecucaoLaudo } : {}),
+        dadosSolicitacao,
+        dadosInvestigacao,
+      }
       : undefined,
     avisos: [
+      ...(!rep.dataEntradaSolicitacao ? [{
+        codigo: 'DATA_ENTRADA_SOLICITACAO_NAO_RETORNADA',
+        mensagem: 'A Data de Entrada/Solicitação não foi retornada pela página da REP no GDL; preencha a Data de recebimento manualmente.',
+      }] : []),
       ...(quantidadeFuncionamentosPreenchidos > 0 ? [{
         codigo: 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',
         mensagem: 'O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.',
