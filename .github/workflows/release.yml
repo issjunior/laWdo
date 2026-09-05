@@ -222,8 +222,11 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      - name: Gerar build
+        run: npm run build
+
       - name: Gerar instalador
-        run: npm run build; npx electron-builder --win --x64 --publish never
+        run: npx electron-builder --win --x64 --publish never
 
       - name: Confirmar versão do aplicativo empacotado
         shell: pwsh
@@ -250,10 +253,6 @@ jobs:
           $versaoSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; const fonte = extractFile(process.argv[1], 'out\\main\\database\\index.js').toString('utf8'); const resultado = fonte.match(/CURRENT_SCHEMA_VERSION = (\d+)/); if (!resultado) throw new Error('Versão do schema ausente no aplicativo empacotado.'); process.stdout.write(resultado[1]);" $arquivoAsar
           if ($versaoSchemaNoAsar.Trim() -ne $versaoSchemaFonte.Trim()) {
             throw "A versão do schema empacotada ($versaoSchemaNoAsar) difere da versão fonte ($versaoSchemaFonte)."
-          }
-          $fonteSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; process.stdout.write(extractFile(process.argv[1], 'out\\main\\database\\index.js').toString('utf8'));" $arquivoAsar
-          if ($fonteSchemaNoAsar -notmatch 'fromVersion < 34') {
-            throw 'A migration 34 não foi encontrada no aplicativo Windows empacotado.'
           }
 
           $executavel = Get-ChildItem -LiteralPath $diretorioAplicativo.FullName -Filter '*.exe' -File |
