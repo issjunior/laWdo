@@ -247,22 +247,22 @@ jobs:
           }
 
           $versaoSchemaFonte = node scripts/release/versao-schema.mjs
-          $versaoSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; const fonte = extractFile(process.argv[1], 'out/main/database/index.js').toString('utf8'); const resultado = fonte.match(/CURRENT_SCHEMA_VERSION = (\\d+)/); if (!resultado) throw new Error('Versão do schema ausente no aplicativo empacotado.'); process.stdout.write(resultado[1]);" $arquivoAsar
+          $versaoSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; const fonte = extractFile(process.argv[1], 'out\\main\\database\\index.js').toString('utf8'); const resultado = fonte.match(/CURRENT_SCHEMA_VERSION = (\\d+)/); if (!resultado) throw new Error('Versão do schema ausente no aplicativo empacotado.'); process.stdout.write(resultado[1]);" $arquivoAsar
           if ($versaoSchemaNoAsar.Trim() -ne $versaoSchemaFonte.Trim()) {
             throw "A versão do schema empacotada ($versaoSchemaNoAsar) difere da versão fonte ($versaoSchemaFonte)."
           }
-          $fonteSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; process.stdout.write(extractFile(process.argv[1], 'out/main/database/index.js').toString('utf8'));" $arquivoAsar
+          $fonteSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; process.stdout.write(extractFile(process.argv[1], 'out\\main\\database\\index.js').toString('utf8'));" $arquivoAsar
           if ($fonteSchemaNoAsar -notmatch 'fromVersion < 34') {
             throw 'A migration 34 não foi encontrada no aplicativo Windows empacotado.'
           }
-
-          node scripts/release/executar-smoke-schema.mjs --executavel $executavel.FullName
 
           $executavel = Get-ChildItem -LiteralPath $diretorioAplicativo.FullName -Filter '*.exe' -File |
             Select-Object -First 1
           if ($null -eq $executavel) {
             throw 'Executável principal não foi produzido no aplicativo Windows empacotado.'
           }
+          node scripts/release/executar-smoke-schema.mjs --executavel $executavel.FullName
+
           $versaoProduto = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($executavel.FullName).ProductVersion
           $padraoVersao = '^' + [regex]::Escape($env:VERSAO) + '(?:\.0)?$'
           if ($versaoProduto -notmatch $padraoVersao) {
@@ -300,7 +300,20 @@ jobs:
         run: npm ci
 
       - name: Gerar pacotes
-        run: npm run build && npx electron-builder --linux --x64 --publish never
+        shell: bash
+        run: |
+          npm run build
+          for tentativa in 1 2 3; do
+            if npx electron-builder --linux --x64 --publish never; then
+              exit 0
+            fi
+            if [ "$tentativa" -eq 3 ]; then
+              exit 1
+            fi
+            echo "::warning::Falha transitória ao reconstruir dependências nativas; nova tentativa em $((tentativa * 15)) segundos."
+            rm -rf dist
+            sleep $((tentativa * 15))
+          done
 
       - name: Enviar artefatos temporários
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
