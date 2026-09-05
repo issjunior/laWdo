@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+const require = createRequire(import.meta.url);
 
 function argumento(nome) {
   const indice = process.argv.indexOf(nome);
@@ -31,7 +34,7 @@ const diretorioTemporario = await mkdtemp(join(tmpdir(), 'lawdo-smoke-schema-'))
 const caminhoRelatorio = join(diretorioTemporario, 'resultado.json');
 
 try {
-  const comando = executavel ? resolve(executavel) : resolve('node_modules/electron/dist/electron.exe');
+  const comando = executavel ? resolve(executavel) : require('electron');
   const argumentos = executavel ? [] : ['.'];
   const codigo = await executar(comando, argumentos, {
     ...process.env,
