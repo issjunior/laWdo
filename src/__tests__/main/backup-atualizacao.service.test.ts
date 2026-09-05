@@ -5,12 +5,12 @@ import sqlite3 from 'sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BackupAtualizacaoService } from '../../main/services/backup-atualizacao.service';
 
-const executeNonQueryMock = vi.fn().mockResolvedValue(undefined);
+const criarBackupConsistenteMock = vi.fn();
 const getSchemaVersionMock = vi.fn().mockResolvedValue(30);
 const diretoriosCriados: string[] = [];
 
 vi.mock('../../main/database/sqlite.js', () => ({
-  executeNonQuery: (...args: unknown[]) => executeNonQueryMock(...args),
+  criarBackupConsistente: (...args: unknown[]) => criarBackupConsistenteMock(...args),
 }));
 
 vi.mock('../../main/database/index.js', () => ({
@@ -33,7 +33,7 @@ function criarBanco(caminho: string): Promise<void> {
 }
 
 afterEach(() => {
-  executeNonQueryMock.mockClear();
+  criarBackupConsistenteMock.mockClear();
   getSchemaVersionMock.mockClear();
   for (const diretorio of diretoriosCriados.splice(0)) fs.rmSync(diretorio, { recursive: true, force: true });
 });
@@ -43,12 +43,15 @@ describe('BackupAtualizacaoService', () => {
     const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-backup-atualizacao-'));
     diretoriosCriados.push(diretorio);
     await criarBanco(path.join(diretorio, 'laudopericial.db'));
+    criarBackupConsistenteMock.mockImplementation(async (destino: string) => {
+      fs.copyFileSync(path.join(diretorio, 'laudopericial.db'), destino);
+    });
     const service = new BackupAtualizacaoService(diretorio, '0.1.1');
 
     const resultado = await service.criarSnapshot('0.1.2');
     const manifesto = JSON.parse(fs.readFileSync(resultado.caminhoManifesto, 'utf8')) as Record<string, unknown>;
 
-    expect(executeNonQueryMock).toHaveBeenCalledWith('PRAGMA wal_checkpoint(FULL)');
+    expect(criarBackupConsistenteMock).toHaveBeenCalledWith(resultado.caminhoBanco);
     expect(fs.existsSync(resultado.caminhoBanco)).toBe(true);
     expect(manifesto).toMatchObject({ versaoOrigem: '0.1.1', versaoDestino: '0.1.2', versaoSchema: 30 });
     expect(typeof manifesto.hashSha256Banco).toBe('string');
@@ -61,6 +64,9 @@ describe('BackupAtualizacaoService', () => {
     const caminhoImagem = path.join(diretorio, 'imagens', 'laudos', 'laudo-1', 'foto.png');
     fs.mkdirSync(path.dirname(caminhoImagem), { recursive: true });
     fs.writeFileSync(caminhoImagem, 'imagem de teste');
+    criarBackupConsistenteMock.mockImplementation(async (destino: string) => {
+      fs.copyFileSync(path.join(diretorio, 'laudopericial.db'), destino);
+    });
     const service = new BackupAtualizacaoService(diretorio, '0.1.1');
 
     const resultado = await service.criarBackupCompleto('0.1.2');

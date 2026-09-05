@@ -880,6 +880,7 @@ export const REPsPage: React.FC = () => {
     setEditingRep(null);
     setError(null);
     setSuccess(null);
+    setMostrarPlaceholders(false);
     setTemplatesVinculados([]);
     setCamposPreenchidosGdl(new Set());
     setOrigensSolicitacaoGdl([]);
@@ -891,9 +892,21 @@ export const REPsPage: React.FC = () => {
     document.body.style.pointerEvents = '';
   };
 
+  const handleConsultarGdl = () => {
+    handleNovo();
+    setGdlModalOpen(true);
+  };
+
+  const handleIdentificarPlaceholders = () => {
+    handleNovo();
+    setMostrarPlaceholders(true);
+  };
+
   const handleCancelar = () => {
     setShowForm(false);
     setEditingRep(null);
+    setMostrarPlaceholders(false);
+    setGdlModalOpen(false);
     form.reset(emptyForm());
     setTemplatesVinculados([]);
     setCamposPreenchidosGdl(new Set());
@@ -1381,6 +1394,20 @@ export const REPsPage: React.FC = () => {
         novosPreenchidos.add(key);
       }
     }
+
+    if (!form.getValues('template_id')) {
+      const respostaTemplates = await window.ipcAPI.template.findByTipoExame(tipoExameGdl.id);
+      if (respostaTemplates.success && respostaTemplates.data) {
+        const templates = [...(respostaTemplates.data as TemplateResumo[])]
+          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        const templatePadrao = obterTemplatePadraoB602(codigoExameGdl, templates);
+        if (templatePadrao) {
+          setTemplatesVinculados(templates);
+          form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
+        }
+      }
+    }
+
     await form.trigger(['tipo_solicitacao', 'b602_numero_bo', 'b602_numero_ip']);
 
     setPecasB602(atuais => mesclarPecasB602DoGdl(
@@ -1541,15 +1568,44 @@ export const REPsPage: React.FC = () => {
             <h1 className="text-2xl md:text-3xl font-bold">Requisições (REPs)</h1>
             <p className="text-muted-foreground mt-1">Gerencie as requisições de exame pericial</p>
           </div>
-          <Button onClick={handleNovo} className="flex items-center gap-2 w-full sm:w-auto"><Plus size={16} /> Nova REP</Button>
         </div>
 
         {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
 
         <Card>
           <CardHeader>
-            <CardTitle>Lista de REPs</CardTitle>
-            <CardDescription>{repsFiltradasDashboard.length} registro(s)</CardDescription>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <CardTitle>Lista de REPs</CardTitle>
+                <CardDescription>{repsFiltradasDashboard.length} registro(s)</CardDescription>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  onClick={handleNovo}
+                  className="flex w-full items-center gap-2 sm:w-auto"
+                >
+                  <Plus size={16} />
+                  Nova REP
+                </Button>
+                <Button
+                  onClick={handleConsultarGdl}
+                  className="flex w-full items-center gap-2 bg-sky-600 text-white hover:bg-sky-700 dark:bg-sky-700 dark:hover:bg-sky-600 sm:w-auto"
+                  title="Consultar e importar dados de REP do GDL"
+                >
+                  <Network size={16} />
+                  Importar do GDL
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleIdentificarPlaceholders}
+                  className="flex w-full items-center gap-2 sm:w-auto"
+                  title="Exibir o placeholder correspondente a cada campo da REP"
+                >
+                  <Eye size={16} />
+                  Identificar placeholders
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {filtroDashboard.size > 0 && <div className="mb-4 flex items-center justify-between rounded-md border border-primary/20 bg-accent/60 p-3 text-sm"><span>Filtro aplicado pelo dashboard.</span><Button variant="outline" size="sm" onClick={() => navigate('/reps')}>Limpar filtro</Button></div>}

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
 import { setupDatabase } from './database/index.js';
-import { closeDatabase } from './database/sqlite.js';
+import { closeDatabase, executeQuery } from './database/sqlite.js';
 import { getLogger, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
 import { atualizacaoService } from './services/atualizacao.service.js';
@@ -22,6 +22,8 @@ import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAc
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const log = getLogger('sistema');
+const modoSmokeSchema = process.env.LAWDO_SMOKE_SCHEMA === '1';
+const caminhoRelatorioSmoke = process.env.LAWDO_SMOKE_SAIDA;
 const caminhoIcone = app.isPackaged
   ? path.join(process.resourcesPath, 'assets/icon.ico')
   : path.join(__dirname, '../../src/renderer/assets/icon.ico');
@@ -513,6 +515,29 @@ app.whenReady().then(async () => {
     setupSecurity();
     if (await atualizacaoService.processarPendenciaInicializacao()) return;
     await setupDatabase();
+    if (modoSmokeSchema) {
+      const [versao] = await executeQuery<{ version: number }>('SELECT MAX(version) AS version FROM schema_version');
+      const colunasLaudos = await executeQuery<{ name: string }>('PRAGMA table_info(laudos)');
+      const colunasLogs = await executeQuery<{ name: string }>('PRAGMA table_info(logs_auditoria)');
+      const templateB602 = await executeQuery<{ id: string }>(
+        "SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' LIMIT 1",
+      );
+      const resultado = {
+        sucesso: versao?.version === 34
+          && colunasLaudos.some(coluna => coluna.name === 'tipo_criacao')
+          && colunasLogs.some(coluna => coluna.name === 'modulo')
+          && templateB602.length === 1,
+        versaoSchema: versao?.version ?? 0,
+      };
+      if (caminhoRelatorioSmoke) {
+        await mkdir(path.dirname(caminhoRelatorioSmoke), { recursive: true });
+        await writeFile(caminhoRelatorioSmoke, JSON.stringify(resultado), 'utf8');
+      }
+      if (!resultado.sucesso) throw new Error('SMOKE_SCHEMA_FALHOU');
+      await closeDatabase();
+      app.exit(0);
+      return;
+    }
     setupLogging();
     await iniciarDiagnosticoAssistido();
 
@@ -552,11 +577,50 @@ app.whenReady().then(async () => {
     log.debug('Aplicação Electron inicializada com sucesso');
   } catch (error) {
     const mensagemTecnica = error instanceof Error ? error.message : 'Erro inesperado';
+    if (modoSmokeSchema) {
+      if (caminhoRelatorioSmoke) {
+        await mkdir(path.dirname(caminhoRelatorioSmoke), { recursive: true });
+        await writeFile(caminhoRelatorioSmoke, JSON.stringify({ sucesso: false, erro: mensagemTecnica }), 'utf8');
+      }
+      app.exit(1);
+      return;
+    }
+    const codigoRecuperacao = mensagemTecnica.startsWith('SCHEMA_FUTURO_INCOMPATIVEL')
+      ? 'SCHEMA_FUTURO_INCOMPATIVEL'
+      : mensagemTecnica.startsWith('SCHEMA_INCOMPATIVEL')
+        ? 'SCHEMA_INCOMPATIVEL'
+        : 'PREPARACAO_DADOS_FALHOU';
+    const diretorioRecuperacao = path.join(app.getPath('userData'), 'recuperacao');
+    const caminhoDiagnostico = path.join(diretorioRecuperacao, `inicializacao_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+    try {
+      await mkdir(diretorioRecuperacao, { recursive: true });
+      await writeFile(caminhoDiagnostico, JSON.stringify({
+        codigo: codigoRecuperacao,
+        criadoEm: new Date().toISOString(),
+        versaoAplicativo: app.getVersion(),
+        erro: mensagemTecnica,
+      }, null, 2), 'utf8');
+    } catch (erroDiagnostico) {
+      log.warn('Não foi possível gravar o diagnóstico de recuperação.', {
+        erro: erroDiagnostico instanceof Error ? erroDiagnostico.message : 'Erro inesperado',
+      });
+    }
     log.error('Erro ao inicializar aplicação', { mensagem: mensagemTecnica });
-    dialog.showErrorBox(
-      'Não foi possível preparar os dados locais',
-      'O laWdo não conseguiu preparar o banco de dados local e será fechado para preservar seus dados. Nenhuma consulta ao GDL foi realizada. Reinicie o aplicativo; se o problema persistir, entre em contato com o suporte e informe o horário da falha.'
-    );
+    const resposta = await dialog.showMessageBox({
+      type: 'error',
+      buttons: ['Tentar novamente', 'Abrir pasta de recuperação', 'Fechar'],
+      defaultId: 2,
+      cancelId: 2,
+      title: 'Não foi possível preparar os dados locais',
+      message: 'Seus dados foram preservados e nenhuma consulta ao GDL foi realizada.',
+      detail: `Código de suporte: ${codigoRecuperacao}. Reinicie o aplicativo. Se a falha persistir, envie o diagnóstico criado ao suporte; não substitua o banco manualmente.`,
+    });
+    if (resposta.response === 0) {
+      app.relaunch();
+      app.exit(0);
+      return;
+    }
+    if (resposta.response === 1) await shell.openPath(diretorioRecuperacao);
     app.quit();
   }
 });
