@@ -247,7 +247,7 @@ jobs:
           }
 
           $versaoSchemaFonte = node scripts/release/versao-schema.mjs
-          $versaoSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; const fonte = extractFile(process.argv[1], 'out\\main\\database\\index.js').toString('utf8'); const resultado = fonte.match(/CURRENT_SCHEMA_VERSION = (\\d+)/); if (!resultado) throw new Error('Versão do schema ausente no aplicativo empacotado.'); process.stdout.write(resultado[1]);" $arquivoAsar
+          $versaoSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; const fonte = extractFile(process.argv[1], 'out\\main\\database\\index.js').toString('utf8'); const resultado = fonte.match(/CURRENT_SCHEMA_VERSION = (\d+)/); if (!resultado) throw new Error('Versão do schema ausente no aplicativo empacotado.'); process.stdout.write(resultado[1]);" $arquivoAsar
           if ($versaoSchemaNoAsar.Trim() -ne $versaoSchemaFonte.Trim()) {
             throw "A versão do schema empacotada ($versaoSchemaNoAsar) difere da versão fonte ($versaoSchemaFonte)."
           }
