@@ -1377,19 +1377,6 @@ export const REPsPage: React.FC = () => {
       form.setValue('tipo_exame_id', tipoExameGdl.id, { shouldValidate: true });
     }
 
-    if (!form.getValues('template_id')) {
-      const respostaTemplates = await window.ipcAPI.template.findByTipoExame(tipoExameGdl.id);
-      if (respostaTemplates.success && respostaTemplates.data) {
-        const templates = [...(respostaTemplates.data as TemplateResumo[])]
-          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-        const templatePadrao = obterTemplatePadraoB602(codigoExameGdl, templates);
-        if (templatePadrao) {
-          setTemplatesVinculados(templates);
-          form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
-        }
-      }
-    }
-
     const valoresPadrao = emptyForm();
     setOrigensSolicitacaoGdl(resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis);
     for (const [key, value] of Object.entries(resultado.camposGerais)) {
@@ -1407,6 +1394,20 @@ export const REPsPage: React.FC = () => {
         novosPreenchidos.add(key);
       }
     }
+
+    if (!form.getValues('template_id')) {
+      const respostaTemplates = await window.ipcAPI.template.findByTipoExame(tipoExameGdl.id);
+      if (respostaTemplates.success && respostaTemplates.data) {
+        const templates = [...(respostaTemplates.data as TemplateResumo[])]
+          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        const templatePadrao = obterTemplatePadraoB602(codigoExameGdl, templates);
+        if (templatePadrao) {
+          setTemplatesVinculados(templates);
+          form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
+        }
+      }
+    }
+
     await form.trigger(['tipo_solicitacao', 'b602_numero_bo', 'b602_numero_ip']);
 
     setPecasB602(atuais => mesclarPecasB602DoGdl(
