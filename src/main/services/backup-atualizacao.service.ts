@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import sqlite3 from 'sqlite3';
-import { executeNonQuery } from '../database/sqlite.js';
+import { criarBackupConsistente } from '../database/sqlite.js';
 import { getSchemaVersion } from '../database/index.js';
 import { getLogger } from '../utils/logger.js';
 
@@ -85,7 +85,6 @@ export class BackupAtualizacaoService {
     const bancoOrigem = path.join(this.diretorioDados, NOME_BANCO);
     if (!fs.existsSync(bancoOrigem)) throw new Error('Banco de dados não encontrado para o backup pré-atualização.');
 
-    await executeNonQuery('PRAGMA wal_checkpoint(FULL)');
     const versaoSchema = await getSchemaVersion();
     const diretorioSnapshots = path.join(this.diretorioDados, 'backups-atualizacao');
     fs.mkdirSync(diretorioSnapshots, { recursive: true });
@@ -96,7 +95,7 @@ export class BackupAtualizacaoService {
     const caminhoManifesto = path.join(diretorioSnapshots, `${base}.json`);
 
     try {
-      fs.copyFileSync(bancoOrigem, caminhoBanco, fs.constants.COPYFILE_EXCL);
+      await criarBackupConsistente(caminhoBanco);
       await executarIntegridade(caminhoBanco);
       const estatisticas = fs.statSync(caminhoBanco);
       const manifesto: ManifestoBackupAtualizacao = {

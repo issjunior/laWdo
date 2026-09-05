@@ -14,6 +14,15 @@ const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 // Singleton para conexão do banco de dados
 let dbInstance: sqlite3.Database | null = null;
 
+interface BackupSQLite {
+  step(paginas: number, callback: (erro: Error | null) => void): void;
+  finish(callback: (erro: Error | null) => void): void;
+}
+
+interface DatabaseComBackup extends sqlite3.Database {
+  backup(caminhoDestino: string): BackupSQLite;
+}
+
 /**
  * Obtém ou cria conexão com o banco de dados SQLite
  */
@@ -81,6 +90,31 @@ export const closeDatabase = async (): Promise<void> => {
       throw error;
     }
   }
+};
+
+/**
+ * Cria uma cópia consistente do banco aberto, inclusive quando estiver em WAL.
+ */
+export const criarBackupConsistente = async (caminhoDestino: string): Promise<void> => {
+  const database = await getDatabase() as DatabaseComBackup;
+
+  await new Promise<void>((resolve, reject) => {
+    const backup = database.backup(caminhoDestino);
+    backup.step(-1, erroStep => {
+      if (erroStep) {
+        backup.finish(() => reject(erroStep));
+        return;
+      }
+
+      backup.finish(erroFinish => {
+        if (erroFinish) {
+          reject(erroFinish);
+          return;
+        }
+        resolve();
+      });
+    });
+  });
 };
 
 /**

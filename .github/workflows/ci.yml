@@ -45,5 +45,11 @@ jobs:
       - name: Executar testes de release
         run: npm run test:release
 
+      - name: Validar contrato de schema para release
+        run: node scripts/release/validar-schema-release.mjs
+
       - name: Gerar build
         run: npm run build
+
+      - name: Executar smoke de schema
+        run: npm run smoke:schema

@@ -246,6 +246,18 @@ jobs:
             throw "A versão do package.json empacotado ($versaoNoAsar) difere da versão solicitada ($env:VERSAO)."
           }
 
+          $versaoSchemaFonte = node scripts/release/versao-schema.mjs
+          $versaoSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; const fonte = extractFile(process.argv[1], 'out/main/database/index.js').toString('utf8'); const resultado = fonte.match(/CURRENT_SCHEMA_VERSION = (\\d+)/); if (!resultado) throw new Error('Versão do schema ausente no aplicativo empacotado.'); process.stdout.write(resultado[1]);" $arquivoAsar
+          if ($versaoSchemaNoAsar.Trim() -ne $versaoSchemaFonte.Trim()) {
+            throw "A versão do schema empacotada ($versaoSchemaNoAsar) difere da versão fonte ($versaoSchemaFonte)."
+          }
+          $fonteSchemaNoAsar = node --input-type=module -e "import { extractFile } from '@electron/asar'; process.stdout.write(extractFile(process.argv[1], 'out/main/database/index.js').toString('utf8'));" $arquivoAsar
+          if ($fonteSchemaNoAsar -notmatch 'fromVersion < 34') {
+            throw 'A migration 34 não foi encontrada no aplicativo Windows empacotado.'
+          }
+
+          node scripts/release/executar-smoke-schema.mjs --executavel $executavel.FullName
+
           $executavel = Get-ChildItem -LiteralPath $diretorioAplicativo.FullName -Filter '*.exe' -File |
             Select-Object -First 1
           if ($null -eq $executavel) {
@@ -438,14 +450,17 @@ jobs:
           VERSAO: ${{ needs.validar.outputs.versao }}
           NOTAS_ATUALIZACAO: ${{ inputs.notas_atualizacao }}
         run: |
+          VERSAO_SCHEMA="$(node scripts/release/versao-schema.mjs)"
           node scripts/release/gerar-manifesto.mjs \
             --diretorio artefatos \
             --versao "$VERSAO" \
             --commit "${{ needs.validar.outputs.commit }}" \
-            --versao-schema 30 \
+            --versao-schema "$VERSAO_SCHEMA" \
             --url-release "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSAO" \
             --saida publicacao/manifesto.json \
             --assinatura publicacao/manifesto.json.sig
+
+          node scripts/release/validar-schema-release.mjs --manifesto publicacao/manifesto.json
 
       - name: Gerar rascunho das notas da release
         env:

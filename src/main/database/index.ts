@@ -6,6 +6,8 @@ import { createHash } from 'crypto';
 import {
   executeQuery,
   executeNonQuery,
+  criarBackupConsistente,
+  withTransaction,
 } from './sqlite.js';
 import { atualizarMarcadoresTemplateB602 } from './template-b602.migration.js';
 import { sincronizarTemplatesIntegrados } from '../templates/integrados/sincronizar-templates-integrados.js';
@@ -17,11 +19,16 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-const CURRENT_SCHEMA_VERSION = 33;
+export const CURRENT_SCHEMA_VERSION = 34;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
   reparosAplicados: string[];
+}
+
+interface IndiceSQLite {
+  name: string;
+  unique: number;
 }
 
 const TABELAS_OBRIGATORIAS = [
@@ -29,6 +36,29 @@ const TABELAS_OBRIGATORIAS = [
   'imagens_laudo', 'categorias_placeholders', 'placeholders', 'logs_auditoria',
   'templates', 'secoes_template', 'configuracoes', 'wizards', 'etapas_wizard',
   'opcoes_etapa', 'pecas', 'regras_wizard', 'respostas_wizard', 'categorias_pecas',
+] as const;
+
+const COLUNAS_REPARAVEIS = [
+  ['logs_auditoria', 'tipo_acao', "TEXT NOT NULL DEFAULT 'outro'"],
+  ['logs_auditoria', 'modulo', "TEXT NOT NULL DEFAULT 'sistema'"],
+  ['logs_auditoria', 'nivel', "TEXT NOT NULL DEFAULT 'info'"],
+  ['logs_auditoria', 'mensagem', 'TEXT'],
+  ['logs_auditoria', 'dados_anteriores', 'TEXT'],
+  ['logs_auditoria', 'dados_novos', 'TEXT'],
+  ['laudos', 'tipo_criacao', "TEXT NOT NULL DEFAULT 'template'"],
+  ['laudos', 'wizard_id', 'TEXT'],
+  ['laudos', 'respostas_wizard', 'TEXT'],
+] as const;
+
+const COLUNAS_ESSENCIAIS = [
+  ['laudos', 'id'],
+  ['laudos', 'rep_id'],
+  ['laudos', 'perito_id'],
+  ['laudos', 'template_id'],
+  ['laudos', 'conteudo'],
+  ['logs_auditoria', 'id'],
+  ['logs_auditoria', 'acao'],
+  ['logs_auditoria', 'entidade'],
 ] as const;
 
 const criarTabelaConfiguracoes = async (): Promise<void> => {
@@ -96,6 +126,14 @@ const criarEstruturasComplementares = async (): Promise<void> => {
   )`);
 };
 
+const normalizarErroSchema = (error: unknown): Error => {
+  if (!(error instanceof Error)) return new Error('SCHEMA_INCOMPATIVEL: falha desconhecida ao validar a estrutura do banco.');
+  if (/SQLITE_ERROR: no such (table|column):/i.test(error.message)) {
+    return new Error('SCHEMA_INCOMPATIVEL: o banco não possui a estrutura necessária para uma atualização segura.');
+  }
+  return error;
+};
+
 /**
  * Configura e inicializa o banco de dados SQLite
  */
@@ -123,14 +161,15 @@ export const setupDatabase = async (): Promise<void> => {
       await aplicarMigracoesERegistrarVersao(0);
     } else {
       log.debug(`Banco de dados encontrado: ${DB_PATH}`);
+      if (await precisaSnapshotAntesDaMigracao()) await criarSnapshotAntesDaMigracao();
       await checkAndApplyMigrations();
     }
 
-    const integridade = await garantirIntegridadeSchema();
-    if (integridade.reparosAplicados.length > 0) {
+    const reparosAplicados = await reconciliarSchemaFisico();
+    if (reparosAplicados.length > 0) {
       log.warn('Estruturas ausentes do banco foram reparadas automaticamente', {
-        tabelasVerificadas: integridade.tabelasVerificadas,
-        reparosAplicados: integridade.reparosAplicados,
+        tabelasVerificadas: TABELAS_OBRIGATORIAS,
+        reparosAplicados,
       });
     }
 
@@ -146,7 +185,7 @@ export const setupDatabase = async (): Promise<void> => {
     log.debug('Banco de dados inicializado com sucesso');
   } catch (error) {
     log.error('Erro ao inicializar banco de dados', error);
-    throw error;
+    throw normalizarErroSchema(error);
   }
 };
 
@@ -254,7 +293,7 @@ const createDatabaseSchema = async (): Promise<void> => {
     await executeNonQuery(`
       CREATE TABLE IF NOT EXISTS laudos (
         id TEXT PRIMARY KEY,
-        rep_id TEXT NOT NULL UNIQUE,
+        rep_id TEXT NOT NULL,
         perito_id TEXT NOT NULL,
         template_id TEXT NOT NULL,
         conteudo TEXT NOT NULL,
@@ -265,9 +304,13 @@ const createDatabaseSchema = async (): Promise<void> => {
         versao INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        tipo_criacao TEXT NOT NULL DEFAULT 'template',
+        wizard_id TEXT,
+        respostas_wizard TEXT,
         FOREIGN KEY (rep_id) REFERENCES reps(id),
         FOREIGN KEY (perito_id) REFERENCES users(id),
-        FOREIGN KEY (template_id) REFERENCES templates(id)
+        FOREIGN KEY (template_id) REFERENCES templates(id),
+        FOREIGN KEY (wizard_id) REFERENCES wizards(id)
       )
     `);
 
@@ -352,6 +395,12 @@ const createDatabaseSchema = async (): Promise<void> => {
         detalhes TEXT,
         ip_address TEXT,
         user_agent TEXT,
+        tipo_acao TEXT NOT NULL DEFAULT 'outro',
+        modulo TEXT NOT NULL DEFAULT 'sistema',
+        nivel TEXT NOT NULL DEFAULT 'info',
+        mensagem TEXT,
+        dados_anteriores TEXT,
+        dados_novos TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -462,6 +511,9 @@ const INDICES_OBRIGATORIOS = [
   'CREATE INDEX IF NOT EXISTS idx_reps_solicitante ON reps(solicitante_id)',
   'CREATE INDEX IF NOT EXISTS idx_laudos_status ON laudos(status)',
   'CREATE INDEX IF NOT EXISTS idx_laudos_rep ON laudos(rep_id)',
+  'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_modulo ON logs_auditoria(modulo)',
+  'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_tipo ON logs_auditoria(tipo_acao)',
+  'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_entidade ON logs_auditoria(entidade, entidade_id)',
   'CREATE INDEX IF NOT EXISTS idx_imagens_laudo_laudo ON imagens_laudo(laudo_id, sequencia)',
   'CREATE INDEX IF NOT EXISTS idx_imagens_laudo_caminho ON imagens_laudo(caminho_relativo)',
   'CREATE INDEX IF NOT EXISTS idx_categorias_placeholders_parent ON categorias_placeholders(parent_id)',
@@ -506,6 +558,20 @@ export const garantirIntegridadeSchema = async (): Promise<ResultadoIntegridadeS
     reparosAplicados.push('laudos.status');
   }
 
+  for (const [tabela, coluna, definicao] of COLUNAS_REPARAVEIS) {
+    if (await garantirColuna(tabela, coluna, definicao)) reparosAplicados.push(`${tabela}.${coluna}`);
+  }
+
+  const colunasEssenciaisAusentes: string[] = [];
+  for (const [tabela, coluna] of COLUNAS_ESSENCIAIS) {
+    const colunas = await executeQuery<{ name: string }>(`PRAGMA table_info(${tabela})`);
+    if (!colunas.some(item => item.name === coluna)) colunasEssenciaisAusentes.push(`${tabela}.${coluna}`);
+  }
+
+  if (colunasEssenciaisAusentes.length > 0) {
+    throw new Error(`SCHEMA_INCOMPATIVEL: colunas essenciais ausentes: ${colunasEssenciaisAusentes.join(', ')}`);
+  }
+
   if (ausentes.length > 0) {
     throw new Error(`SCHEMA_INCOMPATIVEL: estruturas ausentes: ${ausentes.join(', ')}`);
   }
@@ -523,6 +589,10 @@ export const garantirIntegridadeSchema = async (): Promise<ResultadoIntegridadeS
 const checkAndApplyMigrations = async (): Promise<void> => {
   const currentVersion = await getSchemaVersion();
 
+  if (currentVersion > CURRENT_SCHEMA_VERSION) {
+    throw new Error(`SCHEMA_FUTURO_INCOMPATIVEL: banco na versão ${currentVersion}; aplicativo suporta até ${CURRENT_SCHEMA_VERSION}.`);
+  }
+
   if (currentVersion < CURRENT_SCHEMA_VERSION) {
     log.debug(`Aplicando migrations da versão ${currentVersion} para ${CURRENT_SCHEMA_VERSION}...`);
 
@@ -531,6 +601,99 @@ const checkAndApplyMigrations = async (): Promise<void> => {
   } else {
     log.debug(`Schema está atualizado (versão ${currentVersion})`);
   }
+};
+
+const possuiIndiceUnicoPorColuna = async (tabela: string, coluna: string): Promise<boolean> => {
+  const indices = await executeQuery<IndiceSQLite>(`PRAGMA index_list(${tabela})`);
+  for (const indice of indices) {
+    if (indice.unique !== 1) continue;
+    const colunas = await executeQuery<{ name: string }>(`PRAGMA index_info(${indice.name})`);
+    if (colunas.length === 1 && colunas[0]?.name === coluna) return true;
+  }
+  return false;
+};
+
+const precisaSnapshotAntesDaMigracao = async (): Promise<boolean> => {
+  const versaoAtual = await getSchemaVersion();
+  if (versaoAtual < CURRENT_SCHEMA_VERSION) return true;
+
+  const tabelas = await listarTabelas();
+  if (TABELAS_OBRIGATORIAS.some(tabela => !tabelas.has(tabela))) return true;
+
+  for (const [tabela, coluna] of COLUNAS_REPARAVEIS) {
+    const colunas = await executeQuery<{ name: string }>(`PRAGMA table_info(${tabela})`);
+    if (!colunas.some(item => item.name === coluna)) return true;
+  }
+  return possuiIndiceUnicoPorColuna('laudos', 'rep_id');
+};
+
+const criarSnapshotAntesDaMigracao = async (): Promise<void> => {
+  const diretorioSnapshots = path.join(DB_DIR, 'backups-migracoes');
+  fs.mkdirSync(diretorioSnapshots, { recursive: true });
+  const identificador = new Date().toISOString().replace(/[:.]/g, '-');
+  const caminhoSnapshot = path.join(diretorioSnapshots, `antes-schema-${identificador}-v${CURRENT_SCHEMA_VERSION}.db`);
+  await criarBackupConsistente(caminhoSnapshot);
+  if (!fs.existsSync(caminhoSnapshot) || fs.statSync(caminhoSnapshot).size === 0) {
+    throw new Error('SCHEMA_INCOMPATIVEL: não foi possível criar snapshot válido antes da migration.');
+  }
+  log.info('Snapshot consistente criado antes da migration.', { versaoDestino: CURRENT_SCHEMA_VERSION });
+};
+
+const reconstruirLaudosSemRestricaoUnicaRep = async (): Promise<boolean> => {
+  if (!await possuiIndiceUnicoPorColuna('laudos', 'rep_id')) return false;
+
+  await executeNonQuery('DROP TABLE IF EXISTS laudos_v34');
+  await executeNonQuery(`
+    CREATE TABLE laudos_v34 (
+      id TEXT PRIMARY KEY, rep_id TEXT NOT NULL, perito_id TEXT NOT NULL, template_id TEXT NOT NULL,
+      conteudo TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Em andamento',
+      data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP, data_conclusao DATETIME, data_entrega DATETIME,
+      versao INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, tipo_criacao TEXT NOT NULL DEFAULT 'template',
+      wizard_id TEXT, respostas_wizard TEXT,
+      FOREIGN KEY (rep_id) REFERENCES reps(id), FOREIGN KEY (perito_id) REFERENCES users(id),
+      FOREIGN KEY (template_id) REFERENCES templates(id), FOREIGN KEY (wizard_id) REFERENCES wizards(id)
+    )
+  `);
+  await executeNonQuery(`
+    INSERT INTO laudos_v34 (
+      id, rep_id, perito_id, template_id, conteudo, status, data_inicio, data_conclusao,
+      data_entrega, versao, created_at, updated_at, tipo_criacao, wizard_id, respostas_wizard
+    ) SELECT
+      id, rep_id, perito_id, template_id, conteudo, status, data_inicio, data_conclusao,
+      data_entrega, versao, created_at, updated_at, tipo_criacao, wizard_id, respostas_wizard
+    FROM laudos
+  `);
+  await executeNonQuery('DROP TABLE laudos');
+  await executeNonQuery('ALTER TABLE laudos_v34 RENAME TO laudos');
+  return true;
+};
+
+const reconciliarSchemaFisico = async (): Promise<string[]> => {
+  const verificacaoFisica = await executeQuery<{ integrity_check: string }>('PRAGMA integrity_check');
+  if (verificacaoFisica.some(resultado => resultado.integrity_check !== 'ok')) {
+    throw new Error('SCHEMA_INCOMPATIVEL: a integridade física do banco não pôde ser confirmada.');
+  }
+
+  let reparosAplicados: string[] = [];
+  await executeNonQuery('PRAGMA foreign_keys = OFF');
+  try {
+    reparosAplicados = await withTransaction(async () => {
+      const integridade = await garantirIntegridadeSchema();
+      const laudosReconstruida = await reconstruirLaudosSemRestricaoUnicaRep();
+      if (laudosReconstruida) integridade.reparosAplicados.push('laudos.rep_id sem UNIQUE');
+      for (const indice of INDICES_OBRIGATORIOS) await executeNonQuery(indice);
+      return integridade.reparosAplicados;
+    });
+  } finally {
+    await executeNonQuery('PRAGMA foreign_keys = ON');
+  }
+
+  const violacoes = await executeQuery<{ table: string; rowid: number; parent: string; fkid: number }>('PRAGMA foreign_key_check');
+  if (violacoes.length > 0) {
+    throw new Error(`SCHEMA_INCOMPATIVEL: referências inválidas após reconciliação (${violacoes.length}).`);
+  }
+  return reparosAplicados;
 };
 
 /**
@@ -1508,7 +1671,7 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         if (laudosExistTable.length > 0) {
           const laudosCols = await executeQuery<{ name: string; notnull: number; dflt_value: string | null }>('PRAGMA table_info(laudos)');
           const hasTipoCriacao = laudosCols.some(c => c.name === 'tipo_criacao');
-          const hasRepIdUnique = laudosCols.some(c => c.name === 'rep_id' && c.notnull === 1);
+          const hasRepIdUnique = await possuiIndiceUnicoPorColuna('laudos', 'rep_id');
           const needRecreate = !hasTipoCriacao || hasRepIdUnique;
 
           if (needRecreate) {
@@ -2139,6 +2302,17 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.debug('Migration v33: tabela configuracoes validada');
     } catch (error) {
       log.error('Erro ao aplicar migration versão 33', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 34: reconciliar bancos legados cuja versão registrada não corresponde ao schema físico
+  if (fromVersion < 34) {
+    try {
+      const reparos = await reconciliarSchemaFisico();
+      log.debug('Migration v34: schema físico reconciliado', { reparos });
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 34', error);
       throw error;
     }
   }
