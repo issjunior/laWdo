@@ -28,17 +28,6 @@ const MAX_FILE_SIZE_MB = 20;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx'];
-const PALAVRAS_CHAVE_PERICIAIS = new Set([
-  'PREÂMBULO', 'HISTÓRICO', 'DO HISTÓRICO', 'INTRODUÇÃO', 'METODOLOGIA',
-  'DO EXAME', 'EXAME', 'ANÁLISE', 'CONCLUSÃO', 'RESULTADO', 'CONSIDERAÇÕES',
-  'OBJETO', 'OBJETIVO', 'DO OBJETIVO PERICIAL', 'QUESITOS',
-  'RESPOSTA AOS QUESITOS', 'ENCERRAMENTO', 'CONSIDERAÇÕES FINAIS',
-  'MOTIVO DA PERÍCIA', 'MATERIAL APRESENTADO A EXAME',
-  'DO VEÍCULO', 'ISOLAMENTO E PRESERVAÇÃO DO LOCAL',
-  'DAS INFORMAÇÕES', 'DO LOCAL', 'DO CADÁVER', 'DOS VESTÍGIOS',
-  'DISCUSSÃO', 'DINÂMICA DO EVENTO', 'ILUSTRAÇÕES',
-]);
-
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [
     'p', 'br', 'strong', 'em', 'u', 's', 'ol', 'ul', 'li',
@@ -109,16 +98,27 @@ function sanitizarComPlaceholders(html: string): string {
 
 // ─── Detecção de Títulos ──────────────────────────────────
 
+function normalizarTitulo(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
 function isTituloCandidato(linha: string): boolean {
   const texto = linha.trim();
   if (!texto || texto.length > 120) return false;
 
-  const maiusculas = texto === texto.toUpperCase() && texto.length > 3 && texto.length < 120;
-  const temPalavraChave = Array.from(PALAVRAS_CHAVE_PERICIAIS).some(
-    (kw) => texto.toUpperCase().includes(kw)
-  );
+  if (normalizarTitulo(texto) === 'PREAMBULO') return true;
 
-  return maiusculas || temPalavraChave;
+  return /^\d+(?:[.)ºª\-–—]\s*|\s+)(?!\d).+/.test(texto);
+}
+
+function pdfTemAssinaturaDigital(dadosPdf: Buffer): boolean {
+  const conteudo = dadosPdf.toString('latin1');
+  return /\/ByteRange\s*\[/.test(conteudo) && /\/(?:Type\s*\/Sig|FT\s*\/Sig|SubFilter\s*\/)/.test(conteudo);
 }
 
 // ─── Processamento PDF ────────────────────────────────────
@@ -126,9 +126,10 @@ function isTituloCandidato(linha: string): boolean {
 async function processarPDF(filePath: string): Promise<SecaoImportada[]> {
   log.info(`Iniciando extração de PDF: ${filePath}`);
 
-  const dadosPdf = new Uint8Array(fs.readFileSync(filePath));
-  const result = await extractText(dadosPdf);
-  const textoBruto = result.text.join('\n');
+  const dadosPdf = fs.readFileSync(filePath);
+  const result = await extractText(new Uint8Array(dadosPdf));
+  const textosPaginas = result.text;
+  const textoBruto = (pdfTemAssinaturaDigital(dadosPdf) ? textosPaginas.slice(1) : textosPaginas).join('\n');
   log.info(`Texto extraído do PDF: ${textoBruto.length} caracteres`);
 
   const linhas = textoBruto.split(/\r?\n/);
@@ -139,15 +140,8 @@ async function processarPDF(filePath: string): Promise<SecaoImportada[]> {
     const linha = linhas[i].trim();
     if (!linha) continue;
 
-    // Concatenar linhas consecutivas em maiúsculas curtas que parecem título quebrado
     let linhaConcatenada = linha;
-    while (
-      i + 1 < linhas.length &&
-      linhas[i + 1].trim() &&
-      linhas[i + 1].trim().toUpperCase() === linhas[i + 1].trim() &&
-      linhas[i + 1].trim().length < 50 &&
-      linhaConcatenada.length < 120
-    ) {
+    if (/^\d+[.)ºª\-–—]?$/.test(linha) && i + 1 < linhas.length && linhas[i + 1].trim()) {
       i++;
       linhaConcatenada += ' ' + linhas[i].trim();
     }
