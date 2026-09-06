@@ -126,7 +126,8 @@ function isTituloCandidato(linha: string): boolean {
 async function processarPDF(filePath: string): Promise<SecaoImportada[]> {
   log.info(`Iniciando extração de PDF: ${filePath}`);
 
-  const result = await extractText(filePath);
+  const dadosPdf = new Uint8Array(fs.readFileSync(filePath));
+  const result = await extractText(dadosPdf);
   const textoBruto = result.text.join('\n');
   log.info(`Texto extraído do PDF: ${textoBruto.length} caracteres`);
 
