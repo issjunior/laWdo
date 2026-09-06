@@ -18,6 +18,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
+import type { CreateTipoExameInput } from '@/lib/validators/tipo-exame.schema';
 import {
   DndContext,
   closestCenter,
@@ -48,6 +50,7 @@ import {
   X,
   ArrowUp,
   ArrowDown,
+  ClipboardPen,
 } from 'lucide-react';
 import type { PreviaPacoteTemplate } from '@shared/types/template-pacote.types';
 
@@ -63,6 +66,7 @@ interface ImportTemplateDialogProps {
   tiposExame: { id: string; codigo?: string | null; nome: string }[];
   placeholders: { id: string; chave: string; descricao: string; categoria_id: string }[];
   onImportSuccess: () => void;
+  onTiposExameAtualizados: () => Promise<void>;
 }
 
 const getMensagemErro = (erro: unknown, fallback: string): string =>
@@ -187,6 +191,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
   tiposExame,
   placeholders: _placeholders,
   onImportSuccess,
+  onTiposExameAtualizados,
 }) => {
   const [etapa, setEtapa] = useState<'upload' | 'revisao' | 'pacote'>('upload');
   const [nomeTemplate, setNomeTemplate] = useState('');
@@ -196,6 +201,10 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
   const [salvando, setSalvando] = useState(false);
   const [pacote, setPacote] = useState<PreviaPacoteTemplate | null>(null);
   const [confirmarCriacaoTipo, setConfirmarCriacaoTipo] = useState(false);
+  const [tipoExameQCOpen, setTipoExameQCOpen] = useState(false);
+  const [tipoExameQCFormData, setTipoExameQCFormData] = useState<CreateTipoExameInput>({ codigo: '', nome: '', descricao: '' });
+  const [tipoExameQCError, setTipoExameQCError] = useState<string | null>(null);
+  const [tipoExameQCSubmitting, setTipoExameQCSubmitting] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -211,6 +220,9 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
     setSecoes([]);
     setPacote(null);
     setConfirmarCriacaoTipo(false);
+    setTipoExameQCOpen(false);
+    setTipoExameQCFormData({ codigo: '', nome: '', descricao: '' });
+    setTipoExameQCError(null);
     setImportando(false);
     setSalvando(false);
   }, []);
@@ -258,6 +270,36 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
       toast.error(getMensagemErro(erro, 'Erro ao ler pacote de template'));
     } finally {
       setImportando(false);
+    }
+  };
+
+  const handleSalvarTipoExame = async () => {
+    if (!tipoExameQCFormData.codigo.trim()) {
+      setTipoExameQCError('O código do tipo de exame é obrigatório.');
+      return;
+    }
+    if (!tipoExameQCFormData.nome.trim()) {
+      setTipoExameQCError('O nome do tipo de exame é obrigatório.');
+      return;
+    }
+
+    try {
+      setTipoExameQCSubmitting(true);
+      setTipoExameQCError(null);
+      const resposta = await window.ipcAPI.tipoExame.create(tipoExameQCFormData);
+      if (!resposta.success || !resposta.data?.id) {
+        setTipoExameQCError(resposta.error || 'Erro ao criar tipo de exame');
+        return;
+      }
+
+      await onTiposExameAtualizados();
+      setTipoExameId(resposta.data.id);
+      setTipoExameQCOpen(false);
+      setTipoExameQCFormData({ codigo: '', nome: '', descricao: '' });
+    } catch (erro: unknown) {
+      setTipoExameQCError(getMensagemErro(erro, 'Erro ao criar tipo de exame'));
+    } finally {
+      setTipoExameQCSubmitting(false);
     }
   };
 
@@ -438,7 +480,23 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="imp-tipo">Tipo de Exame *</Label>
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="imp-tipo">Tipo de Exame *</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-muted-foreground hover:text-primary"
+                      title="Cadastrar tipo de exame"
+                      aria-label="Cadastrar tipo de exame"
+                      onClick={() => {
+                        setTipoExameQCError(null);
+                        setTipoExameQCOpen(true);
+                      }}
+                    >
+                      <ClipboardPen size={14} />
+                    </Button>
+                  </div>
                   <Select value={tipoExameId} onValueChange={(value: string) => setTipoExameId(value)}>
                     <SelectTrigger id="imp-tipo">
                       <SelectValue placeholder="Selecione o tipo..." />
@@ -543,6 +601,37 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={tipoExameQCOpen} onOpenChange={setTipoExameQCOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Novo Tipo de Exame</DialogTitle>
+            <DialogDescription>
+              Preencha as informações para criar um novo tipo de exame.
+            </DialogDescription>
+          </DialogHeader>
+          <TipoExameFormFields
+            formData={tipoExameQCFormData}
+            onChange={setTipoExameQCFormData}
+            error={tipoExameQCError}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTipoExameQCOpen(false);
+                setTipoExameQCError(null);
+                setTipoExameQCFormData({ codigo: '', nome: '', descricao: '' });
+              }}
+              disabled={tipoExameQCSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleSalvarTipoExame} disabled={tipoExameQCSubmitting}>
+              {tipoExameQCSubmitting ? 'Criando...' : 'Criar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };
