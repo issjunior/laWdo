@@ -107,13 +107,18 @@ function normalizarTitulo(texto: string): string {
     .toUpperCase();
 }
 
-function isTituloCandidato(linha: string): boolean {
+function obterNumeroSecaoPrincipal(texto: string): number | null {
+  const correspondencia = texto.match(/^(\d+)(?:[.)ºª\-–—]\s*|\s+)(?!\d).+/);
+  return correspondencia ? Number(correspondencia[1]) : null;
+}
+
+function isTituloCandidato(linha: string, proximaSecaoPrincipal: number): boolean {
   const texto = linha.trim();
   if (!texto || texto.length > 120) return false;
 
-  if (normalizarTitulo(texto) === 'PREAMBULO') return true;
+  if (proximaSecaoPrincipal === 1 && normalizarTitulo(texto) === 'PREAMBULO') return true;
 
-  return /^\d+(?:[.)ºª\-–—]\s*|\s+)(?!\d).+/.test(texto);
+  return obterNumeroSecaoPrincipal(texto) === proximaSecaoPrincipal;
 }
 
 function pdfTemAssinaturaDigital(dadosPdf: Buffer): boolean {
@@ -135,6 +140,7 @@ async function processarPDF(filePath: string): Promise<SecaoImportada[]> {
   const linhas = textoBruto.split(/\r?\n/);
   const secoes: { nome: string; linhas: string[] }[] = [];
   let secaoAtual: { nome: string; linhas: string[] } | null = null;
+  let proximaSecaoPrincipal = 1;
 
   for (let i = 0; i < linhas.length; i++) {
     const linha = linhas[i].trim();
@@ -146,11 +152,13 @@ async function processarPDF(filePath: string): Promise<SecaoImportada[]> {
       linhaConcatenada += ' ' + linhas[i].trim();
     }
 
-    if (isTituloCandidato(linhaConcatenada)) {
+    if (isTituloCandidato(linhaConcatenada, proximaSecaoPrincipal)) {
       if (secaoAtual && secaoAtual.linhas.length > 0) {
         secoes.push(secaoAtual);
       }
       secaoAtual = { nome: linhaConcatenada, linhas: [] };
+      const numeroSecao = obterNumeroSecaoPrincipal(linhaConcatenada);
+      if (numeroSecao !== null) proximaSecaoPrincipal = numeroSecao + 1;
     } else if (secaoAtual) {
       secaoAtual.linhas.push(linha);
     } else {
@@ -236,21 +244,24 @@ async function processarDOCX(filePath: string): Promise<SecaoImportada[]> {
     }
   }
 
-  // Estratégia 2: se headings não capturaram nada ou pouco, usar palavras-chave no texto bruto
+  // Estratégia 2: se headings não capturaram nada ou pouco, usar a numeração do texto bruto
   if (secoes.length === 0 || secoes.length < 2) {
     const linhas = rawText.split(/\r?\n/);
     const secoesKeyword: { nome: string; linhas: string[] }[] = [];
     let secaoAtual: { nome: string; linhas: string[] } | null = null;
+    let proximaSecaoPrincipal = 1;
 
     for (const linha of linhas) {
       const trimmed = linha.trim();
       if (!trimmed) continue;
 
-      if (isTituloCandidato(trimmed)) {
+      if (isTituloCandidato(trimmed, proximaSecaoPrincipal)) {
         if (secaoAtual && secaoAtual.linhas.length > 0) {
           secoesKeyword.push(secaoAtual);
         }
         secaoAtual = { nome: trimmed, linhas: [] };
+        const numeroSecao = obterNumeroSecaoPrincipal(trimmed);
+        if (numeroSecao !== null) proximaSecaoPrincipal = numeroSecao + 1;
       } else if (secaoAtual) {
         secaoAtual.linhas.push(trimmed);
       } else {
