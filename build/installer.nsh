@@ -10,13 +10,8 @@
         SetShellVarContext current
       ${endif}
 
-      RMDir /r "$APPDATA\${APP_FILENAME}"
-      !ifdef APP_PRODUCT_FILENAME
-        RMDir /r "$APPDATA\${APP_PRODUCT_FILENAME}"
-      !endif
-      !ifdef APP_PACKAGE_NAME
-        RMDir /r "$APPDATA\${APP_PACKAGE_NAME}"
-      !endif
+      RMDir /r "$APPDATA\laWdo"
+      RMDir /r "$APPDATA\laudo-pericial-electron"
 
       ${if} $installMode == "all"
         SetShellVarContext all
