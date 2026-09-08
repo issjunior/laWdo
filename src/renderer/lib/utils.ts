@@ -15,6 +15,11 @@ export function removerFormatacaoPlaceholders(html: string): string {
   const doc = parser.parseFromString(html, 'text/html');
   doc.querySelectorAll('[data-placeholder-preview="true"]').forEach(elemento => elemento.remove());
   doc.querySelectorAll('[data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
+  doc.querySelectorAll('[data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
+  doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
+    bloco.removeAttribute('data-cond-em-edicao');
+    bloco.removeAttribute('contenteditable');
+  });
   doc.querySelectorAll('[data-acao-tabela-placeholder]').forEach(elemento => elemento.remove());
   doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
     tabela.removeAttribute('contenteditable');

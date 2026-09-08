@@ -477,7 +477,14 @@ function removerAncorasTabelasPersonalizadas(doc: Document): void {
 }
 
 export function limparIndicadoresCondicionais(html: string): string {
-  let result = html.replace(
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  documento.querySelectorAll('[data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
+  documento.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
+    bloco.removeAttribute('data-cond-em-edicao');
+    bloco.removeAttribute('contenteditable');
+  });
+
+  let result = documento.body.innerHTML.replace(
     /<[^>]+\bdata-acao-suprimir-bloco="true"[^>]*>[\s\S]*?<\/[^>]+>/gi,
     '',
   ).replace(
@@ -486,7 +493,7 @@ export function limparIndicadoresCondicionais(html: string): string {
   );
   result = result.replace(
     /<div[^>]*\bdata-cond-bloco="[^"]*"[^>]*>/gi,
-    (match) => match.replace(/\s*style="[^"]*"/gi, '')
+    (match) => match.replace(/\s*(?:style|data-cond-em-edicao|contenteditable)="[^"]*"/gi, '')
   );
   return result;
 }
@@ -498,7 +505,11 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
+    doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
+    doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
+      bloco.removeAttribute('data-cond-em-edicao');
+      bloco.removeAttribute('contenteditable');
+    });
     removerAncorasTabelasPersonalizadas(doc);
     const placeholderSpans = doc.querySelectorAll('span[data-placeholder]');
     placeholderSpans.forEach(span => {

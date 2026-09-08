@@ -28,7 +28,7 @@ function resolverPlaceholderTexto(texto: string, mapa: MapaPlaceholdersResolvido
 /** Resolve placeholders preservando a estrutura do HTML para consultas factuais. */
 export function resolverHtmlContextoIa(html: string, mapa: MapaPlaceholdersResolvidos): string {
   const documento = new DOMParser().parseFromString(html, 'text/html')
-  documento.querySelectorAll('[data-placeholder-preview="true"], script, style').forEach(elemento => elemento.remove())
+  documento.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional], script, style').forEach(elemento => elemento.remove())
   removerAncorasTabelasPersonalizadas(documento)
   documento.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(elemento => {
     const chaveBruta = elemento.getAttribute('data-placeholder') || ''
@@ -53,7 +53,7 @@ export function resolverTextoContextoIa(
   mapa: MapaPlaceholdersResolvidos,
 ): string {
   const documento = new DOMParser().parseFromString(html, 'text/html')
-  documento.querySelectorAll('[data-placeholder-preview="true"], script, style').forEach(elemento => elemento.remove())
+  documento.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional], script, style').forEach(elemento => elemento.remove())
   removerAncorasTabelasPersonalizadas(documento)
   documento.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(elemento => {
     const chaveBruta = elemento.getAttribute('data-placeholder') || ''
