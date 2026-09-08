@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { getMargens } from '@/lib/margens';
 import { buildHeaderTemplate } from '@/lib/pdf-header';
+import { CABECALHO_TODAS_PAGINAS_PADRAO } from '@shared/configuracoes/cabecalhos-padrao';
 
 interface Placeholder {
   id: string;
@@ -40,13 +41,12 @@ function mensagemErro(error: unknown): string {
   return error instanceof Error ? error.message : 'Erro inesperado';
 }
 
-const DEFAUL_PAGINAS_HTML = `<p style="text-align: right;">FLS. {{pagina}}/{{totalPaginas}}</p>\n<p style="text-align: right;">LAUDO n&ordm; {{numero_rep}}</p>`;
 const CHAVE_CONFIG = 'cabecalho_laudo';
 const CHAVE_CONFIG_PAGINAS = 'cabecalho_paginas';
 
 export const CabecalhoPage: React.FC = () => {
   const [conteudo, setConteudo] = useState('');
-  const [conteudoPaginas, setConteudoPaginas] = useState(DEFAUL_PAGINAS_HTML);
+  const [conteudoPaginas, setConteudoPaginas] = useState(CABECALHO_TODAS_PAGINAS_PADRAO);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [salvandoPaginas, setSalvandoPaginas] = useState(false);
@@ -278,7 +278,8 @@ export const CabecalhoPage: React.FC = () => {
         </Alert>
       )}
 
-      <Card>
+      <div className="flex flex-col gap-6">
+      <Card className="order-2">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -320,7 +321,7 @@ export const CabecalhoPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="order-1">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -360,6 +361,7 @@ export const CabecalhoPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
     </div>
 

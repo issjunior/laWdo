@@ -27,7 +27,7 @@ A migration v31 permanece responsável por normalizar os marcadores da seção r
 
 ## Sincronização e migração
 
-Ao sincronizar seção derivada, `laudoService` indexa blocos periciais por `data-arma-chave:data-bloco-pericial` e reaproveita o HTML atual quando a peça ainda existe. Assim preserva texto editado e a supressão recuperável, sem transferir conteúdo para outra arma.
+Ao sincronizar seção derivada, `laudoService` indexa blocos periciais por `data-arma-chave:data-bloco-pericial` e reaproveita o HTML atual quando a peça ainda existe. Assim preserva texto editado e a exclusão persistida, sem transferir conteúdo para outra arma. O wrapper excluído conserva `data-cond-suprimido="true"` para não reaparecer na recomposição; não há restauração disponível na interface atual.
 
 Atualização de REP e sincronização de laudo não formam uma transação única; falha na sincronização é registrada sem desfazer a REP. A expansão é em memória e cresce com a quantidade de seções e armas.
 

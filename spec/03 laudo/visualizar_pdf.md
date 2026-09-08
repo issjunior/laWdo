@@ -6,6 +6,14 @@ O preview usa o corpo HTML persistido do laudo, que pode ter sido criado ou sinc
 
 A depuração deve seguir esta ordem: conteúdo salvo em `laudos.conteudo`, HTML após resolução e, por fim, a conversão para PDF/ODT.
 
+## Cabeçalhos configuráveis
+
+A configuração separa `cabecalho_laudo`, usado no corpo da primeira página, de `cabecalho_paginas`, convertido no `headerTemplate` das páginas. `buildPdfHeaderConfig()` lê as duas chaves em paralelo; `buildHeaderTemplate()` remove wrappers `data-placeholder`, converte `{{pagina}}` e `{{totalPaginas}}` nas classes nativas do Chromium e aplica substituições como `numero_rep`.
+
+Os padrões canônicos ficam em `src/shared/configuracoes/cabecalhos-padrao.ts`. A migration v35 garante o cabeçalho da primeira página e a v36 garante o cabeçalho de todas as páginas com `INSERT OR IGNORE`, portanto configurações já personalizadas não são sobrescritas. A tela de Cabeçalhos apresenta primeiro a configuração das páginas e depois a primeira página; ambas são editadas localmente e persistidas em `configuracoes`.
+
+A versão atual do schema é 36. O teste de integridade do schema ainda contém expectativas literais para a versão 34 e, no estado atual, registra duas falhas até ser alinhado por alteração de testes autorizada.
+
 ## Comportamento relevante
 
 - Seções condicionais inativas e blocos periciais suprimidos não aparecem na saída.

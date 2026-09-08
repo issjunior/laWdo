@@ -22,7 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { TinyMceEditor, type BlocoCondicionalSelecionado } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
 import { PainelIaErrorBoundary } from '@/components/ai/PainelIaErrorBoundary';
@@ -136,6 +136,15 @@ interface Placeholder {
   valor: string;
   descricao: string;
   categoria_id: string;
+}
+
+function encerrarEdicaoBlocosCondicionais(html: string): string {
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  documento.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
+    bloco.removeAttribute('data-cond-em-edicao');
+    bloco.removeAttribute('contenteditable');
+  });
+  return documento.body.innerHTML;
 }
 
 interface Categoria {
@@ -382,6 +391,14 @@ interface AtualizacaoStatusPendente {
 
 type SecaoEditor = SecaoEstruturalLaudo;
 
+function conteudoHtmlEhVazio(html?: string | null): boolean {
+  if (!html?.trim()) return true;
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;|&#160;|&#x[aA]0;|\u00a0/gi, '')
+    .trim() === '';
+}
+
 interface RespostaIaPendente {
   modo: 'inserir' | 'substituir';
   texto: string;
@@ -541,9 +558,6 @@ export const LaudosPage: React.FC = () => {
   const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
   const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
   const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
-  const [blocoParaSuprimir, setBlocoParaSuprimir] = useState<{ tipo: string; armaChave?: string; armaIndice?: number } | null>(null);
-  const [quantidadeBlocosSuprimidos, setQuantidadeBlocosSuprimidos] = useState(0);
-
   const exameToggles = useMemo<ExamToggle[] | undefined>(() => {
     if (!editando?.tipo_exame_codigo) return undefined;
     const allToggles = EXAM_TOGGLES[editando.tipo_exame_codigo];
@@ -676,8 +690,17 @@ export const LaudosPage: React.FC = () => {
     if (secoesFonte.length === 0) return '';
     let indiceH2 = 0;
     let indiceH3 = 0;
-    return secoesFonte
-      .map((sec, index) => {
+    const ids = new Set(secoesFonte.flatMap(secao => secao.id ? [secao.id] : []));
+    const filhosPorPai = new Map<string, Array<{ secao: SecaoEditor; indice: number }>>();
+
+    secoesFonte.forEach((secao, indice) => {
+      if (!secao.parentId || !ids.has(secao.parentId)) return;
+      const filhos = filhosPorPai.get(secao.parentId) || [];
+      filhos.push({ secao, indice });
+      filhosPorPai.set(secao.parentId, filhos);
+    });
+
+    const montarSecao = (sec: SecaoEditor, index: number): string => {
         if (sec.nivel === 2) {
           indiceH2 += 1;
           indiceH3 = 0;
@@ -689,7 +712,24 @@ export const LaudosPage: React.FC = () => {
         const titulo = sec.nivel === 2
           ? `${indiceH2}. ${tituloBase}`
           : `${indiceH2}.${indiceH3} ${tituloBase}`;
-        const conteudo = sec.conteudo?.trim() || '<p>&nbsp;</p>';
+        const conteudoOriginal = sec.conteudo?.trim() || '';
+        const filhas = sec.id ? filhosPorPai.get(sec.id) || [] : [];
+        const aninhada = Boolean(sec.parentId && ids.has(sec.parentId));
+        const conteudoEhVazio = conteudoHtmlEhVazio(conteudoOriginal);
+        const conteudo = conteudoEhVazio && filhas.length > 0
+          ? ''
+          : conteudoOriginal || '<p>&nbsp;</p>';
+        const subsecoes = filhas.length > 0
+          ? `<div data-laudo-subsecoes="true" style="margin:4px 8px 12px;padding:0 4px;">${filhas.map(filha => montarSecao(filha.secao, filha.indice)).join('\n')}</div>`
+          : '';
+        const estiloSecao = aninhada
+          ? 'margin:0 0 10px;border:0;border-radius:6px;overflow:hidden;'
+          : 'margin-bottom:16px;border:1px solid rgba(128,128,128,0.2);border-radius:8px;overflow:hidden;';
+        const estiloCabecalho = aninhada
+          ? 'background:rgba(128,128,128,0.06);padding:7px 10px;border-left:3px solid rgba(128,128,128,0.35);border-bottom:1px solid rgba(128,128,128,0.16);font-weight:600;color:inherit;'
+          : 'background:rgba(128,128,128,0.08);padding:8px 12px;border-bottom:1px solid rgba(128,128,128,0.2);font-weight:600;color:inherit;';
+        const estiloConteudo = aninhada ? 'padding:8px 4px 4px 10px;' : 'padding:8px 4px;';
+
         return `
           <section
             data-laudo-secao="true"
@@ -698,21 +738,25 @@ export const LaudosPage: React.FC = () => {
             data-parent-id="${sec.parentId || ''}"
             data-estrutura-nivel="${sec.nivel}"
             data-derivada-rep="${sec.derivadaRep ? 'true' : 'false'}"
-            style="margin-bottom:16px;border:1px solid rgba(128,128,128,0.2);border-radius:8px;overflow:hidden;"
+            style="${estiloSecao}"
           >
             <div
               contenteditable="false"
               data-laudo-secao-header="true"
-              style="background:rgba(128,128,128,0.08);padding:8px 12px;border-bottom:1px solid rgba(128,128,128,0.2);font-weight:600;color:inherit;"
+              style="${estiloCabecalho}"
             >
               ${titulo}
             </div>
-            <div data-laudo-secao-content="true" style="padding:8px 4px;">
-              ${conteudo}
-            </div>
+            ${conteudo ? `<div data-laudo-secao-content="true" style="${estiloConteudo}">${conteudo}</div>` : ''}
+            ${subsecoes}
           </section>
         `;
-      })
+    };
+
+    return secoesFonte
+      .map((secao, indice) => ({ secao, indice }))
+      .filter(({ secao }) => !secao.parentId || !ids.has(secao.parentId))
+      .map(({ secao, indice }) => montarSecao(secao, indice))
       .join('\n');
   }, []);
 
@@ -728,7 +772,7 @@ export const LaudosPage: React.FC = () => {
       sectionNodes.forEach(node => {
         const idxRaw = node.getAttribute('data-secao-index');
         const idx = idxRaw != null ? Number(idxRaw) : NaN;
-        const contentNode = node.querySelector('[data-laudo-secao-content="true"]') as HTMLElement | null;
+        const contentNode = node.querySelector(':scope > [data-laudo-secao-content="true"]') as HTMLElement | null;
         if (!Number.isNaN(idx) && contentNode) {
           contentByIndex.set(idx, (contentNode.innerHTML || '').trim() || '<p>&nbsp;</p>');
         }
@@ -786,11 +830,11 @@ export const LaudosPage: React.FC = () => {
   const handleEditorModeChange = useCallback((nextMode: 'multi' | 'single') => {
     if (nextMode === editorMode) return;
     if (nextMode === 'single') {
-      setSingleEditorHtml(buildSingleHtmlFromSecoes(secoes));
+      setSingleEditorHtml(encerrarEdicaoBlocosCondicionais(buildSingleHtmlFromSecoes(secoes)));
       setEditorMode('single');
       return;
     }
-    setSecoes(prev => parseSingleHtmlToSecoes(singleEditorHtml, prev));
+    setSecoes(prev => parseSingleHtmlToSecoes(encerrarEdicaoBlocosCondicionais(singleEditorHtml), prev));
     setEditorMode('multi');
   }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
@@ -1900,7 +1944,6 @@ export const LaudosPage: React.FC = () => {
     }
 
     setModoVisualizacaoPlaceholders('dados');
-    setQuantidadeBlocosSuprimidos((laudo.conteudo.match(/data-cond-suprimido="true"/g) || []).length);
     iniciarSessao();
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
@@ -1925,50 +1968,38 @@ export const LaudosPage: React.FC = () => {
     });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
 
-  const confirmarSupressaoBloco = useCallback(() => {
-    if (!blocoParaSuprimir) return;
-    const editores = editorMode === 'single'
-      ? [obterEditorTinyMce('laudo-single-editor')]
-      : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
-    const editor = editores.filter(isTinyMceEditor).find(candidato => {
-      const seletor = `[data-bloco-pericial="${blocoParaSuprimir.tipo}"]`;
-      return Array.from(candidato.getBody()?.querySelectorAll<HTMLElement>(seletor) || []).some(bloco => (
-        !blocoParaSuprimir.armaChave || bloco.getAttribute('data-arma-chave') === blocoParaSuprimir.armaChave
-      ));
-    });
-    if (!editor) return;
-    editor.undoManager.transact(() => {
-      const seletor = `[data-bloco-pericial="${blocoParaSuprimir.tipo}"]`;
-      const bloco = Array.from(editor.getBody()?.querySelectorAll<HTMLElement>(seletor) || []).find(candidato => (
-        !blocoParaSuprimir.armaChave || candidato.getAttribute('data-arma-chave') === blocoParaSuprimir.armaChave
-      ));
-      bloco?.setAttribute('data-cond-suprimido', 'true');
-    });
+  const atualizarConteudoDoEditor = useCallback((editor: TinyMceEditorInstance) => {
     const conteudo = editor.getContent();
-    registrarAlteracao();
-    if (editorMode === 'single') setSingleEditorHtml(conteudo);
-    else {
-      const indice = editores.indexOf(editor);
-      if (indice >= 0) atualizarConteudoSecao(indice, conteudo);
+    if (editorMode === 'single') {
+      setSingleEditorHtml(conteudo);
+      return;
     }
-    setQuantidadeBlocosSuprimidos(quantidade => quantidade + 1);
-    setBlocoParaSuprimir(null);
-  }, [atualizarConteudoSecao, blocoParaSuprimir, editorMode, registrarAlteracao, secoes]);
+    const indice = secoes.findIndex((_, indiceSecao) => `secao-${indiceSecao}` === editor.id);
+    if (indice >= 0) atualizarConteudoSecao(indice, conteudo);
+  }, [atualizarConteudoSecao, editorMode, secoes]);
 
-  const restaurarBlocosSuprimidos = useCallback(() => {
-    const editores = editorMode === 'single'
-      ? [obterEditorTinyMce('laudo-single-editor')]
-      : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
-    editores.filter(isTinyMceEditor).forEach((editor, indice) => {
-      if (!editor.getBody()?.querySelector('[data-cond-suprimido="true"]')) return;
-      editor.undoManager.transact(() => editor.getBody()?.querySelectorAll('[data-cond-suprimido="true"]').forEach(bloco => bloco.removeAttribute('data-cond-suprimido')));
-      const conteudo = editor.getContent();
-      if (editorMode === 'single') setSingleEditorHtml(conteudo);
-      else atualizarConteudoSecao(indice, conteudo);
+  const localizarBlocoNoEditor = useCallback((referencia: BlocoCondicionalSelecionado) => {
+    const editor = obterEditorTinyMce(referencia.editorId);
+    if (!isTinyMceEditor(editor)) return null;
+    const bloco = Array.from(editor.getBody()?.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-instancia]') || [])
+      .find(candidato => candidato.getAttribute('data-cond-instancia') === referencia.instanciaId);
+    return bloco ? { editor, bloco } : null;
+  }, []);
+
+  const excluirBlocoCondicional = useCallback((referencia: BlocoCondicionalSelecionado) => {
+    const encontrado = localizarBlocoNoEditor(referencia);
+    if (!encontrado) {
+      toast.error('O bloco condicional não está mais disponível neste editor.');
+      return;
+    }
+    encontrado.editor.undoManager.transact(() => {
+      encontrado.bloco.removeAttribute('data-cond-em-edicao');
+      encontrado.bloco.setAttribute('contenteditable', 'false');
+      encontrado.bloco.setAttribute('data-cond-suprimido', 'true');
     });
+    atualizarConteudoDoEditor(encontrado.editor);
     registrarAlteracao();
-    setQuantidadeBlocosSuprimidos(0);
-  }, [atualizarConteudoSecao, editorMode, registrarAlteracao, secoes]);
+  }, [atualizarConteudoDoEditor, localizarBlocoNoEditor, registrarAlteracao]);
 
   useEffect(() => {
     if (!editando) return;
@@ -1996,7 +2027,6 @@ export const LaudosPage: React.FC = () => {
     setExameMenuStructure(undefined);
     setExameCamposEspecificos(undefined);
     setMapaPlaceholdersResolvidos({});
-    setQuantidadeBlocosSuprimidos(0);
     setCategoriaExameId('');
     if (previewBlobUrl) {
       URL.revokeObjectURL(previewBlobUrl);
@@ -3445,14 +3475,6 @@ export const LaudosPage: React.FC = () => {
               conteudoPainel={conteudoPainelLateral}
             >
               <div data-diagnostico-id="laudos.editor-scroll" className="pr-2 [overflow-anchor:none]">
-                {quantidadeBlocosSuprimidos > 0 && (
-                  <Alert className="mb-3">
-                    <AlertDescription className="flex items-center justify-between gap-3">
-                      <span>{quantidadeBlocosSuprimidos} bloco(s) pericial(is) suprimido(s). Eles não serão exportados.</span>
-                      <Button variant="outline" size="sm" onClick={restaurarBlocosSuprimidos}>Restaurar blocos</Button>
-                    </AlertDescription>
-                  </Alert>
-                )}
                 {editorMode === 'single' ? (
                   <div className="min-w-0 space-y-3 pb-4">
                     <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
@@ -3479,7 +3501,8 @@ export const LaudosPage: React.FC = () => {
                           aplicarModoNoEditor(editor);
                           registrarEditorIa(editor);
                         }}
-                        onSolicitarSupressaoBloco={setBlocoParaSuprimir}
+                        onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
+                        onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
                           setIaSheetOpen(false);
@@ -3491,80 +3514,117 @@ export const LaudosPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="min-w-0 space-y-6 pb-4">
-                    {secoes.map((secao, idx) => {
-                      const isIlustracoes = secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES';
-                      const tituloVisual = secao.nivel === 2 ? 'Seção principal' : 'Subseção';
-                      return (
-                      <Collapsible
-                        key={isIlustracoes ? `ilus-${ilustracoesKey}` : idx}
-                        open={!secoesColapsadas[idx]}
-                        onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
-                        className={cn(
-                          'min-w-0 max-w-full rounded-lg',
-                          getClasseSecaoEstrutural(secao),
-                          secao.nivel === 3 && 'ml-5'
-                        )}
-                      >
-                        <div className="flex min-w-0 items-center justify-between p-4 cursor-default">
-                          <CollapsibleTrigger asChild>
-                            <div className="flex min-w-0 flex-1 items-center gap-3 cursor-pointer">
-                              <div className="p-2 rounded-full bg-primary/10 text-primary">
-                                <Edit size={18} />
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="text-lg font-semibold">{secao.titulo}</h3>
-                                <p className="text-sm text-muted-foreground">{tituloVisual} · clique para expandir/recolher</p>
-                              </div>
-                            </div>
-                          </CollapsibleTrigger>
-                          <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-                        </div>
-                        <CollapsibleContent className="p-4 border-t" forceMount>
-                          <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
-                            <div className={isIlustracoes ? 'relative' : ''}>
-                              <TinyMceEditor
-                                editorId={`secao-${idx}`}
-                                initialValue={secao.conteudo}
-                                onChange={(txt, origem) => atualizarConteudoSecao(idx, txt, origem)}
-                                height={400}
-                                alturaAutomatica
-                                laudoId={editando.id}
-                                repNumero={editando.rep_numero}
-                                onImageInserted={() => {
-                                  void reconciliarImagensDoEditor().catch(error => {
-                                    toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
-                                  });
-                                }}
-                                placeholderChaves={placeholderChaves}
-                                onEditorInit={(editor) => {
-                                  aplicarModoNoEditor(editor);
-                                  registrarEditorIa(editor);
-                                  if (isIlustracoes) handleIlustracoesEditorInit(editor);
-                                }}
-                                condToggles={exameToggles}
-                                onSolicitarSupressaoBloco={setBlocoParaSuprimir}
-                                onDummyFigureClick={(imageId) => {
-                                  setFiguraSubstituicaoSolicitada(imageId);
-                                  setIaSheetOpen(false);
-                                  setIlustracoesPanelOpen(true);
-                                  setPanelCollapsed(false);
-                                }}
-                              />
+                    {(() => {
+                      const ids = new Set(secoes.flatMap(secao => secao.id ? [secao.id] : []));
+                      const filhosPorPai = new Map<string, Array<{ secao: SecaoEditor; indice: number }>>();
 
-                              {isIlustracoes && ilustracoesRemounting && (
-                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded">
-                                  <div className="flex flex-col items-center gap-3">
-                                    <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                    <span className="text-sm text-muted-foreground">Carregando editor...</span>
+                      secoes.forEach((secao, indice) => {
+                        if (!secao.parentId || !ids.has(secao.parentId)) return;
+                        const filhos = filhosPorPai.get(secao.parentId) || [];
+                        filhos.push({ secao, indice });
+                        filhosPorPai.set(secao.parentId, filhos);
+                      });
+
+                      const renderizarSecao = (secao: SecaoEditor, idx: number, aninhada = false): React.ReactNode => {
+                        const isIlustracoes = secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES';
+                        const tituloVisual = secao.nivel === 2 ? 'Seção principal' : 'Subseção';
+                        const filhas = secao.id ? filhosPorPai.get(secao.id) || [] : [];
+                        const exibirEditor = filhas.length === 0 || !conteudoHtmlEhVazio(secao.conteudo);
+
+                        return (
+                          <Collapsible
+                            key={isIlustracoes ? `ilus-${ilustracoesKey}` : idx}
+                            open={!secoesColapsadas[idx]}
+                            onOpenChange={(open) => setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }))}
+                            className={cn(
+                              'min-w-0 max-w-full rounded-lg',
+                              getClasseSecaoEstrutural(secao),
+                              aninhada && 'rounded-md border-0 bg-transparent shadow-none',
+                            )}
+                          >
+                            <div className={cn(
+                              'flex min-w-0 items-center justify-between cursor-default',
+                              aninhada
+                                ? 'rounded-md border-l-4 border-l-primary/40 bg-muted/50 px-3 py-2'
+                                : 'p-4',
+                            )}>
+                              <CollapsibleTrigger asChild>
+                                <div className="flex min-w-0 flex-1 items-center gap-3 cursor-pointer">
+                                  <div className={cn(
+                                    'bg-primary/10 text-primary',
+                                    aninhada ? 'rounded-md p-1.5' : 'rounded-full p-2',
+                                  )}>
+                                    <Edit size={18} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h3 className={cn('font-semibold', aninhada ? 'text-base' : 'text-lg')}>{secao.titulo}</h3>
+                                    <p className="text-sm text-muted-foreground">{tituloVisual} · clique para expandir/recolher</p>
                                   </div>
                                 </div>
-                              )}
+                              </CollapsibleTrigger>
+                              <ChevronDown className="h-4 w-4 transition-transform duration-200" />
                             </div>
-                          </PlaceholderContextMenu>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    );
-                    })}
+                            <CollapsibleContent className={cn(aninhada ? 'px-2 pb-2 pt-2' : 'border-t p-3')} forceMount>
+                              {exibirEditor && (
+                                <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
+                                <div className={isIlustracoes ? 'relative' : ''}>
+                                  <TinyMceEditor
+                                    editorId={`secao-${idx}`}
+                                    initialValue={secao.conteudo}
+                                    onChange={(txt, origem) => atualizarConteudoSecao(idx, txt, origem)}
+                                    height={400}
+                                    alturaAutomatica
+                                    laudoId={editando.id}
+                                    repNumero={editando.rep_numero}
+                                    onImageInserted={() => {
+                                      void reconciliarImagensDoEditor().catch(error => {
+                                        toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
+                                      });
+                                    }}
+                                    placeholderChaves={placeholderChaves}
+                                    onEditorInit={(editor) => {
+                                      aplicarModoNoEditor(editor);
+                                      registrarEditorIa(editor);
+                                      if (isIlustracoes) handleIlustracoesEditorInit(editor);
+                                    }}
+                                    onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
+                                    condToggles={exameToggles}
+                                    onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
+                                    onDummyFigureClick={(imageId) => {
+                                      setFiguraSubstituicaoSolicitada(imageId);
+                                      setIaSheetOpen(false);
+                                      setIlustracoesPanelOpen(true);
+                                      setPanelCollapsed(false);
+                                    }}
+                                  />
+
+                                  {isIlustracoes && ilustracoesRemounting && (
+                                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded">
+                                      <div className="flex flex-col items-center gap-3">
+                                        <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                        <span className="text-sm text-muted-foreground">Carregando editor...</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                </PlaceholderContextMenu>
+                              )}
+
+                              {filhas.length > 0 && (
+                                <div className={cn('space-y-3 px-1 pb-1', exibirEditor && 'mt-3')}>
+                                  {filhas.map(filha => renderizarSecao(filha.secao, filha.indice, true))}
+                                </div>
+                              )}
+                            </CollapsibleContent>
+                          </Collapsible>
+                        );
+                      };
+
+                      return secoes
+                        .map((secao, indice) => ({ secao, indice }))
+                        .filter(({ secao }) => !secao.parentId || !ids.has(secao.parentId))
+                        .map(({ secao, indice }) => renderizarSecao(secao, indice));
+                    })()}
                   </div>
                 )}
                 <RodapeEditorLaudo
@@ -3924,23 +3984,6 @@ export const LaudosPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={blocoParaSuprimir !== null} onOpenChange={(open) => {
-        if (!open) setBlocoParaSuprimir(null);
-      }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Suprimir bloco pericial?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O bloco de {blocoParaSuprimir?.tipo === 'coleta' ? 'Coleta de Padrões Balísticos' : 'Funcionamento e Eficiência'}{blocoParaSuprimir?.armaIndice ? ` da Arma ${String.fromCharCode(64 + blocoParaSuprimir.armaIndice)}` : ''} não será exportado. Você poderá restaurá-lo antes de salvar o laudo.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmarSupressaoBloco}>Suprimir bloco</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {timelineLaudo && (
         <RepTimelineDialog

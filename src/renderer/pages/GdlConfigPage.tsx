@@ -167,22 +167,28 @@ export const GdlConfigPage: React.FC = () => {
     setSalvarErro(null);
 
     const ambLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
+    const loginNormalizado = login.trim();
+    const senhaNormalizada = senha.trim();
+    const cpfUsuarioNormalizado = cpfUsuario.replace(/\D/g, '');
 
-    if (!login.trim() || !senha.trim()) {
+    if (!loginNormalizado || !senhaNormalizada) {
       const faltantes: string[] = [];
-      if (!login.trim()) faltantes.push('login');
-      if (!senha.trim()) faltantes.push('senha');
+      if (!loginNormalizado) faltantes.push('login');
+      if (!senhaNormalizada) faltantes.push('senha');
       setSalvarErro(`Preencha ${faltantes.join(' e ')} de ${ambLabel} para consultas.`);
       return;
     }
 
+    setLogin(loginNormalizado);
+    setSenha(senhaNormalizada);
+    setCpfUsuario(formatarCPF(cpfUsuarioNormalizado));
     setSalvando(true);
     try {
       await Promise.all([
         window.ipcAPI.configuracao.salvar('gdl_ambiente', ambiente, 'texto', 'Ambiente da API GDL'),
-        window.ipcAPI.configuracao.salvar(`gdl_login_${ambiente}`, login, 'texto', `Login GDL (${ambLabel})`),
-        window.ipcAPI.configuracao.salvar(`gdl_senha_${ambiente}`, senha, 'senha', `Senha GDL (${ambLabel})`),
-        window.ipcAPI.configuracao.salvar(`gdl_cpf_usuario_${ambiente}`, cpfUsuario.replace(/\D/g, ''), 'texto', `CPF usuário GDL (${ambLabel})`),
+        window.ipcAPI.configuracao.salvar(`gdl_login_${ambiente}`, loginNormalizado, 'texto', `Login GDL (${ambLabel})`),
+        window.ipcAPI.configuracao.salvar(`gdl_senha_${ambiente}`, senhaNormalizada, 'senha', `Senha GDL (${ambLabel})`),
+        window.ipcAPI.configuracao.salvar(`gdl_cpf_usuario_${ambiente}`, cpfUsuarioNormalizado, 'texto', `CPF usuário GDL (${ambLabel})`),
       ]);
       const rValidacao = await window.ipcAPI.gdl.limparValidacaoSessao(ambiente);
       if (rValidacao.success && rValidacao.data) {

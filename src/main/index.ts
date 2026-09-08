@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
-import { setupDatabase } from './database/index.js';
+import { CURRENT_SCHEMA_VERSION, setupDatabase } from './database/index.js';
 import { closeDatabase, executeQuery } from './database/sqlite.js';
 import { getLogger, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
@@ -523,7 +523,7 @@ app.whenReady().then(async () => {
         "SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' LIMIT 1",
       );
       const resultado = {
-        sucesso: versao?.version === 34
+        sucesso: versao?.version === CURRENT_SCHEMA_VERSION
           && colunasLaudos.some(coluna => coluna.name === 'tipo_criacao')
           && colunasLogs.some(coluna => coluna.name === 'modulo')
           && templateB602.length === 1,

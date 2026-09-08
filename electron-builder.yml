@@ -29,6 +29,7 @@ win:
   icon: src/renderer/assets/icon.ico
 
 nsis:
+  include: build/installer.nsh
   installerIcon: src/renderer/assets/icon.ico
   uninstallerIcon: src/renderer/assets/icon.ico
   oneClick: false

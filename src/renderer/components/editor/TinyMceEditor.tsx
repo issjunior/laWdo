@@ -2,7 +2,16 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
-import { encontrarAcaoSupressaoBloco, sincronizarAcoesSupressaoBlocos } from '@/lib/blocos-periciais';
+import {
+  encontrarAcaoBlocoCondicional,
+  sincronizarAcoesBlocosCondicionais,
+  type AcaoBlocoCondicional,
+} from '@/lib/blocos-periciais';
+import {
+  encontrarAcaoTabelaPlaceholder,
+  personalizarTabelaPlaceholder,
+  restaurarTabelaPlaceholder,
+} from '@/lib/apresentacao-placeholders';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
@@ -109,6 +118,14 @@ function aplicarTemaEditor(editor: TinyMceEditorInstance, dark: boolean) {
   }
 }
 
+export interface BlocoCondicionalSelecionado {
+  editorId: string;
+  instanciaId: string;
+  titulo: string;
+  resumo: string;
+  armaIndice?: number;
+}
+
 interface TinyMceEditorProps {
   /** Modo controlado: conteúdo sincronizado com estado React. Pode causar salto de cursor com HTML complexo. Use initialValue para evitar. */
   value?: string;
@@ -137,8 +154,10 @@ interface TinyMceEditorProps {
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
   condToggles?: Array<{ id: string; label: string; subtitulo?: string; subToggles?: Array<{ id: string; label: string; subtitulo?: string }> }>;
-  /** Solicita supressão confirmada de um bloco pericial versionado. */
-  onSolicitarSupressaoBloco?: (bloco: { tipo: string; armaChave?: string; armaIndice?: number }) => void;
+  /** Solicita a exclusão confirmada de uma ocorrência exata de bloco condicional. */
+  onSolicitarExclusaoBlocoCondicional?: (bloco: BlocoCondicionalSelecionado) => void;
+  /** Reaplica a visualização de placeholders após restaurar uma tabela vinculada. */
+  onTabelaPlaceholderRestaurada?: (editor: TinyMceEditorInstance) => void;
 }
 
 type ToggleCondicionalFlat = { id: string; label: string; subtitulo?: string };
@@ -350,10 +369,10 @@ function criarHtmlBlocoCondicional(toggleId: string, condToggles?: TinyMceEditor
   return [
     `<div class="cond-bloco"`,
     ` data-cond-bloco="${toggleId}"`,
+    ` data-cond-instancia="${crypto.randomUUID()}"`,
     atributosV2,
     ` data-cond-badge="${BADGE_BLOCO_CONDICIONAL}"`,
-    ` data-cond-resumo="${resumo}"`,
-    ` title="${resumo}">`,
+    ` data-cond-resumo="${resumo}">`,
     blocoPericial ? '<p>&nbsp;</p></div>' : `<h3>${getTituloBlocoCondicional(toggleId, condToggles)}</h3><p>&nbsp;</p></div>`,
   ].join('');
 }
@@ -390,9 +409,19 @@ function normalizarBlocosCondicionais(raiz: HTMLElement | null, condToggles?: Ti
       alterados += 1;
     }
 
-    if (bloco.getAttribute('title') !== resumo) {
-      bloco.setAttribute('title', resumo);
+    if (bloco.hasAttribute('title')) {
+      bloco.removeAttribute('title');
       alterados += 1;
+    }
+
+    if (!bloco.getAttribute('data-cond-instancia')) {
+      bloco.setAttribute('data-cond-instancia', crypto.randomUUID());
+      alterados += 1;
+    }
+
+    const emEdicao = bloco.getAttribute('data-cond-em-edicao') === 'true';
+    if (bloco.getAttribute('contenteditable') !== String(emEdicao)) {
+      bloco.setAttribute('contenteditable', String(emEdicao));
     }
   }
 
@@ -415,13 +444,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   onDummyFigureClick,
   autoConverterReservados = false,
   condToggles,
-  onSolicitarSupressaoBloco,
+  onSolicitarExclusaoBlocoCondicional,
+  onTabelaPlaceholderRestaurada,
   ...rest
 }) => {
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
   const repNumeroRef = useRef(repNumero);
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
-  const onSolicitarSupressaoBlocoRef = useRef(onSolicitarSupressaoBloco);
+  const onSolicitarExclusaoBlocoCondicionalRef = useRef(onSolicitarExclusaoBlocoCondicional);
+  const onTabelaPlaceholderRestauradaRef = useRef(onTabelaPlaceholderRestaurada);
   const editorProntoParaAlteracoesRef = useRef(false);
   const frameLiberarAlteracoesRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
@@ -438,8 +469,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   }, [repNumero]);
 
   useEffect(() => {
-    onSolicitarSupressaoBlocoRef.current = onSolicitarSupressaoBloco;
-  }, [onSolicitarSupressaoBloco]);
+    onSolicitarExclusaoBlocoCondicionalRef.current = onSolicitarExclusaoBlocoCondicional;
+  }, [onSolicitarExclusaoBlocoCondicional]);
+
+  useEffect(() => {
+    onTabelaPlaceholderRestauradaRef.current = onTabelaPlaceholderRestaurada;
+  }, [onTabelaPlaceholderRestaurada]);
 
   useEffect(() => () => {
     if (frameLiberarAlteracoesRef.current !== null) {
@@ -646,66 +681,129 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               width: 100% !important;
               max-width: 100% !important;
             }
+            [data-placeholder-preview-tabela="true"],
+            [data-placeholder-tabela-personalizada="true"] {
+              position: relative;
+              display: block;
+              box-sizing: border-box;
+              width: 100%;
+              margin: 12px 0;
+              padding: 40px 14px 12px;
+              border-left: 3px solid #f59e0b;
+              border-radius: 0 10px 10px 0;
+              background-color: rgba(245, 158, 11, 0.08);
+            }
+            [data-placeholder-preview-tabela="true"]::before,
+            [data-placeholder-tabela-personalizada="true"]::before {
+              content: "Tabela do placeholder";
+              display: inline-flex;
+              align-items: center;
+              position: absolute;
+              top: 10px;
+              left: 14px;
+              padding: 2px 8px;
+              border: 1px solid #fdba74;
+              border-radius: 999px;
+              background-color: #fff7ed;
+              color: #9a3412;
+              font-size: 10px;
+              font-weight: 700;
+              letter-spacing: 0.04em;
+              line-height: 1.4;
+              text-transform: uppercase;
+            }
+            [data-placeholder-preview-tabela="true"] > table,
+            [data-placeholder-tabela-personalizada="true"] > table {
+              width: 100% !important;
+              max-width: 100% !important;
+            }
+            .acao-tabela-placeholder {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              position: absolute;
+              top: 8px;
+              right: 10px;
+              min-height: 22px;
+              padding: 0 6px;
+              border: 1px solid #fdba74;
+              border-radius: 4px;
+              color: #92400e;
+              background: #fff7ed;
+              font-size: 11px;
+              font-weight: 700;
+              line-height: 1;
+              cursor: pointer !important;
+              user-select: none;
+              white-space: nowrap;
+            }
+            .acao-tabela-placeholder:hover,
+            .acao-tabela-placeholder:focus {
+              background: rgba(146, 64, 14, 0.12);
+              color: #7c2d12;
+              outline: none;
+            }
+            body.dark-content [data-placeholder-preview-tabela="true"],
+            body.dark-content [data-placeholder-tabela-personalizada="true"] {
+              border-left-color: #d97706;
+              background-color: rgba(245, 158, 11, 0.12);
+            }
+            body.dark-content [data-placeholder-preview-tabela="true"]::before,
+            body.dark-content [data-placeholder-tabela-personalizada="true"]::before {
+              border-color: rgba(251, 191, 36, 0.45);
+              background-color: rgba(120, 53, 15, 0.75);
+              color: #fde68a;
+            }
             body.dark-content .cond-bloco {
               border-left-color: #d97706;
               background-color: rgba(245, 158, 11, 0.12);
             }
             .cond-bloco[data-cond-suprimido="true"] {
-              display: block;
-              min-height: 0;
-              border-left-color: #9ca3af;
-              background-color: rgba(107, 114, 128, 0.1);
-              padding: 8px 12px;
-              color: #6b7280;
-              font-style: italic;
+              display: none !important;
             }
-            .cond-bloco[data-cond-suprimido="true"] > * {
-              display: none;
-            }
-            .cond-bloco[data-cond-suprimido="true"]::before {
-              content: "Bloco pericial suprimido — use Restaurar blocos acima para recuperá-lo";
-              display: block;
-              margin: 0;
-              padding: 0;
-              background: transparent;
-              color: inherit;
-              font-size: 12px;
-              letter-spacing: normal;
-              text-transform: none;
-            }
-            .cond-bloco[data-bloco-pericial] {
+            .cond-bloco {
               position: relative;
-              padding-right: 36px;
+              padding-right: 112px;
             }
-            .cond-bloco .acao-suprimir-bloco {
+            .cond-bloco .controles-bloco-condicional {
               position: absolute;
               top: 6px;
               right: 7px;
               display: inline-flex !important;
+              gap: 4px;
+              align-items: center;
+              z-index: 4;
+            }
+            .cond-bloco .acao-bloco-condicional {
+              display: inline-flex !important;
               align-items: center;
               justify-content: center;
-              width: 22px;
+              min-width: 22px;
               height: 22px;
-              padding: 0;
-              border: 0;
+              padding: 0 6px;
+              border: 1px solid #fdba74;
               border-radius: 4px;
               background: #fff7ed;
               color: #92400e;
               cursor: pointer !important;
               font-family: Arial, sans-serif;
-              font-size: 21px;
+              font-size: 11px;
+              font-weight: 700;
               line-height: 1;
               visibility: visible !important;
               opacity: 1 !important;
               pointer-events: auto !important;
-              z-index: 4;
             }
-            .cond-bloco .acao-suprimir-bloco:hover {
+            .cond-bloco .acao-bloco-condicional-excluir {
+              padding: 0;
+              border-color: transparent;
+              font-size: 21px;
+              font-weight: 400;
+            }
+            .cond-bloco .acao-bloco-condicional:hover,
+            .cond-bloco .acao-bloco-condicional:focus {
               background: rgba(146, 64, 14, 0.12);
               color: #7c2d12;
-            }
-            .cond-bloco[data-cond-suprimido="true"] .acao-suprimir-bloco {
-              display: none;
             }
             .cond-bloco::before {
               content: "Bloco condicional";
@@ -723,17 +821,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               letter-spacing: 0.04em;
               text-transform: uppercase;
               line-height: 1.4;
-            }
-            .cond-bloco::after {
-              content: attr(data-cond-resumo);
-              order: -1;
-              display: block;
-              margin-bottom: 10px;
-              color: #9a3412;
-              font-size: 12px;
-              font-weight: 500;
-              line-height: 1.4;
-              white-space: pre-wrap;
             }
             .cond-bloco h1,
             .cond-bloco h2,
@@ -928,30 +1015,45 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               }
             }) satisfies ComandoTinyMce<string>);
 
-            const solicitarSupressaoBlocoSelecionado = (elemento?: HTMLElement) => {
-              const inicio = editor.selection.getStart() as HTMLElement | null;
-              const bloco = elemento?.closest<HTMLElement>('[data-bloco-pericial]')
-                || inicio?.closest<HTMLElement>('[data-bloco-pericial]');
-              const tipo = bloco?.getAttribute('data-bloco-pericial');
-              if (!bloco || !tipo) return false;
-              const indiceBruto = bloco.getAttribute('data-arma-indice');
-              const armaIndice = indiceBruto ? Number(indiceBruto) : undefined;
-              onSolicitarSupressaoBlocoRef.current?.({
-                tipo,
-                armaChave: bloco.getAttribute('data-arma-chave') || undefined,
-                armaIndice: Number.isInteger(armaIndice) ? armaIndice : undefined,
-              });
+            const confirmarExclusaoBlocoCondicional = (referencia: BlocoCondicionalSelecionado) => {
+              const identificacaoArma = referencia.armaIndice
+                ? ` da Arma ${String.fromCharCode(64 + referencia.armaIndice)}`
+                : '';
+              const confirmou = window.confirm(
+                `Excluir o bloco${identificacaoArma} — ${referencia.titulo}?\n\nEle desaparecerá do laudo e não será exportado. Você poderá restaurá-lo individualmente.`,
+              );
+              if (!confirmou) return false;
+              onSolicitarExclusaoBlocoCondicionalRef.current?.(referencia);
               return true;
             };
 
-            editor.addCommand('suprimirBlocoPericial', () => {
-              solicitarSupressaoBlocoSelecionado();
+            const solicitarExclusaoBlocoSelecionado = (elemento?: HTMLElement) => {
+              const inicio = editor.selection.getStart() as HTMLElement | null;
+              const bloco = elemento?.closest<HTMLElement>('.cond-bloco[data-cond-bloco]')
+                || inicio?.closest<HTMLElement>('.cond-bloco[data-cond-bloco]');
+              const instanciaId = bloco?.getAttribute('data-cond-instancia');
+              if (!bloco || !instanciaId) return false;
+              const indiceBruto = bloco.getAttribute('data-arma-indice');
+              const armaIndice = indiceBruto ? Number(indiceBruto) : undefined;
+              return confirmarExclusaoBlocoCondicional({
+                editorId: editor.id,
+                instanciaId,
+                titulo: bloco.querySelector('h1, h2, h3, h4, h5, h6')?.textContent?.trim()
+                  || bloco.getAttribute('data-cond-bloco')
+                  || 'Bloco condicional',
+                resumo: bloco.getAttribute('data-cond-resumo') || '',
+                armaIndice: Number.isInteger(armaIndice) ? armaIndice : undefined,
+              });
+            };
+
+            editor.addCommand('excluirBlocoCondicional', () => {
+              solicitarExclusaoBlocoSelecionado();
             });
 
             editor.ui.registry.addButton('suprimirblocopericial', {
-              text: 'Suprimir bloco',
-              tooltip: 'Suprimir o bloco pericial selecionado',
-              onAction: () => editor.execCommand('suprimirBlocoPericial'),
+              text: 'Excluir bloco',
+              tooltip: 'Excluir o bloco condicional selecionado',
+              onAction: () => editor.execCommand('excluirBlocoCondicional'),
             });
 
             // Registrar botão "Bloco Condicional" na toolbar
@@ -1004,26 +1106,26 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               if (!doc) return;
               const body = editor.getBody();
 
-              const sincronizarAcoesSupressao = () => {
+              const sincronizarAcoesBlocos = () => {
                 editor.undoManager.ignore(() => {
-                  sincronizarAcoesSupressaoBlocos(editor.getBody());
+                  const raizEditor = editor.getBody();
+                  normalizarBlocosCondicionais(raizEditor, condToggles);
+                  sincronizarAcoesBlocosCondicionais(raizEditor);
                 });
               };
-              const agendarSincronizacaoAcoesSupressao = () => {
+              const agendarSincronizacaoAcoesBlocos = () => {
                 const janelaEditor = editor.getDoc()?.defaultView;
-                janelaEditor?.requestAnimationFrame(sincronizarAcoesSupressao);
+                janelaEditor?.requestAnimationFrame(sincronizarAcoesBlocos);
               };
 
               if (normalizarBlocosCondicionais(body, condToggles) > 0) {
                 onChange(editor.getContent(), 'normalizacao-inicial');
               }
-              sincronizarAcoesSupressao();
-              editor.on('SetContent LoadContent Undo Redo', agendarSincronizacaoAcoesSupressao);
-
-              editor.on('keydown', (evento) => {
-                if ((evento.key === 'Delete' || evento.key === 'Backspace') && solicitarSupressaoBlocoSelecionado()) {
-                  evento.preventDefault();
-                }
+              sincronizarAcoesBlocos();
+              editor.on('SetContent LoadContent', agendarSincronizacaoAcoesBlocos);
+              editor.on('Undo Redo', () => {
+                agendarSincronizacaoAcoesBlocos();
+                onChange(editor.getContent());
               });
 
               doc.addEventListener('contextmenu', (e: MouseEvent) => {
@@ -1044,12 +1146,97 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 container.dispatchEvent(newEvent);
               });
 
+              type AcaoBlocoCondicionalPendente = {
+                acao: AcaoBlocoCondicional;
+                referencia: BlocoCondicionalSelecionado;
+              };
+
+              const descreverBlocoCondicional = (bloco: HTMLElement): BlocoCondicionalSelecionado | null => {
+                const instanciaId = bloco.getAttribute('data-cond-instancia');
+                if (!instanciaId) return null;
+                const indiceBruto = bloco.getAttribute('data-arma-indice');
+                const armaIndice = indiceBruto ? Number(indiceBruto) : undefined;
+                return {
+                  editorId: editor.id,
+                  instanciaId,
+                  titulo: bloco.querySelector('h1, h2, h3, h4, h5, h6')?.textContent?.trim()
+                    || bloco.getAttribute('data-cond-bloco')
+                    || 'Bloco condicional',
+                  resumo: bloco.getAttribute('data-cond-resumo') || '',
+                  armaIndice: Number.isInteger(armaIndice) ? armaIndice : undefined,
+                };
+              };
+
+              const executarAcaoBlocoCondicional = ({ acao, referencia }: AcaoBlocoCondicionalPendente) => {
+                const bloco = Array.from(editor.getBody()?.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-instancia]') || [])
+                  .find(candidato => candidato.getAttribute('data-cond-instancia') === referencia.instanciaId);
+
+                if (acao === 'excluir') {
+                  confirmarExclusaoBlocoCondicional(referencia);
+                  return;
+                }
+
+                if (!bloco) return;
+
+                editor.undoManager.ignore(() => {
+                  if (acao === 'editar') bloco.setAttribute('data-cond-em-edicao', 'true');
+                  else bloco.removeAttribute('data-cond-em-edicao');
+                  bloco.setAttribute('contenteditable', String(acao === 'editar'));
+                  sincronizarAcoesBlocosCondicionais(editor.getBody());
+                });
+              };
+
+              let acaoBlocoPendente: AcaoBlocoCondicionalPendente | null = null;
+              const registrarAcaoBlocoCondicional = (evento: PointerEvent) => {
+                const controle = encontrarAcaoBlocoCondicional(evento.target);
+                if (!controle) return;
+                const acao = controle.getAttribute('data-acao-bloco-condicional') as AcaoBlocoCondicional | null;
+                const bloco = controle.closest<HTMLElement>('.cond-bloco[data-cond-bloco]');
+                const referencia = bloco ? descreverBlocoCondicional(bloco) : null;
+                if (!acao || !referencia) return;
+                evento.preventDefault();
+                evento.stopPropagation();
+                acaoBlocoPendente = { acao, referencia };
+              };
+
+              const concluirAcaoBlocoCondicional = (evento: PointerEvent) => {
+                if (!acaoBlocoPendente) return;
+                evento.preventDefault();
+                evento.stopPropagation();
+                const acaoPendente = acaoBlocoPendente;
+                acaoBlocoPendente = null;
+                doc.defaultView?.setTimeout(() => executarAcaoBlocoCondicional(acaoPendente), 0);
+              };
+
+              const cancelarAcaoBlocoCondicional = () => {
+                acaoBlocoPendente = null;
+              };
+
+              doc.addEventListener('pointerdown', registrarAcaoBlocoCondicional, true);
+              doc.addEventListener('pointerup', concluirAcaoBlocoCondicional, true);
+              doc.addEventListener('pointercancel', cancelarAcaoBlocoCondicional, true);
+              editor.on('remove', () => {
+                doc.removeEventListener('pointerdown', registrarAcaoBlocoCondicional, true);
+                doc.removeEventListener('pointerup', concluirAcaoBlocoCondicional, true);
+                doc.removeEventListener('pointercancel', cancelarAcaoBlocoCondicional, true);
+              });
+
               editor.on('click', (evento: Event) => {
-                const acao = encontrarAcaoSupressaoBloco(evento.target);
+                const acao = encontrarAcaoTabelaPlaceholder(evento.target);
                 if (!acao) return;
                 evento.preventDefault();
                 evento.stopImmediatePropagation();
-                solicitarSupressaoBlocoSelecionado(acao);
+                const tipo = acao.getAttribute('data-acao-tabela-placeholder');
+                const restaurar = tipo === 'restaurar';
+                if (restaurar && !window.confirm('Restaurar os dados atuais da REP? As alterações locais desta tabela serão perdidas.')) {
+                  return;
+                }
+                const alterou = restaurar
+                  ? restaurarTabelaPlaceholder(editor, acao)
+                  : personalizarTabelaPlaceholder(editor, acao);
+                if (!alterou) return;
+                onChange(editor.getContent());
+                if (restaurar) onTabelaPlaceholderRestauradaRef.current?.(editor);
               });
 
               doc.addEventListener('click', (e: MouseEvent) => {

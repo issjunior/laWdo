@@ -11,6 +11,10 @@ import {
 } from './sqlite.js';
 import { atualizarMarcadoresTemplateB602 } from './template-b602.migration.js';
 import { sincronizarTemplatesIntegrados } from '../templates/integrados/sincronizar-templates-integrados.js';
+import {
+  CABECALHO_PRIMEIRA_PAGINA_PADRAO,
+  CABECALHO_TODAS_PAGINAS_PADRAO,
+} from '../../shared/configuracoes/cabecalhos-padrao.js';
 
 const log = getLogger('database');
 
@@ -19,7 +23,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 34;
+export const CURRENT_SCHEMA_VERSION = 36;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -2313,6 +2317,34 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.debug('Migration v34: schema físico reconciliado', { reparos });
     } catch (error) {
       log.error('Erro ao aplicar migration versão 34', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 35: definir cabeçalho inicial sem substituir personalizações existentes
+  if (fromVersion < 35) {
+    try {
+      await executeNonQuery(
+        `INSERT OR IGNORE INTO configuracoes (chave, valor, tipo, descricao) VALUES (?, ?, 'html', ?)`,
+        ['cabecalho_laudo', CABECALHO_PRIMEIRA_PAGINA_PADRAO, 'Cabeçalho da primeira página'],
+      );
+      log.debug('Migration v35: cabeçalho padrão da primeira página garantido');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 35', error);
+      throw error;
+    }
+  }
+
+  // Migration versão 36: definir cabeçalho das páginas sem substituir personalizações existentes
+  if (fromVersion < 36) {
+    try {
+      await executeNonQuery(
+        `INSERT OR IGNORE INTO configuracoes (chave, valor, tipo, descricao) VALUES (?, ?, 'html', ?)`,
+        ['cabecalho_paginas', CABECALHO_TODAS_PAGINAS_PADRAO, 'Cabeçalho de todas as páginas com contador de folhas'],
+      );
+      log.debug('Migration v36: cabeçalho padrão das páginas garantido');
+    } catch (error) {
+      log.error('Erro ao aplicar migration versão 36', error);
       throw error;
     }
   }

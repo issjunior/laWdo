@@ -4,7 +4,7 @@
 
 Antes de registrar handlers, sincronizar templates ou iniciar qualquer consulta ao GDL, `setupDatabase()` prepara o SQLite. A tabela `configuracoes` é obrigatória porque guarda URLs e credenciais da integração.
 
-Em instalação nova, o schema-base é criado e as migrations são executadas antes do registro da versão atual. Em atualização, a migration v33 garante `configuracoes` e a verificação de integridade recompõe estruturas complementares e índices ausentes. A versão só é registrada depois que as migrations terminam.
+Em instalação nova, o schema-base é criado e as migrations são executadas antes do registro da versão atual. Em atualização, a migration v33 garante `configuracoes`, as migrations v35/v36 acrescentam defaults de cabeçalho sem sobrescrever valores existentes e a verificação de integridade recompõe estruturas complementares e índices ausentes. A versão atual do schema é 36 e só é registrada depois que as migrations terminam.
 
 Se ainda faltarem estruturas obrigatórias, a inicialização falha para preservar os dados locais; o processo principal informa o erro e encerra o aplicativo. Nessa condição, nenhum handler nem consulta ao GDL é iniciado.
 
@@ -23,6 +23,12 @@ Fotos da REP: Painel de Ilustrações → preload → gdl.handlers
 ```
 
 `gdl.service.ts` controla HTTP, credenciais e leitura dos retornos; o renderer não recebe JSON bruto, credenciais, URL de download, caminho local ou identificadores remotos.
+
+## Credenciais por ambiente
+
+Produção e homologação mantêm login, senha e CPF em chaves locais separadas. Ao salvar na tela, login e senha são aparados e CPF é reduzido a dígitos; o estado visual recebe os mesmos valores normalizados. O serviço repete essa normalização ao carregar e ao validar credenciais, cobrindo dados legados já persistidos com espaços ou máscara.
+
+Login ou senha vazios interrompem a validação e limpam o estado validado da sessão. O CPF permanece opcional. Essa limpeza é estritamente local e não produz mutação no GDL.
 
 ## Consulta complementar da página da REP
 

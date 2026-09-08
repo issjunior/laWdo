@@ -456,8 +456,35 @@ function paragrafoContemSomentePlaceholder(paragrafo: HTMLParagraphElement, plac
   ));
 }
 
+function removerAncorasTabelasPersonalizadas(doc: Document): void {
+  doc.querySelectorAll('[data-acao-tabela-placeholder]').forEach(acao => acao.remove());
+  doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
+    const identificador = tabela.getAttribute('data-placeholder-tabela-personalizada-id');
+    if (identificador) {
+      const ancora = Array.from(doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada-id]'))
+        .find(elemento => elemento !== tabela && elemento.getAttribute('data-placeholder-tabela-personalizada-id') === identificador);
+      if (ancora) {
+        const pai = ancora.parentElement;
+        if (pai instanceof HTMLParagraphElement && paragrafoContemSomentePlaceholder(pai, ancora)) pai.remove();
+        else ancora.remove();
+      }
+    }
+    tabela.removeAttribute('data-placeholder-tabela-personalizada');
+    tabela.removeAttribute('data-placeholder-tabela-personalizada-id');
+    tabela.classList.remove('placeholder-tabela-personalizada');
+    tabela.querySelectorAll<HTMLElement>('[contenteditable]').forEach(celula => celula.removeAttribute('contenteditable'));
+  });
+}
+
 export function limparIndicadoresCondicionais(html: string): string {
-  let result = html.replace(
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  documento.querySelectorAll('[data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
+  documento.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
+    bloco.removeAttribute('data-cond-em-edicao');
+    bloco.removeAttribute('contenteditable');
+  });
+
+  let result = documento.body.innerHTML.replace(
     /<[^>]+\bdata-acao-suprimir-bloco="true"[^>]*>[\s\S]*?<\/[^>]+>/gi,
     '',
   ).replace(
@@ -466,7 +493,7 @@ export function limparIndicadoresCondicionais(html: string): string {
   );
   result = result.replace(
     /<div[^>]*\bdata-cond-bloco="[^"]*"[^>]*>/gi,
-    (match) => match.replace(/\s*style="[^"]*"/gi, '')
+    (match) => match.replace(/\s*(?:style|data-cond-em-edicao|contenteditable)="[^"]*"/gi, '')
   );
   return result;
 }
@@ -478,7 +505,12 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
+    doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
+    doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
+      bloco.removeAttribute('data-cond-em-edicao');
+      bloco.removeAttribute('contenteditable');
+    });
+    removerAncorasTabelasPersonalizadas(doc);
     const placeholderSpans = doc.querySelectorAll('span[data-placeholder]');
     placeholderSpans.forEach(span => {
       const rawPlaceholder = span.getAttribute('data-placeholder') || '';

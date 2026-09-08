@@ -1548,6 +1548,7 @@ export const TemplatesPage: React.FC = () => {
           tiposExame={tiposExame}
           placeholders={placeholders}
           onImportSuccess={carregarTemplates}
+          onTiposExameAtualizados={carregarTiposExame}
         />
         <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
           <DialogContent className="sm:max-w-md">
