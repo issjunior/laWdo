@@ -14,6 +14,14 @@ A largura integrada é persistida por painel somente após interação. A navega
 
 Transformações da IA são vinculadas ao alvo capturado. Antes da prévia e da aplicação, o renderer recalcula o fingerprint; conteúdo alterado bloqueia a substituição. O HTML é reconstruído a partir da estrutura original, e somente os fragmentos textuais propostos são editáveis. Inserções e substituições são aplicadas em uma única `undoManager.transact`, sincronizam o estado React e registram alteração pendente com origem `ia`. A IA não salva o laudo e resultados de lotes não são aplicados parcialmente.
 
+## Estrutura e modos de edição
+
+O HTML estrutural é convertido em `SecaoEditor` com `id`, `parentId`, `nivel`, título e conteúdo. A relação pai/filha é a fonte da hierarquia; uma subseção com pai inexistente é mantida no primeiro nível para não ocultar conteúdo.
+
+No editor único, `buildSingleHtmlFromSecoes()` cria um contêiner para cada seção principal e inclui as subseções em `data-laudo-subsecoes`. O pai usa a única moldura externa; filhas usam cabeçalho agrupado, sem caixas e recuos acumulados. Conteúdo equivalente apenas a espaço ou `<p>&nbsp;</p>` não cria área vazia quando o pai possui filhas. Ao voltar ao modo por seções, a leitura usa o conteúdo direto de cada seção (`:scope`) para não incorporar HTML das descendentes.
+
+No modo por seções, cada pai é um `Collapsible` e as filhas ficam dentro do seu conteúdo, quase na largura total e com cabeçalho visual mais leve. Recolher o pai oculta o grupo. Se o agrupador estiver vazio e possuir filhas, seu TinyMCE não é montado; editores das subseções mantêm os IDs baseados no índice original. Trocar de modo encerra edição transitória de bloco condicional antes de reconstruir o estado.
+
 ## Atualização e reconciliação
 
 `updateConteudo()` substitui o conteúdo e `updated_at`. A evolução estrutural acontece em `sincronizarSecoesCondicionais()`, que recompõe a base do template e a reconcilia com o HTML salvo.

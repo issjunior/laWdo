@@ -2,7 +2,7 @@
 
 ## Fonte de verdade e usos
 
-`src/renderer/components/editor/TinyMceEditor.tsx` concentra a configuração e os comandos comuns do TinyMCE usados na edição de laudo, templates, cabeçalhos e importação. A toolbar-base é única; `condbloco` e `suprimirblocopericial` só são acrescentados quando `condToggles` fornece contexto.
+`src/renderer/components/editor/TinyMceEditor.tsx` concentra a configuração e os comandos comuns do TinyMCE usados na edição de laudo, templates, cabeçalhos e importação. A toolbar-base é única; `condbloco` e o comando interno `suprimirblocopericial`, apresentado como **Excluir bloco**, só são acrescentados quando `condToggles` fornece contexto.
 
 O componente oferece dois contratos de conteúdo:
 
@@ -29,7 +29,11 @@ Em tela cheia, quando `repNumero` existe, uma identificação `Laudo · REP <nú
 
 ## Extensões preservadas
 
-Além da configuração textual, o componente preserva comandos específicos para placeholders, figuras e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto o indicador interno de quebra de página; ações que alteram várias imagens usam transação de undo.
+Além da configuração textual, o componente preserva comandos específicos para placeholders, figuras, tabelas resolvidas e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto o indicador interno de quebra de página; ações que alteram várias imagens usam transação de undo.
+
+Blocos condicionais são protegidos por padrão e recebem controles transitórios de editar/concluir e excluir. Tabelas HTML resolvidas de placeholders também são protegidas; podem ser convertidas em cópia local editável ou restauradas a partir dos dados atuais da REP. Os destaques, selos e botões existem somente no conteúdo visual do iframe.
+
+A composição entre editor único e editores por seção pertence a `LaudosPage.tsx`. Seções usam `id`, `parentId` e `nivel`: o editor único monta subseções dentro do agrupador; o modo por seções mantém cada subseção recolhível sob o cartão pai. Agrupadores sem conteúdo útil não criam área vazia, e subseções órfãs continuam no primeiro nível.
 
 ## Relações e verificação
 

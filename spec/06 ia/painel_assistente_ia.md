@@ -30,7 +30,7 @@ Lotes seguem sequenciais, sem aplicação parcial; falha após lote concluído p
 
 Cada sessão usa `sessionId`, execução usa `operationId`, mensagem usa identidade estável e proposta usa `proposalId`. O main associa operações ao `webContents`, aceita uma operação ativa e cancela quando o proprietário é destruído.
 
-O alvo é capturado antes da chamada. Placeholders e valores imutáveis são tokenizados; somente texto pode ser proposto. A aplicação revalida alvo e estrutura, usa uma transação única do undo manager e nunca salva automaticamente. Privacidade protegida mascara contexto resolvido e bloqueia descrição de imagens.
+O alvo é capturado antes da chamada. Placeholders e valores imutáveis são tokenizados; somente texto pode ser proposto. Antes de serializar contexto e evidências, o renderer remove controles transitórios, prévias duplicadas e blocos com `data-cond-suprimido="true"`. Para tabela personalizada, remove a âncora canônica oculta e mantém apenas a cópia local visível. A aplicação revalida alvo e estrutura, usa uma transação única do undo manager e nunca salva automaticamente. Privacidade protegida mascara contexto resolvido e bloqueia descrição de imagens.
 
 ## Imagens e verificação
 
