@@ -391,6 +391,14 @@ interface AtualizacaoStatusPendente {
 
 type SecaoEditor = SecaoEstruturalLaudo;
 
+function conteudoHtmlEhVazio(html?: string | null): boolean {
+  if (!html?.trim()) return true;
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;|&#160;|&#x[aA]0;|\u00a0/gi, '')
+    .trim() === '';
+}
+
 interface RespostaIaPendente {
   modo: 'inserir' | 'substituir';
   texto: string;
@@ -706,14 +714,21 @@ export const LaudosPage: React.FC = () => {
           : `${indiceH2}.${indiceH3} ${tituloBase}`;
         const conteudoOriginal = sec.conteudo?.trim() || '';
         const filhas = sec.id ? filhosPorPai.get(sec.id) || [] : [];
-        const conteudoEhVazio = !conteudoOriginal
-          || conteudoOriginal.replace(/<[^>]*>|&nbsp;/gi, '').trim() === '';
+        const aninhada = Boolean(sec.parentId && ids.has(sec.parentId));
+        const conteudoEhVazio = conteudoHtmlEhVazio(conteudoOriginal);
         const conteudo = conteudoEhVazio && filhas.length > 0
           ? ''
           : conteudoOriginal || '<p>&nbsp;</p>';
         const subsecoes = filhas.length > 0
-          ? `<div data-laudo-subsecoes="true" style="margin:4px 10px 12px 20px;padding-left:12px;border-left:2px solid rgba(128,128,128,0.25);">${filhas.map(filha => montarSecao(filha.secao, filha.indice)).join('\n')}</div>`
+          ? `<div data-laudo-subsecoes="true" style="margin:4px 8px 12px;padding:0 4px;">${filhas.map(filha => montarSecao(filha.secao, filha.indice)).join('\n')}</div>`
           : '';
+        const estiloSecao = aninhada
+          ? 'margin:0 0 10px;border:0;border-radius:6px;overflow:hidden;'
+          : 'margin-bottom:16px;border:1px solid rgba(128,128,128,0.2);border-radius:8px;overflow:hidden;';
+        const estiloCabecalho = aninhada
+          ? 'background:rgba(128,128,128,0.06);padding:7px 10px;border-left:3px solid rgba(128,128,128,0.35);border-bottom:1px solid rgba(128,128,128,0.16);font-weight:600;color:inherit;'
+          : 'background:rgba(128,128,128,0.08);padding:8px 12px;border-bottom:1px solid rgba(128,128,128,0.2);font-weight:600;color:inherit;';
+        const estiloConteudo = aninhada ? 'padding:8px 4px 4px 10px;' : 'padding:8px 4px;';
 
         return `
           <section
@@ -723,16 +738,16 @@ export const LaudosPage: React.FC = () => {
             data-parent-id="${sec.parentId || ''}"
             data-estrutura-nivel="${sec.nivel}"
             data-derivada-rep="${sec.derivadaRep ? 'true' : 'false'}"
-            style="margin-bottom:16px;border:1px solid rgba(128,128,128,0.2);border-radius:8px;overflow:hidden;"
+            style="${estiloSecao}"
           >
             <div
               contenteditable="false"
               data-laudo-secao-header="true"
-              style="background:rgba(128,128,128,0.08);padding:8px 12px;border-bottom:1px solid rgba(128,128,128,0.2);font-weight:600;color:inherit;"
+              style="${estiloCabecalho}"
             >
               ${titulo}
             </div>
-            ${conteudo ? `<div data-laudo-secao-content="true" style="padding:8px 4px;">${conteudo}</div>` : ''}
+            ${conteudo ? `<div data-laudo-secao-content="true" style="${estiloConteudo}">${conteudo}</div>` : ''}
             ${subsecoes}
           </section>
         `;
@@ -3514,6 +3529,7 @@ export const LaudosPage: React.FC = () => {
                         const isIlustracoes = secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES';
                         const tituloVisual = secao.nivel === 2 ? 'Seção principal' : 'Subseção';
                         const filhas = secao.id ? filhosPorPai.get(secao.id) || [] : [];
+                        const exibirEditor = filhas.length === 0 || !conteudoHtmlEhVazio(secao.conteudo);
 
                         return (
                           <Collapsible
@@ -3523,25 +3539,34 @@ export const LaudosPage: React.FC = () => {
                             className={cn(
                               'min-w-0 max-w-full rounded-lg',
                               getClasseSecaoEstrutural(secao),
-                              (aninhada || secao.nivel === 3) && 'ml-5',
+                              aninhada && 'rounded-md border-0 bg-transparent shadow-none',
                             )}
                           >
-                            <div className="flex min-w-0 items-center justify-between p-4 cursor-default">
+                            <div className={cn(
+                              'flex min-w-0 items-center justify-between cursor-default',
+                              aninhada
+                                ? 'rounded-md border-l-4 border-l-primary/40 bg-muted/50 px-3 py-2'
+                                : 'p-4',
+                            )}>
                               <CollapsibleTrigger asChild>
                                 <div className="flex min-w-0 flex-1 items-center gap-3 cursor-pointer">
-                                  <div className="p-2 rounded-full bg-primary/10 text-primary">
+                                  <div className={cn(
+                                    'bg-primary/10 text-primary',
+                                    aninhada ? 'rounded-md p-1.5' : 'rounded-full p-2',
+                                  )}>
                                     <Edit size={18} />
                                   </div>
                                   <div className="min-w-0">
-                                    <h3 className="text-lg font-semibold">{secao.titulo}</h3>
+                                    <h3 className={cn('font-semibold', aninhada ? 'text-base' : 'text-lg')}>{secao.titulo}</h3>
                                     <p className="text-sm text-muted-foreground">{tituloVisual} · clique para expandir/recolher</p>
                                   </div>
                                 </div>
                               </CollapsibleTrigger>
                               <ChevronDown className="h-4 w-4 transition-transform duration-200" />
                             </div>
-                            <CollapsibleContent className="p-4 border-t" forceMount>
-                              <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
+                            <CollapsibleContent className={cn(aninhada ? 'px-2 pb-2 pt-2' : 'border-t p-3')} forceMount>
+                              {exibirEditor && (
+                                <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                                 <div className={isIlustracoes ? 'relative' : ''}>
                                   <TinyMceEditor
                                     editorId={`secao-${idx}`}
@@ -3582,10 +3607,11 @@ export const LaudosPage: React.FC = () => {
                                     </div>
                                   )}
                                 </div>
-                              </PlaceholderContextMenu>
+                                </PlaceholderContextMenu>
+                              )}
 
                               {filhas.length > 0 && (
-                                <div className="mt-5 space-y-4 border-l-2 border-border/60 pl-4">
+                                <div className={cn('space-y-3 px-1 pb-1', exibirEditor && 'mt-3')}>
                                   {filhas.map(filha => renderizarSecao(filha.secao, filha.indice, true))}
                                 </div>
                               )}

@@ -240,6 +240,15 @@ export function limparValidacaoSessao(ambiente?: string): GdlValidacaoSessao {
 
 carregarValidacaoSessaoPersistida();
 
+function normalizarCredenciaisGdl(credenciais: GdlCredenciaisEntrada): GdlCredenciaisEntrada {
+  const cpfUsuario = credenciais.cpfUsuario?.replace(/\D/g, '') || undefined;
+  return {
+    login: credenciais.login.trim(),
+    senha: credenciais.senha.trim(),
+    ...(cpfUsuario ? { cpfUsuario } : {}),
+  };
+}
+
 async function carregarCredenciais(ambiente: string): Promise<GdlCredenciais> {
   const chaveUrl = ambiente === 'producao' ? 'gdl_url_producao' : 'gdl_url_homologacao';
   const urlPadraoHomologacao = 'https://iishml01.pr.gov.br/SAC/GDL_IC_NET/api';
@@ -247,11 +256,13 @@ async function carregarCredenciais(ambiente: string): Promise<GdlCredenciais> {
 
   const baseUrl = (await configuracaoService.obter(chaveUrl))
     || (ambiente === 'producao' ? urlPadraoProducao : urlPadraoHomologacao);
-  const login = (await configuracaoService.obter(`gdl_login_${ambiente}`)) || '';
-  const senha = (await configuracaoService.obter(`gdl_senha_${ambiente}`)) || '';
-  const cpfUsuario = (await configuracaoService.obter(`gdl_cpf_usuario_${ambiente}`)) || undefined;
+  const credenciais = normalizarCredenciaisGdl({
+    login: (await configuracaoService.obter(`gdl_login_${ambiente}`)) || '',
+    senha: (await configuracaoService.obter(`gdl_senha_${ambiente}`)) || '',
+    cpfUsuario: (await configuracaoService.obter(`gdl_cpf_usuario_${ambiente}`)) || undefined,
+  });
 
-  return { baseUrl: baseUrl.replace(/\/$/, ''), login, senha, cpfUsuario };
+  return { baseUrl: baseUrl.replace(/\/$/, ''), ...credenciais };
 }
 
 async function carregarBaseUrl(ambiente: string): Promise<string> {
@@ -1278,9 +1289,7 @@ export async function validarCredenciais(
   const amb = normalizarAmbiente(ambiente);
   try {
     const baseUrl = await carregarBaseUrl(amb);
-    const login = credenciais.login.trim();
-    const senha = credenciais.senha.trim();
-    const cpfUsuario = credenciais.cpfUsuario?.replace(/\D/g, '') || undefined;
+    const { login, senha, cpfUsuario } = normalizarCredenciaisGdl(credenciais);
 
     if (!login || !senha) {
       limparValidacaoSessaoInterna(amb);
