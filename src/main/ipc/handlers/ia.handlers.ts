@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, ipcMain } from 'electron';
+import { BrowserWindow, ClipboardItem, clipboard, ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 import { ErroExecucaoIa, iaExecucaoService } from '../../services/ia-execucao.service.js';
@@ -291,14 +291,17 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     fecharJanelaPainelIa(false);
   });
 
-  ipcMain.handle('ia:copiar-resposta', (event, texto: unknown, html: unknown) => {
+  ipcMain.handle('ia:copiar-resposta', async (event, texto: unknown, html: unknown) => {
     if (typeof texto !== 'string' || !texto.trim() || texto.length > 100_000
       || (html !== undefined && (typeof html !== 'string' || html.length > 100_000))
       || !BrowserWindow.fromWebContents(event.sender)) {
       return { success: false, error: 'Texto inválido para cópia.' };
     }
-    if (typeof html === 'string' && html.trim()) clipboard.write({ text: texto, html });
-    else clipboard.writeText(texto);
+    if (typeof html === 'string' && html.trim()) {
+      await clipboard.write([new ClipboardItem({ 'text/plain': texto, 'text/html': html })]);
+    } else {
+      await clipboard.writeText(texto);
+    }
     return { success: true };
   });
 

@@ -29,10 +29,15 @@ vi.mock('electron', () => {
     }
   }
 
+  class ClipboardItem {
+    constructor(_items: unknown) {}
+  }
+
   return {
     ipcMain: { on: mocks.ipcOn, handle: mocks.ipcHandle },
     clipboard: { writeText: mocks.clipboardWriteText },
     BrowserWindow,
+    ClipboardItem,
     screen: {
       getDisplayMatching: vi.fn(() => ({ workAreaSize: { width: 1600, height: 900 } })),
       getPrimaryDisplay: vi.fn(() => ({ workAreaSize: { width: 1600, height: 900 } })),
@@ -189,11 +194,11 @@ describe('handlers IPC do painel de IA', () => {
       data: { operationId: 'operacao-1', fragmentos: solicitacao.fragmentos },
     });
 
-    expect(handle.get('ia:copiar-resposta')?.(eventoProprietario, 'Resposta conferida.'))
-      .toEqual({ success: true });
+    await expect(handle.get('ia:copiar-resposta')?.(eventoProprietario, 'Resposta conferida.'))
+      .resolves.toEqual({ success: true });
     expect(mocks.clipboardWriteText).toHaveBeenCalledWith('Resposta conferida.');
-    expect(handle.get('ia:copiar-resposta')?.(eventoProprietario, ''))
-      .toEqual({ success: false, error: 'Texto inválido para cópia.' });
+    await expect(handle.get('ia:copiar-resposta')?.(eventoProprietario, ''))
+      .resolves.toEqual({ success: false, error: 'Texto inválido para cópia.' });
 
     await expect(handle.get('ia:planejar')?.(eventoProprietario, { operationId: '' }))
       .resolves.toEqual({ success: false, error: 'ENTRADA_INVALIDA' });
