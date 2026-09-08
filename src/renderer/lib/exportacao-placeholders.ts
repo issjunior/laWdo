@@ -456,6 +456,26 @@ function paragrafoContemSomentePlaceholder(paragrafo: HTMLParagraphElement, plac
   ));
 }
 
+function removerAncorasTabelasPersonalizadas(doc: Document): void {
+  doc.querySelectorAll('[data-acao-tabela-placeholder]').forEach(acao => acao.remove());
+  doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
+    const identificador = tabela.getAttribute('data-placeholder-tabela-personalizada-id');
+    if (identificador) {
+      const ancora = Array.from(doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada-id]'))
+        .find(elemento => elemento !== tabela && elemento.getAttribute('data-placeholder-tabela-personalizada-id') === identificador);
+      if (ancora) {
+        const pai = ancora.parentElement;
+        if (pai instanceof HTMLParagraphElement && paragrafoContemSomentePlaceholder(pai, ancora)) pai.remove();
+        else ancora.remove();
+      }
+    }
+    tabela.removeAttribute('data-placeholder-tabela-personalizada');
+    tabela.removeAttribute('data-placeholder-tabela-personalizada-id');
+    tabela.classList.remove('placeholder-tabela-personalizada');
+    tabela.querySelectorAll<HTMLElement>('[contenteditable]').forEach(celula => celula.removeAttribute('contenteditable'));
+  });
+}
+
 export function limparIndicadoresCondicionais(html: string): string {
   let result = html.replace(
     /<[^>]+\bdata-acao-suprimir-bloco="true"[^>]*>[\s\S]*?<\/[^>]+>/gi,
@@ -479,6 +499,7 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     const doc = parser.parseFromString(html, 'text/html');
 
     doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
+    removerAncorasTabelasPersonalizadas(doc);
     const placeholderSpans = doc.querySelectorAll('span[data-placeholder]');
     placeholderSpans.forEach(span => {
       const rawPlaceholder = span.getAttribute('data-placeholder') || '';

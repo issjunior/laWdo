@@ -3,6 +3,11 @@ import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
 import { encontrarAcaoSupressaoBloco, sincronizarAcoesSupressaoBlocos } from '@/lib/blocos-periciais';
+import {
+  encontrarAcaoTabelaPlaceholder,
+  personalizarTabelaPlaceholder,
+  restaurarTabelaPlaceholder,
+} from '@/lib/apresentacao-placeholders';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
@@ -139,6 +144,8 @@ interface TinyMceEditorProps {
   condToggles?: Array<{ id: string; label: string; subtitulo?: string; subToggles?: Array<{ id: string; label: string; subtitulo?: string }> }>;
   /** Solicita supressão confirmada de um bloco pericial versionado. */
   onSolicitarSupressaoBloco?: (bloco: { tipo: string; armaChave?: string; armaIndice?: number }) => void;
+  /** Reaplica a visualização de placeholders após restaurar uma tabela vinculada. */
+  onTabelaPlaceholderRestaurada?: (editor: TinyMceEditorInstance) => void;
 }
 
 type ToggleCondicionalFlat = { id: string; label: string; subtitulo?: string };
@@ -416,12 +423,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   autoConverterReservados = false,
   condToggles,
   onSolicitarSupressaoBloco,
+  onTabelaPlaceholderRestaurada,
   ...rest
 }) => {
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
   const repNumeroRef = useRef(repNumero);
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
   const onSolicitarSupressaoBlocoRef = useRef(onSolicitarSupressaoBloco);
+  const onTabelaPlaceholderRestauradaRef = useRef(onTabelaPlaceholderRestaurada);
   const editorProntoParaAlteracoesRef = useRef(false);
   const frameLiberarAlteracoesRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
@@ -440,6 +449,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useEffect(() => {
     onSolicitarSupressaoBlocoRef.current = onSolicitarSupressaoBloco;
   }, [onSolicitarSupressaoBloco]);
+
+  useEffect(() => {
+    onTabelaPlaceholderRestauradaRef.current = onTabelaPlaceholderRestaurada;
+  }, [onTabelaPlaceholderRestaurada]);
 
   useEffect(() => () => {
     if (frameLiberarAlteracoesRef.current !== null) {
@@ -645,6 +658,39 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             .cond-bloco [data-placeholder-preview="true"] > table {
               width: 100% !important;
               max-width: 100% !important;
+            }
+            .acao-tabela-placeholder {
+              display: inline-block;
+              margin: 0 0 6px auto;
+              padding: 3px 8px;
+              border: 1px solid #64748b;
+              border-radius: 4px;
+              color: #1e3a5f;
+              background: #f8fafc;
+              font-size: 11px;
+              font-weight: 600;
+              cursor: pointer;
+              user-select: none;
+            }
+            .acao-tabela-placeholder:hover,
+            .acao-tabela-placeholder:focus {
+              border-color: #2563eb;
+              background: #dbeafe;
+              outline: none;
+            }
+            .placeholder-tabela-personalizada {
+              border-left: 3px solid #2563eb;
+              padding-left: 6px;
+            }
+            body.dark-content .acao-tabela-placeholder {
+              border-color: #94a3b8;
+              color: #dbeafe;
+              background: #1e293b;
+            }
+            body.dark-content .acao-tabela-placeholder:hover,
+            body.dark-content .acao-tabela-placeholder:focus {
+              border-color: #60a5fa;
+              background: #1d4ed8;
             }
             body.dark-content .cond-bloco {
               border-left-color: #d97706;
@@ -1050,6 +1096,24 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 evento.preventDefault();
                 evento.stopImmediatePropagation();
                 solicitarSupressaoBlocoSelecionado(acao);
+              });
+
+              editor.on('click', (evento: Event) => {
+                const acao = encontrarAcaoTabelaPlaceholder(evento.target);
+                if (!acao) return;
+                evento.preventDefault();
+                evento.stopImmediatePropagation();
+                const tipo = acao.getAttribute('data-acao-tabela-placeholder');
+                const restaurar = tipo === 'restaurar';
+                if (restaurar && !window.confirm('Restaurar os dados atuais da REP? As alterações locais desta tabela serão perdidas.')) {
+                  return;
+                }
+                const alterou = restaurar
+                  ? restaurarTabelaPlaceholder(editor, acao)
+                  : personalizarTabelaPlaceholder(editor, acao);
+                if (!alterou) return;
+                onChange(editor.getContent());
+                if (restaurar) onTabelaPlaceholderRestauradaRef.current?.(editor);
               });
 
               doc.addEventListener('click', (e: MouseEvent) => {

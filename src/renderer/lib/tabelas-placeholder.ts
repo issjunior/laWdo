@@ -12,6 +12,10 @@ function style(obj: Record<string, string>): string {
   return Object.entries(obj).map(([k, v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';');
 }
 
+function atributoCelulaFixa(): string {
+  return ' data-placeholder-celula-fixa="true"';
+}
+
 function formatarDataBrasileira(valor: unknown): string {
   const data = String(valor || '').trim();
   if (!data) return '-';
@@ -43,7 +47,7 @@ export function buildNumberedTable(titulo: string, headers: string[], rows: stri
 
   const tbodyRows = rows.map((row, i) => {
     const cells = [
-      `<td style="${style({ ...TABLE_STYLES.td, ...TABLE_STYLES.item })};">${i + 1}</td>`,
+      `<td${atributoCelulaFixa()} style="${style({ ...TABLE_STYLES.td, ...TABLE_STYLES.item })};">${i + 1}</td>`,
       ...row.map((cell, indice) => {
         const valorFormatado = indice === indiceQuantidade ? formatarQuantidade(cell ?? '') : cell;
         const val = (valorFormatado ?? '').trim() === '' ? '-' : valorFormatado;
@@ -53,7 +57,7 @@ export function buildNumberedTable(titulo: string, headers: string[], rows: stri
     return `<tr>${cells}</tr>`;
   }).join('');
 
-  const titleRow = `<tr><td colspan="${colCount}" style="${style({ ...TABLE_STYLES.th, ...TABLE_STYLES.title })};border:1px solid #000;padding:6px 10px">${titulo}</td></tr>`;
+  const titleRow = `<tr><td${atributoCelulaFixa()} colspan="${colCount}" style="${style({ ...TABLE_STYLES.th, ...TABLE_STYLES.title })};border:1px solid #000;padding:6px 10px">${titulo}</td></tr>`;
 
   return `<table width="100%" style="${style(TABLE_STYLES.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
 }
@@ -71,13 +75,13 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solic
 
   const s = TABLE_STYLES;
 
-  const titleRow = `<tr><td colspan="4" style="${style({ ...s.th, ...s.title })};border:1px solid #000;padding:6px 10px">TABELA 1 – DADOS DA INVESTIGAÇÃO</td></tr>`;
+  const titleRow = `<tr><td${atributoCelulaFixa()} colspan="4" style="${style({ ...s.th, ...s.title })};border:1px solid #000;padding:6px 10px">TABELA 1 – DADOS DA INVESTIGAÇÃO</td></tr>`;
 
   const cell = (val: string, w?: string, extra?: string) =>
     `<td style="${style(s.td)}${w ? ';width:' + w : ''}${extra ? ';' + extra : ''}">${val}</td>`;
 
   const labelCell = (val: string, w?: string) =>
-    `<td style="${style({ ...s.td, fontWeight: '600' })}${w ? ';width:' + w : ''}">${val}</td>`;
+    `<td${atributoCelulaFixa()} style="${style({ ...s.td, fontWeight: '600' })}${w ? ';width:' + w : ''}">${val}</td>`;
 
   const envolvidosVal = envolvidos.length > 0 ? envolvidos.join(', ') : '-';
 
@@ -86,7 +90,7 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solic
     `<tr>${labelCell('Envolvido(s):', '25%')}<td colspan="3" style="${style(s.td)}">${envolvidosVal}</td></tr>`,
     `<tr>${labelCell('Data da Ocorrência:', '25%')}${cell(dataOcorrencia, '25%')}${labelCell('Local:', '25%')}${cell(local, '25%')}</tr>`,
     `<tr>${labelCell('Boletim de Ocorrência:', '25%')}${cell(numeroBo, '25%')}${labelCell('Nº do IP:', '25%')}${cell(numeroIp, '25%')}</tr>`,
-    `<tr><td colspan="1" style="${style({ ...s.td, fontWeight: '600' })};width:25%">Unidade Policial:</td><td colspan="3" style="${style(s.td)};width:75%">${unidadePolicial}</td></tr>`,
+    `<tr><td${atributoCelulaFixa()} colspan="1" style="${style({ ...s.td, fontWeight: '600' })};width:25%">Unidade Policial:</td><td colspan="3" style="${style(s.td)};width:75%">${unidadePolicial}</td></tr>`,
   ];
 
   return `<table width="100%" style="${style(s.table)}">${rows.join('')}</table>`;
@@ -98,14 +102,14 @@ export function buildArmasTabela(b602: Record<string, unknown>, _solicitanteNome
 
   const s = TABLE_STYLES;
 
-  const titleRow = `<tr><td colspan="14" style="${style({ ...s.th, ...s.title })};border:1px solid #000;padding:6px 10px">TABELA 5 – ARMAS</td></tr>`;
+  const titleRow = `<tr><td${atributoCelulaFixa()} colspan="14" style="${style({ ...s.th, ...s.title })};border:1px solid #000;padding:6px 10px">TABELA 5 – ARMAS</td></tr>`;
 
   const headers = ['Item', 'Tipo', 'Marca', 'Calibre', 'Nº Série', 'Nº Cano',
     'Cap. Carreg.', 'Compr. Cano', 'Acabamento', 'Funcionamento',
     'Est. Conservação', 'Qtd', 'Dito Ofício', 'Nº Lacre'];
 
-  const celula = (val: string, extra?: string) =>
-    `<td style="${style(s.td)}${extra ? ';' + extra : ''}">${val || '-'}</td>`;
+  const celula = (val: string, extra?: string, fixa = false) =>
+    `<td${fixa ? atributoCelulaFixa() : ''} style="${style(s.td)}${extra ? ';' + extra : ''}">${val || '-'}</td>`;
 
   const theadRow = `<tr>${headers.map((h) =>
     `<th style="${style(s.th)}">${h}</th>`
@@ -113,7 +117,7 @@ export function buildArmasTabela(b602: Record<string, unknown>, _solicitanteNome
 
   const tbodyRows = armas.map((arma, i) => {
     const cells = [
-      celula(String(i + 1), 'text-align:center;width:40px'),
+      celula(String(i + 1), 'text-align:center;width:40px', true),
       celula(String(arma.tipo || '-')),
       celula(String(arma.marca || '-')),
       celula(String(arma.calibre || '-')),

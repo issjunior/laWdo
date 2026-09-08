@@ -5,6 +5,17 @@ function converterHtmlEmTexto(valor: string): string {
   return documento.body.textContent?.replace(/\s+/g, ' ').trim() || ''
 }
 
+function removerAncorasTabelasPersonalizadas(documento: Document): void {
+  documento.querySelectorAll('[data-acao-tabela-placeholder]').forEach(acao => acao.remove())
+  documento.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
+    const identificador = tabela.getAttribute('data-placeholder-tabela-personalizada-id')
+    if (!identificador) return
+    Array.from(documento.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada-id]'))
+      .filter(elemento => elemento !== tabela && elemento.getAttribute('data-placeholder-tabela-personalizada-id') === identificador)
+      .forEach(ancora => ancora.remove())
+  })
+}
+
 function resolverPlaceholderTexto(texto: string, mapa: MapaPlaceholdersResolvidos): string {
   return texto.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_placeholder, chave: string) => {
     const resolvido = mapa[chave.trim()]
@@ -18,6 +29,7 @@ function resolverPlaceholderTexto(texto: string, mapa: MapaPlaceholdersResolvido
 export function resolverHtmlContextoIa(html: string, mapa: MapaPlaceholdersResolvidos): string {
   const documento = new DOMParser().parseFromString(html, 'text/html')
   documento.querySelectorAll('[data-placeholder-preview="true"], script, style').forEach(elemento => elemento.remove())
+  removerAncorasTabelasPersonalizadas(documento)
   documento.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(elemento => {
     const chaveBruta = elemento.getAttribute('data-placeholder') || ''
     const chave = chaveBruta.match(/^\{\{(.+)\}\}$/)?.[1]
@@ -42,6 +54,7 @@ export function resolverTextoContextoIa(
 ): string {
   const documento = new DOMParser().parseFromString(html, 'text/html')
   documento.querySelectorAll('[data-placeholder-preview="true"], script, style').forEach(elemento => elemento.remove())
+  removerAncorasTabelasPersonalizadas(documento)
   documento.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(elemento => {
     const chaveBruta = elemento.getAttribute('data-placeholder') || ''
     const chave = chaveBruta.match(/^\{\{(.+)\}\}$/)?.[1]

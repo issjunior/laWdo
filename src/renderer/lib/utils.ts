@@ -15,6 +15,11 @@ export function removerFormatacaoPlaceholders(html: string): string {
   const doc = parser.parseFromString(html, 'text/html');
   doc.querySelectorAll('[data-placeholder-preview="true"]').forEach(elemento => elemento.remove());
   doc.querySelectorAll('[data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
+  doc.querySelectorAll('[data-acao-tabela-placeholder]').forEach(elemento => elemento.remove());
+  doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
+    tabela.removeAttribute('contenteditable');
+    tabela.querySelectorAll<HTMLElement>('[contenteditable]').forEach(celula => celula.removeAttribute('contenteditable'));
+  });
   doc.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
     elemento.removeAttribute('data-tooltip-xxx');
     elemento.removeAttribute('data-origem-xxx');
@@ -24,11 +29,13 @@ export function removerFormatacaoPlaceholders(html: string): string {
   doc.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(placeholder => {
     const chave = placeholder.getAttribute('data-placeholder');
     if (!chave) return;
+    const tabelaPersonalizada = placeholder.hasAttribute('data-placeholder-tabela-personalizada-id');
     placeholder.textContent = chave;
     placeholder.removeAttribute('data-placeholder-apresentacao');
-    placeholder.removeAttribute('data-placeholder-preview-id');
+    if (!tabelaPersonalizada) placeholder.removeAttribute('data-placeholder-preview-id');
     placeholder.classList.remove('campo-reservado');
     placeholder.removeAttribute('data-reservado');
+    if (tabelaPersonalizada) placeholder.style.display = 'none';
   });
   return doc.body.innerHTML;
 }

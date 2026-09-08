@@ -3479,6 +3479,7 @@ export const LaudosPage: React.FC = () => {
                           aplicarModoNoEditor(editor);
                           registrarEditorIa(editor);
                         }}
+                        onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
                         onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
@@ -3541,6 +3542,7 @@ export const LaudosPage: React.FC = () => {
                                   registrarEditorIa(editor);
                                   if (isIlustracoes) handleIlustracoesEditorInit(editor);
                                 }}
+                                onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
                                 condToggles={exameToggles}
                                 onSolicitarSupressaoBloco={setBlocoParaSuprimir}
                                 onDummyFigureClick={(imageId) => {
