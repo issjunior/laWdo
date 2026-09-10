@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert } from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert, RefreshCw } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
@@ -79,6 +79,7 @@ import {
 } from '@/components/laudo/PainelLateralRedimensionavel';
 import { useSidebar } from '@/components/ui/sidebar';
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
+import { AtualizarRepGdlDialog } from '@/components/rep/AtualizarRepGdlDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/index';
@@ -465,6 +466,7 @@ export const LaudosPage: React.FC = () => {
   }, [filtroDashboard, laudos]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<LaudoItem | null>(null);
+  const [repIdParaAtualizarGdl, setRepIdParaAtualizarGdl] = useState<string | null>(null);
   const [secoes, setSecoes] = useState<SecaoEditor[]>([]);
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
@@ -3135,6 +3137,14 @@ export const LaudosPage: React.FC = () => {
     void atualizarStatus(pendencia.laudo, pendencia.novoStatus);
   }, [atualizacaoStatusPendente, atualizarStatus]);
 
+  const iniciarAtualizacaoRepGdl = async (repId: string) => {
+    if (alteracoesPendentes) {
+      const salvo = await handleSalvar();
+      if (!salvo) return;
+    }
+    setRepIdParaAtualizarGdl(repId);
+  };
+
   const getProximoStatus = (status: string): { label: string; value: string; icon: typeof CheckCircle } | null => {
     if (status === 'Em andamento') return { label: 'Concluir', value: 'Concluído', icon: CheckCircle };
     if (status === 'Concluído') return { label: 'Entregar', value: 'Entregue', icon: Send };
@@ -3244,6 +3254,16 @@ export const LaudosPage: React.FC = () => {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{isReadonly ? 'Reabrir para edição' : 'Abrir editor'}</TooltipContent>
+            </Tooltip>
+
+            {/* Próximo status (contextual) */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => setRepIdParaAtualizarGdl(laudo.rep_id)} aria-label={`Atualizar REP ${laudo.rep_numero} pelo GDL`}>
+                  <RefreshCw size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Atualizar REP pelo GDL</TooltipContent>
             </Tooltip>
 
             {/* Próximo status (contextual) */}
@@ -3404,9 +3424,6 @@ export const LaudosPage: React.FC = () => {
         <div className="flex w-full flex-col gap-4 px-4 pb-4 md:px-8 md:pb-6">
         <CabecalhoEditorLaudo
           repNumero={editando.rep_numero}
-          tipoExameCodigo={editando.tipo_exame_codigo}
-          tipoExameNome={editando.tipo_exame_nome}
-          status={editando.status}
           estadoSalvamento={estadoSalvamento}
           operacaoEmAndamento={operacaoEmAndamento}
           carregandoPreview={carregandoPreview}
@@ -3417,6 +3434,7 @@ export const LaudosPage: React.FC = () => {
           onVisualizar={handlePreview}
           onExportar={formato => void handleExportar(formato)}
           onSalvar={() => void handleSalvar()}
+          onAtualizarRep={() => { void iniciarAtualizacaoRepGdl(editando.rep_id); }}
         />
 
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
@@ -3424,12 +3442,20 @@ export const LaudosPage: React.FC = () => {
 
         <Card className="flex flex-col overflow-visible">
           <CardHeader className="flex-shrink-0 pb-4">
-            <div>
-              <CardTitle className="text-lg">Laudo pericial</CardTitle>
-              <CardDescription>
+            <div className="flex min-w-0 items-center gap-2.5 whitespace-nowrap">
+              <CardTitle className="shrink-0 text-lg font-bold leading-tight tracking-tight text-primary">Laudo pericial</CardTitle>
+              <span aria-hidden="true" className="text-muted-foreground">|</span>
+              <CardDescription className="shrink-0 leading-tight">
+                {[editando.tipo_exame_codigo, editando.tipo_exame_nome].filter(Boolean).join(' · ') || 'Tipo de exame não definido'}
+              </CardDescription>
+              <span aria-hidden="true" className="text-muted-foreground">|</span>
+              <CardDescription className="min-w-0 truncate leading-tight">
                 Template: {editando.template_nome || 'Não definido'} &middot; iniciado em {formatarData(editando.data_inicio)}
                 {editando.data_conclusao ? ` · concluído em ${formatarData(editando.data_conclusao)}` : ''}
               </CardDescription>
+              <Badge variant="outline" className={obterClasseBadgeStatusLaudo(editando.status)}>
+                {editando.status}
+              </Badge>
             </div>
             <BarraEditorLaudo
               modoConteudo={modoVisualizacaoPlaceholders}
@@ -3794,6 +3820,18 @@ export const LaudosPage: React.FC = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <AtualizarRepGdlDialog
+          open={repIdParaAtualizarGdl !== null}
+          repId={repIdParaAtualizarGdl}
+          onOpenChange={aberto => { if (!aberto) setRepIdParaAtualizarGdl(null); }}
+          onConcluida={() => {
+            void carregarLaudos();
+            void window.ipcAPI.laudo.findById(editando.id).then(resposta => {
+              if (resposta.success && resposta.data) void handleEditar({ ...editando, ...resposta.data } as LaudoItem);
+            });
+            toast.success('REP atualizada com as informações do GDL.');
+          }}
+        />
       </div>
       </TooltipProvider>
     );
@@ -4031,6 +4069,12 @@ export const LaudosPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      <AtualizarRepGdlDialog
+        open={repIdParaAtualizarGdl !== null}
+        repId={repIdParaAtualizarGdl}
+        onOpenChange={aberto => { if (!aberto) setRepIdParaAtualizarGdl(null); }}
+        onConcluida={() => { void carregarLaudos(); toast.success('REP atualizada com as informações do GDL.'); }}
+      />
 
     </div>
   );

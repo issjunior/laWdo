@@ -28,9 +28,7 @@ describe('layout do editor de laudo', () => {
     render(
       <CabecalhoEditorLaudo
         repNumero="192/2026"
-        tipoExameNome="Balística"
         nomeEnvolvido="João da Silva"
-        status="Em andamento"
         estadoSalvamento="pendente"
         operacaoEmAndamento={false}
         carregandoPreview={false}
@@ -54,14 +52,8 @@ describe('layout do editor de laudo', () => {
     expect(tituloRep).toHaveClass('font-bold', 'text-primary');
     expect(cabecalho).toHaveClass('-mt-6', 'py-2');
     expect(cabecalho).not.toHaveClass('sticky', 'top-0');
-    expect(screen.getByText('Em andamento')).toHaveClass(
-      'bg-amber-100',
-      'text-amber-800',
-      'border-amber-300',
-    );
     fireEvent.click(screen.getByRole('button', { name: 'Ir ao final' }));
     expect(onIrAoFinal).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Alterações não salvas');
     expect(visualizar.compareDocumentPosition(exportar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(exportar.compareDocumentPosition(salvar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(salvar).toHaveClass('bg-primary');

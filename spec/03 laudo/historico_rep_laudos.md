@@ -32,6 +32,8 @@ Esse desenho cobre:
 - eventos de REP gravados por `auditCicloVida`
 - exclusoes gravadas por `auditDelete`
 - eventos de laudo vinculados diretamente ao `laudo.id`
+- atualização local da REP pelo GDL, com os IDs de diferenças aplicadas
+- reabertura do laudo causada pela atualização GDL, identificada pelo motivo `atualizacao_gdl`
 
 ## Papel da `LogsPage`
 
@@ -47,4 +49,4 @@ Se a busca falhar, a pagina exibe o erro retornado pelo IPC e nao tenta montar a
 ## Relacao com a auditoria
 
 A timeline depende integralmente de `logs_auditoria`.
-Logo, qualquer alteracao no fluxo de status ou exclusao de REP/laudo precisa manter os eventos de auditoria coerentes para nao quebrar a narrativa cronologica.
+Logo, qualquer alteracao no fluxo de status, exclusao ou reconciliacao REP/laudo precisa manter os eventos de auditoria coerentes para nao quebrar a narrativa cronologica. A atualizacao pelo GDL registra a REP depois da transacao local e registra a transicao do laudo quando ele e reaberto.

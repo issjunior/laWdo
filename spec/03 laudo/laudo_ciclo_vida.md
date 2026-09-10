@@ -28,14 +28,16 @@ No modo por seções, cada pai é um `Collapsible` e as filhas ficam dentro do s
 
 Para seções B-602 derivadas, a reconciliação identifica blocos periciais versionados por `data-arma-chave` e `data-bloco-pericial`. Quando a peça permanece na projeção, o conteúdo atual do wrapper — inclusive `data-cond-suprimido="true"` — prevalece sobre o conteúdo-base. Headings internos legados são descartados durante essa preservação. Blocos de arma removida não são carregados para a nova estrutura.
 
-O laudo combina template, dados da REP e intervenções do usuário. Alterações em qualquer uma dessas fontes devem preservar a reconciliação, as seções estruturais e a identidade estável da arma.
+O laudo combina template, dados da REP e intervenções do usuário. Alterações em qualquer uma dessas fontes devem preservar a reconciliação, as seções estruturais e a identidade estável da arma. Na atualização seletiva pelo GDL, REP e reconciliação do laudo são executadas dentro da mesma transação local; falha em qualquer etapa desfaz esse caminho específico.
 
 ## Status e exclusão
 
 `updateStatus()` aceita `Em andamento`, `Concluido` e `Entregue`, preenche as respectivas datas de conclusão ou entrega e atualiza `updated_at`. Antes de pedir conclusão ou entrega, o renderer analisa o HTML: campos reservados visíveis (inclusive `XXX` legado, sem contar atributos, scripts ou estilos) e figuras marcadas com `data-dummy="true"` geram pendências agrupadas por seção. Havendo pendências, a ação pede confirmação explícita; ela não é bloqueada pelo main nem altera o conteúdo automaticamente.
 
+Quando uma atualização pelo GDL afeta REP vinculada a laudo `Concluído` ou `Entregue`, a aplicação exige confirmação explícita e reabre o laudo como `Em andamento`; a REP também volta para `Em Andamento`. A transição e o motivo `atualizacao_gdl` entram na auditoria. Sem confirmação, o main recusa a operação.
+
 A exclusão remove diretório físico, imagens e linha do banco; operações relacionadas não são transacionais. Ao sair do laudo, referências de painel, seleção de imagem e operações de IA da sessão são encerradas ou descartadas.
 
 ## Limitações e verificação
 
-Atualização de REP e sincronização do laudo são sequenciais. Falhas na sincronização são registradas, mas não desfazem a REP já persistida. Testes protegem criação, seções repetíveis, preservação de blocos versionados, layout do editor, mudança efetiva, salvamento concorrente, aplicação de IA e undo. A aceitação visual ampla dos docks e janelas destacadas em Windows, múltiplas resoluções e temas permanece manual.
+Na edição comum de REP, atualização e sincronização do laudo continuam sequenciais; falha na sincronização é registrada, mas não desfaz a REP já persistida. O fluxo específico de atualização pelo GDL é transacional e usa os `updated_at` capturados na prévia para rejeitar concorrência. Testes protegem criação, seções repetíveis, preservação de blocos versionados, layout do editor, mudança efetiva, salvamento concorrente, aplicação de IA e undo; a reabertura e reconciliação disparadas pelo GDL ainda não têm cobertura dedicada. A aceitação visual ampla dos docks e janelas destacadas em Windows, múltiplas resoluções e temas permanece manual.

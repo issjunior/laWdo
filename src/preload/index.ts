@@ -39,6 +39,7 @@ import type {
   DashboardResumo,
 } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
+import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
 import type { ListaImagensRepGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
 import type {
   AtualizarOrdemImagemLaudoEntrada,
@@ -215,6 +216,8 @@ export interface IpcAPI {
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
     consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
+    prepararAtualizacaoRep: (repId: string) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
+    aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<UserResponse<ResultadoAtualizacaoRepGdl>>;
     listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ListaImagensRepGdl>>;
     capturarImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[], permitirDuplicadas?: boolean) => Promise<UserResponse<ResultadoCapturaImagensLaudoGdl>>;
     fecharSessaoImagensLaudo: (laudoId: string, sessaoId: string) => Promise<UserResponse>;
@@ -480,6 +483,8 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:limpar-validacao-sessao',
   'gdl:validar-credenciais',
   'gdl:consultar-rep',
+  'gdl:preparar-atualizacao-rep',
+  'gdl:aplicar-atualizacao-rep',
   'gdl:listar-imagens-laudo',
   'gdl:capturar-imagens-laudo',
   'gdl:fechar-sessao-imagens-laudo',
@@ -1252,6 +1257,14 @@ contextBridge.exposeInMainWorld('ipcAPI', {
         throw new Error('Ano da REP é obrigatório');
       }
       return invocarComDiagnostico('gdl:consultar-rep', numero.trim(), ano.trim());
+    },
+    prepararAtualizacaoRep: (repId: string): Promise<UserResponse<PreviaAtualizacaoRepGdl>> => {
+      if (typeof repId !== 'string' || !repId.trim()) throw new Error('REP inválida');
+      return invocarComDiagnostico('gdl:preparar-atualizacao-rep', repId);
+    },
+    aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada): Promise<UserResponse<ResultadoAtualizacaoRepGdl>> => {
+      if (!entrada || typeof entrada.operacaoId !== 'string' || !Array.isArray(entrada.diferencasSelecionadas)) throw new Error('Dados de atualização inválidos');
+      return invocarComDiagnostico('gdl:aplicar-atualizacao-rep', entrada);
     },
     listarImagensLaudo: (laudoId: string) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
