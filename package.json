@@ -1,7 +1,7 @@
 {
   "name": "laudo-pericial-electron",
   "productName": "laWdo",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Sistema de Laudos Periciais - Versão Desktop Electron",
   "main": "out/main/bootstrap.js",
   "author": "Izaias Júnior - izaias.junior@policiacientifica.pr.gov.br",
