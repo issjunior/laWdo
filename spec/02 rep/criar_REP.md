@@ -95,6 +95,14 @@ O botão `Selecionar peças do GDL`, exibido na seção B-602, abre um fluxo sep
 
 O destaque verde é estado de sessão e não é persistido. Avisos do normalizador não bloqueiam salvamento. A revisão exclusiva mostra uma mensagem de sucesso por cinco segundos após aplicar a seleção.
 
+## Atualização de REP existente pelo GDL
+
+Além da importação no formulário, uma REP persistida pode ser reconsultada pelas listas de REPs e laudos ou pelo editor do laudo. Esse fluxo usa `atualizacao-rep-gdl.service.ts` e não passa por `rep:update`: o main monta uma prévia B-602, aceita somente IDs de diferenças previamente emitidos e grava os campos selecionados diretamente no SQLite.
+
+A aplicação preserva campos locais não selecionados, ignora valores vazios do GDL e mantém peças locais que não apareceram na resposta. Peças recebidas são reconciliadas por `codPecaGdl`, preservando `idLocal` quando já existiam. O JSON canônico de `campos_especificos` mantém os demais blocos, substitui o bloco `b602` reconciliado e atualiza `integracaoGdl`.
+
+A prévia expira em cinco minutos e captura o `updated_at` da REP e do laudo. Se qualquer um mudar, a aplicação é recusada para evitar sobrescrita silenciosa. Quando existe laudo concluído ou entregue, a atualização exige confirmação de reabertura e muda REP e laudo para andamento antes de reconciliar seções condicionais. Esse caminho é transacional no banco local e gera evento de auditoria; ele não altera a REP remota no GDL.
+
 ## Acoplamento legado com o laudo
 
 `handleSalvar` ainda verifica toggles e snapshots de armas do modelo antigo para alertar sobre laudo vinculado. Como as seções legadas não estão ativas e a escrita canônica remove seus arrays, esse caminho não representa as peças atuais.
@@ -105,7 +113,7 @@ Antes de reutilizá-lo para `PecaB602`, é necessário definir conversão ou mig
 
 - listas e templates são carregados por IPC; o formulário fica local
 - salvamento é uma chamada por REP, seguida de recarga da lista
-- não há controle otimista por `updated_at`; edições concorrentes podem sobrescrever campos
+- o CRUD comum não tem controle otimista por `updated_at`; o fluxo específico de atualização pelo GDL valida os timestamps capturados na prévia
 - criação automática e sincronização do laudo acrescentam operações sequenciais
 
 Evitar consultas por campo ou peça durante renderização. Dados derivados devem ser calculados localmente ou carregados em lote.
@@ -114,4 +122,4 @@ Evitar consultas por campo ou peça durante renderização. Dados derivados deve
 
 Testes do seletor cobrem aplicação programática sem apagar tipo/número, seleção manual, valores catalogados, valor livre e origens repetidas. Testes do service cobrem persistência canônica. O teste de `GdlPecasModal` cobre consulta automática, peça nova desmarcada, peça já importada marcada e aplicação da seleção; helpers cobrem reconciliação e preservação de peças manuais.
 
-`rep-b602-persistencia.integration.test.ts` cobre diretamente `rep:create`, `rep:update` e `rep:findById` com SQLite temporário, incluindo reabertura após Mesclar e Substituir. O serviço de laudo é mockado; sincronização de laudo e consumo downstream continuam fora desse teste.
+`rep-b602-persistencia.integration.test.ts` cobre diretamente `rep:create`, `rep:update` e `rep:findById` com SQLite temporário, incluindo reabertura após Mesclar e Substituir. O serviço de laudo é mockado; sincronização de laudo e consumo downstream continuam fora desse teste. A atualização seletiva de uma REP já persistida pelo GDL ainda não possui teste dedicado.

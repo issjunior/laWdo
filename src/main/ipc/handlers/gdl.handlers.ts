@@ -7,6 +7,8 @@ import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
 import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
+import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
+import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
 
 export function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string } | null {
   const correspondencia = numero.trim().match(/^([\d.\s]+)\s*[/\\-]\s*(\d{4})$/);
@@ -27,6 +29,27 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:preparar-atualizacao-rep', async (_event, repId: unknown) => {
+    try {
+      if (typeof repId !== 'string' || !repId.trim()) return { success: false, error: 'REP inválida.' };
+      return { success: true, data: await atualizacaoRepGdlService.preparar(repId) };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Não foi possível preparar a atualização da REP.' };
+    }
+  });
+
+  ipcMain.handle('gdl:aplicar-atualizacao-rep', async (_event, entrada: unknown) => {
+    try {
+      if (!entrada || typeof entrada !== 'object') return { success: false, error: 'Dados de atualização inválidos.' };
+      const dados = entrada as Partial<AplicarAtualizacaoRepGdlEntrada>;
+      if (typeof dados.operacaoId !== 'string' || !Array.isArray(dados.diferencasSelecionadas) || typeof dados.reabrirLaudo !== 'boolean'
+        || dados.diferencasSelecionadas.some(id => typeof id !== 'string')) return { success: false, error: 'Dados de atualização inválidos.' };
+      return { success: true, data: await atualizacaoRepGdlService.aplicar(dados as AplicarAtualizacaoRepGdlEntrada) };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Não foi possível aplicar a atualização da REP.' };
+    }
+  });
+
   ipcMain.handle('gdl:testar-conexao', async (_event, ambiente: string) => {
     try {
       const resultado = await gdlService.testarConexao(ambiente || 'homologacao');

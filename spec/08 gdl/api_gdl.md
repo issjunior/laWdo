@@ -10,12 +10,16 @@ Se ainda faltarem estruturas obrigatórias, a inicialização falha para preserv
 
 ## Limite e fluxos
 
-A integração é exclusivamente de leitura no GDL. Há dois consumidores ativos:
+A integração é exclusivamente de leitura no GDL. Há três consumidores ativos:
 
 ```text
 Consulta de REP: modal → preload → gdl.handlers → gdl.service
   → /api/rep/obter + página web da REP → schemas Zod
   → adaptador B-602 → REPsPage
+
+Atualização de REP existente: REPsPage ou LaudosPage → diálogo de revisão → preload
+  → gdl.handlers → atualizacao-rep-gdl.service → consulta GDL e adaptador B-602
+  → comparação seletiva → transação local de REP, laudo e seções derivadas
 
 Fotos da REP: Painel de Ilustrações → preload → gdl.handlers
   → resolve laudo → REP → gdl.service → Lista de Fotos ZIP
@@ -51,7 +55,22 @@ O modal apresenta uma revisão antes da escrita. Ele separa identificação, sol
 
 A escolha é preservada apenas nos metadados locais da integração como `origemSolicitacaoSelecionada` (`tipo`, `numero`, e opcionalmente `dataDocumento` e `iniciais`). `quesitoAberto` vira a observação local da REP. A data de entrada preenche `data_requisicao`, inclusive a data de recebimento exibida na REP. Nenhum desses dados altera o registro nem a situação da REP no GDL.
 
-O histórico `andamentos` também é lido, mas não substitui a Data de Entrada/Solicitação. Para novas importações, o normalizador procura a descrição exatamente normalizada `Status alterado para Laudo em Execução`, ignorando diferenças de caixa, acento e espaços; datas inválidas são descartadas e a ocorrência cronologicamente mais recente é salva somente como `integracaoGdl.dataExecucaoLaudo`. Esse metadado é destinado ao placeholder por extenso e não modifica `data_requisicao`. REPs existentes não são reconsultadas nem migradas.
+O histórico `andamentos` também é lido, mas não substitui a Data de Entrada/Solicitação. Para novas importações, o normalizador procura a descrição exatamente normalizada `Status alterado para Laudo em Execução`, ignorando diferenças de caixa, acento e espaços; datas inválidas são descartadas e a ocorrência cronologicamente mais recente é salva somente como `integracaoGdl.dataExecucaoLaudo`. Esse metadado é destinado ao placeholder por extenso e não modifica `data_requisicao`. A importação inicial não migra registros retroativamente; a reconsulta de uma REP existente ocorre apenas quando o usuário aciona explicitamente o fluxo de atualização.
+
+## Atualização local de REP existente
+
+O botão de atualização está disponível nas listas de REPs e laudos e no cabeçalho do editor. Se o editor tiver alterações pendentes, ele tenta salvá-las antes de abrir a revisão. O fluxo continua somente para número no formato `número/ano` e exame `B-602`; nenhum endpoint de escrita do GDL é chamado.
+
+Dois canais tipados formam uma operação de revisão:
+
+- `gdl:preparar-atualizacao-rep` consulta novamente o GDL, executa o adaptador B-602, compara campos comuns, dados B-602 e peças e devolve uma prévia com IDs selecionáveis; valores vazios retornados não viram diferenças aplicáveis.
+- `gdl:aplicar-atualizacao-rep` aceita somente o identificador efêmero da operação, os IDs presentes na prévia e a confirmação de reabertura. O main não aceita valores arbitrários enviados pelo renderer.
+
+A prévia fica apenas em memória por cinco minutos. Ela guarda os `updated_at` da REP e do laudo; alteração concorrente ou expiração invalida a aplicação e exige nova consulta. A seleção começa marcada, mas o usuário pode excluir campos e peças antes da confirmação. Peças são reconciliadas por `codPecaGdl`; uma peça já existente preserva seu `idLocal`, peças novas são acrescentadas e peças locais ausentes na resposta não são removidas. Os metadados da última consulta são atualizados em `campos_especificos.integracaoGdl`.
+
+A escrita local ocorre em transação: atualiza a REP, reabre REP e laudo quando o laudo está concluído ou entregue e a confirmação foi dada, e reconcilia as seções condicionais do laudo. Laudo concluído ou entregue não pode ser atualizado sem confirmação explícita. A operação registra auditoria da REP e, quando aplicável, a transição do laudo. Depois do sucesso, o identificador efêmero é descartado.
+
+Falhas de DNS e conexão são traduzidas no diálogo em orientação sobre rede/VPN, com nova tentativa explícita; detalhes técnicos ficam recolhidos. Não há retry automático.
 
 ## Lista de Fotos, thumbnails e captura
 
@@ -65,4 +84,4 @@ A captura rebaixa e revalida a lista, deduplica IDs e extrai somente itens selec
 
 A API e a página do GDL não são alteradas pelo aplicativo. 401/403, 404 e respostas inesperadas recebem mensagens específicas; falhas de captura são isoladas por item. A listagem/captura de imagens é coberta no renderer pelo modal; a rede real continua dependente de homologação controlada.
 
-Os testes do normalizador cobrem Data de Entrada/Solicitação, Quesito Aberto, seleção do último andamento de execução, normalização da descrição e descarte de data inválida. A autenticação web, o HTML real e a disponibilidade de produção continuam dependentes do GDL.
+Os testes do normalizador cobrem Data de Entrada/Solicitação, Quesito Aberto, seleção do último andamento de execução, normalização da descrição e descarte de data inválida. O fluxo de atualização seletiva, sua concorrência otimista e a reconciliação transacional do laudo ainda não têm cobertura automatizada dedicada. A autenticação web, o HTML real e a disponibilidade de produção continuam dependentes do GDL.

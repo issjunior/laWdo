@@ -17,6 +17,7 @@ import {
   Layers3,
   Loader2,
   Save,
+  RefreshCw,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -145,10 +146,7 @@ export function IndicadorSalvamento({ estado }: { estado: EstadoSalvamentoLaudo 
 
 interface CabecalhoEditorLaudoProps {
   repNumero: string;
-  tipoExameCodigo?: string;
-  tipoExameNome?: string;
   nomeEnvolvido?: string;
-  status: string;
   estadoSalvamento: EstadoSalvamentoLaudo;
   operacaoEmAndamento: boolean;
   carregandoPreview: boolean;
@@ -159,13 +157,11 @@ interface CabecalhoEditorLaudoProps {
   onVisualizar: () => void;
   onExportar: (formato: FormatoExportacaoLaudo) => void;
   onSalvar: () => void;
+  onAtualizarRep?: () => void;
 }
 
 export function CabecalhoEditorLaudo({
   repNumero,
-  tipoExameCodigo,
-  tipoExameNome,
-  status,
   estadoSalvamento,
   operacaoEmAndamento,
   carregandoPreview,
@@ -176,11 +172,18 @@ export function CabecalhoEditorLaudo({
   onVisualizar,
   onExportar,
   onSalvar,
+  onAtualizarRep = () => undefined,
 }: CabecalhoEditorLaudoProps) {
   return (
     <header className="-mx-4 -mt-6 overflow-hidden border-b bg-background px-4 py-2 md:-mx-8 md:px-8">
       <div className="flex min-w-0 items-center gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+          <h1 className="shrink-0 whitespace-nowrap text-lg font-bold leading-tight tracking-tight text-primary">
+            REP {repNumero}
+          </h1>
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-1 [&>button]:gap-1 [&>button]:px-2">
           <Button
             type="button"
             variant="secondary"
@@ -189,7 +192,7 @@ export function CabecalhoEditorLaudo({
             className="gap-2"
           >
             <ArrowLeft className="size-4" />
-            Voltar para laudos
+            Voltar
           </Button>
           <Button
             type="button"
@@ -201,23 +204,6 @@ export function CabecalhoEditorLaudo({
             <ArrowDown className="size-4" />
             Ir ao final
           </Button>
-          <span aria-hidden="true" className="text-muted-foreground">|</span>
-          <h1 className="whitespace-nowrap text-lg font-bold leading-tight tracking-tight text-primary">
-            REP {repNumero}
-          </h1>
-          <span aria-hidden="true" className="text-muted-foreground">|</span>
-          <p className="min-w-0 flex-1 truncate text-sm leading-tight text-muted-foreground">
-            {[tipoExameCodigo, tipoExameNome].filter(Boolean).join(' · ') || 'Editor de laudo'}
-          </p>
-          <Badge variant="outline" className={obterClasseBadgeStatusLaudo(status)}>
-            {status}
-          </Badge>
-        </div>
-
-        <div className="flex flex-none items-center gap-2">
-          <div className="mr-1">
-            <IndicadorSalvamento estado={estadoSalvamento} />
-          </div>
           <Button
             type="button"
             variant="secondary"
@@ -276,6 +262,17 @@ export function CabecalhoEditorLaudo({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAtualizarRep}
+            disabled={operacaoEmAndamento}
+            className="gap-2"
+          >
+            <RefreshCw className="size-4" />
+            Atualizar REP
+          </Button>
           <Button
             type="button"
             size="sm"

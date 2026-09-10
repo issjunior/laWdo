@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Network } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Network, RefreshCw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { REP } from '@/lib/validators/rep.schema';
 import { z } from 'zod';
@@ -52,6 +52,7 @@ import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteForm
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 import { RepStepper, useRepStepperContext } from '@/components/rep/RepStepper';
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal';
+import { AtualizarRepGdlDialog } from '@/components/rep/AtualizarRepGdlDialog';
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { GdlPecasModal } from '@/components/rep/GdlPecasModal';
 import { createSolicitanteSchema, type CreateSolicitanteInput } from '@/lib/validators/solicitante.schema';
@@ -740,6 +741,7 @@ export const REPsPage: React.FC = () => {
   const [tipoExameQCSubmitting, setTipoExameQCSubmitting] = useState(false);
 
   const [gdlModalOpen, setGdlModalOpen] = useState(false);
+  const [repParaAtualizarGdl, setRepParaAtualizarGdl] = useState<REP | null>(null);
   const [gdlPecasModalOpen, setGdlPecasModalOpen] = useState(false);
   const [camposPreenchidosGdl, setCamposPreenchidosGdl] = useState<Set<string>>(new Set());
   const [origensSolicitacaoGdl, setOrigensSolicitacaoGdl] = useState<ReferenciaOrigemGdl[]>([]);
@@ -1546,6 +1548,14 @@ export const REPsPage: React.FC = () => {
             <Button variant="ghost" size="sm" onClick={() => { setTimelineRep(rep); setTimelineOpen(true); }} title="Histórico">
               <Clock size={14} />
             </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => setRepParaAtualizarGdl(rep)} aria-label={`Atualizar REP ${rep.numero} pelo GDL`} title="Atualizar pelo GDL">
+                  <RefreshCw size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Atualizar pelo GDL</TooltipContent>
+            </Tooltip>
             <Button variant="ghost" size="sm" onClick={() => handleEditar(rep)} aria-label={`Editar REP ${rep.numero}`}>
               <Edit size={14} />
             </Button>
@@ -1820,6 +1830,12 @@ export const REPsPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      <AtualizarRepGdlDialog
+        open={repParaAtualizarGdl !== null}
+        repId={repParaAtualizarGdl?.id ?? null}
+        onOpenChange={aberto => { if (!aberto) setRepParaAtualizarGdl(null); }}
+        onConcluida={() => { void carregarREPs(); toast.success('REP atualizada com as informações do GDL.'); }}
+      />
       </div>
       </TooltipProvider>
     );
@@ -2290,6 +2306,12 @@ export const REPsPage: React.FC = () => {
           setGdlModalOpen(false);
           navigate('/gdl-config');
         }}
+      />
+      <AtualizarRepGdlDialog
+        open={repParaAtualizarGdl !== null}
+        repId={repParaAtualizarGdl?.id ?? null}
+        onOpenChange={aberto => { if (!aberto) setRepParaAtualizarGdl(null); }}
+        onConcluida={() => { void carregarREPs(); toast.success('REP atualizada com as informações do GDL.'); }}
       />
       <GdlPecasModal
         open={gdlPecasModalOpen}
