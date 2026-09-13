@@ -296,6 +296,7 @@ interface BarraEditorLaudoProps {
   modoOrganizacao: ModoOrganizacaoLaudo;
   onModoConteudoChange: (modo: ModoConteudoLaudo) => void;
   onModoOrganizacaoChange: (modo: ModoOrganizacaoLaudo) => void;
+  onAbrirIndicePlaceholders?: () => void;
 }
 
 export function BarraEditorLaudo({
@@ -303,18 +304,53 @@ export function BarraEditorLaudo({
   modoOrganizacao,
   onModoConteudoChange,
   onModoOrganizacaoChange,
+  onAbrirIndicePlaceholders = () => undefined,
 }: BarraEditorLaudoProps) {
   return (
     <div className="flex min-w-0 flex-wrap items-end gap-3 border-t pt-4">
-      <ControleSegmentado
-        rotulo="Conteúdo exibido"
-        valor={modoConteudo}
-        onChange={onModoConteudoChange}
-        opcoes={[
-          { valor: 'dados', rotulo: 'Dados da REP', icone: Database },
-          { valor: 'chaves', rotulo: 'Placeholders', icone: Braces },
-        ]}
-      />
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <span className="text-xs font-medium text-muted-foreground">Conteúdo exibido</span>
+        <div role="group" aria-label="Conteúdo exibido" className="flex min-w-0 items-center gap-1 rounded-lg border bg-muted/50 p-1">
+          <Button
+            type="button"
+            variant={modoConteudo === 'dados' ? 'default' : 'ghost'}
+            size="sm"
+            aria-pressed={modoConteudo === 'dados'}
+            onClick={() => onModoConteudoChange('dados')}
+            className="h-8 min-w-0 gap-1.5 px-2.5 text-xs"
+          >
+            <Database className="size-3.5" />
+            <span className="truncate">Dados da REP</span>
+          </Button>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant={modoConteudo === 'chaves' ? 'default' : 'ghost'}
+                size="sm"
+                aria-pressed={modoConteudo === 'chaves'}
+                aria-label="Opções de placeholders"
+                className="h-8 min-w-0 gap-1.5 px-2.5 text-xs"
+              >
+                <Braces className="size-3.5" />
+                <span className="truncate">Placeholders</span>
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              <DropdownMenuItem onSelect={() => onModoConteudoChange('chaves')}>
+                <Braces className="size-4" />
+                Exibir chaves no documento
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onAbrirIndicePlaceholders}>
+                <Database className="size-4" />
+                Ver índice de placeholders
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
       <ControleSegmentado
         rotulo="Organização"
         valor={modoOrganizacao}

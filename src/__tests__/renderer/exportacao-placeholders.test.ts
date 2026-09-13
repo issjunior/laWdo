@@ -23,4 +23,13 @@ describe('placeholders de exportação', () => {
 
     expect(placeholders.data_extenso_recebimento_rep).toBe('23 de agosto de 2026')
   })
+
+  it('inclui valores padrão de placeholders personalizados na resolução', () => {
+    const placeholders = buildPlaceholderMapping({
+      repData: {},
+      placeholdersPersonalizados: [{ chave: 'nome_laboratorio', valor: 'Núcleo de Perícias' }],
+    })
+
+    expect(placeholders.nome_laboratorio).toBe('Núcleo de Perícias')
+  })
 })
