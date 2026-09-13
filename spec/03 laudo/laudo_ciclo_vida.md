@@ -1,43 +1,21 @@
 # Ciclo de vida atual do laudo
 
-## Criação
+## Criação, edição e estrutura
 
-`criarLaudoInicial()` impede duplicidade por `rep_id`, valida que o template existe e, quando sua origem é `integrado`, exige que ele esteja disponível para novos laudos. Também rejeita template integrado sem seções, evitando criar um laudo vazio por falha de catálogo ou sincronização.
+`criarLaudoInicial()` impede duplicidade por `rep_id`, valida template e suas seções, filtra seções ativas, expande repetições e grava HTML em `Em andamento`. `LaudosPage.tsx` orquestra TinyMCE, conteúdo React, IA e Ilustrações; aplicações de IA usam fingerprint do alvo e agrupam escrita no `undoManager`.
 
-Após as validações, busca as seções do template, lê `campos_especificos`, filtra seções ativas, expande repetições e grava o HTML com status `Em andamento`, `tipo_criacao = 'template'`, `versao = 1` e `data_inicio`. Na ausência de conteúdo de template não integrado, usa `<p>Laudo em elaboracao.</p>`.
-
-## Edição e painéis laterais
-
-`LaudosPage.tsx` orquestra o TinyMCE, o estado React do conteúdo e os painéis de IA e Ilustrações. Os docks direitos são separados e mutuamente exclusivos, reservam largura real ao lado do documento e mantêm o editor montado ao abrir, recolher, trocar ou redimensionar. Um trilho vertical permanente abre IA, Ilustrações e Ferramentas; janelas destacadas podem coexistir fora do dock.
-
-A largura integrada é persistida por painel somente após interação. A navegação esquerda pode ser recolhida temporariamente enquanto um dock está expandido, sem alterar a preferência normal da sidebar.
-
-Transformações da IA são vinculadas ao alvo capturado. Antes da prévia e da aplicação, o renderer recalcula o fingerprint; conteúdo alterado bloqueia a substituição. O HTML é reconstruído a partir da estrutura original, e somente os fragmentos textuais propostos são editáveis. Inserções e substituições são aplicadas em uma única `undoManager.transact`, sincronizam o estado React e registram alteração pendente com origem `ia`. A IA não salva o laudo e resultados de lotes não são aplicados parcialmente.
-
-## Estrutura e modos de edição
-
-O HTML estrutural é convertido em `SecaoEditor` com `id`, `parentId`, `nivel`, título e conteúdo. A relação pai/filha é a fonte da hierarquia; uma subseção com pai inexistente é mantida no primeiro nível para não ocultar conteúdo.
-
-No editor único, `buildSingleHtmlFromSecoes()` cria um contêiner para cada seção principal e inclui as subseções em `data-laudo-subsecoes`. O pai usa a única moldura externa; filhas usam cabeçalho agrupado, sem caixas e recuos acumulados. Conteúdo equivalente apenas a espaço ou `<p>&nbsp;</p>` não cria área vazia quando o pai possui filhas. Ao voltar ao modo por seções, a leitura usa o conteúdo direto de cada seção (`:scope`) para não incorporar HTML das descendentes.
-
-No modo por seções, cada pai é um `Collapsible` e as filhas ficam dentro do seu conteúdo, quase na largura total e com cabeçalho visual mais leve. Recolher o pai oculta o grupo. Se o agrupador estiver vazio e possuir filhas, seu TinyMCE não é montado; editores das subseções mantêm os IDs baseados no índice original. Trocar de modo encerra edição transitória de bloco condicional antes de reconstruir o estado.
+O HTML vira `SecaoEditor`, cuja relação `parentId` é a fonte de hierarquia. O editor único agrupa filhas em `data-laudo-subsecoes`; no modo por seções, pais usam `Collapsible`. Trocar de modo encerra edição transitória de bloco condicional.
 
 ## Atualização e reconciliação
 
-`updateConteudo()` substitui o conteúdo e `updated_at`. A evolução estrutural acontece em `sincronizarSecoesCondicionais()`, que recompõe a base do template e a reconcilia com o HTML salvo.
+`updateConteudo()` substitui conteúdo e `updated_at`. `sincronizarSecoesCondicionais()` recompõe a base do template e a reconcilia com o HTML salvo. Blocos B-602 versionados por `data-arma-chave` e `data-bloco-pericial` preservam o wrapper atual da peça ainda projetada, inclusive `data-cond-suprimido="true"`; headings legados são removidos e blocos de peça removida não são carregados.
 
-Para seções B-602 derivadas, a reconciliação identifica blocos periciais versionados por `data-arma-chave` e `data-bloco-pericial`. Quando a peça permanece na projeção, o conteúdo atual do wrapper — inclusive `data-cond-suprimido="true"` — prevalece sobre o conteúdo-base. Headings internos legados são descartados durante essa preservação. Blocos de arma removida não são carregados para a nova estrutura.
+Na atualização seletiva pelo GDL, o serviço recebe também o `campos_especificos` anterior e calcula a base condicional anterior e a nova. Se a projeção estrutural for igual, não reescreve o HTML: placeholders passam a mostrar os novos valores, enquanto intervenções manuais, posição de blocos e estado do editor são preservados. Se houver diferença estrutural, executa a reconciliação normal contra o HTML salvo.
 
-O laudo combina template, dados da REP e intervenções do usuário. Alterações em qualquer uma dessas fontes devem preservar a reconciliação, as seções estruturais e a identidade estável da arma. Na atualização seletiva pelo GDL, REP e reconciliação do laudo são executadas dentro da mesma transação local; falha em qualquer etapa desfaz esse caminho específico.
+A atualização pelo GDL reúne REP e reconciliação na mesma transação local; falha em qualquer etapa desfaz o caminho. A edição comum da REP continua sequencial e pode persistir a REP se a sincronização posterior falhar.
 
-## Status e exclusão
+## Status, verificação e limites
 
-`updateStatus()` aceita `Em andamento`, `Concluido` e `Entregue`, preenche as respectivas datas de conclusão ou entrega e atualiza `updated_at`. Antes de pedir conclusão ou entrega, o renderer analisa o HTML: campos reservados visíveis (inclusive `XXX` legado, sem contar atributos, scripts ou estilos) e figuras marcadas com `data-dummy="true"` geram pendências agrupadas por seção. Havendo pendências, a ação pede confirmação explícita; ela não é bloqueada pelo main nem altera o conteúdo automaticamente.
+`updateStatus()` controla datas de conclusão e entrega. Atualização GDL de REP vinculada a laudo concluído ou entregue exige confirmação, reabre o laudo para `Em andamento`, retorna a REP a `Em Andamento` e registra motivo `atualizacao_gdl`. Sem confirmação, o main recusa a operação.
 
-Quando uma atualização pelo GDL afeta REP vinculada a laudo `Concluído` ou `Entregue`, a aplicação exige confirmação explícita e reabre o laudo como `Em andamento`; a REP também volta para `Em Andamento`. A transição e o motivo `atualizacao_gdl` entram na auditoria. Sem confirmação, o main recusa a operação.
-
-A exclusão remove diretório físico, imagens e linha do banco; operações relacionadas não são transacionais. Ao sair do laudo, referências de painel, seleção de imagem e operações de IA da sessão são encerradas ou descartadas.
-
-## Limitações e verificação
-
-Na edição comum de REP, atualização e sincronização do laudo continuam sequenciais; falha na sincronização é registrada, mas não desfaz a REP já persistida. O fluxo específico de atualização pelo GDL é transacional e usa os `updated_at` capturados na prévia para rejeitar concorrência. Testes protegem criação, seções repetíveis, preservação de blocos versionados, layout do editor, mudança efetiva, salvamento concorrente, aplicação de IA e undo; a reabertura e reconciliação disparadas pelo GDL ainda não têm cobertura dedicada. A aceitação visual ampla dos docks e janelas destacadas em Windows, múltiplas resoluções e temas permanece manual.
+Os testes cobrem criação, seções repetíveis, blocos versionados, editor, salvamento concorrente, IA e undo. `atualizacao-rep-gdl.service.test.ts` verifica o encaminhamento do estado anterior à sincronização e `atualizar-rep-gdl-dialog.component.test.tsx` o fechamento após aplicação. A reconciliação GDL contra SQLite e HTML real ainda não tem teste de integração dedicado; aceitação visual ampla de docks e janelas destacadas permanece manual.

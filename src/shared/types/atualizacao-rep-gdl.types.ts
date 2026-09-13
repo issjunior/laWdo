@@ -1,5 +1,11 @@
 export type CategoriaDiferencaRepGdl = 'campo' | 'peca'
 
+export interface DetalheDiferencaAtualizacaoRepGdl {
+  campo: string
+  valorLocal: string
+  valorGdl: string
+}
+
 export interface DiferencaAtualizacaoRepGdl {
   id: string
   categoria: CategoriaDiferencaRepGdl
@@ -7,6 +13,8 @@ export interface DiferencaAtualizacaoRepGdl {
   rotulo: string
   valorLocal: string
   valorGdl: string
+  resumo?: string
+  detalhes?: DetalheDiferencaAtualizacaoRepGdl[]
   selecionadaPorPadrao: boolean
 }
 

@@ -1,87 +1,25 @@
 # Integração atual com a API GDL
 
-## Dependência do banco local
-
-Antes de registrar handlers, sincronizar templates ou iniciar qualquer consulta ao GDL, `setupDatabase()` prepara o SQLite. A tabela `configuracoes` é obrigatória porque guarda URLs e credenciais da integração.
-
-Em instalação nova, o schema-base é criado e as migrations são executadas antes do registro da versão atual. Em atualização, a migration v33 garante `configuracoes`, as migrations v35/v36 acrescentam defaults de cabeçalho sem sobrescrever valores existentes e a verificação de integridade recompõe estruturas complementares e índices ausentes. A versão atual do schema é 36 e só é registrada depois que as migrations terminam.
-
-Se ainda faltarem estruturas obrigatórias, a inicialização falha para preservar os dados locais; o processo principal informa o erro e encerra o aplicativo. Nessa condição, nenhum handler nem consulta ao GDL é iniciado.
-
 ## Limite e fluxos
 
-A integração é exclusivamente de leitura no GDL. Há três consumidores ativos:
+A integração é exclusivamente de leitura no GDL. Há três consumidores: consulta/importação de REP, atualização local de REP existente e fotos para ilustrações. O renderer não recebe JSON bruto, credenciais, URLs de download, caminhos locais nem identificadores remotos; `gdl.service.ts` controla HTTP, credenciais e normalização. O laWdo nunca cria, edita, exclui ou altera status de qualquer registro no GDL.
 
 ```text
-Consulta de REP: modal → preload → gdl.handlers → gdl.service
-  → /api/rep/obter + página web da REP → schemas Zod
-  → adaptador B-602 → REPsPage
-
-Atualização de REP existente: REPsPage ou LaudosPage → diálogo de revisão → preload
-  → gdl.handlers → atualizacao-rep-gdl.service → consulta GDL e adaptador B-602
+REPsPage ou LaudosPage → diálogo de revisão → preload → gdl.handlers
+  → atualizacao-rep-gdl.service → consulta GDL e adaptador B-602
   → comparação seletiva → transação local de REP, laudo e seções derivadas
-
-Fotos da REP: Painel de Ilustrações → preload → gdl.handlers
-  → resolve laudo → REP → gdl.service → Lista de Fotos ZIP
-  → thumbnails temporárias ou imagens validadas → fila persistida do laudo
 ```
-
-`gdl.service.ts` controla HTTP, credenciais e leitura dos retornos; o renderer não recebe JSON bruto, credenciais, URL de download, caminho local ou identificadores remotos.
-
-## Credenciais por ambiente
-
-Produção e homologação mantêm login, senha e CPF em chaves locais separadas. Ao salvar na tela, login e senha são aparados e CPF é reduzido a dígitos; o estado visual recebe os mesmos valores normalizados. O serviço repete essa normalização ao carregar e ao validar credenciais, cobrindo dados legados já persistidos com espaços ou máscara.
-
-Login ou senha vazios interrompem a validação e limpam o estado validado da sessão. O CPF permanece opcional. Essa limpeza é estritamente local e não produz mutação no GDL.
-
-## Consulta complementar da página da REP
-
-Depois de `GET /api/rep/obter`, o main consulta a página da REP pelo identificador `codRep` apenas para completar dados que a API pode não trazer. A sessão web é isolada por ambiente e assinatura das credenciais, aceita somente login e a URL exata da REP, inclui cookies na sessão e aplica timeout de 15 segundos. Falha de login bloqueia novas tentativas por um minuto, mas não altera nem invalida a consulta já feita pela API.
-
-A página é uma fronteira HTML não confiável. O aplicativo extrai e normaliza somente:
-
-| Campo da página | Destino local | Regra |
-|---|---|---|
-| `txtOpenQuestion` | `quesitoAberto` → `observacoes` | O valor da API tem precedência; o texto da página é fallback. |
-| `txtDateEntry` | `dataEntradaSolicitacao` → `data_requisicao` | Aceita início ISO ou `DD/MM/AAAA` e persiste `AAAA-MM-DD`; ausência não é inferida pelo histórico. |
-
-Se a página não retornar a data ou não contiver os campos esperados, a consulta segue com dados parciais, registra aviso técnico e a importação B-602 informa que a Data de recebimento deve ser preenchida manualmente.
-
-## Importação de REP B-602
-
-`gdl:consultar-rep` normaliza o número informado, consulta somente endpoints e página de leitura do GDL e exige uma natureza de exame identificável. No estado atual, somente o código `B-602` pode ser aplicado ao formulário: natureza ausente ou outro código interrompe a importação sem preencher dados locais.
-
-O modal apresenta uma revisão antes da escrita. Ele separa identificação, solicitação e investigação, permite selecionar as peças reconciliadas e no máximo os dez primeiros envolvidos. Quando o GDL retorna origens de solicitação, BO, IP e Ofício têm preferência; se houver origens mas nenhuma delas pertencer a essas famílias, uma delas precisa ser escolhida para habilitar a aplicação.
-
-A escolha é preservada apenas nos metadados locais da integração como `origemSolicitacaoSelecionada` (`tipo`, `numero`, e opcionalmente `dataDocumento` e `iniciais`). `quesitoAberto` vira a observação local da REP. A data de entrada preenche `data_requisicao`, inclusive a data de recebimento exibida na REP. Nenhum desses dados altera o registro nem a situação da REP no GDL.
-
-O histórico `andamentos` também é lido, mas não substitui a Data de Entrada/Solicitação. Para novas importações, o normalizador procura a descrição exatamente normalizada `Status alterado para Laudo em Execução`, ignorando diferenças de caixa, acento e espaços; datas inválidas são descartadas e a ocorrência cronologicamente mais recente é salva somente como `integracaoGdl.dataExecucaoLaudo`. Esse metadado é destinado ao placeholder por extenso e não modifica `data_requisicao`. A importação inicial não migra registros retroativamente; a reconsulta de uma REP existente ocorre apenas quando o usuário aciona explicitamente o fluxo de atualização.
 
 ## Atualização local de REP existente
 
-O botão de atualização está disponível nas listas de REPs e laudos e no cabeçalho do editor. Se o editor tiver alterações pendentes, ele tenta salvá-las antes de abrir a revisão. O fluxo continua somente para número no formato `número/ano` e exame `B-602`; nenhum endpoint de escrita do GDL é chamado.
+O fluxo exige número `número/ano` e exame B-602. `gdl:preparar-atualizacao-rep` gera prévia de diferenças; `gdl:aplicar-atualizacao-rep` aceita apenas o identificador efêmero, IDs emitidos pela prévia e a confirmação de reabertura. Valores vazios do GDL não são aplicáveis e o main não aceita valores arbitrários do renderer.
 
-Dois canais tipados formam uma operação de revisão:
+A prévia fica somente em memória por dez minutos e captura `updated_at` da REP e do laudo. Expiração ou alteração concorrente exige nova consulta. A seleção começa marcada e pode ser reduzida pelo usuário.
 
-- `gdl:preparar-atualizacao-rep` consulta novamente o GDL, executa o adaptador B-602, compara campos comuns, dados B-602 e peças e devolve uma prévia com IDs selecionáveis; valores vazios retornados não viram diferenças aplicáveis.
-- `gdl:aplicar-atualizacao-rep` aceita somente o identificador efêmero da operação, os IDs presentes na prévia e a confirmação de reabertura. O main não aceita valores arbitrários enviados pelo renderer.
+Peças são correlacionadas por `codPecaGdl`, identificador interno que não é exibido nem constitui sozinho uma diferença. `idLocal`, origem e marcador de alteração local também não participam da comparação. Cada peça alterada mostra tipo, identificação, quantidade de alterações e detalhes recolhíveis por campo, comparando explicitamente o valor local anterior ao valor atual do GDL. Peça existente preserva `idLocal`; peça nova é adicionada e peça local ausente da resposta não é removida.
 
-A prévia fica apenas em memória por cinco minutos. Ela guarda os `updated_at` da REP e do laudo; alteração concorrente ou expiração invalida a aplicação e exige nova consulta. A seleção começa marcada, mas o usuário pode excluir campos e peças antes da confirmação. Peças são reconciliadas por `codPecaGdl`; uma peça já existente preserva seu `idLocal`, peças novas são acrescentadas e peças locais ausentes na resposta não são removidas. Os metadados da última consulta são atualizados em `campos_especificos.integracaoGdl`.
+A escrita ocorre em transação local: atualiza REP, reabre REP e laudo concluído ou entregue quando houver confirmação e reconcilia seções condicionais. A auditoria registra atualização e transição aplicável. Após sucesso, a operação efêmera é descartada, o diálogo fecha e a tela recarrega. Falhas de rede orientam sobre rede/VPN, oferecem nova tentativa explícita e não têm retry automático.
 
-A escrita local ocorre em transação: atualiza a REP, reabre REP e laudo quando o laudo está concluído ou entregue e a confirmação foi dada, e reconcilia as seções condicionais do laudo. Laudo concluído ou entregue não pode ser atualizado sem confirmação explícita. A operação registra auditoria da REP e, quando aplicável, a transição do laudo. Depois do sucesso, o identificador efêmero é descartado.
+## Fronteiras e verificação
 
-Falhas de DNS e conexão são traduzidas no diálogo em orientação sobre rede/VPN, com nova tentativa explícita; detalhes técnicos ficam recolhidos. Não há retry automático.
-
-## Lista de Fotos, thumbnails e captura
-
-Para imagens, o main parte exclusivamente de `laudoId`, resolve a REP e só continua se `rep.numero` estiver no formato `número/ano`. O download da Lista de Fotos usa Basic Auth e CPF quando configurado, recebe ZIP com timeout de 30 segundos e lê metadados inclusive ZIP64.
-
-A listagem expõe metadados públicos, `idSelecao` derivado e `thumbnailDataUri` opcional. A prévia é criada no main a partir da entrada ZIP elegível, usando imagem JPEG de no máximo 320 px no maior lado. Não há persistência ou fallback para a imagem original quando a decodificação da thumbnail falha; o cliente deve manter a foto selecionável e informar a ausência de prévia.
-
-A captura rebaixa e revalida a lista, deduplica IDs e extrai somente itens selecionados. A seleção final exige imagem provável, entrada não criptografada, bytes íntegros e formato aceito. Cada sucesso retorna `dataUri`, MIME, tamanho e SHA-256. A thumbnail serve apenas à escolha visual: a persistência local e a exportação usam sempre o arquivo original validado.
-
-## Fronteira externa e verificação
-
-A API e a página do GDL não são alteradas pelo aplicativo. 401/403, 404 e respostas inesperadas recebem mensagens específicas; falhas de captura são isoladas por item. A listagem/captura de imagens é coberta no renderer pelo modal; a rede real continua dependente de homologação controlada.
-
-Os testes do normalizador cobrem Data de Entrada/Solicitação, Quesito Aberto, seleção do último andamento de execução, normalização da descrição e descarte de data inválida. O fluxo de atualização seletiva, sua concorrência otimista e a reconciliação transacional do laudo ainda não têm cobertura automatizada dedicada. A autenticação web, o HTML real e a disponibilidade de produção continuam dependentes do GDL.
+A API e a página web do GDL são fronteiras não confiáveis e imutáveis pelo aplicativo. 401/403, 404 e respostas inesperadas têm mensagens específicas. `atualizacao-rep-gdl.service.test.ts` cobre comparação seletiva, correlação de peças e encaminhamento do estado anterior ao laudo; `atualizar-rep-gdl-dialog.component.test.tsx` cobre a apresentação local/GDL e o fechamento após sucesso. Rede real, autenticação web e HTML de produção dependem de homologação controlada.
