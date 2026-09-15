@@ -59,9 +59,10 @@ describe('layout do editor de laudo', () => {
     expect(salvar).toHaveClass('bg-primary');
   });
 
-  it('expõe as preferências acessíveis da barra do editor', () => {
+  it('expõe as preferências acessíveis e as ações do menu de placeholders', async () => {
     const onModoConteudoChange = vi.fn();
     const onModoOrganizacaoChange = vi.fn();
+    const onAbrirIndicePlaceholders = vi.fn();
 
     render(
       <TooltipProvider>
@@ -70,6 +71,7 @@ describe('layout do editor de laudo', () => {
           modoOrganizacao="single"
           onModoConteudoChange={onModoConteudoChange}
           onModoOrganizacaoChange={onModoOrganizacaoChange}
+          onAbrirIndicePlaceholders={onAbrirIndicePlaceholders}
         />
       </TooltipProvider>,
     );
@@ -79,10 +81,14 @@ describe('layout do editor de laudo', () => {
     expect(screen.getByRole('button', { name: /Dados da REP/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Documento único/ })).toHaveAttribute('aria-pressed', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: /Placeholders/ }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Opções de placeholders' }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Exibir chaves no documento' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Opções de placeholders' }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Ver índice de placeholders' }));
     fireEvent.click(screen.getByRole('button', { name: /Por seções/ }));
 
     expect(onModoConteudoChange).toHaveBeenCalledWith('chaves');
+    expect(onAbrirIndicePlaceholders).toHaveBeenCalledTimes(1);
     expect(onModoOrganizacaoChange).toHaveBeenCalledWith('multi');
   });
 
