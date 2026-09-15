@@ -155,6 +155,7 @@ describe('AtualizacaoRepGdlService', () => {
       'campo:b602_local_cidade',
       'peca:2',
     ]))
+    expect(previa.diferencas.map(diferenca => diferenca.id)).not.toContain('peca:1')
 
     const resultado = await atualizacaoRepGdlService.aplicar({
       operacaoId: previa.operacaoId,
@@ -170,6 +171,32 @@ describe('AtualizacaoRepGdlService', () => {
     expect(camposEspecificos.b602.local.cidade).toBe('Cidade local')
     expect(camposEspecificos.b602.pecas.map(peca => peca.codPecaGdl)).toEqual([1, 2])
     expect(mocks.atualizarStatusLaudo).not.toHaveBeenCalled()
+  })
+
+  it('apresenta os campos alterados da peça sem expor o código interno do GDL', async () => {
+    const pecaLocal = criarPeca(1, 'local-1')
+    const pecaAtualizada = {
+      ...criarPeca(1, 'gdl-1'),
+      comuns: { ...criarPeca(1, 'gdl-1').comuns, lacreSaida: 'LS-002' },
+    }
+    mocks.buscarRep.mockResolvedValue(criarRep(JSON.stringify({ b602: { pecas: [pecaLocal], local: { cidade: 'Cidade local' } } })))
+    mocks.converter.mockReturnValue({
+      ...criarImportacao(),
+      camposEspecificos: {
+        ...criarImportacao().camposEspecificos,
+        pecas: [pecaAtualizada],
+      },
+    })
+
+    const previa = await atualizacaoRepGdlService.preparar('rep-1')
+    const diferenca = previa.diferencas.find(item => item.id === 'peca:1')
+
+    expect(diferenca).toMatchObject({
+      rotulo: 'Peça Carabina',
+      resumo: 'Identificação: Identificação 1',
+      detalhes: [{ campo: 'Lacre de saída', valorLocal: 'Não preenchido', valorGdl: 'LS-002' }],
+    })
+    expect(diferenca?.rotulo).not.toContain('(1)')
   })
 
   it('exige confirmação e reabre o laudo concluído antes de reconciliar seções', async () => {
@@ -192,7 +219,10 @@ describe('AtualizacaoRepGdlService', () => {
 
     expect(mocks.atualizarStatusLaudo).toHaveBeenCalledWith('laudo-1', 'Em andamento')
     expect(mocks.atualizarStatusRep).toHaveBeenCalledWith('rep-1', 'Em Andamento')
-    expect(mocks.sincronizarSecoes).toHaveBeenCalledWith('laudo-1')
+    expect(mocks.sincronizarSecoes).toHaveBeenCalledWith(
+      'laudo-1',
+      expect.objectContaining({ b602: expect.any(Object) }),
+    )
   })
 
   it('recusa aplicação quando a REP foi alterada após a prévia', async () => {

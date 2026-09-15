@@ -88,11 +88,11 @@ function adicionarAcaoTabela(
   controle.setAttribute('data-acao-tabela-placeholder', acao);
   controle.setAttribute('role', 'button');
   controle.setAttribute('tabindex', '0');
-  controle.setAttribute('aria-label', acao === 'personalizar' ? 'Personalizar tabela' : 'Restaurar dados da REP');
+  controle.setAttribute('aria-label', acao === 'personalizar' ? 'Editar' : 'Restaurar dados da REP');
   controle.setAttribute('title', acao === 'personalizar'
     ? 'Transformar esta tabela em uma cópia editável do laudo'
     : 'Descartar alterações locais e restaurar dados atuais da REP');
-  controle.textContent = acao === 'personalizar' ? 'Personalizar tabela' : 'Restaurar dados da REP';
+  controle.textContent = acao === 'personalizar' ? 'Editar' : 'Restaurar dados da REP';
   raiz.prepend(controle);
 }
 

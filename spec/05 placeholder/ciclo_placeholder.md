@@ -12,6 +12,13 @@ Ao abrir um laudo, a visualização padrão é `Dados da REP`; o usuário pode a
 
 No modo de dados, placeholder textual preenchido exibe o valor mantendo a âncora não editável. Valor ausente exibe `XXX` destacado. Para valor HTML, a âncora canônica é ocultada e a prévia é inserida como elemento irmão identificado por `data-placeholder-preview`; tabelas não são inseridas dentro do `span` da chave. No formato `html-inline`, a âncora recebe somente o fragmento resolvido; isso preserva campos reservados dentro de uma frase, como os lacres de saída B-602. No modo de chaves, a prévia é removida e a âncora volta a mostrar a chave.
 
+## Índice de placeholders
+
+O menu do controle `Placeholders` da barra do editor também abre **Índice de placeholders**. Ao abrir, ele deriva as chaves únicas do conteúdo atual dos editores, inclusive alterações ainda não salvas, e combina cada chave com o campo da REP, o valor efetivamente resolvido e a ação de cópia `{{chave}}`. O campo vem do catálogo de campos específicos ou do mapa de campos comuns; a descrição cadastrada é fallback e chaves sem metadado são identificadas sem interromper a listagem.
+
+Para valores HTML estruturais, o índice mostra a tabela em prévia e permite ampliá-la. Tabela personalizada vinculada no próprio laudo tem precedência sobre a tabela resolvida da REP, igual à exportação. A extração mantém o texto e o alinhamento horizontal de cada célula (`left`, `center`, `right` ou `justify`), procurando `style.text-align` ou `align` na célula e em seus ancestrais; a prévia compacta e a ampliada aplicam o mesmo alinhamento.
+
+A extração usa `DOMParser`, ignora scripts, estilos e prévias transitórias e deduplica pela primeira ocorrência da chave. Se o HTML não puder ser analisado, procura chaves textuais como fallback; uma falha de valor ou tabela não impede os demais itens. O índice é estado derivado do renderer, não altera o HTML, a REP nem o GDL.
 ## Tabelas editáveis no laudo
 
 Uma prévia HTML que contém tabela recebe `data-placeholder-preview-tabela="true"`, células protegidas e a ação transitória **Personalizar tabela**. A apresentação usa fundo e borda âmbar, selo **Tabela do placeholder** e controles no mesmo padrão dos blocos condicionais; tabelas comuns inseridas pelo usuário não recebem esse tratamento.
@@ -28,4 +35,4 @@ A exportação também remove resíduos transitórios e resolve novamente a part
 
 ## Verificação
 
-Testes de utilitários, placeholders pendentes e exportação B-602 cobrem normalização, chaves indexadas, valores ausentes, prévias HTML e resolução de tabelas.
+Testes de utilitários, placeholders pendentes e exportação B-602 cobrem normalização, chaves indexadas, valores ausentes, prévias HTML e resolução de tabelas. `indice-placeholders.test.ts` cobre chaves únicas, valor pendente, precedência da tabela personalizada e preservação de alinhamento por célula; `exportacao-placeholders.test.ts` cobre o valor padrão personalizado no mapa de resolução.

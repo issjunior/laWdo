@@ -55,6 +55,8 @@ import {
   obterClasseBadgeStatusLaudo,
   RodapeEditorLaudo,
 } from '@/components/laudo/editor/ControlesEditorLaudo';
+import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
+import { extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import {
   Dialog,
@@ -270,12 +272,18 @@ const isImagemLaudo = (valor: unknown): valor is ImagemLaudo => (
 const aplicarPlaceholders = (
   html: string,
   repData: RepPlaceholderData,
-  extraContext?: { solicitanteNome?: string; tipoExameNome?: string; tipoExameCodigo?: string },
+  extraContext?: {
+    solicitanteNome?: string;
+    tipoExameNome?: string;
+    tipoExameCodigo?: string;
+    placeholdersPersonalizados?: Array<{ chave: string; valor: string }>;
+  },
 ): string => resolverPlaceholdersExportacao(html, {
   repData,
   solicitanteNome: extraContext?.solicitanteNome,
   tipoExameNome: extraContext?.tipoExameNome,
   tipoExameCodigo: extraContext?.tipoExameCodigo,
+  placeholdersPersonalizados: extraContext?.placeholdersPersonalizados,
 });
 
 const converterHtmlEmTexto = (html: string): string => {
@@ -559,6 +567,8 @@ export const LaudosPage: React.FC = () => {
   const [categoriaExameId, setCategoriaExameId] = useState<string>('');
   const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
   const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
+  const [indicePlaceholdersOpen, setIndicePlaceholdersOpen] = useState(false);
+  const [itensIndicePlaceholders, setItensIndicePlaceholders] = useState<ItemIndicePlaceholder[]>([]);
   const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
   const exameToggles = useMemo<ExamToggle[] | undefined>(() => {
     if (!editando?.tipo_exame_codigo) return undefined;
@@ -823,6 +833,16 @@ export const LaudosPage: React.FC = () => {
       return { ...secao, conteudo };
     });
   }, [editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+
+  const abrirIndicePlaceholders = useCallback(() => {
+    const secoesAtuais = obterSecoesAtuaisDoEditor();
+    setItensIndicePlaceholders(extrairIndicePlaceholders(
+      secoesAtuais.map(secao => secao.conteudo),
+      mapaPlaceholdersResolvidos,
+      placeholders,
+    ));
+    setIndicePlaceholdersOpen(true);
+  }, [mapaPlaceholdersResolvidos, obterSecoesAtuaisDoEditor, placeholders]);
 
   const montarHtmlEstruturalAtual = useCallback((secoesFonte: SecaoEditor[]) => {
     const htmlEstrutural = reconstruirHtmlEstrutural(reindexarSecoesEditadas(secoesFonte));
@@ -1663,6 +1683,7 @@ export const LaudosPage: React.FC = () => {
         solicitanteNome,
         tipoExameNome,
         tipoExameCodigo,
+        placeholdersPersonalizados: placeholders,
       });
 
       // 5. Resolver placeholders de exame (B-602, I-801) incluindo armas computados
@@ -1671,6 +1692,7 @@ export const LaudosPage: React.FC = () => {
         solicitanteNome,
         tipoExameNome,
         tipoExameCodigo,
+        placeholdersPersonalizados: placeholders,
       });
 
       // 6. Gerar PDF via IPC
@@ -1739,12 +1761,18 @@ export const LaudosPage: React.FC = () => {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
       html = reindexarFiguras(html);
-      html = aplicarPlaceholders(html, repData, { solicitanteNome, tipoExameNome, tipoExameCodigo });
+      html = aplicarPlaceholders(html, repData, {
+        solicitanteNome,
+        tipoExameNome,
+        tipoExameCodigo,
+        placeholdersPersonalizados: placeholders,
+      });
       html = resolverPlaceholdersExportacao(html, {
         repData,
         solicitanteNome,
         tipoExameNome,
         tipoExameCodigo,
+        placeholdersPersonalizados: placeholders,
       });
 
       const margins = await getMargens();
@@ -1769,7 +1797,7 @@ export const LaudosPage: React.FC = () => {
     } finally {
       setListaPreviewLoading(false);
     }
-  }, [listaPreviewBlobUrl]);
+  }, [listaPreviewBlobUrl, placeholders]);
 
   const baixarPdfVisualizado = (url: string, nomeArquivo: string) => {
     if (!url) return;
@@ -1833,6 +1861,7 @@ export const LaudosPage: React.FC = () => {
         solicitanteNome,
         tipoExameNome,
         tipoExameCodigo,
+        placeholdersPersonalizados: placeholders,
       });
 
       if (formato === 'pdf') {
@@ -1923,24 +1952,42 @@ export const LaudosPage: React.FC = () => {
     if (codigo) {
       setCategoriaExameId(`cat-exam-${codigo}`);
       setExameMenuStructure(EXAM_MENU_REGISTRY[codigo]);
-      try {
-        const rRep = await window.ipcAPI.rep.findById(laudo.rep_id);
-        if (rRep.success && rRep.data) {
-          setMapaPlaceholdersResolvidos(construirMapaPlaceholdersResolvidos({ repData: rRep.data }));
-        }
-        if (rRep.success && rRep.data && rRep.data.campos_especificos) {
-          const parsed = JSON.parse(rRep.data.campos_especificos);
-          setExameCamposEspecificos(parsed.b602 || parsed);
-        } else {
-          setExameCamposEspecificos(undefined);
-        }
-      } catch {
-        setExameCamposEspecificos(undefined);
-        setMapaPlaceholdersResolvidos({});
-      }
     } else {
       setCategoriaExameId('');
       setExameMenuStructure(undefined);
+    }
+
+    try {
+      const rRep = await window.ipcAPI.rep.findById(laudo.rep_id);
+      if (!rRep.success || !rRep.data) throw new Error('REP indisponível');
+
+      let solicitanteNome = '';
+      if (rRep.data.solicitante_id) {
+        try {
+          const rSolicitante = await window.ipcAPI.solicitante.findById(rRep.data.solicitante_id);
+          if (rSolicitante.success && rSolicitante.data) solicitanteNome = rSolicitante.data.nome || '';
+        } catch {
+          // Mantém os demais valores disponíveis quando o relacionamento falha.
+        }
+      }
+
+      setMapaPlaceholdersResolvidos(construirMapaPlaceholdersResolvidos({
+        repData: rRep.data,
+        solicitanteNome,
+        tipoExameNome: laudo.tipo_exame_nome,
+        tipoExameCodigo: laudo.tipo_exame_codigo,
+        placeholdersPersonalizados: placeholders,
+      }));
+
+      if (rRep.data.campos_especificos) {
+        const parsed: unknown = JSON.parse(rRep.data.campos_especificos);
+        setExameCamposEspecificos(isRecord(parsed)
+          ? (isRecord(parsed.b602) ? parsed.b602 : parsed)
+          : undefined);
+      } else {
+        setExameCamposEspecificos(undefined);
+      }
+    } catch {
       setExameCamposEspecificos(undefined);
       setMapaPlaceholdersResolvidos({});
     }
@@ -1954,7 +2001,7 @@ export const LaudosPage: React.FC = () => {
     setError(null);
     setSuccess(null);
     setEditando(laudo);
-  }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao]);
+  }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao, placeholders]);
 
   const aplicarModoNoEditor = useCallback((editor: TinyMceEditorInstance) => {
     agendarVisualizacaoPlaceholders(editor, {
@@ -3462,6 +3509,7 @@ export const LaudosPage: React.FC = () => {
               modoOrganizacao={editorMode}
               onModoConteudoChange={setModoVisualizacaoPlaceholders}
               onModoOrganizacaoChange={handleEditorModeChange}
+              onAbrirIndicePlaceholders={abrirIndicePlaceholders}
             />
           </CardHeader>
           <CardContent className="overflow-visible p-0 px-6 pb-6">
@@ -3664,6 +3712,12 @@ export const LaudosPage: React.FC = () => {
             </PainelLateralRedimensionavel>
           </CardContent>
         </Card>
+
+        <IndicePlaceholdersDialog
+          open={indicePlaceholdersOpen}
+          onOpenChange={setIndicePlaceholdersOpen}
+          itens={itensIndicePlaceholders}
+        />
 
         {/* Modal de Visualização (Preview PDF) */}
         <Dialog open={previewOpen} onOpenChange={(open) => {

@@ -4,8 +4,11 @@
 
 `exportacao-placeholders.ts` constrói o mapa de valores a partir da REP e de seu contexto. No B-602, `projetarB602ParaLaudo()` é a fonte derivada de material, cartuchos, estojos e armas; novas gravações usam `b602.pecas`, e arrays legados são apenas fallback de leitura.
 
-`construirMapaPlaceholdersResolvidos()` expõe, por chave, valor, preenchimento e formato (`texto`, `html` estrutural ou `html-inline`). O resumo de lacres de saída B-602 é um valor inline: armas são referenciadas individualmente por letra, estojos são agrupados, e cada lacre ausente gera `XXX` reservado. Editor e exportação devem consumir esse mesmo mapa; não duplicar a resolução em componentes.
+`construirMapaPlaceholdersResolvidos()` expõe, por chave, valor, preenchimento e formato (`texto`, `html` estrutural ou `html-inline`). O resumo de lacres de saída B-602 é um valor inline: armas são referenciadas individualmente por letra, estojos são agrupados, e cada lacre ausente gera `XXX` reservado. Editor, IA, preview e exportação devem consumir esse mesmo mapa; não duplicar a resolução em componentes.
 
+### Placeholders personalizados
+
+O contexto de resolução recebe os placeholders personalizados cadastrados, com chave e valor padrão. Eles entram primeiro no mapa para estarem disponíveis em editor, IA, preview e exportação; chaves conhecidas da REP, do perito ou calculadas pelo B-602 são preenchidas depois e têm precedência. Chave vazia é ignorada e valor padrão ausente torna-se texto vazio, preservando o comportamento de `XXX` para placeholder não preenchido.
 ### Datas da REP importada do GDL
 
 `data_recebimento_rep` sempre formata `rep.data_requisicao`, que representa a Data de Entrada/Solicitação importada ou informada manualmente. Somente `data_extenso_recebimento_rep` tem uma fonte alternativa: quando `campos_especificos` contém `integracaoGdl.dataExecucaoLaudo` como texto não vazio, ela formata essa data por extenso; caso contrário, usa `data_requisicao`.
@@ -39,4 +42,4 @@ PDF e preview aplicam `break-after: page` e `page-break-after: always` ao marcad
 
 ## Verificação
 
-`exportacao-parser.test.ts` cobre `text-indent`, o comentário legado e a ordem do bloco de quebra. `exportacao-docx-canonica.test.ts` inspeciona o XML do pacote para `w:firstLine` e `w:type="page"`, além da conversão ODT quando o LibreOffice está disponível. Os testes de exportação também cobrem placeholders B-602, tabelas, valores ausentes, blocos suprimidos, preenchimento de blocos periciais vazios e o fallback/precedência de `data_extenso_recebimento_rep`.
+`exportacao-parser.test.ts` cobre `text-indent`, o comentário legado e a ordem do bloco de quebra. `exportacao-docx-canonica.test.ts` inspeciona o XML do pacote para `w:firstLine` e `w:type="page"`, além da conversão ODT quando o LibreOffice está disponível. `exportacao-placeholders.test.ts` cobre o fallback/precedência de `data_extenso_recebimento_rep` e o valor padrão de placeholder personalizado. Os demais testes de exportação cobrem placeholders B-602, tabelas, valores ausentes, blocos suprimidos e preenchimento de blocos periciais vazios.

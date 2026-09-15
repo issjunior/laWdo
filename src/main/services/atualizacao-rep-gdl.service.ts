@@ -7,9 +7,11 @@ import { repService } from './rep.service.js'
 import { auditCicloVida } from './audit-log.service.js'
 import type { REPRow } from '../types/database.js'
 import { combinarEnvolvido, separarEnvolvido } from '../../shared/utils/envolvido.js'
-import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '../../shared/types/b602-gdl.types.js'
+import { TIPOS_PECA_B602_POR_CODIGO } from '../../shared/catalogos/b602-gdl.catalogo.js'
+import type { CamposComunsPecaB602, DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '../../shared/types/b602-gdl.types.js'
 import type {
   AplicarAtualizacaoRepGdlEntrada,
+  DetalheDiferencaAtualizacaoRepGdl,
   DiferencaAtualizacaoRepGdl,
   PreviaAtualizacaoRepGdl,
   ResultadoAtualizacaoRepGdl,
@@ -86,17 +88,109 @@ function rotuloCampo(campo: string): string {
   return rotulos[campo] ?? campo.replace(/^b602_envolvidos_/, 'Envolvido ')
 }
 
+const CAMPOS_COMUNS_PECA: Array<keyof CamposComunsPecaB602> = [
+  'identificacao', 'quantidade', 'unidadeMedida', 'quantidadeDescricao',
+  'examinadoInLoco', 'materialIncinerado', 'dataEntrada', 'lacreEntrada',
+  'lacreSaida', 'dataLiberacao', 'codigoVestigio', 'consumida', 'observacao',
+]
+
+const ROTULOS_CAMPOS_COMUNS_PECA: Record<keyof CamposComunsPecaB602, string> = {
+  identificacao: 'Identificação', quantidade: 'Quantidade', unidadeMedida: 'Unidade de medida',
+  quantidadeDescricao: 'Descrição da quantidade', examinadoInLoco: 'Examinado no local',
+  materialIncinerado: 'Material incinerado', dataEntrada: 'Data de entrada',
+  lacreEntrada: 'Lacre de entrada', lacreSaida: 'Lacre de saída',
+  dataLiberacao: 'Data de liberação', codigoVestigio: 'Código do vestígio',
+  consumida: 'Consumida', observacao: 'Observação',
+}
+
+function serializarValor(valor: unknown): string {
+  if (valor === null || valor === undefined) return 'null'
+  if (Array.isArray(valor)) return `[${valor.map(serializarValor).join(',')}]`
+  if (typeof valor === 'object') {
+    const registro = valor as Record<string, unknown>
+    return `{${Object.keys(registro).sort().map(chave => `${JSON.stringify(chave)}:${serializarValor(registro[chave])}`).join(',')}}`
+  }
+  return JSON.stringify(valor)
+}
+
+function apresentarValor(valor: unknown): string {
+  if (valor === null || valor === undefined || valor === '') return 'Não preenchido'
+  if (typeof valor === 'boolean') return valor ? 'Sim' : 'Não'
+  if (Array.isArray(valor) || typeof valor === 'object') return JSON.stringify(valor)
+  return String(valor)
+}
+
+function valorRelevante(valor: unknown): boolean {
+  return valor !== null && valor !== undefined && valor !== '' && valor !== false && valor !== 0 && valor !== 'N'
+}
+
+function rotuloCampoPersonalizado(peca: PecaB602, campoId: string): string {
+  const tipo = TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)
+  return tipo?.campos.find(campo => campo.id === campoId)?.label ?? campoId
+}
+
+function apresentarCampoPersonalizado(peca: PecaB602, campoId: string, valor: unknown): string {
+  const tipo = TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)
+  const campo = tipo?.campos.find(candidato => candidato.id === campoId)
+  const opcao = campo?.opcoes?.find(candidata => candidata.codigo === valor || candidata.label === valor)
+  return apresentarValor(opcao?.label ?? valor)
+}
+
+function criarDetalhesPeca(atual: PecaB602 | undefined, recebida: PecaB602): DetalheDiferencaAtualizacaoRepGdl[] {
+  const detalhes: DetalheDiferencaAtualizacaoRepGdl[] = []
+  const adicionar = (campo: string, valorLocal: unknown, valorGdl: unknown, apresentar = apresentarValor) => {
+    if (atual && serializarValor(valorLocal) === serializarValor(valorGdl)) return
+    if (!atual && !valorRelevante(valorGdl)) return
+    detalhes.push({
+      campo,
+      valorLocal: atual ? apresentar(valorLocal) : 'Não cadastrada',
+      valorGdl: apresentar(valorGdl),
+    })
+  }
+
+  adicionar('Tipo da peça', atual?.tipoPeca, recebida.tipoPeca)
+  for (const campo of CAMPOS_COMUNS_PECA) {
+    adicionar(ROTULOS_CAMPOS_COMUNS_PECA[campo], atual?.comuns[campo], recebida.comuns[campo])
+  }
+
+  const camposPersonalizados = new Set([
+    ...Object.keys(atual?.personalizados ?? {}),
+    ...Object.keys(recebida.personalizados),
+  ])
+  for (const campoId of camposPersonalizados) {
+    adicionar(
+      rotuloCampoPersonalizado(recebida, campoId),
+      atual?.personalizados[campoId],
+      recebida.personalizados[campoId],
+      valor => apresentarCampoPersonalizado(recebida, campoId, valor),
+    )
+  }
+
+  const camposAdicionais = new Set([
+    ...Object.keys(atual?.extrasGdl ?? {}),
+    ...Object.keys(recebida.extrasGdl),
+  ])
+  for (const campo of camposAdicionais) {
+    adicionar(`Dado adicional: ${campo}`, atual?.extrasGdl[campo], recebida.extrasGdl[campo])
+  }
+
+  return detalhes
+}
+
 function compararPecas(atuais: PecaB602[], recebidas: PecaB602[]): DiferencaAtualizacaoRepGdl[] {
   const atuaisPorCodigo = new Map(atuais.filter(peca => peca.codPecaGdl !== undefined).map(peca => [peca.codPecaGdl!, peca]))
   return recebidas.flatMap(peca => {
     const atual = peca.codPecaGdl === undefined ? undefined : atuaisPorCodigo.get(peca.codPecaGdl)
-    if (atual && JSON.stringify(atual) === JSON.stringify(peca)) return []
+    const detalhes = criarDetalhesPeca(atual, peca)
+    if (atual && detalhes.length === 0) return []
     const id = `peca:${peca.codPecaGdl ?? peca.idLocal}`
     return [{
       id, categoria: 'peca' as const, grupo: 'Peças B-602',
-      rotulo: atual ? `Peça ${peca.tipoPeca} (${peca.codPecaGdl})` : `Nova peça ${peca.tipoPeca}`,
-      valorLocal: atual ? 'Dados locais diferentes' : 'Não cadastrada',
+      rotulo: atual ? `Peça ${peca.tipoPeca}` : `Nova peça ${peca.tipoPeca}`,
+      resumo: peca.comuns.identificacao ? `Identificação: ${peca.comuns.identificacao}` : 'Sem identificação informada',
+      valorLocal: atual ? `${detalhes.length} alteração(ões) identificada(s)` : 'Não cadastrada',
       valorGdl: 'Dados disponíveis no GDL', selecionadaPorPadrao: true,
+      detalhes,
     }]
   })
 }
@@ -201,7 +295,7 @@ class AtualizacaoRepGdlService {
         await repService.updateStatus(rep.id, 'Em Andamento')
         auditCicloVida('', 'laudo', laudo.id, 'transicao_status', `Laudo da Requisição ${rep.numero}: ${laudo.status} → Em andamento`, { status: laudo.status }, { status: 'Em andamento', motivo: 'atualizacao_gdl' })
       }
-      if (laudo) await laudoService.sincronizarSecoesCondicionais(laudo.id)
+      if (laudo) await laudoService.sincronizarSecoesCondicionais(laudo.id, camposEspecificos)
     })
     auditCicloVida('', 'rep', rep.id, 'atualizacao', `Requisição ${rep.numero} atualizada a partir do GDL`, null, { diferencas: [...selecionados] })
     operacoesPendentes.delete(entrada.operacaoId)

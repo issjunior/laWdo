@@ -106,6 +106,7 @@ export interface ExportacaoContext {
   solicitanteNome?: string;
   tipoExameNome?: string;
   tipoExameCodigo?: string;
+  placeholdersPersonalizados?: Array<{ chave: string; valor: string }>;
 }
 
 export type FormatoValorPlaceholder = 'texto' | 'html' | 'html-inline';
@@ -178,6 +179,9 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
     || repData.data_requisicao;
 
   const mapping: Record<string, string> = {
+    ...Object.fromEntries((ctx.placeholdersPersonalizados || [])
+      .filter(placeholder => placeholder.chave.trim())
+      .map(placeholder => [placeholder.chave, placeholder.valor || ''])),
     'rep_numero': repData.numero || '',
     'rep_data_requisicao': formatarData(repData.data_requisicao),
     'rep_prazo': repData.prazo || '',
