@@ -47,7 +47,7 @@ if (!existsSync(servidor)) {
     }
   }
   if (!process.exitCode) {
-    const adicao = executar(['mcp', 'add', 'lawdoDiagnostico', '--', 'node', servidor, workspace]);
+    const adicao = executar(['mcp', 'add', 'lawdoDiagnostico', '--', process.execPath, servidor, workspace]);
     if (adicao.status !== 0) {
       console.error(mensagemFalha(adicao, 'Não foi possível configurar o servidor MCP do laWdo.'));
       process.exitCode = 1;
