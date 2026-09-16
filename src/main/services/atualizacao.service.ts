@@ -224,37 +224,6 @@ export class AtualizacaoService {
     return this.obterEstado();
   }
 
-  async carregarAtualizacaoOffline(caminhoManifesto: string): Promise<EstadoAtualizacaoResposta> {
-    this.definirEstado('verificando');
-    this.definirProgresso(5, 'verificando', 'Lendo a atualização offline.');
-    try {
-      const diretorio = path.dirname(caminhoManifesto);
-      const assinatura = fs.readFileSync(path.join(diretorio, `${path.basename(caminhoManifesto)}.sig`), 'utf8').trim();
-      const manifesto = normalizarManifesto(JSON.parse(fs.readFileSync(caminhoManifesto, 'utf8')) as unknown);
-      this.definirProgresso(25, 'validando', 'Validando a assinatura do pacote offline.');
-      if (!verify(null, Buffer.from(serializarCanonico(manifesto), 'utf8'), createPublicKey(chavePublicaRelease), Buffer.from(assinatura, 'base64'))) throw new Error('Assinatura do manifesto offline inválida.');
-      if (compararVersoes(manifesto.versao, app.getVersion()) <= 0) throw new Error('A atualização offline não é mais recente que a versão instalada.');
-      const plataforma = plataformaAtual();
-      const arquitetura = process.arch === 'arm64' ? 'arm64' : 'x64';
-      const artefato = manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura);
-      if (!artefato) throw new Error('O manifesto offline não possui pacote compatível com este dispositivo.');
-      const origem = path.join(diretorio, artefato.nome);
-      this.definirProgresso(40, 'validando', 'Conferindo a integridade do pacote offline.');
-      this.validarArquivo(artefato, origem, false);
-      fs.mkdirSync(this.diretorioAtualizacoes, { recursive: true });
-      const destino = path.join(this.diretorioAtualizacoes, artefato.nome);
-      this.definirProgresso(45, 'copiando', 'Copiando o pacote para o laWdo.');
-      await this.copiarArquivoComProgresso(origem, destino, artefato.tamanho);
-      this.definirProgresso(95, 'validando', 'Validando a cópia do pacote offline.');
-      this.validarArquivoLocal(artefato, destino);
-      this.atualizacaoDisponivel = { versao: manifesto.versao, dataPublicacao: manifesto.dataPublicacao, notas: manifesto.notas, versaoSchema: manifesto.versaoSchema, requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens, artefato };
-      this.caminhoDownload = destino;
-      this.definirProgresso(100, 'validando', 'Pacote offline validado.');
-      this.definirEstado('baixada');
-    } catch (erro) { this.definirFalha(erro); }
-    return this.obterEstado();
-  }
-
   adiar(): EstadoAtualizacaoResposta {
     if (this.estado === 'baixando' || this.estado === 'instalando') throw new Error('Não é possível adiar uma operação em andamento.');
     if (this.atualizacaoDisponivel && this.estado !== 'baixada') this.definirEstado('disponivel');
@@ -377,14 +346,14 @@ export class AtualizacaoService {
     if (!arquivoResolvido.startsWith(`${diretorioResolvido}${path.sep}`) || path.basename(arquivoResolvido) !== artefato.nome) {
       throw new Error('Caminho do pacote local inválido.');
     }
-    this.validarArquivo(artefato, arquivoResolvido, true);
+    this.validarArquivo(artefato, arquivoResolvido);
   }
 
-  private validarArquivo(artefato: ArtefatoAtualizacao, caminhoArquivo: string, controlado: boolean): void {
-    if (!fs.existsSync(caminhoArquivo)) throw new Error(controlado ? 'Pacote agendado não foi encontrado.' : 'Pacote offline não foi encontrado ao lado do manifesto.');
+  private validarArquivo(artefato: ArtefatoAtualizacao, caminhoArquivo: string): void {
+    if (!fs.existsSync(caminhoArquivo)) throw new Error('Pacote agendado não foi encontrado.');
     const estatisticas = fs.statSync(caminhoArquivo);
     if (!estatisticas.isFile() || estatisticas.size !== artefato.tamanho || calcularHash(caminhoArquivo) !== artefato.hashSha256) {
-      throw new Error(controlado ? 'Pacote agendado não corresponde ao manifesto validado.' : 'Pacote offline não corresponde ao manifesto.');
+      throw new Error('Pacote agendado não corresponde ao manifesto validado.');
     }
   }
 
@@ -433,27 +402,6 @@ export class AtualizacaoService {
     this.progresso = progresso.percentual;
     this.progressoDetalhado = progresso;
     for (const ouvinte of this.ouvintesProgresso) ouvinte(progresso);
-  }
-
-  private async copiarArquivoComProgresso(origem: string, destino: string, tamanho: number): Promise<void> {
-    const temporario = `${destino}.parcial`;
-    const leitura = fs.createReadStream(origem);
-    const escrita = fs.createWriteStream(temporario, { flags: 'w' });
-    let copiado = 0;
-    try {
-      for await (const parte of leitura) {
-        const bytes = Buffer.isBuffer(parte) ? parte : Buffer.from(parte);
-        copiado += bytes.length;
-        if (!escrita.write(bytes)) await new Promise<void>(resolve => escrita.once('drain', resolve));
-        this.definirProgresso(45 + Math.round((copiado / tamanho) * 50), 'copiando', 'Copiando o pacote para o laWdo.');
-      }
-      await new Promise<void>((resolve, reject) => escrita.end((erro?: Error | null) => erro ? reject(erro) : resolve()));
-      fs.renameSync(temporario, destino);
-    } catch (erro) {
-      escrita.destroy();
-      fs.rmSync(temporario, { force: true });
-      throw erro;
-    }
   }
 
   private carregarUltimaVerificacao(): string | undefined {

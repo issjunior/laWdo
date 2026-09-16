@@ -104,13 +104,13 @@ function botoesDownload(downloads) {
     if (artefatos.length === 0) return '';
     const botoes = artefatos.map(artefato => `
             <a class="download" href="${escaparHtml(artefato.url)}" rel="noopener noreferrer">
-              <span class="download-info"><strong>${escaparHtml(artefato.arquitetura)} · ${escaparHtml(rotuloFormato(artefato.formato))}</strong><small>v${escaparHtml(artefato.versao)} · ${escaparHtml(formatarTamanho(artefato.tamanho))}</small></span>
+              <span class="download-info"><strong>${escaparHtml(artefato.arquitetura)} · ${escaparHtml(rotuloFormato(artefato.formato))}</strong><small>${escaparHtml(artefato.nome)} · v${escaparHtml(artefato.versao)} · ${escaparHtml(formatarTamanho(artefato.tamanho))}</small><small>SHA-256: ${escaparHtml(artefato.hashSha256)}</small></span>
               <b aria-hidden="true">↓</b>
             </a>`).join('');
     return `<section class="grupo-plataforma" aria-label="Downloads para ${escaparHtml(rotuloPlataforma(plataforma))}"><h3>${escaparHtml(rotuloPlataforma(plataforma))}</h3><div class="lista-downloads">${botoes}
           </div></section>`;
   }).join('');
-  return `<section class="downloads" aria-labelledby="titulo-downloads"><div class="downloads-header"><div><p class="rotulo">Versão disponível</p><h2 id="titulo-downloads">Downloads</h2></div><a class="historico" href="https://github.com/issjunior/laWdo/releases" rel="noopener noreferrer">Histórico de versões <span aria-hidden="true">↗</span></a></div><p class="downloads-introducao">Escolha o instalador compatível com seu sistema operacional.</p><div class="grupos-plataforma">${grupos}</div></section>`;
+  return `<section class="downloads" aria-labelledby="titulo-downloads"><div class="downloads-header"><div><p class="rotulo">Versão disponível</p><h2 id="titulo-downloads">Downloads</h2></div><a class="historico" href="https://github.com/issjunior/laWdo/releases" rel="noopener noreferrer">Histórico de versões <span aria-hidden="true">↗</span></a></div><p class="downloads-introducao">Escolha o instalador compatível com seu sistema operacional. No Windows, o SmartScreen poderá identificar o fornecedor como desconhecido enquanto o instalador não possuir assinatura digital.</p><div class="grupos-plataforma">${grupos}</div></section>`;
 }
 
 function paginaInicial(downloads) {

@@ -120,7 +120,6 @@ interface IpcAPIRendererLegada {
     prepararReinicio: () => Promise<RespostaAtualizacao>;
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
-    selecionarOffline: () => Promise<RespostaAtualizacao>;
     onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
     onSolicitarReinicio: (callback: () => boolean) => () => void;
   };

@@ -30,11 +30,13 @@ win:
 
 nsis:
   include: build/installer.nsh
+  artifactName: '${productName}-Setup-${version}-${arch}.${ext}'
   installerIcon: src/renderer/assets/icon.ico
   uninstallerIcon: src/renderer/assets/icon.ico
   oneClick: false
   perMachine: false
-  allowToChangeInstallationDirectory: true
+  allowToChangeInstallationDirectory: false
+  allowElevation: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: laWdo

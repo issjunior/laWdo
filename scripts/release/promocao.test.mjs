@@ -99,6 +99,8 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   assert.match(paginaInicial, /prefers-reduced-motion/);
   assert.match(paginaInicial, /x64 · Instalador/);
   assert.match(paginaInicial, /windows-0\.1\.2\.exe/);
+  assert.match(paginaInicial, /SHA-256: b{64}/);
+  assert.match(paginaInicial, /SmartScreen poderá identificar o fornecedor como desconhecido/);
   assert.match(paginaInicial, /x64 · AppImage/);
   assert.match(paginaInicial, /linux-0\.1\.2\.AppImage/);
   assert.match(paginaInicial, /x64 · DMG/);

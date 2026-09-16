@@ -70,35 +70,6 @@ describe('AtualizacaoService', () => {
     fs.rmSync(diretorio, { recursive: true, force: true });
   });
 
-  it('deve recusar atualização offline com assinatura inválida', async () => {
-    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-atualizacao-offline-'));
-    const caminhoManifesto = path.join(diretorio, 'manifesto.json');
-    fs.writeFileSync(caminhoManifesto, JSON.stringify({
-      versao: '0.1.2',
-      commit: 'a'.repeat(40),
-      dataPublicacao: '2026-07-24T00:00:00.000Z',
-      canais: ['stable'],
-      versaoSchema: 1,
-      requerBackupCompletoImagens: false,
-      notas: 'Teste offline',
-      artefatos: [{
-        plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable',
-        nome: 'laWdo-0.1.2-setup.exe', tamanho: 1, hashSha256: 'a'.repeat(64),
-        url: 'https://example.invalid/laWdo-0.1.2-setup.exe',
-      }],
-    }), 'utf8');
-    fs.writeFileSync(`${caminhoManifesto}.sig`, 'assinatura-invalida', 'utf8');
-    const service = new AtualizacaoService();
-
-    const estado = await service.carregarAtualizacaoOffline(caminhoManifesto);
-
-    expect(estado).toMatchObject({
-      estado: 'falhou',
-      erro: 'Assinatura do manifesto offline inválida.',
-    });
-    fs.rmSync(diretorio, { recursive: true, force: true });
-  });
-
   it('deve persistir apenas um pacote automático já validado para a próxima inicialização', () => {
     const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-atualizacao-'));
     vi.mocked(app.getPath).mockReturnValue(diretorio);

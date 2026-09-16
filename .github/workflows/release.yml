@@ -268,6 +268,26 @@ jobs:
             throw "A versão interna do executável ($versaoProduto) difere da versão solicitada ($env:VERSAO)."
           }
 
+          $bytesExecutavel = [System.IO.File]::ReadAllBytes($executavel.FullName)
+          $offsetPe = [System.BitConverter]::ToInt32($bytesExecutavel, 0x3c)
+          $arquiteturaPe = [System.BitConverter]::ToUInt16($bytesExecutavel, $offsetPe + 4)
+          if ($arquiteturaPe -ne 0x8664) {
+            throw "O executável Windows não foi empacotado para x64 (Machine=$arquiteturaPe)."
+          }
+
+          $instaladorEsperado = Join-Path (Resolve-Path -LiteralPath dist) "laWdo-Setup-$env:VERSAO-x64.exe"
+          if (-not (Test-Path -LiteralPath $instaladorEsperado -PathType Leaf)) {
+            throw "O instalador Windows esperado não foi produzido: $instaladorEsperado."
+          }
+          $hashInstalador = (Get-FileHash -Algorithm SHA256 -LiteralPath $instaladorEsperado).Hash
+          if ($hashInstalador -notmatch '^[A-F0-9]{64}$') {
+            throw 'Não foi possível calcular o SHA-256 do instalador Windows.'
+          }
+          $assinaturaInstalador = Get-AuthenticodeSignature -FilePath $instaladorEsperado
+          if ($assinaturaInstalador.Status -ne 'NotSigned') {
+            throw "O instalador deveria permanecer sem assinatura Authenticode neste estágio, mas recebeu o status $($assinaturaInstalador.Status)."
+          }
+
       - name: Enviar artefatos temporários
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
