@@ -61,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     dbVersion: number;
   } | null>(null);
   const [atualizacao, setAtualizacao] = useState<EstadoAtualizacaoResposta | null>(null);
-  const [acaoAtualizacao, setAcaoAtualizacao] = useState<'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'offline' | null>(null);
+  const [acaoAtualizacao, setAcaoAtualizacao] = useState<'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | null>(null);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -131,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     return `${plataforma} ${dadosAtualizacao.artefato.arquitetura} · ${(dadosAtualizacao.artefato.tamanho / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
   };
 
-  const executarAcaoAtualizacao = async (acao: 'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'offline') => {
+  const executarAcaoAtualizacao = async (acao: 'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar') => {
     const api = window.ipcAPI.atualizacao;
     if (!api) {
       toast.error('Atualizações não estão disponíveis neste ambiente.');
@@ -143,7 +143,6 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
         : acao === 'baixar' ? await api.baixar()
           : acao === 'instalar' ? await api.instalarAgora()
             : acao === 'agendar' ? await api.agendar()
-              : acao === 'offline' ? await api.selecionarOffline()
               : await api.adiar();
       setAtualizacao(resposta.data);
       if (!resposta.success) toast.error(resposta.error || 'Não foi possível concluir a atualização.');
@@ -349,12 +348,9 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                 {atualizacao?.estado === 'aguardando_reinicio' && <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><Clock3 className="h-3.5 w-3.5" />Instalação agendada. Na próxima abertura, o laWdo validará o pacote e criará o backup antes de iniciar o instalador.</p>}
                 <div className="space-y-2 pt-2 border-t border-border">
                   <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Ações</h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2">
                     <Button size="sm" variant="outline" className="w-full" onClick={() => void executarAcaoAtualizacao('verificar')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
                       <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${acaoAtualizacao === 'verificar' ? 'animate-spin' : ''}`} /> Verificar atualizações
-                    </Button>
-                    <Button size="sm" variant="outline" className="w-full" onClick={() => void executarAcaoAtualizacao('offline')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
-                      <Download className="mr-1.5 h-3.5 w-3.5" /> Atualização offline
                     </Button>
                   </div>
                   <div className="grid grid-cols-1 gap-2">

@@ -371,7 +371,6 @@ export interface IpcAPI {
     prepararReinicio: () => Promise<RespostaAtualizacao>;
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
-    selecionarOffline: () => Promise<RespostaAtualizacao>;
     onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
     onSolicitarReinicio: (callback: () => boolean) => () => void;
   };
@@ -622,7 +621,6 @@ const ALLOWED_CHANNELS = new Set([
   'atualizacao:preparar-reinicio',
   'atualizacao:instalar-agora',
   'atualizacao:agendar',
-  'atualizacao:selecionar-offline',
   'atualizacao:responder-reinicio',
 
   // Logs do sistema
@@ -1477,7 +1475,6 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     prepararReinicio: () => invokeSeguro<RespostaAtualizacao>('atualizacao:preparar-reinicio'),
     instalarAgora: () => invokeSeguro<RespostaAtualizacao>('atualizacao:instalar-agora'),
     agendar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:agendar'),
-    selecionarOffline: () => invokeSeguro<RespostaAtualizacao>('atualizacao:selecionar-offline'),
     onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
         if (progressoAtualizacaoValidoNoPreload(progresso)) callback(progresso);

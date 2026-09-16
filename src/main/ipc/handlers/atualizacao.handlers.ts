@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron';
+import { BrowserWindow, ipcMain, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { atualizacaoService } from '../../services/atualizacao.service.js';
 
@@ -57,13 +57,6 @@ export function registerAtualizacaoHandlers(): void {
   });
   ipcMain.handle('atualizacao:agendar', () => {
     try { return { success: true, data: atualizacaoService.agendarParaProximaInicializacao() }; } catch (erro) { return respostaErro(erro); }
-  });
-  ipcMain.handle('atualizacao:selecionar-offline', async _evento => {
-    try {
-      const selecao = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Manifesto de atualização', extensions: ['json'] }] });
-      if (selecao.canceled || selecao.filePaths.length !== 1) return { success: true, data: atualizacaoService.obterEstado() };
-      return { success: true, data: await atualizacaoService.carregarAtualizacaoOffline(selecao.filePaths[0]) };
-    } catch (erro) { return respostaErro(erro); }
   });
   ipcMain.handle('atualizacao:responder-reinicio', (evento, id: unknown, autorizado: unknown) => {
     if (typeof id !== 'string' || typeof autorizado !== 'boolean') return { success: false };
