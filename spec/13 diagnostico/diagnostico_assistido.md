@@ -22,17 +22,27 @@ npm run diagnostico:configurar-codex
 npm run dev:diagnostico
 ```
 
-Depois de configurar o MCP, reinicie o Codex. A configuração registra o servidor local `lawdoDiagnostico`, que executa `out/main/diagnostico-mcp.js` para aquele workspace.
+Depois de configurar o MCP, encerre completamente o Codex, abra-o novamente e crie uma nova tarefa. A configuração de servidores é global ao usuário, mas a lista de ferramentas é carregada no início da tarefa e não é atualizada retroativamente em uma tarefa já aberta.
 
-Para usar em outro computador, repita todo o procedimento no clone local: instale Node.js 24 ou superior, obtenha as dependências com `npm ci`, gere o build e execute `npm run diagnostico:configurar-codex` naquele computador. A configuração é local porque contém o caminho absoluto do workspace; não deve ser copiada de outra máquina. Inicie sempre uma nova sessão com `npm run dev:diagnostico`.
+O configurador recompõe o registro `lawdoDiagnostico` para o workspace atual. No Windows, ele procura o executável do Codex Desktop em `%LOCALAPPDATA%\OpenAI\Codex\bin\<versão>\codex.exe` e usa `codex` do `PATH` como fallback. O comando MCP persistido usa caminhos absolutos para o executável Node que iniciou o configurador, `out/main/diagnostico-mcp.js` e o workspace; assim, a inicialização pelo Desktop não depende do `PATH` herdado. Falhas de criação ou substituição exibem o erro de spawn, stderr ou stdout original em vez de apenas uma mensagem genérica.
 
-Confirmação inicial recomendada:
+Para usar em outro computador, repita todo o procedimento no clone local: instale Node.js 24 ou superior, obtenha as dependências com `npm ci`, gere o build e execute `npm run diagnostico:configurar-codex` naquele computador. A configuração contém caminhos absolutos locais e não deve ser copiada de outra máquina.
+
+Antes de abrir o aplicativo, confirme o registro:
+
+```powershell
+codex mcp get lawdoDiagnostico
+```
+
+O resultado deve indicar `enabled: true`, `transport: stdio` e um `command` com caminho absoluto para `node.exe` no Windows. Se as ferramentas ainda não aparecerem, confirme que o Codex foi totalmente encerrado e que a verificação ocorre em uma nova tarefa. Depois, inicie o aplicativo com `npm run dev:diagnostico`.
+
+Confirmação da sessão:
 
 ```text
 diagnostico_status
 ```
 
-A resposta deve indicar sessão conectada e modo de diagnóstico ativo. Se não houver sessão, a orientação retornada é iniciar `npm run dev:diagnostico`.
+Ferramentas presentes com `conectado: false` significam que o registro MCP foi carregado, mas o aplicativo não possui uma sessão diagnóstica ativa. Com o aplicativo iniciado corretamente, a resposta deve indicar `conectado: true` e `modoDiagnostico: true`.
 
 ## Arquitetura e fontes de verdade
 
