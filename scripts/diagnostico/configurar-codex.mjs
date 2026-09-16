@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,11 +14,30 @@ const mensagemFalha = (resultado, fallback) => {
   return detalhes.join('\n') || fallback;
 };
 
+const obterExecutavelCodex = () => {
+  if (process.platform !== 'win32') return 'codex';
+
+  const diretorioBin = process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, 'OpenAI', 'Codex', 'bin')
+    : null;
+  if (!diretorioBin || !existsSync(diretorioBin)) return 'codex';
+
+  try {
+    const executavel = readdirSync(diretorioBin, { withFileTypes: true })
+      .filter(entrada => entrada.isDirectory())
+      .map(entrada => path.join(diretorioBin, entrada.name, 'codex.exe'))
+      .find(existe => existsSync(existe));
+    return executavel ?? 'codex';
+  } catch {
+    return 'codex';
+  }
+};
+
 if (!existsSync(servidor)) {
   console.error('Build do servidor MCP não encontrado. Execute npm run build antes de configurar o Codex.');
   process.exitCode = 1;
 } else {
-  const executar = argumentos => spawnSync('codex', argumentos, { cwd: workspace, encoding: 'utf8', shell: false });
+  const executar = argumentos => spawnSync(obterExecutavelCodex(), argumentos, { cwd: workspace, encoding: 'utf8', shell: false });
   const existente = executar(['mcp', 'get', 'lawdoDiagnostico']);
   if (existente.status === 0) {
     const remocao = executar(['mcp', 'remove', 'lawdoDiagnostico']);
