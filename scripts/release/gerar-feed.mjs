@@ -103,10 +103,10 @@ function botoesDownload(downloads) {
     const artefatos = downloads.filter(artefato => artefato.plataforma === plataforma);
     if (artefatos.length === 0) return '';
     const botoes = artefatos.map(artefato => `
-            <a class="download" href="${escaparHtml(artefato.url)}" rel="noopener noreferrer">
-              <span class="download-info"><strong>${escaparHtml(artefato.arquitetura)} · ${escaparHtml(rotuloFormato(artefato.formato))}</strong><small>${escaparHtml(artefato.nome)} · v${escaparHtml(artefato.versao)} · ${escaparHtml(formatarTamanho(artefato.tamanho))}</small><small>SHA-256: ${escaparHtml(artefato.hashSha256)}</small></span>
-              <b aria-hidden="true">↓</b>
-            </a>`).join('');
+            <article class="download">
+              <span class="download-info"><strong>${escaparHtml(artefato.arquitetura)} · ${escaparHtml(rotuloFormato(artefato.formato))}</strong><small>${escaparHtml(artefato.nome)} · v${escaparHtml(artefato.versao)} · ${escaparHtml(formatarTamanho(artefato.tamanho))}</small><span class="download-hash"><small>SHA-256: ${escaparHtml(artefato.hashSha256)}</small><button class="copiar-hash" type="button" data-hash="${escaparHtml(artefato.hashSha256)}" aria-label="Copiar hash SHA-256 de ${escaparHtml(artefato.nome)}" title="Copiar hash SHA-256"><svg class="icone-copia" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><svg class="icone-confirmacao" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg></button></span></span>
+              <a class="download-link" href="${escaparHtml(artefato.url)}" rel="noopener noreferrer" aria-label="Baixar ${escaparHtml(artefato.nome)}"><b aria-hidden="true">↓</b></a>
+            </article>`).join('');
     return `<section class="grupo-plataforma" aria-label="Downloads para ${escaparHtml(rotuloPlataforma(plataforma))}"><h3>${escaparHtml(rotuloPlataforma(plataforma))}</h3><div class="lista-downloads">${botoes}
           </div></section>`;
   }).join('');
@@ -133,8 +133,8 @@ function paginaInicial(downloads) {
     .downloads { align-self: center; border: 1px solid rgba(179, 196, 217, .94); border-radius: 20px; padding: clamp(18px, 2.5vw, 28px); background: rgba(255, 255, 255, .82); box-shadow: 0 18px 45px rgba(25, 65, 124, .12); backdrop-filter: blur(15px); }
     .downloads-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; } h2 { margin: 3px 0 0; font-size: clamp(1.35rem, 2vw, 1.8rem); letter-spacing: -.045em; } .historico { display: inline-flex; align-items: center; gap: 5px; color: #1a55e0; font-size: .75rem; font-weight: 800; text-decoration: none; white-space: nowrap; } .historico:hover { text-decoration: underline; }
     .downloads-introducao { margin: 9px 0 15px; color: #5d7191; font-size: .82rem; } .grupos-plataforma { display: grid; gap: 13px; } .grupo-plataforma { display: grid; gap: 7px; } .grupo-plataforma h3 { margin: 0; color: #3a4a62; font-size: .76rem; font-weight: 800; letter-spacing: .03em; } .lista-downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-    .download { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid #c4d2e6; border-radius: 11px; padding: 8px 10px 8px 12px; background: rgba(248, 251, 255, .86); color: #151c2c; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease; } .download:hover { border-color: #1a55e0; background: #fff; box-shadow: 0 7px 16px rgba(26, 85, 224, .13); transform: translateY(-1px); }
-    .download-info { display: grid; gap: 2px; min-width: 0; } .download strong { font-size: .78rem; } .download small { color: #5d7191; font-size: .67rem; } .download b { width: 25px; height: 25px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: #e8effc; color: #1a55e0; font-size: 1rem; }
+    .download { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid #c4d2e6; border-radius: 11px; padding: 8px 10px 8px 12px; background: rgba(248, 251, 255, .86); color: #151c2c; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease; } .download:hover { border-color: #1a55e0; background: #fff; box-shadow: 0 7px 16px rgba(26, 85, 224, .13); transform: translateY(-1px); }
+    .download-info { flex: 1 1 auto; display: grid; gap: 2px; min-width: 0; max-width: 100%; } .download strong { font-size: .78rem; } .download small { min-width: 0; color: #5d7191; font-size: .67rem; overflow-wrap: anywhere; } .download-hash { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: start; } .copiar-hash { width: 21px; height: 21px; display: grid; place-items: center; border: 0; border-radius: 6px; padding: 3px; background: transparent; color: #5d7191; cursor: pointer; transition: color .18s ease, background .18s ease; } .copiar-hash:hover { background: #e8effc; color: #1a55e0; } .copiar-hash:focus-visible, .download-link:focus-visible { outline: 2px solid #1a55e0; outline-offset: 2px; } .copiar-hash svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .copiar-hash .icone-confirmacao { display: none; } .copiar-hash.copiado { background: #dcfce7; color: #15803d; } .copiar-hash.copiado .icone-copia { display: none; } .copiar-hash.copiado .icone-confirmacao { display: block; } .download-link { flex: 0 0 auto; border-radius: 50%; color: #1a55e0; text-decoration: none; } .download-link b { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: #e8effc; font-size: 1rem; }
     footer { padding-top: 10px; color: #5d7191; font-size: .7rem; } @media (max-width: 900px) { body { overflow: auto; } main { height: auto; min-height: 100svh; padding: 20px 0; } .conteudo { grid-template-columns: 1fr; gap: 24px; padding: 28px 0; } .apresentacao { justify-items: center; text-align: center; } .beneficios { justify-content: center; } .downloads { width: 100%; } } @media (max-width: 560px) { main { width: min(100% - 28px, 1180px); } .lista-downloads { grid-template-columns: 1fr; } .downloads-header { align-items: flex-start; flex-direction: column; gap: 7px; } .logo-principal { width: min(82%, 300px); } }
   </style>
 </head>
@@ -150,6 +150,44 @@ function paginaInicial(downloads) {
     <footer>laWdo · apoio ao fluxo pericial, sem substituir o julgamento técnico humano.</footer>
   </main>
   <script>
+    (() => {
+      async function copiarParaAreaTransferencia(texto) {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(texto);
+          return;
+        }
+        const campoTemporario = document.createElement('textarea');
+        campoTemporario.value = texto;
+        campoTemporario.setAttribute('readonly', '');
+        campoTemporario.style.position = 'fixed';
+        campoTemporario.style.opacity = '0';
+        document.body.appendChild(campoTemporario);
+        campoTemporario.select();
+        const copiado = document.execCommand('copy');
+        campoTemporario.remove();
+        if (!copiado) throw new Error('Não foi possível copiar o hash.');
+      }
+
+      document.querySelectorAll('.copiar-hash').forEach(botao => {
+        const rotuloOriginal = botao.getAttribute('aria-label');
+        botao.addEventListener('click', async () => {
+          try {
+            await copiarParaAreaTransferencia(botao.dataset.hash);
+            botao.classList.add('copiado');
+            botao.setAttribute('aria-label', 'Hash SHA-256 copiado');
+            botao.title = 'Hash copiado';
+            window.setTimeout(() => {
+              botao.classList.remove('copiado');
+              botao.setAttribute('aria-label', rotuloOriginal);
+              botao.title = 'Copiar hash SHA-256';
+            }, 1800);
+          } catch {
+            botao.title = 'Não foi possível copiar o hash';
+          }
+        });
+      });
+    })();
+
     (() => {
       const canvas = document.getElementById('flickering-grid');
       const contexto = canvas.getContext('2d');
