@@ -110,7 +110,7 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   assert.match(paginaInicial, /macOS<\/h3>/);
   assert.match(paginaInicial, /82,1 MB/);
   assert.equal((paginaInicial.match(/<article class="download/g) ?? []).length, 5);
-  assert.equal((paginaInicial.match(/download-windows/g) ?? []).length, 2);
+  assert.equal((paginaInicial.match(/class="download download-windows"/g) ?? []).length, 1);
   assert.match(paginaInicial, /Baixar instalador/);
   assert.match(paginaInicial, /Detalhes do arquivo/);
   assert.match(paginaInicial, /\.download-windows \.valor-hash \{ white-space: nowrap/);
