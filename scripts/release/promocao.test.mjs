@@ -99,7 +99,7 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   assert.match(paginaInicial, /prefers-reduced-motion/);
   assert.match(paginaInicial, /x64 · Instalador/);
   assert.match(paginaInicial, /windows-0\.1\.2\.exe/);
-  assert.match(paginaInicial, /SHA-256: b{64}/);
+  assert.match(paginaInicial, /class="valor-hash"[^>]*>b{64}</);
   assert.match(paginaInicial, /SmartScreen poderá identificar o fornecedor como desconhecido/);
   assert.match(paginaInicial, /x64 · AppImage/);
   assert.match(paginaInicial, /linux-0\.1\.2\.AppImage/);
@@ -109,7 +109,11 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   assert.match(paginaInicial, /Linux<\/h3>/);
   assert.match(paginaInicial, /macOS<\/h3>/);
   assert.match(paginaInicial, /82,1 MB/);
-  assert.equal((paginaInicial.match(/class="download"/g) ?? []).length, 5);
+  assert.equal((paginaInicial.match(/<article class="download/g) ?? []).length, 5);
+  assert.equal((paginaInicial.match(/class="download download-windows"/g) ?? []).length, 1);
+  assert.match(paginaInicial, /Baixar instalador/);
+  assert.match(paginaInicial, /Detalhes do arquivo/);
+  assert.match(paginaInicial, /\.download-windows \.valor-hash \{ white-space: nowrap/);
   assert.doesNotMatch(paginaInicial, /\.zip/);
   assert.match(paginaInicial, /logo.png/);
   assert.ok(logo.length > 0);
