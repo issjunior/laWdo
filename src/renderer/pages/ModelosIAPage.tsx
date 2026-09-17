@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -44,7 +44,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -69,6 +68,7 @@ import {
   BookOpen,
   Image,
   Info,
+  Square,
 } from 'lucide-react';
 import {
   CONFIGURACAO_IMAGEM_IA_PADRAO,
@@ -122,6 +122,11 @@ const OPCOES_QUALIDADE_IMAGEM = [
 const getMensagemErro = (erro: unknown): string =>
   erro instanceof Error ? erro.message : 'Erro desconhecido';
 
+const formatarTempoTeste = (segundos: number): string => {
+  const minutos = Math.floor(segundos / 60);
+  return `${String(minutos).padStart(2, '0')}:${String(segundos % 60).padStart(2, '0')}`;
+};
+
 const obterMensagemErroConexaoIa = (erro?: string): string => {
   const codigo = (erro || '').split(':')[0];
   const mensagens: Record<string, string> = {
@@ -143,7 +148,8 @@ export const ModelosIAPage: React.FC = () => {
   const [testando, setTestando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ status: 'success' | 'error', message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ status: 'success' | 'error' | 'cancelado', message: string } | null>(null);
+  const [tempoTesteSegundos, setTempoTesteSegundos] = useState(0);
   const [perfil, setPerfil] = useState<PerfilRespostaIa>(PERFIL_RESPOSTA_IA_PADRAO);
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [salvandoPrivacidade, setSalvandoPrivacidade] = useState(false);
@@ -153,6 +159,7 @@ export const ModelosIAPage: React.FC = () => {
   const [configuracaoAberta, setConfiguracaoAberta] = useState(false);
   const [guiaChaveAberto, setGuiaChaveAberto] = useState(false);
   const [confirmacaoPrivacidadeAberta, setConfirmacaoPrivacidadeAberta] = useState(false);
+  const operacaoTesteConexaoRef = useRef<string | null>(null);
 
   const form = useForm<IAConfigForm>({
     resolver: zodResolver(iaConfigSchema),
@@ -167,6 +174,13 @@ export const ModelosIAPage: React.FC = () => {
   });
 
   const provedor = form.watch('provedor');
+
+  useEffect(() => {
+    if (!testando) return undefined;
+    setTempoTesteSegundos(0);
+    const intervalo = window.setInterval(() => setTempoTesteSegundos(atual => atual + 1), 1_000);
+    return () => window.clearInterval(intervalo);
+  }, [testando]);
 
   const carregarConfig = useCallback(async () => {
     try {
@@ -257,17 +271,29 @@ export const ModelosIAPage: React.FC = () => {
   const provedorNome = provedor === 'gemini' ? 'Gemini' : 'Groq';
 
   const handleTestarConexao = async () => {
+    const operationId = crypto.randomUUID();
+    operacaoTesteConexaoRef.current = operationId;
     try {
       setTestando(true);
       setError(null);
       setTestResult(null);
 
-      const r = await window.ipcAPI.ia.testarConexao();
+      const valores = form.getValues();
+      const apiKey = valores.provedor === 'gemini' ? valores.apiKeyGemini : valores.apiKeyGroq;
+      const modelo = valores.provedor === 'gemini' ? valores.modeloGemini : valores.modeloGroq;
+      const r = await window.ipcAPI.ia.testarConexao({
+        operationId,
+        provedor: valores.provedor,
+        apiKey: apiKey?.trim() || '',
+        modelo,
+      });
 
       if (r.success) {
         const msg = `Conexão com a API ${provedorNome} estabelecida com sucesso!`;
         setTestResult({ status: 'success', message: msg });
         window.ipcAPI.logInfo('IA', msg);
+      } else if (r.error?.split(':')[0] === 'CANCELADO') {
+        setTestResult({ status: 'cancelado', message: 'Teste de conexão cancelado.' });
       } else if (!r.success) {
         const msg = obterMensagemErroConexaoIa(r.error);
         setTestResult({ status: 'error', message: msg });
@@ -283,8 +309,22 @@ export const ModelosIAPage: React.FC = () => {
       setTestResult({ status: 'error', message: msg });
       window.ipcAPI.logError('IA', msg, _e);
     } finally {
-      setTestando(false);
+      if (operacaoTesteConexaoRef.current === operationId) {
+        operacaoTesteConexaoRef.current = null;
+        setTestando(false);
+      }
     }
+  };
+
+  const cancelarTesteConexao = async () => {
+    const operationId = operacaoTesteConexaoRef.current;
+    if (!operationId) return;
+    await window.ipcAPI.ia.cancelar(operationId);
+  };
+
+  const alterarAberturaConfiguracao = (aberta: boolean) => {
+    setConfiguracaoAberta(aberta);
+    if (!aberta && operacaoTesteConexaoRef.current) void cancelarTesteConexao();
   };
 
   const salvarPerfil = async () => {
@@ -396,34 +436,6 @@ export const ModelosIAPage: React.FC = () => {
           </AlertDescription>
         </Alert>
       )}
-      <Dialog open={!!testResult} onOpenChange={(open) => !open && setTestResult(null)}>
-        <DialogContent className="sm:max-w-[425px] text-center">
-          <DialogHeader>
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-4">
-              {testResult?.status === 'success' ? (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-                  <AlertTriangle className="h-6 w-6 text-destructive" />
-                </div>
-              )}
-            </div>
-            <DialogTitle className="text-center text-xl">
-              Teste de Conexão: {testResult?.status === 'success' ? 'Sucesso' : 'Falha'}
-            </DialogTitle>
-            <DialogDescription className="text-center mt-2 text-base whitespace-pre-line">
-              {testResult?.message}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="sm:justify-center mt-4">
-            <Button onClick={() => setTestResult(null)} className="w-full sm:w-auto min-w-[120px]">
-              OK
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <AlertDialog open={confirmacaoPrivacidadeAberta} onOpenChange={setConfirmacaoPrivacidadeAberta}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -609,7 +621,7 @@ export const ModelosIAPage: React.FC = () => {
           </Card>
 
           {/* ── Card: Configuração do Provedor ── */}
-          <Dialog open={configuracaoAberta} onOpenChange={setConfiguracaoAberta}>
+          <Dialog open={configuracaoAberta} onOpenChange={alterarAberturaConfiguracao}>
             <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
               <DialogHeader>
                 <DialogTitle>Configuração do provedor</DialogTitle>
@@ -715,23 +727,49 @@ export const ModelosIAPage: React.FC = () => {
                 )}
               />
 
+              {testando && (
+                <Alert className="border-primary/30 bg-primary/5" role="status" aria-live="polite">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <AlertTitle>Testando conexão — {formatarTempoTeste(tempoTesteSegundos)}</AlertTitle>
+                  <AlertDescription>
+                    O provedor está processando uma solicitação mínima. Você pode cancelar ou fechar esta janela sem ficar preso ao teste.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {!testando && testResult && (
+                <Alert className={testResult.status === 'success'
+                  ? 'border-green-600/30 bg-green-500/5 dark:border-green-500/40 dark:bg-green-500/10'
+                  : testResult.status === 'cancelado'
+                    ? 'border-muted-foreground/30 bg-muted/50'
+                    : 'border-destructive/40 bg-destructive/5'} role="status">
+                  {testResult.status === 'success'
+                    ? <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    : testResult.status === 'cancelado'
+                      ? <Square className="h-4 w-4 text-muted-foreground" />
+                      : <AlertTriangle className="h-4 w-4 text-destructive" />}
+                  <AlertTitle>{testResult.status === 'success' ? 'Conexão validada' : testResult.status === 'cancelado' ? 'Teste cancelado' : 'Falha no teste'}</AlertTitle>
+                  <AlertDescription>{testResult.message}</AlertDescription>
+                </Alert>
+              )}
+
               {/* Ações */}
               <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={handleTestarConexao}
-                  disabled={testando || !chaveAtual}
+                  variant={testando ? 'destructive' : 'outline'}
+                  onClick={() => testando ? void cancelarTesteConexao() : void handleTestarConexao()}
+                  disabled={!testando && !chaveAtual}
                   className="gap-2"
                 >
                   {testando ? (
-                    <Loader2 size={16} className="animate-spin" />
+                    <Square size={16} />
                   ) : (
                     <CheckCircle size={16} />
                   )}
-                  {testando ? 'Testando...' : 'Testar Conexão'}
+                  {testando ? `Cancelar teste · ${formatarTempoTeste(tempoTesteSegundos)}` : 'Testar Conexão'}
                 </Button>
-                <Button type="button" onClick={() => void handleSalvar()} disabled={salvando} className="gap-2">
+                <Button type="button" onClick={() => void handleSalvar()} disabled={salvando || testando} className="gap-2">
                   <Save size={16} />
                   {salvando ? 'Salvando...' : 'Salvar Configurações'}
                 </Button>

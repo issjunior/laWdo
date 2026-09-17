@@ -212,11 +212,15 @@ describe('handlers IPC do painel de IA', () => {
       .resolves.toEqual({ success: false, error: 'RETOMADA_INDISPONIVEL' });
 
     mocks.testarConexao.mockRejectedValueOnce(new Error('CONFIGURACAO_AUSENTE'));
-    await expect(handle.get('ia:testar-conexao')?.(eventoProprietario))
+    await expect(handle.get('ia:testar-conexao')?.(eventoProprietario, null))
+      .resolves.toEqual({ success: false, error: 'ENTRADA_INVALIDA' });
+    const testeConexao = { operationId: 'teste-conexao-1', provedor: 'gemini', apiKey: 'chave-teste', modelo: 'gemini-2.5-flash' };
+    await expect(handle.get('ia:testar-conexao')?.(eventoProprietario, testeConexao))
       .resolves.toEqual({ success: false, error: 'CONFIGURACAO_AUSENTE' });
     mocks.testarConexao.mockResolvedValueOnce({ configurado: true, provedor: 'gemini' });
-    await expect(handle.get('ia:testar-conexao')?.(eventoProprietario))
+    await expect(handle.get('ia:testar-conexao')?.(eventoProprietario, testeConexao))
       .resolves.toEqual({ success: true, data: { configurado: true, provedor: 'gemini' } });
+    expect(mocks.testarConexao).toHaveBeenLastCalledWith(testeConexao);
     mocks.obterContexto.mockRejectedValueOnce(new Error('Configuração indisponível'));
     await expect(handle.get('ia:obter-contexto')?.(eventoProprietario))
       .resolves.toEqual({ success: false, error: 'Configuração indisponível' });

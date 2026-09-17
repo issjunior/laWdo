@@ -25,6 +25,7 @@ import type {
   RespostaIa,
   RespostaConsultaIa,
   SolicitacaoDescricaoImagemIa,
+  SolicitacaoTesteConexaoIa,
   SolicitacaoIa,
   SolicitacaoConsultaIa,
 } from '../../shared/types/ia.types.js';
@@ -80,10 +81,7 @@ const URLS_PROVEDORES = {
   groq: 'https://api.groq.com/openai/v1/chat/completions',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
 } as const;
-const URLS_MODELOS_PROVEDORES = {
-  groq: 'https://api.groq.com/openai/v1/models',
-  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/models',
-} as const;
+const TEMPO_LIMITE_REQUISICAO_IA_MS = 120_000;
 function mensagemAcao(acao: SolicitacaoIa['acao']): string {
   const acoes: Record<SolicitacaoIa['acao'], string> = {
     ortografia: 'Corrija somente ortografia, gramática e pontuação.',
@@ -491,26 +489,47 @@ export class IaExecucaoService {
     return { configurado: Boolean(chave), provedor, modelo: modelo.id, suportaVisao: modelo.suportaVisao };
   }
 
-  async testarConexao(): Promise<ContextoIa> {
-    const contexto = await this.obterContexto();
-    if (!contexto.configurado || !contexto.provedor || !contexto.modelo) throw new Error('CONFIGURACAO_AUSENTE');
-    const chave = await configuracaoService.obter(contexto.provedor === 'groq' ? 'api_key_groq' : 'api_key_gemini');
-    if (!chave) throw new Error('CONFIGURACAO_AUSENTE');
+  async testarConexao(solicitacao?: SolicitacaoTesteConexaoIa): Promise<ContextoIa> {
+    const contextoPersistido = solicitacao ? null : await this.obterContexto();
+    const provedor = solicitacao?.provedor ?? contextoPersistido?.provedor;
+    const modeloId = solicitacao?.modelo.trim() ?? contextoPersistido?.modelo;
+    const chave = solicitacao?.apiKey.trim()
+      ?? (provedor ? await configuracaoService.obter(provedor === 'groq' ? 'api_key_groq' : 'api_key_gemini') : null);
+    if (!provedor || !modeloId || !chave) throw new Error('CONFIGURACAO_AUSENTE');
+    const modelo = listarModelosIa(provedor).find(item => item.id === modeloId);
+    if (!modelo) throw new Error('MODELO_INDISPONIVEL');
 
     const abortador = new AbortController();
-    const timeout = setTimeout(() => abortador.abort(), 20_000);
+    this.abortadores.set(solicitacao?.operationId ?? 'teste-conexao', abortador);
+    let esgotouTempo = false;
+    const timeout = setTimeout(() => {
+      esgotouTempo = true;
+      abortador.abort();
+    }, TEMPO_LIMITE_REQUISICAO_IA_MS);
     try {
       let resposta: Response;
       try {
-        resposta = await fetch(URLS_MODELOS_PROVEDORES[contexto.provedor], {
-          headers: { Authorization: `Bearer ${chave}` },
+        resposta = await fetch(URLS_PROVEDORES[provedor], {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${chave}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: modelo.id,
+            messages: [{ role: 'user', content: 'Responda apenas OK.' }],
+            temperature: 0,
+            max_tokens: 1,
+          }),
           signal: abortador.signal,
         });
       } catch {
-        throw new Error(abortador.signal.aborted ? 'TIMEOUT' : 'SEM_CONEXAO');
+        if (abortador.signal.aborted) throw new Error(esgotouTempo ? 'TIMEOUT' : 'CANCELADO');
+        throw new Error('SEM_CONEXAO');
       }
       if (resposta.status === 401 || resposta.status === 403) throw new Error('NAO_AUTORIZADO');
       if (resposta.status === 429) throw new Error('LIMITE_REQUISICOES');
+      if (resposta.status === 400 || resposta.status === 404) throw new Error('MODELO_INDISPONIVEL');
       if (!resposta.ok) throw new Error(`PROVEDOR_INDISPONIVEL:${resposta.status}`);
 
       let corpo: unknown;
@@ -519,14 +538,13 @@ export class IaExecucaoService {
       } catch {
         throw new Error('RESPOSTA_INVALIDA');
       }
-      const modelos = corpo && typeof corpo === 'object' ? (corpo as { data?: unknown }).data : null;
-      const modeloDisponivel = Array.isArray(modelos) && modelos.some(item => (
-        item && typeof item === 'object' && (item as { id?: unknown }).id === contexto.modelo
-      ));
-      if (!modeloDisponivel) throw new Error('MODELO_INDISPONIVEL');
-      return contexto;
+      const escolhas = corpo && typeof corpo === 'object' ? (corpo as { choices?: unknown }).choices : null;
+      if (!Array.isArray(escolhas) || escolhas.length === 0) throw new Error('RESPOSTA_INVALIDA');
+      return { configurado: true, provedor, modelo: modelo.id, suportaVisao: modelo.suportaVisao };
     } finally {
       clearTimeout(timeout);
+      this.abortadores.delete(solicitacao?.operationId ?? 'teste-conexao');
+      if (solicitacao?.operationId) this.operacoesCanceladas.delete(solicitacao.operationId);
     }
   }
 
@@ -657,7 +675,7 @@ export class IaExecucaoService {
     const timeout = setTimeout(() => {
       esgotouTempo = true;
       abortador.abort();
-    }, 120_000);
+    }, TEMPO_LIMITE_REQUISICAO_IA_MS);
 
     try {
       let resposta: Response | null = null;
