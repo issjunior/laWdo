@@ -107,6 +107,7 @@ type ExportacaoLaudoParams = {
   html: string;
   estrutura?: IpcPayload;
   cabecalho?: IpcPayload;
+  cabecalhoPaginasHtml?: string;
   margens?: IpcPayload;
 };
 

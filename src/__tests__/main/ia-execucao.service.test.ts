@@ -763,4 +763,34 @@ describe('ia-execucao.service — descrição de imagem', () => {
       .rejects.toThrow('Solicitação de IA inválida')
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('valida a chave e o modelo configurado no endpoint de modelos do Gemini', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'gemini-2.5-flash' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(new IaExecucaoService().testarConexao()).resolves.toMatchObject({
+      configurado: true,
+      provedor: 'gemini',
+      modelo: 'gemini-2.5-flash',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://generativelanguage.googleapis.com/v1beta/openai/models',
+      expect.objectContaining({ headers: { Authorization: 'Bearer chave-teste' } }),
+    )
+  })
+
+  it('informa quando o modelo configurado não está disponível para a chave', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'gemini-2.5-pro' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(new IaExecucaoService().testarConexao()).rejects.toThrow('MODELO_INDISPONIVEL')
+  })
+
+  it('informa credencial recusada durante o teste de conexão', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 401 }))
+
+    await expect(new IaExecucaoService().testarConexao()).rejects.toThrow('NAO_AUTORIZADO')
+  })
 })

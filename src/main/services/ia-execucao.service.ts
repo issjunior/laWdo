@@ -80,6 +80,10 @@ const URLS_PROVEDORES = {
   groq: 'https://api.groq.com/openai/v1/chat/completions',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
 } as const;
+const URLS_MODELOS_PROVEDORES = {
+  groq: 'https://api.groq.com/openai/v1/models',
+  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+} as const;
 function mensagemAcao(acao: SolicitacaoIa['acao']): string {
   const acoes: Record<SolicitacaoIa['acao'], string> = {
     ortografia: 'Corrija somente ortografia, gramática e pontuação.',
@@ -485,6 +489,45 @@ export class IaExecucaoService {
     const modeloSalvo = await configuracaoService.obter(provedor === 'groq' ? 'modelo_ia_padrao' : 'modelo_gemini_padrao');
     const modelo = obterModeloIa(provedor, modeloSalvo);
     return { configurado: Boolean(chave), provedor, modelo: modelo.id, suportaVisao: modelo.suportaVisao };
+  }
+
+  async testarConexao(): Promise<ContextoIa> {
+    const contexto = await this.obterContexto();
+    if (!contexto.configurado || !contexto.provedor || !contexto.modelo) throw new Error('CONFIGURACAO_AUSENTE');
+    const chave = await configuracaoService.obter(contexto.provedor === 'groq' ? 'api_key_groq' : 'api_key_gemini');
+    if (!chave) throw new Error('CONFIGURACAO_AUSENTE');
+
+    const abortador = new AbortController();
+    const timeout = setTimeout(() => abortador.abort(), 20_000);
+    try {
+      let resposta: Response;
+      try {
+        resposta = await fetch(URLS_MODELOS_PROVEDORES[contexto.provedor], {
+          headers: { Authorization: `Bearer ${chave}` },
+          signal: abortador.signal,
+        });
+      } catch {
+        throw new Error(abortador.signal.aborted ? 'TIMEOUT' : 'SEM_CONEXAO');
+      }
+      if (resposta.status === 401 || resposta.status === 403) throw new Error('NAO_AUTORIZADO');
+      if (resposta.status === 429) throw new Error('LIMITE_REQUISICOES');
+      if (!resposta.ok) throw new Error(`PROVEDOR_INDISPONIVEL:${resposta.status}`);
+
+      let corpo: unknown;
+      try {
+        corpo = await resposta.json();
+      } catch {
+        throw new Error('RESPOSTA_INVALIDA');
+      }
+      const modelos = corpo && typeof corpo === 'object' ? (corpo as { data?: unknown }).data : null;
+      const modeloDisponivel = Array.isArray(modelos) && modelos.some(item => (
+        item && typeof item === 'object' && (item as { id?: unknown }).id === contexto.modelo
+      ));
+      if (!modeloDisponivel) throw new Error('MODELO_INDISPONIVEL');
+      return contexto;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   cancelar(operationId: string): void {

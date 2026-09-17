@@ -59,7 +59,7 @@ function obterPersonalizado(peca: PecaB602, sufixos: string[]): string {
 function projetarMaterialEncaminhado(peca: PecaB602): Record<string, unknown> {
   const tipo = TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)
   return {
-    natureza: tipo?.familia === 'arma' ? 'Arma' : peca.tipoPeca,
+    natureza: tipo?.familia === 'arma' ? 'ARMA(S)' : peca.tipoPeca,
     quantidade: String(peca.comuns.quantidade),
     tipo: peca.tipoPeca,
     dito_oficio: peca.comuns.identificacao,
@@ -77,6 +77,16 @@ function projetarEstojo(peca: PecaB602): Record<string, unknown> {
     estojo: peca.comuns.identificacao,
     observacao: peca.comuns.observacao,
     lacre_saida: peca.comuns.lacreSaida,
+  }
+}
+
+function projetarCartucho(peca: PecaB602): Record<string, unknown> {
+  return {
+    quantidade: String(peca.comuns.quantidade),
+    calibre: obterPersonalizado(peca, ['calibre_nominal_cartucho', 'calibre']),
+    marca: obterPersonalizado(peca, ['marca_cartucho', 'marca']),
+    estojo: peca.comuns.identificacao,
+    observacao: peca.comuns.observacao,
   }
 }
 
@@ -130,7 +140,7 @@ export function projetarB602ParaLaudo(b602: unknown): ProjecaoB602Laudo {
 
   return {
     materialEncaminhado: pecas.map(projetarMaterialEncaminhado),
-    cartuchos: lerColecaoLegada(b602, 'cartuchos'),
+    cartuchos: pecas.filter(peca => peca.tipoCodigo === '17').map(projetarCartucho),
     estojos: pecas.filter(peca => peca.tipoCodigo === '101').map(projetarEstojo),
     armas: pecas
       .filter(peca => TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.familia === 'arma')

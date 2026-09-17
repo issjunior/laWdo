@@ -434,8 +434,11 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
   });
 
   ipcMain.handle('ia:testar-conexao', async () => {
-    const contexto = await iaExecucaoService.obterContexto();
-    return contexto.configurado ? { success: true, data: contexto } : { success: false, error: 'CONFIGURACAO_AUSENTE' };
+    try {
+      return { success: true, data: await iaExecucaoService.testarConexao() };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'ERRO_INTERNO' };
+    }
   });
   /**
    * Revisar ortografia de um texto HTML

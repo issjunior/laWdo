@@ -1,10 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import {
   expandirSecoesRepetiveis,
+  filtrarSecoesAtivas,
   processarBlocosCondicionais,
 } from '../../main/services/secao-builder.service';
 
 describe('secao-builder.service', () => {
+  it('mantém DOS EXAMES ativo para cartucho e estojo da coleção canônica', () => {
+    const secoes = [{
+      id: 'exames', template_id: 'tpl-1', nome: 'DOS EXAMES', ordem: 0,
+      conteudo: '<div data-cond-bloco="b602_cartuchos_toggle"><p>Cartuchos</p></div><div data-cond-bloco="b602_estojos_toggle"><p>Estojos</p></div>',
+      created_at: '', updated_at: '',
+    }];
+    const pecaBase = {
+      idLocal: 'peca', origem: 'gdl', alteradaLocalmente: false,
+      comuns: { quantidade: 1, identificacao: '', lacreEntrada: '', observacao: '' },
+      personalizados: {}, extrasGdl: {},
+    };
+
+    const resultado = filtrarSecoesAtivas(secoes, {
+      b602: {
+        pecas: [
+          { ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' },
+          { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' },
+        ],
+      },
+    });
+
+    expect(resultado).toHaveLength(1);
+  });
+
   it('mantém os blocos periciais versionados para qualquer arma, independentemente do toggle legado', () => {
     const resultado = processarBlocosCondicionais(
       '<div class="cond-bloco" data-cond-bloco="b602_arma_N_funcionamento_eficiencia_v2" data-bloco-pericial="funcionamento"><h3>FUNCIONAMENTO</h3><p>&nbsp;</p></div>',

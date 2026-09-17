@@ -18,6 +18,8 @@ let disponibilidadeLibreOfficeEmCache: boolean | null = null;
 let verificacaoLibreOfficeEmAndamento: Promise<boolean> | null = null;
 
 const CM_TO_INCHES = 1 / 2.54;
+const MARGENS_PADRAO_PDF: MargensExportacao = { top: 2.5, right: 2, bottom: 2.5, left: 3 };
+const MARGEM_SUPERIOR_MINIMA_CABECALHO_CM = 2.5;
 
 interface ExportacaoCabecalho {
   logoBase64?: string;
@@ -89,6 +91,7 @@ export interface ExportarParams {
   html: string;
   estrutura?: DocumentoExportacao;
   cabecalho?: ExportacaoCabecalho;
+  cabecalhoPaginasHtml?: string;
   margens?: MargensExportacao;
   nomeArquivo?: string;
 }
@@ -157,15 +160,25 @@ async function extrairNumeroRep(laudoId: string): Promise<string> {
   return laudoId;
 }
 
+function normalizarMargensPdf(margens?: ExportarParams['margens'], possuiCabecalho: boolean = false): MargensExportacao {
+  const base = margens || MARGENS_PADRAO_PDF;
+  return {
+    top: possuiCabecalho ? Math.max(base.top, MARGEM_SUPERIOR_MINIMA_CABECALHO_CM) : base.top,
+    right: base.right,
+    bottom: base.bottom,
+    left: base.left,
+  };
+}
+
 async function gerarPDF(html: string, margens?: ExportarParams['margens'], headerTemplate?: string): Promise<Buffer> {
   let win: BrowserWindow | null = null;
   let tmpPath: string | null = null;
 
   try {
-    const hasMargins = margens && (margens.top > 0 || margens.right > 0 || margens.bottom > 0 || margens.left > 0);
-    const bodyPadding = hasMargins ? '0 0 12px 0' : '50px 60px';
-    const leftPad = hasMargins ? `${margens!.left}cm` : '60px';
-    const rightPad = hasMargins ? `${margens!.right}cm` : '60px';
+    const margensEfetivas = normalizarMargensPdf(margens, Boolean(headerTemplate));
+    const bodyPadding = '0 0 12px 0';
+    const leftPad = `${margensEfetivas.left}cm`;
+    const rightPad = `${margensEfetivas.right}cm`;
 
     const docHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -185,6 +198,8 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   table { border-collapse: collapse; width: 100% !important; max-width: 100% !important; margin: 12px 0; }
   table th, table td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
   table th { background: #f5f5f5; font-weight: 600; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
   ul, ol { margin: 8px 0; padding-left: 24px; }
   li { margin-bottom: 4px; }
   img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
@@ -206,9 +221,12 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
     await win.loadFile(tmpPath);
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    const pdfMargins = margens
-      ? { top: margens.top * CM_TO_INCHES, right: margens.right * CM_TO_INCHES, bottom: margens.bottom * CM_TO_INCHES, left: margens.left * CM_TO_INCHES }
-      : { top: 0, bottom: 0, left: 0, right: 0 };
+    const pdfMargins = {
+      top: margensEfetivas.top * CM_TO_INCHES,
+      right: margensEfetivas.right * CM_TO_INCHES,
+      bottom: margensEfetivas.bottom * CM_TO_INCHES,
+      left: margensEfetivas.left * CM_TO_INCHES,
+    };
 
     const printOptions: Electron.PrintToPDFOptions = {
       printBackground: true,
@@ -670,7 +688,7 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
 
     switch (params.formato) {
       case 'pdf':
-        buffer = await gerarPDF(params.html, params.margens, params.cabecalho?.texto);
+        buffer = await gerarPDF(params.html, params.margens, params.cabecalhoPaginasHtml);
         break;
 
       case 'docx':

@@ -218,6 +218,7 @@ const obterMensagemErroIa = (erro: unknown): string => {
   const mensagens: Record<string, string> = {
     CONFIGURACAO_AUSENTE: 'Configure o provedor, o modelo e a chave de API em Modelos de IA antes de tentar novamente.',
     NAO_AUTORIZADO: 'A chave de API foi recusada pelo provedor. Revise a configuração em Modelos de IA.',
+    MODELO_INDISPONIVEL: 'O modelo selecionado não está disponível para a chave de API configurada.',
     ENTRADA_INVALIDA: 'O provedor recusou esta solicitação. Tente reduzir o escopo ou selecionar outro modelo.',
     LIMITE_EXCEDIDO: 'O conteúdo selecionado excede o limite do modelo. Reduza o escopo e tente novamente.',
     SEM_CONEXAO: 'Não foi possível conectar ao provedor de IA. Verifique sua conexão e tente novamente.',
@@ -225,6 +226,12 @@ const obterMensagemErroIa = (erro: unknown): string => {
     TIMEOUT: 'A IA demorou mais que o esperado para responder. Tente novamente ou reduza o escopo.',
     PROVEDOR_INDISPONIVEL: 'O provedor de IA está temporariamente indisponível. Tente novamente em alguns instantes.',
     RESPOSTA_INVALIDA: 'A IA respondeu em um formato inesperado mesmo após uma tentativa de correção. Tente novamente; se persistir, selecione outro modelo.',
+    FORMATO_IMAGEM_NAO_SUPORTADO: 'O formato da imagem não é suportado pelo modelo selecionado.',
+    IMAGEM_MUITO_GRANDE: 'A imagem selecionada excede o limite aceito pelo provedor de IA.',
+    IMAGEM_PROTEGIDA: 'A geração de legenda exige o modo Conteúdo integral em Modelos de IA.',
+    IMAGEM_NAO_VINCULADA: 'A imagem ainda não foi vinculada ao armazenamento do laudo. Atualize as figuras e tente novamente.',
+    IMAGEM_DE_OUTRO_LAUDO: 'A imagem selecionada pertence a outro laudo.',
+    RESPOSTA_VAZIA: 'A IA não retornou uma legenda para a imagem selecionada.',
     CANCELADO: 'A operação foi cancelada. O conteúdo do laudo não foi alterado.',
     OPERACAO_EM_ANDAMENTO: 'Já existe uma operação de IA em andamento. Aguarde sua conclusão ou cancele-a antes de iniciar outra.',
     CONFIRMACAO_NECESSARIA: 'Revise e confirme o plano antes de iniciar o processamento.',
@@ -1845,7 +1852,7 @@ export const LaudosPage: React.FC = () => {
         } catch {}
       }
 
-      const { cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
       });
 
@@ -1869,7 +1876,8 @@ export const LaudosPage: React.FC = () => {
           laudoId: editando.id,
           formato: 'pdf',
           html: htmlResolvido,
-          margens: await getMargens() || undefined,
+          margens: await getMargens(),
+          cabecalhoPaginasHtml: headerTemplate || undefined,
         });
         if (result.success) {
           toast.success('Documento PDF exportado com sucesso', { id: toastId });
@@ -3049,17 +3057,22 @@ export const LaudosPage: React.FC = () => {
 
   const gerarLegendaImagemIa = async (imagemId: string): Promise<string | null> => {
     if (!editando?.id) return null;
-    const resposta = await window.ipcAPI.ia.descreverImagem({
-      operationId: crypto.randomUUID(),
-      laudoId: editando.id,
-      imagemId,
-      modo: 'legenda',
-    });
-    if (!resposta.success || !resposta.data?.descricao.trim()) {
-      setIaError(resposta.error || 'Não foi possível gerar a legenda da figura.');
+    try {
+      const resposta = await window.ipcAPI.ia.descreverImagem({
+        operationId: crypto.randomUUID(),
+        laudoId: editando.id,
+        imagemId,
+        modo: 'legenda',
+      });
+      if (!resposta.success || !resposta.data?.descricao.trim()) {
+        setIaError(obterMensagemErroIa(resposta.error));
+        return null;
+      }
+      return resposta.data.descricao.trim().replace(/\s+/g, ' ');
+    } catch (error: unknown) {
+      setIaError(obterMensagemErroIa(error));
       return null;
     }
-    return resposta.data.descricao.trim().replace(/\s+/g, ' ');
   };
 
   gerarLegendaImagemIaRef.current = gerarLegendaImagemIa;

@@ -122,6 +122,21 @@ const OPCOES_QUALIDADE_IMAGEM = [
 const getMensagemErro = (erro: unknown): string =>
   erro instanceof Error ? erro.message : 'Erro desconhecido';
 
+const obterMensagemErroConexaoIa = (erro?: string): string => {
+  const codigo = (erro || '').split(':')[0];
+  const mensagens: Record<string, string> = {
+    CONFIGURACAO_AUSENTE: 'Selecione um provedor, modelo e chave de API antes de testar.',
+    NAO_AUTORIZADO: 'A chave de API foi recusada pelo provedor.',
+    MODELO_INDISPONIVEL: 'O modelo selecionado não está disponível para esta chave de API.',
+    LIMITE_REQUISICOES: 'O provedor informou que o limite de requisições foi atingido.',
+    SEM_CONEXAO: 'Não foi possível conectar ao provedor de IA.',
+    TIMEOUT: 'O provedor demorou mais que o esperado para responder.',
+    RESPOSTA_INVALIDA: 'O provedor respondeu em formato inesperado.',
+    PROVEDOR_INDISPONIVEL: 'O provedor está temporariamente indisponível.',
+  };
+  return mensagens[codigo] || 'Não foi possível validar a conexão com o provedor.';
+};
+
 export const ModelosIAPage: React.FC = () => {
   const [mostrarChave, setMostrarChave] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -254,8 +269,7 @@ export const ModelosIAPage: React.FC = () => {
         setTestResult({ status: 'success', message: msg });
         window.ipcAPI.logInfo('IA', msg);
       } else if (!r.success) {
-        const erroDetalhe = r.error ? `\n\nDetalhes do erro: ${r.error}` : '';
-        const msg = `Ops! Não conseguimos conectar com o ${provedorNome}. Por favor, confira se a sua chave de API está correta e tente novamente.${erroDetalhe}`;
+        const msg = obterMensagemErroConexaoIa(r.error);
         setTestResult({ status: 'error', message: msg });
         window.ipcAPI.logError('IA', msg, r.error);
       } else {

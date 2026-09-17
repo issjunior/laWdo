@@ -19,7 +19,7 @@ export function clampMargin(value: number): number {
   return Math.min(MARGINS_MAX, Math.max(MARGINS_MIN, Math.round(value * 10) / 10));
 }
 
-export async function getMargens(): Promise<Margins | undefined> {
+export async function getMargens(): Promise<Margins> {
   try {
     const r = await window.ipcAPI.configuracao.obter(PDF_MARGINS_KEY);
     if (r.success && r.data) {
@@ -32,7 +32,7 @@ export async function getMargens(): Promise<Margins | undefined> {
       };
     }
   } catch {
-    /* fallback: retorna undefined → margens padrão (zero) */
+    /* usa as margens seguras quando a configuração ainda não existe ou está inválida */
   }
-  return undefined;
+  return { ...DEFAULT_MARGINS };
 }

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   descreverImagem: vi.fn(),
   cancelar: vi.fn(),
   obterContexto: vi.fn(),
+  testarConexao: vi.fn(),
   obterPerfil: vi.fn(),
   salvarPerfil: vi.fn(),
   configuracaoObter: vi.fn(),
@@ -58,6 +59,7 @@ vi.mock('../../main/services/ia-execucao.service.js', () => ({
     descreverImagem: mocks.descreverImagem,
     cancelar: mocks.cancelar,
     obterContexto: mocks.obterContexto,
+    testarConexao: mocks.testarConexao,
     obterPerfil: mocks.obterPerfil,
     salvarPerfil: mocks.salvarPerfil,
   },
@@ -209,10 +211,10 @@ describe('handlers IPC do painel de IA', () => {
     await expect(handle.get('ia:descartar-retomada')?.(eventoProprietario, 'retomada-ausente'))
       .resolves.toEqual({ success: false, error: 'RETOMADA_INDISPONIVEL' });
 
-    mocks.obterContexto.mockResolvedValueOnce({ configurado: false });
+    mocks.testarConexao.mockRejectedValueOnce(new Error('CONFIGURACAO_AUSENTE'));
     await expect(handle.get('ia:testar-conexao')?.(eventoProprietario))
       .resolves.toEqual({ success: false, error: 'CONFIGURACAO_AUSENTE' });
-    mocks.obterContexto.mockResolvedValueOnce({ configurado: true, provedor: 'gemini' });
+    mocks.testarConexao.mockResolvedValueOnce({ configurado: true, provedor: 'gemini' });
     await expect(handle.get('ia:testar-conexao')?.(eventoProprietario))
       .resolves.toEqual({ success: true, data: { configurado: true, provedor: 'gemini' } });
     mocks.obterContexto.mockRejectedValueOnce(new Error('Configuração indisponível'));
