@@ -103,6 +103,7 @@ function botoesDownload(downloads) {
     const artefatos = downloads.filter(artefato => artefato.plataforma === plataforma);
     if (artefatos.length === 0) return '';
     const botoes = artefatos.map(artefato => {
+      const botaoCopiarHash = compacto => `<button class="copiar-hash${compacto ? ' copiar-hash-compacto' : ''}" type="button" data-hash="${escaparHtml(artefato.hashSha256)}" aria-label="Copiar hash SHA-256 de ${escaparHtml(artefato.nome)}" title="Copiar hash SHA-256"><svg class="icone-copia" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><svg class="icone-confirmacao" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg></button>`;
       const titulo = plataforma === 'windows' ? 'Instalador Windows'
         : plataforma === 'macos' ? (artefato.arquitetura === 'arm64' ? 'Apple Silicon' : 'Intel')
           : rotuloFormato(artefato.formato);
@@ -110,12 +111,16 @@ function botoesDownload(downloads) {
         : plataforma === 'macos' ? (artefato.arquitetura === 'arm64' ? 'Para Macs com chips Apple.' : 'Para Macs com processadores Intel.')
           : artefato.formato === 'deb' ? 'Para distribuições baseadas em Debian.' : 'Versão portátil para Linux.';
       const rotuloBotao = plataforma === 'windows' ? 'Baixar instalador' : `Baixar ${artefato.formato === 'deb' ? 'DEB' : rotuloFormato(artefato.formato)}`;
+      const detalhesWindows = plataforma === 'windows'
+        ? `<div class="detalhes-windows"><span class="detalhes-rotulo">Arquivo</span><code class="nome-arquivo">${escaparHtml(artefato.nome)}</code><div class="hash-cabecalho"><span class="detalhes-rotulo">SHA-256</span>${botaoCopiarHash(false)}</div><code class="valor-hash" tabindex="0" aria-label="SHA-256: ${escaparHtml(artefato.hashSha256)}">${escaparHtml(artefato.hashSha256)}</code></div>`
+        : '';
+      const acaoHashCompacta = plataforma === 'windows' ? '' : `<span class="metadado-hash">SHA-256 ${botaoCopiarHash(true)}</span>`;
       return `
             <article class="download${plataforma === 'windows' ? ' download-windows' : ''}" aria-label="${escaparHtml(artefato.arquitetura)} · ${escaparHtml(rotuloFormato(artefato.formato))}">
               <div class="download-cabecalho"><div><strong>${escaparHtml(titulo)}</strong><p class="download-descricao">${descricao}</p></div><span class="arquitetura">${artefato.arquitetura === 'arm64' ? 'ARM64' : escaparHtml(artefato.arquitetura)}</span></div>
-              <div class="download-metadados"><span>v${escaparHtml(artefato.versao)}</span><span>${escaparHtml(formatarTamanho(artefato.tamanho))}</span></div>
+              <div class="download-metadados"><span>v${escaparHtml(artefato.versao)}</span><span>${escaparHtml(formatarTamanho(artefato.tamanho))}</span>${acaoHashCompacta}</div>
               <a class="download-link" href="${escaparHtml(artefato.url)}" rel="noopener noreferrer" aria-label="Baixar ${escaparHtml(artefato.nome)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>${rotuloBotao}</a>
-              <details class="download-detalhes"><summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>Detalhes do arquivo</summary><div class="detalhes-conteudo"><span class="detalhes-rotulo">Nome do arquivo</span><code class="nome-arquivo">${escaparHtml(artefato.nome)}</code><div class="hash-cabecalho"><span class="detalhes-rotulo">SHA-256</span><button class="copiar-hash" type="button" data-hash="${escaparHtml(artefato.hashSha256)}" aria-label="Copiar hash SHA-256 de ${escaparHtml(artefato.nome)}" title="Copiar hash SHA-256"><svg class="icone-copia" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><svg class="icone-confirmacao" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg></button></div><code class="valor-hash" tabindex="0" aria-label="SHA-256: ${escaparHtml(artefato.hashSha256)}">${escaparHtml(artefato.hashSha256)}</code></div></details>
+              ${detalhesWindows}
             </article>`;
     }).join('');
     return `<section class="grupo-plataforma" aria-label="Downloads para ${escaparHtml(rotuloPlataforma(plataforma))}"><h3>${escaparHtml(rotuloPlataforma(plataforma))}</h3><div class="lista-downloads">${botoes}
@@ -149,28 +154,27 @@ function paginaInicial(downloads) {
     footer { padding-top: 10px; color: #5d7191; font-size: .7rem; } @media (max-width: 900px) { body { overflow: auto; } main { height: auto; min-height: 100svh; padding: 20px 0; } .conteudo { grid-template-columns: 1fr; gap: 24px; padding: 28px 0; } .apresentacao { justify-items: center; text-align: center; } .beneficios { justify-content: center; } .downloads { width: 100%; } } @media (max-width: 560px) { main { width: min(100% - 28px, 1180px); } .lista-downloads { grid-template-columns: 1fr; } .downloads-header { align-items: flex-start; flex-direction: column; gap: 7px; } .logo-principal { width: min(82%, 300px); } }
     .conteudo > div { min-width: 0; }
     .lista-downloads { align-items: start; gap: 12px; }
-    .download { min-width: 0; display: grid; gap: 12px; padding: 16px; border-radius: 12px; }
+    .download { min-width: 0; display: grid; gap: 10px; padding: 13px 16px; border-radius: 12px; }
     .download:hover { transform: none; }
     .download-windows { grid-column: 1 / -1; }
     .download-cabecalho { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
-    .download-cabecalho strong { font-size: .92rem; }
-    .download-descricao { margin: 5px 0 0; color: #5d7191; font-size: .75rem; line-height: 1.5; min-height: 2.25rem; }
+    .download-cabecalho strong { font-size: .88rem; }
+    .download-descricao { margin: 4px 0 0; color: #5d7191; font-size: .72rem; line-height: 1.4; }
+    .download:not(.download-windows) .download-descricao { display: none; }
     .arquitetura { flex-shrink: 0; padding: 4px 10px; border-radius: 999px; color: #1a55e0; background: #e8effc; font-size: .72rem; font-weight: 700; }
-    .download-metadados { display: flex; gap: 14px; color: #5d7191; font-size: .78rem; }
+    .download-metadados { display: flex; align-items: center; gap: 12px; color: #5d7191; font-size: .74rem; }
     .download-metadados span + span { border-left: 1px solid #c4d2e6; padding-left: 14px; }
-    .download-link { display: flex; justify-content: center; align-items: center; gap: 9px; min-height: 40px; border-radius: 8px; background: #1769ed; color: white; font-size: .8rem; font-weight: 700; }
+    .download-link { width: 100%; display: flex; justify-content: center; align-items: center; gap: 9px; min-height: 36px; border-radius: 8px; background: #1769ed; color: white; font-size: .76rem; font-weight: 700; }
     .download-link:hover { background: #1254c3; }
     .download-link svg, summary svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .download-detalhes { min-width: 0; border-radius: 8px; background: #eef4fc; border: 1px solid #e0e9f6; }
-    .download-detalhes summary { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; list-style: none; font-size: .74rem; color: #3a4a62; }
-    .download-detalhes summary::-webkit-details-marker { display: none; }
-    .download-detalhes[open] summary svg { transform: rotate(180deg); }
-    .download-detalhes summary:focus-visible, .valor-hash:focus-visible { outline: 2px solid #1a55e0; outline-offset: 2px; }
-    .detalhes-conteudo { padding: 4px 10px 12px; display: grid; gap: 6px; min-width: 0; }
+    .detalhes-windows { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 12px; padding: 9px 11px; border-radius: 8px; background: #eef4fc; border: 1px solid #e0e9f6; }
+    .valor-hash:focus-visible { outline: 2px solid #1a55e0; outline-offset: 2px; }
     .detalhes-rotulo { font-size: .68rem; color: #5d7191; }
     .nome-arquivo, .valor-hash { font-family: ui-monospace, Consolas, monospace; font-size: .68rem; line-height: 1.6; overflow-wrap: anywhere; min-width: 0; }
-    .hash-cabecalho { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
-    .download-windows .valor-hash { white-space: nowrap; overflow-x: auto; overflow-wrap: normal; padding-bottom: 4px; }
+    .hash-cabecalho { display: flex; align-items: center; gap: 6px; }
+    .download-windows .valor-hash { white-space: nowrap; overflow-x: auto; overflow-wrap: normal; padding-bottom: 2px; }
+    .metadado-hash { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+    .copiar-hash-compacto { width: 23px; height: 23px; }
     .copiar-hash { width: 28px; height: 28px; }
     @media (prefers-reduced-motion: reduce) { .download, .copiar-hash { transition: none; } }
   </style>
