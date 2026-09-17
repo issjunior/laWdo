@@ -112,7 +112,8 @@ test('gera um feed completo preservando a versão mais recente por plataforma', 
   assert.equal((paginaInicial.match(/<article class="download/g) ?? []).length, 5);
   assert.equal((paginaInicial.match(/class="download download-windows"/g) ?? []).length, 1);
   assert.match(paginaInicial, /Baixar instalador/);
-  assert.match(paginaInicial, /Detalhes do arquivo/);
+  assert.match(paginaInicial, /class="detalhes-windows"/);
+  assert.doesNotMatch(paginaInicial, /Detalhes do arquivo/);
   assert.match(paginaInicial, /\.download-windows \.valor-hash \{ white-space: nowrap/);
   assert.doesNotMatch(paginaInicial, /\.zip/);
   assert.match(paginaInicial, /logo.png/);
