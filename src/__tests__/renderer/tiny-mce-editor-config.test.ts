@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { MEDIDAS_RECUO_PRIMEIRA_LINHA, obterPluginsTinyMce, obterRotuloIdentificacaoFullscreen, obterToolbarTinyMce, sincronizarIdentificacaoFullscreen } from '../../renderer/components/editor/TinyMceEditor';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  MEDIDAS_RECUO_PRIMEIRA_LINHA,
+  obterPluginsTinyMce,
+  obterRotuloIdentificacaoFullscreen,
+  obterToolbarTinyMce,
+  removerInstanciaTinyMceAnterior,
+  sincronizarIdentificacaoFullscreen,
+} from '../../renderer/components/editor/TinyMceEditor';
 
 describe('configuração do TinyMceEditor', () => {
   it('expõe apenas os plugins usados pela toolbar e adiciona autoresize quando necessário', () => {
@@ -47,5 +54,20 @@ describe('configuração do TinyMceEditor', () => {
 
     sincronizarIdentificacaoFullscreen(container, false, '123/2026');
     expect(container.querySelector('.laudo-identificacao-fullscreen')).toBeNull();
+  });
+
+  it('remove uma instância anterior antes de reutilizar o mesmo identificador de editor', () => {
+    const remover = vi.fn();
+    const tinymceOriginal = Object.getOwnPropertyDescriptor(window, 'tinymce');
+    Object.defineProperty(window, 'tinymce', {
+      configurable: true,
+      value: { get: vi.fn(() => ({ remove: remover })) },
+    });
+
+    expect(removerInstanciaTinyMceAnterior('laudo-single-editor')).toBe(true);
+    expect(remover).toHaveBeenCalledOnce();
+
+    if (tinymceOriginal) Object.defineProperty(window, 'tinymce', tinymceOriginal);
+    else Reflect.deleteProperty(window, 'tinymce');
   });
 });

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useId, useLayoutEffect, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
@@ -174,6 +174,20 @@ type TinymceWindow = Window & {
 type ComandoTinyMce<T> = (_ui: boolean, data: T) => void;
 
 const CLASSE_IDENTIFICACAO_FULLSCREEN = 'laudo-identificacao-fullscreen';
+const TEMPO_LIMITE_INICIALIZACAO_MS = 8_000;
+const MAX_TENTATIVAS_AUTOMATICAS = 2;
+
+export function removerInstanciaTinyMceAnterior(editorId: string): boolean {
+  const editorAnterior = (window as TinymceWindow).tinymce?.get(editorId);
+  if (!editorAnterior) return false;
+
+  try {
+    editorAnterior.remove();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function obterRotuloIdentificacaoFullscreen(repNumero?: string): string | null {
   const numeroNormalizado = repNumero?.trim();
@@ -446,8 +460,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   condToggles,
   onSolicitarExclusaoBlocoCondicional,
   onTabelaPlaceholderRestaurada,
+  className,
   ...rest
 }) => {
+  const idReact = useId();
+  const editorIdResolvido = editorId || `tiny-editor-${idReact.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
   const repNumeroRef = useRef(repNumero);
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
@@ -455,10 +472,43 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const onTabelaPlaceholderRestauradaRef = useRef(onTabelaPlaceholderRestaurada);
   const editorProntoParaAlteracoesRef = useRef(false);
   const frameLiberarAlteracoesRef = useRef<number | null>(null);
+  const [preparado, setPreparado] = useState(false);
   const [ready, setReady] = useState(false);
+  const [tentativaInicializacao, setTentativaInicializacao] = useState(0);
+  const [falhaInicializacao, setFalhaInicializacao] = useState<string | null>(null);
 
   const [stableInitialValue] = useState(initialValue);
   const isUncontrolled = initialValue !== undefined;
+
+  useLayoutEffect(() => {
+    removerInstanciaTinyMceAnterior(editorIdResolvido);
+    setPreparado(true);
+  }, [editorIdResolvido]);
+
+  const reiniciarEditor = useCallback(() => {
+    removerInstanciaTinyMceAnterior(editorIdResolvido);
+    editorRef.current = null;
+    editorProntoParaAlteracoesRef.current = false;
+    setReady(false);
+    setFalhaInicializacao(null);
+    setTentativaInicializacao(atual => atual + 1);
+  }, [editorIdResolvido]);
+
+  useEffect(() => {
+    if (!preparado || ready || falhaInicializacao) return;
+
+    const timeout = window.setTimeout(() => {
+      if (tentativaInicializacao + 1 < MAX_TENTATIVAS_AUTOMATICAS) {
+        reiniciarEditor();
+        return;
+      }
+
+      removerInstanciaTinyMceAnterior(editorIdResolvido);
+      setFalhaInicializacao('O editor demorou mais que o esperado para abrir.');
+    }, TEMPO_LIMITE_INICIALIZACAO_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [editorIdResolvido, falhaInicializacao, preparado, ready, reiniciarEditor, tentativaInicializacao]);
 
   useEffect(() => {
     placeholderChavesRef.current = placeholderChaves;
@@ -510,7 +560,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
         const reader = new FileReader();
         reader.onload = () => {
           const dataUri = reader.result as string;
-          const editor = (window as TinymceWindow).tinymce?.get(editorId);
+          const editor = (window as TinymceWindow).tinymce?.get(editorIdResolvido);
           if (editor) {
             editor.insertContent(buildFigureHtml(dataUri, id, ''));
             onImageInserted?.();
@@ -523,19 +573,53 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   };
 
   return (
-    <div className={ready ? '' : 'opacity-0'} {...rest}>
-      <Editor
-        id={editorId}
+    <div
+      className={[className, 'relative min-h-72'].filter(Boolean).join(' ')}
+      data-diagnostico-id={`editor.${editorIdResolvido}`}
+      {...rest}
+    >
+      {!ready && (
+        <div className="absolute inset-0 z-10 flex min-h-72 items-center justify-center rounded-md border border-border bg-background">
+          {falhaInicializacao ? (
+            <div className="flex max-w-md flex-col items-center gap-3 px-6 text-center">
+              <p className="text-sm font-medium text-foreground">{falhaInicializacao}</p>
+              <p className="text-xs text-muted-foreground">O conteúdo do laudo foi preservado. Tente carregar o editor novamente.</p>
+              <button
+                type="button"
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                onClick={reiniciarEditor}
+              >
+                Tentar novamente
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
+              Carregando editor...
+            </div>
+          )}
+        </div>
+      )}
+      <div className={ready ? '' : 'invisible'}>
+      {preparado && <Editor
+        key={`${editorIdResolvido}-${tentativaInicializacao}`}
+        id={editorIdResolvido}
         licenseKey="gpl"
         tinymceScriptSrc="./tinymce/tinymce.min.js"
         onInit={(_evt, editor) => {
           editorRef.current = editor;
+          setFalhaInicializacao(null);
           setReady(true);
           onEditorInit?.(editor);
           frameLiberarAlteracoesRef.current = window.requestAnimationFrame(() => {
             editorProntoParaAlteracoesRef.current = true;
             frameLiberarAlteracoesRef.current = null;
           });
+        }}
+        onScriptsLoadError={(erro) => {
+          setFalhaInicializacao(erro instanceof Error && erro.message
+            ? erro.message
+            : 'Não foi possível carregar os recursos do editor.');
         }}
         {...(isUncontrolled
           ? { initialValue: stableInitialValue }
@@ -1468,7 +1552,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             }
           },
         }}
-      />
+      />}
+      </div>
     </div>
   );
 };
