@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { laudoPadraoB602V1 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v1';
+import { laudoPadraoB602V3 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v3';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 
@@ -29,6 +30,15 @@ describe('catálogo de templates integrados', () => {
     comImagem.secoes[2].conteudo += '<table><tbody><tr><td><figure data-dummy="true" data-image-id="aleatorio"><img src="x"></figure></td></tr></tbody></table>';
 
     expect(calcularChecksumTemplateIntegrado(comImagem)).toBe(calcularChecksumTemplateIntegrado(base));
+  });
+
+  it('inclui a descrição e o total de cartuchos no template B-602 atual', () => {
+    const conteudoCartuchos = laudoPadraoB602V3.secoes.find(secao => secao.chave === 'dos-exames')?.conteudo || '';
+
+    expect(laudoPadraoB602V3.versao).toBe(3);
+    expect(conteudoCartuchos).toContain('Trata-se de');
+    expect(conteudoCartuchos).toContain('{{b602_total_cartuchos}}');
+    expect(conteudoCartuchos).toContain('text-align: justify; text-indent: 35.43pt;');
   });
 
   it('rejeita chaves de seção duplicadas', () => {
