@@ -26,6 +26,7 @@ import {
   criarChaveMontagemEditor,
   TinyMceEditor,
   type BlocoCondicionalSelecionado,
+  type CampoReservadoSelecionado,
 } from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
@@ -62,9 +63,12 @@ import {
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
 import { extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
+import { preencherCampoReservado } from '@/lib/campos-reservados';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -560,6 +564,10 @@ export const LaudosPage: React.FC = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
   const [figuraSubstituicaoSolicitada, setFiguraSubstituicaoSolicitada] = useState<string | null>(null);
+  const [dialogoCampoReservadoAberto, setDialogoCampoReservadoAberto] = useState(false);
+  const [valorCampoReservado, setValorCampoReservado] = useState('');
+  const [erroCampoReservado, setErroCampoReservado] = useState<string | null>(null);
+  const campoReservadoSelecionadoRef = useRef<CampoReservadoSelecionado | null>(null);
 
   const painelLateralAtivo: PainelLateralAtivo = iaSheetOpen
     ? 'ia'
@@ -2040,6 +2048,43 @@ export const LaudosPage: React.FC = () => {
     const indice = secoes.findIndex((_, indiceSecao) => `secao-${indiceSecao}` === editor.id);
     if (indice >= 0) atualizarConteudoSecao(indice, conteudo);
   }, [atualizarConteudoSecao, editorMode, secoes]);
+
+  const solicitarPreenchimentoCampoReservado = useCallback((campo: CampoReservadoSelecionado) => {
+    campoReservadoSelecionadoRef.current = campo;
+    setValorCampoReservado('');
+    setErroCampoReservado(null);
+    setDialogoCampoReservadoAberto(true);
+  }, []);
+
+  const fecharDialogoCampoReservado = useCallback(() => {
+    campoReservadoSelecionadoRef.current = null;
+    setDialogoCampoReservadoAberto(false);
+    setValorCampoReservado('');
+    setErroCampoReservado(null);
+  }, []);
+
+  const confirmarPreenchimentoCampoReservado = useCallback(() => {
+    const valor = valorCampoReservado.trim();
+    if (!valor) {
+      setErroCampoReservado('Informe um valor para substituir o campo pendente.');
+      return;
+    }
+
+    const selecionado = campoReservadoSelecionadoRef.current;
+    const editor = selecionado ? obterEditorTinyMce(selecionado.editorId) : null;
+    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento)) {
+      toast.error('O campo selecionado não está mais disponível neste editor.');
+      fecharDialogoCampoReservado();
+      return;
+    }
+
+    editor.undoManager.transact(() => {
+      preencherCampoReservado(selecionado.elemento, valor);
+    });
+    atualizarConteudoDoEditor(editor);
+    registrarAlteracao();
+    fecharDialogoCampoReservado();
+  }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, valorCampoReservado]);
 
   const localizarBlocoNoEditor = useCallback((referencia: BlocoCondicionalSelecionado) => {
     const editor = obterEditorTinyMce(referencia.editorId);
@@ -3597,6 +3642,7 @@ export const LaudosPage: React.FC = () => {
                         }}
                         onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
                         onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
+                        onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
                           setIaSheetOpen(false);
@@ -3685,6 +3731,7 @@ export const LaudosPage: React.FC = () => {
                                     onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
                                     condToggles={exameToggles}
                                     onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
+                                    onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}
                                     onDummyFigureClick={(imageId) => {
                                       setFiguraSubstituicaoSolicitada(imageId);
                                       setIaSheetOpen(false);
@@ -3739,6 +3786,39 @@ export const LaudosPage: React.FC = () => {
           onOpenChange={setIndicePlaceholdersOpen}
           itens={itensIndicePlaceholders}
         />
+
+        <Dialog open={dialogoCampoReservadoAberto} onOpenChange={aberto => {
+          if (!aberto) fecharDialogoCampoReservado();
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Preencher campo manualmente</DialogTitle>
+              <DialogDescription>
+                O valor será aplicado somente neste laudo e não altera a REP.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <label htmlFor="valor-campo-reservado" className="text-sm font-medium">Valor</label>
+              <Input
+                id="valor-campo-reservado"
+                value={valorCampoReservado}
+                onChange={evento => {
+                  setValorCampoReservado(evento.target.value);
+                  setErroCampoReservado(null);
+                }}
+                onKeyDown={evento => {
+                  if (evento.key === 'Enter') confirmarPreenchimentoCampoReservado();
+                }}
+                autoFocus
+              />
+              {erroCampoReservado && <p className="text-sm text-destructive">{erroCampoReservado}</p>}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={fecharDialogoCampoReservado}>Cancelar</Button>
+              <Button type="button" onClick={confirmarPreenchimentoCampoReservado}>Aplicar valor</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Modal de Visualização (Preview PDF) */}
         <Dialog open={previewOpen} onOpenChange={(open) => {
