@@ -41,6 +41,7 @@ function isSecaoDerivadaRep(secao: SecaoTemplateRow): boolean {
   const nome = normalizarNomeSecao(secao.nome);
   return Boolean(
     secao.repetir_para === 'armas'
+    || /data-cond-bloco="b602_(?:cartuchos|estojos)_toggle"/i.test(secao.conteudo || '')
     || nome.includes('CARTUCHO')
     || nome.includes('ESTOJO')
     || nome.includes('ARMA')

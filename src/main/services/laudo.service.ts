@@ -357,7 +357,7 @@ class LaudoService extends BaseService<LaudoRow> {
 
   async sincronizarSecoesCondicionais(
     laudoId: string,
-    camposEspecificosAnteriores?: Record<string, unknown>,
+    _camposEspecificosAnteriores?: Record<string, unknown>,
   ): Promise<void> {
     try {
       const laudo = await this.findById(laudoId);
@@ -375,22 +375,6 @@ class LaudoService extends BaseService<LaudoRow> {
       const secoesFiltradas = filtrarSecoesAtivas(secoes, especificos);
       const expansoes = expandirSecoesRepetiveis(secoesFiltradas, especificos);
       const conteudoBase = buildHtml(secoesFiltradas, expansoes, especificos);
-
-      if (camposEspecificosAnteriores) {
-        // Valores sem impacto estrutural já são refletidos pelos placeholders do editor.
-        // Evitar uma recomposição desnecessária preserva as edições manuais do laudo.
-        const secoesAnteriores = filtrarSecoesAtivas(secoes, camposEspecificosAnteriores);
-        const expansoesAnteriores = expandirSecoesRepetiveis(secoesAnteriores, camposEspecificosAnteriores);
-        const conteudoBaseAnterior = buildHtml(
-          secoesAnteriores,
-          expansoesAnteriores,
-          camposEspecificosAnteriores,
-        );
-
-        if (conteudoBaseAnterior === conteudoBase) {
-          return;
-        }
-      }
 
       const novoConteudo = this._reconciliarComBase(laudo.conteudo, conteudoBase, especificos);
 

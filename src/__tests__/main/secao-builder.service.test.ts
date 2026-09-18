@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildHtml,
   expandirSecoesRepetiveis,
   filtrarSecoesAtivas,
   processarBlocosCondicionais,
 } from '../../main/services/secao-builder.service';
+import { laudoService } from '../../main/services/laudo.service';
 
 describe('secao-builder.service', () => {
   it('mantém DOS EXAMES ativo para cartucho e estojo da coleção canônica', () => {
@@ -28,6 +30,58 @@ describe('secao-builder.service', () => {
     });
 
     expect(resultado).toHaveLength(1);
+    const html = buildHtml(resultado, new Map(), {
+      b602: {
+        pecas: [
+          { ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' },
+          { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' },
+        ],
+      },
+    });
+    expect(html).toContain('data-derivada-rep="true"');
+    expect(html).toContain('Cartuchos');
+    expect(html).toContain('Estojos');
+  });
+
+  it('repara DOS EXAMES antigo quando o bloco de cartuchos ainda não existia', () => {
+    const htmlAtual = [
+      '<h2 data-secao-id="exames" data-estrutura-nivel="2" data-titulo-base="DOS EXAMES">4. DOS EXAMES</h2>',
+      '<div data-cond-bloco="b602_estojos_toggle"><p>Estojos antigos</p></div>',
+    ].join('\n');
+    const htmlBase = [
+      '<h2 data-secao-id="exames" data-estrutura-nivel="2" data-titulo-base="DOS EXAMES" data-derivada-rep="true">4. DOS EXAMES</h2>',
+      '<div data-cond-bloco="b602_cartuchos_toggle"><p>Cartuchos atuais</p></div>',
+      '<div data-cond-bloco="b602_estojos_toggle"><p>Estojos atuais</p></div>',
+    ].join('\n');
+    const servico = laudoService as unknown as {
+      _reconciliarComBase: (
+        atual: string,
+        base: string,
+        campos: Record<string, unknown>,
+      ) => string;
+    };
+
+    const resultado = servico._reconciliarComBase(htmlAtual, htmlBase, {
+      b602: {
+        pecas: [
+          {
+            idLocal: 'cartucho-1', origem: 'gdl', alteradaLocalmente: false,
+            tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)',
+            comuns: { quantidade: 1, identificacao: '.38 SPL', lacreEntrada: '', observacao: '' },
+            personalizados: {}, extrasGdl: {},
+          },
+          {
+            idLocal: 'estojo-1', origem: 'gdl', alteradaLocalmente: false,
+            tipoCodigo: '101', tipoPeca: 'ESTOJO(S)',
+            comuns: { quantidade: 1, identificacao: '9mm', lacreEntrada: '', observacao: '' },
+            personalizados: {}, extrasGdl: {},
+          },
+        ],
+      },
+    });
+
+    expect(resultado).toContain('Cartuchos atuais');
+    expect(resultado).toContain('Estojos atuais');
   });
 
   it('mantém os blocos periciais versionados para qualquer arma, independentemente do toggle legado', () => {
