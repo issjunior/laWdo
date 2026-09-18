@@ -4,8 +4,6 @@
 
 Esta spec descreve o consumo de atualizações dentro do laWdo: consulta do feed, validação, download, atualização offline, autorização de reinício e instalação. A produção e publicação dos mesmos contratos está documentada em `spec/11 github actions/workflows_github_actions.md`.
 
-A relação entre os domínios é profunda e deve permanecer explícita:
-
 ```text
 spec/11 github actions
   release pública -> manifesto + assinatura -> feed por plataforma
@@ -17,26 +15,27 @@ spec/12 atualizacao
 
 Mudanças em manifesto, assinatura, canais, nomes de plataforma, arquitetura, formato, URL ou seleção de assets exigem revisão coordenada das duas specs e dos dois lados do contrato. GitHub Actions é a fonte do artefato publicado; `AtualizacaoService` é a fronteira que volta a tratar todo conteúdo remoto como não confiável.
 
-## Fontes de verdade e responsabilidades
+## Fontes de verdade e contratos
 
 | Responsabilidade | Fonte atual |
 |---|---|
-| estado, consulta, download, offline, agendamento e instalação | `src/main/services/atualizacao.service.ts` |
-| contrato compartilhado do manifesto e do estado | `src/shared/atualizacao/atualizacao.types.ts` |
-| chave pública Ed25519 embutida | `src/shared/atualizacao/chave-publica-release.ts` |
+| estado, consulta, download, agendamento e instalação | `src/main/services/atualizacao.service.ts` |
+| contrato de manifesto, estado e falha | `src/shared/atualizacao/atualizacao.types.ts` |
+| chave pública Ed25519 | `src/shared/atualizacao/chave-publica-release.ts` |
 | handlers e autorização de reinício | `src/main/ipc/handlers/atualizacao.handlers.ts` |
 | canais permitidos e API exposta | `src/preload/index.ts` |
-| interface e polling do estado | `src/renderer/components/layout/Header.tsx` |
-| registro global de alterações pendentes | `src/renderer/contexts/AlteracoesPendentesContext.tsx` |
-| inicialização e processamento de pendência | `src/main/index.ts` |
+| interface, polling e detalhamento da falha | `src/renderer/components/layout/Header.tsx` |
+| alterações pendentes | `src/renderer/contexts/AlteracoesPendentesContext.tsx` |
+| processamento de pendência | `src/main/index.ts` |
 | backups obrigatórios | `src/main/services/backup-atualizacao.service.ts` |
-| última verificação persistida | `userData/atualizacao-ultima-verificacao.json` |
 
-O estado canônico da execução é mantido em memória pelo singleton `atualizacaoService`. Persistem em `userData`: `atualizacao-pendente.json`, usado para instalação automática na próxima inicialização; `atualizacao-ultima-verificacao.json`, que guarda `verificadoEm` em ISO 8601; e os pacotes copiados para `atualizacoes`. Esses arquivos são persistência do processo principal, não o `localStorage` do renderer.
+O singleton `atualizacaoService` mantém o estado canônico em memória. Em `userData` persistem a pendência de instalação, a data da última verificação e os pacotes em `atualizacoes`; o renderer não usa `localStorage` para esses dados.
 
-Além do percentual legado, a resposta de estado pode conter `progressoDetalhado` com percentual inteiro, etapa e descrição. As etapas válidas são `verificando`, `baixando`, `validando`, `copiando`, `confirmando`, `backup`, `agendando` e `abrindo_instalador`.
+`EstadoAtualizacaoResposta` expõe `falha` opcional em vez da antiga string `erro`. A estrutura contém código estável, etapa, mensagem amigável, detalhe técnico sanitizado, horário ISO e ação de nova tentativa quando segura. `RespostaAtualizacao` pode repetir a mesma `falha` quando uma pré-condição falha no handler. Assim, `success: false` representa falha da ação solicitada, enquanto `atualizacao:estado` permanece uma leitura bem-sucedida do estado atual.
 
-## Estado e concorrência
+Os códigos atuais cobrem rede, timeout, serviço ou recurso indisponível, resposta inválida, assinatura, incompatibilidade, download, integridade, armazenamento, backup, alterações pendentes, confirmação, instalador, operação indisponível e erro inesperado. Stack traces, conteúdo remoto, caminhos pessoais e URLs completas não entram no contrato do renderer.
+
+## Estado, concorrência e falhas
 
 Os estados públicos são:
 
@@ -48,83 +47,47 @@ ociosa -> verificando -> disponivel -> baixando -> baixada
 baixada -> aguardando_reinicio
 ```
 
-`verificar` recusa nova operação durante verificação, download ou instalação. `baixar` exige estado `disponivel`; instalação e agendamento exigem `baixada`. O controle é uma máquina de estados em memória, não um mutex geral: a seleção offline define `verificando` diretamente e a proteção contra concorrência também depende de a interface manter apenas uma ação local ativa.
+`verificar` recusa nova operação durante verificação, download ou instalação. `baixar` exige atualização disponível; após uma falha de download com pacote remoto ainda selecionado, permite a repetição indicada por `falha.acaoSugerida`. A instalação também pode ser repetida depois de falha recuperável enquanto o pacote validado permanecer disponível.
 
-Falhas capturadas pelo serviço normalmente retornam uma resposta com `estado: falhou` e a mensagem em `erro`; o handler pode continuar retornando `success: true` porque a chamada IPC foi concluída. Erros lançados antes do bloco interno são convertidos pelo handler em `success: false`. Consumidores devem observar tanto `success` quanto `data.estado` e `data.erro`.
+Falhas capturadas pelo serviço definem `estado: falhou` e armazenam a falha estruturada. Os handlers convertem a conclusão com `falha` em `success: false`; falhas lançadas antes do bloco interno são normalizadas no handler sem expor a mensagem crua. O Header deve observar `success`, `data.estado` e `data.falha`. Uma nova operação ou transição de sucesso limpa a falha anterior.
 
-O serviço publica cada transição de progresso para todas as janelas não destruídas. O preload valida faixa, etapa e descrição antes de repassar `atualizacao:progresso`; o `Header` assina esse evento e combina o valor ao estado já carregado. O evento informa progresso da operação atual, não é log persistente nem mecanismo de retomada.
+O serviço publica progresso para janelas não destruídas. O preload valida percentual, etapa e descrição antes de repassar o evento; ele não é log persistente nem mecanismo de retomada.
 
-## Verificação online
+## Verificação online, validação e download
 
-Após o Electron ficar pronto, uma atualização agendada é processada antes da abertura do banco. Se não houver instalação pendente, a aplicação inicializa e agenda uma verificação automática com atraso aleatório entre 5 e 30 segundos.
+Após o Electron ficar pronto, uma atualização agendada é processada antes da abertura do banco. Sem pendência, a aplicação agenda verificação automática com atraso aleatório entre 5 e 30 segundos. A verificação automática é limitada a uma vez a cada 24 horas usando `verificadoEm`; a manual ignora o limite.
 
-A URL-base atual é fixa em `https://issjunior.github.io/laWdo/stable`. O serviço deriva `<plataforma>-<arquitetura>.json` e baixa em paralelo o índice e seu arquivo `.sig`. A verificação automática é limitada a uma vez a cada 24 horas usando `verificadoEm`, carregado de `userData/atualizacao-ultima-verificacao.json` ao criar o serviço. A verificação manual ignora esse limite.
+A URL-base é `https://issjunior.github.io/laWdo/stable`. Para a plataforma e arquitetura atuais, o serviço obtém em paralelo `<plataforma>-<arquitetura>.json` e `.sig`, ambos com timeout de 20 segundos. Falha de DNS, conexão recusada, rede inacessível, `fetch failed` ou timeout é classificada sem assumir se a causa é ausência de internet ou bloqueio de rede. HTTP 404 identifica recurso indisponível; os demais status HTTP identificam indisponibilidade do serviço.
 
-`verificadoEm` só é atualizado depois que índice e assinatura foram obtidos, normalizados, autenticados e contêm artefato compatível; falhas anteriores preservam a data anterior. O arquivo é tratado como fronteira insegura: JSON inválido, objeto inesperado ou data inválida são ignorados com log de aviso. Uma falha de escrita não invalida a verificação corrente, mas pode fazer a próxima execução perder a data.
+O manifesto remoto é uma fronteira insegura: tipos, SemVer, data, canais, formatos, tamanho, SHA-256, nome simples de arquivo e URL HTTPS são normalizados antes de a serialização canônica ser verificada pela chave Ed25519 embutida. Somente uma versão superior à instalada e com artefato compatível produz `disponivel`. `verificadoEm` só é gravado após todas essas validações.
 
-O manifesto remoto passa por normalização de tipos, SemVer, data, canais, formatos, tamanho, SHA-256, nome simples de arquivo e URL HTTPS. Em seguida, sua serialização canônica é validada com a chave pública Ed25519 embutida. Somente uma versão superior à instalada produz o estado `disponivel`.
+No download online, o pacote é escrito como `.parcial`, com tamanho e SHA-256 calculados durante o streaming. Apenas um arquivo compatível com o manifesto é renomeado para o nome final e muda o estado para `baixada`. Divergência remove o parcial; outras falhas podem deixá-lo para inspeção ou limpeza posterior. Falha de escrita é classificada como armazenamento indisponível antes da categoria genérica de download.
 
-A normalização do consumidor é implementada separadamente da normalização do produtor em `scripts/release/manifesto.mjs`. Elas precisam permanecer compatíveis, mas não compartilham a mesma função. O consumidor é atualmente menos estrito em alguns pontos: não valida o formato recebido de `versaoManifesto`, não exige padrão hexadecimal para `commit`, não exige canais não vazios nem rejeita combinações duplicadas de artefatos.
+A atualização offline mantém o mesmo contrato de assinatura, versão, plataforma, arquitetura, tamanho e hash, e converge para `baixada`; o comportamento de falhas estruturadas também se aplica às etapas posteriores de backup e instalação.
 
-O serviço seleciona o primeiro artefato que coincidir com plataforma e arquitetura; não existe uma tabela explícita de prioridade entre formatos no consumidor. A ordenação produzida pelo feed influencia essa escolha.
+## IPC, backup e instalação
 
-### Limitação atual do canal macOS
+Antes da instalação imediata, o main solicita autorização ao mesmo `webContents` por UUID e expira após 15 segundos. Alterações pendentes e expiração possuem mensagens próprias; a autorização não salva nem descarta conteúdo. Depois dela, o backup obrigatório precisa terminar antes de o instalador ser iniciado.
 
-O produtor publica pacotes macOS no canal `experimental`, mas a URL online do aplicativo está fixada em `stable`. Assim, índices macOS localizados sob `/experimental` não são descobertos pela verificação online atual. O fluxo offline ainda pode carregar um manifesto experimental válido e compatível.
+O backup permanece responsabilidade de `BackupAtualizacaoService`. A falha é classificada e apresentada pelo fluxo de atualização, mas não altera sua política de snapshot, backup completo, retenção ou persistência, documentadas em `backup_pre_atualizacao.md`.
 
-## Download e atualização offline
+Windows/NSIS inicia instalador silencioso e encerra o app; Linux/AppImage substitui e reabre quando executado como AppImage; DEB, DMG e ZIP usam abertura manual pelo sistema. Pacotes locais continuam sendo validados dentro de `userData/atualizacoes` antes de execução ou agendamento.
 
-No download online, o pacote é gravado como `<nome>.parcial` em `userData/atualizacoes`. Tamanho e SHA-256 são calculados durante o streaming; somente após coincidirem com o manifesto o arquivo é renomeado para o nome final e o estado passa a `baixada`.
+## Interface e suporte
 
-Divergência de tamanho ou hash remove o arquivo parcial. Outras falhas de rede ou escrita podem deixar um `.parcial`, pois não há limpeza geral no `catch`. O pacote final existente pode ser substituído pela renomeação conforme a semântica do sistema operacional.
+O Header consulta o estado ao montar e a cada 30 segundos. Falhas automáticas permanecem silenciosas fora do modal; não geram toast nem destaque adicional no ícone. Falhas originadas por ação manual mostram toast com a mensagem amigável.
 
-Na atualização offline, o usuário escolhe um JSON. A assinatura deve estar ao lado dele como `<nome-do-manifesto>.sig`, e o artefato deve estar no mesmo diretório com o nome registrado. O serviço valida assinatura, versão superior, plataforma, arquitetura, tamanho e hash antes de copiar; depois revalida a cópia dentro do diretório controlado. Online e offline convergem no mesmo estado `baixada` e reutilizam backup e instalação.
+No modal **Atualizações**, uma `falha` substitui o status de ausência de atualização por **Falha na atualização** e exibe alerta com orientação em português. O usuário pode expandir **Ver detalhes técnicos** para consultar código, etapa e detalhe sanitizado, e usar **Copiar detalhes** para copiar essas informações, o horário e a versão do laWdo. O modal oferece repetição contextual de download ou instalação quando `acaoSugerida` permitir, além da verificação manual sempre disponível.
 
-## IPC e fechamento seguro
+O processo principal continua responsável por rede, arquivos, assinatura, backup e execução; o renderer apenas apresenta o estado tipado.
 
-A superfície exposta pelo preload contém consulta de estado, verificação, download, adiamento, preparação de reinício, instalação imediata, agendamento, seleção offline e resposta ao pedido de reinício. Todos os canais constam em `ALLOWED_CHANNELS`.
+## Invariantes e verificação
 
-Antes da instalação imediata, o main envia `atualizacao:solicitar-reinicio` ao mesmo `webContents` que iniciou a ação. A resposta usa um UUID, deve vir do mesmo remetente e expira após 15 segundos. `AlteracoesPendentesProvider` autoriza somente quando nenhum registro ativo está pendente; `LaudosPage` e `WizardLaudoPage` são os registradores atuais. O mesmo contexto também usa `beforeunload` para impedir fechamento comum sem confirmação.
-
-A autorização não salva nem descarta conteúdo: apenas permite ou bloqueia. Depois dela, o backup obrigatório precisa terminar antes de o instalador ser iniciado.
-
-`prepararReinicio` também solicita autorização, cria o backup e muda para `aguardando_reinicio`, mas não é chamado pela interface atual. O caminho visível usa `instalarAgora` ou `agendar`.
-
-## Instalação por plataforma
-
-| Plataforma/formato | Instalação imediata | Agendamento |
-|---|---|---|
-| Windows/NSIS | inicia o instalador com `/S`, destacado, e encerra o app | suportado |
-| Linux/AppImage | exige `APPIMAGE` absoluto; cria script que substitui, torna executável e reabre | suportado |
-| Linux/DEB | abre o pacote pelo sistema para instalação manual | não suportado |
-| macOS/DMG ou ZIP | abre o pacote pelo sistema para instalação manual | não suportado |
-
-No instalador NSIS do Windows, a desinstalação manual oferece uma seção opcional para apagar os dados locais do laWdo, após confirmação explícita. Ela remove diretórios de dados do produto no escopo de instalação, incluindo laudos, imagens, configurações, credenciais, logs e pacotes locais. Atualizações (`isUpdated`) não exibem nem executam essa remoção; o fluxo de atualização preserva dados e continua exigindo o backup prévio normal.
-
-O agendamento grava `atualizacao-pendente.json` por arquivo temporário e renomeação, depois muda para `aguardando_reinicio`. Na abertura seguinte, antes do banco, o registro é normalizado, o pacote controlado é revalidado e o backup é criado. O arquivo de pendência é removido antes de chamar o instalador; se a chamada falhar depois da remoção, não há retry automático. Falhas são registradas e a inicialização normal prossegue.
-
-## Interface
-
-`Header` consulta o estado ao montar e repete a consulta a cada 30 segundos. A interface separa duas responsabilidades:
-
-- **Informações** permanece visível com nome, versão do sistema e banco, ambiente, sistema operacional, memória e contatos;
-- **Atualizações** aparece normalmente somente como ícone. Quando o estado indica atualização disponível, o gatilho acrescenta o texto **Atualização**, usa destaque verde e mostra o badge **Nova versão**.
-
-O modal **Atualizações** segue a mesma largura, hierarquia visual e cores do modal **Informações**. Ele sempre mostra a versão atual do laWdo; mostra também a última verificação persistida, quando válida, e o status. Verificação manual e seleção offline ficam centralizadas na primeira linha de ações. Download, instalação, agendamento e adiamento aparecem conforme o estado. O renderer apresenta versão disponível, data, formato, tamanho, notas, progresso e erro; o processo principal continua responsável por rede, arquivos, assinatura, backup e execução.
-
-O botão de agendamento só aparece para NSIS ou AppImage. O indicador acessível considera `disponivel`, `baixando`, `baixada` e `aguardando_reinicio` como atualização disponível.
-
-## Invariantes e alterações coordenadas
-
-- Nenhum pacote pode ser instalado sem assinatura válida do manifesto e validação local de nome, tamanho e SHA-256.
+- Nenhum pacote é instalado sem manifesto assinado e validação local de nome, tamanho e SHA-256.
 - Apenas arquivos dentro de `userData/atualizacoes` podem ser executados ou agendados.
 - Versão igual ou inferior à instalada não é aceita.
-- Backup pré-atualização é obrigatório antes de instalar; o tipo depende de `requerBackupCompletoImagens`.
-- Alterações em canais, manifesto, chave ou formatos devem revisar `spec/11 github actions/workflows_github_actions.md`, scripts de release, tipos compartilhados e consumidor.
-- Novos canais IPC exigem handler, `ALLOWED_CHANNELS`, API do preload e tipos alinhados.
-- Novas telas editáveis que devam bloquear atualização precisam registrar seu estado em `AlteracoesPendentesContext`.
-- `verificadoEm` precisa continuar sendo validado ao cruzar o arquivo JSON de `userData`; não deve ser movido para `localStorage`, pois o processo principal usa essa data antes e independentemente do renderer.
+- Backup pré-atualização é obrigatório antes de instalar.
+- Detalhes apresentados ao usuário não podem expor stack trace, conteúdo remoto, caminhos pessoais ou URLs completas.
+- Alterações em canais, manifesto, chave ou formatos exigem revisão coordenada com `spec/11 github actions/workflows_github_actions.md`.
 
-## Cobertura atual
-
-`src/__tests__/main/atualizacao.service.test.ts` cobre estado inicial, falha de índice, recusa de download sem versão disponível, assinatura offline inválida, persistência da última verificação entre inicializações e persistência de pacote automático validado. Permanecem sem teste automatizado ponta a ponta: download válido, autorização IPC e timeout, instalação por processo, AppImage real, integração do Header, consulta ao Pages e ciclo completo entre release publicada e aplicativo.
+`src/__tests__/main/atualizacao.service.test.ts` cobre estado inicial, HTTP ausente, falha de rede amigável, download válido, persistência da última verificação e agendamento validado. `src/__tests__/renderer/header-atualizacao.component.test.tsx` cobre o resumo amigável, detalhes inicialmente recolhidos e disponibilidade da cópia. Permanecem sem cobertura ponta a ponta timeout real, autorização IPC, instalação por processo, AppImage real e ciclo entre release publicada e aplicativo.

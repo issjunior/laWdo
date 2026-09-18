@@ -61,6 +61,35 @@ export interface AtualizacaoDisponivel {
   artefato: ArtefatoAtualizacao;
 }
 
+export type EtapaFalhaAtualizacao = 'verificacao' | 'download' | 'validacao' | 'backup' | 'agendamento' | 'instalacao' | 'operacao';
+export type AcaoAtualizacao = 'verificar' | 'baixar' | 'instalar' | 'agendar';
+export type CodigoFalhaAtualizacao =
+  | 'REDE_INDISPONIVEL'
+  | 'TEMPO_ESGOTADO'
+  | 'SERVICO_INDISPONIVEL'
+  | 'RECURSO_INDISPONIVEL'
+  | 'RESPOSTA_INVALIDA'
+  | 'ASSINATURA_INVALIDA'
+  | 'PACOTE_INCOMPATIVEL'
+  | 'DOWNLOAD_INTERROMPIDO'
+  | 'INTEGRIDADE_INVALIDA'
+  | 'ARMAZENAMENTO_INDISPONIVEL'
+  | 'BACKUP_FALHOU'
+  | 'ALTERACOES_PENDENTES'
+  | 'CONFIRMACAO_EXPIRADA'
+  | 'INSTALADOR_FALHOU'
+  | 'OPERACAO_INDISPONIVEL'
+  | 'ERRO_INESPERADO';
+
+export interface FalhaAtualizacao {
+  codigo: CodigoFalhaAtualizacao;
+  etapa: EtapaFalhaAtualizacao;
+  mensagem: string;
+  detalheTecnico: string;
+  ocorridoEm: string;
+  acaoSugerida?: AcaoAtualizacao;
+}
+
 export interface EstadoAtualizacaoResposta {
   estado: EstadoAtualizacao;
   versaoInstalada: string;
@@ -68,12 +97,12 @@ export interface EstadoAtualizacaoResposta {
   caminhoDownload?: string;
   progresso?: number;
   progressoDetalhado?: ProgressoAtualizacao;
-  erro?: string;
+  falha?: FalhaAtualizacao;
   verificadoEm?: string;
 }
 
 export interface RespostaAtualizacao {
   success: boolean;
   data: EstadoAtualizacaoResposta;
-  error?: string;
+  falha?: FalhaAtualizacao;
 }
