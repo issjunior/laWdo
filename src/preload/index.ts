@@ -50,7 +50,7 @@ import type {
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
-import type { ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
+import type { AutorizacaoReinicioAtualizacao, ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
 
 // O preload sandboxado não pode carregar módulos locais em tempo de execução.
 function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
@@ -84,6 +84,14 @@ function progressoAtualizacaoValidoNoPreload(valor: unknown): valor is Progresso
   return Number.isInteger(progresso.percentual) && (progresso.percentual as number) >= 0 && (progresso.percentual as number) <= 100
     && ['verificando', 'baixando', 'validando', 'copiando', 'confirmando', 'backup', 'agendando', 'abrindo_instalador'].includes(String(progresso.etapa))
     && typeof progresso.descricao === 'string';
+}
+
+function autorizacaoReinicioValida(valor: unknown): valor is AutorizacaoReinicioAtualizacao {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
+  const resposta = valor as Record<string, unknown>;
+  return typeof resposta.autorizado === 'boolean'
+    && Array.isArray(resposta.impedimentos)
+    && resposta.impedimentos.every(impedimento => typeof impedimento === 'string' && impedimento.length <= 200);
 }
 
 // Tipo para entrada de log do sistema
@@ -370,11 +378,11 @@ export interface IpcAPI {
     verificar: () => Promise<RespostaAtualizacao>;
     baixar: () => Promise<RespostaAtualizacao>;
     adiar: () => Promise<RespostaAtualizacao>;
-    prepararReinicio: () => Promise<RespostaAtualizacao>;
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
+    mostrarPacote: () => Promise<{ success: boolean }>;
     onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
-    onSolicitarReinicio: (callback: () => boolean) => () => void;
+    onSolicitarReinicio: (callback: () => AutorizacaoReinicioAtualizacao) => () => void;
   };
 
   // Logs do sistema
@@ -620,9 +628,9 @@ const ALLOWED_CHANNELS = new Set([
   'atualizacao:verificar',
   'atualizacao:baixar',
   'atualizacao:adiar',
-  'atualizacao:preparar-reinicio',
   'atualizacao:instalar-agora',
   'atualizacao:agendar',
+  'atualizacao:mostrar-pacote',
   'atualizacao:responder-reinicio',
 
   // Logs do sistema
@@ -1474,9 +1482,9 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     verificar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:verificar'),
     baixar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:baixar'),
     adiar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:adiar'),
-    prepararReinicio: () => invokeSeguro<RespostaAtualizacao>('atualizacao:preparar-reinicio'),
     instalarAgora: () => invokeSeguro<RespostaAtualizacao>('atualizacao:instalar-agora'),
     agendar: () => invokeSeguro<RespostaAtualizacao>('atualizacao:agendar'),
+    mostrarPacote: () => invokeSeguro<{ success: boolean }>('atualizacao:mostrar-pacote'),
     onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
         if (progressoAtualizacaoValidoNoPreload(progresso)) callback(progresso);
@@ -1484,16 +1492,16 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       ipcRenderer.on('atualizacao:progresso', listener);
       return () => ipcRenderer.removeListener('atualizacao:progresso', listener);
     },
-    onSolicitarReinicio: (callback: () => boolean) => {
+    onSolicitarReinicio: (callback: () => AutorizacaoReinicioAtualizacao) => {
       const listener = (_event: Electron.IpcRendererEvent, id: unknown) => {
         if (typeof id !== 'string') return;
-        let autorizado = false;
+        let resposta: AutorizacaoReinicioAtualizacao = { autorizado: false, impedimentos: [] };
         try {
-          autorizado = callback();
+          resposta = callback();
         } catch {
-          autorizado = false;
+          resposta = { autorizado: false, impedimentos: [] };
         }
-        void invokeSeguro('atualizacao:responder-reinicio', id, autorizado);
+        void invokeSeguro('atualizacao:responder-reinicio', id, autorizacaoReinicioValida(resposta) ? resposta : { autorizado: false, impedimentos: [] });
       };
       ipcRenderer.on('atualizacao:solicitar-reinicio', listener);
       return () => ipcRenderer.removeListener('atualizacao:solicitar-reinicio', listener);

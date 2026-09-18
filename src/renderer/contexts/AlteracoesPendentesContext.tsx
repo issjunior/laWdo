@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { AutorizacaoReinicioAtualizacao } from '@shared/atualizacao/atualizacao.types';
 
 interface AlteracoesPendentesContexto {
   registrar: (chave: string, pendente: boolean) => void;
@@ -9,6 +10,17 @@ const ContextoAlteracoesPendentes = createContext<AlteracoesPendentesContexto | 
 export function AlteracoesPendentesProvider({ children }: { children: ReactNode }) {
   const [registros, setRegistros] = useState<Record<string, boolean>>({});
   const temAlteracoesPendentes = Object.values(registros).some(Boolean);
+
+  const obterAutorizacaoReinicio = useCallback((): AutorizacaoReinicioAtualizacao => {
+    const impedimentos = Object.entries(registros)
+      .filter(([, pendente]) => pendente)
+      .map(([chave]) => chave === 'editor-laudo'
+        ? 'O Editor de Laudos possui alterações não salvas.'
+        : chave.startsWith('wizard-laudo-')
+          ? 'O Wizard de Laudos possui alterações não salvas.'
+          : 'Há alterações não salvas no laWdo.');
+    return { autorizado: impedimentos.length === 0, impedimentos };
+  }, [registros]);
 
   const valor = useMemo(() => ({
     registrar: (chave: string, pendente: boolean) => setRegistros(atual => ({ ...atual, [chave]: pendente })),
@@ -27,8 +39,8 @@ export function AlteracoesPendentesProvider({ children }: { children: ReactNode 
   useEffect(() => {
     const api = window.ipcAPI.atualizacao;
     if (!api) return;
-    return api.onSolicitarReinicio(() => !temAlteracoesPendentes);
-  }, [temAlteracoesPendentes]);
+    return api.onSolicitarReinicio(obterAutorizacaoReinicio);
+  }, [obterAutorizacaoReinicio]);
 
   return <ContextoAlteracoesPendentes.Provider value={valor}>{children}</ContextoAlteracoesPendentes.Provider>;
 }

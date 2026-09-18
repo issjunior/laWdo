@@ -32,9 +32,9 @@ describe('Header - atualizações', () => {
         verificar: vi.fn(),
         baixar: vi.fn(),
         adiar: vi.fn(),
-        prepararReinicio: vi.fn(),
         instalarAgora: vi.fn(),
         agendar: vi.fn(),
+        mostrarPacote: vi.fn().mockResolvedValue({ success: true }),
         onProgresso: vi.fn().mockReturnValue(() => undefined),
         onSolicitarReinicio: vi.fn().mockReturnValue(() => undefined),
       },
@@ -54,5 +54,30 @@ describe('Header - atualizações', () => {
 
     expect(screen.getByText(/TypeError: fetch failed/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copiar detalhes/i })).toBeInTheDocument();
+  });
+
+  it('destaca a versão de origem e destino antes de reiniciar para instalar', async () => {
+    const api = window.ipcAPI.atualizacao;
+    if (!api) throw new Error('API de atualização indisponível no teste.');
+    api.estado = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        estado: 'baixada',
+        versaoInstalada: '0.1.12',
+        atualizacaoDisponivel: {
+          versao: '0.1.14', dataPublicacao: '2026-09-18T00:00:00.000Z', notas: 'Melhorias.', versaoSchema: 1,
+          requerBackupCompletoImagens: false,
+          artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome: 'laWdo-0.1.14-setup.exe', tamanho: 100, hashSha256: 'a'.repeat(64), url: 'https://example.invalid/arquivo' },
+        },
+      },
+    });
+
+    render(<Header currentUser={null} onLogout={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizações' }));
+
+    expect(await screen.findByText('Nova versão disponível')).toBeInTheDocument();
+    expect(screen.getAllByText('v0.1.14')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Reiniciar e instalar' }));
+    expect(await screen.findByText('Reiniciar e instalar a atualização?')).toBeInTheDocument();
   });
 });

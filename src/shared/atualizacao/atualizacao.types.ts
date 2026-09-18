@@ -106,3 +106,8 @@ export interface RespostaAtualizacao {
   data: EstadoAtualizacaoResposta;
   falha?: FalhaAtualizacao;
 }
+
+export interface AutorizacaoReinicioAtualizacao {
+  autorizado: boolean;
+  impedimentos: string[];
+}

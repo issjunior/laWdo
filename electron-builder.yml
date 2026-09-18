@@ -37,6 +37,7 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: false
   allowElevation: false
+  runAfterFinish: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: laWdo

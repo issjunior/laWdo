@@ -10,7 +10,7 @@ import type {
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
-import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
+import type { AutorizacaoReinicioAtualizacao, RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
 import type { AtualizacaoPainelIa, ComandoPainelIa, LimiteUsoIa, PlanoExecucaoIaResumo, ProgressoConsultaIa, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
 import type { ProgressoAtualizacao } from '@shared/atualizacao/atualizacao.types';
 
@@ -117,11 +117,11 @@ interface IpcAPIRendererLegada {
     verificar: () => Promise<RespostaAtualizacao>;
     baixar: () => Promise<RespostaAtualizacao>;
     adiar: () => Promise<RespostaAtualizacao>;
-    prepararReinicio: () => Promise<RespostaAtualizacao>;
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
+    mostrarPacote: () => Promise<{ success: boolean }>;
     onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
-    onSolicitarReinicio: (callback: () => boolean) => () => void;
+    onSolicitarReinicio: (callback: () => AutorizacaoReinicioAtualizacao) => () => void;
   };
   log: IpcGrupoLegado;
   diagnosticoInterno: IpcGrupoLegado;

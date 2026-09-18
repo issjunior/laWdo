@@ -109,6 +109,10 @@ interface RegistroUltimaVerificacao {
   verificadoEm: string;
 }
 
+interface RegistroPacotePronto {
+  atualizacao: AtualizacaoDisponivel;
+}
+
 function compararVersoes(primeira: string, segunda: string): number {
   const primeiraPartes = primeira.match(SEMVER);
   const segundaPartes = segunda.match(SEMVER);
@@ -195,6 +199,7 @@ export class AtualizacaoService {
 
   constructor() {
     this.verificadoEm = this.carregarUltimaVerificacao();
+    this.restaurarPacotePronto();
   }
 
   private get diretorioAtualizacoes(): string {
@@ -207,6 +212,10 @@ export class AtualizacaoService {
 
   private get caminhoUltimaVerificacao(): string {
     return path.join(app.getPath('userData'), 'atualizacao-ultima-verificacao.json');
+  }
+
+  private get caminhoPacotePronto(): string {
+    return path.join(app.getPath('userData'), 'atualizacao-pacote-pronto.json');
   }
 
   obterEstado(): EstadoAtualizacaoResposta {
@@ -243,12 +252,19 @@ export class AtualizacaoService {
       if (compararVersoes(manifesto.versao, app.getVersion()) <= 0) {
         this.atualizacaoDisponivel = undefined;
         this.caminhoDownload = undefined;
+        this.removerPacotePronto();
         this.definirEstado('ociosa');
         return this.obterEstado();
       }
+      const pacotePronto = this.caminhoDownload && this.estado === 'baixada' && this.atualizacaoDisponivel?.versao === manifesto.versao;
       this.atualizacaoDisponivel = { versao: manifesto.versao, dataPublicacao: manifesto.dataPublicacao, notas: manifesto.notas, versaoSchema: manifesto.versaoSchema, requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens, artefato };
-      this.caminhoDownload = undefined;
-      this.definirEstado('disponivel');
+      if (pacotePronto) {
+        this.definirEstado('baixada');
+      } else {
+        this.caminhoDownload = undefined;
+        this.removerPacotePronto();
+        this.definirEstado('disponivel');
+      }
       this.definirProgresso(100, 'validando', 'Atualização pronta para baixar.');
     } catch (erro) {
       this.definirFalha(erro, 'verificacao', 'verificar');
@@ -288,6 +304,7 @@ export class AtualizacaoService {
       }
       fs.renameSync(temporario, destino);
       this.caminhoDownload = destino;
+      this.salvarPacotePronto();
       this.definirProgresso(100, 'validando', 'Pacote baixado e validado.');
       this.definirEstado('baixada');
     } catch (erro) {
@@ -299,28 +316,6 @@ export class AtualizacaoService {
   adiar(): EstadoAtualizacaoResposta {
     if (this.estado === 'baixando' || this.estado === 'instalando') throw new Error('Não é possível adiar uma operação em andamento.');
     if (this.atualizacaoDisponivel && this.estado !== 'baixada') this.definirEstado('disponivel');
-    return this.obterEstado();
-  }
-
-  async prepararReinicio(solicitarAutorizacao: () => Promise<void>): Promise<EstadoAtualizacaoResposta> {
-    if (this.estado !== 'baixada' || !this.atualizacaoDisponivel || !this.caminhoDownload) {
-      throw new Error('Não há pacote validado pronto para instalação.');
-    }
-    this.definirEstado('instalando');
-    try {
-      this.definirProgresso(10, 'confirmando', 'Verificando se é seguro fechar o laWdo.');
-      await solicitarAutorizacao();
-      this.definirProgresso(35, 'backup', 'Criando backup antes da atualização.');
-      if (this.atualizacaoDisponivel.requerBackupCompletoImagens) {
-        await backupAtualizacaoService.criarBackupCompleto(this.atualizacaoDisponivel.versao);
-      } else {
-        await backupAtualizacaoService.criarSnapshot(this.atualizacaoDisponivel.versao);
-      }
-      this.definirEstado('aguardando_reinicio');
-      this.definirProgresso(100, 'agendando', 'Atualização preparada para o próximo reinício.');
-    } catch (erro) {
-      this.definirFalha(erro, 'backup', 'instalar');
-    }
     return this.obterEstado();
   }
 
@@ -388,8 +383,8 @@ export class AtualizacaoService {
       this.validarArquivoLocal(artefato, caminhoDownload);
       if (pendencia.requerBackupCompletoImagens) await backupAtualizacaoService.criarBackupCompleto(pendencia.versao);
       else await backupAtualizacaoService.criarSnapshot(pendencia.versao);
-      fs.rmSync(this.caminhoPendencia, { force: true });
       await this.executarInstalador(artefato, caminhoDownload);
+      fs.rmSync(this.caminhoPendencia, { force: true });
       return true;
     } catch (erro) {
       const mensagem = erro instanceof Error ? erro.message : 'Erro inesperado ao processar atualização agendada.';
@@ -445,8 +440,8 @@ export class AtualizacaoService {
   private async executarInstalador(artefato: ArtefatoAtualizacao, caminhoArquivo: string): Promise<void> {
     this.validarArquivoLocal(artefato, caminhoArquivo);
     if (artefato.plataforma === 'windows' && artefato.formato === 'nsis') {
-      const processo = spawn(caminhoArquivo, ['/S'], { detached: true, stdio: 'ignore' });
-      processo.unref();
+      const erro = await shell.openPath(caminhoArquivo);
+      if (erro) throw new Error(`Não foi possível abrir o instalador: ${erro}`);
       app.quit();
       return;
     }
@@ -462,6 +457,59 @@ export class AtualizacaoService {
     }
     const erro = await shell.openPath(caminhoArquivo);
     if (erro) throw new Error(`Não foi possível abrir o instalador para instalação manual: ${erro}`);
+  }
+
+  mostrarPacoteBaixado(): boolean {
+    if (!this.atualizacaoDisponivel || !this.caminhoDownload) return false;
+    this.validarArquivoLocal(this.atualizacaoDisponivel.artefato, this.caminhoDownload);
+    shell.showItemInFolder(this.caminhoDownload);
+    return true;
+  }
+
+  private salvarPacotePronto(): void {
+    if (!this.atualizacaoDisponivel || !this.caminhoDownload) return;
+    this.validarArquivoLocal(this.atualizacaoDisponivel.artefato, this.caminhoDownload);
+    const temporario = `${this.caminhoPacotePronto}.parcial`;
+    fs.writeFileSync(temporario, JSON.stringify({ atualizacao: this.atualizacaoDisponivel } satisfies RegistroPacotePronto), 'utf8');
+    fs.renameSync(temporario, this.caminhoPacotePronto);
+  }
+
+  private removerPacotePronto(): void {
+    fs.rmSync(this.caminhoPacotePronto, { force: true });
+  }
+
+  private restaurarPacotePronto(): void {
+    try {
+      if (!fs.existsSync(this.caminhoPacotePronto)) return;
+      const bruto = JSON.parse(fs.readFileSync(this.caminhoPacotePronto, 'utf8')) as unknown;
+      if (typeof bruto !== 'object' || bruto === null || Array.isArray(bruto) || !('atualizacao' in bruto)) throw new Error('Registro de pacote pronto inválido.');
+      const atualizacaoBruta = (bruto as Record<string, unknown>).atualizacao;
+      const manifesto = normalizarManifesto({
+        versaoManifesto: 1,
+        versao: (atualizacaoBruta as Record<string, unknown>)?.versao,
+        commit: 'pacote-local-validado',
+        dataPublicacao: (atualizacaoBruta as Record<string, unknown>)?.dataPublicacao,
+        canais: ['stable'],
+        versaoSchema: (atualizacaoBruta as Record<string, unknown>)?.versaoSchema,
+        requerBackupCompletoImagens: (atualizacaoBruta as Record<string, unknown>)?.requerBackupCompletoImagens,
+        notas: (atualizacaoBruta as Record<string, unknown>)?.notas,
+        artefatos: [(atualizacaoBruta as Record<string, unknown>)?.artefato],
+      });
+      const plataforma = plataformaAtual();
+      const arquitetura = process.arch === 'arm64' ? 'arm64' : 'x64';
+      const artefato = manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura);
+      if (!artefato || compararVersoes(manifesto.versao, app.getVersion()) <= 0) throw new Error('Pacote pronto incompatível com a versão instalada.');
+      const caminhoDownload = path.join(this.diretorioAtualizacoes, artefato.nome);
+      this.validarArquivoLocal(artefato, caminhoDownload);
+      this.atualizacaoDisponivel = { versao: manifesto.versao, dataPublicacao: manifesto.dataPublicacao, notas: manifesto.notas, versaoSchema: manifesto.versaoSchema, requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens, artefato };
+      this.caminhoDownload = caminhoDownload;
+      this.estado = 'baixada';
+      this.progresso = 100;
+      this.progressoDetalhado = { percentual: 100, etapa: 'validando', descricao: 'Pacote validado e pronto para instalar.' };
+    } catch (erro) {
+      log.warn('Pacote de atualização persistido foi descartado.', { mensagem: detalheTecnico(erro) });
+      this.removerPacotePronto();
+    }
   }
 
   private definirEstado(estado: EstadoAtualizacao): void {

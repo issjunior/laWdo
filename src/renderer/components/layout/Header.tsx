@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -64,7 +65,8 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     dbVersion: number;
   } | null>(null);
   const [atualizacao, setAtualizacao] = useState<EstadoAtualizacaoResposta | null>(null);
-  const [acaoAtualizacao, setAcaoAtualizacao] = useState<'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | null>(null);
+  const [acaoAtualizacao, setAcaoAtualizacao] = useState<'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'mostrar' | null>(null);
+  const [confirmacaoInstalacaoAberta, setConfirmacaoInstalacaoAberta] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -154,6 +156,20 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
       if (resposta.success && acao === 'agendar') toast.success('Instalação agendada para a próxima inicialização.');
     } catch {
       toast.error('Não foi possível concluir a atualização.');
+    } finally {
+      setAcaoAtualizacao(null);
+    }
+  };
+
+  const mostrarPacoteAtualizacao = async () => {
+    const api = window.ipcAPI.atualizacao;
+    if (!api) return;
+    setAcaoAtualizacao('mostrar');
+    try {
+      const resposta = await api.mostrarPacote();
+      if (!resposta.success) toast.error('Não foi possível localizar o pacote de atualização.');
+    } catch {
+      toast.error('Não foi possível abrir a pasta do instalador.');
     } finally {
       setAcaoAtualizacao(null);
     }
@@ -322,6 +338,23 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
+                {dadosAtualizacao && (
+                  <div className="rounded-lg border border-primary/25 bg-primary/10 p-4" aria-live="polite">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">Nova versão disponível</p>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Versão atual</p>
+                        <p className="font-semibold">v{appInfo?.version ?? atualizacao?.versaoInstalada}</p>
+                      </div>
+                      <span className="text-lg font-semibold text-primary" aria-hidden="true">→</span>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Nova versão</p>
+                        <p className="text-lg font-bold text-primary">v{dadosAtualizacao.versao}</p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">O laWdo criará um backup, fechará com segurança e abrirá o instalador. O processo costuma levar alguns minutos.</p>
+                  </div>
+                )}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-medium text-muted-foreground">Versão atual do laWdo</span>
@@ -353,7 +386,10 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                     <p><span className="font-medium text-foreground">Versão que será instalada:</span> v{dadosAtualizacao.versao}</p>
                     <p><span className="font-medium text-foreground">Publicada:</span> {new Intl.DateTimeFormat('pt-BR').format(new Date(dadosAtualizacao.dataPublicacao))}</p>
                     <p><span className="font-medium text-foreground">Sistema:</span> {formatarPacote()}</p>
-                    <p className="whitespace-pre-wrap"><span className="font-medium text-foreground">Notas:</span> {dadosAtualizacao.notas}</p>
+                    <Collapsible>
+                      <CollapsibleTrigger className="text-left font-medium text-foreground underline underline-offset-2">Ver notas desta versão</CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2 whitespace-pre-wrap">{dadosAtualizacao.notas}</CollapsibleContent>
+                    </Collapsible>
                     </div>
                   </div>
                 )}
@@ -400,8 +436,13 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                       </Button>
                     )}
                     {falhaAtualizacao?.acaoSugerida === 'instalar' && (
-                      <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
+                      <Button size="sm" className="w-full" onClick={() => setConfirmacaoInstalacaoAberta(true)} disabled={acaoAtualizacao !== null}>
                         <Download className="mr-1.5 h-3.5 w-3.5" /> Tentar instalar novamente
+                      </Button>
+                    )}
+                    {falhaAtualizacao?.acaoSugerida === 'instalar' && (
+                      <Button size="sm" variant="outline" className="w-full" onClick={() => void mostrarPacoteAtualizacao()} disabled={acaoAtualizacao !== null}>
+                        Abrir pasta do instalador
                       </Button>
                     )}
                   </div>
@@ -409,8 +450,8 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                     {atualizacao?.estado === 'disponivel' && <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>
                       <Download className="mr-1.5 h-3.5 w-3.5" /> Baixar agora
                     </Button>}
-                    {atualizacao?.estado === 'baixada' && <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
-                      <Download className="mr-1.5 h-3.5 w-3.5" /> Instalar agora
+                    {atualizacao?.estado === 'baixada' && <Button size="sm" className="w-full" onClick={() => setConfirmacaoInstalacaoAberta(true)} disabled={acaoAtualizacao !== null}>
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Reiniciar e instalar
                     </Button>}
                     {atualizacao?.estado === 'baixada' && (dadosAtualizacao?.artefato.formato === 'nsis' || dadosAtualizacao?.artefato.formato === 'AppImage') && <Button size="sm" variant="outline" className="w-full" onClick={() => void executarAcaoAtualizacao('agendar')} disabled={acaoAtualizacao !== null}>
                       <Clock3 className="mr-1.5 h-3.5 w-3.5" /> Instalar na próxima inicialização
@@ -428,6 +469,20 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
               </div>
             </DialogContent>
           </Dialog>
+          <AlertDialog open={confirmacaoInstalacaoAberta} onOpenChange={setConfirmacaoInstalacaoAberta}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reiniciar e instalar a atualização?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  O laWdo criará um backup, fechará todas as janelas com segurança e abrirá o instalador para atualizar de v{appInfo?.version ?? atualizacao?.versaoInstalada} para v{dadosAtualizacao?.versao}. Ao terminar, o instalador reabrirá o laWdo.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={acaoAtualizacao !== null}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { setConfirmacaoInstalacaoAberta(false); void executarAcaoAtualizacao('instalar'); }} disabled={acaoAtualizacao !== null}>Reiniciar e instalar</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           <button 
             onClick={onLogout} 
