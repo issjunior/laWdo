@@ -1834,7 +1834,12 @@ export const REPsPage: React.FC = () => {
         open={repParaAtualizarGdl !== null}
         repId={repParaAtualizarGdl?.id ?? null}
         onOpenChange={aberto => { if (!aberto) setRepParaAtualizarGdl(null); }}
-        onConcluida={() => { void carregarREPs(); toast.success('REP atualizada com as informações do GDL.'); }}
+        onConcluida={(resultado) => {
+          void carregarREPs();
+          toast.success(resultado.camposAtualizados === 0 && resultado.pecasAtualizadas === 0 && resultado.laudoReconciliado
+            ? 'Estrutura do laudo reconciliada com os dados locais.'
+            : 'REP atualizada com as informações do GDL.');
+        }}
       />
       </div>
       </TooltipProvider>
@@ -2311,7 +2316,12 @@ export const REPsPage: React.FC = () => {
         open={repParaAtualizarGdl !== null}
         repId={repParaAtualizarGdl?.id ?? null}
         onOpenChange={aberto => { if (!aberto) setRepParaAtualizarGdl(null); }}
-        onConcluida={() => { void carregarREPs(); toast.success('REP atualizada com as informações do GDL.'); }}
+        onConcluida={(resultado) => {
+          void carregarREPs();
+          toast.success(resultado.camposAtualizados === 0 && resultado.pecasAtualizadas === 0 && resultado.laudoReconciliado
+            ? 'Estrutura do laudo reconciliada com os dados locais.'
+            : 'REP atualizada com as informações do GDL.');
+        }}
       />
       <GdlPecasModal
         open={gdlPecasModalOpen}

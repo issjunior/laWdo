@@ -25,6 +25,7 @@ import type {
   RespostaIa,
   RespostaConsultaIa,
   SolicitacaoDescricaoImagemIa,
+  SolicitacaoTesteConexaoIa,
   SolicitacaoIa,
   SolicitacaoConsultaIa,
 } from '../../shared/types/ia.types.js';
@@ -80,6 +81,7 @@ const URLS_PROVEDORES = {
   groq: 'https://api.groq.com/openai/v1/chat/completions',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
 } as const;
+const TEMPO_LIMITE_REQUISICAO_IA_MS = 120_000;
 function mensagemAcao(acao: SolicitacaoIa['acao']): string {
   const acoes: Record<SolicitacaoIa['acao'], string> = {
     ortografia: 'Corrija somente ortografia, gramática e pontuação.',
@@ -487,6 +489,65 @@ export class IaExecucaoService {
     return { configurado: Boolean(chave), provedor, modelo: modelo.id, suportaVisao: modelo.suportaVisao };
   }
 
+  async testarConexao(solicitacao?: SolicitacaoTesteConexaoIa): Promise<ContextoIa> {
+    const contextoPersistido = solicitacao ? null : await this.obterContexto();
+    const provedor = solicitacao?.provedor ?? contextoPersistido?.provedor;
+    const modeloId = solicitacao?.modelo.trim() ?? contextoPersistido?.modelo;
+    const chave = solicitacao?.apiKey.trim()
+      ?? (provedor ? await configuracaoService.obter(provedor === 'groq' ? 'api_key_groq' : 'api_key_gemini') : null);
+    if (!provedor || !modeloId || !chave) throw new Error('CONFIGURACAO_AUSENTE');
+    const modelo = listarModelosIa(provedor).find(item => item.id === modeloId);
+    if (!modelo) throw new Error('MODELO_INDISPONIVEL');
+
+    const abortador = new AbortController();
+    this.abortadores.set(solicitacao?.operationId ?? 'teste-conexao', abortador);
+    let esgotouTempo = false;
+    const timeout = setTimeout(() => {
+      esgotouTempo = true;
+      abortador.abort();
+    }, TEMPO_LIMITE_REQUISICAO_IA_MS);
+    try {
+      let resposta: Response;
+      try {
+        resposta = await fetch(URLS_PROVEDORES[provedor], {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${chave}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: modelo.id,
+            messages: [{ role: 'user', content: 'Responda apenas OK.' }],
+            temperature: 0,
+            max_tokens: 1,
+          }),
+          signal: abortador.signal,
+        });
+      } catch {
+        if (abortador.signal.aborted) throw new Error(esgotouTempo ? 'TIMEOUT' : 'CANCELADO');
+        throw new Error('SEM_CONEXAO');
+      }
+      if (resposta.status === 401 || resposta.status === 403) throw new Error('NAO_AUTORIZADO');
+      if (resposta.status === 429) throw new Error('LIMITE_REQUISICOES');
+      if (resposta.status === 400 || resposta.status === 404) throw new Error('MODELO_INDISPONIVEL');
+      if (!resposta.ok) throw new Error(`PROVEDOR_INDISPONIVEL:${resposta.status}`);
+
+      let corpo: unknown;
+      try {
+        corpo = await resposta.json();
+      } catch {
+        throw new Error('RESPOSTA_INVALIDA');
+      }
+      const escolhas = corpo && typeof corpo === 'object' ? (corpo as { choices?: unknown }).choices : null;
+      if (!Array.isArray(escolhas) || escolhas.length === 0) throw new Error('RESPOSTA_INVALIDA');
+      return { configurado: true, provedor, modelo: modelo.id, suportaVisao: modelo.suportaVisao };
+    } finally {
+      clearTimeout(timeout);
+      this.abortadores.delete(solicitacao?.operationId ?? 'teste-conexao');
+      if (solicitacao?.operationId) this.operacoesCanceladas.delete(solicitacao.operationId);
+    }
+  }
+
   cancelar(operationId: string): void {
     this.operacoesCanceladas.add(operationId);
     this.abortadores.get(operationId)?.abort();
@@ -614,7 +675,7 @@ export class IaExecucaoService {
     const timeout = setTimeout(() => {
       esgotouTempo = true;
       abortador.abort();
-    }, 120_000);
+    }, TEMPO_LIMITE_REQUISICAO_IA_MS);
 
     try {
       let resposta: Response | null = null;

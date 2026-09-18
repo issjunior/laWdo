@@ -11,6 +11,7 @@ import type {
   SolicitacaoDescricaoImagemIa,
   SolicitacaoIa,
   SolicitacaoConsultaIa,
+  SolicitacaoTesteConexaoIa,
   ProgressoIa,
   ProgressoConsultaIa,
 } from '../shared/types/ia.types.js';
@@ -107,6 +108,7 @@ type ExportacaoLaudoParams = {
   html: string;
   estrutura?: IpcPayload;
   cabecalho?: IpcPayload;
+  cabecalhoPaginasHtml?: string;
   margens?: IpcPayload;
 };
 
@@ -338,7 +340,7 @@ export interface IpcAPI {
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => Promise<UserResponse<RespostaDescricaoImagemIa>>;
     cancelar: (operationId: string) => Promise<UserResponse>;
     descartarRetomada: (retomadaId: string) => Promise<UserResponse>;
-    testarConexao: () => Promise<UserResponse<ContextoIa>>;
+    testarConexao: (solicitacao: SolicitacaoTesteConexaoIa) => Promise<UserResponse<ContextoIa>>;
     copiarResposta: (texto: string, html?: string) => Promise<UserResponse>;
     onProgresso: (callback: (progresso: ProgressoIa) => void) => () => void;
     onProgressoConsulta: (callback: (progresso: ProgressoConsultaIa) => void) => () => void;
@@ -1411,7 +1413,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     descreverImagem: (solicitacao: SolicitacaoDescricaoImagemIa) => invocarComDiagnostico('ia:descrever-imagem', solicitacao),
     cancelar: (operationId: string) => invocarComDiagnostico('ia:cancelar', operationId),
     descartarRetomada: (retomadaId: string) => invocarComDiagnostico('ia:descartar-retomada', retomadaId),
-    testarConexao: () => invocarComDiagnostico('ia:testar-conexao'),
+    testarConexao: (solicitacao: SolicitacaoTesteConexaoIa) => invocarComDiagnostico('ia:testar-conexao', solicitacao),
     copiarResposta: (texto: string, html?: string) => invocarComDiagnostico('ia:copiar-resposta', texto, html),
     onProgresso: (callback: (progresso: ProgressoIa) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {

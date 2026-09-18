@@ -1,10 +1,89 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildHtml,
   expandirSecoesRepetiveis,
+  filtrarSecoesAtivas,
   processarBlocosCondicionais,
 } from '../../main/services/secao-builder.service';
+import { laudoService } from '../../main/services/laudo.service';
 
 describe('secao-builder.service', () => {
+  it('numera as subseções de DOS EXAMES conforme as peças canônicas', () => {
+    const secoes = [
+      { id: 'preambulo', template_id: 'tpl-1', nome: 'PREÂMBULO', ordem: 0, conteudo: '<p>Preâmbulo</p>', created_at: '', updated_at: '' },
+      { id: 'objetivo', template_id: 'tpl-1', nome: 'OBJETIVO', ordem: 1, conteudo: '<p>Objetivo</p>', created_at: '', updated_at: '' },
+      { id: 'material', template_id: 'tpl-1', nome: 'MATERIAL APRESENTADO A EXAME', ordem: 2, conteudo: '<p>Material</p>', created_at: '', updated_at: '' },
+      { id: 'exames', template_id: 'tpl-1', nome: 'DOS EXAMES', ordem: 3, conteudo: '<p></p>', created_at: '', updated_at: '' },
+      { id: 'cartuchos', template_id: 'tpl-1', parent_id: 'exames', nome: 'DOS CARTUCHOS', ordem: 4, conteudo: '<p>Cartuchos</p>', created_at: '', updated_at: '' },
+      { id: 'estojos', template_id: 'tpl-1', parent_id: 'exames', nome: 'DOS ESTOJOS', ordem: 5, conteudo: '<p>Estojos</p>', created_at: '', updated_at: '' },
+      { id: 'armas', template_id: 'tpl-1', parent_id: 'exames', nome: 'DAS ARMAS', ordem: 6, repetir_para: 'armas', conteudo: '<p>Armas</p>', created_at: '', updated_at: '' },
+    ];
+    const pecaBase = {
+      idLocal: 'peca', origem: 'gdl', alteradaLocalmente: false,
+      comuns: { quantidade: 1, identificacao: '', lacreEntrada: '', observacao: '' },
+      personalizados: {}, extrasGdl: {},
+    };
+
+    const cenarios = [
+      { nome: 'cartuchos', pecas: [{ ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS CARTUCHOS'], ausentes: ['DOS ESTOJOS', 'DAS ARMAS'] },
+      { nome: 'estojos', pecas: [{ ...pecaBase, tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS ESTOJOS'], ausentes: ['DOS CARTUCHOS', 'DAS ARMAS'] },
+      { nome: 'cartuchos e estojos', pecas: [{ ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' }, { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS CARTUCHOS', '4.2 DOS ESTOJOS'], ausentes: ['DAS ARMAS'] },
+      { nome: 'cartuchos, estojos e armas', pecas: [{ ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' }, { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' }, { ...pecaBase, idLocal: 'arma', tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS CARTUCHOS', '4.2 DOS ESTOJOS', '4.3 DAS ARMAS'], ausentes: [] },
+      { nome: 'armas', pecas: [{ ...pecaBase, tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }], titulos: ['4. DOS EXAMES', '4.1 DAS ARMAS'], ausentes: ['DOS CARTUCHOS', 'DOS ESTOJOS'] },
+      { nome: 'sem peças elegíveis', pecas: [], titulos: [], ausentes: ['DOS EXAMES'] },
+    ];
+
+    for (const cenario of cenarios) {
+      const camposEspecificos = { b602: { pecas: cenario.pecas } };
+      const resultado = filtrarSecoesAtivas(secoes, camposEspecificos);
+      const html = buildHtml(resultado, new Map(), camposEspecificos);
+
+      for (const titulo of cenario.titulos) expect(html, cenario.nome).toContain(titulo);
+      for (const titulo of cenario.ausentes) expect(html, cenario.nome).not.toContain(titulo);
+    }
+  });
+
+  it('repara DOS EXAMES antigo quando o bloco de cartuchos ainda não existia', () => {
+    const htmlAtual = [
+      '<h2 data-secao-id="exames" data-estrutura-nivel="2" data-titulo-base="DOS EXAMES">4. DOS EXAMES</h2>',
+      '<div data-cond-bloco="b602_estojos_toggle"><p>Estojos antigos</p></div>',
+    ].join('\n');
+    const htmlBase = [
+      '<h2 data-secao-id="exames" data-estrutura-nivel="2" data-titulo-base="DOS EXAMES" data-derivada-rep="true">4. DOS EXAMES</h2>',
+      '<div data-cond-bloco="b602_cartuchos_toggle"><p>Cartuchos atuais</p></div>',
+      '<div data-cond-bloco="b602_estojos_toggle"><p>Estojos atuais</p></div>',
+    ].join('\n');
+    const servico = laudoService as unknown as {
+      _reconciliarComBase: (
+        atual: string,
+        base: string,
+        campos: Record<string, unknown>,
+      ) => string;
+    };
+
+    const resultado = servico._reconciliarComBase(htmlAtual, htmlBase, {
+      b602: {
+        pecas: [
+          {
+            idLocal: 'cartucho-1', origem: 'gdl', alteradaLocalmente: false,
+            tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)',
+            comuns: { quantidade: 1, identificacao: '.38 SPL', lacreEntrada: '', observacao: '' },
+            personalizados: {}, extrasGdl: {},
+          },
+          {
+            idLocal: 'estojo-1', origem: 'gdl', alteradaLocalmente: false,
+            tipoCodigo: '101', tipoPeca: 'ESTOJO(S)',
+            comuns: { quantidade: 1, identificacao: '9mm', lacreEntrada: '', observacao: '' },
+            personalizados: {}, extrasGdl: {},
+          },
+        ],
+      },
+    });
+
+    expect(resultado).toContain('Cartuchos atuais');
+    expect(resultado).toContain('Estojos atuais');
+  });
+
   it('mantém os blocos periciais versionados para qualquer arma, independentemente do toggle legado', () => {
     const resultado = processarBlocosCondicionais(
       '<div class="cond-bloco" data-cond-bloco="b602_arma_N_funcionamento_eficiencia_v2" data-bloco-pericial="funcionamento"><h3>FUNCIONAMENTO</h3><p>&nbsp;</p></div>',

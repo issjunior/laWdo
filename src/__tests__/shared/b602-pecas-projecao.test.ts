@@ -41,7 +41,7 @@ describe('projetarB602ParaLaudo', () => {
     const resultado = projetarB602ParaLaudo({ pecas: [criarPeca()] })
 
     expect(resultado.materialEncaminhado).toEqual([expect.objectContaining({
-      natureza: 'Arma', tipo: 'PISTOLA(S)', quantidade: '1',
+      natureza: 'ARMA(S)', tipo: 'PISTOLA(S)', quantidade: '1',
       dito_oficio: 'Pistola apreendida', numero_lacre: 'LACRE-1',
     })])
     expect(resultado.armas).toEqual([expect.objectContaining({
@@ -70,6 +70,25 @@ describe('projetarB602ParaLaudo', () => {
     })])
     expect(legado.armas).toEqual([expect.objectContaining({
       tipo: 'Revólver', chaveOrigem: 'legado-1', exibeBlocosPericiais: false,
+    })])
+  })
+
+  it('deriva cartuchos canônicos para os blocos e tabelas do laudo', () => {
+    const cartucho = criarPeca({
+      tipoCodigo: '17',
+      tipoPeca: 'CARTUCHO(S)',
+      comuns: { ...criarPeca().comuns, identificacao: 'Cartucho íntegro', observacao: 'Apreendido' },
+      personalizados: {
+        '17:calibre_nominal_cartucho': '49',
+        '17:marca_cartucho': '1',
+      },
+    })
+
+    const resultado = projetarB602ParaLaudo({ pecas: [cartucho] })
+
+    expect(resultado.cartuchos).toEqual([expect.objectContaining({
+      quantidade: '1', calibre: '.9mm Luger', marca: 'CBC',
+      estojo: 'Cartucho íntegro', observacao: 'Apreendido',
     })])
   })
 

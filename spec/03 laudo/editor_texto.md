@@ -1,42 +1,25 @@
 # Editor de texto compartilhado
 
-## Fonte de verdade e usos
+## Fonte de verdade e contratos
 
-`src/renderer/components/editor/TinyMceEditor.tsx` concentra a configuração e os comandos comuns do TinyMCE usados na edição de laudo, templates, cabeçalhos e importação. A toolbar-base é única; `condbloco` e o comando interno `suprimirblocopericial`, apresentado como **Excluir bloco**, só são acrescentados quando `condToggles` fornece contexto.
+`src/renderer/components/editor/TinyMceEditor.tsx` concentra a configuração e os comandos comuns do TinyMCE usados em laudos, templates, cabeçalhos e importação. A toolbar-base é única; `condbloco` e `suprimirblocopericial` só são acrescentados quando `condToggles` fornece contexto.
 
-O componente oferece dois contratos de conteúdo:
+O componente aceita `value` no modo controlado e `initialValue` no modo não controlado. Este último captura o HTML apenas na montagem para impedir que normalizações internas reposicionem o cursor em documentos estruturados. Por isso, uma recarga externa do laudo precisa trocar a chave de montagem do editor; `criarChaveMontagemEditor()` é usada por `LaudosPage.tsx` para desmontar a instância anterior e carregar o novo HTML persistido. Não tentar atualizar `initialValue` na mesma instância.
 
-- `value` mantém o editor controlado pelo estado React.
-- `initialValue` captura o HTML somente na montagem e evita que a normalização interna do TinyMCE reposicione o cursor em documentos com seções e atributos estruturais. Atualizações programáticas nesse modo devem usar a instância do editor.
+Antes de montar, `removerInstanciaTinyMceAnterior()` remove instâncias TinyMCE órfãs com o mesmo id. A abertura mostra estado de carregamento, tenta uma nova montagem automaticamente uma vez após 8 segundos e, se persistir a indisponibilidade, preserva o conteúdo e mostra **Tentar novamente**. IDs ausentes recebem identificador derivado de `useId`.
 
-## Configuração de edição
+## Configuração textual e visual
 
-A toolbar usa `wrap` e agrupa histórico, formato de bloco, estilo de texto, fonte/cores, alinhamento/listas, recuos/entrelinha, inserção e comandos de revisão. A lista de plugins é estática; `autoresize` entra apenas quando `alturaAutomatica` está ativo. Não há menu "Mais ferramentas": os controles avançados disponíveis ficam nos grupos da toolbar.
+A toolbar usa `wrap` e agrupa histórico, formatação, fonte/cores, alinhamento/listas, recuos/entrelinha, inserção e revisão. `autoresize` só entra quando `alturaAutomatica` está ativa. O menu de parágrafo aplica recuo de primeira linha apenas em `p`, com 1 cm, 1,25 cm, 1,5 cm ou remoção; a alteração ocorre em transação de undo e não alcança títulos, listas ou células.
 
-O menu `Formatação` aplica parágrafo, títulos 1–6 ou pré-formatado. O menu `Parágrafo` aplica recuo da primeira linha somente em `p`, com 1 cm (`28.35pt`), 1,25 cm (`35.43pt`), 1,5 cm (`42.52pt`) ou remoção da propriedade. A alteração ocorre em uma transação do undo manager; o estado dos itens acompanha a seleção. Títulos, listas, células e outros blocos não recebem esse formato.
+`pagebreak` grava o marcador canônico `data-quebra-pagina="true"`; o comentário legado `<!-- pagebreak -->` continua aceito pela normalização de exportação. A skin observa o tema sem remontar o editor. Em tela cheia, `repNumero` insere identificação fora do conteúdo editável; ela não integra o HTML salvo.
 
-## Quebra de página e tema
+## Extensões e composição
 
-O botão `pagebreak` grava o marcador canônico definido em `@shared/utils/quebra-pagina`:
+O editor preserva comandos de placeholders, figuras, tabelas resolvidas e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto indicadores de quebra. Controles visuais de blocos e tabelas vivem somente no iframe.
 
-```html
-<div data-quebra-pagina="true" style="break-after: page;"></div>
-```
-
-O editor ainda aceita o comentário legado `<!-- pagebreak -->` por meio da normalização compartilhada usada na exportação. O marcador recebe contraste próprio nos temas claro e escuro; o tema do conteúdo observa `body.dark` e troca a skin sem remontar o editor.
-
-Em tela cheia, quando `repNumero` existe, uma identificação `Laudo · REP <número>` é inserida fora da área editável e removida ao sair. Ela não integra o HTML do laudo.
-
-## Extensões preservadas
-
-Além da configuração textual, o componente preserva comandos específicos para placeholders, figuras, tabelas resolvidas e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto o indicador interno de quebra de página; ações que alteram várias imagens usam transação de undo.
-
-Blocos condicionais são protegidos por padrão e recebem controles transitórios de editar/concluir e excluir. Tabelas HTML resolvidas de placeholders também são protegidas; podem ser convertidas em cópia local editável ou restauradas a partir dos dados atuais da REP. Os destaques, selos e botões existem somente no conteúdo visual do iframe.
-
-A composição entre editor único e editores por seção pertence a `LaudosPage.tsx`. Seções usam `id`, `parentId` e `nivel`: o editor único monta subseções dentro do agrupador; o modo por seções mantém cada subseção recolhível sob o cartão pai. Agrupadores sem conteúdo útil não criam área vazia, e subseções órfãs continuam no primeiro nível.
+A composição entre editor único e por seções pertence a `LaudosPage.tsx`. Seções possuem `id`, `parentId` e `nivel`; agrupadores vazios não criam editor ocioso e subseções órfãs permanecem no primeiro nível. Após uma atualização externa — inclusive a reconciliação de uma REP — `handleEditar()` recarrega o laudo, incrementa a versão de montagem e faz o TinyMCE refletir o HTML do banco imediatamente.
 
 ## Relações e verificação
 
-Mudanças em recuo ou quebra devem ser coordenadas com `src/renderer/lib/exportacao-parser.ts`, `src/shared/types/exportacao.types.ts`, `src/shared/utils/quebra-pagina.ts` e `src/main/services/exportacao.service.ts`, pois o editor apenas produz HTML e a exportação preserva a semântica nos formatos finais.
-
-`src/__tests__/renderer/tiny-mce-editor-config.test.ts` cobre catálogo, toolbar, medidas e identificação em tela cheia. O teste é unitário de configuração; interação real do TinyMCE, seleção múltipla e alternância visual de tema dependem de smoke manual.
+Mudanças em recuo ou quebra devem ser coordenadas com `src/renderer/lib/exportacao-parser.ts`, `src/shared/types/exportacao.types.ts`, `src/shared/utils/quebra-pagina.ts` e `src/main/services/exportacao.service.ts`. `src/__tests__/renderer/tiny-mce-editor-config.test.ts` cobre catálogo, toolbar, medidas, tela cheia, remoção de instância anterior e mudança da chave de montagem. A interação real do TinyMCE, seleção múltipla e alternância visual de tema continuam dependentes de smoke manual.

@@ -84,17 +84,6 @@ export const MODELOS_IA: readonly ModeloIaCatalogo[] = [
     reservaRespostaCaracteres: 20_000,
     perfil: 'maior_precisao',
   },
-  {
-    id: 'gemini-2.0-flash',
-    provedor: 'gemini',
-    rotulo: 'Gemini 2.0 Flash',
-    suportaVisao: true,
-    mimesImagem: ['image/jpeg', 'image/png', 'image/webp'],
-    limiteBytesImagem: 15 * 1024 * 1024,
-    janelaContextoCaracteres: 96_000,
-    reservaRespostaCaracteres: 16_000,
-    perfil: 'equilibrado',
-  },
 ];
 
 const MODELOS_PADRAO: Record<ProvedorIa, string> = {

@@ -225,6 +225,41 @@ describe('AtualizacaoRepGdlService', () => {
     )
   })
 
+  it('reconcilia o laudo sem alterar a REP quando o GDL não possui diferenças', async () => {
+    const laudo = criarLaudo('Em andamento')
+    mocks.buscarLaudoPorRep.mockResolvedValue(laudo)
+    mocks.buscarLaudo.mockResolvedValue(laudo)
+    mocks.converter.mockReturnValue({
+      ...criarImportacao(),
+      camposGerais: {
+        tipo_solicitacao: 'Local',
+        observacoes: 'Observação local',
+        b602_local_cidade: 'Cidade local',
+      },
+      camposEspecificos: {
+        ...criarImportacao().camposEspecificos,
+        pecas: [criarPeca(1, 'gdl-1')],
+      },
+    })
+
+    const previa = await atualizacaoRepGdlService.preparar('rep-1')
+    expect(previa.diferencas).toHaveLength(0)
+
+    await expect(atualizacaoRepGdlService.aplicar({
+      operacaoId: previa.operacaoId,
+      diferencasSelecionadas: [],
+      reabrirLaudo: false,
+    })).resolves.toEqual({
+      camposAtualizados: 0,
+      pecasAtualizadas: 0,
+      laudoReconciliado: true,
+      laudoReaberto: false,
+    })
+
+    expect(mocks.executar).not.toHaveBeenCalled()
+    expect(mocks.sincronizarSecoes).toHaveBeenCalledWith('laudo-1', expect.any(Object))
+  })
+
   it('recusa aplicação quando a REP foi alterada após a prévia', async () => {
     const repInicial = criarRep()
     mocks.buscarRep.mockResolvedValueOnce(repInicial).mockResolvedValueOnce({

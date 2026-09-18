@@ -10,6 +10,7 @@ import {
   perfilRespostaIaValido,
   solicitacaoConsultaIaValida,
   solicitacaoIaValida,
+  solicitacaoTesteConexaoIaValida,
 } from '../../../shared/types/ia.types.js';
 import type {
   SolicitacaoDescricaoImagemIa,
@@ -433,9 +434,18 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     return { success: true };
   });
 
-  ipcMain.handle('ia:testar-conexao', async () => {
-    const contexto = await iaExecucaoService.obterContexto();
-    return contexto.configurado ? { success: true, data: contexto } : { success: false, error: 'CONFIGURACAO_AUSENTE' };
+  ipcMain.handle('ia:testar-conexao', async (event, solicitacao: unknown) => {
+    try {
+      if (!solicitacaoTesteConexaoIaValida(solicitacao)) return { success: false, error: 'ENTRADA_INVALIDA' };
+      if (!registrarOperacao(event, solicitacao.operationId)) return { success: false, error: 'OPERACAO_EM_ANDAMENTO' };
+      try {
+        return { success: true, data: await iaExecucaoService.testarConexao(solicitacao) };
+      } finally {
+        removerOperacao(event.sender.id, solicitacao.operationId);
+      }
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'ERRO_INTERNO' };
+    }
   });
   /**
    * Revisar ortografia de um texto HTML

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { laudoPadraoB602V1 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v1';
+import { laudoPadraoB602V4 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v4';
+import { laudoPadraoB602V5 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v5';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 
@@ -29,6 +31,39 @@ describe('catálogo de templates integrados', () => {
     comImagem.secoes[2].conteudo += '<table><tbody><tr><td><figure data-dummy="true" data-image-id="aleatorio"><img src="x"></figure></td></tr></tbody></table>';
 
     expect(calcularChecksumTemplateIntegrado(comImagem)).toBe(calcularChecksumTemplateIntegrado(base));
+  });
+
+  it('estrutura cartuchos, estojos e armas como subseções do B-602 atual', () => {
+    const conteudoCartuchos = laudoPadraoB602V4.secoes.find(secao => secao.chave === 'dos-cartuchos')?.conteudo || '';
+
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V4)).not.toThrow();
+    expect(laudoPadraoB602V4.versao).toBe(4);
+    expect(laudoPadraoB602V4.secoes.find(secao => secao.chave === 'dos-cartuchos')).toMatchObject({
+      chavePai: 'dos-exames',
+      ordem: 4,
+    });
+    expect(laudoPadraoB602V4.secoes.find(secao => secao.chave === 'dos-estojos')).toMatchObject({
+      chavePai: 'dos-exames',
+      ordem: 5,
+    });
+    expect(laudoPadraoB602V4.secoes.find(secao => secao.chave === 'das-armas')).toMatchObject({
+      chavePai: 'dos-exames',
+      ordem: 6,
+    });
+    expect(conteudoCartuchos).toContain('Trata-se de');
+    expect(conteudoCartuchos).toContain('{{b602_total_cartuchos}}');
+    expect(conteudoCartuchos).toContain('text-align: justify; text-indent: 35.43pt;');
+  });
+
+  it('inclui total, figuras dummy e texto de custódia na subseção de estojos atual', () => {
+    const conteudoEstojos = laudoPadraoB602V5.secoes.find(secao => secao.chave === 'dos-estojos')?.conteudo || '';
+
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V5)).not.toThrow();
+    expect(laudoPadraoB602V5.versao).toBe(5);
+    expect(conteudoEstojos).toContain('{{b602_total_estojos}}');
+    expect(conteudoEstojos).toContain('text-align: justify; text-indent: 35.43pt;');
+    expect(conteudoEstojos.match(/data-image-id="dummy-b602-estojos-[12]"/g)).toHaveLength(2);
+    expect(conteudoEstojos).toContain('Os estojos percutidos e deflagrados foram retornados à Central de Custódia');
   });
 
   it('rejeita chaves de seção duplicadas', () => {

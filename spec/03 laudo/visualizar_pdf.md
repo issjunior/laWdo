@@ -1,24 +1,19 @@
 # Preview PDF e HTML do laudo
 
-## Origem
+## Origem e cabeçalhos
 
-O preview usa o corpo HTML persistido do laudo, que pode ter sido criado ou sincronizado por `laudo.service.ts` a partir de template e `campos_especificos` da REP. Antes da geração final, a resolução de placeholders produz a camada de valores e tabelas.
+O preview e a exportação partem de `laudos.conteudo`; antes da geração, placeholders e tabelas são resolvidos com os dados atuais da REP. A depuração deve seguir conteúdo salvo, HTML resolvido e conversão final para PDF/ODT. A prévia visual do editor não é fonte da saída.
 
-A depuração deve seguir esta ordem: conteúdo salvo em `laudos.conteudo`, HTML após resolução e, por fim, a conversão para PDF/ODT.
+`cabecalho_laudo` é inserido no corpo da primeira página e `cabecalho_paginas` torna-se `headerTemplate` do Chromium. `buildPdfHeaderConfig()` lê ambos; `buildHeaderTemplate()` remove wrappers de placeholder, converte `{{pagina}}`/`{{totalPaginas}}` nas classes nativas e substitui valores como o número da REP. Os padrões ficam em `src/shared/configuracoes/cabecalhos-padrao.ts`; migrations v35 e v36 os inserem com `INSERT OR IGNORE`.
 
-## Cabeçalhos configuráveis
+## Margens e paginação
 
-A configuração separa `cabecalho_laudo`, usado no corpo da primeira página, de `cabecalho_paginas`, convertido no `headerTemplate` das páginas. `buildPdfHeaderConfig()` lê as duas chaves em paralelo; `buildHeaderTemplate()` remove wrappers `data-placeholder`, converte `{{pagina}}` e `{{totalPaginas}}` nas classes nativas do Chromium e aplica substituições como `numero_rep`.
+`getMargens()` sempre devolve margens válidas: configuração persistida normalizada ou o padrão `{ top: 2.5, right: 2, bottom: 2.5, left: 3 }` em centímetros. Para PDF, `exportacao.service.ts` e `template.handlers.ts` usam as mesmas margens efetivas. Quando existe cabeçalho de páginas, a margem superior é no mínimo 2,5 cm, mesmo se uma configuração menor chegar à camada de impressão. O `headerTemplate` é encaminhado explicitamente na exportação do laudo; assim o cálculo não depende do cabeçalho exclusivo da primeira página.
 
-Os padrões canônicos ficam em `src/shared/configuracoes/cabecalhos-padrao.ts`. A migration v35 garante o cabeçalho da primeira página e a v36 garante o cabeçalho de todas as páginas com `INSERT OR IGNORE`, portanto configurações já personalizadas não são sobrescritas. A tela de Cabeçalhos apresenta primeiro a configuração das páginas e depois a primeira página; ambas são editadas localmente e persistidas em `configuracoes`.
+O HTML de impressão não introduz padding lateral alternativo: as margens de impressão definem a área útil e o documento usa os valores efetivos. Tabelas têm largura máxima de 100%, `thead` como `table-header-group` e `tr` com `break-inside: avoid`. Em continuação de tabela, o cabeçalho da página e o cabeçalho da tabela ficam abaixo da margem superior, sem sobreposição.
 
-A versão atual do schema é 36. O teste de integridade do schema ainda contém expectativas literais para a versão 34 e, no estado atual, registra duas falhas até ser alinhado por alteração de testes autorizada.
+## Saída e verificação
 
-## Comportamento relevante
+Seções condicionais inativas ou suprimidas não aparecem na saída. Placeholders pendentes podem aparecer como `XXX`; isso informa dado ausente. Tabelas resolvidas recebem largura máxima de 100% no HTML e nas folhas de estilo do PDF/ODT.
 
-- Seções condicionais inativas e blocos periciais suprimidos não aparecem na saída.
-- Placeholders textuais ausentes e blocos periciais vazios aparecem como `XXX` destacado; isso é informação pendente, não erro de preview.
-- Tabelas resolvidas recebem `width` e `max-width` de 100% no fragmento HTML e nas folhas de estilo do PDF/ODT.
-- Prévia visual do editor não é fonte do preview: ela é removida e a resolução é refeita com dados da REP.
-
-Assim, defeitos de seção podem vir da sincronização estrutural, enquanto defeitos de valor ou tabela devem ser investigados no resolvedor antes da camada de conversão.
+`src/__tests__/renderer/margens.test.ts` cobre a normalização/fallback das margens. O smoke de PDF deve usar tabela suficiente para cruzar uma página e confirmar, visualmente, a margem superior e a repetição de cabeçalho na página seguinte.

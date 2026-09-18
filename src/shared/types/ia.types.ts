@@ -243,6 +243,26 @@ export interface ContextoIa {
   suportaVisao: boolean;
 }
 
+export interface SolicitacaoTesteConexaoIa {
+  operationId: string;
+  provedor: 'groq' | 'gemini';
+  apiKey: string;
+  modelo: string;
+}
+
+export function solicitacaoTesteConexaoIaValida(valor: unknown): valor is SolicitacaoTesteConexaoIa {
+  if (!valor || typeof valor !== 'object') return false;
+  const solicitacao = valor as Record<string, unknown>;
+  return Object.keys(solicitacao).length === 4
+    && typeof solicitacao.operationId === 'string'
+    && Boolean(solicitacao.operationId.trim())
+    && (solicitacao.provedor === 'groq' || solicitacao.provedor === 'gemini')
+    && typeof solicitacao.apiKey === 'string'
+    && Boolean(solicitacao.apiKey.trim())
+    && typeof solicitacao.modelo === 'string'
+    && Boolean(solicitacao.modelo.trim());
+}
+
 export interface ErroIa {
   codigo:
     | 'CONFIGURACAO_AUSENTE'

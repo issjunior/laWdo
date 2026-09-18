@@ -8,7 +8,10 @@ const aplicarAtualizacaoRep = vi.fn()
 
 describe('AtualizarRepGdlDialog', () => {
   beforeEach(() => {
-    aplicarAtualizacaoRep.mockResolvedValue({ success: true })
+    aplicarAtualizacaoRep.mockResolvedValue({
+      success: true,
+      data: { camposAtualizados: 1, pecasAtualizadas: 0, laudoReconciliado: true, laudoReaberto: false },
+    })
     prepararAtualizacaoRep.mockResolvedValue({
       success: true,
       data: {
@@ -62,5 +65,27 @@ describe('AtualizarRepGdlDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar atualização' }))
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+  })
+
+  it('permite reconciliar o laudo quando a REP não possui diferenças', async () => {
+    prepararAtualizacaoRep.mockResolvedValueOnce({
+      success: true,
+      data: {
+        operacaoId: 'operacao-reconciliacao', repId: 'rep-1', repNumero: '109.026-2026', codigoExame: 'B-602', avisos: [],
+        diferencas: [],
+        impactoLaudo: { laudoId: 'laudo-1', status: 'Em andamento', requerReabertura: false },
+      },
+    })
+
+    render(<AtualizarRepGdlDialog open repId="rep-1" onOpenChange={vi.fn()} onConcluida={vi.fn()} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reconciliar laudo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar reconciliação' }))
+
+    await waitFor(() => expect(aplicarAtualizacaoRep).toHaveBeenCalledWith({
+      operacaoId: 'operacao-reconciliacao',
+      diferencasSelecionadas: [],
+      reabrirLaudo: false,
+    }))
   })
 })

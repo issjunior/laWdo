@@ -288,8 +288,10 @@ class AtualizacaoRepGdlService {
     }
     atualizacoes.push(['campos_especificos', JSON.stringify(novoCamposEspecificos)])
     await withTransaction(async () => {
-      const camposSql = atualizacoes.map(([campo]) => `${campo} = ?`).join(', ')
-      await executeNonQuery(`UPDATE reps SET ${camposSql}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [...atualizacoes.map(([, valor]) => valor), rep.id])
+      if (selecionados.size > 0) {
+        const camposSql = atualizacoes.map(([campo]) => `${campo} = ?`).join(', ')
+        await executeNonQuery(`UPDATE reps SET ${camposSql}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [...atualizacoes.map(([, valor]) => valor), rep.id])
+      }
       if (laudo && ['Concluído', 'Entregue'].includes(laudo.status)) {
         await laudoService.updateStatus(laudo.id, 'Em andamento')
         await repService.updateStatus(rep.id, 'Em Andamento')
@@ -297,7 +299,17 @@ class AtualizacaoRepGdlService {
       }
       if (laudo) await laudoService.sincronizarSecoesCondicionais(laudo.id, camposEspecificos)
     })
-    auditCicloVida('', 'rep', rep.id, 'atualizacao', `Requisição ${rep.numero} atualizada a partir do GDL`, null, { diferencas: [...selecionados] })
+    auditCicloVida(
+      '',
+      'rep',
+      rep.id,
+      'atualizacao',
+      selecionados.size > 0
+        ? `Requisição ${rep.numero} atualizada a partir do GDL`
+        : `Laudo da Requisição ${rep.numero} reconciliado com os dados locais`,
+      null,
+      { diferencas: [...selecionados], somenteReconciliacaoLaudo: selecionados.size === 0 },
+    )
     operacoesPendentes.delete(entrada.operacaoId)
     return { camposAtualizados: [...selecionados].filter(id => id.startsWith('campo:')).length, pecasAtualizadas: [...selecionados].filter(id => id.startsWith('peca:')).length, laudoReconciliado: Boolean(laudo), laudoReaberto: Boolean(laudo && ['Concluído', 'Entregue'].includes(laudo.status)) }
   }

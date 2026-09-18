@@ -763,4 +763,107 @@ describe('ia-execucao.service — descrição de imagem', () => {
       .rejects.toThrow('Solicitação de IA inválida')
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('valida a chave e o modelo com uma chamada mínima no mesmo endpoint usado pela execução', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: 'OK' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(new IaExecucaoService().testarConexao({
+      operationId: 'teste-conexao-1',
+      provedor: 'gemini',
+      apiKey: 'chave-formulario',
+      modelo: 'gemini-2.5-flash',
+    })).resolves.toMatchObject({
+      configurado: true,
+      provedor: 'gemini',
+      modelo: 'gemini-2.5-flash',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer chave-formulario',
+          'Content-Type': 'application/json',
+        },
+      }),
+    )
+    const [, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(String(opcoes.body))).toMatchObject({
+      model: 'gemini-2.5-flash',
+      max_tokens: 1,
+    })
+  })
+
+  it('não rejeita um modelo funcional só porque ele poderia faltar na listagem do provedor', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: 'OK' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(new IaExecucaoService().testarConexao()).resolves.toMatchObject({
+      provedor: 'gemini',
+      modelo: 'gemini-2.5-flash',
+    })
+  })
+
+  it('mantém o teste ativo pelo mesmo prazo das demais chamadas de IA', async () => {
+    vi.useFakeTimers()
+    try {
+      let concluirResposta: ((resposta: Response) => void) | undefined
+      fetchMock.mockImplementation(() => new Promise<Response>(resolve => {
+        concluirResposta = resolve
+      }))
+
+      const teste = new IaExecucaoService().testarConexao({
+        operationId: 'teste-conexao-lento',
+        provedor: 'gemini',
+        apiKey: 'chave-formulario',
+        modelo: 'gemini-2.5-flash',
+      })
+      await vi.advanceTimersByTimeAsync(25_000)
+
+      const [, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect((opcoes.signal as AbortSignal).aborted).toBe(false)
+      concluirResposta?.(new Response(JSON.stringify({
+        choices: [{ message: { content: 'OK' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      await expect(teste).resolves.toMatchObject({ modelo: 'gemini-2.5-flash' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('informa credencial recusada durante o teste de conexão', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 401 }))
+
+    await expect(new IaExecucaoService().testarConexao()).rejects.toThrow('NAO_AUTORIZADO')
+  })
+
+  it('cancela imediatamente o teste de conexão em andamento', async () => {
+    fetchMock.mockImplementation((_url: string, opcoes: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      opcoes.signal?.addEventListener('abort', () => reject(new Error('abortado')))
+    }))
+    const servico = new IaExecucaoService()
+    const teste = servico.testarConexao({
+      operationId: 'teste-conexao-cancelado',
+      provedor: 'gemini',
+      apiKey: 'chave-formulario',
+      modelo: 'gemini-2.5-flash',
+    })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    servico.cancelar('teste-conexao-cancelado')
+
+    await expect(teste).rejects.toThrow('CANCELADO')
+  })
+
+  it('informa resposta inválida quando a chamada de teste não retorna escolhas', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ data: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(new IaExecucaoService().testarConexao()).rejects.toThrow('RESPOSTA_INVALIDA')
+  })
 })

@@ -9,6 +9,8 @@ import { exportarPacoteTemplate, importarPacoteTemplate, lerPreviaPacoteTemplate
 import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincronizar-templates-integrados.js';
 
 const CM_TO_INCHES = 1 / 2.54;
+const MARGENS_PADRAO_PDF = { top: 2.5, right: 2, bottom: 2.5, left: 3 };
+const MARGEM_SUPERIOR_MINIMA_CABECALHO_CM = 2.5;
 
 const mensagemErro = (error: unknown): string =>
   error instanceof Error ? error.message : 'Erro desconhecido';
@@ -277,10 +279,14 @@ export const registerTemplateHandlers = (): void => {
       const titulo = typeof opts.titulo === 'string' && opts.titulo.trim()
         ? escaparTextoHtml(opts.titulo.trim())
         : 'Pré-visualização do Laudo';
-       const hasMargins = margins && (margins.top > 0 || margins.right > 0 || margins.bottom > 0 || margins.left > 0);
-      const bodyPadding = hasMargins ? '0 0 12px 0' : '50px 60px';
-      const leftPad = hasMargins ? `${margins!.left}cm` : '60px';
-      const rightPad = hasMargins ? `${margins!.right}cm` : '60px';
+      const margensBase = margins || MARGENS_PADRAO_PDF;
+      const margensEfetivas = {
+        ...margensBase,
+        top: headerTemplate ? Math.max(margensBase.top, MARGEM_SUPERIOR_MINIMA_CABECALHO_CM) : margensBase.top,
+      };
+      const bodyPadding = '0 0 12px 0';
+      const leftPad = `${margensEfetivas.left}cm`;
+      const rightPad = `${margensEfetivas.right}cm`;
 
       const docHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -305,6 +311,8 @@ export const registerTemplateHandlers = (): void => {
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
   table th, table td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
   table th { background: #f5f5f5; font-weight: 600; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
   ul, ol { margin: 8px 0; padding-left: 24px; }
   li { margin-bottom: 4px; }
   img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
@@ -329,14 +337,12 @@ export const registerTemplateHandlers = (): void => {
       await win.loadFile(tmpPath);
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      const pdfMargins = margins
-        ? {
-            top:    margins.top    * CM_TO_INCHES,
-            right:  margins.right  * CM_TO_INCHES,
-            bottom: margins.bottom * CM_TO_INCHES,
-            left:   margins.left   * CM_TO_INCHES,
-          }
-        : { top: 0, bottom: 0, left: 0, right: 0 };
+      const pdfMargins = {
+        top: margensEfetivas.top * CM_TO_INCHES,
+        right: margensEfetivas.right * CM_TO_INCHES,
+        bottom: margensEfetivas.bottom * CM_TO_INCHES,
+        left: margensEfetivas.left * CM_TO_INCHES,
+      };
 
       const printOptions: Electron.PrintToPDFOptions = {
         printBackground: true,
