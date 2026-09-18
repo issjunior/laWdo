@@ -6,7 +6,7 @@ function criarImagemDummy(id: string): string {
   return `<figure class="laudo-figure" data-image-id="${id}" data-dummy="true" style="text-align:center;margin:12px auto;max-width:100%;cursor:pointer"><img src="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 600 400%27%3E%3Crect width=%27600%27 height=%27400%27 fill=%27%233a3a3a%27 rx=%278%27/%3E%3Crect x=%27235%27 y=%27115%27 width=%27130%27 height=%27100%27 rx=%278%27 fill=%27none%27 stroke=%27%23888%27 stroke-width=%272.5%27/%3E%3Ccircle cx=%27265%27 cy=%27145%27 r=%2711%27 fill=%27none%27 stroke=%27%23888%27 stroke-width=%272.5%27/%3E%3Cpolyline points=%27235,195 275,162 325,195%27 fill=%27none%27 stroke=%27%23888%27 stroke-width=%272.5%27/%3E%3Ctext x=%27300%27 y=%27260%27 text-anchor=%27middle%27 fill=%27%23aaa%27 font-size=%2720%27 font-family=%27sans-serif%27 font-weight=%27500%27%3EINSERIR IMAGEM%3C/text%3E%3Ctext x=%27300%27 y=%27290%27 text-anchor=%27middle%27 fill=%27%23777%27 font-size=%2713%27 font-family=%27sans-serif%27%3EClique para substituir%3C/text%3E%3C/svg%3E" alt="Figura XX" style="max-width:100%;height:auto;border:1px solid #444;border-radius:4px;padding:4px"/><figcaption style="font-size:13px;color:#666;font-weight:bold;margin-top:4px">Figura XX</figcaption></figure>`;
 }
 
-function criarTabelaDummies(prefixoId: string): string {
+export function criarTabelaDummies(prefixoId: string): string {
   return `<table style="border-collapse:collapse;width:100%" border="1"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td style="text-align:center">${criarImagemDummy(`${prefixoId}-1`)}</td><td style="text-align:center">${criarImagemDummy(`${prefixoId}-2`)}</td></tr></tbody></table>`;
 }
 
