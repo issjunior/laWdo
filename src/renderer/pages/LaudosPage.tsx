@@ -3891,12 +3891,14 @@ export const LaudosPage: React.FC = () => {
           open={repIdParaAtualizarGdl !== null}
           repId={repIdParaAtualizarGdl}
           onOpenChange={aberto => { if (!aberto) setRepIdParaAtualizarGdl(null); }}
-          onConcluida={() => {
+          onConcluida={(resultado) => {
             void carregarLaudos();
             void window.ipcAPI.laudo.findById(editando.id).then(resposta => {
               if (resposta.success && resposta.data) void handleEditar({ ...editando, ...resposta.data } as LaudoItem);
             });
-            toast.success('REP atualizada com as informações do GDL.');
+            toast.success(resultado.camposAtualizados === 0 && resultado.pecasAtualizadas === 0 && resultado.laudoReconciliado
+              ? 'Estrutura do laudo reconciliada com os dados locais.'
+              : 'REP atualizada com as informações do GDL.');
           }}
         />
       </div>
@@ -4140,7 +4142,12 @@ export const LaudosPage: React.FC = () => {
         open={repIdParaAtualizarGdl !== null}
         repId={repIdParaAtualizarGdl}
         onOpenChange={aberto => { if (!aberto) setRepIdParaAtualizarGdl(null); }}
-        onConcluida={() => { void carregarLaudos(); toast.success('REP atualizada com as informações do GDL.'); }}
+        onConcluida={(resultado) => {
+          void carregarLaudos();
+          toast.success(resultado.camposAtualizados === 0 && resultado.pecasAtualizadas === 0 && resultado.laudoReconciliado
+            ? 'Estrutura do laudo reconciliada com os dados locais.'
+            : 'REP atualizada com as informações do GDL.');
+        }}
       />
 
     </div>

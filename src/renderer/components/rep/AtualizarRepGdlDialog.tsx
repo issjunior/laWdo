@@ -6,13 +6,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { ChevronDown, Loader2, RefreshCw, TriangleAlert, WifiOff } from 'lucide-react'
-import type { PreviaAtualizacaoRepGdl } from '@shared/types/atualizacao-rep-gdl.types'
+import type { PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '@shared/types/atualizacao-rep-gdl.types'
 
 interface AtualizarRepGdlDialogProps {
   open: boolean
   repId: string | null
   onOpenChange: (open: boolean) => void
-  onConcluida: () => void
+  onConcluida: (resultado: ResultadoAtualizacaoRepGdl) => void
 }
 
 function previaAtualizacaoValida(valor: unknown): valor is PreviaAtualizacaoRepGdl {
@@ -112,14 +112,16 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
     setConfirmacaoAberta(false); setAplicando(true); setErro(null)
     try {
       const resposta = await window.ipcAPI.gdl.aplicarAtualizacaoRep({ operacaoId: previa.operacaoId, diferencasSelecionadas: [...selecionadas], reabrirLaudo })
-      if (!resposta.success) { setErro(resposta.error || 'Não foi possível aplicar a atualização.'); return }
+      if (!resposta.success || !resposta.data) { setErro(resposta.error || 'Não foi possível aplicar a atualização.'); return }
       onOpenChange(false)
-      onConcluida()
+      onConcluida(resposta.data)
     } catch { setErro('Não foi possível aplicar a atualização.') } finally { setAplicando(false) }
   }
 
   const requerReabertura = Boolean(previa?.impactoLaudo?.requerReabertura)
-  const podeConfirmar = selecionadas.size > 0 && (!requerReabertura || reabrirLaudo)
+  const semDiferencas = previa?.diferencas.length === 0
+  const podeReconciliarLaudo = Boolean(semDiferencas && previa?.impactoLaudo)
+  const podeConfirmar = (selecionadas.size > 0 || podeReconciliarLaudo) && (!requerReabertura || reabrirLaudo)
   const mensagemErro = erro ? obterMensagemErroGdl(erro) : null
 
   return <>
@@ -146,7 +148,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
         </Alert>}
         {previa && <div className="space-y-5">
           {previa.avisos.map(aviso => <Alert key={aviso}><AlertDescription>{aviso}</AlertDescription></Alert>)}
-          {previa.diferencas.length === 0 ? <Alert><AlertDescription>A REP já está atualizada com as informações retornadas pelo GDL.</AlertDescription></Alert> : grupos.map(([grupo, diferencas]) => <section key={grupo} className="space-y-2"><h3 className="text-sm font-semibold">{grupo}</h3><div className="divide-y rounded-md border">{diferencas.map(diferenca => {
+          {semDiferencas ? <Alert><AlertDescription>{podeReconciliarLaudo ? 'A REP já está atualizada. Você ainda pode reconciliar a estrutura do laudo vinculado com os dados locais.' : 'A REP já está atualizada com as informações retornadas pelo GDL.'}</AlertDescription></Alert> : grupos.map(([grupo, diferencas]) => <section key={grupo} className="space-y-2"><h3 className="text-sm font-semibold">{grupo}</h3><div className="divide-y rounded-md border">{diferencas.map(diferenca => {
             const possuiDetalhes = Boolean(diferenca.detalhes?.length)
             const detalhesAbertosParaDiferenca = detalhesAbertos.has(diferenca.id)
             return <div key={diferenca.id} className="p-3">
@@ -194,12 +196,12 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
             </div>
           })}</div></section>)}
           {requerReabertura && <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"><TriangleAlert className="size-4" /><AlertDescription className="space-y-3"><p>O laudo vinculado está {previa.impactoLaudo?.status}. Para aplicar a atualização, ele voltará para Em andamento; as datas já registradas serão preservadas no histórico.</p><label className="flex items-center gap-2"><Checkbox checked={reabrirLaudo} onCheckedChange={valor => setReabrirLaudo(valor === true)} />Confirmo a reabertura do laudo.</label></AlertDescription></Alert>}
-          <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)} disabled={aplicando}>Cancelar</Button><Button onClick={() => setConfirmacaoAberta(true)} disabled={!podeConfirmar || aplicando}>{aplicando ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Aplicar atualização</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)} disabled={aplicando}>Cancelar</Button><Button onClick={() => setConfirmacaoAberta(true)} disabled={!podeConfirmar || aplicando}>{aplicando ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}{podeReconciliarLaudo ? 'Reconciliar laudo' : 'Aplicar atualização'}</Button></div>
         </div>}
       </DialogContent>
     </Dialog>
     <AlertDialog open={confirmacaoAberta} onOpenChange={setConfirmacaoAberta}>
-      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar atualização pelo GDL</AlertDialogTitle><AlertDialogDescription>Os dados selecionados substituirão os valores locais. Se houver laudo vinculado, as seções derivadas impactadas serão regeneradas e figuras nelas inseridas continuarão disponíveis no painel de ilustrações.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={aplicando}>Voltar</AlertDialogCancel><AlertDialogAction onClick={() => void aplicar()} disabled={aplicando}>Confirmar atualização</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{podeReconciliarLaudo ? 'Confirmar reconciliação do laudo' : 'Confirmar atualização pelo GDL'}</AlertDialogTitle><AlertDialogDescription>{podeReconciliarLaudo ? 'A REP não será alterada. As seções derivadas do laudo serão recompostas a partir dos dados locais, preservando as demais edições.' : 'Os dados selecionados substituirão os valores locais. Se houver laudo vinculado, as seções derivadas impactadas serão regeneradas e figuras nelas inseridas continuarão disponíveis no painel de ilustrações.'}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={aplicando}>Voltar</AlertDialogCancel><AlertDialogAction onClick={() => void aplicar()} disabled={aplicando}>{podeReconciliarLaudo ? 'Confirmar reconciliação' : 'Confirmar atualização'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
     </AlertDialog>
   </>
 }
