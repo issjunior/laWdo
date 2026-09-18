@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   MEDIDAS_RECUO_PRIMEIRA_LINHA,
+  criarChaveMontagemEditor,
   obterPluginsTinyMce,
   obterRotuloIdentificacaoFullscreen,
   obterToolbarTinyMce,
@@ -9,6 +10,12 @@ import {
 } from '../../renderer/components/editor/TinyMceEditor';
 
 describe('configuração do TinyMceEditor', () => {
+  it('altera a chave de montagem quando uma recarga externa exige novo conteúdo inicial', () => {
+    expect(criarChaveMontagemEditor('laudo-single-editor', 1)).not.toBe(
+      criarChaveMontagemEditor('laudo-single-editor', 2),
+    );
+  });
+
   it('expõe apenas os plugins usados pela toolbar e adiciona autoresize quando necessário', () => {
     expect(obterPluginsTinyMce(false)).toEqual(expect.arrayContaining([
       'charmap', 'image', 'link', 'lists', 'pagebreak', 'searchreplace', 'table',

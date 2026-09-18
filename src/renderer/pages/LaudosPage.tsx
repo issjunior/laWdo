@@ -22,7 +22,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { TinyMceEditor, type BlocoCondicionalSelecionado } from '@/components/editor/TinyMceEditor';
+import {
+  criarChaveMontagemEditor,
+  TinyMceEditor,
+  type BlocoCondicionalSelecionado,
+} from '@/components/editor/TinyMceEditor';
 import { DialogoAplicarRespostaIa } from '@/components/ai/DialogoAplicarRespostaIa';
 import { AssistenteIaPanel, type ChatMessage } from '@/components/ai/AssistenteIaPanel';
 import { PainelIaErrorBoundary } from '@/components/ai/PainelIaErrorBoundary';
@@ -486,6 +490,7 @@ export const LaudosPage: React.FC = () => {
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
+  const [versaoMontagemEditor, setVersaoMontagemEditor] = useState(0);
   const {
     estadoSalvamento,
     alteracoesPendentes,
@@ -2004,6 +2009,7 @@ export const LaudosPage: React.FC = () => {
     iniciarSessao();
     setSecoes(parsedSecoes);
     setSingleEditorHtml(buildSingleHtmlFromSecoes(parsedSecoes));
+    setVersaoMontagemEditor(versao => versao + 1);
     setEditorMode('single');
     setSecoesColapsadas({});
     setError(null);
@@ -3566,6 +3572,7 @@ export const LaudosPage: React.FC = () => {
                   <div className="min-w-0 space-y-3 pb-4">
                     <PlaceholderContextMenu editorId="laudo-single-editor" categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                       <TinyMceEditor
+                        key={criarChaveMontagemEditor('laudo-single-editor', versaoMontagemEditor)}
                         editorId="laudo-single-editor"
                         initialValue={singleEditorHtml}
                         onChange={(html: string, origem) => {
@@ -3656,6 +3663,7 @@ export const LaudosPage: React.FC = () => {
                                 <PlaceholderContextMenu editorId={`secao-${idx}`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} exameCamposEspecificos={exameCamposEspecificos} categoriaExameId={categoriaExameId}>
                                 <div className={isIlustracoes ? 'relative' : ''}>
                                   <TinyMceEditor
+                                    key={criarChaveMontagemEditor(`secao-${idx}`, versaoMontagemEditor)}
                                     editorId={`secao-${idx}`}
                                     initialValue={secao.conteudo}
                                     onChange={(txt, origem) => atualizarConteudoSecao(idx, txt, origem)}

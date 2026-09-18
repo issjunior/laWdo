@@ -171,6 +171,10 @@ type TinymceWindow = Window & {
     get: (id?: string) => TinyMceEditorInstance | null;
   };
 };
+
+export function criarChaveMontagemEditor(editorId: string, versao: number): string {
+  return `${editorId}-${versao}`;
+}
 type ComandoTinyMce<T> = (_ui: boolean, data: T) => void;
 
 const CLASSE_IDENTIFICACAO_FULLSCREEN = 'laudo-identificacao-fullscreen';
