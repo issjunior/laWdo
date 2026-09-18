@@ -1309,7 +1309,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 doc.removeEventListener('pointercancel', cancelarAcaoBlocoCondicional, true);
               });
 
-              editor.on('click', (evento: Event) => {
+              const executarAcaoTabelaPlaceholder = (evento: MouseEvent) => {
                 const acao = encontrarAcaoTabelaPlaceholder(evento.target);
                 if (!acao) return;
                 evento.preventDefault();
@@ -1325,6 +1325,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (!alterou) return;
                 onChange(editor.getContent());
                 if (restaurar) onTabelaPlaceholderRestauradaRef.current?.(editor);
+              };
+
+              doc.addEventListener('click', executarAcaoTabelaPlaceholder, true);
+              editor.on('remove', () => {
+                doc.removeEventListener('click', executarAcaoTabelaPlaceholder, true);
               });
 
               doc.addEventListener('click', (e: MouseEvent) => {
