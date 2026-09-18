@@ -12,6 +12,7 @@ import {
   personalizarTabelaPlaceholder,
   restaurarTabelaPlaceholder,
 } from '@/lib/apresentacao-placeholders';
+import { encontrarCampoReservado } from '@/lib/campos-reservados';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
@@ -158,6 +159,12 @@ interface TinyMceEditorProps {
   onSolicitarExclusaoBlocoCondicional?: (bloco: BlocoCondicionalSelecionado) => void;
   /** Reaplica a visualização de placeholders após restaurar uma tabela vinculada. */
   onTabelaPlaceholderRestaurada?: (editor: TinyMceEditorInstance) => void;
+  onCampoReservadoDuploClique?: (campo: CampoReservadoSelecionado) => void;
+}
+
+export interface CampoReservadoSelecionado {
+  editorId: string;
+  elemento: HTMLElement;
 }
 
 type ToggleCondicionalFlat = { id: string; label: string; subtitulo?: string };
@@ -464,6 +471,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   condToggles,
   onSolicitarExclusaoBlocoCondicional,
   onTabelaPlaceholderRestaurada,
+  onCampoReservadoDuploClique,
   className,
   ...rest
 }) => {
@@ -474,6 +482,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
   const onSolicitarExclusaoBlocoCondicionalRef = useRef(onSolicitarExclusaoBlocoCondicional);
   const onTabelaPlaceholderRestauradaRef = useRef(onTabelaPlaceholderRestaurada);
+  const onCampoReservadoDuploCliqueRef = useRef(onCampoReservadoDuploClique);
   const editorProntoParaAlteracoesRef = useRef(false);
   const frameLiberarAlteracoesRef = useRef<number | null>(null);
   const [preparado, setPreparado] = useState(false);
@@ -529,6 +538,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useEffect(() => {
     onTabelaPlaceholderRestauradaRef.current = onTabelaPlaceholderRestaurada;
   }, [onTabelaPlaceholderRestaurada]);
+
+  useEffect(() => {
+    onCampoReservadoDuploCliqueRef.current = onCampoReservadoDuploClique;
+  }, [onCampoReservadoDuploClique]);
 
   useEffect(() => () => {
     if (frameLiberarAlteracoesRef.current !== null) {
@@ -1330,6 +1343,19 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               doc.addEventListener('click', executarAcaoTabelaPlaceholder, true);
               editor.on('remove', () => {
                 doc.removeEventListener('click', executarAcaoTabelaPlaceholder, true);
+              });
+
+              const solicitarPreenchimentoCampoReservado = (evento: MouseEvent) => {
+                const campo = encontrarCampoReservado(evento.target);
+                if (!campo || !onCampoReservadoDuploCliqueRef.current) return;
+                evento.preventDefault();
+                evento.stopPropagation();
+                onCampoReservadoDuploCliqueRef.current({ editorId: editor.id, elemento: campo });
+              };
+
+              doc.addEventListener('dblclick', solicitarPreenchimentoCampoReservado, true);
+              editor.on('remove', () => {
+                doc.removeEventListener('dblclick', solicitarPreenchimentoCampoReservado, true);
               });
 
               doc.addEventListener('click', (e: MouseEvent) => {
