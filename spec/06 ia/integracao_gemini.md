@@ -2,22 +2,22 @@
 
 ## Papel e configuração
 
-Gemini usa o endpoint OpenAI-compatível `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`. `ModelosIAPage.tsx` persiste `provedor_ia = 'gemini'`, chave e modelo padrão; a chave permanece no main. O catálogo compartilhado registra capacidade de visão, MIME, limites de imagem e orçamento. Modelo ausente ou incompatível recai no padrão do Gemini, sem fallback para Groq.
+Gemini usa `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` em modo OpenAI-compatível. `ModelosIAPage.tsx` persiste provedor, chave e modelo padrão localmente; a chave é tratada no processo principal. O catálogo compartilhado declara visão, MIME, limites de imagem e orçamento. Modelo inexistente no catálogo é rejeitado como `MODELO_INDISPONIVEL`; não há fallback silencioso para Groq.
 
-O perfil versionado `perfil_resposta_ia` contém tom, detalhamento, instruções personalizadas e temperatura entre 0 e 1, em passos de 0,1. Perfis ausentes, legados ou inválidos recebem o padrão, com temperatura 0,2.
+O perfil versionado `perfil_resposta_ia` contém tom, detalhamento, instruções e temperatura entre 0 e 1, em passos de 0,1. Perfil ausente, legado ou inválido recebe o padrão com temperatura 0,2. O uso de Gemini Enterprise no navegador não prova equivalência de credenciais, cotas ou endpoint com a Gemini Developer API usada pelo laWdo.
 
-## Observação sobre Gemini Enterprise
+## Teste de conexão
 
-O usuário utiliza Gemini Enterprise pelo link `https://vertexaisearch.cloud.google.com/home/cid/b417bc3f-ab4d-444d-a66c-6ded42f69850?hl=pt_BR`. Esta informação é contexto para futuras investigações: o uso do produto corporativo no navegador pode apresentar regras, limites ou comportamento distintos da Gemini Developer API configurada no laWdo.
+O teste valida a configuração que está aberta no formulário, sem exigir salvamento prévio. O renderer gera `operationId` e envia `{ operationId, provedor, apiKey, modelo }` pelo IPC tipado; o handler valida a forma exata, registra a operação e garante sua remoção ao final. A chave fica somente na chamada do processo principal e não é registrada em logs ou diagnóstico.
 
-A observação não altera o provedor ativo nem permite, por si só, inferir equivalência entre cotas, credenciais, projeto ou respostas dos dois serviços. Ao comparar falhas ou limites, registre o produto e o endpoint envolvidos antes de concluir a causa.
+`IaExecucaoService.testarConexao()` chama o mesmo endpoint de chat usado na operação real, com mensagem mínima, `temperature: 0` e `max_tokens: 1`. Logo, sucesso confirma simultaneamente chave, modelo e rota compatíveis. HTTP 401/403 vira `NAO_AUTORIZADO`, 400/404 vira `MODELO_INDISPONIVEL`, 429 vira limite de requisições e respostas sem `choices` viram `RESPOSTA_INVALIDA`. O timeout é de 120 segundos; cancelar usa o mesmo `operationId` e resulta em `CANCELADO`, sem deixar a tela bloqueada.
 
-## Execução, limites e invariantes
+Enquanto o teste está ativo, a tela mostra cronômetro e botão **Cancelar teste**; fechar o diálogo também solicita cancelamento. O resultado fica inline como sucesso, falha ou cancelamento, e salvar permanece desabilitado durante a execução.
 
-O `IaExecucaoService` fotografa provedor, modelo, perfil e privacidade antes do planejamento. Cada chamada textual recebe a instrução fixa de segurança, a ação, o pedido explícito do usuário, o perfil e `temperature`; documento e contexto são conteúdo não confiável e não podem orientar o modelo. Respostas são JSON estruturado e validadas localmente, com tentativa compatível quando `response_format` é rejeitado.
+## Execução multimodal e privacidade
 
-Descrição multimodal exige modelo Gemini com visão e imagem persistida válida. No modo `legenda`, o serviço exige legenda técnico-pericial em uma linha, sem prefixo ou quebra, limitada a 15 palavras; no modo normal retorna apenas descrição simples para cópia manual.
+Descrição de imagem exige Gemini com visão e imagem persistida válida. No modo `legenda`, o serviço retorna uma legenda técnico-pericial de uma linha, sem prefixo ou quebra, limitada a 15 palavras; no modo normal retorna descrição simples. O renderer traduz erros de configuração, modelo, formato/tamanho/propriedade da imagem e resposta vazia antes de exibi-los no fluxo de substituição de figura.
 
-Uma resposta HTTP 429 só é apresentada como tipo específico de limite quando o provedor oferece metadados estruturados reconhecíveis. Sem `QuotaFailure`, `RetryInfo` ou cabeçalho de prazo, a UI informa HTTP 429 sem identificar a causa ou prometer reativação. Em modo diagnóstico, o evento terminal `limite_uso_ia` registra somente metadados permitidos (provedor, modelo, status, tentativa, categoria conhecida, formato/MIME da resposta e campos estruturados de cota); chave, prompt, corpo bruto, mensagem do provedor, documento e imagem não entram em eventos. Respostas-array não documentadas são classificadas como formato observado, não como prova de cota.
+Cada chamada fotografa provedor, modelo, perfil e privacidade antes do planejamento. Documento e contexto são conteúdo não confiável; respostas estruturadas são validadas localmente, com tentativa compatível quando `response_format` é rejeitado. Timeout, retries, checkpoints e privacidade compartilhados estão em `spec/06 ia/painel_assistente_ia.md`. Chaves, prompts, documentos, imagens, respostas brutas e mensagens do provedor não entram em logs.
 
-Timeout, retries, cancelamento, checkpoints e privacidade são comuns aos dois provedores e estão em `spec/06 ia/painel_assistente_ia.md`. Chaves, prompts, respostas, documentos e imagens não entram em logs.
+`ia-execucao.service.test.ts` e `ia-painel.handlers.test.ts` cobrem o contrato do teste e seus erros; o smoke manual deve validar conexão e geração de legenda com a mesma configuração do formulário.

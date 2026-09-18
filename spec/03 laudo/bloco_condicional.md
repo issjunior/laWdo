@@ -1,33 +1,19 @@
 # Blocos condicionais do laudo
 
-## Processamento
+## Processamento e elegibilidade
 
-`processarBlocosCondicionais(html, camposEspecificos, contexto?)`, em `secao-builder.service.ts`, processa primeiro wrappers internos com `data-cond-bloco`, remove o wrapper inteiro quando a condição não está ativa e encerra ao estabilizar. O limite defensivo é de 50 passagens.
+`processarBlocosCondicionais(html, camposEspecificos, contexto?)`, em `secao-builder.service.ts`, avalia wrappers `data-cond-bloco`, remove o wrapper inteiro quando a condição está inativa e encerra ao estabilizar, com limite defensivo de 50 passagens. Em seções repetidas, ids com `N` usam o índice da arma. Toggles legados e os ids B-602 versionados de funcionamento/coleta consultam a arma projetada; estes últimos dependem de `exibeBlocosPericiais`. Headings `h3` residuais dentro de `data-bloco-pericial` são removidos para manter um único título estrutural por arma.
 
-Em seções repetidas, ids com `N` são normalizados para o índice da arma. Toggles legados de funcionamento e coleta continuam consultando os valores da arma projetada. Os dois ids B-602 versionados (`funcionamento_eficiencia_v2` e `coleta_padroes_v2`) dependem de `exibeBlocosPericiais`, calculado pela família da peça.
+`filtrarSecoesAtivas()` usa `projetarB602ParaLaudo()` para decidir se uma seção derivada existe. Cartuchos, estojos e armas exigem a respectiva coleção projetada. `b602_lacres_saida_toggle` é ativo com ao menos uma arma ou estojo. Os wrappers `b602_cartuchos_toggle` e `b602_estojos_toggle` são contrato de processamento do template, não toggles manuais da REP.
 
-Antes da avaliação, headings `h3` residuais dentro de `[data-bloco-pericial]` são removidos. Isso preserva um único título estrutural por arma.
+## Exclusão no editor e reconciliação
 
-## Seções derivadas da REP
+Cada `.cond-bloco[data-cond-bloco]` recebe `data-cond-instancia`, fica protegido e expõe controles transitórios **Editar/Concluir** e **Excluir**. Os controles são `data-mce-bogus`, não fazem parte do HTML salvo e o alvo da ação é sempre `editorId + instanciaId`. A exclusão confirmada marca a ocorrência com `data-cond-suprimido="true"` em uma transação de undo; preview, PDF, ODT, HTML exportado e contexto de IA omitem blocos suprimidos.
 
-`filtrarSecoesAtivas()` usa `projetarB602ParaLaudo()` para decidir se seções derivadas têm dados. `DOS CARTUCHOS` exige cartuchos projetados e `DOS ESTOJOS` exige estojos projetados; `DAS ARMAS` exige ao menos uma arma projetada. Portanto, os blocos de cartuchos e estojos no template não aparecem apenas por existirem no HTML: uma REP que contém somente pistola não os produz.
+A exclusão local não altera a REP nem o GDL. A recomposição não é uniforme: blocos periciais versionados por arma preservam wrapper, texto e supressão pelo par `data-arma-chave + data-bloco-pericial`; já cartuchos e estojos pertencem ao conteúdo-base da seção derivada **DOS EXAMES**. Se essa seção for reconciliada com peças projetadas, esses wrappers são reconstituídos a partir do template, inclusive quando foram apagados no editor.
 
-O id `b602_lacres_saida_toggle` é ativo quando a projeção contém ao menos uma arma ou um estojo; ele envolve o parágrafo de lacração final e evita que a seção declare lacres para uma REP sem essas peças.
+`LaudoService.sincronizarSecoesCondicionais()` sempre calcula a reconciliação estrutural contra o HTML persistido. `AtualizacaoRepGdlService.aplicar()` a chama também quando não há diferenças selecionadas: nesse caso não regrava a REP e registra uma reconciliação pura do laudo. O modal oferece **Reconciliar laudo** para uma REP atualizada; o renderer recarrega o laudo do banco e remonta o TinyMCE, evitando que o conteúdo persistido restaurado permaneça invisível na instância aberta.
 
-Os ids `b602_cartuchos_toggle` e `b602_estojos_toggle` permanecem nos wrappers como contrato de processamento e de edição do template. Eles não correspondem a um toggle manual disponível na tela atual da REP B-602.
+## Verificação
 
-## Edição e exclusão no laudo
-
-Todo `.cond-bloco[data-cond-bloco]`, incluindo blocos genéricos e B-602, recebe um `data-cond-instancia` persistente e único durante a normalização. O wrapper fica protegido com `contenteditable="false"`; o botão transitório **Editar** ativa `data-cond-em-edicao="true"` e libera apenas o conteúdo textual. Placeholders, controles e demais elementos atômicos continuam protegidos. **Concluir**, troca de modo e recarga encerram a edição.
-
-Os controles **Editar/Concluir** e **Excluir** são elementos `data-mce-bogus` adicionados no documento do iframe e não integram o HTML salvo. O clique é capturado por eventos nativos de ponteiro no documento do TinyMCE e transporta `{ editorId, instanciaId }`, evitando localizar novamente a ocorrência por título, tipo ou arma. `Backspace` e `Delete` editam texto no modo liberado e não disparam exclusão integral.
-
-Após confirmação nativa, a ocorrência exata recebe `data-cond-suprimido="true"` em uma transação do undo manager e desaparece imediatamente. A exclusão preserva internamente o wrapper e o conteúdo para estabilidade da recomposição, mas a interface atual não oferece restauração. Preview, PDF, ODT, HTML exportado, contexto e evidências da IA removem integralmente blocos suprimidos e controles transitórios.
-
-Blocos B-602 versionados ainda carregam `data-bloco-pericial`, `data-arma-chave` e `data-cond-versao="2"`. Ao recompor seção derivada, o serviço preserva o wrapper atual pelo par arma+tipo, incluindo texto editado e o marcador de exclusão. A identidade da ação no editor, porém, é sempre `editorId + data-cond-instancia`.
-
-## Seções e desempenho
-
-`expandirSecoesRepetiveis()` aplica o processamento para cada arma. Evite parse repetido de `campos_especificos` ou buscas por arma dentro dos loops.
-
-Os testes de `secao-builder.service` e de blocos periciais cobrem marcadores legados e versionados, elegibilidade, remoção de headings residuais e preservação de conteúdo.
+`secao-builder.service.test.ts` cobre elegibilidade, projeções e reparo de estrutura derivada; `atualizacao-rep-gdl.service.test.ts` protege a reconciliação sem regravação da REP; `atualizar-rep-gdl-dialog.component.test.tsx` cobre o disparo com seleção vazia. O smoke manual deve confirmar que excluir cartuchos/estojos, salvar e executar **Atualizar REP → Reconciliar laudo** restaura ambos sem duplicação.
