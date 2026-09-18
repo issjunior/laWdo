@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import {
   Info,
@@ -15,6 +17,7 @@ import {
   Clock3,
   Download,
   RefreshCw,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { EstadoAtualizacaoResposta } from '@shared/atualizacao/atualizacao.types';
@@ -92,8 +95,8 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     const api = window.ipcAPI.atualizacao;
     if (!api) return;
     const resposta = manual ? await api.verificar() : await api.estado();
-    setAtualizacao(resposta.data);
-    if (!resposta.success && resposta.error) toast.error(resposta.error);
+    setAtualizacao({ ...resposta.data, falha: resposta.falha ?? resposta.data.falha });
+    if (manual && !resposta.success && resposta.falha) toast.error(resposta.falha.mensagem);
   };
 
   useEffect(() => {
@@ -120,6 +123,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   const atualizacaoDisponivel = atualizacao?.estado === 'disponivel' || atualizacao?.estado === 'baixando' || atualizacao?.estado === 'baixada' || atualizacao?.estado === 'aguardando_reinicio';
   const dadosAtualizacao = atualizacao?.atualizacaoDisponivel;
   const progressoAtualizacao = atualizacao?.progressoDetalhado;
+  const falhaAtualizacao = atualizacao?.falha;
 
   const formatarPacote = () => {
     if (!dadosAtualizacao) return '';
@@ -144,14 +148,31 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           : acao === 'instalar' ? await api.instalarAgora()
             : acao === 'agendar' ? await api.agendar()
               : await api.adiar();
-      setAtualizacao(resposta.data);
-      if (!resposta.success) toast.error(resposta.error || 'Não foi possível concluir a atualização.');
+      setAtualizacao({ ...resposta.data, falha: resposta.falha ?? resposta.data.falha });
+      if (!resposta.success) toast.error((resposta.falha ?? resposta.data.falha)?.mensagem || 'Não foi possível concluir a atualização.');
       if (resposta.success && acao === 'baixar' && resposta.data.estado === 'baixada') toast.success('Atualização baixada e validada.');
       if (resposta.success && acao === 'agendar') toast.success('Instalação agendada para a próxima inicialização.');
-    } catch (erro) {
-      toast.error(erro instanceof Error ? erro.message : 'Não foi possível concluir a atualização.');
+    } catch {
+      toast.error('Não foi possível concluir a atualização.');
     } finally {
       setAcaoAtualizacao(null);
+    }
+  };
+
+  const copiarDetalhesFalha = async () => {
+    if (!falhaAtualizacao) return;
+    const detalhes = [
+      `Código: ${falhaAtualizacao.codigo}`,
+      `Etapa: ${falhaAtualizacao.etapa}`,
+      `Ocorrido em: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(falhaAtualizacao.ocorridoEm))}`,
+      `Versão do laWdo: v${appInfo?.version ?? atualizacao?.versaoInstalada ?? 'não identificada'}`,
+      `Detalhe técnico: ${falhaAtualizacao.detalheTecnico}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(detalhes);
+      toast.success('Detalhes do erro copiados.');
+    } catch {
+      toast.error('Não foi possível copiar os detalhes do erro.');
     }
   };
 
@@ -316,7 +337,9 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                   )}
                   <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
                     <span className="text-sm font-medium text-muted-foreground">Status</span>
-                    {dadosAtualizacao ? (
+                    {falhaAtualizacao ? (
+                      <Badge variant="destructive">Falha na atualização</Badge>
+                    ) : dadosAtualizacao ? (
                       <Badge variant="default" className="bg-green-500 hover:bg-green-600">Atualização disponível</Badge>
                     ) : (
                       <span className="text-xs font-semibold">Nenhuma atualização disponível</span>
@@ -334,7 +357,26 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                     </div>
                   </div>
                 )}
-                {atualizacao?.erro && <p className="flex items-center gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" />{atualizacao.erro}</p>}
+                {falhaAtualizacao && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Não foi possível concluir a atualização</AlertTitle>
+                    <AlertDescription className="space-y-2">
+                      <p>{falhaAtualizacao.mensagem}</p>
+                      <Collapsible>
+                        <CollapsibleTrigger className="text-xs font-medium underline underline-offset-2">Ver detalhes técnicos</CollapsibleTrigger>
+                        <CollapsibleContent className="mt-2 space-y-2 rounded-md bg-destructive/10 p-2 text-xs">
+                          <p><span className="font-medium">Código:</span> {falhaAtualizacao.codigo}</p>
+                          <p><span className="font-medium">Etapa:</span> {falhaAtualizacao.etapa}</p>
+                          <p><span className="font-medium">Detalhe:</span> {falhaAtualizacao.detalheTecnico}</p>
+                          <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => void copiarDetalhesFalha()}>
+                            <Copy className="mr-1.5 h-3.5 w-3.5" /> Copiar detalhes
+                          </Button>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {progressoAtualizacao && ['verificando', 'baixando', 'instalando', 'aguardando_reinicio'].includes(atualizacao?.estado ?? '') && (
                   <div className="space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-3" aria-live="polite">
                     <div className="flex items-center justify-between gap-3 text-xs">
@@ -352,6 +394,16 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                     <Button size="sm" variant="outline" className="w-full" onClick={() => void executarAcaoAtualizacao('verificar')} disabled={acaoAtualizacao !== null || atualizacao?.estado === 'baixando'}>
                       <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${acaoAtualizacao === 'verificar' ? 'animate-spin' : ''}`} /> Verificar atualizações
                     </Button>
+                    {falhaAtualizacao?.acaoSugerida === 'baixar' && (
+                      <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>
+                        <Download className="mr-1.5 h-3.5 w-3.5" /> Tentar baixar novamente
+                      </Button>
+                    )}
+                    {falhaAtualizacao?.acaoSugerida === 'instalar' && (
+                      <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('instalar')} disabled={acaoAtualizacao !== null}>
+                        <Download className="mr-1.5 h-3.5 w-3.5" /> Tentar instalar novamente
+                      </Button>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 gap-2">
                     {atualizacao?.estado === 'disponivel' && <Button size="sm" className="w-full" onClick={() => void executarAcaoAtualizacao('baixar')} disabled={acaoAtualizacao !== null}>

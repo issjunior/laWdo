@@ -1,10 +1,10 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { atualizacaoService } from '../../services/atualizacao.service.js';
+import { atualizacaoService, normalizarFalhaAtualizacao } from '../../services/atualizacao.service.js';
+import type { AcaoAtualizacao, EtapaFalhaAtualizacao } from '../../../shared/atualizacao/atualizacao.types.js';
 
-function respostaErro(erro: unknown) {
-  const mensagem = erro instanceof Error ? erro.message : 'Erro inesperado na atualização.';
-  return { success: false, data: atualizacaoService.obterEstado(), error: mensagem };
+function respostaErro(erro: unknown, etapa: EtapaFalhaAtualizacao = 'operacao', acaoSugerida?: AcaoAtualizacao) {
+  return { success: false, data: atualizacaoService.obterEstado(), falha: normalizarFalhaAtualizacao(erro, etapa, acaoSugerida) };
 }
 
 const autorizacoesPendentes = new Map<string, { webContentsId: number; resolver: (autorizado: boolean) => void }>();
@@ -37,10 +37,10 @@ export function registerAtualizacaoHandlers(): void {
   });
   ipcMain.handle('atualizacao:estado', () => ({ success: true, data: atualizacaoService.obterEstado() }));
   ipcMain.handle('atualizacao:verificar', async () => {
-    try { return { success: true, data: await atualizacaoService.verificar(true) }; } catch (erro) { return respostaErro(erro); }
+    try { const data = await atualizacaoService.verificar(true); return data.falha ? { success: false, data, falha: data.falha } : { success: true, data }; } catch (erro) { return respostaErro(erro, 'verificacao', 'verificar'); }
   });
   ipcMain.handle('atualizacao:baixar', async () => {
-    try { return { success: true, data: await atualizacaoService.baixar() }; } catch (erro) { return respostaErro(erro); }
+    try { const data = await atualizacaoService.baixar(); return data.falha ? { success: false, data, falha: data.falha } : { success: true, data }; } catch (erro) { return respostaErro(erro, 'download', 'baixar'); }
   });
   ipcMain.handle('atualizacao:adiar', () => {
     try { return { success: true, data: atualizacaoService.adiar() }; } catch (erro) { return respostaErro(erro); }
@@ -48,12 +48,12 @@ export function registerAtualizacaoHandlers(): void {
   ipcMain.handle('atualizacao:preparar-reinicio', async evento => {
     try {
       return { success: true, data: await atualizacaoService.prepararReinicio(() => solicitarAutorizacaoReinicio(evento.sender)) };
-    } catch (erro) { return respostaErro(erro); }
+    } catch (erro) { return respostaErro(erro, 'backup', 'instalar'); }
   });
   ipcMain.handle('atualizacao:instalar-agora', async evento => {
     try {
       return { success: true, data: await atualizacaoService.instalarAgora(() => solicitarAutorizacaoReinicio(evento.sender)) };
-    } catch (erro) { return respostaErro(erro); }
+    } catch (erro) { return respostaErro(erro, 'instalacao', 'instalar'); }
   });
   ipcMain.handle('atualizacao:agendar', () => {
     try { return { success: true, data: atualizacaoService.agendarParaProximaInicializacao() }; } catch (erro) { return respostaErro(erro); }

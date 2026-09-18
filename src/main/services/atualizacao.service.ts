@@ -7,9 +7,13 @@ import { Readable } from 'node:stream';
 import { chavePublicaRelease } from '../../shared/atualizacao/chave-publica-release.js';
 import type {
   ArtefatoAtualizacao,
+  AcaoAtualizacao,
   AtualizacaoDisponivel,
+  CodigoFalhaAtualizacao,
   EstadoAtualizacao,
   EstadoAtualizacaoResposta,
+  EtapaFalhaAtualizacao,
+  FalhaAtualizacao,
   ManifestoAtualizacao,
   PlataformaAtualizacao,
   ProgressoAtualizacao,
@@ -22,6 +26,71 @@ const URL_FEED = 'https://issjunior.github.io/laWdo/stable';
 const UM_DIA_EM_MS = 24 * 60 * 60 * 1000;
 const HASH_SHA256 = /^[a-f0-9]{64}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+const TIMEOUT_VERIFICACAO_MS = 20_000;
+
+class ErroRespostaHttpAtualizacao extends Error {
+  constructor(readonly status: number) {
+    super(`Resposta HTTP ${status} durante a atualização.`);
+    this.name = 'ErroRespostaHttpAtualizacao';
+  }
+}
+
+function detalheTecnico(erro: unknown): string {
+  if (!(erro instanceof Error)) return 'Erro sem detalhes técnicos disponíveis.';
+  const causa = erro.cause;
+  const codigoCausa = causa && typeof causa === 'object' && 'code' in causa && typeof causa.code === 'string' ? ` (${causa.code})` : '';
+  return `${erro.name}: ${erro.message}${codigoCausa}`.slice(0, 500);
+}
+
+function codigoCausa(erro: unknown): string | undefined {
+  if (!erro || typeof erro !== 'object' || !('cause' in erro)) return undefined;
+  const causa = erro.cause;
+  return causa && typeof causa === 'object' && 'code' in causa && typeof causa.code === 'string' ? causa.code : undefined;
+}
+
+function mensagemFalha(codigo: CodigoFalhaAtualizacao): string {
+  return {
+    REDE_INDISPONIVEL: 'O laWdo não conseguiu acessar o servidor de atualizações. A conexão pode estar indisponível ou o endereço pode estar bloqueado pela rede.',
+    TEMPO_ESGOTADO: 'O servidor de atualizações não respondeu no tempo esperado. Tente novamente mais tarde.',
+    SERVICO_INDISPONIVEL: 'O serviço de atualizações está indisponível no momento. Tente novamente mais tarde.',
+    RECURSO_INDISPONIVEL: 'O arquivo de atualização não está disponível no servidor.',
+    RESPOSTA_INVALIDA: 'O servidor enviou uma resposta de atualização inválida.',
+    ASSINATURA_INVALIDA: 'Não foi possível confirmar a autenticidade da atualização recebida.',
+    PACOTE_INCOMPATIVEL: 'Não há pacote de atualização compatível com este dispositivo.',
+    DOWNLOAD_INTERROMPIDO: 'Não foi possível concluir o download da atualização.',
+    INTEGRIDADE_INVALIDA: 'O pacote baixado não passou na verificação de integridade.',
+    ARMAZENAMENTO_INDISPONIVEL: 'Não foi possível gravar os arquivos necessários para a atualização.',
+    BACKUP_FALHOU: 'Não foi possível criar o backup obrigatório antes da atualização.',
+    ALTERACOES_PENDENTES: 'Existem alterações não salvas. Salve ou descarte-as antes de atualizar.',
+    CONFIRMACAO_EXPIRADA: 'A confirmação de fechamento seguro expirou. Tente novamente.',
+    INSTALADOR_FALHOU: 'Não foi possível iniciar o instalador da atualização.',
+    OPERACAO_INDISPONIVEL: 'Esta operação de atualização não está disponível agora.',
+    ERRO_INESPERADO: 'Ocorreu um erro inesperado durante a atualização.',
+  }[codigo];
+}
+
+export function normalizarFalhaAtualizacao(erro: unknown, etapa: EtapaFalhaAtualizacao, acaoSugerida?: AcaoAtualizacao): FalhaAtualizacao {
+  const mensagem = erro instanceof Error ? erro.message : '';
+  const mensagemNormalizada = mensagem.toLowerCase();
+  const causa = codigoCausa(erro);
+  let codigo: CodigoFalhaAtualizacao = 'ERRO_INESPERADO';
+  if (erro instanceof ErroRespostaHttpAtualizacao) codigo = erro.status === 404 ? 'RECURSO_INDISPONIVEL' : 'SERVICO_INDISPONIVEL';
+  else if (erro instanceof Error && erro.name === 'TimeoutError') codigo = 'TEMPO_ESGOTADO';
+  else if (['ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT'].includes(causa ?? '') || mensagemNormalizada.includes('fetch failed')) codigo = 'REDE_INDISPONIVEL';
+  else if (mensagemNormalizada.includes('índice de atualização indisponível')) codigo = 'SERVICO_INDISPONIVEL';
+  else if (mensagemNormalizada.includes('assinatura')) codigo = 'ASSINATURA_INVALIDA';
+  else if (mensagemNormalizada.includes('artefato compatível')) codigo = 'PACOTE_INCOMPATIVEL';
+  else if (mensagemNormalizada.includes('manifesto') || mensagemNormalizada.includes('json')) codigo = 'RESPOSTA_INVALIDA';
+  else if (mensagemNormalizada.includes('não corresponde ao manifesto')) codigo = 'INTEGRIDADE_INVALIDA';
+  else if (mensagemNormalizada.includes('backup')) codigo = 'BACKUP_FALHOU';
+  else if (mensagemNormalizada.includes('alterações não salvas')) codigo = 'ALTERACOES_PENDENTES';
+  else if (mensagemNormalizada.includes('confirmação de fechamento')) codigo = 'CONFIRMACAO_EXPIRADA';
+  else if (mensagemNormalizada.includes('instalador') || mensagemNormalizada.includes('appimage')) codigo = 'INSTALADOR_FALHOU';
+  else if (['eacces', 'enospc', 'eperm', 'write'].some(termo => mensagemNormalizada.includes(termo))) codigo = 'ARMAZENAMENTO_INDISPONIVEL';
+  else if (mensagemNormalizada.includes('download') || etapa === 'download') codigo = 'DOWNLOAD_INTERROMPIDO';
+  else if (mensagemNormalizada.includes('não há ') || mensagemNormalizada.includes('operação de atualização')) codigo = 'OPERACAO_INDISPONIVEL';
+  return { codigo, etapa, mensagem: mensagemFalha(codigo), detalheTecnico: detalheTecnico(erro), ocorridoEm: new Date().toISOString(), acaoSugerida };
+}
 
 function calcularHash(caminho: string): string {
   return createHash('sha256').update(fs.readFileSync(caminho)).digest('hex');
@@ -118,7 +187,7 @@ export class AtualizacaoService {
   private estado: EstadoAtualizacao = 'ociosa';
   private atualizacaoDisponivel?: AtualizacaoDisponivel;
   private caminhoDownload?: string;
-  private erro?: string;
+  private falha?: FalhaAtualizacao;
   private progresso?: number;
   private progressoDetalhado?: ProgressoAtualizacao;
   private verificadoEm?: string;
@@ -141,7 +210,7 @@ export class AtualizacaoService {
   }
 
   obterEstado(): EstadoAtualizacaoResposta {
-    return { estado: this.estado, versaoInstalada: app.getVersion(), atualizacaoDisponivel: this.atualizacaoDisponivel, caminhoDownload: this.caminhoDownload, progresso: this.progresso, progressoDetalhado: this.progressoDetalhado, erro: this.erro, verificadoEm: this.verificadoEm };
+    return { estado: this.estado, versaoInstalada: app.getVersion(), atualizacaoDisponivel: this.atualizacaoDisponivel, caminhoDownload: this.caminhoDownload, progresso: this.progresso, progressoDetalhado: this.progressoDetalhado, falha: this.falha, verificadoEm: this.verificadoEm };
   }
 
   onProgresso(ouvinte: (progresso: ProgressoAtualizacao) => void): () => void {
@@ -158,8 +227,10 @@ export class AtualizacaoService {
       const plataforma = plataformaAtual();
       const arquitetura = process.arch === 'arm64' ? 'arm64' : 'x64';
       const indiceUrl = `${URL_FEED}/${plataforma}-${arquitetura}.json`;
-      const [manifestoResposta, assinaturaResposta] = await Promise.all([fetch(indiceUrl), fetch(`${indiceUrl}.sig`)]);
-      if (!manifestoResposta.ok || !assinaturaResposta.ok) throw new Error('Índice de atualização indisponível.');
+      const sinal = AbortSignal.timeout(TIMEOUT_VERIFICACAO_MS);
+      const [manifestoResposta, assinaturaResposta] = await Promise.all([fetch(indiceUrl, { signal: sinal }), fetch(`${indiceUrl}.sig`, { signal: sinal })]);
+      if (!manifestoResposta.ok) throw new ErroRespostaHttpAtualizacao(manifestoResposta.status);
+      if (!assinaturaResposta.ok) throw new ErroRespostaHttpAtualizacao(assinaturaResposta.status);
       this.definirProgresso(45, 'validando', 'Validando a atualização encontrada.');
       const manifestoBruto = await manifestoResposta.json() as unknown;
       const assinatura = (await assinaturaResposta.text()).trim();
@@ -180,18 +251,19 @@ export class AtualizacaoService {
       this.definirEstado('disponivel');
       this.definirProgresso(100, 'validando', 'Atualização pronta para baixar.');
     } catch (erro) {
-      this.definirFalha(erro);
+      this.definirFalha(erro, 'verificacao', 'verificar');
     }
     return this.obterEstado();
   }
 
   async baixar(): Promise<EstadoAtualizacaoResposta> {
-    if (this.estado !== 'disponivel' || !this.atualizacaoDisponivel) throw new Error('Não há atualização disponível para download.');
+    if ((this.estado !== 'disponivel' && !(this.estado === 'falhou' && this.falha?.acaoSugerida === 'baixar')) || !this.atualizacaoDisponivel) throw new Error('Não há atualização disponível para download.');
     this.definirEstado('baixando');
     this.definirProgresso(0, 'baixando', 'Iniciando download do pacote.');
     try {
       const resposta = await fetch(this.atualizacaoDisponivel.artefato.url);
-      if (!resposta.ok || !resposta.body) throw new Error('Não foi possível baixar o instalador.');
+      if (!resposta.ok) throw new ErroRespostaHttpAtualizacao(resposta.status);
+      if (!resposta.body) throw new Error('Não foi possível baixar o instalador.');
       const destinoDir = path.join(app.getPath('userData'), 'atualizacoes');
       fs.mkdirSync(destinoDir, { recursive: true });
       const destino = path.join(destinoDir, this.atualizacaoDisponivel.artefato.nome);
@@ -219,7 +291,7 @@ export class AtualizacaoService {
       this.definirProgresso(100, 'validando', 'Pacote baixado e validado.');
       this.definirEstado('baixada');
     } catch (erro) {
-      this.definirFalha(erro);
+      this.definirFalha(erro, 'download', 'baixar');
     }
     return this.obterEstado();
   }
@@ -247,13 +319,13 @@ export class AtualizacaoService {
       this.definirEstado('aguardando_reinicio');
       this.definirProgresso(100, 'agendando', 'Atualização preparada para o próximo reinício.');
     } catch (erro) {
-      this.definirFalha(erro);
+      this.definirFalha(erro, 'backup', 'instalar');
     }
     return this.obterEstado();
   }
 
   async instalarAgora(solicitarAutorizacao: () => Promise<void>): Promise<EstadoAtualizacaoResposta> {
-    if (this.estado !== 'baixada' || !this.atualizacaoDisponivel || !this.caminhoDownload) {
+    if ((this.estado !== 'baixada' && !(this.estado === 'falhou' && this.falha?.acaoSugerida === 'instalar')) || !this.atualizacaoDisponivel || !this.caminhoDownload) {
       throw new Error('Não há pacote validado pronto para instalação.');
     }
     this.definirEstado('instalando');
@@ -266,7 +338,7 @@ export class AtualizacaoService {
       await this.executarInstalador(this.atualizacaoDisponivel.artefato, this.caminhoDownload);
       this.definirEstado('concluida');
     } catch (erro) {
-      this.definirFalha(erro);
+      this.definirFalha(erro, 'instalacao', 'instalar');
     }
     return this.obterEstado();
   }
@@ -394,7 +466,7 @@ export class AtualizacaoService {
 
   private definirEstado(estado: EstadoAtualizacao): void {
     this.estado = estado;
-    this.erro = undefined;
+    this.falha = undefined;
   }
 
   private definirProgresso(percentual: number, etapa: ProgressoAtualizacao['etapa'], descricao: string): void {
@@ -431,11 +503,11 @@ export class AtualizacaoService {
     }
   }
 
-  private definirFalha(erro: unknown): void {
-    const mensagem = erro instanceof Error ? erro.message : 'Falha inesperada ao atualizar.';
+  private definirFalha(erro: unknown, etapa: EtapaFalhaAtualizacao, acaoSugerida?: AcaoAtualizacao): void {
+    const falha = normalizarFalhaAtualizacao(erro, etapa, acaoSugerida);
     this.estado = 'falhou';
-    this.erro = mensagem;
-    log.warn('Falha na verificação ou download de atualização.', { mensagem });
+    this.falha = falha;
+    log.warn('Falha na atualização.', { codigo: falha.codigo, etapa, detalheTecnico: falha.detalheTecnico });
   }
 }
 

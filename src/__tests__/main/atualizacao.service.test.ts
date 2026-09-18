@@ -23,14 +23,34 @@ describe('AtualizacaoService', () => {
     });
   });
 
-  it('deve registrar falha quando o índice não estiver disponível', async () => {
+  it('deve registrar falha amigável quando o índice não estiver disponível', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
     const service = new AtualizacaoService();
 
     const estado = await service.verificar(true);
 
     expect(estado.estado).toBe('falhou');
-    expect(estado.erro).toBe('Índice de atualização indisponível.');
+    expect(estado.falha).toMatchObject({
+      codigo: 'RECURSO_INDISPONIVEL',
+      etapa: 'verificacao',
+      acaoSugerida: 'verificar',
+    });
+    expect(estado.falha?.mensagem).not.toContain('Índice de atualização indisponível');
+  });
+
+  it('deve explicar falha de rede sem expor a mensagem bruta do fetch', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed', {
+      cause: { code: 'ENOTFOUND' },
+    }));
+    const service = new AtualizacaoService();
+
+    const estado = await service.verificar(true);
+
+    expect(estado.falha).toMatchObject({
+      codigo: 'REDE_INDISPONIVEL',
+      mensagem: expect.stringContaining('não conseguiu acessar o servidor de atualizações'),
+      detalheTecnico: expect.stringContaining('fetch failed'),
+    });
   });
 
   it('deve recusar download sem uma atualização disponível', async () => {
