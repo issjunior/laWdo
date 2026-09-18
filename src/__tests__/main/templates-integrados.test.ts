@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { laudoPadraoB602V1 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v1';
-import { laudoPadraoB602V3 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v3';
+import { laudoPadraoB602V4 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v4';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 
@@ -32,10 +32,23 @@ describe('catálogo de templates integrados', () => {
     expect(calcularChecksumTemplateIntegrado(comImagem)).toBe(calcularChecksumTemplateIntegrado(base));
   });
 
-  it('inclui a descrição e o total de cartuchos no template B-602 atual', () => {
-    const conteudoCartuchos = laudoPadraoB602V3.secoes.find(secao => secao.chave === 'dos-exames')?.conteudo || '';
+  it('estrutura cartuchos, estojos e armas como subseções do B-602 atual', () => {
+    const conteudoCartuchos = laudoPadraoB602V4.secoes.find(secao => secao.chave === 'dos-cartuchos')?.conteudo || '';
 
-    expect(laudoPadraoB602V3.versao).toBe(3);
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V4)).not.toThrow();
+    expect(laudoPadraoB602V4.versao).toBe(4);
+    expect(laudoPadraoB602V4.secoes.find(secao => secao.chave === 'dos-cartuchos')).toMatchObject({
+      chavePai: 'dos-exames',
+      ordem: 4,
+    });
+    expect(laudoPadraoB602V4.secoes.find(secao => secao.chave === 'dos-estojos')).toMatchObject({
+      chavePai: 'dos-exames',
+      ordem: 5,
+    });
+    expect(laudoPadraoB602V4.secoes.find(secao => secao.chave === 'das-armas')).toMatchObject({
+      chavePai: 'dos-exames',
+      ordem: 6,
+    });
     expect(conteudoCartuchos).toContain('Trata-se de');
     expect(conteudoCartuchos).toContain('{{b602_total_cartuchos}}');
     expect(conteudoCartuchos).toContain('text-align: justify; text-indent: 35.43pt;');

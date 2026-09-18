@@ -8,39 +8,39 @@ import {
 import { laudoService } from '../../main/services/laudo.service';
 
 describe('secao-builder.service', () => {
-  it('mantém DOS EXAMES ativo para cartucho e estojo da coleção canônica', () => {
-    const secoes = [{
-      id: 'exames', template_id: 'tpl-1', nome: 'DOS EXAMES', ordem: 0,
-      conteudo: '<div data-cond-bloco="b602_cartuchos_toggle"><p>Cartuchos</p></div><div data-cond-bloco="b602_estojos_toggle"><p>Estojos</p></div>',
-      created_at: '', updated_at: '',
-    }];
+  it('numera as subseções de DOS EXAMES conforme as peças canônicas', () => {
+    const secoes = [
+      { id: 'preambulo', template_id: 'tpl-1', nome: 'PREÂMBULO', ordem: 0, conteudo: '<p>Preâmbulo</p>', created_at: '', updated_at: '' },
+      { id: 'objetivo', template_id: 'tpl-1', nome: 'OBJETIVO', ordem: 1, conteudo: '<p>Objetivo</p>', created_at: '', updated_at: '' },
+      { id: 'material', template_id: 'tpl-1', nome: 'MATERIAL APRESENTADO A EXAME', ordem: 2, conteudo: '<p>Material</p>', created_at: '', updated_at: '' },
+      { id: 'exames', template_id: 'tpl-1', nome: 'DOS EXAMES', ordem: 3, conteudo: '<p></p>', created_at: '', updated_at: '' },
+      { id: 'cartuchos', template_id: 'tpl-1', parent_id: 'exames', nome: 'DOS CARTUCHOS', ordem: 4, conteudo: '<p>Cartuchos</p>', created_at: '', updated_at: '' },
+      { id: 'estojos', template_id: 'tpl-1', parent_id: 'exames', nome: 'DOS ESTOJOS', ordem: 5, conteudo: '<p>Estojos</p>', created_at: '', updated_at: '' },
+      { id: 'armas', template_id: 'tpl-1', parent_id: 'exames', nome: 'DAS ARMAS', ordem: 6, repetir_para: 'armas', conteudo: '<p>Armas</p>', created_at: '', updated_at: '' },
+    ];
     const pecaBase = {
       idLocal: 'peca', origem: 'gdl', alteradaLocalmente: false,
       comuns: { quantidade: 1, identificacao: '', lacreEntrada: '', observacao: '' },
       personalizados: {}, extrasGdl: {},
     };
 
-    const resultado = filtrarSecoesAtivas(secoes, {
-      b602: {
-        pecas: [
-          { ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' },
-          { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' },
-        ],
-      },
-    });
+    const cenarios = [
+      { nome: 'cartuchos', pecas: [{ ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS CARTUCHOS'], ausentes: ['DOS ESTOJOS', 'DAS ARMAS'] },
+      { nome: 'estojos', pecas: [{ ...pecaBase, tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS ESTOJOS'], ausentes: ['DOS CARTUCHOS', 'DAS ARMAS'] },
+      { nome: 'cartuchos e estojos', pecas: [{ ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' }, { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS CARTUCHOS', '4.2 DOS ESTOJOS'], ausentes: ['DAS ARMAS'] },
+      { nome: 'cartuchos, estojos e armas', pecas: [{ ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' }, { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' }, { ...pecaBase, idLocal: 'arma', tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }], titulos: ['4. DOS EXAMES', '4.1 DOS CARTUCHOS', '4.2 DOS ESTOJOS', '4.3 DAS ARMAS'], ausentes: [] },
+      { nome: 'armas', pecas: [{ ...pecaBase, tipoCodigo: '104', tipoPeca: 'PISTOLA(S)' }], titulos: ['4. DOS EXAMES', '4.1 DAS ARMAS'], ausentes: ['DOS CARTUCHOS', 'DOS ESTOJOS'] },
+      { nome: 'sem peças elegíveis', pecas: [], titulos: [], ausentes: ['DOS EXAMES'] },
+    ];
 
-    expect(resultado).toHaveLength(1);
-    const html = buildHtml(resultado, new Map(), {
-      b602: {
-        pecas: [
-          { ...pecaBase, tipoCodigo: '17', tipoPeca: 'CARTUCHO(S)' },
-          { ...pecaBase, idLocal: 'estojo', tipoCodigo: '101', tipoPeca: 'ESTOJO(S)' },
-        ],
-      },
-    });
-    expect(html).toContain('data-derivada-rep="true"');
-    expect(html).toContain('Cartuchos');
-    expect(html).toContain('Estojos');
+    for (const cenario of cenarios) {
+      const camposEspecificos = { b602: { pecas: cenario.pecas } };
+      const resultado = filtrarSecoesAtivas(secoes, camposEspecificos);
+      const html = buildHtml(resultado, new Map(), camposEspecificos);
+
+      for (const titulo of cenario.titulos) expect(html, cenario.nome).toContain(titulo);
+      for (const titulo of cenario.ausentes) expect(html, cenario.nome).not.toContain(titulo);
+    }
   });
 
   it('repara DOS EXAMES antigo quando o bloco de cartuchos ainda não existia', () => {
