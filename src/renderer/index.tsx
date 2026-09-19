@@ -13,6 +13,11 @@ import type {
 import type { AutorizacaoReinicioAtualizacao, RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
 import type { AtualizacaoPainelIa, ComandoPainelIa, LimiteUsoIa, PlanoExecucaoIaResumo, ProgressoConsultaIa, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
 import type { ProgressoAtualizacao } from '@shared/atualizacao/atualizacao.types';
+import type {
+  AmostraDesempenho,
+  EstadoCapturaDesempenho,
+  EventoDesempenhoEntrada,
+} from '@shared/desempenho/contratos';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -64,6 +69,18 @@ interface IpcIlustracoesLegado {
   onPanelAction: (cb: (action: string, ...args: unknown[]) => void) => () => void;
   onStateSync: <T>(cb: (data: T) => void) => () => void;
   onPanelClosed: (cb: () => void) => () => void;
+}
+
+interface IpcDesempenhoRenderer {
+  estado: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  configurarPerfil: (perfil: 'importante' | 'critico') => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  iniciarDetalhada: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  pararDetalhada: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  marcarProblema: () => Promise<{ success: boolean; error?: string }>;
+  listar: () => Promise<{ success: boolean; data?: AmostraDesempenho[]; error?: string }>;
+  exportarCsv: () => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
+  registrar: (entrada: EventoDesempenhoEntrada) => void;
+  onPerfilAlterado: (callback: (estado: EstadoCapturaDesempenho) => void) => () => void;
 }
 
 interface IpcAPIRendererLegada {
@@ -124,6 +141,7 @@ interface IpcAPIRendererLegada {
     onSolicitarReinicio: (callback: () => AutorizacaoReinicioAtualizacao) => () => void;
   };
   log: IpcGrupoLegado;
+  desempenho: IpcDesempenhoRenderer;
   diagnosticoInterno: IpcGrupoLegado;
   ilustracoes: IpcIlustracoesLegado;
 }
@@ -259,6 +277,17 @@ const initApp = async () => {
           listarAuditoria: async () => ({ success: true, data: [], total: 0 }),
           limparAuditoria: async () => ({ success: true, count: 0 }),
           contar: async () => ({ success: true, data: { sistema: 0, auditoria: 0 } }),
+        },
+        desempenho: {
+          estado: async () => ({ success: true, data: { perfil: 'importante', sessao: null, eventosDescartados: 0 } }),
+          configurarPerfil: async (perfil: 'importante' | 'critico') => ({ success: true, data: { perfil, sessao: null, eventosDescartados: 0 } }),
+          iniciarDetalhada: async () => ({ success: true, data: { perfil: 'detalhado', sessao: null, eventosDescartados: 0 } }),
+          pararDetalhada: async () => ({ success: true, data: { perfil: 'importante', sessao: null, eventosDescartados: 0 } }),
+          marcarProblema: async () => ({ success: true }),
+          listar: async () => ({ success: true, data: [] }),
+          exportarCsv: async () => ({ success: true, canceled: true }),
+          registrar: () => undefined,
+          onPerfilAlterado: () => () => undefined,
         },
         laudo: {
           findAll: async () => ({ success: true, data: [] }),

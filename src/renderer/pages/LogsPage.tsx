@@ -23,6 +23,7 @@ import {
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { DualTrackTimeline } from '@/components/timeline/DualTrackTimeline';
+import { DesempenhoTab } from '@/components/desempenho/DesempenhoTab';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -177,7 +178,7 @@ const formatarTimestamp = (ts: string): string => {
 };
 
 export function LogsPage() {
-  const [aba, setAba] = useState<'sistema' | 'auditoria' | 'timeline'>('sistema');
+  const [aba, setAba] = useState<'sistema' | 'auditoria' | 'timeline' | 'desempenho'>('sistema');
   const [logsSistema, setLogsSistema] = useState<SystemLog[]>([]);
   const [logsAuditoria, setLogsAuditoria] = useState<AuditLog[]>([]);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
@@ -649,7 +650,7 @@ export function LogsPage() {
         )}
       </div>
 
-      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria' | 'timeline')}>
+      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria' | 'timeline' | 'desempenho')}>
         <TabsList>
           <TabsTrigger value="sistema" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -662,6 +663,10 @@ export function LogsPage() {
           <TabsTrigger value="timeline" className="flex items-center gap-2">
             <Clock className="h-4 w-4" />
             Linha do Tempo
+          </TabsTrigger>
+          <TabsTrigger value="desempenho" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Desempenho
           </TabsTrigger>
         </TabsList>
 
@@ -867,6 +872,9 @@ export function LogsPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+        <TabsContent value="desempenho">
+          <DesempenhoTab />
         </TabsContent>
       </Tabs>
 

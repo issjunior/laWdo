@@ -180,10 +180,19 @@ function registrarFalha(chave: string, erro: unknown): void {
   });
 }
 
+function registrarDesempenhoPlaceholders(duracaoMs: number, resultado: ResultadoAplicacaoPlaceholders, metadados: Record<string, number | boolean>): void {
+  window.ipcAPI?.desempenho?.registrar({
+    origem: 'placeholder', categoria: 'visualizacao', evento: resultado.estado,
+    operacao: 'aplicar_visualizacao', duracaoMs,
+    metadados: { ...metadados, placeholders: resultado.processados, falhou: resultado.estado === 'falhou' },
+  });
+}
+
 export function aplicarVisualizacaoPlaceholders(
   editor: TinyMceEditorInstance,
   opcoes: OpcoesAplicacaoPlaceholders,
 ): ResultadoAplicacaoPlaceholders {
+  const inicio = performance.now();
   if (!editorPronto(editor)) {
     return { estado: 'adiado', processados: 0, falhas: 0 };
   }
@@ -193,10 +202,16 @@ export function aplicarVisualizacaoPlaceholders(
 
   let processados = 0;
   let falhas = 0;
+  let previasRemovidas = 0;
+  let previasCriadas = 0;
+  let tabelas = 0;
+  let celulas = 0;
 
   try {
     editor.undoManager.ignore(() => {
-      body.querySelectorAll('[data-placeholder-preview="true"]').forEach(preview => preview.remove());
+      const previas = body.querySelectorAll('[data-placeholder-preview="true"]');
+      previasRemovidas = previas.length;
+      previas.forEach(preview => preview.remove());
       body.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
         elemento.removeAttribute('data-tooltip-xxx');
         elemento.removeAttribute('data-origem-xxx');
@@ -269,6 +284,9 @@ export function aplicarVisualizacaoPlaceholders(
               tabela.style.setProperty('width', '100%', 'important');
               tabela.style.setProperty('max-width', '100%', 'important');
             });
+            tabelas += preview.querySelectorAll('table').length;
+            celulas += preview.querySelectorAll('td, th').length;
+            previasCriadas += 1;
             if (configurarPreviaTabela(preview)) {
               preview.setAttribute('data-placeholder-preview-tabela', 'true');
             }
@@ -307,10 +325,14 @@ export function aplicarVisualizacaoPlaceholders(
   } catch (erro) {
     const mensagem = mensagemErro(erro);
     console.warn('Falha ao preparar a visualização dos placeholders.', { erro: mensagem });
-    return { estado: 'falhou', processados, falhas: falhas + 1, erro: mensagem };
+    const resultado = { estado: 'falhou' as const, processados, falhas: falhas + 1, erro: mensagem };
+    registrarDesempenhoPlaceholders(performance.now() - inicio, resultado, { previasCriadas, previasRemovidas, tabelas, celulas });
+    return resultado;
   }
 
-  return { estado: falhas ? 'falhou' : 'aplicado', processados, falhas };
+  const resultado = { estado: falhas ? 'falhou' as const : 'aplicado' as const, processados, falhas };
+  registrarDesempenhoPlaceholders(performance.now() - inicio, resultado, { previasCriadas, previasRemovidas, tabelas, celulas });
+  return resultado;
 }
 
 export function agendarVisualizacaoPlaceholders(
@@ -324,6 +346,7 @@ export function agendarVisualizacaoPlaceholders(
   const agendamento = setTimeout(() => {
     agendamentos.delete(editor);
     const resultado = aplicarVisualizacaoPlaceholders(editor, opcoes);
+    if (tentativa > 0) window.ipcAPI?.desempenho?.registrar({ origem: 'placeholder', categoria: 'visualizacao', evento: 'tentativa_repetida', operacao: 'agendar_visualizacao', metadados: { tentativas: tentativa + 1 } });
     if ((resultado.estado === 'adiado' || resultado.estado === 'falhou') && tentativa === 0) {
       agendarVisualizacaoPlaceholders(editor, opcoes, 1);
       return;

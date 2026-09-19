@@ -62,6 +62,10 @@ import type { ImagemLaudoResumo } from '@shared/types/imagem-laudo.types';
 const MINIATURAS_POR_LOTE = 30;
 const MINIATURA_PENDENTE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
+function registrarDesempenhoIlustracao(operacao: string, inicio: number, metadados: Record<string, number | boolean>): void {
+  window.ipcAPI.desempenho.registrar({ origem: 'ilustracao', categoria: 'painel', evento: 'concluido', operacao, duracaoMs: performance.now() - inicio, metadados });
+}
+
 function readFileAsDataUri(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -537,6 +541,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 
   const carregarMiniaturas = async (ids: string[]) => {
     if (ids.length === 0) return;
+    const inicio = performance.now();
     const resultado = await window.ipcAPI.ilustracoes.obterMiniaturas(laudoId, ids);
     if (!resultado.success) {
       toast.error(resultado.error || 'Não foi possível carregar as próximas miniaturas.');
@@ -547,6 +552,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       ...imagem,
       thumbnailUrl: miniaturasPorId.get(imagem.id) || imagem.thumbnailUrl,
     })));
+    registrarDesempenhoIlustracao('carregar_miniaturas', inicio, { imagens: ids.length, itensRenderizados: imagens.length });
   };
 
   const carregarMiniaturasPendentes = async () => {
@@ -559,10 +565,12 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 
   const carregarImagemCompleta = async (imagem: ImagemLaudo): Promise<ImagemLaudo> => {
     if (imagem.url) return imagem;
+    const inicio = performance.now();
     const resultado = await window.ipcAPI.ilustracoes.obterImagem(laudoId, imagem.id);
     if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível carregar a imagem.');
     const carregada = { ...imagem, url: resultado.data.dataUri };
     setImagens(atuais => atuais.map(item => item.id === imagem.id ? carregada : item));
+    registrarDesempenhoIlustracao('carregar_imagem_completa', inicio, { imagens: 1, imagensMemoria: imagens.filter(item => Boolean(item.url)).length + 1 });
     return carregada;
   };
 
@@ -583,6 +591,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
+    const inicio = performance.now();
 
     let proximaSequencia = imagens.length + 1;
     const novasImagens: ImagemLaudo[] = [];
@@ -608,6 +617,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       }
     }
     if (novasImagens.length > 0) setImagens(prev => [...prev, ...novasImagens]);
+    registrarDesempenhoIlustracao('upload_imagens', inicio, { imagens: novasImagens.length, tentativas: files.length });
     e.target.value = '';
   };
 
@@ -681,12 +691,14 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const handleInsertAll = async () => {
     if (!onInsertAll || imagens.length === 0) return;
     if (imagens.length > MINIATURAS_POR_LOTE && !confirm(`Inserir ${imagens.length} imagens pode consumir muita memória no editor. Deseja continuar?`)) return;
+    const inicio = performance.now();
     try {
       const completas: ImagemLaudo[] = [];
       for (const imagem of imagens) completas.push(await carregarImagemCompleta(imagem));
       onInsertAll(completas);
       void arquivarImagensInseridas(completas.map(imagem => imagem.id));
       setImagens([]);
+      registrarDesempenhoIlustracao('inserir_todas', inicio, { imagens: completas.length, imagensMemoria: completas.length });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível preparar as imagens para inserção.');
     }
@@ -701,9 +713,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     const indice = imagensReais.findIndex(imagem => imagem.id === imagemId);
     if (indice < 0) return;
 
+    const inicio = performance.now();
     void Promise.all(imagensReais.map(carregarImagemCompleta)).then(carregadas => {
       setImagensEmVisualizacao(carregadas);
       setLightboxIndex(indice);
+      registrarDesempenhoIlustracao('abrir_carrossel', inicio, { imagens: carregadas.length, imagensMemoria: carregadas.length });
     }).catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível abrir as imagens.'));
   };
 

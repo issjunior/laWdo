@@ -51,6 +51,7 @@ import type {
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
 import type { AutorizacaoReinicioAtualizacao, ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
+import type { AmostraDesempenho, EstadoCapturaDesempenho, EventoDesempenhoEntrada } from '../shared/desempenho/contratos.js';
 
 // O preload sandboxado não pode carregar módulos locais em tempo de execução.
 function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
@@ -395,6 +396,18 @@ export interface IpcAPI {
     timelineRep: (repId: string) => Promise<TimelineResponse>;
   };
 
+  desempenho: {
+    estado: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+    configurarPerfil: (perfil: 'importante' | 'critico') => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+    iniciarDetalhada: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+    pararDetalhada: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+    marcarProblema: () => Promise<{ success: boolean; error?: string }>;
+    listar: () => Promise<{ success: boolean; data?: AmostraDesempenho[]; error?: string }>;
+    exportarCsv: () => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
+    registrar: (entrada: EventoDesempenhoEntrada) => void;
+    onPerfilAlterado: (callback: (estado: EstadoCapturaDesempenho) => void) => () => void;
+  };
+
   diagnosticoInterno: {
     atualizarContextoRenderer: (contexto: Record<string, unknown>) => void;
     registrarErroFatalRenderer: (erro: Record<string, unknown>) => void;
@@ -641,6 +654,18 @@ const ALLOWED_CHANNELS = new Set([
   'log:contar',
   'log:timeline-rep',
 
+  // Captura de desempenho
+  'desempenho:estado',
+  'desempenho:configurar-perfil',
+  'desempenho:iniciar-detalhada',
+  'desempenho:parar-detalhada',
+  'desempenho:marcar-problema',
+  'desempenho:listar',
+  'desempenho:exportar-csv',
+  'desempenho:registrar',
+  'desempenho:registrar-lote',
+  'desempenho:perfil-alterado',
+
   // Diagnóstico interno
   'diagnostico:atualizar-contexto-renderer',
   'diagnostico:erro-fatal-renderer',
@@ -675,7 +700,69 @@ const canaisDiagnosticoInternos = new Set([
   'diagnostico:atualizar-contexto-renderer',
   'diagnostico:erro-fatal-renderer',
   'diagnostico:registrar-evento',
+  'desempenho:estado',
+  'desempenho:configurar-perfil',
+  'desempenho:iniciar-detalhada',
+  'desempenho:parar-detalhada',
+  'desempenho:marcar-problema',
+  'desempenho:listar',
+  'desempenho:exportar-csv',
 ]);
+
+let perfilDesempenhoAtual: 'importante' | 'critico' | 'detalhado' = 'importante';
+let temporizadorResumoIpc: ReturnType<typeof setTimeout> | null = null;
+let temporizadorLoteIpc: ReturnType<typeof setTimeout> | null = null;
+const eventosIpcDetalhados: EventoDesempenhoEntrada[] = [];
+const resumoIpcPorCanal = new Map<string, { quantidade: number; falhas: number; duracaoTotalMs: number; duracaoMaximaMs: number; bytesEntrada: number; bytesSaida: number }>();
+
+function tamanhoAproximado(valor: unknown, profundidade = 0): number {
+  if (valor == null) return 0;
+  if (typeof valor === 'string') return valor.length;
+  if (typeof valor === 'number' || typeof valor === 'boolean') return 8;
+  if (profundidade >= 2 || typeof valor !== 'object') return 0;
+  if (Array.isArray(valor)) return valor.slice(0, 20).reduce((total, item) => total + tamanhoAproximado(item, profundidade + 1), 0);
+  return Object.entries(valor as Record<string, unknown>).slice(0, 20).reduce((total, [chave, item]) => total + chave.length + tamanhoAproximado(item, profundidade + 1), 0);
+}
+
+function descarregarIpcDetalhado(): void {
+  temporizadorLoteIpc = null;
+  const lote = eventosIpcDetalhados.splice(0, 100);
+  if (lote.length) ipcRenderer.send('desempenho:registrar-lote', lote);
+  if (eventosIpcDetalhados.length) agendarIpcDetalhado();
+}
+
+function agendarIpcDetalhado(): void {
+  if (!temporizadorLoteIpc) temporizadorLoteIpc = setTimeout(descarregarIpcDetalhado, 1_000);
+}
+
+function descarregarResumoIpc(): void {
+  temporizadorResumoIpc = null;
+  const resumoIpc = [...resumoIpcPorCanal.entries()].slice(0, 10).map(([canal, dados]) => ({ canal, quantidade: dados.quantidade, falhas: dados.falhas, duracaoMaximaMs: dados.duracaoMaximaMs, duracaoMediaMs: dados.quantidade ? dados.duracaoTotalMs / dados.quantidade : 0, bytesEntrada: dados.bytesEntrada || null, bytesSaida: dados.bytesSaida || null }));
+  resumoIpcPorCanal.clear();
+  if (resumoIpc.length) ipcRenderer.send('desempenho:registrar', { origem: 'ipc', categoria: 'canal', evento: 'resumo_ipc', resumoIpc });
+}
+
+function registrarIpcDesempenho(canal: string, duracaoMs: number, sucesso: boolean, entrada: unknown[], resposta?: unknown): void {
+  const bytesEntrada = Array.from(entrada as unknown[]).reduce<number>((total, item) => total + tamanhoAproximado(item), 0);
+  const evento: EventoDesempenhoEntrada = { origem: 'ipc', categoria: 'canal', evento: sucesso ? 'concluido' : 'falhou', canal, duracaoMs, metadados: { sucesso, falhou: !sucesso, bytesEntrada, bytesSaida: tamanhoAproximado(resposta) } };
+  if (!sucesso || duracaoMs >= 2_000) { ipcRenderer.send('desempenho:registrar', evento); return; }
+  if (perfilDesempenhoAtual === 'detalhado') {
+    eventosIpcDetalhados.push(evento);
+    if (eventosIpcDetalhados.length >= 100) descarregarIpcDetalhado(); else agendarIpcDetalhado();
+    return;
+  }
+  if (perfilDesempenhoAtual === 'importante') {
+    const resumo = resumoIpcPorCanal.get(canal) ?? { quantidade: 0, falhas: 0, duracaoTotalMs: 0, duracaoMaximaMs: 0, bytesEntrada: 0, bytesSaida: 0 };
+    resumo.quantidade += 1; resumo.duracaoTotalMs += duracaoMs; resumo.duracaoMaximaMs = Math.max(resumo.duracaoMaximaMs, duracaoMs);
+    resumo.bytesEntrada += evento.metadados?.bytesEntrada as number; resumo.bytesSaida += evento.metadados?.bytesSaida as number;
+    resumoIpcPorCanal.set(canal, resumo);
+    if (!temporizadorResumoIpc) temporizadorResumoIpc = setTimeout(descarregarResumoIpc, 10_000);
+  }
+}
+
+ipcRenderer.on('desempenho:perfil-alterado', (_evento, estado: EstadoCapturaDesempenho) => {
+  perfilDesempenhoAtual = estado.sessao?.ativa ? 'detalhado' : estado.perfil;
+});
 
 const registrarEventoIpcDiagnostico = (dados: Record<string, unknown>): void => {
   ipcRenderer.send('diagnostico:registrar-evento', dados);
@@ -891,6 +978,7 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
     resposta => {
       if (!canaisDiagnosticoInternos.has(channel)) {
         registrarEventoIpcDiagnostico({ fase: 'sucesso', canal: channel, correlacaoId, duracaoMs: performance.now() - inicio });
+        registrarIpcDesempenho(channel, performance.now() - inicio, true, args, resposta);
       }
       return resposta;
     },
@@ -903,6 +991,7 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
           duracaoMs: performance.now() - inicio,
           erro: erro instanceof Error ? erro.message : 'Erro IPC não identificável',
         });
+        registrarIpcDesempenho(channel, performance.now() - inicio, false, args);
       }
       throw erro;
     },
@@ -1515,6 +1604,22 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     limparAuditoria: (userId?: string) => invocarComDiagnostico('log:limpar-auditoria', userId),
     contar: () => invocarComDiagnostico('log:contar'),
     timelineRep: (repId: string) => invocarComDiagnostico('log:timeline-rep', repId),
+  },
+
+  desempenho: {
+    estado: () => invocarComDiagnostico('desempenho:estado'),
+    configurarPerfil: (perfil: 'importante' | 'critico') => invocarComDiagnostico('desempenho:configurar-perfil', perfil),
+    iniciarDetalhada: () => invocarComDiagnostico('desempenho:iniciar-detalhada'),
+    pararDetalhada: () => invocarComDiagnostico('desempenho:parar-detalhada'),
+    marcarProblema: () => invocarComDiagnostico('desempenho:marcar-problema'),
+    listar: () => invocarComDiagnostico('desempenho:listar'),
+    exportarCsv: () => invocarComDiagnostico('desempenho:exportar-csv'),
+    registrar: (entrada: EventoDesempenhoEntrada) => enviarComDiagnostico('desempenho:registrar', entrada),
+    onPerfilAlterado: callback => {
+      const listener = (_evento: Electron.IpcRendererEvent, estado: EstadoCapturaDesempenho) => callback(estado);
+      ipcRenderer.on('desempenho:perfil-alterado', listener);
+      return () => ipcRenderer.removeListener('desempenho:perfil-alterado', listener);
+    },
   },
 
   diagnosticoInterno: {
