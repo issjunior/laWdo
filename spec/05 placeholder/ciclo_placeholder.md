@@ -39,3 +39,5 @@ A exportação também remove resíduos transitórios e resolve novamente a part
 ## Verificação
 
 Testes de utilitários, placeholders pendentes e exportação B-602 cobrem normalização, chaves indexadas, valores ausentes, prévias HTML e resolução de tabelas. `campos-reservados.test.ts` cobre a conversão local de `XXX` e o desligamento de placeholder pendente; `indice-placeholders.test.ts` cobre chaves únicas, valor pendente, precedência da tabela personalizada e preservação de alinhamento por célula; `exportacao-placeholders.test.ts` cobre o valor padrão personalizado no mapa de resolução.
+
+Para diagnosticar gargalo da TABELA 2, o procedimento manual fica na aba **Logs > Desempenho**: iniciar a captura detalhada antes de abrir ou reaplicar o laudo, reproduzir uma unica insercao e exportar o CSV ao terminar. A operacao incremental registra somente contadores estruturais; `tabelaB602=true` identifica a tabela de material encaminhado e `fallback=true` informa que foi necessario reaplicar a visualizacao completa. A telemetria detalhada nao e ativada automaticamente pelo laudo nem pela captura assistida de diagnostico.

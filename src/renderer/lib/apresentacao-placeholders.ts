@@ -216,6 +216,7 @@ function registrarDesempenhoPlaceholders(
   duracaoMs: number,
   resultado: ResultadoAplicacaoPlaceholders,
   operacao: 'aplicar_visualizacao_incremental' | 'aplicar_visualizacao_completa' | 'fallback_visualizacao_completa',
+  chave?: string | null,
 ): void {
   window.ipcAPI?.desempenho?.registrar({
     origem: 'placeholder', categoria: 'visualizacao', evento: resultado.estado,
@@ -229,6 +230,8 @@ function registrarDesempenhoPlaceholders(
       celulas: resultado.celulas,
       tabelasPersonalizadas: resultado.tabelasPersonalizadas,
       incremental: operacao === 'aplicar_visualizacao_incremental',
+      tabelaB602: chave === 'b602_tabela_material_enc',
+      fallback: operacao === 'fallback_visualizacao_completa',
       falhou: resultado.estado === 'falhou',
     },
   });
@@ -422,6 +425,7 @@ export function aplicarVisualizacaoPlaceholder(
   opcoes: OpcoesAplicacaoPlaceholders,
 ): ResultadoAplicacaoPlaceholders {
   const inicio = performance.now();
+  const chave = obterChavePlaceholder(ancora.getAttribute('data-placeholder') || '');
   if (!editorPronto(editor)) return criarResultado('adiado', criarContadores(0));
 
   const body = editor.getBody();
@@ -438,12 +442,12 @@ export function aplicarVisualizacaoPlaceholder(
     const mensagem = mensagemErro(erro);
     resultado.falhas += 1;
     const resultadoComErro = criarResultado('falhou', resultado, mensagem);
-    registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoComErro, 'aplicar_visualizacao_incremental');
+    registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoComErro, 'aplicar_visualizacao_incremental', chave);
     return resultadoComErro;
   }
 
   const resultadoFinal = criarResultado(resultado.falhas ? 'falhou' : 'aplicado', resultado);
-  registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoFinal, 'aplicar_visualizacao_incremental');
+  registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoFinal, 'aplicar_visualizacao_incremental', chave);
   return resultadoFinal;
 }
 

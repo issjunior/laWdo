@@ -50,6 +50,23 @@ Regra de threshold:
 
 `getLogger(module)` devolve um singleton por modulo.
 
+## Captura de desempenho
+
+`desempenho.service.ts` grava amostras tecnicas locais em `userData/logs/performance.log`, com rotacao e exportacao CSV. A coleta detalhada fica desligada por padrao para nao acrescentar trabalho ao uso cotidiano; eventos `info` que nao sao essenciais podem ser descartados pelos perfis `importante` e `critico`.
+
+A unica forma de ativar a coleta detalhada e a aba **Desempenho** de `LogsPage`: o usuario escolhe **Iniciar captura** antes de reproduzir o cenario e **Parar captura** ao concluir. A sessao detalhada expira em ate 15 minutos. A captura assistida de diagnostico coleta suas proprias evidencias e nao altera esse estado; portanto, para correlacionar eventos curtos do renderer, a coleta detalhada deve ser iniciada manualmente antes do teste.
+
+As amostras armazenam somente identificadores tecnicos, duracao, contadores e metricas agregadas. Para a atualizacao incremental de placeholders, os metadados permitidos incluem `tabelaB602` e `fallback`, ambos booleanos. Eles indicam, respectivamente, a TABELA 2 B-602 e o uso do caminho completo de contingencia, sem registrar numero de REP, texto, dados de pecas, imagens, nomes ou caminhos locais.
+
+Protocolo para investigar a TABELA 2 B-602:
+
+1. Abrir **Logs > Desempenho** e iniciar a captura detalhada.
+2. Abrir o laudo e inserir ou reaplicar a TABELA 2.
+3. Parar a captura e exportar o CSV.
+4. Procurar `aplicar_visualizacao_incremental` com `tabelaB602=true`, `incremental=true` e `fallback=false`; comparar contadores de placeholders, linhas e celulas entre repeticoes do mesmo cenario.
+
+Essa trilha demonstra a execucao e o volume estrutural do DOM, mas nao mede diretamente reflow, pintura, coleta de lixo ou travamentos do Chromium.
+
 ## Leitura e limpeza do log de sistema
 
 Helpers publicos de `logger.ts`:
@@ -96,11 +113,12 @@ Este mecanismo nao registra uma trilha de sessao, nao gera `eventos.ndjson` e na
 
 ## `LogsPage`
 
-A pagina do renderer hoje tem tres abas:
+A pagina do renderer hoje tem quatro abas:
 
 - `sistema`
 - `auditoria`
 - `timeline`
+- `desempenho`
 
 Recursos atuais:
 
@@ -109,6 +127,7 @@ Recursos atuais:
 - contagem separada de registros de sistema e auditoria
 - limpeza protegida por senha com dois passos
 - busca da timeline por numero de REP
+- inicio, encerramento, visualizacao e exportacao da captura de desempenho
 
 ## Limpeza protegida
 

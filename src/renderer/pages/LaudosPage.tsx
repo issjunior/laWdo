@@ -2061,7 +2061,7 @@ export const LaudosPage: React.FC = () => {
     window.ipcAPI?.desempenho?.registrar({
       origem: 'placeholder', categoria: 'visualizacao', evento: 'fallback',
       operacao: 'fallback_visualizacao_completa',
-      metadados: { falhou: Boolean(ancora) },
+      metadados: { falhou: Boolean(ancora), tabelaB602: chave === 'b602_tabela_material_enc', fallback: true },
     });
     aplicarModoNoEditor(editor);
   }, [aplicarModoNoEditor, mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
