@@ -41,7 +41,7 @@ import type {
 } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
 import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
-import type { ListaImagensRepGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
+import type { ListaImagensRepGdl, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
 import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
@@ -85,6 +85,17 @@ function progressoAtualizacaoValidoNoPreload(valor: unknown): valor is Progresso
   return Number.isInteger(progresso.percentual) && (progresso.percentual as number) >= 0 && (progresso.percentual as number) <= 100
     && ['verificando', 'baixando', 'validando', 'copiando', 'confirmando', 'backup', 'agendando', 'abrindo_instalador'].includes(String(progresso.etapa))
     && typeof progresso.descricao === 'string';
+}
+
+function progressoListaFotosGdlValidoNoPreload(valor: unknown): valor is ProgressoListaFotosGdl {
+  if (!valor || typeof valor !== 'object') return false;
+  const progresso = valor as Record<string, unknown>;
+  return typeof progresso.laudoId === 'string' && Boolean(progresso.laudoId)
+    && ['consultando', 'baixando', 'preparando'].includes(String(progresso.fase))
+    && typeof progresso.descricao === 'string'
+    && (progresso.percentual === null || (typeof progresso.percentual === 'number' && progresso.percentual >= 0 && progresso.percentual <= 100))
+    && typeof progresso.bytesRecebidos === 'number' && progresso.bytesRecebidos >= 0
+    && (progresso.totalBytes === null || (typeof progresso.totalBytes === 'number' && progresso.totalBytes >= 0));
 }
 
 function autorizacaoReinicioValida(valor: unknown): valor is AutorizacaoReinicioAtualizacao {
@@ -230,6 +241,8 @@ export interface IpcAPI {
     prepararAtualizacaoRep: (repId: string) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<UserResponse<ResultadoAtualizacaoRepGdl>>;
     listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ListaImagensRepGdl>>;
+    obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<UserResponse<MiniaturaArquivoRepGdl[]>>;
+    onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
     capturarImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[], permitirDuplicadas?: boolean) => Promise<UserResponse<ResultadoCapturaImagensLaudoGdl>>;
     fecharSessaoImagensLaudo: (laudoId: string, sessaoId: string) => Promise<UserResponse>;
   };
@@ -508,6 +521,8 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:preparar-atualizacao-rep',
   'gdl:aplicar-atualizacao-rep',
   'gdl:listar-imagens-laudo',
+  'gdl:obter-miniaturas-imagens-laudo',
+  'gdl:progresso-imagens-laudo',
   'gdl:capturar-imagens-laudo',
   'gdl:fechar-sessao-imagens-laudo',
   'rep:create',
@@ -1366,6 +1381,21 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     listarImagensLaudo: (laudoId: string) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
       return invocarComDiagnostico('gdl:listar-imagens-laudo', laudoId);
+    },
+    obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => {
+      if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');
+      if (typeof sessaoId !== 'string' || !sessaoId.trim()) throw new Error('Sessão de imagens inválida');
+      if (!Array.isArray(idsSelecao) || idsSelecao.length > 30 || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
+        throw new Error('Solicitação de miniaturas inválida');
+      }
+      return invocarComDiagnostico('gdl:obter-miniaturas-imagens-laudo', laudoId, sessaoId, idsSelecao);
+    },
+    onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progresso: unknown) => {
+        if (progressoListaFotosGdlValidoNoPreload(progresso)) callback(progresso);
+      };
+      ipcRenderer.on('gdl:progresso-imagens-laudo', listener);
+      return () => ipcRenderer.removeListener('gdl:progresso-imagens-laudo', listener);
     },
     capturarImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[], permitirDuplicadas?: boolean) => {
       if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido');

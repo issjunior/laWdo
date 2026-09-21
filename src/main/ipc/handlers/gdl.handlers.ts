@@ -164,13 +164,31 @@ export const registerGdlHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('gdl:listar-imagens-laudo', async (_event, laudoId: unknown) => {
+  ipcMain.handle('gdl:listar-imagens-laudo', async (event, laudoId: unknown) => {
     try {
       const { numero, ano } = await resolverRepDoLaudo(laudoId);
       if (typeof laudoId !== 'string') return { success: false, error: 'Laudo inválido.' };
-      return { success: true, data: await gdlService.abrirSessaoImagensRepGdl(laudoId, numero, ano) };
+      return {
+        success: true,
+        data: await gdlService.abrirSessaoImagensRepGdl(laudoId, numero, ano, progresso => {
+          if (!event.sender.isDestroyed()) event.sender.send('gdl:progresso-imagens-laudo', { laudoId, ...progresso });
+        }),
+      };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao listar imagens da REP.' };
+    }
+  });
+
+  ipcMain.handle('gdl:obter-miniaturas-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown, idsSelecao: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || typeof sessaoId !== 'string' || !/^[a-z0-9-]{36}$/i.test(sessaoId)
+        || !Array.isArray(idsSelecao) || idsSelecao.length > 30
+        || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
+        return { success: false, error: 'Solicitação de miniaturas inválida.' };
+      }
+      return { success: true, data: await gdlService.obterMiniaturasDaSessaoImagensRepGdl(laudoId, sessaoId, idsSelecao) };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao preparar miniaturas da REP.' };
     }
   });
 

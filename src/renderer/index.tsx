@@ -18,6 +18,7 @@ import type {
   EstadoCapturaDesempenho,
   EventoDesempenhoEntrada,
 } from '@shared/desempenho/contratos';
+import type { MiniaturaArquivoRepGdl, ProgressoListaFotosGdl } from '@shared/types/gdl-arquivos.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -101,7 +102,10 @@ interface IpcAPIRendererLegada {
   rep: IpcGrupoLegado;
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
-  gdl: IpcGrupoLegado;
+  gdl: IpcGrupoLegado & {
+    obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
+    onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
+  };
   categoria: IpcGrupoLegado;
   placeholder: IpcGrupoLegado;
   template: IpcGrupoLegado;
