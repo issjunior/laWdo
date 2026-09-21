@@ -235,6 +235,7 @@ export function sincronizarIdentificacaoFullscreen(
 
 interface PlaceholderPayload {
   chave: string;
+  identificadorInsercao?: string;
 }
 
 interface ImagemLaudoPayload {
@@ -1031,7 +1032,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             });
 
             editor.addCommand('insertPlaceholder', ((_ui, placeholder) => {
-              const html = `<span contenteditable="false" class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
+              const identificador = placeholder.identificadorInsercao
+                ? ` data-placeholder-inserido-id="${placeholder.identificadorInsercao}"`
+                : '';
+              const html = `<span contenteditable="false" class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}"${identificador}>{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
             }) satisfies ComandoTinyMce<PlaceholderPayload>);
 

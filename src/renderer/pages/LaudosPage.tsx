@@ -107,6 +107,7 @@ import {
 import { getMargens } from '@/lib/margens';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import {
+  aplicarVisualizacaoPlaceholder,
   agendarVisualizacaoPlaceholders,
   type ModoVisualizacaoPlaceholders,
 } from '@/lib/apresentacao-placeholders';
@@ -978,14 +979,6 @@ export const LaudosPage: React.FC = () => {
       : secoes.some(secao => secao.conteudo.includes(marcador));
     if (!imagemPermaneceNoLaudo) setImagemSelecionadaIaId(null);
   }, [editorMode, imagemSelecionadaIaId, secoes, singleEditorHtml]);
-
-  const inserirPlaceholder = (editorId: string, chave: string) => {
-    const editor = obterEditorTinyMce(editorId);
-    if (editor) {
-      editor.execCommand('insertPlaceholder', false, { chave });
-      aplicarModoNoEditor(editor);
-    }
-  };
 
   /**
    * Verifica e cria a seção "ILUSTRAÇÕES" no modo multi-seção.
@@ -2038,6 +2031,60 @@ export const LaudosPage: React.FC = () => {
       },
     });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
+
+  const inserirPlaceholder = useCallback((editorId: string, chave: string) => {
+    const editor = obterEditorTinyMce(editorId);
+    if (!editor) return;
+
+    const identificadorInsercao = crypto.randomUUID();
+    editor.execCommand('insertPlaceholder', false, { chave, identificadorInsercao });
+    const ancora = Array.from(editor.getBody()?.querySelectorAll<HTMLElement>('[data-placeholder-inserido-id]') || [])
+      .find(elemento => elemento.getAttribute('data-placeholder-inserido-id') === identificadorInsercao);
+
+    if (ancora) {
+      const resultado = aplicarVisualizacaoPlaceholder(editor, ancora, {
+        modo: modoVisualizacaoPlaceholders,
+        valores: mapaPlaceholdersResolvidos,
+        placeholdersPersonalizados: placeholders,
+        descreverPendente: descreverPlaceholderPendente,
+      });
+      ancora.removeAttribute('data-placeholder-inserido-id');
+      if (resultado.estado === 'aplicado') return;
+    }
+
+    editor.getBody()?.querySelectorAll<HTMLElement>('[data-placeholder-inserido-id]').forEach(elemento => {
+      if (elemento.getAttribute('data-placeholder-inserido-id') === identificadorInsercao) {
+        elemento.removeAttribute('data-placeholder-inserido-id');
+      }
+    });
+
+    window.ipcAPI?.desempenho?.registrar({
+      origem: 'placeholder', categoria: 'visualizacao', evento: 'fallback',
+      operacao: 'fallback_visualizacao_completa',
+      metadados: { falhou: Boolean(ancora) },
+    });
+    aplicarModoNoEditor(editor);
+  }, [aplicarModoNoEditor, mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
+
+  const assinaturaEstruturalEditores = useMemo(() => {
+    if (editorMode === 'single') return 'single';
+    return secoes.map((secao, indice) => [indice, secao.id || '', secao.nivel, secao.parentId || ''].join(':')).join('|');
+  }, [editorMode, secoes]);
+
+  const idsEditoresEstruturais = useMemo(() => editorMode === 'single'
+    ? ['laudo-single-editor']
+    : assinaturaEstruturalEditores.split('|').map((_, indice) => `secao-${indice}`),
+  [assinaturaEstruturalEditores, editorMode]);
+
+  const laudoEditandoId = editando?.id;
+
+  useEffect(() => {
+    if (!laudoEditandoId) return;
+    idsEditoresEstruturais.forEach(id => {
+      const editor = obterEditorTinyMce(id);
+      if (editor) aplicarModoNoEditor(editor);
+    });
+  }, [aplicarModoNoEditor, idsEditoresEstruturais, laudoEditandoId]);
 
   const atualizarConteudoDoEditor = useCallback((editor: TinyMceEditorInstance) => {
     const conteudo = editor.getContent();

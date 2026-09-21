@@ -11,7 +11,7 @@ const LIMITE_FILA = 1_000;
 const TAMANHO_LOTE = 100;
 const INTERVALO_GRAVACAO_MS = 1_000;
 const CHAVE_PERFIL = 'desempenho_perfil_captura';
-const METADADOS_PERMITIDOS = new Set(['placeholders', 'previasCriadas', 'previasRemovidas', 'tabelas', 'linhas', 'celulas', 'tabelasPersonalizadas', 'tentativas', 'imagens', 'imagensMemoria', 'itensRenderizados', 'bytesEntrada', 'bytesSaida', 'arquivosRelidos', 'sucesso', 'falhou', 'quantidade']);
+const METADADOS_PERMITIDOS = new Set(['placeholders', 'previasCriadas', 'previasRemovidas', 'tabelas', 'linhas', 'celulas', 'tabelasPersonalizadas', 'incremental', 'tentativas', 'imagens', 'imagensMemoria', 'itensRenderizados', 'bytesEntrada', 'bytesSaida', 'arquivosRelidos', 'sucesso', 'falhou', 'quantidade']);
 const PADRAO_IDENTIFICADOR = /^[a-z0-9:_-]{1,100}$/i;
 
 function diretorioLogs(): string { return path.join(app.getPath('userData'), 'logs'); }
