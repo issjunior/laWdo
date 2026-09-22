@@ -114,7 +114,17 @@ function adicionarAcaoTabela(
     ? 'Transformar esta tabela em uma cópia editável do laudo'
     : 'Descartar alterações locais e restaurar dados atuais da REP');
   controle.textContent = acao === 'personalizar' ? 'Editar' : 'Restaurar dados da REP';
-  raiz.prepend(controle);
+  const excluir = documento.createElement('span');
+  excluir.className = 'acao-tabela-placeholder acao-tabela-placeholder-excluir';
+  excluir.setAttribute('contenteditable', 'false');
+  excluir.setAttribute('data-mce-bogus', 'all');
+  excluir.setAttribute('data-acao-tabela-placeholder', 'excluir');
+  excluir.setAttribute('role', 'button');
+  excluir.setAttribute('tabindex', '0');
+  excluir.setAttribute('aria-label', 'Excluir tabela do placeholder');
+  excluir.setAttribute('title', 'Excluir tabela do placeholder deste laudo');
+  excluir.textContent = '×';
+  raiz.prepend(controle, excluir);
 }
 
 function configurarTabelaPersonalizada(tabela: HTMLElement, contadores?: ContadoresTabelas): void {
@@ -181,6 +191,38 @@ export function restaurarTabelaPlaceholder(
     tabela.remove();
     ancora.removeAttribute('data-placeholder-tabela-personalizada-id');
     ancora.style.removeProperty('display');
+  });
+  return true;
+}
+
+export function excluirTabelaPlaceholder(
+  editor: TinyMceEditorInstance,
+  acao: HTMLElement,
+): boolean {
+  const tabela = acao.closest<HTMLElement>(`${SELETOR_PREVIA_TABELA}, ${SELETOR_TABELA_PERSONALIZADA}`);
+  const body = editor.getBody();
+  if (!tabela || !body || !body.contains(tabela)) return false;
+
+  const personalizada = tabela.matches(SELETOR_TABELA_PERSONALIZADA);
+  const identificador = tabela.getAttribute(personalizada
+    ? 'data-placeholder-tabela-personalizada-id'
+    : 'data-placeholder-preview-id');
+  if (!identificador) return false;
+  const ancora = personalizada
+    ? encontrarAncoraTabelaPersonalizada(body, identificador)
+    : Array.from(body.querySelectorAll<HTMLElement>('[data-placeholder][data-placeholder-preview-id]'))
+      .find(elemento => elemento.getAttribute('data-placeholder-preview-id') === identificador) || null;
+  if (!ancora) return false;
+
+  editor.undoManager.transact(() => {
+    const paragrafo = ancora.parentElement;
+    if (paragrafo?.tagName === 'P' && Array.from(paragrafo.childNodes).every(no =>
+      no === ancora || (no.nodeType === Node.TEXT_NODE && !no.textContent?.trim()))) {
+      paragrafo.remove();
+    } else {
+      ancora.remove();
+    }
+    tabela.remove();
   });
   return true;
 }

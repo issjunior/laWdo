@@ -8,6 +8,7 @@ import {
   type AcaoBlocoCondicional,
 } from '@/lib/blocos-periciais';
 import {
+  excluirTabelaPlaceholder,
   encontrarAcaoTabelaPlaceholder,
   personalizarTabelaPlaceholder,
   restaurarTabelaPlaceholder,
@@ -825,7 +826,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               justify-content: center;
               position: absolute;
               top: 8px;
-              right: 10px;
+              right: 38px;
               min-height: 22px;
               padding: 0 6px;
               border: 1px solid #fdba74;
@@ -838,6 +839,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               cursor: pointer !important;
               user-select: none;
               white-space: nowrap;
+            }
+            .acao-tabela-placeholder-excluir {
+              right: 10px;
+              min-width: 22px;
+              padding: 0;
+              border-color: transparent;
+              font-size: 21px;
+              font-weight: 400;
             }
             .acao-tabela-placeholder:hover,
             .acao-tabela-placeholder:focus {
@@ -1332,6 +1341,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 evento.preventDefault();
                 evento.stopImmediatePropagation();
                 const tipo = acao.getAttribute('data-acao-tabela-placeholder');
+                if (tipo === 'excluir') {
+                  if (!window.confirm('Excluir esta tabela do laudo? O placeholder vinculado também será removido.')) return;
+                  if (excluirTabelaPlaceholder(editor, acao)) onChange(editor.getContent());
+                  return;
+                }
+                if (tipo !== 'restaurar' && tipo !== 'personalizar') return;
                 const restaurar = tipo === 'restaurar';
                 if (restaurar && !window.confirm('Restaurar os dados atuais da REP? As alterações locais desta tabela serão perdidas.')) {
                   return;
