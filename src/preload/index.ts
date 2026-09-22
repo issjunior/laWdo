@@ -52,6 +52,7 @@ import type {
 } from '../shared/types/imagem-laudo.types.js';
 import type { AutorizacaoReinicioAtualizacao, ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
 import type { AmostraDesempenho, EstadoCapturaDesempenho, EventoDesempenhoEntrada } from '../shared/desempenho/contratos.js';
+import type { EstadoCapturaLogs, ResumoCapturaLogs, SondaCapturaLogs } from '../shared/captura-logs/contratos.js';
 
 // O preload sandboxado não pode carregar módulos locais em tempo de execução.
 function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
@@ -421,6 +422,18 @@ export interface IpcAPI {
     onPerfilAlterado: (callback: (estado: EstadoCapturaDesempenho) => void) => () => void;
   };
 
+  capturaLogs: {
+    estado: () => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+    iniciar: (sondas: SondaCapturaLogs[]) => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+    parar: () => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+    marcarProblema: () => Promise<{ success: boolean; error?: string }>;
+    listar: () => Promise<{ success: boolean; data?: ResumoCapturaLogs[]; error?: string }>;
+    exportar: (id: string) => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
+    excluir: (id: string) => Promise<{ success: boolean; error?: string }>;
+    limpar: () => Promise<{ success: boolean; error?: string }>;
+    onEstadoAlterado: (callback: (estado: EstadoCapturaLogs) => void) => () => void;
+  };
+
   diagnosticoInterno: {
     atualizarContextoRenderer: (contexto: Record<string, unknown>) => void;
     registrarErroFatalRenderer: (erro: Record<string, unknown>) => void;
@@ -680,6 +693,17 @@ const ALLOWED_CHANNELS = new Set([
   'desempenho:registrar',
   'desempenho:registrar-lote',
   'desempenho:perfil-alterado',
+
+  // Captura central de logs
+  'captura-logs:estado',
+  'captura-logs:iniciar',
+  'captura-logs:parar',
+  'captura-logs:marcar-problema',
+  'captura-logs:listar',
+  'captura-logs:exportar',
+  'captura-logs:excluir',
+  'captura-logs:limpar',
+  'captura-logs:estado-alterado',
 
   // Diagnóstico interno
   'diagnostico:atualizar-contexto-renderer',
@@ -1649,6 +1673,22 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       const listener = (_evento: Electron.IpcRendererEvent, estado: EstadoCapturaDesempenho) => callback(estado);
       ipcRenderer.on('desempenho:perfil-alterado', listener);
       return () => ipcRenderer.removeListener('desempenho:perfil-alterado', listener);
+    },
+  },
+
+  capturaLogs: {
+    estado: () => invocarComDiagnostico('captura-logs:estado'),
+    iniciar: (sondas: SondaCapturaLogs[]) => invocarComDiagnostico('captura-logs:iniciar', sondas),
+    parar: () => invocarComDiagnostico('captura-logs:parar'),
+    marcarProblema: () => invocarComDiagnostico('captura-logs:marcar-problema'),
+    listar: () => invocarComDiagnostico('captura-logs:listar'),
+    exportar: (id: string) => invocarComDiagnostico('captura-logs:exportar', id),
+    excluir: (id: string) => invocarComDiagnostico('captura-logs:excluir', id),
+    limpar: () => invocarComDiagnostico('captura-logs:limpar'),
+    onEstadoAlterado: callback => {
+      const listener = (_evento: Electron.IpcRendererEvent, estado: EstadoCapturaLogs) => callback(estado);
+      ipcRenderer.on('captura-logs:estado-alterado', listener);
+      return () => ipcRenderer.removeListener('captura-logs:estado-alterado', listener);
     },
   },
 

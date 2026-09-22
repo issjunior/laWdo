@@ -18,6 +18,7 @@ import { DiagnosticoCapturaService } from './services/diagnostico-captura.servic
 import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.service.js';
 import { iaExecucaoService } from './services/ia-execucao.service.js';
 import { desempenhoService } from './services/desempenho.service.js';
+import { capturaLogsService } from './services/captura-logs.service.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -548,6 +549,7 @@ app.whenReady().then(async () => {
     }
     setupLogging();
     await desempenhoService.inicializar();
+    await capturaLogsService.inicializar();
     await iniciarDiagnosticoAssistido();
 
     // Registrar handlers IPC
@@ -652,6 +654,7 @@ app.on('will-quit', evento => {
   void Promise.all([
     encerrarDiagnosticoAssistido(),
     Promise.resolve(desempenhoService.encerrar()),
+    Promise.resolve(capturaLogsService.encerrar()),
     closeDatabase().catch(error => log.error('Erro ao fechar banco de dados no encerramento', error)),
   ]).finally(() => app.exit(0));
 });

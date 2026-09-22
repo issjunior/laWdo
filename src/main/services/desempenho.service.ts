@@ -4,6 +4,7 @@ import path from 'path';
 import { app } from 'electron';
 import type { AmostraDesempenho, EstadoCapturaDesempenho, EventoDesempenhoEntrada, MetricasDesempenho, PerfilCapturaLogs, ResumoIpcDesempenho, SeveridadeDesempenho, SessaoCapturaDesempenho } from '../../shared/desempenho/contratos.js';
 import { configuracaoService } from './configuracao.service.js';
+import { capturaLogsService } from './captura-logs.service.js';
 
 const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 const MAXIMO_ARQUIVOS = 3;
@@ -62,9 +63,9 @@ export class DesempenhoService {
     await configuracaoService.salvar(CHAVE_PERFIL, perfil, 'texto', 'Perfil padrão da captura de desempenho');
     this.iniciarColetaPeriodica(); return this.obterEstado();
   }
-  async iniciarDetalhada(): Promise<EstadoCapturaDesempenho> {
+  async iniciarDetalhada(duracaoMs = 15 * 60_000): Promise<EstadoCapturaDesempenho> {
     await this.inicializar();
-    this.sessao = { id: randomUUID(), perfil: 'detalhado', iniciadaEm: new Date().toISOString(), terminaEm: new Date(Date.now() + 15 * 60_000).toISOString(), ativa: true };
+    this.sessao = { id: randomUUID(), perfil: 'detalhado', iniciadaEm: new Date().toISOString(), terminaEm: new Date(Date.now() + duracaoMs).toISOString(), ativa: true };
     this.iniciarColetaPeriodica(); await this.registrar({ origem: 'main', categoria: 'captura', evento: 'captura_detalhada_iniciada' }); return this.obterEstado();
   }
   async pararDetalhada(): Promise<EstadoCapturaDesempenho> {
@@ -79,6 +80,7 @@ export class DesempenhoService {
     if (perfilAtivo === 'critico' && severidade !== 'critico') return;
     if (perfilAtivo === 'importante' && severidade === 'info' && entrada.categoria !== 'amostra' && entrada.evento !== 'resumo_ipc') return;
     this.enfileirar({ id: randomUUID(), sessaoId: this.sessao?.id ?? this.idSessaoPadrao(), timestamp: new Date().toISOString(), perfil: perfilAtivo, severidade, origem: entrada.origem, categoria: entrada.categoria.slice(0, 80), evento: entrada.evento.slice(0, 100), operacao: identificadorSeguro(entrada.operacao), canal: identificadorSeguro(entrada.canal), duracaoMs: Number.isFinite(entrada.duracaoMs) ? Math.max(0, entrada.duracaoMs ?? 0) : null, contextoId: entrada.contextoId ? createHash('sha256').update(`${this.saltSessao}:${entrada.contextoId}`).digest('hex').slice(0, 20) : null, metricas: metricasSeguras(entrada.metricas), metadados: metadadosSeguros(entrada.metadados), resumoIpc: resumoIpcSeguro(entrada.resumoIpc) });
+    await capturaLogsService.registrarDesempenho(entrada);
   }
   async listar(limite = 500): Promise<AmostraDesempenho[]> {
     await this.descarregarTudo();

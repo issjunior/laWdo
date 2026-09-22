@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { EstadoAtualizacaoResposta } from '@shared/atualizacao/atualizacao.types';
+import type { EstadoCapturaLogs } from '@shared/captura-logs/contratos';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -34,6 +35,13 @@ const formatadorDataCompleta = new Intl.DateTimeFormat('pt-BR', {
   month: 'long',
   year: 'numeric',
 });
+
+const nomesSondasCaptura: Record<string, string> = {
+  sistema: 'Sistema',
+  auditoria: 'Auditoria',
+  linha_tempo: 'Linha do tempo',
+  desempenho: 'Desempenho',
+};
 
 const extrairNomeUsuario = (usuario: Record<string, unknown> | null): string => {
   if (!usuario) return '';
@@ -67,6 +75,8 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   const [atualizacao, setAtualizacao] = useState<EstadoAtualizacaoResposta | null>(null);
   const [acaoAtualizacao, setAcaoAtualizacao] = useState<'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'mostrar' | null>(null);
   const [confirmacaoInstalacaoAberta, setConfirmacaoInstalacaoAberta] = useState(false);
+  const [capturaLogs, setCapturaLogs] = useState<EstadoCapturaLogs>({ ativa: null });
+  const [agoraCaptura, setAgoraCaptura] = useState(Date.now());
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -92,6 +102,21 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     };
     fetchAppInfo();
   }, []);
+
+  useEffect(() => {
+    const api = window.ipcAPI.capturaLogs;
+    if (!api) return;
+    void api.estado().then(resposta => {
+      if (resposta.success && resposta.data) setCapturaLogs(resposta.data);
+    });
+    return api.onEstadoAlterado(setCapturaLogs);
+  }, []);
+
+  useEffect(() => {
+    if (!capturaLogs.ativa) return;
+    const temporizador = window.setInterval(() => setAgoraCaptura(Date.now()), 1_000);
+    return () => window.clearInterval(temporizador);
+  }, [capturaLogs.ativa]);
 
   const atualizarEstadoAtualizacao = async (manual = false) => {
     const api = window.ipcAPI.atualizacao;
@@ -126,6 +151,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   const dadosAtualizacao = atualizacao?.atualizacaoDisponivel;
   const progressoAtualizacao = atualizacao?.progressoDetalhado;
   const falhaAtualizacao = atualizacao?.falha;
+  const restanteCaptura = capturaLogs.ativa ? Math.max(0, Math.ceil((Date.parse(capturaLogs.ativa.terminaEm) - agoraCaptura) / 1_000)) : null;
 
   const formatarPacote = () => {
     if (!dadosAtualizacao) return '';
@@ -203,6 +229,15 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
         </div>
         
         <div className="ml-auto flex items-center gap-2">
+          {capturaLogs.ativa && <div className="flex max-w-[430px] items-center gap-2 rounded-md bg-amber-500/15 px-2 py-1 text-xs">
+            <Clock3 className="h-4 w-4 text-amber-600" />
+            <span className="truncate">Captura: {capturaLogs.ativa.sondas.map(sonda => nomesSondasCaptura[sonda] ?? sonda).join(', ')} · {Math.floor((restanteCaptura ?? 0) / 60)}m {(restanteCaptura ?? 0) % 60}s</span>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={async () => {
+              const resposta = await window.ipcAPI.capturaLogs.parar();
+              if (!resposta.success) toast.error(resposta.error || 'Não foi possível encerrar a captura.');
+              else toast.success('Captura encerrada e preservada.');
+            }}>Parar</Button>
+          </div>}
           {/* Escolha de Tema */}
           <Button
             variant="ghost"

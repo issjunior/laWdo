@@ -42,9 +42,16 @@ interface TimelineRow {
   connection?: ConnectionLine;
 }
 
+export interface ResumoLinhaTempo {
+  quantidadeEventos: number;
+  quantidadeEventosRep: number;
+  quantidadeEventosLaudo: number;
+}
+
 interface DualTrackTimelineProps {
   repId: string;
   repNumero?: string;
+  onResumoAlterado?: (resumo: ResumoLinhaTempo | null) => void;
 }
 
 const laudoStatusStyles: Record<string, string> = {
@@ -364,7 +371,7 @@ function ConnectionGutter({ connection }: { connection: ConnectionLine }) {
 }
 
 /* ─── Main Component ──────────────────────────────────────────────────────── */
-export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
+export function DualTrackTimeline({ repId, onResumoAlterado }: DualTrackTimelineProps) {
   const [allEvents, setAllEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -374,23 +381,34 @@ export function DualTrackTimeline({ repId }: DualTrackTimelineProps) {
     async function load() {
       setLoading(true);
       setError(null);
+      onResumoAlterado?.(null);
       try {
         const r = await window.ipcAPI.log.timelineRep(repId);
         if (cancelled) return;
         if (r.success && Array.isArray(r.data)) {
-          setAllEvents(r.data as TimelineEvent[]);
+          const eventos = r.data as TimelineEvent[];
+          setAllEvents(eventos);
+          onResumoAlterado?.({
+            quantidadeEventos: eventos.length,
+            quantidadeEventosRep: eventos.filter(evento => evento.origem === 'REP').length,
+            quantidadeEventosLaudo: eventos.filter(evento => evento.origem === 'Laudo').length,
+          });
         } else {
           setError(r.error || 'Erro ao carregar linha do tempo');
+          onResumoAlterado?.(null);
         }
       } catch (err) {
-        if (!cancelled) setError(String(err));
+        if (!cancelled) {
+          setError(String(err));
+          onResumoAlterado?.(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     load();
     return () => { cancelled = true; };
-  }, [repId]);
+  }, [repId, onResumoAlterado]);
 
   if (loading) return <TimelineSkeleton />;
 

@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
 import { registrarErroFatalMainDiagnostico } from '../services/diagnostico-state.service.js';
+import { capturaLogsService } from '../services/captura-logs.service.js';
 
 const LOGS_DIR = path.join(app.getPath('userData'), 'logs');
 
@@ -127,6 +128,7 @@ class ModuleLogger implements ILogger {
   warn(message: string, meta?: Record<string, unknown>): void {
     if (!shouldLog(this.module, 'warn')) return;
     baseLogger.warn(message, { module: this.module, ...meta });
+    void capturaLogsService.registrarSistema('warn', this.module);
   }
 
   error(message: string, errorOrMeta?: unknown): void {
@@ -143,6 +145,7 @@ class ModuleLogger implements ILogger {
     } else {
       baseLogger.error(message, { module: this.module });
     }
+    void capturaLogsService.registrarSistema('error', this.module);
   }
 
   debug(message: string | (() => string), meta?: Record<string, unknown>): void {
@@ -178,6 +181,7 @@ export const logError = (message: string, error?: unknown) => {
   } else {
     baseLogger.error(message, { module: 'sistema' });
   }
+  void capturaLogsService.registrarSistema('error', 'sistema');
 };
 
 export const logDebug = (message: string, meta?: Record<string, unknown>) => {

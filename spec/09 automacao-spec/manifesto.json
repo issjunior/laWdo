@@ -536,8 +536,18 @@
       "autoAtualizavel": true,
       "descricao": "Sistema de logs implementado no estado atual.",
       "globsCodigo": [
+        "src/shared/captura-logs/**",
+        "src/main/services/captura-logs.service.ts",
+        "src/main/ipc/handlers/captura-logs.handlers.ts",
+        "src/main/ipc/handlers/log.handlers.ts",
+        "src/main/services/audit-log.service.ts",
+        "src/main/services/desempenho.service.ts",
         "src/main/utils/logger.ts",
-        "src/renderer/pages/LogsPage.tsx"
+        "src/renderer/components/logs/**",
+        "src/renderer/components/desempenho/DesempenhoTab.tsx",
+        "src/renderer/components/layout/Header.tsx",
+        "src/renderer/pages/LogsPage.tsx",
+        "src/__tests__/main/captura-logs.service.test.ts"
       ]
     },
     {

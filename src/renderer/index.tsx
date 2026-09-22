@@ -18,6 +18,7 @@ import type {
   EstadoCapturaDesempenho,
   EventoDesempenhoEntrada,
 } from '@shared/desempenho/contratos';
+import type { EstadoCapturaLogs, ResumoCapturaLogs, SondaCapturaLogs } from '@shared/captura-logs/contratos';
 import type { MiniaturaArquivoRepGdl, ProgressoListaFotosGdl } from '@shared/types/gdl-arquivos.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
@@ -84,6 +85,18 @@ interface IpcDesempenhoRenderer {
   onPerfilAlterado: (callback: (estado: EstadoCapturaDesempenho) => void) => () => void;
 }
 
+interface IpcCapturaLogsRenderer {
+  estado: () => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+  iniciar: (sondas: SondaCapturaLogs[]) => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+  parar: () => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+  marcarProblema: () => Promise<{ success: boolean; error?: string }>;
+  listar: () => Promise<{ success: boolean; data?: ResumoCapturaLogs[]; error?: string }>;
+  exportar: (id: string) => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
+  excluir: (id: string) => Promise<{ success: boolean; error?: string }>;
+  limpar: () => Promise<{ success: boolean; error?: string }>;
+  onEstadoAlterado: (callback: (estado: EstadoCapturaLogs) => void) => () => void;
+}
+
 interface IpcAPIRendererLegada {
   ping: () => Promise<string>;
   getAppInfo: () => Promise<AppInfoLegado>;
@@ -146,6 +159,7 @@ interface IpcAPIRendererLegada {
   };
   log: IpcGrupoLegado;
   desempenho: IpcDesempenhoRenderer;
+  capturaLogs: IpcCapturaLogsRenderer;
   diagnosticoInterno: IpcGrupoLegado;
   ilustracoes: IpcIlustracoesLegado;
 }
@@ -292,6 +306,17 @@ const initApp = async () => {
           exportarCsv: async () => ({ success: true, canceled: true }),
           registrar: () => undefined,
           onPerfilAlterado: () => () => undefined,
+        },
+        capturaLogs: {
+          estado: async () => ({ success: true, data: { ativa: null } }),
+          iniciar: async () => ({ success: true, data: { ativa: null } }),
+          parar: async () => ({ success: true, data: { ativa: null } }),
+          marcarProblema: async () => ({ success: true }),
+          listar: async () => ({ success: true, data: [] }),
+          exportar: async () => ({ success: true, canceled: true }),
+          excluir: async () => ({ success: true }),
+          limpar: async () => ({ success: true }),
+          onEstadoAlterado: () => () => undefined,
         },
         laudo: {
           findAll: async () => ({ success: true, data: [] }),
