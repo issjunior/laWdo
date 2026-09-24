@@ -8,5 +8,81 @@ function estilo(e: Element, p: EstiloTextoExportacao = {}): EstiloTextoExportaca
 function trechos(n: Node, p: EstiloTextoExportacao = {}): TrechoExportacao[] { if (n.nodeType === Node.TEXT_NODE) return n.textContent ? [{ texto: n.textContent, estilo: p }] : []; if (n.nodeType !== Node.ELEMENT_NODE) return []; const e = n as Element; if (e.tagName.toLowerCase() === 'br') return [{ texto: '', estilo: p, quebraLinha: true }]; return Array.from(e.childNodes).flatMap(f => trechos(f, estilo(e, p))); }
 function paragrafo(e: Element): ParagrafoExportacao { const c = e.getAttribute('style') || '', h = /^h([1-6])$/i.exec(e.tagName)?.[1]; return { tipo: 'paragrafo', trechos: trechos(e), alinhamento: alinhamento(e), nivelTitulo: h ? Number(h) : undefined, citacao: e.tagName.toLowerCase() === 'blockquote', preFormatado: e.tagName.toLowerCase() === 'pre', recuoEsquerdoPt: numero(c.match(/margin-left:\s*([\d.]+)pt/i)?.[1] || null), recuoDireitoPt: numero(c.match(/margin-right:\s*([\d.]+)pt/i)?.[1] || null), recuoPrimeiraLinhaPt: numero(c.match(/text-indent:\s*([\d.]+)pt/i)?.[1] || null), espacamentoAntesPt: numero(c.match(/margin-top:\s*([\d.]+)pt/i)?.[1] || null), espacamentoDepoisPt: numero(c.match(/margin-bottom:\s*([\d.]+)pt/i)?.[1] || null), espacamentoLinha: numero(c.match(/line-height:\s*([\d.]+)/i)?.[1] || null) }; }
 function lista(e: Element, nivel = 0): ListaExportacao[] { const itens: ParagrafoExportacao[] = [], sub: ListaExportacao[] = []; for (const li of Array.from(e.querySelectorAll(':scope > li'))) { const c = li.cloneNode(true) as Element; c.querySelectorAll(':scope > ul,:scope > ol').forEach(x => x.remove()); itens.push(paragrafo(c)); li.querySelectorAll(':scope > ul,:scope > ol').forEach(x => sub.push(...lista(x, nivel + 1))); } return [{ tipo: 'lista', ordenada: e.tagName.toLowerCase() === 'ol', nivel, itens }, ...sub]; }
-function blocos(p: Element): BlocoExportacao[] { const r: BlocoExportacao[] = []; for (const e of Array.from(p.children)) { const t = e.tagName.toLowerCase(); if (e.matches('[data-placeholder-preview],[data-laudo-secao-header],.tox,button')) continue; if (elementoEhQuebraPagina(e)) { r.push({ tipo: 'quebra-pagina' }); continue; } if (t === 'ul' || t === 'ol') { r.push(...lista(e)); continue; } if (t === 'hr') { r.push({ tipo: 'linha-horizontal' }); continue; } if (t === 'table') { r.push({ tipo: 'tabela', linhas: Array.from(e.querySelectorAll(':scope > thead > tr,:scope > tbody > tr,:scope > tr')).map(tr => Array.from(tr.querySelectorAll(':scope > th,:scope > td')).map(td => { const conteudo = blocos(td); return { paragrafos: conteudo.filter((b): b is ParagrafoExportacao => b.tipo === 'paragrafo'), blocos: conteudo, colspan: Number(td.getAttribute('colspan')) || undefined, rowspan: Number(td.getAttribute('rowspan')) || undefined, corFundo: corDeFundoExportavel(td.getAttribute('style') || '') }; })) }); continue; } const img = t === 'img' ? e : e.querySelector('img'); const d = img?.getAttribute('src')?.match(/^data:image\/(\w+);base64,(.+)$/i); if ((t === 'figure' || t === 'img') && d) { const css = img?.getAttribute('style') || ''; r.push({ tipo: 'figura', formato: d[1] === 'jpeg' ? 'jpg' : d[1], base64: d[2], larguraPx: numero(img?.getAttribute('width') || null) || numero(css.match(/width:\s*([\d.]+)px/i)?.[1] || null), alturaPx: numero(img?.getAttribute('height') || null) || numero(css.match(/height:\s*([\d.]+)px/i)?.[1] || null), alinhamento: alinhamento(e), legenda: e.querySelector('figcaption') ? paragrafo(e.querySelector('figcaption')!) : undefined }); continue; } if (/^(p|div|blockquote|pre|h[1-6])$/.test(t)) r.push(paragrafo(e)); else r.push(...blocos(e)); } return r; }
+function blocosCelula(celula: Element): BlocoExportacao[] {
+  const resultado: BlocoExportacao[] = [];
+  let grupoInline = celula.cloneNode(false) as Element;
+  const concluirGrupo = () => {
+    if (grupoInline.textContent?.trim() || grupoInline.querySelector('br')) resultado.push(paragrafo(grupoInline));
+    grupoInline = celula.cloneNode(false) as Element;
+  };
+
+  for (const no of Array.from(celula.childNodes)) {
+    if (no.nodeType !== Node.ELEMENT_NODE || !/^(p|div|blockquote|pre|h[1-6]|ul|ol|hr|table|figure|img)$/i.test((no as Element).tagName)) {
+      grupoInline.appendChild(no.cloneNode(true));
+      continue;
+    }
+    concluirGrupo();
+    const contenedor = celula.ownerDocument.createElement('div');
+    contenedor.appendChild(no.cloneNode(true));
+    resultado.push(...blocos(contenedor));
+  }
+  concluirGrupo();
+  return resultado;
+}
+
+function blocos(p: Element): BlocoExportacao[] {
+  const resultado: BlocoExportacao[] = [];
+  for (const elemento of Array.from(p.children)) {
+    const tipo = elemento.tagName.toLowerCase();
+    if (elemento.matches('[data-placeholder-preview],[data-laudo-secao-header],.tox,button')) continue;
+    if (elementoEhQuebraPagina(elemento)) {
+      resultado.push({ tipo: 'quebra-pagina' });
+      continue;
+    }
+    if (tipo === 'ul' || tipo === 'ol') {
+      resultado.push(...lista(elemento));
+      continue;
+    }
+    if (tipo === 'hr') {
+      resultado.push({ tipo: 'linha-horizontal' });
+      continue;
+    }
+    if (tipo === 'table') {
+      const legenda = elemento.querySelector(':scope > caption');
+      if (legenda?.textContent?.trim()) resultado.push(paragrafo(legenda));
+      resultado.push({
+        tipo: 'tabela',
+        linhas: Array.from(elemento.querySelectorAll(':scope > thead > tr,:scope > tbody > tr,:scope > tr')).map(linha =>
+          Array.from(linha.querySelectorAll(':scope > th,:scope > td')).map(celula => {
+            const conteudo = blocosCelula(celula);
+            return {
+              paragrafos: conteudo.filter((bloco): bloco is ParagrafoExportacao => bloco.tipo === 'paragrafo'),
+              blocos: conteudo,
+              colspan: Number(celula.getAttribute('colspan')) || undefined,
+              rowspan: Number(celula.getAttribute('rowspan')) || undefined,
+              corFundo: corDeFundoExportavel(celula.getAttribute('style') || ''),
+            };
+          })
+        ),
+      });
+      continue;
+    }
+    const imagem = tipo === 'img' ? elemento : elemento.querySelector('img');
+    const dados = imagem?.getAttribute('src')?.match(/^data:image\/(\w+);base64,(.+)$/i);
+    if ((tipo === 'figure' || tipo === 'img') && dados) {
+      const css = imagem?.getAttribute('style') || '';
+      resultado.push({
+        tipo: 'figura', formato: dados[1] === 'jpeg' ? 'jpg' : dados[1], base64: dados[2],
+        larguraPx: numero(imagem?.getAttribute('width') || null) || numero(css.match(/width:\s*([\d.]+)px/i)?.[1] || null),
+        alturaPx: numero(imagem?.getAttribute('height') || null) || numero(css.match(/height:\s*([\d.]+)px/i)?.[1] || null),
+        alinhamento: alinhamento(elemento),
+        legenda: elemento.querySelector('figcaption') ? paragrafo(elemento.querySelector('figcaption')!) : undefined,
+      });
+      continue;
+    }
+    if (/^(p|div|blockquote|pre|h[1-6])$/.test(tipo)) resultado.push(paragrafo(elemento));
+    else resultado.push(...blocos(elemento));
+  }
+  return resultado;
+}
 export function parseHtmlParaEstrutura(html: string): DocumentoExportacao { const d = new DOMParser().parseFromString(normalizarQuebrasPaginaHtml(html), 'text/html'); const c = d.body.getAttribute('style') || ''; return { versao: 1, fontePadrao: c.match(/font-family:\s*([^;,]+)/i)?.[1]?.replace(/["']/g, '').trim() || 'Calibri', tamanhoPadraoPt: numero(c.match(/font-size:\s*([\d.]+)pt/i)?.[1] || null) || 12, secoes: [{ blocos: blocos(d.body) }] }; }

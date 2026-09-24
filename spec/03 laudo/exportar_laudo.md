@@ -23,23 +23,29 @@ A escrita canônica no editor é `<div data-quebra-pagina="true" style="break-af
 
 A validação no processo principal rejeita documentos fora desse contrato antes da geração. Não é uma fronteira IPC permissiva: dados inválidos não seguem para os conversores.
 
+### Tabelas no documento canônico
+
+`exportacao-parser.ts` transforma texto direto e formatação inline de `<td>`/`<th>` em parágrafos da célula, preserva blocos mistos na ordem e representa `<caption>` como parágrafo antes da tabela. DOCX consome esse documento canônico; ODT converte o DOCX gerado pelo mesmo caminho. Por isso, texto de células não pode depender de um `<p>` explícito no HTML.
+
 ## Regras de saída
 
 A exportação remove prévias transitórias de placeholder, controles de tabelas e blocos condicionais, atributos de edição e qualquer bloco com `data-cond-suprimido="true"`. Placeholders sem valor resolvem para `<span class="campo-reservado" data-reservado="true">XXX</span>`. Bloco pericial não excluído que contenha somente espaço ou parágrafo vazio recebe um parágrafo com o mesmo marcador. `XXX` não bloqueia a exportação.
 
 Valores estruturais são inseridos como fragmento HTML. Tabelas recebem largura e largura máxima de 100%; a geração de PDF e ODT também força essas regras para impedir estouro horizontal. Quando uma tabela foi personalizada no laudo, a cópia local substitui a resolução da âncora vinculada; identificadores, classes e controles exclusivamente visuais são removidos da saída.
 
+Na exportação iniciada pelo editor, `LaudosPage.tsx` lê primeiro os editores abertos, confere e corrige seus títulos `TABELA N`, e só então monta o HTML a exportar. Depois de resolver todos os placeholders, `renumerarTabelasHtml()` confere o HTML final; isso impede que os títulos fixos B-602 restaurem números antigos. Falha na conferência anterior à geração interrompe a operação com erro, antes de produzir arquivo.
+
 PDF e preview aplicam `break-after: page` e `page-break-after: always` ao marcador. DOCX converte o recuo para twips (`w:firstLine`) e cada bloco de quebra em `PageBreak` nativo; ODT é produzido a partir do DOCX canônico pelo LibreOffice.
 
 ## Invariantes
 
 - O HTML persistido mantém as chaves canônicas; valores resolvidos e prévias não devem ser gravados.
-- O valor de HTML vem exclusivamente do resolvedor, nunca de atributo ou DOM do editor.
+- Valores HTML de placeholders vêm do resolvedor; tabelas personalizadas vinculadas usam a cópia local persistida. Prévias transitórias e atributos de apresentação não entram na saída.
 - Dados desconhecidos do GDL não se tornam placeholders automaticamente.
 - A data de execução GDL afeta somente `data_extenso_recebimento_rep`; não altera a data de recebimento, a REP persistida fora do metadado nem o GDL.
 - Ausência de peça ou de valor não interrompe a exportação.
-- Recuo e quebra de página devem atravessar parser e conversores sem se degradar em texto ou HTML comum.
+- Recuo, quebra de página, texto de células e títulos de tabelas devem atravessar parser e conversores sem se degradar em texto ou HTML comum.
 
 ## Verificação
 
-`exportacao-parser.test.ts` cobre `text-indent`, o comentário legado e a ordem do bloco de quebra. `exportacao-docx-canonica.test.ts` inspeciona o XML do pacote para `w:firstLine` e `w:type="page"`, além da conversão ODT quando o LibreOffice está disponível. `exportacao-placeholders.test.ts` cobre o fallback/precedência de `data_extenso_recebimento_rep` e o valor padrão de placeholder personalizado. Os demais testes de exportação cobrem placeholders B-602, tabelas, valores ausentes, blocos suprimidos e preenchimento de blocos periciais vazios.
+`exportacao-parser.test.ts` cobre `text-indent`, quebra de página, caption, texto direto e blocos mistos em células. `exportacao-docx-canonica.test.ts` inspeciona o XML de DOCX e ODT para garantir texto de tabela, além de `w:firstLine` e `w:type="page"`; a conversão ODT depende de LibreOffice disponível. `exportacao-placeholders.test.ts` cobre o fallback/precedência de `data_extenso_recebimento_rep` e o valor padrão de placeholder personalizado. Os demais testes de exportação cobrem placeholders B-602, tabelas, valores ausentes, blocos suprimidos e preenchimento de blocos periciais vazios.

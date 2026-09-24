@@ -12,9 +12,9 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm run build` | Build completo (prebuild → main/preload/renderer → postbuild) |
 | `npm run lint` | ESLint |
 | `npm run lint:fix` | ESLint com autocorreção |
-| `npm run type-check` | TypeScript (`tsc --noEmit`) |
-| `npm run spec` | Executa a auditoria padrão de spec (diff atual + último commit) |
-| `npm run spec:auditar` | Audita quais specs de estado atual precisam ser revistos |
+| `npm run type-check` | TypeScript (main/preload e renderer) |
+| `npm run spec` | Executa a auditoria de spec sobre o diff atual |
+| `npm run spec:auditar` | Audita quais specs de estado atual precisam ser revistos (diff atual + último commit por padrão) |
 | `npm run spec:registrar` | Aplica um plano aprovado de escrita em `spec/` |
 | `npm test` | Vitest (single run) |
 | `npm run test:watch` | Vitest em watch mode |
@@ -26,11 +26,11 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm run dead-code:check` | Aliás de `prune:all` |
 | `npm run knip` | Auditoria observacional de dependências, exports e tipos órfãos |
 | `/graphify` | Consultar o knowledge graph do projeto (skill) |
-| `/check-dead-code` | Skill de auditoria de código morto |
+| `/check-dead-code` | Skill de auditoria de código morto (`.claude/skills/check-dead-code/SKILL.md`) |
 
 O ambiente de desenvolvimento requer Node.js 24 ou superior, conforme `package.json`.
 
-Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte `/check-dead-code` para auditar código morto.
+Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte a skill `/check-dead-code` para auditar código morto.
 
 ### Criação e manutenção de testes
 
@@ -45,7 +45,7 @@ No desenvolvimento local, `npm run dev:diagnostico` habilita o modo de diagnóst
 
 Quando as ferramentas estiverem disponíveis, recomende o diagnóstico assistido para falhas recorrentes, intermitentes ou difíceis de localizar e para verificações de saúde/desempenho antes e depois de otimizações. Para falhas reproduzíveis siga `diagnostico_status` → `iniciar_captura(finalidade=problema)` → usuário reproduz → `finalizar_captura`; não peça cursores, filtros, caminhos ou comandos MCP ao usuário. Para saúde e desempenho, use `diagnostico_status` → `iniciar_captura(finalidade=desempenho)` → `consultar_captura` após a conclusão automática. Compare somente capturas de desempenho do mesmo cenário e protocolo; trate degradação da coleta como limitação explícita, não como evidência de regressão. As ferramentas pontuais `capturar_tela`, `inspecionar_interface`, `executar_acao`, `obter_eventos` e `criar_snapshot` ficam para aprofundamento. A v1.1 expõe: `diagnostico_status`, `capturar_tela`, `inspecionar_interface`, `executar_acao`, `obter_eventos`, `criar_snapshot`, `iniciar_captura`, `status_captura`, `finalizar_captura` e `consultar_captura`. Nunca tente usar avaliação livre de JavaScript, consultas SQLite arbitrárias ou rede de diagnóstico: não fazem parte do contrato.
 
-**Exceção para alterações exclusivamente documentais em `spec/`:** quando todos os arquivos alterados e rastreados estiverem sob `spec/**`, não execute `type-check`, `lint`, `test`, `test:coverage` ou `build`, pois esses comandos não validam o conteúdo Markdown e não acrescentam sinal relevante. Nesse caso, limite a validação ao fluxo `/spec`: registro pela automação, releitura das seções alteradas, `git diff --check` e conferência de títulos, cercas Markdown, caminhos e consistência entre specs relacionadas. Se houver qualquer arquivo alterado fora de `spec/**`, a exceção não se aplica e as validações normais devem ser executadas conforme o escopo.
+**Exceção para alterações exclusivamente documentais em `spec/`:** quando todos os arquivos alterados, inclusive os não rastreados, estiverem sob `spec/**`, não execute `type-check`, `lint`, `test`, `test:coverage` ou `build`, pois esses comandos não validam o conteúdo Markdown e não acrescentam sinal relevante. Nesse caso, limite a validação ao fluxo `/spec`: registro pela automação, releitura das seções alteradas, `git diff --check` e conferência de títulos, cercas Markdown, caminhos e consistência entre specs relacionadas. Se houver qualquer arquivo alterado fora de `spec/**`, a exceção não se aplica e as validações normais devem ser executadas conforme o escopo.
 
 `npm run test:coverage` e `npm run knip -- --no-exit-code` continuam comandos de verificação manual/observacional importantes quando a mudança toca testes, cobertura, dependências, exports públicos ou limpeza estrutural.
 
@@ -55,7 +55,7 @@ O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas se
 
 No GitHub, `Dependency graph` e `Dependabot` estão ativos para `npm` e `github-actions`.
 
-- O Dependabot agrupa apenas atualizações `minor` e `patch`; atualizações de segurança permanecem separadas e atualizações major são avaliadas isoladamente.
+- O Dependabot configura um grupo mensal multiecossistema para atualizações de `npm` e `github-actions` com padrão `*`, sem restrição por tipo de versão. Atualizações de segurança têm grupos próprios por ecossistema.
 - `.github/dependabot.yml` é a fonte de verdade para agenda, grupos e limites de PRs; `package.json`, `package-lock.json`, `.nvmrc` e CI definem as versões instaladas e o baseline de Node.
 - Atualizações de Electron, módulos nativos ou empacotamento exigem validação proporcional, incluindo `npm run pack` e smoke no Windows quando aplicável.
 
@@ -72,10 +72,10 @@ Ao revisar PRs abertos, especialmente os automáticos:
 
 - **Idioma**: todo código, nomes de funções, variáveis, comentários e mensagens em **português**.
 - **Nomenclatura**: camelCase para funções/variáveis (`buscarPorId`, `criarLaudo`), PascalCase para componentes React (`LoginForm`, `TinyMceEditor`), kebab-case para serviços/handlers (`user.service.ts`, `laudo.handlers.ts`).
-- **Aliases de import**: `@` → `src/renderer/`, `@shared` → `src/shared/`, `@main` → `src/main/`, `@preload` → `src/preload/`.
+- **Aliases de import**: no renderer, o Vite resolve `@` → `src/renderer/` e `@shared` → `src/shared/`. `@main` e `@preload` também estão configurados nos tsconfigs e no Vitest para tipagem e testes; não os use para importar código do main ou preload no renderer.
 - **Estilo**: minimalista. Sem comentários óbvios — adicione comentários apenas quando ajudarem a própria IA a entender o código em manutenções futuras. Sem emojis, sem explicações prolixas.
 - **CSS**: exclusivamente Tailwind utility classes + variáveis CSS definidas em `src/renderer/styles/globals.css`. Não criar arquivos CSS novos nem estilos inline.
-- **Assets estáticos**: `src/renderer/types/assets.d.ts` declara tipos para imports de `.jpg/.jpeg/.png/.svg`. Código vendor (ex: TinyMCE em `src/renderer/public/tinymce/`) é excluído do lint via `.eslintignore`.
+- **Assets estáticos**: `src/renderer/types/assets.d.ts` declara tipos para imports de `.jpg/.jpeg/.png/.svg`. Código vendor (ex: TinyMCE em `src/renderer/public/tinymce/`) é excluído do lint via `eslint.config.js`.
 
 ---
 
@@ -123,7 +123,7 @@ src/
 └── shared/       # Tipos, contratos e metadados puros compartilhados
 ```
 
-**Fluxo IPC** (toda comunicação renderer ↔ main):
+**Fluxo IPC típico** (renderer ↔ main):
 
 ```
 Renderer → window.ipcAPI(channel, payload) → Preload → Handler → Service → Database
@@ -137,17 +137,17 @@ Renderer → window.ipcAPI(channel, payload) → Preload → Handler → Service
 ```
 main/
 ├── database/     # SQLite + migrações (src/main/database/index.ts)
-├── services/     # Lógica de negócio (herdam de BaseService<T>)
+├── services/     # Lógica de negócio; serviços CRUD de entidades usam BaseService<T>
 ├── ipc/handlers/  # Handlers IPC (um arquivo por entidade)
 ├── security/     # Criptografia e sanitização
 └── utils/        # Logger (Winston)
 ```
 
-**BaseService\<T\>** (`src/main/services/base.service.ts`): classe abstrata com CRUD genérico — `findAll()`, `findById()`, `create()`, `update()`, `delete()`. Todo serviço de entidade deve estendê-la.
+**BaseService\<T\>** (`src/main/services/base.service.ts`): classe abstrata com CRUD genérico — `findAll()`, `findById()`, `create()`, `update()`, `delete()`. Serviços CRUD de entidades devem estendê-la.
 
 ### Renderer
 
-React 19 + React Router 7 (HashRouter — obrigatório para Electron com `file://`) + Tailwind CSS + shadcn/ui (New York style). Páginas com lazy loading via `React.lazy`.
+React 19 + React Router 8 (HashRouter — obrigatório para Electron com `file://`) + Tailwind CSS + shadcn/ui (New York style). Páginas com lazy loading via `React.lazy`.
 
 ### Organização de módulos (features)
 
@@ -219,17 +219,18 @@ shadcn/ui (New York, base Zinc, ícones Lucide) com Tailwind CSS e suporte a dar
 | `rep/` | RepStepper, formulários de requisição de exame |
 | `laudo/` | IlustracoesPanel |
 | `timeline/` | DualTrackTimeline, RepTimelineDialog |
-| `ai/` | AISectionToolbar, AISheet |
+| `ai/` | AssistenteIaPanel, AssistenteIaCard e diálogo de aplicação da resposta |
 | `categorias/` | SortableCategoryTree |
 | `data-table/` | DataTable com paginação |
+| `desempenho/` | Captura e visualização de desempenho |
+| `diagnostico/` | Ponte de diagnóstico do renderer |
 | `layout/` | AppSidebar, Header, Footer |
-| `ui/` | 28 componentes shadcn/ui |
+| `logs/` | Captura e histórico de logs |
+| `ui/` | Componentes de interface shadcn/ui |
 | `auth/` | Login, autenticação |
 | `avatar/` | Avatar/foto do periciando |
-| `forms/` | Formulários reutilizáveis |
-| `pecas/` | Peças processuais |
-| `placeholders/` | Lista e gerenciamento de placeholders |
-| `shared/` | Componentes compartilhados entre features |
+| `forms/` | Primitivos de formulário com react-hook-form |
+| `placeholders/` | Gerenciamento de categorias de placeholders |
 | `solicitantes/` | Gestão de solicitantes |
 | `template/` | Templates de laudo |
 | `tipos-exame/` | Tipos de exame |
@@ -240,10 +241,10 @@ shadcn/ui (New York, base Zinc, ícones Lucide) com Tailwind CSS e suporte a dar
 
 SQLite via pacote `sqlite3`. Arquivo: `laudopericial.db` em `app.getPath('userData')`.
 
-**Serviços**: herdam de `BaseService<T>` (`src/main/services/base.service.ts`) com CRUD genérico.
+**Serviços CRUD de entidades**: herdam de `BaseService<T>` (`src/main/services/base.service.ts`).
 
 **Para criar uma nova migration**:
-1. Adicionar o bloco da migration `vXX` em `src/main/database/index.ts`
+1. Adicionar o bloco `if (fromVersion < XX)` em `applyMigrations()` em `src/main/database/index.ts`
 2. Incrementar `CURRENT_SCHEMA_VERSION`
 3. Garantir que a nova migration entre no fluxo de `checkAndApplyMigrations()`
 
@@ -264,7 +265,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 
 ### Banco de dados
 
-- **Sempre criar migration ao alterar schema** — incrementar `CURRENT_SCHEMA_VERSION` sem criar a função `migrateVXX()` correspondente corrompe upgrades do banco.
+- **Sempre criar migration ao alterar schema** — incrementar `CURRENT_SCHEMA_VERSION` sem adicionar o bloco correspondente em `applyMigrations()` deixa bancos existentes sem a alteração necessária.
 
 ### Build e código morto
 
@@ -273,7 +274,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 
 ### Processo de trabalho
 
-- **Em caso de dúvida** — perguntar, somente prosseguir quando souber ao menos 95% do que fazer.
+- **Em caso de dúvida material** — esclarecer com o usuário quando uma decisão não puder ser tomada com segurança a partir do contexto e do código disponível.
 
 ---
 
@@ -338,7 +339,7 @@ As specs `11 github actions` e `12 atualizacao` formam uma cadeia de confiança 
 ## /spec — Relatório
 
 **Modo:** <padrão (diff + último commit) | diff atual | último commit | auditoria total | focado: <subdir>>
-**Modelo IA:** <nome curto do modelo — extraia de "You are powered by the model named..." no system prompt>
+**Modelo IA:** <nome curto do modelo informado no contexto da sessão>
 **Base:** <arquivos analisados>
 
 ### Specs que precisam de atualização
@@ -350,6 +351,8 @@ As specs `11 github actions` e `12 atualizacao` formam uma cadeia de confiança 
 ### Sugestão de novo spec
 ...
 ```
+
+Informe o modelo real com `--modelo` ou `CODEX_MODEL_NAME` ao executar a auditoria. Sem ambos, o script usa `gpt-5` como fallback; confira o campo antes de apresentar o relatório.
 
 Se nenhuma alteração for necessária, informar em uma linha.
 
@@ -368,6 +371,6 @@ Se nenhuma alteração for necessária, informar em uma linha.
 - `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md` — exceções de código morto (não remover).
 - `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md` — painel de saúde do sistema (métricas de TS, lint, testes, código morto).
 - `graphify-out/GRAPH_REPORT.md` — relações entre arquivos e funções (auto-gerado).
-- `spec/.../codigomorto/03_melhoria_graphify.md` — análise curada do grafo com recomendações de melhoria (gerado por LLM).
+- `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md` — análise curada do grafo com recomendações de melhoria (gerado por LLM).
 
 Consulte sob demanda, apenas quando necessário para entender requisitos.

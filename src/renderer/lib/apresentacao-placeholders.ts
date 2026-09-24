@@ -35,6 +35,7 @@ interface OpcoesAplicacaoPlaceholders {
 
 interface OpcoesAgendamentoPlaceholders extends OpcoesAplicacaoPlaceholders {
   aoFalharDefinitivamente?: (resultado: ResultadoAplicacaoPlaceholders) => void;
+  aoAplicar?: () => void;
 }
 
 const agendamentos = new WeakMap<TinyMceEditorInstance, ReturnType<typeof setTimeout>>();
@@ -510,6 +511,7 @@ export function agendarVisualizacaoPlaceholders(
       return;
     }
     if (resultado.estado === 'falhou') opcoes.aoFalharDefinitivamente?.(resultado);
+    if (resultado.estado === 'aplicado') opcoes.aoAplicar?.();
   }, tentativa === 0 ? 0 : 150);
 
   agendamentos.set(editor, agendamento);
