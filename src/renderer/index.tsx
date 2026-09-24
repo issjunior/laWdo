@@ -10,9 +10,16 @@ import type {
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
 } from '@shared/types/imagem-laudo.types';
-import type { RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
+import type { AutorizacaoReinicioAtualizacao, RespostaAtualizacao } from '@shared/atualizacao/atualizacao.types';
 import type { AtualizacaoPainelIa, ComandoPainelIa, LimiteUsoIa, PlanoExecucaoIaResumo, ProgressoConsultaIa, ProgressoIa, RespostaExecucaoIaIpc, SolicitacaoIa } from '@shared/types/ia.types';
 import type { ProgressoAtualizacao } from '@shared/atualizacao/atualizacao.types';
+import type {
+  AmostraDesempenho,
+  EstadoCapturaDesempenho,
+  EventoDesempenhoEntrada,
+} from '@shared/desempenho/contratos';
+import type { EstadoCapturaLogs, ResumoCapturaLogs, SondaCapturaLogs } from '@shared/captura-logs/contratos';
+import type { MiniaturaArquivoRepGdl, ProgressoListaFotosGdl } from '@shared/types/gdl-arquivos.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -66,6 +73,30 @@ interface IpcIlustracoesLegado {
   onPanelClosed: (cb: () => void) => () => void;
 }
 
+interface IpcDesempenhoRenderer {
+  estado: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  configurarPerfil: (perfil: 'importante' | 'critico') => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  iniciarDetalhada: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  pararDetalhada: () => Promise<{ success: boolean; data?: EstadoCapturaDesempenho; error?: string }>;
+  marcarProblema: () => Promise<{ success: boolean; error?: string }>;
+  listar: () => Promise<{ success: boolean; data?: AmostraDesempenho[]; error?: string }>;
+  exportarCsv: () => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
+  registrar: (entrada: EventoDesempenhoEntrada) => void;
+  onPerfilAlterado: (callback: (estado: EstadoCapturaDesempenho) => void) => () => void;
+}
+
+interface IpcCapturaLogsRenderer {
+  estado: () => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+  iniciar: (sondas: SondaCapturaLogs[]) => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+  parar: () => Promise<{ success: boolean; data?: EstadoCapturaLogs; error?: string }>;
+  marcarProblema: () => Promise<{ success: boolean; error?: string }>;
+  listar: () => Promise<{ success: boolean; data?: ResumoCapturaLogs[]; error?: string }>;
+  exportar: (id: string) => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
+  excluir: (id: string) => Promise<{ success: boolean; error?: string }>;
+  limpar: () => Promise<{ success: boolean; error?: string }>;
+  onEstadoAlterado: (callback: (estado: EstadoCapturaLogs) => void) => () => void;
+}
+
 interface IpcAPIRendererLegada {
   ping: () => Promise<string>;
   getAppInfo: () => Promise<AppInfoLegado>;
@@ -84,7 +115,10 @@ interface IpcAPIRendererLegada {
   rep: IpcGrupoLegado;
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
-  gdl: IpcGrupoLegado;
+  gdl: IpcGrupoLegado & {
+    obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
+    onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
+  };
   categoria: IpcGrupoLegado;
   placeholder: IpcGrupoLegado;
   template: IpcGrupoLegado;
@@ -117,13 +151,15 @@ interface IpcAPIRendererLegada {
     verificar: () => Promise<RespostaAtualizacao>;
     baixar: () => Promise<RespostaAtualizacao>;
     adiar: () => Promise<RespostaAtualizacao>;
-    prepararReinicio: () => Promise<RespostaAtualizacao>;
     instalarAgora: () => Promise<RespostaAtualizacao>;
     agendar: () => Promise<RespostaAtualizacao>;
+    mostrarPacote: () => Promise<{ success: boolean }>;
     onProgresso: (callback: (progresso: ProgressoAtualizacao) => void) => () => void;
-    onSolicitarReinicio: (callback: () => boolean) => () => void;
+    onSolicitarReinicio: (callback: () => AutorizacaoReinicioAtualizacao) => () => void;
   };
   log: IpcGrupoLegado;
+  desempenho: IpcDesempenhoRenderer;
+  capturaLogs: IpcCapturaLogsRenderer;
   diagnosticoInterno: IpcGrupoLegado;
   ilustracoes: IpcIlustracoesLegado;
 }
@@ -259,6 +295,28 @@ const initApp = async () => {
           listarAuditoria: async () => ({ success: true, data: [], total: 0 }),
           limparAuditoria: async () => ({ success: true, count: 0 }),
           contar: async () => ({ success: true, data: { sistema: 0, auditoria: 0 } }),
+        },
+        desempenho: {
+          estado: async () => ({ success: true, data: { perfil: 'importante', sessao: null, eventosDescartados: 0 } }),
+          configurarPerfil: async (perfil: 'importante' | 'critico') => ({ success: true, data: { perfil, sessao: null, eventosDescartados: 0 } }),
+          iniciarDetalhada: async () => ({ success: true, data: { perfil: 'detalhado', sessao: null, eventosDescartados: 0 } }),
+          pararDetalhada: async () => ({ success: true, data: { perfil: 'importante', sessao: null, eventosDescartados: 0 } }),
+          marcarProblema: async () => ({ success: true }),
+          listar: async () => ({ success: true, data: [] }),
+          exportarCsv: async () => ({ success: true, canceled: true }),
+          registrar: () => undefined,
+          onPerfilAlterado: () => () => undefined,
+        },
+        capturaLogs: {
+          estado: async () => ({ success: true, data: { ativa: null } }),
+          iniciar: async () => ({ success: true, data: { ativa: null } }),
+          parar: async () => ({ success: true, data: { ativa: null } }),
+          marcarProblema: async () => ({ success: true }),
+          listar: async () => ({ success: true, data: [] }),
+          exportar: async () => ({ success: true, canceled: true }),
+          excluir: async () => ({ success: true }),
+          limpar: async () => ({ success: true }),
+          onEstadoAlterado: () => () => undefined,
         },
         laudo: {
           findAll: async () => ({ success: true, data: [] }),

@@ -3,11 +3,11 @@ import type { ContextoSerializacaoCamposEspecificos, ExamService } from './types
 import { combinarEnvolvido, separarEnvolvido } from '@shared/utils/envolvido';
 
 function formatarNumeroBO(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  const digits = raw.replace(/\D/g, '').slice(0, 15);
   if (digits.length <= 4) return digits;
-  const year = digits.slice(0, 4);
-  const num = digits.slice(4, 10);
-  return `${year}/${num}`;
+  const numero = digits.slice(0, -4);
+  const ano = digits.slice(-4);
+  return `${numero}/${ano}`;
 }
 
 const MAX_MATERIAL_ENC = 20;
@@ -192,7 +192,7 @@ export const b602Service: ExamService = {
         if (loc.uf) result['b602_local_uf'] = loc.uf;
       }
     }
-    if (data.numero_bo) result['b602_numero_bo'] = String(data.numero_bo);
+    if (data.numero_bo) result['b602_numero_bo'] = formatarNumeroBO(String(data.numero_bo));
     if (data.numero_ip) result['b602_numero_ip'] = String(data.numero_ip);
     if (data.solicitante_nome) result['b602_solicitante_nome'] = String(data.solicitante_nome);
 

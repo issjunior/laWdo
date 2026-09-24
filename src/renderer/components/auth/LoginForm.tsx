@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { loginSchema, type LoginInput } from '@/lib/validators/user.schema'
+import { VersaoAplicativo } from '@/components/auth/VersaoAplicativo'
 import logo from '@/assets/logo.png'
 
 interface LoginFormProps {
@@ -179,6 +180,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               </form>
             </Form>
           </CardContent>
+          <div className="pb-5 text-center">
+            <VersaoAplicativo />
+          </div>
         </Card>
       </div>
     </div>

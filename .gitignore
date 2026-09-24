@@ -22,7 +22,7 @@ release/
 *.tar.gz
 
 # --- DADOS E LOGS ---
-logs/
+/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*

@@ -42,4 +42,25 @@ describe('parseHtmlParaEstrutura', () => {
       expect.objectContaining({ tipo: 'paragrafo' }),
     ]);
   });
+
+  it('preserva texto direto, formatação inline e blocos mistos nas células', () => {
+    const documento = parseHtmlParaEstrutura(`
+      <table>
+        <caption>TABELA 1 – Material</caption>
+        <tr><th colspan="2">TABELA 1 – MATERIAL</th></tr>
+        <tr><td>Cartucho <strong>calibre 12</strong></td><td>Antes<p>Detalhe</p>Depois</td></tr>
+      </table>
+    `);
+    const [legenda, tabela] = documento.secoes[0].blocos;
+
+    expect(legenda).toMatchObject({ tipo: 'paragrafo', trechos: [expect.objectContaining({ texto: 'TABELA 1 – Material' })] });
+    expect(tabela).toMatchObject({ tipo: 'tabela' });
+    if (tabela.tipo !== 'tabela') return;
+    expect(tabela.linhas[0][0].paragrafos[0].trechos.map(trecho => trecho.texto).join('')).toBe('TABELA 1 – MATERIAL');
+    expect(tabela.linhas[1][0].paragrafos[0].trechos).toEqual(expect.arrayContaining([
+      expect.objectContaining({ texto: 'calibre 12', estilo: expect.objectContaining({ negrito: true }) }),
+    ]));
+    expect(tabela.linhas[1][1].paragrafos.map(paragrafo => paragrafo.trechos.map(trecho => trecho.texto).join('')))
+      .toEqual(['Antes', 'Detalhe', 'Depois']);
+  });
 });

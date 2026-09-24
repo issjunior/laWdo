@@ -82,6 +82,51 @@ const URLS_PROVEDORES = {
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
 } as const;
 const TEMPO_LIMITE_REQUISICAO_IA_MS = 120_000;
+
+function obterCodigoErroRede(erro: unknown): string {
+  const codigos = new Set<string>();
+  let atual: unknown = erro;
+
+  for (let nivel = 0; nivel < 4 && atual && typeof atual === 'object'; nivel += 1) {
+    if ('code' in atual && typeof atual.code === 'string') codigos.add(atual.code.toUpperCase());
+    atual = 'cause' in atual ? atual.cause : null;
+  }
+
+  if ([...codigos].some(codigo => codigo === 'ENOTFOUND' || codigo === 'EAI_AGAIN')) return 'DNS_INDISPONIVEL';
+  if ([...codigos].some(codigo => ['ENETDOWN', 'ENETUNREACH', 'EHOSTUNREACH'].includes(codigo))) return 'REDE_INDISPONIVEL';
+  if ([...codigos].some(codigo => codigo === 'ECONNREFUSED')) return 'CONEXAO_RECUSADA';
+  if ([...codigos].some(codigo => ['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET'].includes(codigo))) return 'CONEXAO_INTERROMPIDA';
+  if ([...codigos].some(codigo => codigo === 'ETIMEDOUT' || codigo === 'UND_ERR_CONNECT_TIMEOUT')) return 'TIMEOUT';
+  if ([...codigos].some(codigo => (
+    codigo.startsWith('ERR_TLS_')
+    || codigo.startsWith('CERT_')
+    || codigo.includes('CERTIFICATE')
+    || codigo === 'DEPTH_ZERO_SELF_SIGNED_CERT'
+    || codigo === 'SELF_SIGNED_CERT_IN_CHAIN'
+    || codigo === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+  ))) return 'CERTIFICADO_TLS_INVALIDO';
+
+  return 'SEM_CONEXAO';
+}
+
+async function obterCodigoRespostaRecusada(resposta: Response): Promise<string> {
+  if (resposta.status === 401 || resposta.status === 403) return 'NAO_AUTORIZADO';
+  if (resposta.status === 402) return 'SALDO_INSUFICIENTE';
+  if (resposta.status === 408 || resposta.status === 504) return 'TIMEOUT';
+  if (resposta.status === 429) return 'LIMITE_REQUISICOES';
+  if (resposta.status === 404) return 'MODELO_INDISPONIVEL';
+  if (resposta.status >= 500) return `PROVEDOR_INDISPONIVEL:${resposta.status}`;
+
+  if (resposta.status === 400) {
+    const detalhe = (await resposta.clone().text()).toLowerCase();
+    if (detalhe.includes('api_key') || detalhe.includes('api key') || detalhe.includes('unauthoriz')) return 'NAO_AUTORIZADO';
+    if (detalhe.includes('model') || detalhe.includes('modelo')) return 'MODELO_INDISPONIVEL';
+    return 'SOLICITACAO_RECUSADA';
+  }
+
+  return `PROVEDOR_INDISPONIVEL:${resposta.status}`;
+}
+
 function mensagemAcao(acao: SolicitacaoIa['acao']): string {
   const acoes: Record<SolicitacaoIa['acao'], string> = {
     ortografia: 'Corrija somente ortografia, gramática e pontuação.',
@@ -523,14 +568,11 @@ export class IaExecucaoService {
           }),
           signal: abortador.signal,
         });
-      } catch {
+      } catch (erro: unknown) {
         if (abortador.signal.aborted) throw new Error(esgotouTempo ? 'TIMEOUT' : 'CANCELADO');
-        throw new Error('SEM_CONEXAO');
+        throw new Error(obterCodigoErroRede(erro));
       }
-      if (resposta.status === 401 || resposta.status === 403) throw new Error('NAO_AUTORIZADO');
-      if (resposta.status === 429) throw new Error('LIMITE_REQUISICOES');
-      if (resposta.status === 400 || resposta.status === 404) throw new Error('MODELO_INDISPONIVEL');
-      if (!resposta.ok) throw new Error(`PROVEDOR_INDISPONIVEL:${resposta.status}`);
+      if (!resposta.ok) throw new Error(await obterCodigoRespostaRecusada(resposta));
 
       let corpo: unknown;
       try {

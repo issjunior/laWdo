@@ -17,6 +17,8 @@ import { DiagnosticoInterfaceService } from './services/diagnostico-interface.se
 import { DiagnosticoCapturaService } from './services/diagnostico-captura.service.js';
 import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.service.js';
 import { iaExecucaoService } from './services/ia-execucao.service.js';
+import { desempenhoService } from './services/desempenho.service.js';
+import { capturaLogsService } from './services/captura-logs.service.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -492,9 +494,16 @@ const createWindow = async (): Promise<void> => {
   mainWindow.webContents.on('render-process-gone', (_evento, detalhes) => {
     registrarEventoDiagnostico('erro', 'error', { evento: 'renderer_encerrado', motivo: detalhes.reason, codigo: detalhes.exitCode }, mainWindow ?? undefined);
     void capturaDiagnostico?.interromper(`Renderer encerrado: ${detalhes.reason}.`);
+    void desempenhoService.registrar({ origem: 'processo', categoria: 'renderer', evento: 'renderer_encerrado', metadados: { falhou: true } });
   });
-  mainWindow.webContents.on('unresponsive', () => registrarEventoDiagnostico('janela', 'warn', { evento: 'renderer_sem_resposta' }, mainWindow ?? undefined));
-  mainWindow.webContents.on('responsive', () => registrarEventoDiagnostico('janela', 'info', { evento: 'renderer_responsivo' }, mainWindow ?? undefined));
+  mainWindow.webContents.on('unresponsive', () => {
+    registrarEventoDiagnostico('janela', 'warn', { evento: 'renderer_sem_resposta' }, mainWindow ?? undefined);
+    void desempenhoService.registrar({ origem: 'processo', categoria: 'renderer', evento: 'renderer_sem_resposta' });
+  });
+  mainWindow.webContents.on('responsive', () => {
+    registrarEventoDiagnostico('janela', 'info', { evento: 'renderer_responsivo' }, mainWindow ?? undefined);
+    void desempenhoService.registrar({ origem: 'processo', categoria: 'renderer', evento: 'renderer_responsivo' });
+  });
 };
 
 // Função para alternar DevTools
@@ -539,6 +548,8 @@ app.whenReady().then(async () => {
       return;
     }
     setupLogging();
+    await desempenhoService.inicializar();
+    await capturaLogsService.inicializar();
     await iniciarDiagnosticoAssistido();
 
     // Registrar handlers IPC
@@ -642,6 +653,8 @@ app.on('will-quit', evento => {
   encerramentoAplicativoEmAndamento = true;
   void Promise.all([
     encerrarDiagnosticoAssistido(),
+    Promise.resolve(desempenhoService.encerrar()),
+    Promise.resolve(capturaLogsService.encerrar()),
     closeDatabase().catch(error => log.error('Erro ao fechar banco de dados no encerramento', error)),
   ]).finally(() => app.exit(0));
 });

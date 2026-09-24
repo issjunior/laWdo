@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import {
   agendarVisualizacaoPlaceholders,
+  aplicarVisualizacaoPlaceholder,
   aplicarVisualizacaoPlaceholders,
 } from '../../renderer/lib/apresentacao-placeholders';
 
@@ -104,5 +105,52 @@ describe('apresentacao-placeholders', () => {
     await vi.runAllTimersAsync();
 
     expect(body.querySelector('[data-placeholder]')?.textContent).toBe('Último');
+  });
+
+  it('atualiza somente a âncora afetada e preserva a prévia não relacionada', () => {
+    const body = document.createElement('body');
+    body.innerHTML = [
+      '<p><span data-placeholder="{{tabela}}">{{tabela}}</span></p>',
+      '<p><span data-placeholder="{{tabela}}">{{tabela}}</span></p>',
+    ].join('');
+    document.body.append(body);
+    const editor = criarEditor(body);
+    const opcoes = criarOpcoes();
+    aplicarVisualizacaoPlaceholders(editor, opcoes);
+    const previaPreservada = body.querySelector<HTMLElement>('[data-placeholder-preview="true"]');
+    const ancoraAfetada = body.querySelectorAll<HTMLElement>('[data-placeholder]')[1];
+
+    const resultado = aplicarVisualizacaoPlaceholder(editor, ancoraAfetada, opcoes);
+
+    expect(resultado).toMatchObject({ estado: 'aplicado', processados: 1, previasCriadas: 1, previasRemovidas: 1 });
+    expect(body.querySelector('[data-placeholder-preview="true"]')).toBe(previaPreservada);
+    expect(body.querySelectorAll('[data-placeholder-preview="true"]')).toHaveLength(2);
+  });
+
+  it.each([6, 80])('conta corretamente a tabela com %i linhas sem truncar a prévia', quantidade => {
+    const linhas = Array.from({ length: quantidade }, (_, indice) => `<tr><td>Item ${indice + 1}</td><td>${indice + 1}</td></tr>`).join('');
+    const body = document.createElement('body');
+    body.innerHTML = '<p><span data-placeholder="{{tabela}}">{{tabela}}</span></p>';
+    document.body.append(body);
+    const editor = criarEditor(body);
+    const opcoes = {
+      ...criarOpcoes(),
+      valores: {
+        tabela: {
+          valor: `<table><thead><tr><th>Material</th><th>Quantidade</th></tr></thead><tbody>${linhas}</tbody></table>`,
+          preenchido: true,
+          formato: 'html' as const,
+        },
+      },
+    };
+    const ancora = body.querySelector<HTMLElement>('[data-placeholder]');
+
+    const resultado = aplicarVisualizacaoPlaceholder(editor, ancora!, opcoes);
+
+    expect(resultado).toMatchObject({ processados: 1, tabelas: 1, linhas: quantidade + 1, celulas: (quantidade + 1) * 2 });
+    const celulas = body.querySelectorAll('[data-placeholder-preview="true"] tbody td');
+    expect(celulas).toHaveLength(quantidade * 2);
+    expect(celulas[0]).toHaveTextContent('Item 1');
+    expect(celulas[celulas.length - 2]).toHaveTextContent(`Item ${quantidade}`);
   });
 });

@@ -57,11 +57,11 @@ const PROJETIL_OPTS = [
 const OBS_CARTUCHO_OPTS = ['Intacto', 'NTA', 'Picotado', 'Percutido', 'Não deflagrado'] as const;
 
 function formatarNumeroBO(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  const digits = raw.replace(/\D/g, '').slice(0, 15);
   if (digits.length <= 4) return digits;
-  const year = digits.slice(0, 4);
-  const num = digits.slice(4, 10);
-  return `${year}/${num}`;
+  const numero = digits.slice(0, -4);
+  const ano = digits.slice(-4);
+  return `${numero}/${ano}`;
 }
 
 const UF_OPTS = [
@@ -323,7 +323,7 @@ export const DadosInvestigacaoFields: React.FC<ExamSectionProps> = ({ form, camp
                 <FormItem>
                   <FormControl>
                     <Input
-                      placeholder="2026/123456"
+                      placeholder="Boletim de Ocorrência"
                       className={obterClasseGdl('b602_numero_bo')}
                       value={field.value || ''}
                       onChange={(e) => {

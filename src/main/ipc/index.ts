@@ -24,6 +24,8 @@ import { registerRegraWizardHandlers } from './handlers/regra-wizard.handlers.js
 import { registerGdlHandlers } from './handlers/gdl.handlers.js';
 import { registerDashboardHandlers } from './handlers/dashboard.handlers.js';
 import { registerAtualizacaoHandlers } from './handlers/atualizacao.handlers.js';
+import { registerDesempenhoHandlers } from './handlers/desempenho.handlers.js';
+import { registerCapturaLogsHandlers } from './handlers/captura-logs.handlers.js';
 import { getSchemaVersion } from '../database/index.js';
 import { userService } from '../services/user.service.js';
 import {
@@ -85,6 +87,8 @@ export const registerIpcHandlers = (options: {
   registerIAHandlers(options);
   registerBackupHandlers();
   registerLogSystemHandlers();
+  registerDesempenhoHandlers();
+  registerCapturaLogsHandlers();
   registerIlustracoesHandlers(options);
   registerWizardHandlers();
   registerPecaHandlers();

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, CheckSquare, Image as ImageIcon, ImageDown, Loader2, Minus, Plus, Search, Square } from 'lucide-react'
+import { AlertCircle, CheckSquare, Image as ImageIcon, ImageDown, Loader2, Minus, Plus, RefreshCw, Search, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import type { ArquivoRepGdl, DuplicataImagemRepGdl, ImagemRepGdlAdicionadaAoLaudo } from '@shared/types/gdl-arquivos.types'
+import type { ArquivoRepGdl, DuplicataImagemRepGdl, ImagemRepGdlAdicionadaAoLaudo, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl } from '@shared/types/gdl-arquivos.types'
 
 interface GdlImagensRepModalProps {
   aberto: boolean
@@ -80,6 +81,15 @@ function dadosSessaoImagensValidos(valor: unknown): valor is DadosSessaoImagens 
     && Array.isArray(dados.arquivos)
 }
 
+function miniaturaArquivoRepGdlValida(valor: unknown): valor is MiniaturaArquivoRepGdl {
+  if (!valor || typeof valor !== 'object') return false
+  const miniatura = valor as Record<string, unknown>
+  return typeof miniatura.idSelecao === 'string'
+    && /^[a-f0-9]{64}$/.test(miniatura.idSelecao)
+    && typeof miniatura.thumbnailDataUri === 'string'
+    && miniatura.thumbnailDataUri.startsWith('data:image/jpeg;base64,')
+}
+
 function formatarTamanho(tamanho: number | null): string {
   if (tamanho === null) return 'Tamanho não informado'
   if (tamanho < 1024) return `${tamanho} bytes`
@@ -100,12 +110,25 @@ function formatarNumeroRep(numero: string, ano: string): string {
   return `${numeroFormatado}-${anoFormatado}`
 }
 
+function formatarBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} bytes`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, laudoId, onAbertoChange, onCapturadas }) => {
   const [arquivos, setArquivos] = useState<ArquivoRepGdl[]>([])
   const [sessaoId, setSessaoId] = useState<string | null>(null)
   const sessaoIdRef = useRef<string | null>(null)
+  const containerFotosRef = useRef<HTMLDivElement | null>(null)
+  const elementosFotosRef = useRef<Map<string, HTMLElement>>(new Map())
+  const idsMiniaturasSolicitadasRef = useRef<Set<string>>(new Set())
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(false)
+  const [progresso, setProgresso] = useState<ProgressoListaFotosGdl | null>(null)
+  const [tentativaCarregamento, setTentativaCarregamento] = useState(0)
+  const [idsMiniaturasCarregando, setIdsMiniaturasCarregando] = useState<Set<string>>(new Set())
+  const [idsMiniaturasIndisponiveis, setIdsMiniaturasIndisponiveis] = useState<Set<string>>(new Set())
   const [capturando, setCapturando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [identificacaoRep, setIdentificacaoRep] = useState<Omit<DadosSessaoImagens, 'sessaoId' | 'arquivos'> | null>(null)
@@ -119,6 +142,7 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
     if (!aberto) return
     let ativo = true
     setCarregando(true)
+    setProgresso(null)
     setErro(null)
     setSelecionadas(new Set())
     setSessaoId(null)
@@ -127,7 +151,14 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
     setFiltro('elegiveis')
     setOrdenacao('nome-crescente')
     setColunasGrade(2)
+    setIdsMiniaturasCarregando(new Set())
+    setIdsMiniaturasIndisponiveis(new Set())
+    idsMiniaturasSolicitadasRef.current.clear()
+    elementosFotosRef.current.clear()
     sessaoIdRef.current = null
+    const removerProgresso = window.ipcAPI.gdl.onProgressoImagensLaudo?.(progressoAtual => {
+      if (ativo && progressoAtual.laudoId === laudoId) setProgresso(progressoAtual)
+    }) ?? (() => undefined)
     void window.ipcAPI.gdl.listarImagensLaudo(laudoId).then(resultado => {
       if (!ativo) {
         if (resultado.success && dadosSessaoImagensValidos(resultado.data)) void window.ipcAPI.gdl.fecharSessaoImagensLaudo(laudoId, resultado.data.sessaoId)
@@ -148,14 +179,18 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
     }).catch(error => {
       if (ativo) setErro(error instanceof Error ? error.message : 'Não foi possível carregar a Lista de Fotos da REP.')
     }).finally(() => {
-      if (ativo) setCarregando(false)
+      if (ativo) {
+        setCarregando(false)
+        setProgresso(null)
+      }
     })
     return () => {
       ativo = false
+      removerProgresso()
       if (sessaoIdRef.current) void window.ipcAPI.gdl.fecharSessaoImagensLaudo(laudoId, sessaoIdRef.current)
       sessaoIdRef.current = null
     }
-  }, [aberto, laudoId])
+  }, [aberto, laudoId, tentativaCarregamento])
 
   const alternarSelecao = (idSelecao: string) => {
     setSelecionadas(atuais => {
@@ -182,6 +217,82 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
       return ordenacao === 'nome-decrescente' ? -comparacao : comparacao
     })
   }, [arquivos, busca, filtro, ordenacao])
+
+  useEffect(() => {
+    if (!aberto || !sessaoId) return
+    const candidatos = arquivosVisiveis.filter(arquivo => arquivo.provavelImagem && !arquivo.status && !arquivo.thumbnailDataUri)
+    if (candidatos.length === 0) return
+
+    const solicitarMiniaturas = async (ids: string[]) => {
+      const idsPendentes = ids
+        .filter(id => !idsMiniaturasSolicitadasRef.current.has(id))
+        .slice(0, 30)
+      if (idsPendentes.length === 0) return
+      idsPendentes.forEach(id => idsMiniaturasSolicitadasRef.current.add(id))
+      setIdsMiniaturasCarregando(atuais => new Set([...atuais, ...idsPendentes]))
+
+      try {
+        const obterMiniaturas = window.ipcAPI.gdl.obterMiniaturasImagensLaudo
+        if (typeof obterMiniaturas !== 'function') throw new Error('Carregamento progressivo de miniaturas indisponível.')
+        const resultado = await obterMiniaturas(laudoId, sessaoId, idsPendentes)
+        if (sessaoIdRef.current !== sessaoId) return
+
+        const miniaturas = Array.isArray(resultado.data)
+          ? resultado.data.filter(miniaturaArquivoRepGdlValida)
+          : []
+        const miniaturasPorId = new Map(miniaturas.map(miniatura => [miniatura.idSelecao, miniatura.thumbnailDataUri]))
+        if (resultado.success && miniaturasPorId.size > 0) {
+          setArquivos(atuais => atuais.map(arquivo => {
+            const thumbnailDataUri = miniaturasPorId.get(arquivo.idSelecao)
+            return thumbnailDataUri ? { ...arquivo, thumbnailDataUri } : arquivo
+          }))
+        }
+        const idsSemMiniatura = idsPendentes.filter(id => !miniaturasPorId.has(id))
+        if (idsSemMiniatura.length > 0) {
+          setIdsMiniaturasIndisponiveis(atuais => new Set([...atuais, ...idsSemMiniatura]))
+        }
+      } catch {
+        if (sessaoIdRef.current === sessaoId) {
+          setIdsMiniaturasIndisponiveis(atuais => new Set([...atuais, ...idsPendentes]))
+        }
+      } finally {
+        if (sessaoIdRef.current === sessaoId) {
+          setIdsMiniaturasCarregando(atuais => {
+            const proximos = new Set(atuais)
+            idsPendentes.forEach(id => proximos.delete(id))
+            return proximos
+          })
+        }
+      }
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
+      void solicitarMiniaturas(candidatos.slice(0, 6).map(arquivo => arquivo.idSelecao))
+      return
+    }
+
+    const observer = new IntersectionObserver(entradas => {
+      const idsVisiveis: string[] = []
+      for (const entrada of entradas) {
+        if (!entrada.isIntersecting) continue
+        const elemento = entrada.target as HTMLElement
+        const idSelecao = elemento.dataset.idSelecao
+        if (idSelecao) idsVisiveis.push(idSelecao)
+        observer.unobserve(elemento)
+      }
+      if (idsVisiveis.length > 0) void solicitarMiniaturas(idsVisiveis)
+    }, {
+      root: containerFotosRef.current,
+      rootMargin: '240px 0px',
+    })
+
+    candidatos.forEach(arquivo => {
+      const elemento = elementosFotosRef.current.get(arquivo.idSelecao)
+      if (elemento) observer.observe(elemento)
+    })
+
+    return () => observer.disconnect()
+  }, [aberto, arquivosVisiveis, laudoId, sessaoId])
 
   const idsElegiveisVisiveis = arquivosVisiveis.filter(arquivo => arquivo.provavelImagem && !arquivo.status).map(arquivo => arquivo.idSelecao)
   const todasElegiveisSelecionadas = idsElegiveisVisiveis.length > 0 && idsElegiveisVisiveis.every(idSelecao => selecionadas.has(idSelecao))
@@ -269,28 +380,51 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
             )}</div>
           </div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {carregando && <div className="grid grid-cols-2 gap-3 py-2 sm:grid-cols-3">{Array.from({ length: 6 }, (_, indice) => <Skeleton key={indice} className="h-36 w-full" />)}</div>}
-          {erro && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{erro}</AlertDescription></Alert>}
+        <div ref={containerFotosRef} className="min-h-0 flex-1 overflow-y-auto">
+          {carregando && <div className="space-y-4 py-2">
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3" aria-live="polite">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="flex items-center gap-2 font-medium"><Loader2 className="h-4 w-4 animate-spin" />{progresso?.descricao || 'Iniciando consulta ao GDL…'}</span>
+                {progresso?.percentual !== null && progresso?.percentual !== undefined && <span>{progresso.percentual}%</span>}
+              </div>
+              <Progress value={progresso?.percentual ?? null} aria-label={progresso?.descricao || 'Carregando Lista de Fotos da REP'} />
+              {progresso?.fase === 'baixando' && progresso.bytesRecebidos > 0 && <p className="text-xs text-muted-foreground">{formatarBytes(progresso.bytesRecebidos)}{progresso.totalBytes ? ` de ${formatarBytes(progresso.totalBytes)}` : ' recebidos'}</p>}
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{Array.from({ length: 6 }, (_, indice) => <Skeleton key={indice} className="h-36 w-full" />)}</div>
+          </div>}
+          {erro && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"><span>{erro}</span><Button variant="outline" size="sm" onClick={() => setTentativaCarregamento(atual => atual + 1)}><RefreshCw className="mr-2 h-4 w-4" />Tentar novamente</Button></AlertDescription></Alert>}
           {!carregando && !erro && arquivos.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">A Lista de Fotos da REP está vazia.</p>}
           {!carregando && !erro && arquivos.length > 0 && arquivosVisiveis.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma foto encontrada com os filtros selecionados.</p>}
           {!carregando && !erro && arquivosVisiveis.length > 0 && <div className={`grid grid-cols-1 gap-3 ${CLASSES_COLUNAS_GRADE[colunasGrade]}`}>{arquivosVisiveis.map(arquivo => {
             const elegivel = arquivo.provavelImagem && !arquivo.status
-            return <label key={arquivo.idSelecao} className={`group relative flex min-w-0 flex-col gap-2 rounded-md border p-2 transition-colors ${elegivel ? 'cursor-pointer hover:bg-accent' : 'opacity-70'} ${selecionadas.has(arquivo.idSelecao) ? 'border-primary bg-primary/5' : 'border-border'}`}>
+            return <label
+              key={arquivo.idSelecao}
+              ref={elemento => {
+                if (elemento) elementosFotosRef.current.set(arquivo.idSelecao, elemento)
+                else elementosFotosRef.current.delete(arquivo.idSelecao)
+              }}
+              data-id-selecao={arquivo.idSelecao}
+              className={`group relative flex min-w-0 flex-col gap-2 rounded-md border p-2 transition-colors ${elegivel ? 'cursor-pointer hover:bg-accent' : 'opacity-70'} ${selecionadas.has(arquivo.idSelecao) ? 'border-primary bg-primary/5' : 'border-border'}`}
+            >
               <Checkbox className="absolute right-3 top-3 z-10 bg-background" checked={selecionadas.has(arquivo.idSelecao)} disabled={!elegivel || capturando} onCheckedChange={() => alternarSelecao(arquivo.idSelecao)} />
               <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-md border bg-muted">
-                  {arquivo.thumbnailDataUri ? <img src={arquivo.thumbnailDataUri} alt={`Prévia de ${arquivo.nomeArquivo}`} className="h-full w-full object-contain" /> : <ImageIcon className="h-5 w-5 text-muted-foreground" aria-label="Prévia indisponível" />}
+                  {arquivo.thumbnailDataUri
+                    ? <img src={arquivo.thumbnailDataUri} alt={`Prévia de ${arquivo.nomeArquivo}`} className="h-full w-full object-contain" />
+                    : idsMiniaturasCarregando.has(arquivo.idSelecao)
+                      ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Carregando prévia" />
+                      : <ImageIcon className="h-5 w-5 text-muted-foreground" aria-label={idsMiniaturasIndisponiveis.has(arquivo.idSelecao) ? 'Prévia indisponível' : 'Prévia aguardando carregamento'} />}
                 </div>
                 <div className="min-w-0 space-y-1">
                   <span className="block truncate text-sm font-medium">{arquivo.nomeArquivo}</span>
                   <p className="text-xs text-muted-foreground">{formatarTamanho(arquivo.tamanho)}{arquivo.dataUpload ? ` · ${new Date(arquivo.dataUpload).toLocaleString('pt-BR')}` : ''}</p>
-                  {!arquivo.thumbnailDataUri && elegivel && <p className="text-xs text-muted-foreground">Prévia indisponível</p>}
+                  {!arquivo.thumbnailDataUri && elegivel && idsMiniaturasCarregando.has(arquivo.idSelecao) && <p className="text-xs text-muted-foreground">Carregando prévia…</p>}
+                  {!arquivo.thumbnailDataUri && elegivel && idsMiniaturasIndisponiveis.has(arquivo.idSelecao) && <p className="text-xs text-muted-foreground">Prévia indisponível</p>}
                   {arquivo.status && <p className="text-xs text-muted-foreground">{arquivo.status}</p>}
                 </div>
             </label>
           })}</div>}
         </div>
-        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Lista de Fotos pode ter até <strong>1 GB</strong> e cada foto até <strong>50 MB</strong>.</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onAbertoChange(false)} disabled={capturando}>Cancelar</Button><Button onClick={() => void capturar()} disabled={capturando || selecionadas.size === 0}>{capturando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Capturar imagens ({selecionadas.size})</Button></div></div>
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Lista de Fotos pode ter até <strong>1 GB</strong> e cada foto até <strong>50 MB</strong>.</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onAbertoChange(false)} disabled={capturando}>{carregando ? 'Fechar' : 'Cancelar'}</Button><Button onClick={() => void capturar()} disabled={carregando || capturando || selecionadas.size === 0}>{capturando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Capturar imagens ({selecionadas.size})</Button></div></div>
       </DialogContent>
     </Dialog>
     <AlertDialog open={duplicadasPendentes.length > 0} onOpenChange={aberto => { if (!aberto) setDuplicadasPendentes([]) }}>

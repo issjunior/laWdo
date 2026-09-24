@@ -8,6 +8,8 @@ import {
   auditLimpezaLogs,
 } from '../../services/audit-log.service.js';
 import type { AuditFilters } from '../../services/audit-log.service.js';
+import { desempenhoService } from '../../services/desempenho.service.js';
+import { capturaLogsService } from '../../services/captura-logs.service.js';
 
 export const registerLogSystemHandlers = (): void => {
   logInfo('Registrando handlers de logs do sistema...');
@@ -48,6 +50,7 @@ export const registerLogSystemHandlers = (): void => {
   ipcMain.handle('log:limpar', async () => {
     try {
       const result = clearAllLogs();
+      if (result.success) await Promise.all([desempenhoService.limpar(), capturaLogsService.limpar()]);
       return result;
     } catch (error) {
       logError('Erro ao limpar logs do sistema', error);

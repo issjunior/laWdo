@@ -18,6 +18,8 @@ import type {
   ListaImagensRepGdl,
   ImagemRepGdlAdicionadaAoLaudo,
   ImagemRepGdlCapturada,
+  MiniaturaArquivoRepGdl,
+  ProgressoListaFotosGdl,
   ResultadoCapturaImagensLaudoGdl,
   ResultadoCapturaImagensRepGdl,
 } from '../../shared/types/gdl-arquivos.types.js';
@@ -83,7 +85,7 @@ type AmbienteGdl = 'homologacao' | 'producao';
 const GDL_ESTADO_DIR = path.join(app.getPath('userData'), 'gdl');
 const GDL_ESTADO_FILE = path.join(GDL_ESTADO_DIR, 'validacao-sessao.json');
 const GDL_DOWNLOADS_DIR = path.join(GDL_ESTADO_DIR, 'downloads-temporarios');
-const TIMEOUT_DOWNLOAD_GDL_MS = 30000;
+const TIMEOUT_INATIVIDADE_DOWNLOAD_GDL_MS = 30000;
 const LIMITE_BYTES_ZIP_GDL = 1024 * 1024 * 1024;
 const LIMITE_BYTES_FOTO_GDL = 50 * 1024 * 1024;
 const LIMITE_RAZAO_DESCOMPRESSAO_GDL = 100;
@@ -202,6 +204,7 @@ interface SessaoFotosGdl {
   caminhoZip: string
   arquivos: ArquivoRepInterno[]
   entradasZip: EntradaZipFoto[]
+  miniaturas: Map<string, string>
   expiraEm: number
 }
 
@@ -606,10 +609,21 @@ function detectarMimeImagem(bytes: Buffer): string | null {
   return null;
 }
 
-async function baixarArquivoGdl(url: string, headers: Record<string, string>): Promise<{ statusCode: number; contentType: string; caminhoTemporario?: string }> {
+type InformarProgressoDownloadGdl = (progresso: Omit<ProgressoListaFotosGdl, 'laudoId'>) => void;
+
+async function baixarArquivoGdl(
+  url: string,
+  headers: Record<string, string>,
+  informarProgresso?: InformarProgressoDownloadGdl,
+): Promise<{ statusCode: number; contentType: string; caminhoTemporario?: string }> {
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
-  const temporizador = setTimeout(() => controller.abort(), TIMEOUT_DOWNLOAD_GDL_MS);
+  let temporizador: NodeJS.Timeout | undefined;
+  const reiniciarTimeoutInatividade = () => {
+    if (temporizador) clearTimeout(temporizador);
+    temporizador = setTimeout(() => controller.abort(), TIMEOUT_INATIVIDADE_DOWNLOAD_GDL_MS);
+  };
+  reiniciarTimeoutInatividade();
   try {
     const resposta = await sessaoRede.fetch(url, {
       method: 'GET',
@@ -617,19 +631,44 @@ async function baixarArquivoGdl(url: string, headers: Record<string, string>): P
       signal: controller.signal,
     });
     if (!resposta.ok || !resposta.body) return { statusCode: resposta.status, contentType: resposta.headers.get('content-type') || '' };
-    const contentLength = Number(resposta.headers.get('content-length'));
+    const contentLengthCabecalho = resposta.headers.get('content-length');
+    const contentLength = contentLengthCabecalho === null ? Number.NaN : Number(contentLengthCabecalho);
     if (Number.isFinite(contentLength) && contentLength > LIMITE_BYTES_ZIP_GDL) {
       throw new Error('A Lista de Fotos ultrapassa o limite de 1 GB permitido para importação.')
     }
     fs.mkdirSync(GDL_DOWNLOADS_DIR, { recursive: true })
     const caminhoTemporario = path.join(GDL_DOWNLOADS_DIR, `lista-fotos-${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2)}.zip`)
     let bytesRecebidos = 0
+    let ultimaAtualizacaoProgressoEm = 0
+    let ultimoPercentualInformado: number | null = null
+    const totalBytes = Number.isFinite(contentLength) && contentLength >= 0 ? contentLength : null
+    informarProgresso?.({
+      fase: 'baixando',
+      descricao: 'Baixando a Lista de Fotos do GDL…',
+      percentual: totalBytes && totalBytes > 0 ? 0 : null,
+      bytesRecebidos,
+      totalBytes,
+    })
     const limite = new Transform({
       transform(chunk: Buffer, _encoding, callback) {
         bytesRecebidos += chunk.length
+        reiniciarTimeoutInatividade()
         if (bytesRecebidos > LIMITE_BYTES_ZIP_GDL) {
           callback(new Error('A Lista de Fotos ultrapassa o limite de 1 GB permitido para importação.'))
           return
+        }
+        const agora = Date.now()
+        const percentual = totalBytes && totalBytes > 0 ? Math.min(100, Math.round((bytesRecebidos / totalBytes) * 100)) : null
+        if (percentual === 100 || percentual !== ultimoPercentualInformado || agora - ultimaAtualizacaoProgressoEm >= 250) {
+          informarProgresso?.({
+            fase: 'baixando',
+            descricao: 'Baixando a Lista de Fotos do GDL…',
+            percentual,
+            bytesRecebidos,
+            totalBytes,
+          })
+          ultimaAtualizacaoProgressoEm = agora
+          ultimoPercentualInformado = percentual
         }
         callback(null, chunk)
       },
@@ -647,11 +686,11 @@ async function baixarArquivoGdl(url: string, headers: Record<string, string>): P
     }
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error('Timeout ao baixar arquivo do GDL.');
+      throw new Error('O download da Lista de Fotos ficou 30 segundos sem receber dados do GDL. Tente novamente.');
     }
     throw error;
   } finally {
-    clearTimeout(temporizador);
+    if (temporizador) clearTimeout(temporizador);
   }
 }
 
@@ -1010,21 +1049,35 @@ function montarUrlListaFotos(baseUrlApi: string, codRep: number, numero: string,
   return `${urlApi.origin}${caminhoRaiz}/Rep/Controls/PictureHandler.ashx?repId=${encodeURIComponent(String(codRep))}&repNumberYear=${encodeURIComponent(`${numero}_${ano}`)}`;
 }
 
-async function baixarListaFotosRep(numero: string, ano: string): Promise<{
+async function baixarListaFotosRep(numero: string, ano: string, informarProgresso?: InformarProgressoDownloadGdl): Promise<{
   arquivos: ArquivoRepInterno[];
   caminhoZip: string;
   ambiente: AmbienteGdl;
 }> {
+  informarProgresso?.({
+    fase: 'consultando',
+    descricao: 'Localizando a Lista de Fotos da REP no GDL…',
+    percentual: null,
+    bytesRecebidos: 0,
+    totalBytes: null,
+  })
   const { rep, credenciais, ambiente } = await consultarIdentificacaoDaRep(numero, ano);
   const url = montarUrlListaFotos(credenciais.baseUrl, rep.codRep, numero, ano);
   const resposta = await baixarArquivoGdl(url, {
     Authorization: buildAuthHeader(credenciais.login, credenciais.senha),
     ...(credenciais.cpfUsuario ? { cpfUsuario: credenciais.cpfUsuario.replace(/\D/g, '') } : {}),
-  });
+  }, informarProgresso);
   if (resposta.statusCode === 404) throw new Error(`A Lista de Fotos da REP ${numero}/${ano} não foi encontrada no GDL.`);
   if (resposta.statusCode === 401 || resposta.statusCode === 403) throw new Error('Acesso à Lista de Fotos rejeitado pelo GDL.');
   if (resposta.statusCode !== 200) throw new Error(`Erro ao obter a Lista de Fotos do GDL (HTTP ${resposta.statusCode}).`);
   if (!resposta.caminhoTemporario) throw new Error('O GDL não retornou o arquivo da Lista de Fotos.')
+  informarProgresso?.({
+    fase: 'preparando',
+    descricao: 'Preparando a lista de fotos…',
+    percentual: null,
+    bytesRecebidos: 0,
+    totalBytes: null,
+  })
   try {
     return {
       arquivos: criarArquivosDaListaFotos(lerEntradasZipDoArquivo(resposta.caminhoTemporario), rep.codRep),
@@ -1068,29 +1121,14 @@ function limparSessoesFotosExpiradas(): void {
   }
 }
 
-function criarArquivosPublicosComMiniaturas(
-  arquivos: ArquivoRepInterno[],
-  entradasZip: EntradaZipFoto[],
-  caminhoZip: string,
-): ArquivoRepGdl[] {
-  return arquivos.map((arquivo, indice) => {
-    const publico = paraArquivoPublico(arquivo)
-    if (indice >= 30 || !arquivo.provavelImagem || arquivo.status) return publico
-    try {
-      const entrada = entradasZip[arquivo.indiceEntradaZip]
-      if (!entrada) return publico
-      const bytes = extrairEntradaZipDoArquivo(caminhoZip, entrada)
-      if (!detectarMimeImagem(bytes)) return publico
-      return { ...publico, thumbnailDataUri: gerarThumbnailImagem(bytes) }
-    } catch {
-      return publico
-    }
-  })
-}
-
-export async function abrirSessaoImagensRepGdl(laudoId: string, numero: string, ano: string): Promise<ListaImagensRepGdl> {
+export async function abrirSessaoImagensRepGdl(
+  laudoId: string,
+  numero: string,
+  ano: string,
+  informarProgresso?: InformarProgressoDownloadGdl,
+): Promise<ListaImagensRepGdl> {
   limparSessoesFotosExpiradas()
-  const { arquivos, caminhoZip, ambiente } = await baixarListaFotosRep(numero, ano)
+  const { arquivos, caminhoZip, ambiente } = await baixarListaFotosRep(numero, ano, informarProgresso)
   try {
     const entradasZip = lerEntradasZipDoArquivo(caminhoZip)
     const sessaoId = randomUUID()
@@ -1101,6 +1139,7 @@ export async function abrirSessaoImagensRepGdl(laudoId: string, numero: string, 
       caminhoZip,
       arquivos,
       entradasZip,
+      miniaturas: new Map(),
       expiraEm: Date.now() + TEMPO_SESSAO_FOTOS_GDL_MS,
     })
     return {
@@ -1108,7 +1147,7 @@ export async function abrirSessaoImagensRepGdl(laudoId: string, numero: string, 
       ambiente,
       numeroRep: numero,
       anoRep: ano,
-      arquivos: criarArquivosPublicosComMiniaturas(arquivos, entradasZip, caminhoZip),
+      arquivos: arquivos.map(paraArquivoPublico),
     }
   } catch (error) {
     if (fs.existsSync(caminhoZip)) fs.unlinkSync(caminhoZip)
@@ -1129,6 +1168,49 @@ function obterSessaoImagensRepGdl(laudoId: string, sessaoId: string): SessaoFoto
   if (!sessao || sessao.laudoId !== laudoId) throw new Error('A sessão temporária da Lista de Fotos expirou. Consulte novamente.')
   sessao.expiraEm = Date.now() + TEMPO_SESSAO_FOTOS_GDL_MS
   return sessao
+}
+
+export async function obterMiniaturasDaSessaoImagensRepGdl(
+  laudoId: string,
+  sessaoId: string,
+  idsSelecao: string[],
+): Promise<MiniaturaArquivoRepGdl[]> {
+  const sessao = obterSessaoImagensRepGdl(laudoId, sessaoId)
+  const idsUnicos = [...new Set(idsSelecao)].slice(0, 30)
+  const arquivosPorId = new Map(sessao.arquivos.map(arquivo => [arquivo.idSelecao, arquivo]))
+  const miniaturas: MiniaturaArquivoRepGdl[] = []
+  const tamanhoLote = 3
+
+  for (let inicio = 0; inicio < idsUnicos.length; inicio += tamanhoLote) {
+    const lote = idsUnicos.slice(inicio, inicio + tamanhoLote)
+    for (const idSelecao of lote) {
+      const miniaturaEmCache = sessao.miniaturas.get(idSelecao)
+      if (miniaturaEmCache) {
+        miniaturas.push({ idSelecao, thumbnailDataUri: miniaturaEmCache })
+        continue
+      }
+
+      const arquivo = arquivosPorId.get(idSelecao)
+      if (!arquivo?.provavelImagem || arquivo.status) continue
+      try {
+        const entrada = sessao.entradasZip[arquivo.indiceEntradaZip]
+        if (!entrada) continue
+        const bytes = extrairEntradaZipDoArquivo(sessao.caminhoZip, entrada)
+        if (!detectarMimeImagem(bytes)) continue
+        const thumbnailDataUri = gerarThumbnailImagem(bytes)
+        if (!thumbnailDataUri) continue
+        sessao.miniaturas.set(idSelecao, thumbnailDataUri)
+        miniaturas.push({ idSelecao, thumbnailDataUri })
+      } catch {
+        continue
+      }
+    }
+    if (inicio + tamanhoLote < idsUnicos.length) {
+      await new Promise<void>(resolve => setImmediate(resolve))
+    }
+  }
+
+  return miniaturas
 }
 
 export async function capturarImagensRepGdl(

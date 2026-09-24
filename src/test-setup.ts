@@ -35,6 +35,11 @@ vi.mock('electron', () => ({
     getAppPath: vi.fn(() => path.join(os.tmpdir(), 'lawdo-test-app')),
     getName: vi.fn(() => 'laWdoTest'),
     getVersion: vi.fn(() => '0.1.0-test'),
+    quit: vi.fn(),
+  },
+  shell: {
+    openPath: vi.fn(async () => ''),
+    showItemInFolder: vi.fn(),
   },
   ipcMain: {
     handle: vi.fn(),

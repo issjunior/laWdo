@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { app } from 'electron';
+import { app, shell } from 'electron';
 import { AtualizacaoService } from '../../main/services/atualizacao.service';
 import type { AtualizacaoDisponivel, EstadoAtualizacao } from '../../shared/atualizacao/atualizacao.types';
 
@@ -87,6 +87,52 @@ describe('AtualizacaoService', () => {
     expect(percentuais[0]).toBe(0);
     expect(percentuais.at(-1)).toBe(100);
     expect(percentuais.every((valor, indice) => indice === 0 || valor >= percentuais[indice - 1])).toBe(true);
+    expect(fs.existsSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'))).toBe(true);
+    fs.rmSync(diretorio, { recursive: true, force: true });
+  });
+
+  it('deve restaurar o pacote validado após reiniciar o aplicativo', () => {
+    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-pacote-pronto-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    const nome = 'laWdo-0.1.2-setup.exe';
+    const conteudo = Buffer.from('instalador validado');
+    const hashSha256 = createHash('sha256').update(conteudo).digest('hex');
+    const diretorioAtualizacoes = path.join(diretorio, 'atualizacoes');
+    fs.mkdirSync(diretorioAtualizacoes, { recursive: true });
+    fs.writeFileSync(path.join(diretorioAtualizacoes, nome), conteudo);
+    fs.writeFileSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'), JSON.stringify({
+      atualizacao: {
+        versao: '0.1.2', dataPublicacao: '2026-07-24T00:00:00.000Z', notas: 'Teste', versaoSchema: 1,
+        requerBackupCompletoImagens: false,
+        artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudo.length, hashSha256, url: 'https://example.invalid/arquivo' },
+      },
+    }));
+
+    const service = new AtualizacaoService();
+
+    expect(service.obterEstado()).toMatchObject({ estado: 'baixada', atualizacaoDisponivel: { versao: '0.1.2' } });
+    fs.rmSync(diretorio, { recursive: true, force: true });
+  });
+
+  it('deve manter o aplicativo aberto quando o Windows não conseguir abrir o instalador', async () => {
+    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-instalador-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    const nome = 'laWdo-0.1.2-setup.exe';
+    const conteudo = Buffer.from('instalador validado');
+    const hashSha256 = createHash('sha256').update(conteudo).digest('hex');
+    const diretorioAtualizacoes = path.join(diretorio, 'atualizacoes');
+    fs.mkdirSync(diretorioAtualizacoes, { recursive: true });
+    const caminho = path.join(diretorioAtualizacoes, nome);
+    fs.writeFileSync(caminho, conteudo);
+    vi.mocked(shell.openPath).mockResolvedValueOnce('Acesso negado');
+    const service = new AtualizacaoService();
+    const interno = service as unknown as { executarInstalador: (artefato: AtualizacaoDisponivel['artefato'], caminhoArquivo: string) => Promise<void> };
+
+    await expect(interno.executarInstalador({
+      plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudo.length, hashSha256, url: 'https://example.invalid/arquivo',
+    }, caminho)).rejects.toThrow('Não foi possível abrir o instalador');
+
+    expect(app.quit).not.toHaveBeenCalled();
     fs.rmSync(diretorio, { recursive: true, force: true });
   });
 

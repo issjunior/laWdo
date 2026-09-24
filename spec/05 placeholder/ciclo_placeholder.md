@@ -30,6 +30,14 @@ Personalizar transforma a prévia em cópia local com `data-placeholder-tabela-p
 
 A cópia personalizada pertence somente ao laudo e nunca altera REP ou GDL. No modo de chaves ela é ocultada e a âncora reaparece; no modo de dados ocorre o inverso. Undo envolve personalização e restauração. Salvamento preserva a cópia e o vínculo, removendo `contenteditable` e controles; exportação e contexto da IA removem a âncora duplicada e usam o conteúdo local da tabela.
 
+## Exclusão e numeração de tabelas
+
+O **×** da prévia ou da cópia personalizada exclui, em uma transação de undo, somente a tabela selecionada e sua âncora vinculada; outras ocorrências da mesma chave permanecem. A ação é local ao laudo e não modifica REP ou GDL.
+
+`numeracao-tabelas.ts` percorre tabelas efetivas na ordem física do laudo, inclusive entre seções, e corrige apenas o número de títulos iniciados por `TABELA N` em `<caption>` ou na primeira célula. Tabelas sem esse título e referências fora de tabelas não entram na sequência. A rotina preserva o restante do texto e a marcação inline; repetida sem mudança estrutural, não altera o DOM.
+
+A conferência visual ocorre após exclusão, inserção, personalização, restauração, troca de modo e mutações estruturais de tabelas, sem substituir todo o HTML do editor nem executar a cada tecla. Uma prévia transitória recebe apenas a correção visível; títulos de tabelas manuais e personalizadas são sincronizados no estado canônico. Antes de gerar arquivos, a página confere novamente o conteúdo atual dos editores; o HTML final resolvido é renumerado uma segunda vez para que os títulos fixos do B-602 não reapareçam.
+
 ## Normalização e fronteiras
 
 Antes de salvar, `removerFormatacaoPlaceholders()` remove prévias, controles transitórios e atributos de apresentação, restaura o texto da âncora a partir de `data-placeholder` e preserva o marcador persistido de supressão de bloco. Portanto, valores reais e HTML de prévia nunca devem substituir o contrato salvo. Campos preenchidos manualmente não possuem mais `data-placeholder`; por isso são preservados como texto local.
@@ -38,4 +46,6 @@ A exportação também remove resíduos transitórios e resolve novamente a part
 
 ## Verificação
 
-Testes de utilitários, placeholders pendentes e exportação B-602 cobrem normalização, chaves indexadas, valores ausentes, prévias HTML e resolução de tabelas. `campos-reservados.test.ts` cobre a conversão local de `XXX` e o desligamento de placeholder pendente; `indice-placeholders.test.ts` cobre chaves únicas, valor pendente, precedência da tabela personalizada e preservação de alinhamento por célula; `exportacao-placeholders.test.ts` cobre o valor padrão personalizado no mapa de resolução.
+Testes de utilitários, placeholders pendentes e exportação B-602 cobrem normalização, chaves indexadas, valores ausentes, prévias HTML e resolução de tabelas. `campos-reservados.test.ts` cobre a conversão local de `XXX` e o desligamento de placeholder pendente; `indice-placeholders.test.ts` cobre chaves únicas, valor pendente, precedência da tabela personalizada e preservação de alinhamento por célula; `exportacao-placeholders.test.ts` cobre o valor padrão personalizado no mapa de resolução. `numeracao-tabelas.test.ts` cobre títulos em caption e primeira célula, formatação inline, idempotência, prévias sem escrita sobre a âncora e exclusão de uma ocorrência.
+
+Para diagnosticar gargalo da TABELA 2, o procedimento manual fica na aba **Logs > Desempenho**: iniciar a captura detalhada antes de abrir ou reaplicar o laudo, reproduzir uma unica insercao e exportar o CSV ao terminar. A operacao incremental registra somente contadores estruturais; `tabelaB602=true` identifica a tabela de material encaminhado e `fallback=true` informa que foi necessario reaplicar a visualizacao completa. A telemetria detalhada nao e ativada automaticamente pelo laudo nem pela captura assistida de diagnostico.

@@ -38,6 +38,22 @@ export interface ListaImagensRepGdl {
   arquivos: ArquivoRepGdl[]
 }
 
+export type FaseProgressoListaFotosGdl = 'consultando' | 'baixando' | 'preparando'
+
+export interface ProgressoListaFotosGdl {
+  laudoId: string
+  fase: FaseProgressoListaFotosGdl
+  descricao: string
+  percentual: number | null
+  bytesRecebidos: number
+  totalBytes: number | null
+}
+
+export interface MiniaturaArquivoRepGdl {
+  idSelecao: string
+  thumbnailDataUri: string
+}
+
 export interface ImagemRepGdlAdicionadaAoLaudo {
   idSelecao: string
   imagemId: string

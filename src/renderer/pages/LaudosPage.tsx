@@ -96,6 +96,7 @@ import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/i
 import type { ExamToggle } from '@/components/rep/exam-fields/index';
 import type { MenuSection } from '@/components/rep/exam-fields/types';
 import { reindexarFiguras } from '@/lib/figuras';
+import { renumerarTabelas, renumerarTabelasHtml } from '@/lib/numeracao-tabelas';
 import {
   getClasseSecaoEstrutural,
   normalizarTituloSecao,
@@ -107,6 +108,7 @@ import {
 import { getMargens } from '@/lib/margens';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import {
+  aplicarVisualizacaoPlaceholder,
   agendarVisualizacaoPlaceholders,
   type ModoVisualizacaoPlaceholders,
 } from '@/lib/apresentacao-placeholders';
@@ -854,6 +856,55 @@ export const LaudosPage: React.FC = () => {
     });
   }, [editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
+  const conferirTabelasEditores = useCallback((exigirEditor = false): SecaoEditor[] => {
+    const editores = editorMode === 'single'
+      ? [obterEditorTinyMce('laudo-single-editor')]
+      : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
+    if (exigirEditor && editores.some((editor, indice) => !editor && (
+      editorMode === 'single' || !conteudoHtmlEhVazio(secoes[indice]?.conteudo || '')
+    ))) {
+      throw new Error('O editor ainda não está pronto para conferir a numeração das tabelas.');
+    }
+
+    let proximoNumero = 1;
+    let houveCorrecaoPersistente = false;
+    editores.forEach(editor => {
+      const body = editor?.getBody();
+      if (!editor || !body) return;
+      editor.undoManager.ignore(() => {
+        const resultado = renumerarTabelas(body, { incluirPrevias: true, numeroInicial: proximoNumero });
+        proximoNumero = resultado.proximoNumero;
+        houveCorrecaoPersistente = resultado.alteradoPersistente || houveCorrecaoPersistente;
+      });
+    });
+
+    if (houveCorrecaoPersistente) registrarAlteracao();
+
+    if (editorMode === 'single') {
+      const editor = editores[0];
+      const conteudo = editor ? editor.getContent() : singleEditorHtml;
+      const secoesAtuais = parseSingleHtmlToSecoes(conteudo, secoes);
+      if (houveCorrecaoPersistente) {
+        const conteudoCanonico = removerFormatacaoPlaceholders(conteudo);
+        setSingleEditorHtml(conteudoCanonico);
+        setSecoes(parseSingleHtmlToSecoes(conteudoCanonico, secoes));
+      }
+      return secoesAtuais;
+    }
+
+    const secoesAtuais = secoes.map((secao, indice) => ({
+      ...secao,
+      conteudo: editores[indice]?.getContent() ?? secao.conteudo,
+    }));
+    if (houveCorrecaoPersistente) setSecoes(secoesAtuais.map(secao => ({
+      ...secao,
+      conteudo: removerFormatacaoPlaceholders(secao.conteudo),
+    })));
+    return secoesAtuais;
+  }, [editorMode, parseSingleHtmlToSecoes, registrarAlteracao, secoes, singleEditorHtml]);
+  const conferirTabelasEditoresRef = useRef(conferirTabelasEditores);
+  conferirTabelasEditoresRef.current = conferirTabelasEditores;
+
   const abrirIndicePlaceholders = useCallback(() => {
     const secoesAtuais = obterSecoesAtuaisDoEditor();
     setItensIndicePlaceholders(extrairIndicePlaceholders(
@@ -978,14 +1029,6 @@ export const LaudosPage: React.FC = () => {
       : secoes.some(secao => secao.conteudo.includes(marcador));
     if (!imagemPermaneceNoLaudo) setImagemSelecionadaIaId(null);
   }, [editorMode, imagemSelecionadaIaId, secoes, singleEditorHtml]);
-
-  const inserirPlaceholder = (editorId: string, chave: string) => {
-    const editor = obterEditorTinyMce(editorId);
-    if (editor) {
-      editor.execCommand('insertPlaceholder', false, { chave });
-      aplicarModoNoEditor(editor);
-    }
-  };
 
   /**
    * Verifica e cria a seção "ILUSTRAÇÕES" no modo multi-seção.
@@ -1653,7 +1696,7 @@ export const LaudosPage: React.FC = () => {
     try {
       setCarregandoPreview(true);
       setError(null);
-      const secoesAtuais = obterSecoesAtuaisDoEditor();
+      const secoesAtuais = conferirTabelasEditores(true);
       
       // 1. Buscar dados da REP para placeholders
       const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
@@ -1707,13 +1750,13 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 5. Resolver placeholders de exame (B-602, I-801) incluindo armas computados
-      const htmlResolvido = resolverPlaceholdersExportacao(htmlProcessado, {
+      const htmlResolvido = renumerarTabelasHtml(resolverPlaceholdersExportacao(htmlProcessado, {
         repData,
         solicitanteNome,
         tipoExameNome,
         tipoExameCodigo,
         placeholdersPersonalizados: placeholders,
-      });
+      }));
 
       // 6. Gerar PDF via IPC
       const nomeArquivo = obterNomeArquivoLaudo(repData.numero || editando.rep_numero, 'pdf');
@@ -1787,13 +1830,13 @@ export const LaudosPage: React.FC = () => {
         tipoExameCodigo,
         placeholdersPersonalizados: placeholders,
       });
-      html = resolverPlaceholdersExportacao(html, {
+      html = renumerarTabelasHtml(resolverPlaceholdersExportacao(html, {
         repData,
         solicitanteNome,
         tipoExameNome,
         tipoExameCodigo,
         placeholdersPersonalizados: placeholders,
-      });
+      }));
 
       const margins = await getMargens();
       const nomeArquivo = obterNomeArquivoLaudo(repData.numero || laudo.rep_numero, 'pdf');
@@ -1869,20 +1912,20 @@ export const LaudosPage: React.FC = () => {
         numeroRepFallback: repData.numero || '',
       });
 
-      const secoesAtuais = obterSecoesAtuaisDoEditor();
+      const secoesAtuais = conferirTabelasEditores(true);
       let html = montarHtmlEstruturalAtual(secoesAtuais);
 
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
 
-      const htmlResolvido = resolverPlaceholdersExportacao(html, {
+      const htmlResolvido = renumerarTabelasHtml(resolverPlaceholdersExportacao(html, {
         repData,
         solicitanteNome,
         tipoExameNome,
         tipoExameCodigo,
         placeholdersPersonalizados: placeholders,
-      });
+      }));
 
       if (formato === 'pdf') {
         const result = await window.ipcAPI.laudo.exportar({
@@ -2031,6 +2074,7 @@ export const LaudosPage: React.FC = () => {
       valores: mapaPlaceholdersResolvidos,
       placeholdersPersonalizados: placeholders,
       descreverPendente: descreverPlaceholderPendente,
+      aoAplicar: () => { conferirTabelasEditoresRef.current(); },
       aoFalharDefinitivamente: () => {
         if (avisosFalhaPlaceholdersRef.current.has(editor.id)) return;
         avisosFalhaPlaceholdersRef.current.add(editor.id);
@@ -2038,6 +2082,63 @@ export const LaudosPage: React.FC = () => {
       },
     });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
+
+  const inserirPlaceholder = useCallback((editorId: string, chave: string) => {
+    const editor = obterEditorTinyMce(editorId);
+    if (!editor) return;
+
+    const identificadorInsercao = crypto.randomUUID();
+    editor.execCommand('insertPlaceholder', false, { chave, identificadorInsercao });
+    const ancora = Array.from(editor.getBody()?.querySelectorAll<HTMLElement>('[data-placeholder-inserido-id]') || [])
+      .find(elemento => elemento.getAttribute('data-placeholder-inserido-id') === identificadorInsercao);
+
+    if (ancora) {
+      const resultado = aplicarVisualizacaoPlaceholder(editor, ancora, {
+        modo: modoVisualizacaoPlaceholders,
+        valores: mapaPlaceholdersResolvidos,
+        placeholdersPersonalizados: placeholders,
+        descreverPendente: descreverPlaceholderPendente,
+      });
+      ancora.removeAttribute('data-placeholder-inserido-id');
+      if (resultado.estado === 'aplicado') {
+        conferirTabelasEditores();
+        return;
+      }
+    }
+
+    editor.getBody()?.querySelectorAll<HTMLElement>('[data-placeholder-inserido-id]').forEach(elemento => {
+      if (elemento.getAttribute('data-placeholder-inserido-id') === identificadorInsercao) {
+        elemento.removeAttribute('data-placeholder-inserido-id');
+      }
+    });
+
+    window.ipcAPI?.desempenho?.registrar({
+      origem: 'placeholder', categoria: 'visualizacao', evento: 'fallback',
+      operacao: 'fallback_visualizacao_completa',
+      metadados: { falhou: Boolean(ancora), tabelaB602: chave === 'b602_tabela_material_enc', fallback: true },
+    });
+    aplicarModoNoEditor(editor);
+  }, [aplicarModoNoEditor, conferirTabelasEditores, mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders]);
+
+  const assinaturaEstruturalEditores = useMemo(() => {
+    if (editorMode === 'single') return 'single';
+    return secoes.map((secao, indice) => [indice, secao.id || '', secao.nivel, secao.parentId || ''].join(':')).join('|');
+  }, [editorMode, secoes]);
+
+  const idsEditoresEstruturais = useMemo(() => editorMode === 'single'
+    ? ['laudo-single-editor']
+    : assinaturaEstruturalEditores.split('|').map((_, indice) => `secao-${indice}`),
+  [assinaturaEstruturalEditores, editorMode]);
+
+  const laudoEditandoId = editando?.id;
+
+  useEffect(() => {
+    if (!laudoEditandoId) return;
+    idsEditoresEstruturais.forEach(id => {
+      const editor = obterEditorTinyMce(id);
+      if (editor) aplicarModoNoEditor(editor);
+    });
+  }, [aplicarModoNoEditor, idsEditoresEstruturais, laudoEditandoId]);
 
   const atualizarConteudoDoEditor = useCallback((editor: TinyMceEditorInstance) => {
     const conteudo = editor.getContent();
@@ -2108,17 +2209,6 @@ export const LaudosPage: React.FC = () => {
     atualizarConteudoDoEditor(encontrado.editor);
     registrarAlteracao();
   }, [atualizarConteudoDoEditor, localizarBlocoNoEditor, registrarAlteracao]);
-
-  useEffect(() => {
-    if (!editando) return;
-    const aplicarAosEditores = () => {
-      const editores = editorMode === 'single'
-        ? [obterEditorTinyMce('laudo-single-editor')]
-        : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`));
-      editores.filter(isTinyMceEditor).forEach(aplicarModoNoEditor);
-    };
-    aplicarAosEditores();
-  }, [aplicarModoNoEditor, editando, editorMode, secoes]);
 
   const finalizarVolta = () => {
     if (panelPoppedOut) {
@@ -3641,6 +3731,7 @@ export const LaudosPage: React.FC = () => {
                           registrarEditorIa(editor);
                         }}
                         onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
+                        onEstruturaTabelasAlterada={() => { conferirTabelasEditores(); }}
                         onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
                         onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}
                         onDummyFigureClick={(imageId) => {
@@ -3729,6 +3820,7 @@ export const LaudosPage: React.FC = () => {
                                       if (isIlustracoes) handleIlustracoesEditorInit(editor);
                                     }}
                                     onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
+                                    onEstruturaTabelasAlterada={() => { conferirTabelasEditores(); }}
                                     condToggles={exameToggles}
                                     onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
                                     onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}

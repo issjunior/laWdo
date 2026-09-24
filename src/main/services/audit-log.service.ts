@@ -1,5 +1,6 @@
 import { getLogger } from '../utils/logger.js';
 import { executeNonQuery, executeQuery } from '../database/sqlite.js';
+import { capturaLogsService } from './captura-logs.service.js';
 
 const log = getLogger('sistema');
 
@@ -40,6 +41,13 @@ function insertAuditLog(input: CreateAuditInput): void {
 
   executeNonQuery(sql, params).catch(err => {
     log.error('Falha ao persistir log de auditoria', err);
+  });
+  void capturaLogsService.registrarAuditoria({
+    modulo: input.modulo,
+    tipoAcao: input.tipo_acao,
+    entidade: input.entidade,
+    entidadeId: input.entidade_id,
+    nivel: input.nivel,
   });
 }
 

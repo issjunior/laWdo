@@ -15,6 +15,7 @@ import {
 import { laudoService } from '../../services/laudo.service.js';
 import type { SalvarImagemLaudoEntrada } from '../../../shared/types/imagem-laudo.types.js';
 import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
+import { desempenhoService } from '../../services/desempenho.service.js';
 
 interface IlustracoesHandlerOptions {
   preloadPath: string;
@@ -26,6 +27,15 @@ let panelWindow: BrowserWindow | null = null;
 let mainWindowId: number | null = null;
 let criandoPanelWindow = false;
 
+async function executarMedido<T>(operacao: string, acao: () => Promise<T>, metadados: Record<string, number | boolean> = {}): Promise<T> {
+  const inicio = performance.now();
+  try {
+    return await acao();
+  } finally {
+    void desempenhoService.registrar({ origem: 'ilustracao', categoria: 'servico', evento: 'concluido', operacao, duracaoMs: performance.now() - inicio, metadados });
+  }
+}
+
 export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions): void {
   const { preloadPath, rendererHtmlPath, isDev } = options;
 
@@ -34,7 +44,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
       const laudo = await laudoService.findById(laudoId)
       if (!laudo) throw new Error('Laudo não encontrado.')
-      return { success: true, data: await reconciliarImagensLaudo(laudoId, laudo.conteudo) }
+      return { success: true, data: await executarMedido('reconciliar_imagens', () => reconciliarImagensLaudo(laudoId, laudo.conteudo)) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao reconciliar as imagens do laudo.' }
     }
@@ -43,7 +53,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
   ipcMain.handle('ilustracoes:listar-imagens', async (_event, laudoId: unknown) => {
     try {
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
-      return { success: true, data: await listarResumosImagensLaudo(laudoId) }
+      return { success: true, data: await executarMedido('listar_imagens', () => listarResumosImagensLaudo(laudoId)) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao listar imagens do laudo.' }
     }
@@ -52,7 +62,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
   ipcMain.handle('ilustracoes:obter-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
-      return { success: true, data: await obterImagemLaudoPorId(laudoId, imagemId) }
+      return { success: true, data: await executarMedido('obter_imagem', () => obterImagemLaudoPorId(laudoId, imagemId), { imagens: 1 }) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao carregar a imagem do laudo.' }
     }
@@ -61,7 +71,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
   ipcMain.handle('ilustracoes:obter-miniaturas', async (_event, laudoId: unknown, ids: unknown) => {
     try {
       if (typeof laudoId !== 'string' || !Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Imagens inválidas.')
-      return { success: true, data: await obterMiniaturasImagensLaudo(laudoId, ids) }
+      return { success: true, data: await executarMedido('obter_miniaturas', () => obterMiniaturasImagensLaudo(laudoId, ids), { imagens: ids.length }) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao carregar as miniaturas.' }
     }
@@ -75,7 +85,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         || typeof dados.legenda !== 'string' || (dados.origem !== 'local' && dados.origem !== 'gdl') || typeof dados.sequencia !== 'number') {
         throw new Error('Dados da imagem inválidos.')
       }
-      return { success: true, data: await salvarImagemLaudo(laudoId, dados as SalvarImagemLaudoEntrada) }
+      return { success: true, data: await executarMedido('salvar_imagem', () => salvarImagemLaudo(laudoId, dados as SalvarImagemLaudoEntrada), { imagens: 1, bytesEntrada: dados.dataUri.length }) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao salvar imagem do laudo.' }
     }
@@ -84,7 +94,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
   ipcMain.handle('ilustracoes:excluir-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
-      await excluirImagemLaudo(laudoId, imagemId)
+      await executarMedido('excluir_imagem', () => excluirImagemLaudo(laudoId, imagemId), { imagens: 1 })
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao excluir imagem do laudo.' }
@@ -126,7 +136,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
       if (typeof laudoId !== 'string' || !Array.isArray(ordem) || ordem.some(item => (
         !item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.sequencia !== 'number'
       ))) throw new Error('Ordem das imagens inválida.')
-      await atualizarOrdemImagensLaudo(laudoId, ordem)
+      await executarMedido('atualizar_ordem', () => atualizarOrdemImagensLaudo(laudoId, ordem), { imagens: ordem.length })
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao atualizar ordem das imagens.' }

@@ -17,6 +17,12 @@ export interface ResultadoAplicacaoPlaceholders {
   estado: 'aplicado' | 'adiado' | 'falhou';
   processados: number;
   falhas: number;
+  previasCriadas: number;
+  previasRemovidas: number;
+  tabelas: number;
+  linhas: number;
+  celulas: number;
+  tabelasPersonalizadas: number;
   erro?: string;
 }
 
@@ -29,6 +35,7 @@ interface OpcoesAplicacaoPlaceholders {
 
 interface OpcoesAgendamentoPlaceholders extends OpcoesAplicacaoPlaceholders {
   aoFalharDefinitivamente?: (resultado: ResultadoAplicacaoPlaceholders) => void;
+  aoAplicar?: () => void;
 }
 
 const agendamentos = new WeakMap<TinyMceEditorInstance, ReturnType<typeof setTimeout>>();
@@ -36,13 +43,15 @@ const agendamentos = new WeakMap<TinyMceEditorInstance, ReturnType<typeof setTim
 const SELETOR_PREVIA_TABELA = '[data-placeholder-preview="true"][data-placeholder-preview-tabela="true"]';
 const SELETOR_TABELA_PERSONALIZADA = '[data-placeholder-tabela-personalizada="true"]';
 const SELETOR_ACAO_TABELA = '[data-acao-tabela-placeholder]';
+let sequenciaIdentificadorTabela = 0;
 
 function obterChavePlaceholder(valor: string): string | null {
   return valor.match(/^\{\{(.+)\}\}$/)?.[1] || null;
 }
 
 function criarIdentificadorTabela(): string {
-  return crypto.randomUUID();
+  sequenciaIdentificadorTabela += 1;
+  return `${crypto.randomUUID()}-${sequenciaIdentificadorTabela}`;
 }
 
 function encontrarAncoraTabelaPersonalizada(
@@ -65,9 +74,22 @@ function prepararCelulasTabela(tabela: HTMLTableElement, editavel: boolean): voi
   });
 }
 
-function prepararTabelas(raiz: HTMLElement, editavel: boolean): boolean {
+interface ContadoresTabelas {
+  tabelas: number;
+  linhas: number;
+  celulas: number;
+}
+
+function prepararTabelas(raiz: HTMLElement, editavel: boolean, contadores?: ContadoresTabelas): boolean {
   const tabelas = Array.from(raiz.querySelectorAll<HTMLTableElement>('table'));
-  tabelas.forEach(tabela => prepararCelulasTabela(tabela, editavel));
+  tabelas.forEach(tabela => {
+    prepararCelulasTabela(tabela, editavel);
+    if (contadores) {
+      contadores.tabelas += 1;
+      contadores.linhas += tabela.querySelectorAll('tr').length;
+      contadores.celulas += tabela.querySelectorAll('td, th').length;
+    }
+  });
   return tabelas.length > 0;
 }
 
@@ -93,17 +115,27 @@ function adicionarAcaoTabela(
     ? 'Transformar esta tabela em uma cópia editável do laudo'
     : 'Descartar alterações locais e restaurar dados atuais da REP');
   controle.textContent = acao === 'personalizar' ? 'Editar' : 'Restaurar dados da REP';
-  raiz.prepend(controle);
+  const excluir = documento.createElement('span');
+  excluir.className = 'acao-tabela-placeholder acao-tabela-placeholder-excluir';
+  excluir.setAttribute('contenteditable', 'false');
+  excluir.setAttribute('data-mce-bogus', 'all');
+  excluir.setAttribute('data-acao-tabela-placeholder', 'excluir');
+  excluir.setAttribute('role', 'button');
+  excluir.setAttribute('tabindex', '0');
+  excluir.setAttribute('aria-label', 'Excluir tabela do placeholder');
+  excluir.setAttribute('title', 'Excluir tabela do placeholder deste laudo');
+  excluir.textContent = '×';
+  raiz.prepend(controle, excluir);
 }
 
-function configurarTabelaPersonalizada(tabela: HTMLElement): void {
+function configurarTabelaPersonalizada(tabela: HTMLElement, contadores?: ContadoresTabelas): void {
   tabela.classList.add('placeholder-tabela-personalizada');
-  prepararTabelas(tabela, true);
+  prepararTabelas(tabela, true, contadores);
   adicionarAcaoTabela(tabela, 'restaurar');
 }
 
-function configurarPreviaTabela(tabela: HTMLElement): boolean {
-  const possuiTabela = prepararTabelas(tabela, false);
+function configurarPreviaTabela(tabela: HTMLElement, contadores?: ContadoresTabelas): boolean {
+  const possuiTabela = prepararTabelas(tabela, false, contadores);
   if (possuiTabela) adicionarAcaoTabela(tabela, 'personalizar');
   return possuiTabela;
 }
@@ -164,6 +196,38 @@ export function restaurarTabelaPlaceholder(
   return true;
 }
 
+export function excluirTabelaPlaceholder(
+  editor: TinyMceEditorInstance,
+  acao: HTMLElement,
+): boolean {
+  const tabela = acao.closest<HTMLElement>(`${SELETOR_PREVIA_TABELA}, ${SELETOR_TABELA_PERSONALIZADA}`);
+  const body = editor.getBody();
+  if (!tabela || !body || !body.contains(tabela)) return false;
+
+  const personalizada = tabela.matches(SELETOR_TABELA_PERSONALIZADA);
+  const identificador = tabela.getAttribute(personalizada
+    ? 'data-placeholder-tabela-personalizada-id'
+    : 'data-placeholder-preview-id');
+  if (!identificador) return false;
+  const ancora = personalizada
+    ? encontrarAncoraTabelaPersonalizada(body, identificador)
+    : Array.from(body.querySelectorAll<HTMLElement>('[data-placeholder][data-placeholder-preview-id]'))
+      .find(elemento => elemento.getAttribute('data-placeholder-preview-id') === identificador) || null;
+  if (!ancora) return false;
+
+  editor.undoManager.transact(() => {
+    const paragrafo = ancora.parentElement;
+    if (paragrafo?.tagName === 'P' && Array.from(paragrafo.childNodes).every(no =>
+      no === ancora || (no.nodeType === Node.TEXT_NODE && !no.textContent?.trim()))) {
+      paragrafo.remove();
+    } else {
+      ancora.remove();
+    }
+    tabela.remove();
+  });
+  return true;
+}
+
 function editorPronto(editor: TinyMceEditorInstance): boolean {
   const body = editor.getBody();
   return editor.initialized && !editor.destroyed && !editor.removed && Boolean(body?.isConnected);
@@ -180,23 +244,184 @@ function registrarFalha(chave: string, erro: unknown): void {
   });
 }
 
+function criarResultado(estado: ResultadoAplicacaoPlaceholders['estado'], contadores: ResultadoAplicacaoPlaceholders, erro?: string): ResultadoAplicacaoPlaceholders {
+  return { ...contadores, estado, erro };
+}
+
+function criarContadores(tabelasPersonalizadas: number): ResultadoAplicacaoPlaceholders {
+  return {
+    estado: 'aplicado', processados: 0, falhas: 0, previasCriadas: 0,
+    previasRemovidas: 0, tabelas: 0, linhas: 0, celulas: 0, tabelasPersonalizadas,
+  };
+}
+
+function registrarDesempenhoPlaceholders(
+  duracaoMs: number,
+  resultado: ResultadoAplicacaoPlaceholders,
+  operacao: 'aplicar_visualizacao_incremental' | 'aplicar_visualizacao_completa' | 'fallback_visualizacao_completa',
+  chave?: string | null,
+): void {
+  window.ipcAPI?.desempenho?.registrar({
+    origem: 'placeholder', categoria: 'visualizacao', evento: resultado.estado,
+    operacao, duracaoMs,
+    metadados: {
+      placeholders: resultado.processados,
+      previasCriadas: resultado.previasCriadas,
+      previasRemovidas: resultado.previasRemovidas,
+      tabelas: resultado.tabelas,
+      linhas: resultado.linhas,
+      celulas: resultado.celulas,
+      tabelasPersonalizadas: resultado.tabelasPersonalizadas,
+      incremental: operacao === 'aplicar_visualizacao_incremental',
+      tabelaB602: chave === 'b602_tabela_material_enc',
+      fallback: operacao === 'fallback_visualizacao_completa',
+      falhou: resultado.estado === 'falhou',
+    },
+  });
+}
+
+interface ContextoProcessamentoPlaceholder {
+  body: HTMLElement;
+  opcoes: OpcoesAplicacaoPlaceholders;
+  tabelasPersonalizadas: Map<string, HTMLElement>;
+  resultado: ResultadoAplicacaoPlaceholders;
+}
+
+function limparApresentacaoAncora(ancora: HTMLElement): void {
+  ancora.classList.remove('campo-reservado');
+  ancora.removeAttribute('data-reservado');
+  ancora.removeAttribute('data-placeholder-apresentacao');
+  ancora.removeAttribute('data-tooltip-xxx');
+  ancora.removeAttribute('data-origem-xxx');
+  ancora.removeAttribute('title');
+  ancora.removeAttribute('aria-label');
+  ancora.style.removeProperty('display');
+}
+
+function removerPreviaDaAncora(body: HTMLElement, ancora: HTMLElement, resultado: ResultadoAplicacaoPlaceholders): void {
+  const identificador = ancora.getAttribute('data-placeholder-preview-id');
+  if (!identificador) return;
+  const previa = Array.from(body.querySelectorAll<HTMLElement>('[data-placeholder-preview="true"]'))
+    .find(elemento => elemento.getAttribute('data-placeholder-preview-id') === identificador);
+  if (previa) {
+    previa.remove();
+    resultado.previasRemovidas += 1;
+  }
+  ancora.removeAttribute('data-placeholder-preview-id');
+}
+
+function processarAncoraPlaceholder(ancora: HTMLElement, contexto: ContextoProcessamentoPlaceholder): void {
+  const { body, opcoes, tabelasPersonalizadas, resultado } = contexto;
+  const copiaOriginal = ancora.cloneNode(true) as HTMLElement;
+  const chaveBruta = ancora.getAttribute('data-placeholder') || '';
+  const chave = obterChavePlaceholder(chaveBruta);
+  if (!chave) return;
+
+  try {
+    const resolvido = opcoes.valores[chave];
+    const identificadorPersonalizado = ancora.getAttribute('data-placeholder-tabela-personalizada-id');
+    const tabelaPersonalizada = identificadorPersonalizado
+      ? tabelasPersonalizadas.get(identificadorPersonalizado)
+      : null;
+
+    if (tabelaPersonalizada) {
+      if (opcoes.modo === 'chaves') {
+        tabelaPersonalizada.style.display = 'none';
+        ancora.textContent = chaveBruta;
+        ancora.style.removeProperty('display');
+      } else {
+        configurarTabelaPersonalizada(tabelaPersonalizada, resultado);
+        tabelaPersonalizada.style.removeProperty('display');
+        ancora.style.display = 'none';
+      }
+      resultado.processados += 1;
+      return;
+    }
+
+    limparApresentacaoAncora(ancora);
+    if (opcoes.modo === 'chaves') {
+      ancora.textContent = chaveBruta;
+    } else if (!resolvido?.preenchido) {
+      const aviso = opcoes.descreverPendente(chave, opcoes.placeholdersPersonalizados, opcoes.valores);
+      ancora.textContent = 'XXX';
+      ancora.classList.add('campo-reservado');
+      ancora.setAttribute('data-reservado', 'true');
+      ancora.setAttribute('data-placeholder-apresentacao', 'dados');
+      ancora.setAttribute('data-tooltip-xxx', 'true');
+      ancora.setAttribute('data-origem-xxx', 'rep');
+      ancora.setAttribute('title', aviso);
+      ancora.setAttribute('aria-label', aviso);
+    } else if (resolvido.formato === 'html') {
+      const id = criarIdentificadorTabela();
+      const documento = body.ownerDocument;
+      if (!documento) throw new Error('Documento do editor indisponível.');
+      const preview = documento.createElement('div');
+      preview.setAttribute('contenteditable', 'false');
+      preview.setAttribute('data-placeholder-preview', 'true');
+      preview.setAttribute('data-placeholder-preview-for', id);
+      preview.setAttribute('data-placeholder-preview-id', id);
+      preview.style.width = '100%';
+      preview.style.maxWidth = '100%';
+      preview.style.minWidth = '0';
+      preview.style.alignSelf = 'stretch';
+      preview.style.boxSizing = 'border-box';
+      preview.innerHTML = resolvido.valor;
+      preview.querySelectorAll('table').forEach(tabela => {
+        tabela.setAttribute('width', '100%');
+        tabela.style.setProperty('width', '100%', 'important');
+        tabela.style.setProperty('max-width', '100%', 'important');
+      });
+      resultado.previasCriadas += 1;
+      if (configurarPreviaTabela(preview, resultado)) {
+        preview.setAttribute('data-placeholder-preview-tabela', 'true');
+      }
+      ancora.setAttribute('data-placeholder-preview-id', id);
+      ancora.style.display = 'none';
+      ancora.parentElement?.insertAdjacentElement('afterend', preview);
+    } else if (resolvido.formato === 'html-inline') {
+      ancora.innerHTML = resolvido.valor;
+      ancora.setAttribute('data-placeholder-apresentacao', 'dados');
+    } else {
+      ancora.textContent = resolvido.valor;
+      ancora.setAttribute('data-placeholder-apresentacao', 'dados');
+    }
+    resultado.processados += 1;
+  } catch (erro) {
+    ancora.replaceWith(copiaOriginal);
+    resultado.falhas += 1;
+    registrarFalha(chave, erro);
+  }
+}
+
+function criarMapaTabelasPersonalizadas(body: HTMLElement): Map<string, HTMLElement> {
+  const tabelas = new Map<string, HTMLElement>();
+  body.querySelectorAll<HTMLElement>(SELETOR_TABELA_PERSONALIZADA).forEach(tabela => {
+    const identificador = tabela.getAttribute('data-placeholder-tabela-personalizada-id');
+    if (identificador) tabelas.set(identificador, tabela);
+  });
+  return tabelas;
+}
+
 export function aplicarVisualizacaoPlaceholders(
   editor: TinyMceEditorInstance,
   opcoes: OpcoesAplicacaoPlaceholders,
 ): ResultadoAplicacaoPlaceholders {
+  const inicio = performance.now();
   if (!editorPronto(editor)) {
-    return { estado: 'adiado', processados: 0, falhas: 0 };
+    return criarResultado('adiado', criarContadores(0));
   }
 
   const body = editor.getBody();
-  if (!body) return { estado: 'adiado', processados: 0, falhas: 0 };
+  if (!body) return criarResultado('adiado', criarContadores(0));
 
-  let processados = 0;
-  let falhas = 0;
+  const tabelasPersonalizadas = criarMapaTabelasPersonalizadas(body);
+  const resultado = criarContadores(tabelasPersonalizadas.size);
 
   try {
     editor.undoManager.ignore(() => {
-      body.querySelectorAll('[data-placeholder-preview="true"]').forEach(preview => preview.remove());
+      const previas = body.querySelectorAll('[data-placeholder-preview="true"]');
+      resultado.previasRemovidas = previas.length;
+      previas.forEach(preview => preview.remove());
       body.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
         elemento.removeAttribute('data-tooltip-xxx');
         elemento.removeAttribute('data-origem-xxx');
@@ -205,89 +430,8 @@ export function aplicarVisualizacaoPlaceholders(
       });
 
       body.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(ancora => {
-        const copiaOriginal = ancora.cloneNode(true) as HTMLElement;
-        const chaveBruta = ancora.getAttribute('data-placeholder') || '';
-        const chave = obterChavePlaceholder(chaveBruta);
-        if (!chave) return;
-
-        try {
-          const resolvido = opcoes.valores[chave];
-          const identificadorPersonalizado = ancora.getAttribute('data-placeholder-tabela-personalizada-id');
-          const tabelaPersonalizada = identificadorPersonalizado
-            ? Array.from(body.querySelectorAll<HTMLElement>(SELETOR_TABELA_PERSONALIZADA))
-              .find(tabela => tabela.getAttribute('data-placeholder-tabela-personalizada-id') === identificadorPersonalizado)
-            : null;
-
-          if (tabelaPersonalizada) {
-            if (opcoes.modo === 'chaves') {
-              tabelaPersonalizada.style.display = 'none';
-              ancora.textContent = chaveBruta;
-              ancora.style.removeProperty('display');
-            } else {
-              configurarTabelaPersonalizada(tabelaPersonalizada);
-              tabelaPersonalizada.style.removeProperty('display');
-              ancora.style.display = 'none';
-            }
-            processados += 1;
-            return;
-          }
-
-          ancora.classList.remove('campo-reservado');
-          ancora.removeAttribute('data-reservado');
-          ancora.removeAttribute('data-placeholder-apresentacao');
-          ancora.style.removeProperty('display');
-
-          if (opcoes.modo === 'chaves') {
-            ancora.textContent = chaveBruta;
-          } else if (!resolvido?.preenchido) {
-            const aviso = opcoes.descreverPendente(chave, opcoes.placeholdersPersonalizados, opcoes.valores);
-            ancora.textContent = 'XXX';
-            ancora.classList.add('campo-reservado');
-            ancora.setAttribute('data-reservado', 'true');
-            ancora.setAttribute('data-placeholder-apresentacao', 'dados');
-            ancora.setAttribute('data-tooltip-xxx', 'true');
-            ancora.setAttribute('data-origem-xxx', 'rep');
-            ancora.setAttribute('title', aviso);
-            ancora.setAttribute('aria-label', aviso);
-          } else if (resolvido.formato === 'html') {
-            const id = criarIdentificadorTabela();
-            const documento = body.ownerDocument;
-            if (!documento) throw new Error('Documento do editor indisponível.');
-            const preview = documento.createElement('div');
-            preview.setAttribute('contenteditable', 'false');
-            preview.setAttribute('data-placeholder-preview', 'true');
-            preview.setAttribute('data-placeholder-preview-for', id);
-            preview.setAttribute('data-placeholder-preview-id', id);
-            preview.style.width = '100%';
-            preview.style.maxWidth = '100%';
-            preview.style.minWidth = '0';
-            preview.style.alignSelf = 'stretch';
-            preview.style.boxSizing = 'border-box';
-            preview.innerHTML = resolvido.valor;
-            preview.querySelectorAll('table').forEach(tabela => {
-              tabela.setAttribute('width', '100%');
-              tabela.style.setProperty('width', '100%', 'important');
-              tabela.style.setProperty('max-width', '100%', 'important');
-            });
-            if (configurarPreviaTabela(preview)) {
-              preview.setAttribute('data-placeholder-preview-tabela', 'true');
-            }
-            ancora.setAttribute('data-placeholder-preview-id', id);
-            ancora.style.display = 'none';
-            ancora.parentElement?.insertAdjacentElement('afterend', preview);
-          } else if (resolvido.formato === 'html-inline') {
-            ancora.innerHTML = resolvido.valor;
-            ancora.setAttribute('data-placeholder-apresentacao', 'dados');
-          } else {
-            ancora.textContent = resolvido.valor;
-            ancora.setAttribute('data-placeholder-apresentacao', 'dados');
-          }
-          processados += 1;
-        } catch (erro) {
-          ancora.replaceWith(copiaOriginal);
-          falhas += 1;
-          registrarFalha(chave, erro);
-        }
+        ancora.removeAttribute('data-placeholder-preview-id');
+        processarAncoraPlaceholder(ancora, { body, opcoes, tabelasPersonalizadas, resultado });
       });
 
       body.querySelectorAll<HTMLElement>('[data-reservado="true"]:not([data-placeholder])').forEach(campo => {
@@ -299,7 +443,7 @@ export function aplicarVisualizacaoPlaceholders(
           campo.setAttribute('title', aviso);
           campo.setAttribute('aria-label', aviso);
         } catch (erro) {
-          falhas += 1;
+          resultado.falhas += 1;
           registrarFalha('campo-manual', erro);
         }
       });
@@ -307,10 +451,47 @@ export function aplicarVisualizacaoPlaceholders(
   } catch (erro) {
     const mensagem = mensagemErro(erro);
     console.warn('Falha ao preparar a visualização dos placeholders.', { erro: mensagem });
-    return { estado: 'falhou', processados, falhas: falhas + 1, erro: mensagem };
+    resultado.falhas += 1;
+    const resultadoComErro = criarResultado('falhou', resultado, mensagem);
+    registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoComErro, 'aplicar_visualizacao_completa');
+    return resultadoComErro;
   }
 
-  return { estado: falhas ? 'falhou' : 'aplicado', processados, falhas };
+  const resultadoFinal = criarResultado(resultado.falhas ? 'falhou' : 'aplicado', resultado);
+  registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoFinal, 'aplicar_visualizacao_completa');
+  return resultadoFinal;
+}
+
+export function aplicarVisualizacaoPlaceholder(
+  editor: TinyMceEditorInstance,
+  ancora: HTMLElement,
+  opcoes: OpcoesAplicacaoPlaceholders,
+): ResultadoAplicacaoPlaceholders {
+  const inicio = performance.now();
+  const chave = obterChavePlaceholder(ancora.getAttribute('data-placeholder') || '');
+  if (!editorPronto(editor)) return criarResultado('adiado', criarContadores(0));
+
+  const body = editor.getBody();
+  if (!body || !body.contains(ancora)) return criarResultado('adiado', criarContadores(0));
+
+  const tabelasPersonalizadas = criarMapaTabelasPersonalizadas(body);
+  const resultado = criarContadores(tabelasPersonalizadas.size);
+  try {
+    editor.undoManager.ignore(() => {
+      removerPreviaDaAncora(body, ancora, resultado);
+      processarAncoraPlaceholder(ancora, { body, opcoes, tabelasPersonalizadas, resultado });
+    });
+  } catch (erro) {
+    const mensagem = mensagemErro(erro);
+    resultado.falhas += 1;
+    const resultadoComErro = criarResultado('falhou', resultado, mensagem);
+    registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoComErro, 'aplicar_visualizacao_incremental', chave);
+    return resultadoComErro;
+  }
+
+  const resultadoFinal = criarResultado(resultado.falhas ? 'falhou' : 'aplicado', resultado);
+  registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoFinal, 'aplicar_visualizacao_incremental', chave);
+  return resultadoFinal;
 }
 
 export function agendarVisualizacaoPlaceholders(
@@ -324,11 +505,13 @@ export function agendarVisualizacaoPlaceholders(
   const agendamento = setTimeout(() => {
     agendamentos.delete(editor);
     const resultado = aplicarVisualizacaoPlaceholders(editor, opcoes);
+    if (tentativa > 0) window.ipcAPI?.desempenho?.registrar({ origem: 'placeholder', categoria: 'visualizacao', evento: 'tentativa_repetida', operacao: 'agendar_visualizacao', metadados: { tentativas: tentativa + 1 } });
     if ((resultado.estado === 'adiado' || resultado.estado === 'falhou') && tentativa === 0) {
       agendarVisualizacaoPlaceholders(editor, opcoes, 1);
       return;
     }
     if (resultado.estado === 'falhou') opcoes.aoFalharDefinitivamente?.(resultado);
+    if (resultado.estado === 'aplicado') opcoes.aoAplicar?.();
   }, tentativa === 0 ? 0 : 150);
 
   agendamentos.set(editor, agendamento);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
 import { gerarDOCXCanonico, gerarODT, verificarLibreOffice } from '../../main/services/exportacao.service.js';
 import type { DocumentoExportacao } from '../../shared/types/exportacao.types.js';
+import { parseHtmlParaEstrutura } from '../../renderer/lib/exportacao-parser.js';
 
 const documento: DocumentoExportacao = {
   versao: 1, fontePadrao: 'Arial', tamanhoPadraoPt: 11,
@@ -29,6 +30,15 @@ describe('gerarDOCXCanonico', () => {
     expect(xml).toContain('w:firstLine="567"');
     expect(xml).toContain('w:type="page"');
   });
+
+  it('mantém o conteúdo de células HTML no DOCX', async () => {
+    const estrutura = parseHtmlParaEstrutura('<table><tr><td>TABELA 1 – MATERIAL</td></tr><tr><td>Cartuchos calibre 12</td></tr></table>');
+    const arquivo = await JSZip.loadAsync(await gerarDOCXCanonico(estrutura));
+    const xml = await arquivo.file('word/document.xml')?.async('text');
+
+    expect(xml).toContain('TABELA 1 – MATERIAL');
+    expect(xml).toContain('Cartuchos calibre 12');
+  });
 });
 
 describe('gerarODT', () => {
@@ -38,5 +48,16 @@ describe('gerarODT', () => {
     const odt = await gerarODT(docx);
     expect(Buffer.from(odt).subarray(0, 2).toString('utf8')).toBe('PK');
     expect(odt.byteLength).toBeGreaterThan(1_000);
+  }, 30_000);
+
+  it('mantém o conteúdo de células HTML no ODT', async () => {
+    if (!(await verificarLibreOffice())) return;
+    const estrutura = parseHtmlParaEstrutura('<table><tr><td>TABELA 1 – MATERIAL</td></tr><tr><td>Cartuchos calibre 12</td></tr></table>');
+    const docx = await gerarDOCXCanonico(estrutura);
+    const arquivo = await JSZip.loadAsync(await gerarODT(docx));
+    const xml = await arquivo.file('content.xml')?.async('text');
+
+    expect(xml).toContain('TABELA 1 – MATERIAL');
+    expect(xml).toContain('Cartuchos calibre 12');
   }, 30_000);
 });

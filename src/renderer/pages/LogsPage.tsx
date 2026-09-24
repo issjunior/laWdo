@@ -14,15 +14,16 @@ import {
   Database,
   ClipboardList,
   Activity,
-  ShieldCheck,
-  HardDrive,
   Clock,
   Maximize2,
 } from 'lucide-react';
 
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
-import { DualTrackTimeline } from '@/components/timeline/DualTrackTimeline';
+import { DualTrackTimeline, type ResumoLinhaTempo } from '@/components/timeline/DualTrackTimeline';
+import { DesempenhoTab } from '@/components/desempenho/DesempenhoTab';
+import { CapturaLogsControle } from '@/components/logs/CapturaLogsControle';
+import { HistoricoCapturasLogs } from '@/components/logs/HistoricoCapturasLogs';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -177,9 +178,10 @@ const formatarTimestamp = (ts: string): string => {
 };
 
 export function LogsPage() {
-  const [aba, setAba] = useState<'sistema' | 'auditoria' | 'timeline'>('sistema');
+  const [aba, setAba] = useState<'sistema' | 'auditoria' | 'timeline' | 'desempenho'>('sistema');
   const [logsSistema, setLogsSistema] = useState<SystemLog[]>([]);
   const [logsAuditoria, setLogsAuditoria] = useState<AuditLog[]>([]);
+  const [totalAuditoria, setTotalAuditoria] = useState(0);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [senha, setSenha] = useState('');
@@ -206,6 +208,7 @@ export function LogsPage() {
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineRepId, setTimelineRepId] = useState<string | null>(null);
   const [timelineRepEncontrada, setTimelineRepEncontrada] = useState<TimelineRepResumo | null>(null);
+  const [resumoLinhaTempo, setResumoLinhaTempo] = useState<ResumoLinhaTempo | null>(null);
   const [timelineError, setTimelineError] = useState('');
 
   const carregarLogsSistema = useCallback(async () => {
@@ -239,6 +242,7 @@ export function LogsPage() {
       );
       if (r.success && Array.isArray(r.data)) {
         setLogsAuditoria(r.data as unknown as AuditLog[]);
+        setTotalAuditoria(r.total ?? r.data.length);
       }
     } catch {
       toast.error('Erro ao carregar logs de auditoria');
@@ -271,6 +275,7 @@ export function LogsPage() {
         }
         if (auditoria.success && Array.isArray(auditoria.data)) {
           setLogsAuditoria(auditoria.data as unknown as AuditLog[]);
+          setTotalAuditoria(auditoria.total ?? auditoria.data.length);
         }
         if (contagens.success && contagens.data) {
           setContagemSistema(contagens.data.sistema);
@@ -317,6 +322,7 @@ export function LogsPage() {
     setTimelineError('');
     setTimelineRepId(null);
     setTimelineRepEncontrada(null);
+    setResumoLinhaTempo(null);
     try {
       const r = await window.ipcAPI.rep.findByNumero(numero);
       if (r.success && r.data) {
@@ -379,10 +385,11 @@ export function LogsPage() {
 
       if (rSistema.success && rAuditoria.success) {
         toast.success(
-          `Logs limpos: ${rAuditoria.count ?? 0} registros de auditoria removidos e arquivos de sistema truncados`,
+          `Registros limpos: ${rAuditoria.count ?? 0} itens de auditoria removidos, além de logs técnicos, desempenho e capturas`,
         );
         setLogsSistema([]);
         setLogsAuditoria([]);
+        setTotalAuditoria(0);
         setContagemSistema(0);
         setContagemAuditoria(0);
         setClearDialogOpen(false);
@@ -396,15 +403,15 @@ export function LogsPage() {
     }
   };
 
-  const exportarCSV = () => {
-    const dados = aba === 'sistema' ? logsSistema : logsAuditoria;
+  const exportarCSV = (tipo: 'sistema' | 'auditoria') => {
+    const dados = tipo === 'sistema' ? logsSistema : logsAuditoria;
     if (dados.length === 0) {
       toast.warning('Nenhum log para exportar');
       return;
     }
 
     let csv: string;
-    if (aba === 'sistema') {
+    if (tipo === 'sistema') {
       const linhas = (dados as SystemLog[]).map(l =>
         `"${formatarTimestamp(l.timestamp)}","${l.level.toUpperCase()}","${l.module}","${(l.message || '').replace(/"/g, '""')}"`,
       );
@@ -420,7 +427,7 @@ export function LogsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `logs-${aba}-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `logs-${tipo}-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -529,127 +536,20 @@ export function LogsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FileText className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">Logs do Sistema</h1>
+          <h1 className="text-2xl font-bold">Logs e diagnóstico</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportarCSV}>
-            <Download className="mr-2 h-4 w-4" />
-            Exportar CSV
-          </Button>
           <Button variant="destructive" size="sm" onClick={abrirDialogLimpeza}>
             <Trash2 className="mr-2 h-4 w-4" />
-            Limpar Logs
+            Limpar registros
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="border-l-4 border-l-blue-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="h-5 w-5 text-blue-500" />
-              Log de Sistema
-            </CardTitle>
-            <CardDescription>
-              Registros técnicos da operação do software. Use para diagnosticar erros, monitorar
-              performance e depurar o comportamento da aplicação.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" className="gap-1 text-xs">
-                <HardDrive className="h-3 w-3" />
-                Arquivos JSON em disco
-              </Badge>
-              <Badge variant="secondary" className="gap-1 text-xs">
-                <Clock className="h-3 w-3" />
-                Retenção: 30 dias
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Ex: erro de conexão com banco, query lenta, aviso de memória, debug de template IA
-            </p>
-          </CardContent>
-        </Card>
+      <CapturaLogsControle sondas={['sistema', 'auditoria', 'linha_tempo', 'desempenho']} />
+      <HistoricoCapturasLogs />
 
-        <Card className="border-l-4 border-l-amber-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-amber-500" />
-              Log de Auditoria
-            </CardTitle>
-            <CardDescription>
-              Rastreabilidade das ações dos usuários sobre os dados. Garante conformidade legal e
-              permite identificar quem fez o quê e quando.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" className="gap-1 text-xs">
-                <HardDrive className="h-3 w-3" />
-                Tabela SQLite no banco
-              </Badge>
-              <Badge variant="secondary" className="gap-1 text-xs">
-                <Clock className="h-3 w-3" />
-                Retenção: Indefinido
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Ex: login de usuário, exclusão de REP, transição de status do laudo, exportação de
-              backup
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        {aba === 'sistema' ? (
-          <>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold">{contadoresSistema.total}</div>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </CardContent>
-            </Card>
-            <Card className="border-red-200 dark:border-red-800">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-red-600">{contadoresSistema.erro}</div>
-                <p className="text-xs text-muted-foreground">Erros</p>
-              </CardContent>
-            </Card>
-            <Card className="border-amber-200 dark:border-amber-800">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-amber-600">{contadoresSistema.aviso}</div>
-                <p className="text-xs text-muted-foreground">Avisos</p>
-              </CardContent>
-            </Card>
-            <Card className="border-emerald-200 dark:border-emerald-800">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-emerald-600">{contadoresSistema.info}</div>
-                <p className="text-xs text-muted-foreground">Info</p>
-              </CardContent>
-            </Card>
-            <Card className="border-slate-200 dark:border-slate-600">
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-slate-600">{contadoresSistema.debug}</div>
-                <p className="text-xs text-muted-foreground">Debug</p>
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          <Card className="col-span-full">
-            <CardContent className="pt-6 flex items-center gap-4">
-              <ClipboardList className="h-8 w-8 text-primary" />
-              <div>
-                <div className="text-2xl font-bold">{logsAuditoria.length}</div>
-                <p className="text-xs text-muted-foreground">Registros de auditoria carregados</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria' | 'timeline')}>
+      <Tabs value={aba} onValueChange={v => setAba(v as 'sistema' | 'auditoria' | 'timeline' | 'desempenho')}>
         <TabsList>
           <TabsTrigger value="sistema" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -663,9 +563,27 @@ export function LogsPage() {
             <Clock className="h-4 w-4" />
             Linha do Tempo
           </TabsTrigger>
+          <TabsTrigger value="desempenho" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Desempenho
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="sistema" className="mt-4 space-y-4">
+          <CapturaLogsControle sondas={['sistema']} />
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Resumo do resultado atual</CardTitle>
+              <CardDescription>Contagens calculadas sobre os registros retornados pelos filtros desta aba.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div><p className="text-2xl font-bold">{contadoresSistema.total}</p><p className="text-xs text-muted-foreground">Registros</p></div>
+              <div><p className="text-2xl font-bold text-red-600">{contadoresSistema.erro}</p><p className="text-xs text-muted-foreground">Erros</p></div>
+              <div><p className="text-2xl font-bold text-amber-600">{contadoresSistema.aviso}</p><p className="text-xs text-muted-foreground">Avisos</p></div>
+              <div><p className="text-2xl font-bold text-emerald-600">{contadoresSistema.info}</p><p className="text-xs text-muted-foreground">Informações</p></div>
+              <div><p className="text-2xl font-bold text-slate-600">{contadoresSistema.debug}</p><p className="text-xs text-muted-foreground">Depuração</p></div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -721,10 +639,15 @@ export function LogsPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Search className="h-4 w-4" />
-                Registros de Log — Sistema
-              </CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  Registros de Log — Sistema
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={() => exportarCSV('sistema')}>
+                  <Download className="mr-2 h-4 w-4" />Exportar CSV
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <DataTable
@@ -738,6 +661,17 @@ export function LogsPage() {
         </TabsContent>
 
         <TabsContent value="auditoria" className="mt-4 space-y-4">
+          <CapturaLogsControle sondas={['auditoria']} />
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Resumo da consulta</CardTitle>
+              <CardDescription>A tabela mostra os 200 registros mais recentes dentre os resultados encontrados.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+              <div><p className="text-2xl font-bold">{totalAuditoria}</p><p className="text-xs text-muted-foreground">Registros encontrados</p></div>
+              <div><p className="text-2xl font-bold">{logsAuditoria.length}</p><p className="text-xs text-muted-foreground">Registros carregados</p></div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -791,10 +725,15 @@ export function LogsPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Search className="h-4 w-4" />
-                Registros de Log — Auditoria
-              </CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  Registros de Log — Auditoria
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={() => exportarCSV('auditoria')}>
+                  <Download className="mr-2 h-4 w-4" />Exportar CSV
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <DataTable
@@ -808,6 +747,7 @@ export function LogsPage() {
         </TabsContent>
 
         <TabsContent value="timeline" className="mt-4 space-y-4">
+          <CapturaLogsControle sondas={['linha_tempo']} />
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -842,20 +782,18 @@ export function LogsPage() {
 
           {timelineRepEncontrada && (
             <Card className="border-emerald-200 dark:border-emerald-800">
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:border-emerald-700 dark:bg-emerald-950/30">
-                    REP {timelineRepEncontrada.numero}
-                  </Badge>
-                  {timelineRepEncontrada.status && (
-                    <Badge variant={
-                      timelineRepEncontrada.status === 'Pendente' ? 'secondary' :
-                      timelineRepEncontrada.status === 'Em Andamento' ? 'default' : 'outline'
-                    }>
-                      {timelineRepEncontrada.status}
-                    </Badge>
-                  )}
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Resumo da linha do tempo</CardTitle>
+                <CardDescription>Eventos associados à REP selecionada e aos laudos vinculados.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:border-emerald-700 dark:bg-emerald-950/30">REP {timelineRepEncontrada.numero}</Badge>
+                  {timelineRepEncontrada.status && <p className="mt-2 text-xs text-muted-foreground">{timelineRepEncontrada.status}</p>}
                 </div>
+                <div><p className="text-2xl font-bold">{resumoLinhaTempo?.quantidadeEventos ?? '—'}</p><p className="text-xs text-muted-foreground">Eventos</p></div>
+                <div><p className="text-2xl font-bold text-blue-600">{resumoLinhaTempo?.quantidadeEventosRep ?? '—'}</p><p className="text-xs text-muted-foreground">Eventos da REP</p></div>
+                <div><p className="text-2xl font-bold text-purple-600">{resumoLinhaTempo?.quantidadeEventosLaudo ?? '—'}</p><p className="text-xs text-muted-foreground">Eventos do laudo</p></div>
               </CardContent>
             </Card>
           )}
@@ -863,10 +801,13 @@ export function LogsPage() {
           {timelineRepId && (
             <Card>
               <CardContent className="pt-6">
-                <DualTrackTimeline repId={timelineRepId} repNumero={timelineRepEncontrada?.numero} />
+                <DualTrackTimeline repId={timelineRepId} repNumero={timelineRepEncontrada?.numero} onResumoAlterado={setResumoLinhaTempo} />
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+        <TabsContent value="desempenho">
+          <DesempenhoTab />
         </TabsContent>
       </Tabs>
 
@@ -892,7 +833,8 @@ export function LogsPage() {
                 <AlertTitle>Atenção</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc pl-4 mt-1 space-y-1 text-sm">
-                    <li>{contagemSistema} registros de sistema serão truncados dos arquivos de log</li>
+                    <li>{contagemSistema} registros técnicos serão removidos dos arquivos de log</li>
+                    <li>Amostras de desempenho e capturas de diagnóstico locais serão removidas</li>
                     <li>{contagemAuditoria} registros de auditoria serão permanentemente excluídos do banco de dados</li>
                   </ul>
                 </AlertDescription>

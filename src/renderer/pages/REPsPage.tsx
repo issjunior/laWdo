@@ -659,7 +659,10 @@ export const REPsPage: React.FC = () => {
     b602_local_bairro: z.string().optional(),
     b602_local_cidade: z.string().optional(),
     b602_local_uf: z.string().optional(),
-    b602_numero_bo: z.string().max(30, 'Nº do BO deve ter no máximo 30 caracteres').optional(),
+    b602_numero_bo: z.string().refine(
+      valor => (valor.match(/\d/g) || []).length <= 15,
+      'Boletim de Ocorrência deve ter no máximo 15 algarismos',
+    ).optional(),
     b602_numero_ip: z.string().max(30, 'Nº do IP deve ter no máximo 30 caracteres').optional(),
     b602_solicitante_nome: z.string().optional(),
     b602_material_enc_toggle: z.string().optional(),

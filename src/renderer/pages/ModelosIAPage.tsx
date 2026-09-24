@@ -127,19 +127,87 @@ const formatarTempoTeste = (segundos: number): string => {
   return `${String(minutos).padStart(2, '0')}:${String(segundos % 60).padStart(2, '0')}`;
 };
 
-const obterMensagemErroConexaoIa = (erro?: string): string => {
+interface MensagemTesteConexaoIa {
+  titulo: string;
+  mensagem: string;
+}
+
+const obterMensagemErroConexaoIa = (erro: string | undefined, provedor: string): MensagemTesteConexaoIa => {
   const codigo = (erro || '').split(':')[0];
-  const mensagens: Record<string, string> = {
-    CONFIGURACAO_AUSENTE: 'Selecione um provedor, modelo e chave de API antes de testar.',
-    NAO_AUTORIZADO: 'A chave de API foi recusada pelo provedor.',
-    MODELO_INDISPONIVEL: 'O modelo selecionado não está disponível para esta chave de API.',
-    LIMITE_REQUISICOES: 'O provedor informou que o limite de requisições foi atingido.',
-    SEM_CONEXAO: 'Não foi possível conectar ao provedor de IA.',
-    TIMEOUT: 'O provedor demorou mais que o esperado para responder.',
-    RESPOSTA_INVALIDA: 'O provedor respondeu em formato inesperado.',
-    PROVEDOR_INDISPONIVEL: 'O provedor está temporariamente indisponível.',
+  const mensagens: Record<string, MensagemTesteConexaoIa> = {
+    CONFIGURACAO_AUSENTE: {
+      titulo: 'Configuração incompleta',
+      mensagem: 'Selecione o provedor e o modelo e informe uma chave de API antes de testar.',
+    },
+    ENTRADA_INVALIDA: {
+      titulo: 'Dados inválidos',
+      mensagem: 'Os dados do teste não puderam ser validados. Confira o provedor, o modelo e a chave de API.',
+    },
+    NAO_AUTORIZADO: {
+      titulo: 'Chave recusada',
+      mensagem: `O ${provedor} recusou a autenticação. Verifique se a chave está completa, ativa, pertence a esse provedor e tem acesso ao modelo selecionado.`,
+    },
+    MODELO_INDISPONIVEL: {
+      titulo: 'Modelo não disponível',
+      mensagem: `O ${provedor} não disponibilizou o modelo selecionado para esta chave. Escolha outro modelo ou confira as permissões da sua conta.`,
+    },
+    SALDO_INSUFICIENTE: {
+      titulo: 'Créditos insuficientes',
+      mensagem: `A conta do ${provedor} não possui créditos ou faturamento disponível para concluir o teste. Confira o plano e a cobrança no provedor.`,
+    },
+    LIMITE_REQUISICOES: {
+      titulo: 'Limite de uso atingido',
+      mensagem: `O ${provedor} bloqueou temporariamente novas solicitações por limite de uso ou frequência. Aguarde e tente novamente ou confira a cota da conta.`,
+    },
+    DNS_INDISPONIVEL: {
+      titulo: 'Endereço do provedor não encontrado',
+      mensagem: `O computador não conseguiu localizar o servidor do ${provedor}. Verifique a internet e as configurações de DNS, VPN ou proxy.`,
+    },
+    REDE_INDISPONIVEL: {
+      titulo: 'Rede indisponível',
+      mensagem: `O computador está sem rota até o ${provedor}. Confira a conexão com a internet, a VPN e as regras da rede local.`,
+    },
+    CONEXAO_RECUSADA: {
+      titulo: 'Conexão recusada',
+      mensagem: `A conexão com o ${provedor} foi recusada. Um firewall, proxy, antivírus ou bloqueio da rede pode estar impedindo o acesso.`,
+    },
+    CONEXAO_INTERROMPIDA: {
+      titulo: 'Conexão interrompida',
+      mensagem: `A comunicação com o ${provedor} foi encerrada antes da resposta. Verifique a estabilidade da internet, VPN, proxy ou firewall e tente novamente.`,
+    },
+    CERTIFICADO_TLS_INVALIDO: {
+      titulo: 'Conexão segura bloqueada',
+      mensagem: `Não foi possível validar o certificado de segurança do ${provedor}. Confira a data do computador e se proxy, antivírus ou rede corporativa inspeciona conexões HTTPS.`,
+    },
+    SEM_CONEXAO: {
+      titulo: 'Não foi possível acessar o provedor',
+      mensagem: `O laWdo não conseguiu iniciar a comunicação com o ${provedor}. Verifique a internet e possíveis bloqueios de proxy, VPN, firewall ou antivírus.`,
+    },
+    TIMEOUT: {
+      titulo: 'Tempo de resposta esgotado',
+      mensagem: `O ${provedor} não respondeu dentro do prazo. A conexão pode estar lenta ou instável, ou o serviço pode estar sobrecarregado. Tente novamente.`,
+    },
+    SOLICITACAO_RECUSADA: {
+      titulo: 'Solicitação recusada',
+      mensagem: `O ${provedor} considerou a solicitação de teste inválida. Confira a chave e o modelo; se o problema persistir, tente outro modelo.`,
+    },
+    RESPOSTA_INVALIDA: {
+      titulo: 'Resposta inválida',
+      mensagem: `O ${provedor} respondeu, mas o conteúdo não pôde ser reconhecido. Tente novamente; se persistir, escolha outro modelo.`,
+    },
+    PROVEDOR_INDISPONIVEL: {
+      titulo: 'Serviço do provedor indisponível',
+      mensagem: `O ${provedor} respondeu com uma falha temporária. Aguarde alguns instantes e tente novamente.`,
+    },
+    OPERACAO_EM_ANDAMENTO: {
+      titulo: 'Teste já em andamento',
+      mensagem: 'Já existe um teste de conexão em execução. Aguarde a conclusão ou cancele-o antes de tentar novamente.',
+    },
   };
-  return mensagens[codigo] || 'Não foi possível validar a conexão com o provedor.';
+  return mensagens[codigo] || {
+    titulo: 'Falha não identificada',
+    mensagem: `Não foi possível validar a conexão com o ${provedor}. Tente novamente e, se o problema persistir, consulte os logs do aplicativo.`,
+  };
 };
 
 export const ModelosIAPage: React.FC = () => {
@@ -148,7 +216,11 @@ export const ModelosIAPage: React.FC = () => {
   const [testando, setTestando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ status: 'success' | 'error' | 'cancelado', message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    status: 'success' | 'error' | 'cancelado';
+    title: string;
+    message: string;
+  } | null>(null);
   const [tempoTesteSegundos, setTempoTesteSegundos] = useState(0);
   const [perfil, setPerfil] = useState<PerfilRespostaIa>(PERFIL_RESPOSTA_IA_PADRAO);
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
@@ -290,23 +362,23 @@ export const ModelosIAPage: React.FC = () => {
 
       if (r.success) {
         const msg = `Conexão com a API ${provedorNome} estabelecida com sucesso!`;
-        setTestResult({ status: 'success', message: msg });
+        setTestResult({ status: 'success', title: 'Conexão validada', message: msg });
         window.ipcAPI.logInfo('IA', msg);
       } else if (r.error?.split(':')[0] === 'CANCELADO') {
-        setTestResult({ status: 'cancelado', message: 'Teste de conexão cancelado.' });
+        setTestResult({ status: 'cancelado', title: 'Teste cancelado', message: 'Teste de conexão cancelado.' });
       } else if (!r.success) {
-        const msg = obterMensagemErroConexaoIa(r.error);
-        setTestResult({ status: 'error', message: msg });
-        window.ipcAPI.logError('IA', msg, r.error);
+        const erroApresentado = obterMensagemErroConexaoIa(r.error, provedorNome);
+        setTestResult({ status: 'error', title: erroApresentado.titulo, message: erroApresentado.mensagem });
+        window.ipcAPI.logError('IA', erroApresentado.mensagem, r.error);
       } else {
         const msg = `Ops! O ${provedorNome} retornou uma resposta inesperada. Confira se a sua chave está correta e tente novamente.`;
-        setTestResult({ status: 'error', message: msg });
+        setTestResult({ status: 'error', title: 'Resposta inesperada', message: msg });
         window.ipcAPI.logError('IA', msg, r.data);
       }
     } catch (_e: unknown) {
       const erroTecnico = getMensagemErro(_e);
-      const msg = `Ops! Algo deu errado ao tentar falar com o ${provedorNome}. Verifique sua conexão e sua chave de API.\n\nDetalhes: ${erroTecnico}`;
-      setTestResult({ status: 'error', message: msg });
+      const msg = `O aplicativo não conseguiu concluir o teste com o ${provedorNome}. Verifique a conexão com a internet e tente novamente. Detalhe técnico: ${erroTecnico}`;
+      setTestResult({ status: 'error', title: 'Falha ao executar o teste', message: msg });
       window.ipcAPI.logError('IA', msg, _e);
     } finally {
       if (operacaoTesteConexaoRef.current === operationId) {
@@ -748,7 +820,7 @@ export const ModelosIAPage: React.FC = () => {
                     : testResult.status === 'cancelado'
                       ? <Square className="h-4 w-4 text-muted-foreground" />
                       : <AlertTriangle className="h-4 w-4 text-destructive" />}
-                  <AlertTitle>{testResult.status === 'success' ? 'Conexão validada' : testResult.status === 'cancelado' ? 'Teste cancelado' : 'Falha no teste'}</AlertTitle>
+                  <AlertTitle>{testResult.title}</AlertTitle>
                   <AlertDescription>{testResult.message}</AlertDescription>
                 </Alert>
               )}

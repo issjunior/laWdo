@@ -21,6 +21,7 @@ import {
   CardHeader,
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { VersaoAplicativo } from '@/components/auth/VersaoAplicativo'
 import {
   Select,
   SelectContent,
@@ -347,6 +348,9 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
               </form>
             </Form>
           </CardContent>
+          <div className="pb-5 text-center">
+            <VersaoAplicativo />
+          </div>
         </Card>
       </div>
     </div>

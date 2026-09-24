@@ -8,6 +8,7 @@ import {
   type AcaoBlocoCondicional,
 } from '@/lib/blocos-periciais';
 import {
+  excluirTabelaPlaceholder,
   encontrarAcaoTabelaPlaceholder,
   personalizarTabelaPlaceholder,
   restaurarTabelaPlaceholder,
@@ -159,6 +160,7 @@ interface TinyMceEditorProps {
   onSolicitarExclusaoBlocoCondicional?: (bloco: BlocoCondicionalSelecionado) => void;
   /** Reaplica a visualização de placeholders após restaurar uma tabela vinculada. */
   onTabelaPlaceholderRestaurada?: (editor: TinyMceEditorInstance) => void;
+  onEstruturaTabelasAlterada?: () => void;
   onCampoReservadoDuploClique?: (campo: CampoReservadoSelecionado) => void;
 }
 
@@ -235,6 +237,7 @@ export function sincronizarIdentificacaoFullscreen(
 
 interface PlaceholderPayload {
   chave: string;
+  identificadorInsercao?: string;
 }
 
 interface ImagemLaudoPayload {
@@ -471,6 +474,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   condToggles,
   onSolicitarExclusaoBlocoCondicional,
   onTabelaPlaceholderRestaurada,
+  onEstruturaTabelasAlterada,
   onCampoReservadoDuploClique,
   className,
   ...rest
@@ -482,6 +486,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
   const onSolicitarExclusaoBlocoCondicionalRef = useRef(onSolicitarExclusaoBlocoCondicional);
   const onTabelaPlaceholderRestauradaRef = useRef(onTabelaPlaceholderRestaurada);
+  const onEstruturaTabelasAlteradaRef = useRef(onEstruturaTabelasAlterada);
   const onCampoReservadoDuploCliqueRef = useRef(onCampoReservadoDuploClique);
   const editorProntoParaAlteracoesRef = useRef(false);
   const frameLiberarAlteracoesRef = useRef<number | null>(null);
@@ -538,6 +543,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useEffect(() => {
     onTabelaPlaceholderRestauradaRef.current = onTabelaPlaceholderRestaurada;
   }, [onTabelaPlaceholderRestaurada]);
+
+  useEffect(() => {
+    onEstruturaTabelasAlteradaRef.current = onEstruturaTabelasAlterada;
+  }, [onEstruturaTabelasAlterada]);
 
   useEffect(() => {
     onCampoReservadoDuploCliqueRef.current = onCampoReservadoDuploClique;
@@ -824,7 +833,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               justify-content: center;
               position: absolute;
               top: 8px;
-              right: 10px;
+              right: 38px;
               min-height: 22px;
               padding: 0 6px;
               border: 1px solid #fdba74;
@@ -837,6 +846,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               cursor: pointer !important;
               user-select: none;
               white-space: nowrap;
+            }
+            .acao-tabela-placeholder-excluir {
+              right: 10px;
+              min-width: 22px;
+              padding: 0;
+              border-color: transparent;
+              font-size: 21px;
+              font-weight: 400;
             }
             .acao-tabela-placeholder:hover,
             .acao-tabela-placeholder:focus {
@@ -1031,7 +1048,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             });
 
             editor.addCommand('insertPlaceholder', ((_ui, placeholder) => {
-              const html = `<span contenteditable="false" class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}">{{${placeholder.chave}}}</span>`;
+              const identificador = placeholder.identificadorInsercao
+                ? ` data-placeholder-inserido-id="${placeholder.identificadorInsercao}"`
+                : '';
+              const html = `<span contenteditable="false" class="placeholder-tag" data-placeholder="{{${placeholder.chave}}}"${identificador}>{{${placeholder.chave}}}</span>`;
               editor.insertContent(html);
             }) satisfies ComandoTinyMce<PlaceholderPayload>);
 
@@ -1328,6 +1348,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 evento.preventDefault();
                 evento.stopImmediatePropagation();
                 const tipo = acao.getAttribute('data-acao-tabela-placeholder');
+                if (tipo === 'excluir') {
+                  if (!window.confirm('Excluir esta tabela do laudo? O placeholder vinculado também será removido.')) return;
+                  if (excluirTabelaPlaceholder(editor, acao)) {
+                    onChange(editor.getContent());
+                    onEstruturaTabelasAlteradaRef.current?.();
+                  }
+                  return;
+                }
+                if (tipo !== 'restaurar' && tipo !== 'personalizar') return;
                 const restaurar = tipo === 'restaurar';
                 if (restaurar && !window.confirm('Restaurar os dados atuais da REP? As alterações locais desta tabela serão perdidas.')) {
                   return;
@@ -1338,11 +1367,31 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (!alterou) return;
                 onChange(editor.getContent());
                 if (restaurar) onTabelaPlaceholderRestauradaRef.current?.(editor);
+                onEstruturaTabelasAlteradaRef.current?.();
               };
 
               doc.addEventListener('click', executarAcaoTabelaPlaceholder, true);
+              let conferenciaPendente: ReturnType<typeof setTimeout> | null = null;
+              const observarTabelas = new MutationObserver(mutacoes => {
+                const alterouEstrutura = mutacoes.some(mutacao =>
+                  [...mutacao.addedNodes, ...mutacao.removedNodes].some(no =>
+                    no.nodeType === Node.ELEMENT_NODE && (
+                      (no as Element).matches('table') || Boolean((no as Element).querySelector('table'))
+                    )
+                  )
+                );
+                if (!alterouEstrutura || conferenciaPendente) return;
+                conferenciaPendente = setTimeout(() => {
+                  conferenciaPendente = null;
+                  onEstruturaTabelasAlteradaRef.current?.();
+                }, 0);
+              });
+              const bodyEditor = editor.getBody();
+              if (bodyEditor) observarTabelas.observe(bodyEditor, { childList: true, subtree: true });
               editor.on('remove', () => {
                 doc.removeEventListener('click', executarAcaoTabelaPlaceholder, true);
+                observarTabelas.disconnect();
+                if (conferenciaPendente) clearTimeout(conferenciaPendente);
               });
 
               const solicitarPreenchimentoCampoReservado = (evento: MouseEvent) => {
