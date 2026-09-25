@@ -21,6 +21,7 @@ import {
   CardHeader,
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { CampoLotacao } from '@/components/auth/CampoLotacao'
 import { VersaoAplicativo } from '@/components/auth/VersaoAplicativo'
 import {
   Select,
@@ -240,10 +241,13 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
                     <FormItem className="min-w-0 md:col-span-2">
                       <FormLabel>Lotação</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="Ex: Instituto de Criminalística"
-                          className="border-border/50 bg-muted/40 placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-2 focus:ring-primary/30 dark:bg-muted/20"
-                          {...field}
+                        <CampoLotacao
+                          ref={field.ref}
+                          name={field.name}
+                          value={field.value}
+                          onValorChange={field.onChange}
+                          onBlur={field.onBlur}
+                          placeholder="Selecione um município ou digite sua lotação"
                         />
                       </FormControl>
                       <FormMessage />
