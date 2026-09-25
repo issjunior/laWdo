@@ -460,6 +460,20 @@ const createWindow = async (): Promise<void> => {
     });
   });
 
+  const janela = mainWindow;
+  const mostrarJanela = () => {
+    if (janela.isDestroyed() || janela.isVisible()) return;
+    if (estado.maximizada) janela.maximize();
+    janela.show();
+  };
+  janela.once('ready-to-show', mostrarJanela);
+  janela.webContents.once('did-finish-load', mostrarJanela);
+  janela.webContents.on('before-input-event', (evento, entrada) => {
+    if (entrada.type !== 'keyDown' || entrada.key !== 'F12') return;
+    evento.preventDefault();
+    toggleDevTools();
+  });
+
   // Carregar a aplicação React
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:3000');
@@ -467,14 +481,6 @@ const createWindow = async (): Promise<void> => {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
-
-  // Mostrar quando estiver pronto
-  mainWindow.once('ready-to-show', () => {
-    if (mainWindow) {
-      if (estado.maximizada) mainWindow.maximize();
-      mainWindow.show();
-    }
-  });
 
   // Abrir links externos no navegador padrão
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -568,11 +574,9 @@ app.whenReady().then(async () => {
 
     // Registrar atalhos de teclado para DevTools
     // Ctrl+Shift+I - Alternar DevTools (padrão Chrome/Electron)
-    // F12 - Alternar DevTools (alternativo)
     // Ctrl+Shift+D - Alternar DevTools (alternativo)
     const shortcuts = [
       'CommandOrControl+Shift+I',
-      'F12',
       'CommandOrControl+Shift+D'
     ];
 
