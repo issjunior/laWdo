@@ -1,10 +1,12 @@
 import { app, dialog } from 'electron';
 import { access, rename } from 'node:fs/promises';
 import path from 'node:path';
+import { iniciarInstanciaUnica } from './utils/instancia-unica.js';
 
 const diretorioTemporarioSmoke = process.env.LAWDO_SMOKE_USER_DATA;
+const modoSmokeJanela = process.env.LAWDO_SMOKE_JANELA === '1';
 let migracaoConcluida = true;
-if (process.env.LAWDO_SMOKE_SCHEMA === '1' && diretorioTemporarioSmoke) {
+if ((process.env.LAWDO_SMOKE_SCHEMA === '1' || modoSmokeJanela) && diretorioTemporarioSmoke) {
   app.setPath('userData', diretorioTemporarioSmoke);
 } else {
   const diretorioAppData = app.getPath('appData');
@@ -39,5 +41,5 @@ if (process.env.LAWDO_SMOKE_SCHEMA === '1' && diretorioTemporarioSmoke) {
   if (migracaoConcluida) app.setPath('userData', diretorioDados);
 }
 
-if (migracaoConcluida) await import('./index.js');
-else app.exit(1);
+if (!migracaoConcluida) app.exit(1);
+else if (process.env.LAWDO_SMOKE_SCHEMA === '1' || iniciarInstanciaUnica(app)) await import('./index.js');
