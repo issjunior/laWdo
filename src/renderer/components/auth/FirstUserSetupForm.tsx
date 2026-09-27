@@ -21,6 +21,7 @@ import {
   CardHeader,
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { CampoLotacao } from '@/components/auth/CampoLotacao'
 import { VersaoAplicativo } from '@/components/auth/VersaoAplicativo'
 import {
   Select,
@@ -95,22 +96,23 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-200 via-indigo-50 to-blue-100 px-4 dark:from-slate-950 dark:via-indigo-950 dark:to-blue-950">
+    <div className="relative h-dvh overflow-y-auto bg-gradient-to-br from-slate-200 via-indigo-50 to-blue-100 dark:from-slate-950 dark:via-indigo-950 dark:to-blue-950">
       <FlickeringGrid
-        className="absolute inset-0 z-0 [mask-image:radial-gradient(ellipse_at_center,white,transparent_70%)]"
+        className="pointer-events-none absolute inset-0 z-0 [mask-image:radial-gradient(ellipse_at_center,white,transparent_70%)]"
         squareSize={4}
         gridGap={6}
         color={isDarkMode ? '#4B5563' : '#6B7280'}
         maxOpacity={0.25}
         flickerChance={0.4}
       />
-      <div className="relative z-10 w-full max-w-xl">
-        <Card className="animate-fade-in border-0 bg-card/70 shadow-[0_8px_32px_rgba(26,85,224,0.12)] backdrop-blur-xl ring-1 ring-primary/20 dark:bg-card/60 dark:shadow-[0_8px_32px_rgba(106,176,255,0.08)]">
-          <div className="flex justify-end px-7 pt-5">
+      <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-4 sm:px-6">
+        <Card className="w-full max-w-4xl animate-fade-in border-0 bg-card/70 shadow-[0_8px_32px_rgba(26,85,224,0.12)] backdrop-blur-xl ring-1 ring-primary/20 dark:bg-card/60 dark:shadow-[0_8px_32px_rgba(106,176,255,0.08)]">
+          <div className="flex justify-end px-6 pt-3">
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              aria-label="Alternar tema"
               onClick={onToggleTheme}
               className="transition-transform duration-300"
             >
@@ -122,13 +124,13 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
             </Button>
           </div>
 
-          <CardHeader className="flex flex-col items-center text-center">
+          <CardHeader className="flex flex-col items-center gap-3 space-y-0 px-6 pb-4 pt-0 text-center sm:flex-row sm:gap-5 sm:text-left">
             <img
               src={logo}
               alt="laWdo"
-              className="mb-4 h-auto w-40 max-w-[60%] object-contain"
+              className="h-auto w-24 shrink-0 object-contain sm:w-28"
             />
-            <div className="mt-4 space-y-1">
+            <div className="space-y-1">
               <p className="text-lg font-semibold text-foreground">
                 Primeiro acesso
               </p>
@@ -143,7 +145,7 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(handleSubmit)}
-                className="space-y-4"
+                className="grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-2"
               >
                 <FormField
                   control={form.control}
@@ -236,13 +238,16 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
                   control={form.control}
                   name="lotacao"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="min-w-0 md:col-span-2">
                       <FormLabel>Lotação</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="Ex: Instituto de Criminalística"
-                          className="border-border/50 bg-muted/40 placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-2 focus:ring-primary/30 dark:bg-muted/20"
-                          {...field}
+                        <CampoLotacao
+                          ref={field.ref}
+                          name={field.name}
+                          value={field.value}
+                          onValorChange={field.onChange}
+                          onBlur={field.onBlur}
+                          placeholder="Selecione um município ou digite sua lotação"
                         />
                       </FormControl>
                       <FormMessage />
@@ -321,18 +326,18 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
                 />
 
                 {error && (
-                  <Alert variant="destructive">
+                  <Alert variant="destructive" className="md:col-span-2">
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
 
                 {success && (
-                  <Alert>
+                  <Alert className="md:col-span-2">
                     <AlertDescription>{success}</AlertDescription>
                   </Alert>
                 )}
 
-                <Button type="submit" className="group w-full shadow-lg shadow-primary/20 hover:shadow-primary/30" disabled={loading}>
+                <Button type="submit" className="group w-full shadow-lg shadow-primary/20 hover:shadow-primary/30 md:col-span-2" disabled={loading}>
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -348,7 +353,7 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
               </form>
             </Form>
           </CardContent>
-          <div className="pb-5 text-center">
+          <div className="pb-3 text-center">
             <VersaoAplicativo />
           </div>
         </Card>

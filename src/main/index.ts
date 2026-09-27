@@ -496,6 +496,11 @@ const createWindow = async (): Promise<void> => {
   if (process.env.NODE_ENV === 'development') {
     janela.webContents.openDevTools();
   }
+  janela.webContents.on('before-input-event', (evento, entrada) => {
+    if (entrada.type !== 'keyDown' || entrada.key !== 'F12') return;
+    evento.preventDefault();
+    toggleDevTools();
+  });
   // Abrir links externos no navegador padrão
   janela.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:')) {
@@ -604,11 +609,9 @@ app.whenReady().then(async () => {
 
     // Registrar atalhos de teclado para DevTools
     // Ctrl+Shift+I - Alternar DevTools (padrão Chrome/Electron)
-    // F12 - Alternar DevTools (alternativo)
     // Ctrl+Shift+D - Alternar DevTools (alternativo)
     const shortcuts = [
       'CommandOrControl+Shift+I',
-      'F12',
       'CommandOrControl+Shift+D'
     ];
 
