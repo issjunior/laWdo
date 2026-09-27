@@ -7,7 +7,7 @@ import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
 import { CURRENT_SCHEMA_VERSION, setupDatabase } from './database/index.js';
 import { closeDatabase, executeQuery } from './database/sqlite.js';
-import { getLogger, setupLogging } from './utils/logger.js';
+import { getLogger, logDebug, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
 import { atualizacaoService } from './services/atualizacao.service.js';
 import { carregarEstadoJanelaPrincipal, observarEstadoJanelaPrincipal } from './utils/estado-janela-principal.js';
@@ -19,6 +19,8 @@ import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.s
 import { iaExecucaoService } from './services/ia-execucao.service.js';
 import { desempenhoService } from './services/desempenho.service.js';
 import { capturaLogsService } from './services/captura-logs.service.js';
+import { definirAtivadorInstancia } from './utils/instancia-unica.js';
+import { carregarConteudoJanela } from './utils/carregamento-janela.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +51,16 @@ let sourceMapsDiagnostico: DiagnosticoSourceMapService | null = null;
 let encerramentoAplicativoEmAndamento = false;
 let temporizadorAtrasoEventLoopDiagnostico: NodeJS.Timeout | null = null;
 let atrasoEventLoopDiagnostico: number | null = null;
+let ativacaoPendente = false;
+
+definirAtivadorInstancia(() => {
+  ativacaoPendente = true;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  ativacaoPendente = false;
+});
 
 function iniciarMedicaoAtrasoEventLoop(): void {
   let esperado = performance.now() + 1_000;
@@ -411,6 +423,7 @@ async function encerrarDiagnosticoAssistido(): Promise<void> {
 }
 
 const createWindow = async (): Promise<void> => {
+  logDebug('Inicialização da janela principal iniciada');
   const estado = await carregarEstadoJanelaPrincipal();
   // Criar a janela do navegador
   mainWindow = new BrowserWindow({
@@ -428,7 +441,8 @@ const createWindow = async (): Promise<void> => {
     },
     icon: caminhoIcone,
     title: 'laWdo',
-    show: false, // Mostrar apenas quando estiver pronto
+    show: true,
+    backgroundColor: '#1a2540',
     ...(process.platform === 'win32' || process.platform === 'linux'
       ? {
           titleBarStyle: 'hidden' as const,
@@ -441,13 +455,22 @@ const createWindow = async (): Promise<void> => {
       : {}),
   });
   mainWindow.removeMenu();
+  if (estado.maximizada) mainWindow.maximize();
+  if (ativacaoPendente) {
+    mainWindow.focus();
+    ativacaoPendente = false;
+  }
   observarEstadoJanelaPrincipal(mainWindow);
   registrarEventoDiagnostico('janela', 'info', { evento: 'aberta' }, mainWindow);
 
   mainWindow.on('focus', () => registrarEventoDiagnostico('janela', 'info', { evento: 'foco' }, mainWindow ?? undefined));
   mainWindow.on('blur', () => registrarEventoDiagnostico('janela', 'info', { evento: 'perdeu_foco' }, mainWindow ?? undefined));
-  mainWindow.webContents.on('did-finish-load', () => registrarEventoDiagnostico('janela', 'info', { evento: 'carregada' }, mainWindow ?? undefined));
+  mainWindow.webContents.on('did-finish-load', () => {
+    logDebug('HTML da janela principal carregado');
+    registrarEventoDiagnostico('janela', 'info', { evento: 'carregada' }, mainWindow ?? undefined);
+  });
   mainWindow.webContents.on('did-fail-load', (_evento, codigoErro, descricaoErro, urlValidada) => {
+    log.error('Falha no carregamento da janela principal', { codigoErro, descricaoErro, url: urlValidada });
     registrarEventoDiagnostico('erro', 'error', {
       evento: 'falha_carregamento', codigoErro, descricaoErro, url: urlValidada,
     }, mainWindow ?? undefined);
@@ -460,24 +483,21 @@ const createWindow = async (): Promise<void> => {
     });
   });
 
-  // Carregar a aplicação React
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:3000');
-    mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  }
-
-  // Mostrar quando estiver pronto
   mainWindow.once('ready-to-show', () => {
-    if (mainWindow) {
-      if (estado.maximizada) mainWindow.maximize();
-      mainWindow.show();
-    }
+    logDebug('Primeira renderização da janela principal concluída');
   });
 
+  // Carregar a aplicação React
+  const janela = mainWindow;
+  const endereco = process.env.NODE_ENV === 'development'
+    ? 'http://localhost:3000'
+    : path.join(__dirname, '../renderer/index.html');
+  logDebug('Carregamento do conteúdo da janela principal iniciado', { modo: process.env.NODE_ENV === 'development' ? 'servidor' : 'arquivo' });
+  if (process.env.NODE_ENV === 'development') {
+    janela.webContents.openDevTools();
+  }
   // Abrir links externos no navegador padrão
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  janela.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:')) {
       shell.openExternal(url);
       return { action: 'deny' };
@@ -486,24 +506,34 @@ const createWindow = async (): Promise<void> => {
   });
 
   // Lidar com fechamento da janela
-  mainWindow.on('closed', () => {
-    registrarEventoDiagnostico('janela', 'info', { evento: 'fechada' }, mainWindow ?? undefined);
+  janela.on('closed', () => {
+    registrarEventoDiagnostico('janela', 'info', { evento: 'fechada' });
     void capturaDiagnostico?.interromper('Janela encerrada durante a captura.');
-    mainWindow = null;
+    if (mainWindow === janela) mainWindow = null;
   });
-  mainWindow.webContents.on('render-process-gone', (_evento, detalhes) => {
+  janela.webContents.on('render-process-gone', (_evento, detalhes) => {
     registrarEventoDiagnostico('erro', 'error', { evento: 'renderer_encerrado', motivo: detalhes.reason, codigo: detalhes.exitCode }, mainWindow ?? undefined);
     void capturaDiagnostico?.interromper(`Renderer encerrado: ${detalhes.reason}.`);
     void desempenhoService.registrar({ origem: 'processo', categoria: 'renderer', evento: 'renderer_encerrado', metadados: { falhou: true } });
   });
-  mainWindow.webContents.on('unresponsive', () => {
+  janela.webContents.on('unresponsive', () => {
     registrarEventoDiagnostico('janela', 'warn', { evento: 'renderer_sem_resposta' }, mainWindow ?? undefined);
     void desempenhoService.registrar({ origem: 'processo', categoria: 'renderer', evento: 'renderer_sem_resposta' });
   });
-  mainWindow.webContents.on('responsive', () => {
+  janela.webContents.on('responsive', () => {
     registrarEventoDiagnostico('janela', 'info', { evento: 'renderer_responsivo' }, mainWindow ?? undefined);
     void desempenhoService.registrar({ origem: 'processo', categoria: 'renderer', evento: 'renderer_responsivo' });
   });
+
+  try {
+    await carregarConteudoJanela(() => process.env.NODE_ENV === 'development'
+      ? janela.loadURL(endereco)
+      : janela.loadFile(endereco));
+    logDebug('Carregamento do conteúdo da janela principal concluído');
+  } catch (erro) {
+    const detalhe = erro instanceof Error ? erro.message : 'Erro inesperado';
+    throw new Error(`CARREGAMENTO_JANELA_FALHOU: ${detalhe}`);
+  }
 };
 
 // Função para alternar DevTools
@@ -521,8 +551,11 @@ const toggleDevTools = () => {
 app.whenReady().then(async () => {
   try {
     // Inicializar sistemas
+    logDebug('Inicialização do aplicativo iniciada', { versao: app.getVersion() });
     setupSecurity();
+    logDebug('Verificando atualização agendada');
     if (await atualizacaoService.processarPendenciaInicializacao()) return;
+    logDebug('Preparando banco de dados');
     await setupDatabase();
     if (modoSmokeSchema) {
       const [versao] = await executeQuery<{ version: number }>('SELECT MAX(version) AS version FROM schema_version');
@@ -548,6 +581,7 @@ app.whenReady().then(async () => {
       return;
     }
     setupLogging();
+    logDebug('Preparando serviços de desempenho e logs');
     await desempenhoService.inicializar();
     await capturaLogsService.inicializar();
     await iniciarDiagnosticoAssistido();
@@ -561,10 +595,12 @@ app.whenReady().then(async () => {
     // Criar janela
     await createWindow();
 
-    const atrasoVerificacaoAtualizacao = 5_000 + Math.floor(Math.random() * 25_000);
-    setTimeout(() => {
-      void atualizacaoService.verificar().catch(() => undefined);
-    }, atrasoVerificacaoAtualizacao);
+    if (process.env.LAWDO_SMOKE_JANELA !== '1') {
+      const atrasoVerificacaoAtualizacao = 5_000 + Math.floor(Math.random() * 25_000);
+      setTimeout(() => {
+        void atualizacaoService.verificar().catch(() => undefined);
+      }, atrasoVerificacaoAtualizacao);
+    }
 
     // Registrar atalhos de teclado para DevTools
     // Ctrl+Shift+I - Alternar DevTools (padrão Chrome/Electron)
@@ -596,7 +632,10 @@ app.whenReady().then(async () => {
       app.exit(1);
       return;
     }
-    const codigoRecuperacao = mensagemTecnica.startsWith('SCHEMA_FUTURO_INCOMPATIVEL')
+    const falhaJanela = mensagemTecnica.startsWith('CARREGAMENTO_JANELA_FALHOU');
+    const codigoRecuperacao = falhaJanela
+      ? 'CARREGAMENTO_JANELA_FALHOU'
+      : mensagemTecnica.startsWith('SCHEMA_FUTURO_INCOMPATIVEL')
       ? 'SCHEMA_FUTURO_INCOMPATIVEL'
       : mensagemTecnica.startsWith('SCHEMA_INCOMPATIVEL')
         ? 'SCHEMA_INCOMPATIVEL'
@@ -622,8 +661,8 @@ app.whenReady().then(async () => {
       buttons: ['Tentar novamente', 'Abrir pasta de recuperação', 'Fechar'],
       defaultId: 2,
       cancelId: 2,
-      title: 'Não foi possível preparar os dados locais',
-      message: 'Seus dados foram preservados e nenhuma consulta ao GDL foi realizada.',
+      title: falhaJanela ? 'Não foi possível abrir o laWdo' : 'Não foi possível preparar os dados locais',
+      message: falhaJanela ? 'A janela do aplicativo não conseguiu carregar.' : 'Seus dados foram preservados e nenhuma consulta ao GDL foi realizada.',
       detail: `Código de suporte: ${codigoRecuperacao}. Reinicie o aplicativo. Se a falha persistir, envie o diagnóstico criado ao suporte; não substitua o banco manualmente.`,
     });
     if (resposta.response === 0) {
