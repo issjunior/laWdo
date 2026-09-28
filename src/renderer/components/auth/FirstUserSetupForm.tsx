@@ -138,6 +138,9 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
                 Nenhum usuário foi encontrado. Cadastre o primeiro usuário
                 para liberar o sistema.
               </p>
+              <p className="text-xs text-muted-foreground">
+                Para restaurar um backup, crie sua conta local e entre no laWdo.
+              </p>
             </div>
           </CardHeader>
 

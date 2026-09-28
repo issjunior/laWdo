@@ -84,7 +84,9 @@ const NotFoundPage = () => (
 );
 
 const App = () => {
+  const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes') || window.location.hash.startsWith('#/painel-ia');
   const [currentUser, setCurrentUser] = useState<UsuarioSessao>(() => {
+    if (!isPanelWindow) return null;
     try {
       const raw = sessionStorage.getItem(AUTH_USER_KEY);
       return parseUsuarioSessao(raw);
@@ -99,11 +101,10 @@ const App = () => {
   };
 
   const handleLogout = () => {
+    void window.ipcAPI.logout();
     sessionStorage.removeItem(AUTH_USER_KEY);
     setCurrentUser(null);
   };
-
-  const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes') || window.location.hash.startsWith('#/painel-ia');
 
   return (
     <ErrorBoundary>

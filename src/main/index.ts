@@ -17,6 +17,8 @@ import { DiagnosticoInterfaceService } from './services/diagnostico-interface.se
 import { DiagnosticoCapturaService } from './services/diagnostico-captura.service.js';
 import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.service.js';
 import { iaExecucaoService } from './services/ia-execucao.service.js';
+import { authSessaoService } from './services/auth-sessao.service.js';
+import { concluirRestauracaoPendente, reverterRestauracaoPendente } from './services/backup.service.js';
 import { desempenhoService } from './services/desempenho.service.js';
 import { capturaLogsService } from './services/captura-logs.service.js';
 import { definirAtivadorInstancia } from './utils/instancia-unica.js';
@@ -501,6 +503,8 @@ const createWindow = async (): Promise<void> => {
     evento.preventDefault();
     toggleDevTools();
   });
+  janela.webContents.on('did-start-navigation', () => authSessaoService.encerrar(janela.webContents.id));
+  janela.webContents.on('destroyed', () => authSessaoService.encerrar(janela.webContents.id));
   // Abrir links externos no navegador padrão
   janela.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:')) {
@@ -561,7 +565,14 @@ app.whenReady().then(async () => {
     logDebug('Verificando atualização agendada');
     if (await atualizacaoService.processarPendenciaInicializacao()) return;
     logDebug('Preparando banco de dados');
-    await setupDatabase();
+    try {
+      await setupDatabase();
+      await concluirRestauracaoPendente();
+    } catch (erroInicializacao) {
+      if (!await reverterRestauracaoPendente()) throw erroInicializacao;
+      log.error('Restauração revertida após falha na inicialização.', erroInicializacao);
+      await setupDatabase();
+    }
     if (modoSmokeSchema) {
       const [versao] = await executeQuery<{ version: number }>('SELECT MAX(version) AS version FROM schema_version');
       const colunasLaudos = await executeQuery<{ name: string }>('PRAGMA table_info(laudos)');

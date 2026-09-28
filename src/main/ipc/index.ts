@@ -12,6 +12,7 @@ import { registerPlaceholderHandlers } from './handlers/placeholder.handlers.js'
 import { registerCategoriaHandlers } from './handlers/categoria-placeholder.handlers.js';
 import { registerTemplateHandlers } from './handlers/template.handlers.js';
 import { registerImportacaoHandlers } from './handlers/importacao.handlers.js';
+import { authSessaoService } from '../services/auth-sessao.service.js';
 import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
 import { registerIAHandlers } from './handlers/ia.handlers.js';
 import { registerBackupHandlers } from './handlers/backup.handlers.js';
@@ -297,7 +298,7 @@ const registerDatabaseHandlers = (): void => {
  */
 const registerAuthHandlers = (): void => {
   // Login
-  ipcMain.handle('login', async (_event, username: string, password: string) => {
+  ipcMain.handle('login', async (event, username: string, password: string) => {
     try {
       // Validação básica
       if (!username || !password) {
@@ -315,6 +316,7 @@ const registerAuthHandlers = (): void => {
 
       const user = await userService.authenticate(sanitizedUsername, sanitizedPassword)
       if (user) {
+        authSessaoService.iniciar(event.sender.id, user.id);
         log.info(`Login bem-sucedido: ${sanitizedUsername}`);
         auditLogin(user.id, true);
         return {
@@ -347,9 +349,9 @@ const registerAuthHandlers = (): void => {
       };
     }
   });
-
   // Logout
-  ipcMain.handle('logout', async () => {
+  ipcMain.handle('logout', async event => {
+    authSessaoService.encerrar(event.sender.id);
     log.info('Logout solicitado');
     return { success: true };
   });

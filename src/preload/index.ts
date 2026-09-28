@@ -120,7 +120,9 @@ type IpcParams = unknown[];
 type IpcResult = unknown;
 type ImportarArquivoResponse = { success: boolean; data?: IpcPayload; error?: string };
 type PacoteTemplateResponse = { success: boolean; data?: IpcPayload; nome?: string; error?: string };
-type BackupResponse = { success: boolean; path?: string; error?: string };
+type BackupResponse = { success: boolean; path?: string; error?: string; canceled?: boolean };
+type TipoBackup = 'completo' | 'configuracao';
+type PreviaBackup = Record<string, unknown>;
 type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; total?: number; error?: string };
 type TimelineResponse = { success: boolean; data?: IpcPayload[]; error?: string };
 type ExportacaoLaudoParams = {
@@ -163,6 +165,7 @@ export interface IpcAPI {
 
   // Autenticação
   login: (username: string, password: string) => Promise<{ success: boolean; user?: IpcPayload }>;
+  logout: () => Promise<{ success: boolean }>;
   verifyPassword: (userId: string, password: string) => Promise<{ success: boolean; valid: boolean; error?: string }>;
 
   // Usuários
@@ -382,10 +385,10 @@ export interface IpcAPI {
 
   // Backup e Restauração
   backup: {
-    criar: () => Promise<BackupResponse>;
-    restaurar: () => Promise<Omit<BackupResponse, 'path'>>;
-    configExportar: () => Promise<BackupResponse>;
-    configImportar: () => Promise<Omit<BackupResponse, 'path'>>;
+    criar: (tipo: TipoBackup, senha: string) => Promise<BackupResponse>;
+    analisar: (tipo: TipoBackup, senha: string) => Promise<BackupResponse & { operacaoId?: string; previa?: PreviaBackup }>;
+    confirmar: (operacaoId: string, senha: string) => Promise<BackupResponse & { reinicio?: boolean }>;
+    cancelar: (operacaoId: string) => Promise<BackupResponse>;
   };
 
   atualizacao: {
@@ -484,6 +487,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Autenticação
   'login',
+  'logout',
   'user:verifyPassword',
 
   // Usuários
@@ -660,9 +664,9 @@ const ALLOWED_CHANNELS = new Set([
 
   // Backup
   'backup:criar',
-  'backup:restaurar',
-  'backup:config-exportar',
-  'backup:config-importar',
+  'backup:analisar',
+  'backup:confirmar',
+  'backup:cancelar',
 
   // Atualização
   'atualizacao:estado',
@@ -1119,6 +1123,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
     return invocarComDiagnostico('login', username.trim(), password.trim());
   },
+  logout: () => invocarComDiagnostico('logout'),
 
   verifyPassword: (userId: string, password: string) => {
     if (typeof userId !== 'string' || typeof password !== 'string') return Promise.resolve({ success: false, valid: false, error: 'Dados inválidos' });
@@ -1614,10 +1619,10 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   backup: {
-    criar: () => invocarComDiagnostico('backup:criar'),
-    restaurar: () => invocarComDiagnostico('backup:restaurar'),
-    configExportar: () => invocarComDiagnostico('backup:config-exportar'),
-    configImportar: () => invocarComDiagnostico('backup:config-importar'),
+    criar: (tipo: TipoBackup, senha: string) => invocarComDiagnostico('backup:criar', tipo, senha),
+    analisar: (tipo: TipoBackup, senha: string) => invocarComDiagnostico('backup:analisar', tipo, senha),
+    confirmar: (operacaoId: string, senha: string) => invocarComDiagnostico('backup:confirmar', operacaoId, senha),
+    cancelar: (operacaoId: string) => invocarComDiagnostico('backup:cancelar', operacaoId),
   },
 
   atualizacao: {
