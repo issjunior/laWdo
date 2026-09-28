@@ -503,8 +503,9 @@ const createWindow = async (): Promise<void> => {
     evento.preventDefault();
     toggleDevTools();
   });
-  janela.webContents.on('did-start-navigation', () => authSessaoService.encerrar(janela.webContents.id));
-  janela.webContents.on('destroyed', () => authSessaoService.encerrar(janela.webContents.id));
+  const conteudoId = janela.webContents.id;
+  janela.webContents.on('did-start-navigation', detalhes => authSessaoService.aoIniciarNavegacao(conteudoId, detalhes));
+  janela.webContents.on('destroyed', () => authSessaoService.encerrar(conteudoId));
   // Abrir links externos no navegador padrão
   janela.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:')) {

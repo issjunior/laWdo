@@ -7,6 +7,9 @@ export const authSessaoService = {
   encerrar(janelaId: number): void {
     usuariosPorJanela.delete(janelaId);
   },
+  aoIniciarNavegacao(janelaId: number, detalhes: { isMainFrame: boolean; isSameDocument: boolean }): void {
+    if (detalhes.isMainFrame && !detalhes.isSameDocument) usuariosPorJanela.delete(janelaId);
+  },
   exigir(janelaId: number): string {
     const usuarioId = usuariosPorJanela.get(janelaId);
     if (!usuarioId) throw new Error('Faça login novamente para acessar o backup.');
