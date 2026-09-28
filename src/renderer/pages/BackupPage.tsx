@@ -37,33 +37,48 @@ function numero(valor: unknown): string {
 export const BackupPage: React.FC = () => {
   const [operacao, setOperacao] = useState<Operacao | null>(null);
   const [senha, setSenha] = useState('');
-  const [confirmacaoSenha, setConfirmacaoSenha] = useState('');
+  const [selecaoId, setSelecaoId] = useState<string | null>(null);
+  const [nomeArquivo, setNomeArquivo] = useState('');
   const [preparacaoId, setPreparacaoId] = useState<string | null>(null);
   const [previa, setPrevia] = useState<Record<string, unknown> | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   const fechar = () => {
     if (preparacaoId) void window.ipcAPI.backup.cancelar(preparacaoId);
+    if (selecaoId) void window.ipcAPI.backup.cancelar(selecaoId);
     setOperacao(null);
     setSenha('');
-    setConfirmacaoSenha('');
+    setSelecaoId(null);
+    setNomeArquivo('');
     setPreparacaoId(null);
     setPrevia(null);
   };
 
-  const iniciar = (tipo: TipoBackup, acao: Acao) => {
+  const iniciar = async (tipo: TipoBackup, acao: Acao) => {
     fechar();
-    setOperacao({ tipo, acao });
+    if (acao === 'criar') {
+      setOperacao({ tipo, acao });
+      return;
+    }
+    setOcupado(true);
+    try {
+      const resultado = await window.ipcAPI.backup.selecionar(tipo);
+      if (resultado.success && resultado.selecaoId && resultado.nomeArquivo) {
+        setSelecaoId(resultado.selecaoId);
+        setNomeArquivo(resultado.nomeArquivo);
+        setOperacao({ tipo, acao });
+      } else if (!resultado.canceled) toast.error(resultado.error || 'Não foi possível selecionar o backup.');
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : 'Falha ao selecionar o backup.');
+    } finally {
+      setOcupado(false);
+    }
   };
 
   const executar = async () => {
     if (!operacao) return;
-    if (senha.length < 12) {
-      toast.error('A senha do arquivo deve ter pelo menos 12 caracteres.');
-      return;
-    }
-    if (operacao.acao === 'criar' && senha !== confirmacaoSenha) {
-      toast.error('As senhas do arquivo não conferem.');
+    if (!senha) {
+      toast.error('Informe a senha de acesso usada na criação do backup.');
       return;
     }
     setOcupado(true);
@@ -75,8 +90,10 @@ export const BackupPage: React.FC = () => {
           fechar();
         } else if (!resultado.canceled) toast.error(resultado.error || 'Não foi possível criar o backup.');
       } else {
-        const resultado = await window.ipcAPI.backup.analisar(operacao.tipo, senha);
+        if (!selecaoId) throw new Error('Selecione o arquivo de backup novamente.');
+        const resultado = await window.ipcAPI.backup.analisar(selecaoId, senha);
         if (resultado.success && resultado.operacaoId && resultado.previa) {
+          setSelecaoId(null);
           setPreparacaoId(resultado.operacaoId);
           setPrevia(resultado.previa);
         } else if (!resultado.canceled) toast.error(resultado.error || 'Não foi possível analisar o backup.');
@@ -119,7 +136,7 @@ export const BackupPage: React.FC = () => {
         <Database className="h-7 w-7 text-primary" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Backup e restauração</h1>
-          <p className="text-sm text-muted-foreground">Os dois arquivos são protegidos por uma senha definida por você.</p>
+          <p className="text-sm text-muted-foreground">Os novos backups são protegidos pela senha de acesso ao laWdo usada no momento da criação.</p>
         </div>
       </div>
       <Tabs defaultValue="completo">
@@ -138,10 +155,10 @@ export const BackupPage: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
-                <Button onClick={() => iniciar(tipo, 'criar')} disabled={ocupado}>
+                <Button onClick={() => void iniciar(tipo, 'criar')} disabled={ocupado}>
                   <Download className="mr-2 h-4 w-4" />Criar backup
                 </Button>
-                <Button variant="outline" onClick={() => iniciar(tipo, 'restaurar')} disabled={ocupado}>
+                <Button variant="outline" onClick={() => void iniciar(tipo, 'restaurar')} disabled={ocupado}>
                   <Upload className="mr-2 h-4 w-4" />Restaurar backup
                 </Button>
               </CardContent>
@@ -156,22 +173,21 @@ export const BackupPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{operacao?.acao === 'criar' ? 'Criar' : 'Restaurar'} {operacao ? MODALIDADES[operacao.tipo].titulo.toLowerCase() : 'backup'}</DialogTitle>
             <DialogDescription>
-              {previa ? 'Confira os dados antes de substituir o conteúdo local.' : 'Informe a senha que protegerá ou abrirá este arquivo. Ela não é a senha de acesso ao laWdo.'}
+              {previa ? 'Confira os dados antes de substituir o conteúdo local.' : operacao?.acao === 'criar'
+                ? 'Informe sua senha atual de acesso ao laWdo. Ela protegerá este backup.'
+                : 'Informe a senha usada quando este backup foi criado.'}
             </DialogDescription>
           </DialogHeader>
           {!previa ? (
             <div className="space-y-3">
+              {operacao?.acao === 'restaurar' && <p className="break-all text-sm">Arquivo selecionado: {nomeArquivo}</p>}
               <label className="block space-y-1 text-sm font-medium">
-                <span>Senha do arquivo</span>
-                <Input type="password" value={senha} onChange={evento => setSenha(evento.target.value)} autoComplete="new-password" />
+                <span>{operacao?.acao === 'criar' ? 'Senha de acesso ao laWdo' : 'Senha do backup'}</span>
+                <Input type="password" value={senha} onChange={evento => setSenha(evento.target.value)} autoComplete={operacao?.acao === 'criar' ? 'current-password' : 'off'} />
               </label>
-              {operacao?.acao === 'criar' && (
-                <label className="block space-y-1 text-sm font-medium">
-                  <span>Confirmar senha</span>
-                  <Input type="password" value={confirmacaoSenha} onChange={evento => setConfirmacaoSenha(evento.target.value)} autoComplete="new-password" />
-                </label>
-              )}
-              <p className="text-xs text-muted-foreground">Use pelo menos 12 caracteres. O laWdo não poderá recuperar essa senha.</p>
+              <p className="text-xs text-muted-foreground">{operacao?.acao === 'criar'
+                ? 'Use uma senha de acesso forte (recomendamos 12 ou mais caracteres). Se mudá-la depois, este arquivo ainda exigirá a senha usada hoje.'
+                : 'Backups anteriores podem exigir uma senha própria. A senha não pode ser recuperada pelo laWdo.'}</p>
             </div>
           ) : (
             <div className="space-y-3 text-sm">
@@ -191,7 +207,7 @@ export const BackupPage: React.FC = () => {
             <Button variant="outline" onClick={fechar} disabled={ocupado}>Cancelar</Button>
             <Button variant={previa ? 'destructive' : 'default'} onClick={() => void (previa ? confirmarRestauracao() : executar())} disabled={ocupado}>
               {ocupado && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {previa ? 'Confirmar restauração' : operacao?.acao === 'criar' ? 'Selecionar destino' : 'Selecionar arquivo'}
+              {previa ? 'Confirmar restauração' : operacao?.acao === 'criar' ? 'Selecionar destino' : 'Analisar backup'}
             </Button>
           </DialogFooter>
         </DialogContent>

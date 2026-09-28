@@ -37,7 +37,7 @@ function nomeSeguro(nome: string): boolean {
 }
 
 async function chave(senha: string, sal: Buffer): Promise<Buffer> {
-  if (senha.length < 12) throw new Error('A senha do backup deve ter ao menos 12 caracteres.');
+  if (!senha) throw new Error('Informe a senha usada na criação do backup.');
   return await new Promise<Buffer>((resolve, reject) => {
     scrypt(senha, sal, 32, { N: 1 << 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (erro, derivada) => {
       if (erro) reject(erro);

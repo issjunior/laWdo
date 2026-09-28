@@ -148,7 +148,8 @@ interface IpcAPIRendererLegada {
   };
   backup: {
     criar: (tipo: 'completo' | 'configuracao', senha: string) => Promise<{ success: boolean; path?: string; error?: string; canceled?: boolean }>;
-    analisar: (tipo: 'completo' | 'configuracao', senha: string) => Promise<{ success: boolean; operacaoId?: string; previa?: Record<string, unknown>; error?: string; canceled?: boolean }>;
+    selecionar: (tipo: 'completo' | 'configuracao') => Promise<{ success: boolean; selecaoId?: string; nomeArquivo?: string; error?: string; canceled?: boolean }>;
+    analisar: (selecaoId: string, senha: string) => Promise<{ success: boolean; operacaoId?: string; previa?: Record<string, unknown>; error?: string; canceled?: boolean }>;
     confirmar: (operacaoId: string, senha: string) => Promise<{ success: boolean; reinicio?: boolean; error?: string }>;
     cancelar: (operacaoId: string) => Promise<{ success: boolean; error?: string }>;
   };

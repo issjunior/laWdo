@@ -386,7 +386,8 @@ export interface IpcAPI {
   // Backup e Restauração
   backup: {
     criar: (tipo: TipoBackup, senha: string) => Promise<BackupResponse>;
-    analisar: (tipo: TipoBackup, senha: string) => Promise<BackupResponse & { operacaoId?: string; previa?: PreviaBackup }>;
+    selecionar: (tipo: TipoBackup) => Promise<BackupResponse & { selecaoId?: string; nomeArquivo?: string }>;
+    analisar: (selecaoId: string, senha: string) => Promise<BackupResponse & { operacaoId?: string; previa?: PreviaBackup }>;
     confirmar: (operacaoId: string, senha: string) => Promise<BackupResponse & { reinicio?: boolean }>;
     cancelar: (operacaoId: string) => Promise<BackupResponse>;
   };
@@ -664,6 +665,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Backup
   'backup:criar',
+  'backup:selecionar',
   'backup:analisar',
   'backup:confirmar',
   'backup:cancelar',
@@ -1620,7 +1622,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
 
   backup: {
     criar: (tipo: TipoBackup, senha: string) => invocarComDiagnostico('backup:criar', tipo, senha),
-    analisar: (tipo: TipoBackup, senha: string) => invocarComDiagnostico('backup:analisar', tipo, senha),
+    selecionar: (tipo: TipoBackup) => invocarComDiagnostico('backup:selecionar', tipo),
+    analisar: (selecaoId: string, senha: string) => invocarComDiagnostico('backup:analisar', selecaoId, senha),
     confirmar: (operacaoId: string, senha: string) => invocarComDiagnostico('backup:confirmar', operacaoId, senha),
     cancelar: (operacaoId: string) => invocarComDiagnostico('backup:cancelar', operacaoId),
   },
