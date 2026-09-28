@@ -34,7 +34,9 @@ function numero(valor: unknown): string {
   return typeof valor === 'number' && Number.isFinite(valor) ? String(valor) : '—';
 }
 
-export const BackupPage: React.FC = () => {
+export const BackupPage: React.FC<{ currentUser: Record<string, unknown> | null }> = ({ currentUser }) => {
+  const nomeUsuario = [currentUser?.name, currentUser?.nome, currentUser?.username]
+    .find((valor): valor is string => typeof valor === 'string' && valor.trim().length > 0) || 'usuário atual';
   const [operacao, setOperacao] = useState<Operacao | null>(null);
   const [senha, setSenha] = useState('');
   const [selecaoId, setSelecaoId] = useState<string | null>(null);
@@ -169,24 +171,29 @@ export const BackupPage: React.FC = () => {
       </Tabs>
 
       <Dialog open={Boolean(operacao)} onOpenChange={aberto => { if (!aberto && !ocupado) fechar(); }}>
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-xl">
           <DialogHeader>
-            <DialogTitle>{operacao?.acao === 'criar' ? 'Criar' : 'Restaurar'} {operacao ? MODALIDADES[operacao.tipo].titulo.toLowerCase() : 'backup'}</DialogTitle>
+            <DialogTitle className="pr-6 leading-snug">{operacao?.acao === 'criar' ? 'Criar' : 'Restaurar'} {operacao ? MODALIDADES[operacao.tipo].titulo.toLowerCase() : 'backup'}</DialogTitle>
             <DialogDescription>
               {previa ? 'Confira os dados antes de substituir o conteúdo local.' : operacao?.acao === 'criar'
-                ? 'Informe sua senha atual de acesso ao laWdo. Ela protegerá este backup.'
+                ? <>Este backup será protegido pela senha de acesso de <span className="font-medium text-foreground">{nomeUsuario}</span>.</>
                 : 'Informe a senha usada quando este backup foi criado.'}
             </DialogDescription>
           </DialogHeader>
           {!previa ? (
             <div className="space-y-3">
-              {operacao?.acao === 'restaurar' && <p className="break-all text-sm">Arquivo selecionado: {nomeArquivo}</p>}
+              {operacao?.acao === 'restaurar' && (
+                <div className="min-w-0 space-y-1 text-sm">
+                  <p className="text-muted-foreground">Arquivo selecionado:</p>
+                  <p className="break-words font-medium [overflow-wrap:anywhere]">{nomeArquivo}</p>
+                </div>
+              )}
               <label className="block space-y-1 text-sm font-medium">
                 <span>{operacao?.acao === 'criar' ? 'Senha de acesso ao laWdo' : 'Senha do backup'}</span>
                 <Input type="password" value={senha} onChange={evento => setSenha(evento.target.value)} autoComplete={operacao?.acao === 'criar' ? 'current-password' : 'off'} />
               </label>
               <p className="text-xs text-muted-foreground">{operacao?.acao === 'criar'
-                ? 'Use uma senha de acesso forte (recomendamos 12 ou mais caracteres). Se mudá-la depois, este arquivo ainda exigirá a senha usada hoje.'
+                ? 'Observação: se mudá-la depois, este arquivo ainda exigirá a senha usada hoje.'
                 : 'Backups anteriores podem exigir uma senha própria. A senha não pode ser recuperada pelo laWdo.'}</p>
             </div>
           ) : (
@@ -205,7 +212,7 @@ export const BackupPage: React.FC = () => {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={fechar} disabled={ocupado}>Cancelar</Button>
-            <Button variant={previa ? 'destructive' : 'default'} onClick={() => void (previa ? confirmarRestauracao() : executar())} disabled={ocupado}>
+            <Button className="whitespace-nowrap" variant={previa ? 'destructive' : 'default'} onClick={() => void (previa ? confirmarRestauracao() : executar())} disabled={ocupado}>
               {ocupado && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {previa ? 'Confirmar restauração' : operacao?.acao === 'criar' ? 'Selecionar destino' : 'Analisar backup'}
             </Button>

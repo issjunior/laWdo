@@ -139,7 +139,7 @@ const App = () => {
                     <Route path="/templates" element={<TemplatesPage />} />
                     <Route path="/laudos" element={<LaudosPage />} />
                     <Route path="/modelos-ia" element={<ModelosIAPage />} />
-                    <Route path="/backup" element={<BackupPage />} />
+                    <Route path="/backup" element={<BackupPage currentUser={currentUser} />} />
                     <Route path="/logs" element={<LogsPage />} />
                     <Route path="/gdl-config" element={<GdlConfigPage />} />
                     <Route path="/margens" element={<MargensPage />} />
