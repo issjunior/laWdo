@@ -84,7 +84,9 @@ const NotFoundPage = () => (
 );
 
 const App = () => {
+  const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes') || window.location.hash.startsWith('#/painel-ia');
   const [currentUser, setCurrentUser] = useState<UsuarioSessao>(() => {
+    if (!isPanelWindow) return null;
     try {
       const raw = sessionStorage.getItem(AUTH_USER_KEY);
       return parseUsuarioSessao(raw);
@@ -99,11 +101,10 @@ const App = () => {
   };
 
   const handleLogout = () => {
+    void window.ipcAPI.logout();
     sessionStorage.removeItem(AUTH_USER_KEY);
     setCurrentUser(null);
   };
-
-  const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes') || window.location.hash.startsWith('#/painel-ia');
 
   return (
     <ErrorBoundary>
@@ -138,7 +139,7 @@ const App = () => {
                     <Route path="/templates" element={<TemplatesPage />} />
                     <Route path="/laudos" element={<LaudosPage />} />
                     <Route path="/modelos-ia" element={<ModelosIAPage />} />
-                    <Route path="/backup" element={<BackupPage />} />
+                    <Route path="/backup" element={<BackupPage currentUser={currentUser} />} />
                     <Route path="/logs" element={<LogsPage />} />
                     <Route path="/gdl-config" element={<GdlConfigPage />} />
                     <Route path="/margens" element={<MargensPage />} />
