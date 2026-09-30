@@ -108,6 +108,7 @@ interface IpcAPIRendererLegada {
   openDevTools?: () => void;
   executeQuery: (...args: unknown[]) => Promise<IpcRespostaLegada>;
   login: (username: string, password: string) => Promise<IpcRespostaLegada>;
+  logout: () => Promise<{ success: boolean }>;
   verifyPassword: (userId: string, password: string) => Promise<IpcRespostaLegada>;
   user: IpcGrupoLegado;
   solicitante: IpcGrupoLegado;
@@ -145,7 +146,13 @@ interface IpcAPIRendererLegada {
     onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
     onPainelFechado: (callback: (sessionId: string) => void) => () => void;
   };
-  backup: IpcGrupoLegado;
+  backup: {
+    criar: (tipo: 'completo' | 'configuracao', senha: string) => Promise<{ success: boolean; path?: string; error?: string; canceled?: boolean }>;
+    selecionar: (tipo: 'completo' | 'configuracao') => Promise<{ success: boolean; selecaoId?: string; nomeArquivo?: string; error?: string; canceled?: boolean }>;
+    analisar: (selecaoId: string, senha: string) => Promise<{ success: boolean; operacaoId?: string; previa?: Record<string, unknown>; error?: string; canceled?: boolean }>;
+    confirmar: (operacaoId: string, senha: string) => Promise<{ success: boolean; reinicio?: boolean; error?: string }>;
+    cancelar: (operacaoId: string) => Promise<{ success: boolean; error?: string }>;
+  };
   atualizacao?: {
     estado: () => Promise<RespostaAtualizacao>;
     verificar: () => Promise<RespostaAtualizacao>;
@@ -254,6 +261,7 @@ const initApp = async () => {
         verifyPassword: async () => ({ success: true, valid: true }),
         executeQuery: async () => ({ success: false, message: 'Mock mode' }),
         login: async () => ({ success: true, user: { id: 1, name: 'Usuario Mock', username: 'mock', email: 'mock@pcp.pr.gov.br', cargo: 'Perito Oficial Criminal', lotacao: 'Curitiba', foto_url: null } }),
+        logout: async () => ({ success: true }),
         closeApp: async () => undefined,
         dashboard: {
           resumo: async () => ({ success: true, data: null }),

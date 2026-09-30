@@ -1,7 +1,7 @@
 {
   "name": "laudo-pericial-electron",
   "productName": "laWdo",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Sistema de Laudos Periciais - Versão Desktop Electron",
   "main": "out/main/bootstrap.js",
   "author": "Izaias Júnior - izaias.junior@policiacientifica.pr.gov.br",
@@ -114,28 +114,30 @@
     "@vitest/coverage-v8": "^4.1.11",
     "@vitest/ui": "^4.1.5",
     "concurrently": "^10.0.5",
-    "electron": "^44.4.3",
+    "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
     "jsdom": "^29.1.1",
-    "knip": "^6.37.0",
-    "prettier": "^3.9.8",
+    "knip": "^6.38.0",
+    "prettier": "^3.9.9",
     "tailwindcss": "^4.3.3",
     "ts-prune": "^0.10.3",
     "typescript": "^5.3.0",
-    "typescript-eslint": "^8.70.0",
-    "vite": "^8.3.0",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^8.3.1",
     "vitest": "^4.1.5"
   },
   "overrides": {
-    "undici": "7.29.0",
-    "node-gyp": {
-      "undici": "6.28.0"
+    "@electron/get": {
+      "undici": "7.29.1"
     },
-    "fast-uri": "3.1.5"
+    "node-gyp": {
+      "undici": "6.28.1"
+    },
+    "fast-uri": "3.1.8"
   },
   "engines": {
     "node": ">=24.0.0"

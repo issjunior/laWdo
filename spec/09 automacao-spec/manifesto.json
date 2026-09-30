@@ -171,6 +171,24 @@
         "tsconfig.json",
         "tsconfig.preload.json"
       ]
+    },
+    {
+      "subdiretorio": "14 backup",
+      "descricao": "Backup protegido completo e de configuracao criado pelo usuario e sua restauracao.",
+      "globsCodigo": [
+        "src/renderer/pages/BackupPage.tsx",
+        "src/renderer/App.tsx",
+        "src/renderer/index.tsx",
+        "src/preload/index.ts",
+        "src/main/index.ts",
+        "src/main/ipc/handlers/backup.handlers.ts",
+        "src/main/services/backup.service.ts",
+        "src/main/services/backup-arquivo.service.ts",
+        "src/main/services/backup-sqlite.service.ts",
+        "src/main/services/config-backup.service.ts",
+        "src/main/services/auth-sessao.service.ts",
+        "src/__tests__/main/backup-arquivo.service.test.ts"
+      ]
     }
   ],
   "specs": [
@@ -708,6 +726,26 @@
         "package.json",
         "tsconfig.json",
         "tsconfig.preload.json"
+      ]
+    },
+    {
+      "arquivo": "spec/14 backup/backup_usuario.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Arquivo de backup protegido, modalidades completo/configuracao, senha, previa e restauracao.",
+      "globsCodigo": [
+        "src/renderer/pages/BackupPage.tsx",
+        "src/renderer/App.tsx",
+        "src/renderer/index.tsx",
+        "src/preload/index.ts",
+        "src/main/index.ts",
+        "src/main/ipc/handlers/backup.handlers.ts",
+        "src/main/services/backup.service.ts",
+        "src/main/services/backup-arquivo.service.ts",
+        "src/main/services/backup-sqlite.service.ts",
+        "src/main/services/config-backup.service.ts",
+        "src/main/services/auth-sessao.service.ts",
+        "src/__tests__/main/backup-arquivo.service.test.ts"
       ]
     }
   ]
