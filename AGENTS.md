@@ -28,7 +28,7 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `/graphify` | Consultar o knowledge graph do projeto (skill) |
 | `/check-dead-code` | Skill de auditoria de código morto (`.claude/skills/check-dead-code/SKILL.md`) |
 
-O ambiente de desenvolvimento requer Node.js 24 ou superior, conforme `package.json`.
+O ambiente de desenvolvimento requer Node.js 24.15 ou superior, conforme `package.json`.
 
 Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte a skill `/check-dead-code` para auditar código morto.
 
