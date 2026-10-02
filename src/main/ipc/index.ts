@@ -1,7 +1,8 @@
 import { ipcMain, BrowserWindow, app } from 'electron';
 import { getLogger, type LogModule } from '../utils/logger.js'
 const log = getLogger('ipc');
-import { sanitizeInput, validateSqlQuery } from '../security/index.js';
+import { sanitizeInput } from '../security/index.js';
+import { validarCredenciaisLogin } from '../security/autenticacao.js';
 import { auditLogin } from '../services/audit-log.service.js';
 import { registerUserHandlers, registerVerifyPasswordHandler } from './handlers/user.handlers.js';
 import { registerSolicitanteHandlers } from './handlers/solicitante.handlers.js';
@@ -66,9 +67,6 @@ export const registerIpcHandlers = (options: {
 
   // Sistema
   registerSystemHandlers();
-
-  // Banco de dados (básico por enquanto)
-  registerDatabaseHandlers();
 
   // Autenticação
   registerAuthHandlers();
@@ -247,74 +245,18 @@ const registerSystemHandlers = (): void => {
 };
 
 /**
- * Handlers de banco de dados (básico)
- */
-const registerDatabaseHandlers = (): void => {
-  // Executar query (protegida)
-  ipcMain.handle('execute-query', async (_event, query: string, params: unknown[] = []) => {
-    try {
-      // Validação de segurança
-      if (!validateSqlQuery(query)) {
-        log.error('Query rejeitada por validação de segurança', query);
-        return {
-          success: false,
-          error: 'Query rejeitada por motivos de segurança',
-          query: query.substring(0, 100) + '...',
-        };
-      }
-
-      // Sanitizar parâmetros
-      const sanitizedParams = params.map(param => {
-        if (typeof param === 'string') {
-          return sanitizeInput(param);
-        }
-        return param;
-      });
-
-      log.debug(`Executando query: ${query.substring(0, 50)}...`, {
-        params: sanitizedParams,
-      });
-
-      // TODO: Implementar conexão real com SQLite
-      // Por enquanto, retornar mock
-      return {
-        success: true,
-        data: [],
-        message: 'Banco de dados em configuração',
-        queryExecuted: query.substring(0, 100) + '...',
-      };
-    } catch (error) {
-      log.error('Erro ao executar query', { query, error });
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
-      };
-    }
-  });
-};
-
-/**
  * Handlers de autenticação
  */
 const registerAuthHandlers = (): void => {
   // Login
   ipcMain.handle('login', async (event, username: string, password: string) => {
     try {
-      // Validação básica
-      if (!username || !password) {
-        return {
-          success: false,
-          error: 'Usuário e senha são obrigatórios',
-        };
-      }
-
-      // Sanitizar entrada
-      const sanitizedUsername = sanitizeInput(username);
-      const sanitizedPassword = sanitizeInput(password);
+      const credenciais = validarCredenciaisLogin(username, password);
+      const sanitizedUsername = sanitizeInput(credenciais.username);
 
       log.info(`Tentativa de login: ${sanitizedUsername}`);
 
-      const user = await userService.authenticate(sanitizedUsername, sanitizedPassword)
+      const user = await userService.authenticate(credenciais.username, credenciais.password)
       if (user) {
         authSessaoService.iniciar(event.sender.id, user.id);
         log.info(`Login bem-sucedido: ${sanitizedUsername}`);
@@ -356,14 +298,6 @@ const registerAuthHandlers = (): void => {
     return { success: true };
   });
 
-  // Verificar sessão
-  ipcMain.handle('check-session', async () => {
-    // TODO: Implementar verificação real de sessão
-    return {
-      authenticated: false,
-      user: null,
-    };
-  });
 };
 
 

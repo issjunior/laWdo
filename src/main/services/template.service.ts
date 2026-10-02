@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 const log = getLogger('template');
 const MENSAGEM_TEMPLATE_INTEGRADO = 'Este template é integrado ao laWdo e não pode ser alterado. Crie uma cópia personalizada para editar.';
 
-export interface SecaoCompletaTemplateInput {
+interface SecaoCompletaTemplateInput {
   id?: string;
   chave_local: string;
   nome: string;

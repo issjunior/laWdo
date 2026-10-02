@@ -8,7 +8,7 @@ const normalizarHtml = (conteudo: string): string => conteudo
   .replace(/\r\n/g, '\n')
   .trim();
 
-export const serializarTemplateIntegrado = (template: DefinicaoTemplateIntegrado): string => JSON.stringify({
+const serializarTemplateIntegrado = (template: DefinicaoTemplateIntegrado): string => JSON.stringify({
   chave: template.chave,
   versao: template.versao,
   versaoFormato: template.versaoFormato,

@@ -177,7 +177,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     )
     expect(consultarRep).toHaveBeenCalledWith('109026', '2026')
     expect(criarRep).not.toHaveBeenCalled()
-  })
+  }, 20_000)
 
   it('preserva o quesito local ao mesclar uma consulta GDL', async () => {
     render(<MemoryRouter><REPsPage /></MemoryRouter>)

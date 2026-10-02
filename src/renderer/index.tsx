@@ -106,7 +106,6 @@ interface IpcAPIRendererLegada {
   restartApp?: () => Promise<void>;
   closeApp: () => Promise<void>;
   openDevTools?: () => void;
-  executeQuery: (...args: unknown[]) => Promise<IpcRespostaLegada>;
   login: (username: string, password: string) => Promise<IpcRespostaLegada>;
   logout: () => Promise<{ success: boolean }>;
   verifyPassword: (userId: string, password: string) => Promise<IpcRespostaLegada>;
@@ -259,7 +258,6 @@ const initApp = async () => {
         logError: (_module: string, msg: string, err?: unknown) => console.error(`[ERROR] ${msg}`, err),
         logWarning: (_module: string, msg: string) => console.warn(`[WARN] ${msg}`),
         verifyPassword: async () => ({ success: true, valid: true }),
-        executeQuery: async () => ({ success: false, message: 'Mock mode' }),
         login: async () => ({ success: true, user: { id: 1, name: 'Usuario Mock', username: 'mock', email: 'mock@pcp.pr.gov.br', cargo: 'Perito Oficial Criminal', lotacao: 'Curitiba', foto_url: null } }),
         logout: async () => ({ success: true }),
         closeApp: async () => undefined,

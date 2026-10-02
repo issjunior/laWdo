@@ -1,6 +1,4 @@
-export type OrigemTemplate = 'integrado' | 'usuario' | 'importado' | 'clonado';
-
-export interface DefinicaoSecaoTemplateIntegrado {
+interface DefinicaoSecaoTemplateIntegrado {
   chave: string;
   nome: string;
   ordem: number;

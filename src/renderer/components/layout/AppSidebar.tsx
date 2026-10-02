@@ -39,8 +39,7 @@ import { AvatarUploadDialog } from '@/components/avatar/AvatarUploadDialog';
 import { Badge } from '@/components/ui/badge';
 import logoSidebar from '@/assets/logo-sidebar.png';
 import { itensMenu } from '@/lib/menu-config';
-
-const AUTH_USER_KEY = 'lawdo_auth_user';
+import { lerUsuarioSessao, salvarUsuarioSessao } from '@/lib/usuario-sessao';
 
 interface AppSidebarProps {
   currentUser: Record<string, unknown> | null;
@@ -49,12 +48,6 @@ interface AppSidebarProps {
 
 const obterString = (valor: unknown): string | undefined =>
   typeof valor === 'string' ? valor : undefined;
-
-const parseObjetoSessao = (raw: string | null): Record<string, unknown> | null => {
-  if (!raw) return null;
-  const parsed: unknown = JSON.parse(raw);
-  return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
-};
 
 export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
   const { pathname } = useLocation();
@@ -77,8 +70,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
 
   const loadAvatar = useCallback(async () => {
     if (!userId) return;
-    const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    const user = parseObjetoSessao(raw);
+    const user = lerUsuarioSessao();
 
     if (user?.foto_url) {
       try {
@@ -106,16 +98,11 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
 
   const handleAvatarUpdated = useCallback((newFotoUrl: string) => {
     setFotoUrl(newFotoUrl);
-    const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    if (raw) {
-      try {
-        const user = parseObjetoSessao(raw);
-        if (!user) return;
-        user.foto_url = 'updated';
-        sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-        window.dispatchEvent(new Event('storage'));
-      } catch { }
-    }
+    const user = lerUsuarioSessao();
+    if (!user) return;
+    user.foto_url = 'updated';
+    salvarUsuarioSessao(user);
+    window.dispatchEvent(new Event('storage'));
   }, []);
 
   return (

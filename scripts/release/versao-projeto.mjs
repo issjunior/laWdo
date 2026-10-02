@@ -6,7 +6,7 @@ function falhar(mensagem) {
   throw new Error(mensagem);
 }
 
-export function validarVersaoSemVerEstavel(versao, origem) {
+function validarVersaoSemVerEstavel(versao, origem) {
   if (!versaoSemVerEstavel.test(versao)) {
     falhar(`${origem} deve conter uma versão SemVer estável no formato X.Y.Z.`);
   }

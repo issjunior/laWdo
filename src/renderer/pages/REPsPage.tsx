@@ -18,6 +18,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Network, RefreshCw } from 'lucide-react';
+import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { REP } from '@/lib/validators/rep.schema';
 import { z } from 'zod';
@@ -172,7 +173,8 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
         }
       }
     }
-  } catch {
+  } catch (erro) {
+    window.ipcAPI.logWarning('rep', `Campos específicos inválidos ao montar visualização: ${mensagemErro(erro, 'erro inesperado')}`);
   }
 
   let html = `<h2 style="font-size:18px;margin-bottom:16px">REP Nº ${s(rep.numero)}</h2>`;
@@ -291,7 +293,9 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
         }
         html += `</table>`;
       }
-    } catch {}
+    } catch (erro) {
+      window.ipcAPI.logWarning('rep', `Campos específicos inválidos ao montar tabelas: ${mensagemErro(erro, 'erro inesperado')}`);
+    }
   }
 
   // QUESITO ABERTO
@@ -395,13 +399,8 @@ function formatarNumeroREP(raw: string): string {
 }
 
 function getLoggedUserId(): string | undefined {
-  try {
-    const raw = sessionStorage.getItem('lawdo_auth_user');
-    if (!raw) return undefined;
-    return JSON.parse(raw).id;
-  } catch {
-    return undefined;
-  }
+  const id = lerUsuarioSessao()?.id;
+  return typeof id === 'string' ? id : undefined;
 }
 
 function prepareForApi(
@@ -764,7 +763,8 @@ export const REPsPage: React.FC = () => {
             );
             setRepsComLaudo(idsComLaudo);
           }
-        } catch {
+        } catch (erro) {
+          window.ipcAPI.logWarning('rep', `Não foi possível relacionar laudos às REPs: ${mensagemErro(erro, 'erro inesperado')}`);
         }
       } else {
         setError(r.error);
@@ -936,7 +936,8 @@ export const REPsPage: React.FC = () => {
         if (r.success && r.data && r.data.template_id) {
           templateId = r.data.template_id;
         }
-      } catch {
+      } catch (erro) {
+        window.ipcAPI.logWarning('rep', `Não foi possível identificar o template atual: ${mensagemErro(erro, 'erro inesperado')}`);
       }
 
       try {

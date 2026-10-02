@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Edit, Plus, Lock, Check, type LucideIcon } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { Trash2, Edit, Plus, Lock, Check, Tag } from 'lucide-react';
+import { obterIconeCategoria } from '@/lib/icones-categoria';
 
 export interface CategoriaPlaceholderRow {
   id: string;
@@ -31,7 +31,6 @@ const POPULAR_ICONS = [
   'XCircle', 'HelpCircle', 'MessageSquare', 'Mail', 'Phone', 'Camera', 'Video', 'Music'
 ];
 
-const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
 
 const getMensagemErro = (erro: unknown): string =>
   erro instanceof Error ? erro.message : 'Erro interno';
@@ -173,7 +172,7 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
 
               <div className="space-y-2">
                 {categorias.filter(c => c.id !== 'cat-sem-categoria').map(cat => {
-                  const Icon = iconesLucide[cat.icone] || LucideIcons.Tag;
+                  const Icon = obterIconeCategoria(cat.icone, Tag);
                   const isSys = cat.is_sistema === 1;
 
                   return (
@@ -269,8 +268,7 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
                 <Label>Ícone</Label>
                 <div className="grid grid-cols-8 sm:grid-cols-10 gap-2 border rounded-lg p-3 max-h-48 overflow-y-auto bg-muted/10">
                   {POPULAR_ICONS.map(iconName => {
-                    const IconComp = iconesLucide[iconName];
-                    if (!IconComp) return null;
+                    const IconComp = obterIconeCategoria(iconName, Tag);
                     return (
                       <button
                         key={iconName}

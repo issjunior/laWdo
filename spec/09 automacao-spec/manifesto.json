@@ -189,6 +189,22 @@
         "src/main/services/auth-sessao.service.ts",
         "src/__tests__/main/backup-arquivo.service.test.ts"
       ]
+    },
+    {
+      "subdiretorio": "15 seguranca",
+      "descricao": "Segurança Electron, autenticação local, fronteiras IPC e recuperação do renderer.",
+      "globsCodigo": [
+        "src/main/security/**",
+        "src/main/index.ts",
+        "src/main/ipc/index.ts",
+        "src/preload/index.ts",
+        "src/preload/types.ts",
+        "src/renderer/lib/usuario-sessao.ts",
+        "src/renderer/components/ErrorBoundary.tsx",
+        "src/__tests__/main/*security*.test.ts",
+        "src/__tests__/renderer/usuario-sessao.test.ts",
+        "src/__tests__/renderer/error-boundary.component.test.tsx"
+      ]
     }
   ],
   "specs": [
@@ -746,6 +762,24 @@
         "src/main/services/config-backup.service.ts",
         "src/main/services/auth-sessao.service.ts",
         "src/__tests__/main/backup-arquivo.service.test.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/15 seguranca/seguranca_electron.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Segurança Electron, autenticação, sessão local e recuperação do renderer.",
+      "globsCodigo": [
+        "src/main/security/**",
+        "src/main/index.ts",
+        "src/main/ipc/index.ts",
+        "src/preload/index.ts",
+        "src/preload/types.ts",
+        "src/renderer/lib/usuario-sessao.ts",
+        "src/renderer/components/ErrorBoundary.tsx",
+        "src/__tests__/main/*security*.test.ts",
+        "src/__tests__/renderer/usuario-sessao.test.ts",
+        "src/__tests__/renderer/error-boundary.component.test.tsx"
       ]
     }
   ]

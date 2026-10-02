@@ -31,19 +31,10 @@ import { Footer } from '@/components/layout/Footer';
 import { DiagnosticoBridge } from '@/components/diagnostico/DiagnosticoBridge';
 import { DesempenhoBridge } from '@/components/desempenho/DesempenhoBridge';
 import { AlteracoesPendentesProvider } from '@/contexts/AlteracoesPendentesContext';
+import { CHAVE_USUARIO_SESSAO, lerUsuarioSessao, salvarUsuarioSessao, type UsuarioSessao } from '@/lib/usuario-sessao';
 import './styles/globals.css';
 
-const AUTH_USER_KEY = 'lawdo_auth_user';
-
-type UsuarioSessao = Record<string, unknown> | null;
-
-const parseUsuarioSessao = (raw: string | null): UsuarioSessao => {
-  if (!raw) return null;
-  const parsed: unknown = JSON.parse(raw);
-  return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
-};
-
-const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; currentUser: UsuarioSessao }> = ({
+const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; currentUser: UsuarioSessao | null }> = ({
   children,
   onLogout,
   currentUser,
@@ -85,24 +76,19 @@ const NotFoundPage = () => (
 
 const App = () => {
   const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes') || window.location.hash.startsWith('#/painel-ia');
-  const [currentUser, setCurrentUser] = useState<UsuarioSessao>(() => {
+  const [currentUser, setCurrentUser] = useState<UsuarioSessao | null>(() => {
     if (!isPanelWindow) return null;
-    try {
-      const raw = sessionStorage.getItem(AUTH_USER_KEY);
-      return parseUsuarioSessao(raw);
-    } catch {
-      return null;
-    }
+    return lerUsuarioSessao();
   });
 
   const handleAuthenticated = (user: Record<string, unknown>) => {
-    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-    setCurrentUser(user);
+    const usuarioSessao = salvarUsuarioSessao(user);
+    setCurrentUser(usuarioSessao);
   };
 
   const handleLogout = () => {
     void window.ipcAPI.logout();
-    sessionStorage.removeItem(AUTH_USER_KEY);
+    sessionStorage.removeItem(CHAVE_USUARIO_SESSAO);
     setCurrentUser(null);
   };
 

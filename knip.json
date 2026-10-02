@@ -2,6 +2,7 @@
   "$schema": "https://unpkg.com/knip/schema.json",
   "entry": [
     "src/preload/index.ts",
+    "src/main/diagnostico-mcp.ts",
     "src/renderer/index.html",
     "scripts/*.mjs"
   ],
@@ -9,6 +10,7 @@
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
     "src/renderer/**/*.{ts,tsx}",
+    "src/renderer/**/*.css",
     "src/types/**/*.d.ts",
     "scripts/**/*.mjs",
     "*.config.{js,ts}",

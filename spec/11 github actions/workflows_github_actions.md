@@ -9,7 +9,8 @@ Este domínio documenta as automações de integração, atualização de depend
 - `.github/workflows/release.yml` para **Preparar release**;
 - `.github/workflows/promover-release.yml` para **Promover release**;
 - `scripts/release/**` para validação, manifesto, assinatura e geração do feed;
-- `package.json` para os comandos executados e o requisito de Node.js 24 ou superior;
+- `package.json` para os comandos executados, Node.js `>=24.21.0 <25`, npm `>=11.17.0 <12` e a lista de scripts de instalação autorizados;
+- `.nvmrc` para a versão local de referência, fixada em Node.js 24.21.0;
 - `electron-builder.yml` para os alvos e metadados de empacotamento.
 
 O arquivo `spec/01 planejamento/git_realease_plan.md` é planejamento e histórico operacional da implantação. Em caso de divergência, os YAMLs e scripts acima descrevem o comportamento atual.
@@ -60,17 +61,21 @@ main + despacho manual
 
 ## CI
 
-A CI aceita despacho manual por `workflow_dispatch`, além de `pull_request` para `main` e `push` em `main`. Possui um único job `Validar` em `ubuntu-latest`, com `permissions: contents: read`. Cada execução faz checkout, configura Node.js 24 com cache do npm, instala por `npm ci` e executa nesta ordem:
+A CI aceita despacho manual por `workflow_dispatch`, além de `pull_request` para `main` e `push` em `main`. Possui um único job `Validar` em `windows-latest`, com `permissions: contents: read`. Cada execução faz checkout, fixa Node.js 24.21.0 com cache do npm, instala por `npm ci --strict-allow-scripts` e executa nesta ordem:
 
 1. `npm run type-check`;
 2. `npm run lint`;
 3. `npm run test:coverage`;
 4. `npm run test:release`;
-5. `npm run build`.
+5. `node scripts/release/validar-schema-release.mjs`;
+6. `npm run build`;
+7. `npm run smoke:schema`.
 
 O grupo de concorrência combina workflow e PR ou referência. `cancel-in-progress: true` descarta a execução anterior da mesma origem quando chega uma revisão nova.
 
 A CI não recebe segredo de assinatura e não cria tag, release, deployment ou asset. PRs criados pelo Dependabot também disparam este workflow. Pela semântica do GitHub, essas execuções são tratadas como vindas de fork, com `GITHUB_TOKEN` somente leitura e sem acesso aos secrets comuns; o workflow atual é compatível porque só solicita leitura e não consome secrets.
+
+O requisito do projeto é Node.js `>=24.21.0 <25` com npm `>=11.17.0 <12`. `.nvmrc`, CI, preparação e promoção fixam Node.js 24.21.0. Todos os jobs que instalam dependências usam `npm ci --strict-allow-scripts`; novos lifecycle scripts falham até serem classificados em `allowScripts`. Ao elevar qualquer versão, revisar em conjunto `.nvmrc`, `package.json`, lockfile e todos os workflows.
 
 Limitação atual: `actions/checkout@v7` e `actions/setup-node@v7` são referenciadas por tag na CI. Os workflows de release fixam as Actions por SHA completo.
 
@@ -116,7 +121,7 @@ Esse estágio escreve na `main` antes da criação do rascunho e não é transac
 
 ### Builds e artefatos temporários
 
-Os jobs selecionados fazem checkout do mesmo commit, usam Node.js 24, executam `npm ci`, constroem a aplicação e empacotam sem publicar diretamente:
+Os jobs selecionados fazem checkout do mesmo commit, usam Node.js 24.21.0, executam `npm ci --strict-allow-scripts`, constroem a aplicação e empacotam sem publicar diretamente:
 
 - Windows x64: NSIS, blockmap e `latest.yml`;
 - Linux x64: AppImage, blockmap, DEB e `latest-linux.yml`;

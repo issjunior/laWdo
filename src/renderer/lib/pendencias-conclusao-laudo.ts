@@ -1,6 +1,6 @@
 import { parsearSecoesEstruturais } from '@/lib/estrutura-laudo';
 
-export interface PendenciaSecaoConclusaoLaudo {
+interface PendenciaSecaoConclusaoLaudo {
   titulo: string;
   camposReservados: number;
   figurasDummy: number;

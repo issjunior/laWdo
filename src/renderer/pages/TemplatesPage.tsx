@@ -9,6 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import {
   Plus, Search, Edit, Trash2, Copy, ArrowLeft,
   FileText, Layers, Eye, LayoutGrid, List, Upload,
@@ -387,27 +388,17 @@ const obterMensagemErro = (erro: unknown, fallback: string): string => (
   erro instanceof Error && erro.message ? erro.message : fallback
 );
 
-const isRecord = (valor: unknown): valor is Record<string, unknown> => (
-  typeof valor === 'object' && valor !== null
-);
-
 const lerPeritoSessao = (): PeritoSessaoData => {
-  try {
-    const userJson = sessionStorage.getItem('lawdo_auth_user');
-    if (!userJson) return {};
-    const parsed: unknown = JSON.parse(userJson);
-    if (!isRecord(parsed)) return {};
-    return {
-      nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
-      name: typeof parsed.name === 'string' ? parsed.name : undefined,
-      cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
-      role: typeof parsed.role === 'string' ? parsed.role : undefined,
-      lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
-      matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
-    };
-  } catch {
-    return {};
-  }
+  const parsed = lerUsuarioSessao();
+  if (!parsed) return {};
+  return {
+    nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
+    name: typeof parsed.name === 'string' ? parsed.name : undefined,
+    cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
+    role: typeof parsed.role === 'string' ? parsed.role : undefined,
+    lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
+    matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+  };
 };
 
 const templateFormSchema = z.object({
@@ -1146,13 +1137,11 @@ export const TemplatesPage: React.FC = () => {
     let peritoCargo = '';
     let peritoLotacao = '';
     let peritoMatricula = '';
-    try {
-      const perito = lerPeritoSessao();
-      peritoNome = perito.nome || perito.name || '';
-      peritoCargo = perito.cargo || perito.role || '';
-      peritoLotacao = perito.lotacao || '';
-      peritoMatricula = perito.matricula || '';
-    } catch {}
+    const perito = lerPeritoSessao();
+    peritoNome = perito.nome || perito.name || '';
+    peritoCargo = perito.cargo || perito.role || '';
+    peritoLotacao = perito.lotacao || '';
+    peritoMatricula = perito.matricula || '';
 
     const replacements: Record<string, string> = {
       '{{perito.nome}}': peritoNome,

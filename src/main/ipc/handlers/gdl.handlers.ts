@@ -10,7 +10,7 @@ import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../serv
 import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
 import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
 
-export function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string } | null {
+function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string } | null {
   const correspondencia = numero.trim().match(/^([\d.\s]+)\s*[/\\-]\s*(\d{4})$/);
   if (!correspondencia) return null;
   const numeroNormalizado = correspondencia[1].replace(/\D/g, '');

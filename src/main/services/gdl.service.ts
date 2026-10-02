@@ -1268,56 +1268,6 @@ export async function capturarImagensRepGdl(
   }
 }
 
-export async function capturarImagensRepGdlParaLaudo(
-  numero: string,
-  ano: string,
-  idsSelecao: string[],
-  salvarImagem: (imagem: { idSelecao: string; nomeArquivo: string; mimeType: string; bytes: Buffer; sha256: string }) => Promise<ImagemRepGdlAdicionadaAoLaudo | DuplicataImagemRepGdl>,
-): Promise<ResultadoCapturaImagensLaudoGdl> {
-  const idsUnicos = [...new Set(idsSelecao)]
-  if (idsUnicos.length === 0) return { imagens: [], falhas: [], duplicadas: [] }
-
-  const { arquivos, caminhoZip } = await baixarListaFotosRep(numero, ano)
-  try {
-    const porId = new Map(arquivos.map(arquivo => [arquivo.idSelecao, arquivo]))
-    const entradasZip = lerEntradasZipDoArquivo(caminhoZip)
-    const imagens: ImagemRepGdlAdicionadaAoLaudo[] = []
-    const falhas: ResultadoCapturaImagensLaudoGdl['falhas'] = []
-    const duplicadas: ResultadoCapturaImagensLaudoGdl['duplicadas'] = []
-    const hashesCapturados = new Set<string>()
-
-    for (const idSelecao of idsUnicos) {
-    const arquivo = porId.get(idSelecao)
-    if (!arquivo || !arquivo.provavelImagem || arquivo.status) {
-      falhas.push({ idSelecao, erro: 'Foto indisponível para captura na Lista de Fotos.' })
-      continue
-    }
-    try {
-      const entrada = entradasZip[arquivo.indiceEntradaZip]
-      if (!entrada) throw new Error('A foto não foi encontrada no arquivo retornado pelo GDL.')
-      const bytes = extrairEntradaZipDoArquivo(caminhoZip, entrada)
-      if (bytes.length === 0) throw new Error('O GDL retornou um arquivo vazio.')
-      const mimeType = detectarMimeImagem(bytes)
-      if (!mimeType) throw new Error('O conteúdo baixado não é uma imagem compatível.')
-      const sha256 = createHash('sha256').update(bytes).digest('hex')
-      if (hashesCapturados.has(sha256)) {
-        falhas.push({ idSelecao, erro: 'Imagem duplicada nesta captura.' })
-        continue
-      }
-      hashesCapturados.add(sha256)
-      const resultado = await salvarImagem({ idSelecao, nomeArquivo: arquivo.nomeArquivo, mimeType, bytes, sha256 })
-      if ('imagemExistenteId' in resultado) duplicadas.push(resultado)
-      else imagens.push(resultado)
-    } catch (erro) {
-      falhas.push({ idSelecao, erro: erro instanceof Error ? erro.message : 'Erro inesperado ao capturar arquivo.' })
-    }
-    }
-    return { imagens, falhas, duplicadas }
-  } finally {
-    if (fs.existsSync(caminhoZip)) fs.unlinkSync(caminhoZip)
-  }
-}
-
 export async function capturarImagensDaSessaoGdlParaLaudo(
   laudoId: string,
   sessaoId: string,

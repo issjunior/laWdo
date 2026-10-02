@@ -64,7 +64,7 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
 
       - name: Validar solicitação
@@ -216,11 +216,11 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --strict-allow-scripts
 
       - name: Gerar build
         run: npm run build
@@ -312,11 +312,11 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --strict-allow-scripts
 
       - name: Gerar pacotes
         shell: bash
@@ -359,11 +359,11 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --strict-allow-scripts
 
       - name: Gerar pacotes
         run: npm run build && npx electron-builder --mac --x64 --publish never
@@ -390,11 +390,11 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --strict-allow-scripts
 
       - name: Gerar pacotes
         run: npm run build && npx electron-builder --mac --arm64 --publish never
@@ -429,11 +429,11 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --strict-allow-scripts
 
       - name: Confirmar rascunho vazio para retomada
         if: ${{ inputs.modo == 'retomar' }}

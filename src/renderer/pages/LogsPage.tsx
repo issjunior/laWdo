@@ -48,8 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-const AUTH_USER_KEY = 'lawdo_auth_user';
+import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 
 const MODULOS = [
   { value: 'todos', label: 'Todos os módulos' },
@@ -86,13 +85,7 @@ const TIPOS_ACAO = [
 ];
 
 function getCurrentUserId(): string {
-  try {
-    const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    const user = parseUsuarioSessao(raw);
-    return getString(user?.id);
-  } catch {
-    return '';
-  }
+  return getString(lerUsuarioSessao()?.id);
 }
 
 interface SystemLog {
@@ -123,12 +116,6 @@ interface TimelineRepResumo {
   numero?: string;
   status?: string;
 }
-
-const parseUsuarioSessao = (raw: string | null): Record<string, unknown> | null => {
-  if (!raw) return null;
-  const parsed: unknown = JSON.parse(raw);
-  return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
-};
 
 const getString = (valor: unknown): string =>
   typeof valor === 'string' ? valor : '';

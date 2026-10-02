@@ -11,9 +11,9 @@ const schemaMensagemPipe = z.strictObject({
   payload: z.unknown(),
 });
 
-export type MensagemPipeDiagnostico = z.infer<typeof schemaMensagemPipe>;
+type MensagemPipeDiagnostico = z.infer<typeof schemaMensagemPipe>;
 
-export interface RespostaPipeDiagnostico {
+interface RespostaPipeDiagnostico {
   requestId: string;
   ok: boolean;
   dados?: unknown;

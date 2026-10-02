@@ -26,6 +26,7 @@ import {
   MARGINS_STEP,
   MARGINS_A4_MM,
   clampMargin,
+  normalizarMargensConfiguracao,
 } from '@/lib/margens';
 
 const STYLES = {
@@ -48,6 +49,7 @@ export const MargensPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isCustom, setIsCustom] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   const a4Aspect = MARGINS_A4_MM.width / MARGINS_A4_MM.height;
   const pageCm = { w: MARGINS_A4_MM.width / 10, h: MARGINS_A4_MM.height / 10 };
@@ -57,16 +59,12 @@ export const MargensPage: React.FC = () => {
       try {
         const r = await window.ipcAPI.configuracao.obter(PDF_MARGINS_KEY);
         if (r.success && r.data) {
-          const parsed = JSON.parse(r.data) as Margins;
-          setMargins({
-            top: parsed.top ?? DEFAULT_MARGINS.top,
-            right: parsed.right ?? DEFAULT_MARGINS.right,
-            bottom: parsed.bottom ?? DEFAULT_MARGINS.bottom,
-            left: parsed.left ?? DEFAULT_MARGINS.left,
-          });
+          setMargins(normalizarMargensConfiguracao(r.data));
           setIsCustom(true);
         }
-      } catch {
+      } catch (error) {
+        const mensagem = error instanceof Error ? error.message : 'Erro inesperado';
+        setErro(`Não foi possível carregar as margens: ${mensagem}`);
       } finally {
         setLoading(false);
       }
@@ -93,6 +91,7 @@ export const MargensPage: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setErro(null);
     try {
       const json = JSON.stringify(margins);
       const r = await window.ipcAPI.configuracao.salvar(PDF_MARGINS_KEY, json, 'json', 'Margens padrão para geração de PDF');
@@ -100,8 +99,11 @@ export const MargensPage: React.FC = () => {
         setIsCustom(true);
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
+      } else {
+        setErro(r.error || 'Não foi possível salvar as margens.');
       }
-    } catch {
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível salvar as margens.');
     } finally {
       setSaving(false);
     }
@@ -136,6 +138,12 @@ export const MargensPage: React.FC = () => {
           {isCustom ? 'Personalizado' : 'Padrão'}
         </Badge>
       </div>
+
+      {erro && (
+        <Alert variant="destructive">
+          <AlertDescription>{erro}</AlertDescription>
+        </Alert>
+      )}
 
       {saved && (
         <Alert className="bg-primary/10 border-primary/20 text-primary animate-fade-in">

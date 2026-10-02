@@ -87,20 +87,3 @@ export const itensMenu: ItemMenu[] = [
     ],
   },
 ]
-
-export const obterIconeMenuPorRota = (rota: string, fallback: LucideIcon): LucideIcon => {
-  for (const item of itensMenu) {
-    if ('path' in item && item.path === rota) {
-      return item.icon
-    }
-
-    if ('items' in item) {
-      const encontrado = item.items.find(subitem => subitem.path === rota)
-      if (encontrado) {
-        return encontrado.icon
-      }
-    }
-  }
-
-  return fallback
-}

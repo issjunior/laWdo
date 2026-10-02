@@ -89,7 +89,7 @@ export async function exportarConfig(destino: string, senha: string): Promise<{ 
   }
 }
 
-export async function lerConfiguracao(diretorio: string, manifesto: ManifestoBackup): Promise<DadosConfiguracao> {
+async function lerConfiguracao(diretorio: string, manifesto: ManifestoBackup): Promise<DadosConfiguracao> {
   if (manifesto.tipo !== 'configuracao' || !manifesto.arquivos.some(item => item.nome === 'configuracao.json')) {
     throw new Error('O arquivo não contém um backup de configuração.');
   }

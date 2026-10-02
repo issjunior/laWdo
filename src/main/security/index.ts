@@ -2,7 +2,8 @@ import { getLogger } from '../utils/logger.js'
 
 const log = getLogger('sistema')
 
-import { app, session } from 'electron'
+import { app, session, shell } from 'electron'
+import { urlExternaPermitida } from './navegacao.js'
 
 
 /**
@@ -45,17 +46,10 @@ const contentSecurityPolicy = `
  * Configura permissões da sessão
  */
 const setupSessionPermissions = (): void => {
-  // Revogar permissões desnecessárias
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowedPermissions = ['media', 'geolocation', 'notifications', 'midiSysex'];
-
-    if (allowedPermissions.includes(permission)) {
-      log.warn(`Permissão ${permission} solicitada - negada por padrão`);
-      callback(false); // Negar todas as permissões por padrão
-    } else {
-      log.warn(`Permissão desconhecida ${permission} solicitada - negada`);
-      callback(false);
-    }
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    log.warn(`Permissão ${permission} solicitada - negada por padrão`);
+    callback(false);
   });
 
   log.info('Permissões da sessão configuradas');
@@ -95,9 +89,6 @@ const setupSecurityHeaders = (): void => {
  * Configura proteções adicionais
  */
 const setupAdditionalProtections = (): void => {
-  // Desabilitar funcionalidades perigosas
-  app.commandLine.appendSwitch('disable-features', 'CrossOriginOpenerPolicy');
-
   // Habilitar sandbox para processos de renderização
   app.commandLine.appendSwitch('enable-sandbox');
 
@@ -105,8 +96,18 @@ const setupAdditionalProtections = (): void => {
   app.commandLine.appendSwitch('disable-node-integration-in-workers', 'true');
   app.commandLine.appendSwitch('disable-node-integration-in-subframes', 'true');
 
-  // Configurar política de origem cruzada
-  app.commandLine.appendSwitch('disable-site-isolation-trials', 'true');
+  app.on('web-contents-created', (_event, contents) => {
+    contents.setWindowOpenHandler(({ url }) => {
+      if (urlExternaPermitida(url)) {
+        setImmediate(() => void shell.openExternal(url).catch(erro => {
+          log.error('Não foi possível abrir URL externa', { url, erro });
+        }));
+      } else {
+        log.warn('Abertura de URL externa bloqueada', { url });
+      }
+      return { action: 'deny' };
+    });
+  });
 
   log.info('Proteções adicionais configuradas');
 };
@@ -126,44 +127,5 @@ export const sanitizeInput = (input: string): string => {
     .replace(/data:/gi, '') // Remove data:
     .trim()
     .substring(0, 1000); // Limitar comprimento
-};
-
-/**
- * Valida se uma query SQL é segura (proteção básica)
- */
-export const validateSqlQuery = (query: string): boolean => {
-  if (typeof query !== 'string') {
-    return false;
-  }
-
-  const trimmedQuery = query.trim().toUpperCase();
-
-  // Lista de comandos perigosos
-  const dangerousCommands = [
-    'DROP',
-    'DELETE',
-    'UPDATE',
-    'INSERT',
-    'ALTER',
-    'TRUNCATE',
-    'CREATE',
-    'EXEC',
-    'EXECUTE',
-    'SHUTDOWN',
-    'GRANT',
-    'REVOKE',
-  ];
-
-  // Verificar se a query contém comandos perigosos
-  const containsDangerousCommand = dangerousCommands.some(
-    cmd => trimmedQuery.includes(cmd) && !trimmedQuery.includes(`-- ${cmd}`) // Ignorar comentários
-  );
-
-  if (containsDangerousCommand) {
-    log.warn(`Query potencialmente perigosa detectada: ${query.substring(0, 100)}`);
-    return false;
-  }
-
-  return true;
 };
 

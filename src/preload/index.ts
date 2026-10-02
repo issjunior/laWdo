@@ -160,9 +160,6 @@ export interface IpcAPI {
   openDevTools: () => void;
   atualizarBarraTitulo: (cores: { cor: string; corSimbolo: string }) => Promise<void>;
 
-  // Banco de dados
-  executeQuery: (query: string, params?: IpcParams) => Promise<IpcResult>;
-
   // Autenticação
   login: (username: string, password: string) => Promise<{ success: boolean; user?: IpcPayload }>;
   logout: () => Promise<{ success: boolean }>;
@@ -482,9 +479,6 @@ const ALLOWED_CHANNELS = new Set([
   'close-app',
   'open-dev-tools',
   'janela:atualizar-barra-titulo',
-
-  // Banco de dados
-  'execute-query',
 
   // Autenticação
   'login',
@@ -1098,32 +1092,17 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   openDevTools: () => sendSeguro('open-dev-tools'),
   atualizarBarraTitulo: cores => invokeSeguro<void>('janela:atualizar-barra-titulo', cores),
 
-  // Banco de dados
-  executeQuery: (query: string, params?: IpcParams) => {
-    if (typeof query !== 'string') {
-      throw new Error('Query deve ser uma string');
-    }
-
-    // Proteção básica contra injeção SQL (será melhorada no main process)
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      throw new Error('Query não pode ser vazia');
-    }
-
-    return invocarComDiagnostico('execute-query', trimmedQuery, params || []);
-  },
-
   // Autenticação
   login: (username: string, password: string) => {
     if (typeof username !== 'string' || typeof password !== 'string') {
       throw new Error('Username e password devem ser strings');
     }
 
-    if (!username.trim() || !password.trim()) {
+    if (!username.trim() || password.length === 0) {
       throw new Error('Username e password não podem ser vazios');
     }
 
-    return invocarComDiagnostico('login', username.trim(), password.trim());
+    return invocarComDiagnostico('login', username.trim(), password);
   },
   logout: () => invocarComDiagnostico('logout'),
 
