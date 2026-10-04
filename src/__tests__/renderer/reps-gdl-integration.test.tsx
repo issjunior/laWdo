@@ -85,6 +85,7 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
 const ipcApiOriginal = window.ipcAPI
 const criarRep = vi.fn()
 const consultarRep = vi.fn()
+const listarMinhasReps = vi.fn()
 
 beforeAll(() => {
   HTMLElement.prototype.hasPointerCapture = () => false
@@ -97,6 +98,20 @@ describe('integração da consulta geral GDL com REPsPage', () => {
   beforeEach(() => {
     criarRep.mockResolvedValue({ success: true, data: { id: 'rep-criada' } })
     consultarRep.mockResolvedValue({ success: true, data: resultadoConsulta })
+    listarMinhasReps.mockResolvedValue({
+      success: true,
+      data: {
+        reps: [{
+          idGdl: 1, numero: '109026', ano: '2026', naturezaExame: 'B-602 - EXAME BALÍSTICO',
+          naturezaExameComCodigo: 'B-602 - EXAME BALÍSTICO',
+          status: 'Laudo em Execução', dataDesignacao: '2026-07-19T14:30', quantidadeFotos: 5,
+        }],
+        listagemId: '11111111-1111-4111-8111-111111111111',
+        paginaAtual: 1,
+        temAnterior: false,
+        temProxima: false,
+      },
+    })
     toastInfo.mockReset()
 
     Object.defineProperty(window, 'ipcAPI', {
@@ -136,6 +151,15 @@ describe('integração da consulta geral GDL com REPsPage', () => {
             },
           }),
           consultarRep,
+          listarMinhasReps,
+          obterMinhasRepsCache: vi.fn().mockResolvedValue({ success: true, data: null }),
+          atualizarMinhasRepsCache: vi.fn().mockImplementation(async () => {
+            const pagina = await listarMinhasReps()
+            return { success: true, data: { reps: pagina.data.reps, atualizadoEm: new Date().toISOString() } }
+          }),
+          consultarNaturezasMinhasReps: vi.fn().mockResolvedValue({
+            success: true, data: [{ idGdl: 1, naturezaExameComCodigo: 'B-602 - EXAME BALÍSTICO' }],
+          }),
         },
       },
       writable: true,
@@ -177,6 +201,31 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     )
     expect(consultarRep).toHaveBeenCalledWith('109026', '2026')
     expect(criarRep).not.toHaveBeenCalled()
+  }, 20_000)
+
+  it('encaminha a REP selecionada ao fluxo de importação já existente', async () => {
+    render(<MemoryRouter><REPsPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Listar REPs' }))
+    expect(await screen.findByText('REP 109.026/2026')).toBeInTheDocument()
+    expect(screen.getByText('Designação: 19/07/2026 14:30')).toBeInTheDocument()
+    expect(screen.getByText('5 fotos')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: /REP 109.026\/2026/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Importar selecionada' }))
+
+    expect(await screen.findByLabelText('Nº da REP')).toHaveValue('109.026')
+    expect(consultarRep).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    await waitFor(() => expect(consultarRep).toHaveBeenCalledWith('109026', '2026'))
+    expect(criarRep).not.toHaveBeenCalled()
+  }, 20_000)
+
+  it('abre o importador para a REP escolhida no dashboard', async () => {
+    render(<MemoryRouter initialEntries={[{ pathname: '/reps', state: { importarGdl: { numero: '109026', ano: '2026' } } }]}><REPsPage /></MemoryRouter>)
+    expect(await screen.findByLabelText('Nº da REP')).toHaveValue('109.026')
+    expect(consultarRep).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    await waitFor(() => expect(consultarRep).toHaveBeenCalledWith('109026', '2026'))
   }, 20_000)
 
   it('preserva o quesito local ao mesclar uma consulta GDL', async () => {

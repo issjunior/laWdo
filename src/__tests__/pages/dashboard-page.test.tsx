@@ -14,6 +14,8 @@ describe('DashboardPage', () => {
     consultarLaudos.mockReset();
     cronologiaLaudo.mockReset();
     window.localStorage.clear();
+    vi.mocked(window.localStorage.getItem).mockImplementation(chave => chave === 'dashboard_secoes_expandidas'
+      ? JSON.stringify({ situacao: true, repsGdl: false, cronologia: true, producao: true }) : null);
     Object.assign(window.ipcAPI, {
       dashboard: {
         resumo,
@@ -23,6 +25,37 @@ describe('DashboardPage', () => {
       },
     });
   });
+  it('inicia todas as seções recolhidas quando ainda não há preferência salva', async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
+    resumo.mockResolvedValue({ success: true, data: {
+      repsPorStatus: [], laudosPorStatus: [], repsPrazoVencido: 0, repsPrazoProximo: 0,
+      laudosConcluidosAguardandoEntrega: 0, laudosEmAndamentoSemAlteracao: 0,
+    } });
+    producao.mockResolvedValue({ success: true, data: [] });
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    expect(await screen.findAllByRole('button', { name: 'Expandir' })).toHaveLength(4);
+    expect(screen.queryByText('REPs vencidas')).not.toBeInTheDocument();
+  });
+
+  it('restaura a ordem salva das seções e a expansão por seção', async () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation(chave => {
+      if (chave === 'dashboard_ordem_secoes') return JSON.stringify(['producao', 'situacao', 'repsGdl', 'cronologia']);
+      if (chave === 'dashboard_secoes_expandidas') return JSON.stringify({ producao: true, situacao: false, repsGdl: false, cronologia: false });
+      return null;
+    });
+    resumo.mockResolvedValue({ success: true, data: {
+      repsPorStatus: [], laudosPorStatus: [], repsPrazoVencido: 0, repsPrazoProximo: 0,
+      laudosConcluidosAguardandoEntrega: 0, laudosEmAndamentoSemAlteracao: 0,
+    } });
+    producao.mockResolvedValue({ success: true, data: [] });
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Produção de laudos' })).toBeInTheDocument();
+    expect([...document.querySelectorAll('[data-secao-dashboard]')].map(item => item.getAttribute('data-secao-dashboard')))
+      .toEqual(['producao', 'situacao', 'repsGdl', 'cronologia']);
+    expect(screen.getAllByRole('button', { name: 'Expandir' })).toHaveLength(3);
+    expect(screen.getByText('Nenhuma amostra válida encontrada.')).toBeInTheDocument();
+  });
+
   it('exibe a visão operacional e prioridades', async () => {
     resumo.mockResolvedValue({
       success: true,
@@ -112,10 +145,10 @@ describe('DashboardPage', () => {
       </MemoryRouter>
     );
     fireEvent.click((await screen.findAllByRole('button', { name: 'Recolher' }))[0]!);
-    expect(screen.getAllByRole('button', { name: 'Expandir' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Expandir' })).toHaveLength(2);
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       'dashboard_secoes_expandidas',
-      JSON.stringify({ situacao: false, cronologia: true, producao: true })
+      JSON.stringify({ situacao: false, cronologia: true, producao: true, repsGdl: false })
     );
   });
 
@@ -140,7 +173,7 @@ describe('DashboardPage', () => {
         <DashboardPage />
       </MemoryRouter>
     );
-    expect(await screen.findAllByRole('button', { name: 'Expandir' })).toHaveLength(1);
+    expect(await screen.findAllByRole('button', { name: 'Expandir' })).toHaveLength(2);
   });
 
   it('consulta, pagina e apresenta a cronologia de um laudo', async () => {
@@ -240,7 +273,7 @@ describe('DashboardPage', () => {
     for (const botao of screen.getAllByRole('button', { name: 'Recolher' })) {
       fireEvent.click(botao);
     }
-    expect(screen.getAllByRole('button', { name: 'Expandir' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Expandir' })).toHaveLength(4);
   });
 
   it('busca por laudo e comunica falhas de carregamento', async () => {

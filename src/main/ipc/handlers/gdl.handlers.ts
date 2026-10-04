@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto';
 import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
+import { obterMinhasRepsEmCache, atualizarMinhasRepsEmCache } from '../../services/gdl-minhas-reps-cache.service.js';
+import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
@@ -29,6 +31,23 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:obter-minhas-reps-cache', async event => {
+    try {
+      return { success: true, data: await obterMinhasRepsEmCache(authSessaoService.exigir(event.sender.id)) };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível ler as REPs salvas.' };
+    }
+  });
+
+  ipcMain.handle('gdl:atualizar-minhas-reps-cache', async (event, forcar: unknown) => {
+    try {
+      if (typeof forcar !== 'boolean') throw new Error('Opção de atualização inválida.');
+      return { success: true, data: await atualizarMinhasRepsEmCache(authSessaoService.exigir(event.sender.id), forcar) };
+    } catch (erro: unknown) {
+      logError('Falha ao atualizar Minhas REPs no GDL', erro);
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível atualizar as REPs do GDL.' };
+    }
+  });
   ipcMain.handle('gdl:preparar-atualizacao-rep', async (_event, repId: unknown) => {
     try {
       if (typeof repId !== 'string' || !repId.trim()) return { success: false, error: 'REP inválida.' };

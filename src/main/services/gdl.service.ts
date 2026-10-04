@@ -7,7 +7,8 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { app, nativeImage, session } from 'electron';
 import type { Session } from 'electron';
-import { consultarPaginaRepGdl } from './gdl-pagina.service.js';
+import { consultarNaturezasMinhasRepsGdl, consultarPaginaRepGdl, listarPaginaMinhasRepsGdl } from './gdl-pagina.service.js';
+import type { NaturezaMinhaRepGdl, PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
@@ -290,6 +291,7 @@ async function requisitarGdl(
   headers: Record<string, string>,
   body?: string,
   timeout: number = 15000,
+  seguirRedirecionamentos = true,
 ): Promise<{ statusCode: number; data: string; redirecionado: boolean; paginaAutenticacao: boolean }> {
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
@@ -298,6 +300,7 @@ async function requisitarGdl(
     const resposta = await sessaoRede.fetch(url, {
       method,
       headers,
+      redirect: seguirRedirecionamentos ? 'follow' : 'manual',
       ...(body ? { body } : {}),
       signal: controller.signal,
     });
@@ -893,6 +896,27 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
       },
     };
   }
+}
+
+export async function listarMinhasReps(pagina: number): Promise<PaginaMinhasRepsGdl> {
+  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const credenciais = await carregarCredenciais(ambiente);
+  if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
+  return listarPaginaMinhasRepsGdl(credenciais, pagina, obterSessaoRedeGdl);
+}
+
+export async function obterIdentidadeMinhasReps(): Promise<string> {
+  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const credenciais = await carregarCredenciais(ambiente);
+  if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
+  return createHash('sha256').update(JSON.stringify({ ambiente, credenciais })).digest('hex');
+}
+
+export async function consultarNaturezasMinhasReps(listagemId: string): Promise<NaturezaMinhaRepGdl[]> {
+  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const credenciais = await carregarCredenciais(ambiente);
+  if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
+  return consultarNaturezasMinhasRepsGdl(credenciais, listagemId, obterSessaoRedeGdl);
 }
 
 export async function consultarRep(numero: string, ano: string): Promise<GdlConsultaResultado> {

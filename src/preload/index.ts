@@ -40,6 +40,7 @@ import type {
   DashboardResumo,
 } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
+import type { SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
 import type { ListaImagensRepGdl, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
 import type {
@@ -234,6 +235,8 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
+    obterMinhasRepsCache: () => Promise<UserResponse<SnapshotMinhasRepsGdl | null>>;
+    atualizarMinhasRepsCache: (forcar: boolean) => Promise<UserResponse<SnapshotMinhasRepsGdl>>;
     testarConexao: (ambiente?: string) => Promise<UserResponse>;
     obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
@@ -530,6 +533,8 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:limpar-validacao-sessao',
   'gdl:validar-credenciais',
   'gdl:consultar-rep',
+  'gdl:obter-minhas-reps-cache',
+  'gdl:atualizar-minhas-reps-cache',
   'gdl:preparar-atualizacao-rep',
   'gdl:aplicar-atualizacao-rep',
   'gdl:listar-imagens-laudo',
@@ -1356,6 +1361,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    obterMinhasRepsCache: (): Promise<UserResponse<SnapshotMinhasRepsGdl | null>> => invocarComDiagnostico('gdl:obter-minhas-reps-cache'),
+    atualizarMinhasRepsCache: (forcar: boolean): Promise<UserResponse<SnapshotMinhasRepsGdl>> => {
+      if (typeof forcar !== 'boolean') throw new Error('Opção de atualização inválida');
+      return invocarComDiagnostico('gdl:atualizar-minhas-reps-cache', forcar);
+    },
     testarConexao: (ambiente?: string) => invocarComDiagnostico('gdl:testar-conexao', ambiente),
     obterValidacaoSessao: (ambiente?: string) => invocarComDiagnostico('gdl:obter-validacao-sessao', ambiente),
     limparValidacaoSessao: (ambiente?: string) => invocarComDiagnostico('gdl:limpar-validacao-sessao', ambiente),
