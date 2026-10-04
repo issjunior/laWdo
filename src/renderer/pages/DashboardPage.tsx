@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
+import {
+  closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor,
+  useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   Bar,
   BarChart,
@@ -19,6 +24,7 @@ import {
   ChevronDown,
   Clock3,
   ExternalLink,
+  GripVertical,
   RefreshCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,6 +41,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import logo from '@/assets/logo.png';
+import { GdlMinhasRepsDashboard } from '@/components/rep/GdlMinhasRepsDashboard';
 import type {
   DashboardConsultaLaudosEntrada,
   DashboardConsultaLaudosResultado,
@@ -49,11 +56,17 @@ import type {
 
 type Resposta<T> = { success: boolean; data?: T; error?: string };
 type TipoGrafico = 'barras' | 'rosca' | 'empilhado';
-type SecaoDashboard = 'situacao' | 'cronologia' | 'producao';
+type SecaoDashboard = 'situacao' | 'cronologia' | 'producao' | 'repsGdl';
 type SecoesExpandidas = Record<SecaoDashboard, boolean>;
 const CHAVE_GRAFICO = 'dashboard_tipo_grafico';
 const CHAVE_SECOES = 'dashboard_secoes_expandidas';
-const secoesPadrao: SecoesExpandidas = { situacao: true, cronologia: true, producao: true };
+const CHAVE_ORDEM_SECOES = 'dashboard_ordem_secoes';
+const ordemPadrao: SecaoDashboard[] = ['situacao', 'repsGdl', 'cronologia', 'producao'];
+const titulosSecoes: Record<SecaoDashboard, string> = {
+  situacao: 'Situação atual', repsGdl: 'REPs disponíveis no GDL',
+  cronologia: 'Consulta cronológica', producao: 'Produção de laudos',
+};
+const secoesPadrao: SecoesExpandidas = { situacao: false, cronologia: false, producao: false, repsGdl: false };
 const cores = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -74,11 +87,43 @@ const obterSecoesExpandidas = (): SecoesExpandidas => {
       cronologia:
         typeof valor.cronologia === 'boolean' ? valor.cronologia : secoesPadrao.cronologia,
       producao: typeof valor.producao === 'boolean' ? valor.producao : secoesPadrao.producao,
+      repsGdl: typeof valor.repsGdl === 'boolean' ? valor.repsGdl : secoesPadrao.repsGdl,
     };
   } catch {
     return secoesPadrao;
   }
 };
+const obterOrdemSecoes = (): SecaoDashboard[] => {
+  try {
+    const valor: unknown = JSON.parse(window.localStorage.getItem(CHAVE_ORDEM_SECOES) ?? '');
+    if (!Array.isArray(valor)) return ordemPadrao;
+    const validas = valor.filter((secao): secao is SecaoDashboard =>
+      typeof secao === 'string' && ordemPadrao.some(item => item === secao));
+    return [...new Set(validas), ...ordemPadrao.filter(secao => !validas.includes(secao))];
+  } catch {
+    return ordemPadrao;
+  }
+};
+
+function SecaoOrdenavel({ id, children }: { id: SecaoDashboard; children: (alca: ReactNode) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({ id });
+  return (
+    <div ref={setNodeRef} className={isDragging ? 'opacity-50' : ''} data-secao-dashboard={id}>
+      {children(<Button
+        ref={setActivatorNodeRef}
+        variant="ghost"
+        size="icon"
+        className="shrink-0 cursor-grab touch-none"
+        aria-label={`Reordenar ${titulosSecoes[id]}`}
+        title={`Arraste para reordenar ${titulosSecoes[id]}`}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </Button>)}
+    </div>
+  );
+}
 const dataOpcional = (valor: unknown) => (typeof valor === 'string' && valor ? valor : null);
 const normalizarResumo = (valor: unknown): DashboardResumo => {
   const dados = registro(valor) ? valor : {};
@@ -356,6 +401,12 @@ export function DashboardPage() {
   const [secoesExpandidas, setSecoesExpandidas] = useState<SecoesExpandidas>(() =>
     obterSecoesExpandidas()
   );
+  const [ordemSecoes, setOrdemSecoes] = useState<SecaoDashboard[]>(() => obterOrdemSecoes());
+  const [secaoArrastada, setSecaoArrastada] = useState<SecaoDashboard | null>(null);
+  const sensores = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
@@ -475,6 +526,16 @@ export function DashboardPage() {
     window.localStorage.setItem(CHAVE_SECOES, JSON.stringify(proximas));
     setSecoesExpandidas(proximas);
   };
+  const concluirReordenacao = (evento: DragEndEvent) => {
+    setSecaoArrastada(null);
+    if (!evento.over || evento.active.id === evento.over.id) return;
+    const origem = ordemSecoes.indexOf(evento.active.id as SecaoDashboard);
+    const destino = ordemSecoes.indexOf(evento.over.id as SecaoDashboard);
+    if (origem < 0 || destino < 0) return;
+    const proxima = arrayMove(ordemSecoes, origem, destino);
+    setOrdemSecoes(proxima);
+    window.localStorage.setItem(CHAVE_ORDEM_SECOES, JSON.stringify(proxima));
+  };
   if (carregando) return <div className="p-6 text-muted-foreground">Carregando dashboard...</div>;
   if (erro)
     return (
@@ -498,6 +559,19 @@ export function DashboardPage() {
         className="pointer-events-none absolute left-1/2 top-1/2 z-0 w-[min(42rem,72vw)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.035] grayscale dark:opacity-[0.06]"
       />
       <div className="container relative z-10 mx-auto space-y-3 p-3 md:p-4">
+        <DndContext
+          sensors={sensores}
+          collisionDetection={closestCenter}
+          onDragStart={evento => setSecaoArrastada(evento.active.id as SecaoDashboard)}
+          onDragCancel={() => setSecaoArrastada(null)}
+          onDragEnd={concluirReordenacao}
+        >
+          <SortableContext items={ordemSecoes} strategy={verticalListSortingStrategy}>
+            <div className="space-y-3">
+              {ordemSecoes.map(secao => (
+                <SecaoOrdenavel key={secao} id={secao}>
+                  {alca => (<>
+                  {secao === 'situacao' && (
         <Card>
           <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
             <div className="space-y-0.5">
@@ -509,6 +583,8 @@ export function DashboardPage() {
                 Status das REPs e laudos, com prioridades operacionais.
               </CardDescription>
             </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {alca}
             <Button
               variant="ghost"
               size="sm"
@@ -520,6 +596,7 @@ export function DashboardPage() {
                 className={`h-4 w-4 transition-transform ${secoesExpandidas.situacao ? 'rotate-180' : ''}`}
               />
             </Button>
+            </div>
           </CardHeader>
           {secoesExpandidas.situacao && (
             <CardContent className="space-y-3 p-4 pt-2">
@@ -569,6 +646,26 @@ export function DashboardPage() {
             </CardContent>
           )}
         </Card>
+                  )}
+                  {secao === 'repsGdl' && (
+        <Card>
+          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
+            <div className="space-y-0.5">
+              <CardTitle>REPs disponíveis no GDL</CardTitle>
+              <CardDescription>Consulte e importe REPs designadas para você.</CardDescription>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {alca}
+            <Button variant="ghost" size="sm" aria-expanded={secoesExpandidas.repsGdl} onClick={() => alternarSecao('repsGdl')}>
+              {secoesExpandidas.repsGdl ? 'Recolher' : 'Expandir'}
+              <ChevronDown className={`h-4 w-4 transition-transform ${secoesExpandidas.repsGdl ? 'rotate-180' : ''}`} />
+            </Button>
+            </div>
+          </CardHeader>
+          {secoesExpandidas.repsGdl && <CardContent className="p-4 pt-0"><GdlMinhasRepsDashboard /></CardContent>}
+        </Card>
+                  )}
+                  {secao === 'cronologia' && (
         <Card>
           <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
             <div className="space-y-0.5">
@@ -580,6 +677,8 @@ export function DashboardPage() {
                 Por período, com a distribuição de todos os resultados filtrados.
               </CardDescription>
             </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {alca}
             <Button
               variant="ghost"
               size="sm"
@@ -591,6 +690,7 @@ export function DashboardPage() {
                 className={`h-4 w-4 transition-transform ${secoesExpandidas.cronologia ? 'rotate-180' : ''}`}
               />
             </Button>
+            </div>
           </CardHeader>
           {secoesExpandidas.cronologia && (
             <CardContent className="p-4 pt-0">
@@ -774,6 +874,8 @@ export function DashboardPage() {
             </CardContent>
           )}
         </Card>
+                  )}
+                  {secao === 'producao' && (
         <Card>
           <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
             <div className="space-y-0.5">
@@ -785,6 +887,8 @@ export function DashboardPage() {
                 Ciclos em dias corridos para todo o histórico concluído.
               </CardDescription>
             </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {alca}
             <Button
               variant="ghost"
               size="sm"
@@ -796,6 +900,7 @@ export function DashboardPage() {
                 className={`h-4 w-4 transition-transform ${secoesExpandidas.producao ? 'rotate-180' : ''}`}
               />
             </Button>
+            </div>
           </CardHeader>
           {secoesExpandidas.producao && (
             <CardContent className="space-y-3 p-4 pt-0">
@@ -898,6 +1003,20 @@ export function DashboardPage() {
             </CardContent>
           )}
         </Card>
+                  )}
+                  </>) }
+                </SecaoOrdenavel>
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {secaoArrastada && (
+              <div className="rounded-lg border bg-card p-5 text-sm font-medium shadow-lg">
+                {titulosSecoes[secaoArrastada]}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
         <Dialog open={graficoConsultaAberto} onOpenChange={setGraficoConsultaAberto}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>

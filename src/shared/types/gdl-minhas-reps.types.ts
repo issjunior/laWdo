@@ -1,0 +1,30 @@
+export type StatusMinhaRepGdl = 'Aberta e Distribuída' | 'Laudo em Execução' | 'Concluída e Não Remetida';
+
+export interface MinhaRepGdl {
+  idGdl: number;
+  numero: string;
+  ano: string;
+  naturezaExame: string;
+  naturezaExameComCodigo: string | null;
+  status: StatusMinhaRepGdl;
+  dataDesignacao: string | null;
+  quantidadeFotos: number | null;
+}
+
+export interface PaginaMinhasRepsGdl {
+  reps: MinhaRepGdl[];
+  listagemId: string;
+  paginaAtual: number;
+  temAnterior: boolean;
+  temProxima: boolean;
+}
+
+export interface NaturezaMinhaRepGdl {
+  idGdl: number;
+  naturezaExameComCodigo: string | null;
+}
+
+export interface SnapshotMinhasRepsGdl {
+  reps: MinhaRepGdl[];
+  atualizadoEm: string;
+}

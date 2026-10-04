@@ -40,6 +40,7 @@ import type {
   DashboardResumo,
 } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
+import type { SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
 import type { ListaImagensRepGdl, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
 import type {
@@ -160,9 +161,6 @@ export interface IpcAPI {
   openDevTools: () => void;
   atualizarBarraTitulo: (cores: { cor: string; corSimbolo: string }) => Promise<void>;
 
-  // Banco de dados
-  executeQuery: (query: string, params?: IpcParams) => Promise<IpcResult>;
-
   // Autenticação
   login: (username: string, password: string) => Promise<{ success: boolean; user?: IpcPayload }>;
   logout: () => Promise<{ success: boolean }>;
@@ -237,6 +235,8 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
+    obterMinhasRepsCache: () => Promise<UserResponse<SnapshotMinhasRepsGdl | null>>;
+    atualizarMinhasRepsCache: (forcar: boolean) => Promise<UserResponse<SnapshotMinhasRepsGdl>>;
     testarConexao: (ambiente?: string) => Promise<UserResponse>;
     obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
@@ -483,9 +483,6 @@ const ALLOWED_CHANNELS = new Set([
   'open-dev-tools',
   'janela:atualizar-barra-titulo',
 
-  // Banco de dados
-  'execute-query',
-
   // Autenticação
   'login',
   'logout',
@@ -536,6 +533,8 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:limpar-validacao-sessao',
   'gdl:validar-credenciais',
   'gdl:consultar-rep',
+  'gdl:obter-minhas-reps-cache',
+  'gdl:atualizar-minhas-reps-cache',
   'gdl:preparar-atualizacao-rep',
   'gdl:aplicar-atualizacao-rep',
   'gdl:listar-imagens-laudo',
@@ -1098,32 +1097,17 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   openDevTools: () => sendSeguro('open-dev-tools'),
   atualizarBarraTitulo: cores => invokeSeguro<void>('janela:atualizar-barra-titulo', cores),
 
-  // Banco de dados
-  executeQuery: (query: string, params?: IpcParams) => {
-    if (typeof query !== 'string') {
-      throw new Error('Query deve ser uma string');
-    }
-
-    // Proteção básica contra injeção SQL (será melhorada no main process)
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      throw new Error('Query não pode ser vazia');
-    }
-
-    return invocarComDiagnostico('execute-query', trimmedQuery, params || []);
-  },
-
   // Autenticação
   login: (username: string, password: string) => {
     if (typeof username !== 'string' || typeof password !== 'string') {
       throw new Error('Username e password devem ser strings');
     }
 
-    if (!username.trim() || !password.trim()) {
+    if (!username.trim() || password.length === 0) {
       throw new Error('Username e password não podem ser vazios');
     }
 
-    return invocarComDiagnostico('login', username.trim(), password.trim());
+    return invocarComDiagnostico('login', username.trim(), password);
   },
   logout: () => invocarComDiagnostico('logout'),
 
@@ -1377,6 +1361,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    obterMinhasRepsCache: (): Promise<UserResponse<SnapshotMinhasRepsGdl | null>> => invocarComDiagnostico('gdl:obter-minhas-reps-cache'),
+    atualizarMinhasRepsCache: (forcar: boolean): Promise<UserResponse<SnapshotMinhasRepsGdl>> => {
+      if (typeof forcar !== 'boolean') throw new Error('Opção de atualização inválida');
+      return invocarComDiagnostico('gdl:atualizar-minhas-reps-cache', forcar);
+    },
     testarConexao: (ambiente?: string) => invocarComDiagnostico('gdl:testar-conexao', ambiente),
     obterValidacaoSessao: (ambiente?: string) => invocarComDiagnostico('gdl:obter-validacao-sessao', ambiente),
     limparValidacaoSessao: (ambiente?: string) => invocarComDiagnostico('gdl:limpar-validacao-sessao', ambiente),

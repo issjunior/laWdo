@@ -31,9 +31,9 @@ import {
 import type { EstadoSalvamentoLaudo } from '@/hooks/useGerenciadorAlteracoesLaudo';
 import { cn } from '@/lib/utils';
 
-export type FormatoExportacaoLaudo = 'pdf' | 'docx' | 'odt';
-export type ModoConteudoLaudo = 'dados' | 'chaves';
-export type ModoOrganizacaoLaudo = 'single' | 'multi';
+type FormatoExportacaoLaudo = 'pdf' | 'docx' | 'odt';
+type ModoConteudoLaudo = 'dados' | 'chaves';
+type ModoOrganizacaoLaudo = 'single' | 'multi';
 
 export function obterClasseBadgeStatusLaudo(status: string): string {
   const statusNormalizado = status.trim().toLocaleLowerCase('pt-BR');
@@ -129,7 +129,7 @@ const configuracaoEstadoSalvamento: Record<
   },
 };
 
-export function IndicadorSalvamento({ estado }: { estado: EstadoSalvamentoLaudo }) {
+function IndicadorSalvamento({ estado }: { estado: EstadoSalvamentoLaudo }) {
   const configuracao = configuracaoEstadoSalvamento[estado];
   const Icone = configuracao.icone;
   return (

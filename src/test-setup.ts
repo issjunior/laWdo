@@ -23,7 +23,6 @@ const electronAPIMock = {
   restartApp: vi.fn(),
   closeApp: vi.fn(() => Promise.resolve()),
   clearCache: vi.fn(),
-  executeQuery: vi.fn(() => Promise.resolve([])),
   backupDatabase: vi.fn(() => Promise.resolve(true)),
   restoreDatabase: vi.fn(() => Promise.resolve(true)),
 }

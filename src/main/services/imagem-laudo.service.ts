@@ -161,17 +161,7 @@ export async function reconciliarImagensLaudo(
   return { recuperadasParaPainel, arquivadasComoInseridas, referenciasSemImagem, arquivosAusentes }
 }
 
-export async function existeImagemLaudoComHash(laudoIdEntrada: string, sha256: string): Promise<boolean> {
-  const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
-  if (!/^[a-f0-9]{64}$/i.test(sha256)) throw new Error('Hash de imagem inválido.')
-  const registro = (await executeQuery<Pick<ImagemLaudoRow, 'id'>>(
-    'SELECT id FROM imagens_laudo WHERE laudo_id = ? AND sha256 = ? LIMIT 1',
-    [laudoId, sha256.toLowerCase()],
-  ))[0]
-  return Boolean(registro)
-}
-
-export async function listarImagensLaudo(laudoIdEntrada: string): Promise<ImagemLaudoPersistida[]> {
+async function listarImagensLaudo(laudoIdEntrada: string): Promise<ImagemLaudoPersistida[]> {
   const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
   const registros = await executeQuery<ImagemLaudoRow>(
     'SELECT * FROM imagens_laudo WHERE laudo_id = ? AND disponivel_painel = 1 ORDER BY sequencia, created_at',

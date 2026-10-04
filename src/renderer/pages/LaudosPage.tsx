@@ -16,8 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert, RefreshCw } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert, RefreshCw, Loader2 } from 'lucide-react';
+import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
@@ -1803,7 +1803,9 @@ export const LaudosPage: React.FC = () => {
         try {
           const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
           if (rSol.success && rSol.data) solicitanteNome = rSol.data.nome || '';
-        } catch {}
+        } catch (erro) {
+          window.ipcAPI.logWarning('laudo', `Solicitante indisponível no preview: ${obterMensagemErro(erro, 'erro inesperado')}`);
+        }
       }
       if (repData.tipo_exame_id) {
         try {
@@ -1812,7 +1814,9 @@ export const LaudosPage: React.FC = () => {
             tipoExameNome = rTipo.data.nome || '';
             tipoExameCodigo = rTipo.data.codigo || '';
           }
-        } catch {}
+        } catch (erro) {
+          window.ipcAPI.logWarning('laudo', `Tipo de exame indisponível no preview: ${obterMensagemErro(erro, 'erro inesperado')}`);
+        }
       }
 
       const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
@@ -1896,7 +1900,9 @@ export const LaudosPage: React.FC = () => {
         try {
           const rSol = await window.ipcAPI.solicitante.findById(repData.solicitante_id);
           if (rSol.success && rSol.data) solicitanteNome = rSol.data.nome || '';
-        } catch {}
+        } catch (erro) {
+          window.ipcAPI.logWarning('laudo', `Solicitante indisponível na exportação: ${obterMensagemErro(erro, 'erro inesperado')}`);
+        }
       }
       if (repData.tipo_exame_id) {
         try {
@@ -1905,7 +1911,9 @@ export const LaudosPage: React.FC = () => {
             tipoExameNome = rTipo.data.nome || '';
             tipoExameCodigo = rTipo.data.codigo || '';
           }
-        } catch {}
+        } catch (erro) {
+          window.ipcAPI.logWarning('laudo', `Tipo de exame indisponível na exportação: ${obterMensagemErro(erro, 'erro inesperado')}`);
+        }
       }
 
       const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
@@ -3240,10 +3248,8 @@ export const LaudosPage: React.FC = () => {
   aplicarRespostaIaRef.current = handleApplyResponse;
 
   function getCurrentUserId(): string {
-    try {
-      const raw = sessionStorage.getItem('lawdo_auth_user');
-      return raw ? JSON.parse(raw)?.id ?? '' : '';
-    } catch { return ''; }
+    const id = lerUsuarioSessao()?.id;
+    return typeof id === 'string' ? id : '';
   }
 
   const precisaSenhaParaExcluir = (status: string) =>
@@ -3835,7 +3841,7 @@ export const LaudosPage: React.FC = () => {
                                   {isIlustracoes && ilustracoesRemounting && (
                                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded">
                                       <div className="flex flex-col items-center gap-3">
-                                        <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                         <span className="text-sm text-muted-foreground">Carregando editor...</span>
                                       </div>
                                     </div>

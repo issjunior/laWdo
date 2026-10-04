@@ -15,12 +15,10 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   ArrowLeft, Plus, Trash2, GripVertical, Loader2, AlertCircle, Save, Link2, Search,
-  type LucideIcon,
+  Tag,
 } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
 import { toast } from 'sonner';
-
-const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
+import { obterIconeCategoria } from '@/lib/icones-categoria';
 
 interface EtapaWizard {
   id: string;
@@ -591,7 +589,7 @@ const WizardEditorPage: React.FC = () => {
               </div>
               <div className="max-h-[200px] overflow-y-auto border rounded-md">
                 {pecasFiltradas.map(p => {
-                  const IconComp = iconesLucide[p.categoria_icone || 'Tag'] || LucideIcons.Tag;
+                  const IconComp = obterIconeCategoria(p.categoria_icone, Tag);
                   return (
                     <div
                       key={p.id}

@@ -77,7 +77,7 @@ import {
   validarCredenciais,
 } from '../../main/services/gdl.service'
 import { interpretarGdlRepJson } from '../../main/services/gdl.schema'
-import { destinoPaginaGdlPermitido, montarFormularioLoginGdl, paginaGdlExigeLogin } from '../../main/services/gdl-pagina.service'
+import { consultarNaturezasMinhasRepsGdl, destinoPaginaGdlPermitido, listarPaginaMinhasRepsGdl, montarFormularioLoginGdl, paginaGdlExigeLogin } from '../../main/services/gdl-pagina.service'
 
 const formularioLogin = '<form method="post" action="./Login.aspx"><input type="hidden" name="__VIEWSTATE" value="estado&amp;teste"><input type="hidden" name="__EVENTVALIDATION" value="validacao"><input name="ctl00$Content$txtUser"><input name="ctl00$Content$txtPass" type="password"><input type="submit" name="ctl00$Content$btnLogin" value="Entrar"><input type="submit" name="ctl00$Content$btn_NewPass" value="Nova senha"></form>'
 
@@ -103,6 +103,7 @@ const statusRepPorBusca = new Map<string, number>()
 let statusFotos = 200
 let respostaRep = fixtureRep
 let respostaPaginaRep = '<input id="Content_RepMain_txtDateEntry" value="11/06/2024"><textarea id="Content_RepMain_txtOpenQuestion">QUESITO &amp; TESTE</textarea>'
+let respostaMinhasReps = ''
 const corposInvestigacao: string[] = []
 const configuracoes: Record<string, string> = {}
 let requisicoesRecebidas = 0
@@ -133,6 +134,10 @@ beforeAll(async () => {
         return
       }
       responder(resposta, 200, respostaPaginaRep)
+      return
+    }
+    if (url.pathname.endsWith('/REP/MinhasReps.aspx')) {
+      responder(resposta, 200, respostaMinhasReps)
       return
     }
     if (url.pathname === '/Account/Login.aspx') {
@@ -195,6 +200,7 @@ beforeEach(() => {
   statusFotos = 200
   respostaRep = fixtureRep
   respostaPaginaRep = '<input id="Content_RepMain_txtDateEntry" value="11/06/2024"><textarea id="Content_RepMain_txtOpenQuestion">QUESITO &amp; TESTE</textarea>'
+  respostaMinhasReps = ''
   corposInvestigacao.length = 0
   requisicoesGdl.length = 0
   requisicoesRecebidas = 0
@@ -553,10 +559,37 @@ describe('gdl.service', () => {
   it('bloqueia mutações e destinos fora da lista fechada da sessão web', () => {
     expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/Account/Login.aspx`, 'POST')).toBe(true)
     expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/REP/Default.aspx?rep_id=123`, 'GET')).toBe(true)
-    for (const [caminho, metodo] of [['/REP/Default.aspx?rep_id=123', 'POST'], ['/REP/Default.aspx', 'GET'], ['/Account/Logout.aspx', 'GET'], ['/REP/CancelarREP.aspx', 'GET'], ['/Account/Login.aspx?acao=outra', 'POST']]) {
+    expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/REP/MinhasReps.aspx`, 'GET')).toBe(true)
+    expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/REP/MinhasReps.aspx`, 'POST')).toBe(true)
+    for (const [caminho, metodo] of [['/REP/Default.aspx?rep_id=123', 'POST'], ['/REP/Default.aspx', 'GET'], ['/REP/MinhasReps.aspx?acao=concluir', 'POST'], ['/Account/Logout.aspx', 'GET'], ['/REP/CancelarREP.aspx', 'GET'], ['/REP/Concluir_REP.aspx?cod_rep=123', 'GET'], ['/Account/Login.aspx?acao=outra', 'POST']]) {
       expect(destinoPaginaGdlPermitido(baseUrl, baseUrl + caminho, metodo)).toBe(false)
     }
     expect(destinoPaginaGdlPermitido(baseUrl, 'https://outro.example/Account/Login.aspx', 'POST')).toBe(false)
+  })
+
+  it('lista a grade antes dos detalhes e restringe a consulta complementar à sessão atual', async () => {
+    respostaMinhasReps = `<form method="post" action="./MinhasReps.aspx">
+      <input name="__VIEWSTATE" value="estado"><input name="__EVENTVALIDATION" value="validacao">
+      <select id="Content_ddlYear"><option value="0">Todos</option></select>
+      <select id="Content_ddlStatus"><option value="-1">Todos</option></select>
+      <select id="Content_ddlUnit"><option value="-1">Todos</option></select>
+      <table id="Content_gridSearchMyRequests">
+        <tr><th>Número/Ano da REP</th><th>Data/Hora da Designação</th><th>Status</th><th>Natureza do Exame</th><th>Quant. Fotos</th></tr>
+        <tr><td><a href="/REP/Default.aspx?rep_id=123">123/2026</a></td><td>19/07/2026 14:30</td><td><img alt="Laudo em Execução"></td><td>EXAME DE CONSTATAÇÃO</td><td>0</td></tr>
+      </table></form>`
+    respostaPaginaRep = '<select id="Content_RepMain_ddlNatureExam"><option selected="selected">B601 - EXAME DE CONSTATAÇÃO</option></select>'
+    const credenciais = { baseUrl, login: 'usuario-minhas-reps', senha: 'senha' }
+    const inicioRequisicoes = requisicoesGdl.length
+    const pagina = await listarPaginaMinhasRepsGdl(credenciais, 1, () => undefined)
+    expect(pagina.reps).toHaveLength(1)
+    expect(pagina.reps[0].naturezaExameComCodigo).toBeNull()
+    expect(requisicoesGdl.slice(inicioRequisicoes).some(item => item.caminho.endsWith('/REP/Default.aspx'))).toBe(false)
+    const naturezas = await consultarNaturezasMinhasRepsGdl(credenciais, pagina.listagemId, () => undefined)
+    expect(naturezas).toEqual([{ idGdl: 123, naturezaExameComCodigo: 'B601 - EXAME DE CONSTATAÇÃO' }])
+    expect(requisicoesGdl.slice(inicioRequisicoes).filter(item => item.caminho.endsWith('/REP/Default.aspx')))
+      .toEqual([{ metodo: 'GET', caminho: '/REP/Default.aspx', busca: '?rep_id=123' }])
+    await listarPaginaMinhasRepsGdl(credenciais, 1, () => undefined)
+    await expect(consultarNaturezasMinhasRepsGdl(credenciais, pagina.listagemId, () => undefined)).rejects.toThrow('atualizada')
   })
 
   it('valida arquivos ZIP e deriva filtros únicos para a investigação', () => {

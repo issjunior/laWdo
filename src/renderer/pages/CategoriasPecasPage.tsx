@@ -5,11 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, AlertCircle, Plus, Check, FolderTree, type LucideIcon } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { Loader2, AlertCircle, Plus, Check, FolderTree, Tag } from 'lucide-react';
 import { SortableCategoryTree, type CategoriaNode } from '@/components/categorias/SortableCategoryTree';
 import { toast } from 'sonner';
 import { ALLOWED_COLORS, ICON_CATEGORIES } from '@/lib/category-constants';
+import { obterIconeCategoria } from '@/lib/icones-categoria';
 import {
   type CategoriaFull,
   findCat,
@@ -22,7 +22,6 @@ import {
 } from '@/lib/tree-utils';
 
 const emptyForm = { label: '', descricao: '', cor: 'slate', icone: 'Tag', parent_id: '__none__' as string };
-const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
 
 type CategoriaPecaPayload = {
   label: string;
@@ -416,8 +415,7 @@ const CategoriasPecasPage: React.FC = () => {
                         <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">{cat.label}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {cat.icons.map(iconName => {
-                            const IconComp = iconesLucide[iconName];
-                            if (!IconComp) return null;
+                            const IconComp = obterIconeCategoria(iconName, Tag);
                             return (
                               <button
                                 key={iconName}

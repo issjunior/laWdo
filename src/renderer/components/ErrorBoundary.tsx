@@ -1,4 +1,27 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { CHAVE_USUARIO_SESSAO } from '@/lib/usuario-sessao';
+
+const CHAVES_INTERFACE_LOCAL = [
+  'dashboard_tipo_grafico',
+  'dashboard_secoes_expandidas',
+  'lawdo:laudo:painel-ilustracoes:largura:v1',
+  'lawdo:laudo:painel-ia:largura:v1',
+];
+
+export async function reiniciarAplicacaoComFallback(
+  reiniciar: (() => Promise<void>) | undefined,
+  recarregar: () => void,
+): Promise<void> {
+  if (!reiniciar) {
+    recarregar();
+    return;
+  }
+  try {
+    await reiniciar();
+  } catch {
+    recarregar();
+  }
+}
 
 interface Props {
   children: ReactNode;
@@ -39,25 +62,21 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleRestartApp = (): void => {
-    try {
-      window.ipcAPI?.restartApp?.() ?? window.location.reload();
-    } catch {
-      window.location.reload();
-    }
+    const reiniciar = window.ipcAPI?.restartApp;
+    void reiniciarAplicacaoComFallback(
+      reiniciar ? () => reiniciar() : undefined,
+      () => window.location.reload(),
+    );
   };
 
   private handleClearCache = (): void => {
-    localStorage.clear();
-    sessionStorage.clear();
+    for (const chave of CHAVES_INTERFACE_LOCAL) localStorage.removeItem(chave);
+    sessionStorage.removeItem(CHAVE_USUARIO_SESSAO);
     window.location.reload();
   };
 
   private handleGoToHome = (): void => {
-    window.location.href = '/';
-  };
-
-  private handleCreateReport = (): void => {
-    window.location.href = '/laudos/novo';
+    window.location.hash = '#/';
   };
 
   private handleReportError = (): void => {
@@ -225,4 +244,3 @@ export class ErrorBoundary extends Component<Props, State> {
     return children;
   }
 }
-

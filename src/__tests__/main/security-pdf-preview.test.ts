@@ -14,7 +14,10 @@ type ListenerCabecalhos = (
 
 const mocks = vi.hoisted(() => ({
   appendSwitch: vi.fn(),
+  on: vi.fn(),
   onHeadersReceived: vi.fn(),
+  openExternal: vi.fn(() => Promise.resolve()),
+  setPermissionCheckHandler: vi.fn(),
   setPermissionRequestHandler: vi.fn(),
 }))
 
@@ -23,14 +26,19 @@ vi.mock('electron', () => ({
     commandLine: {
       appendSwitch: mocks.appendSwitch,
     },
+    on: mocks.on,
   },
   session: {
     defaultSession: {
       webRequest: {
         onHeadersReceived: mocks.onHeadersReceived,
       },
+      setPermissionCheckHandler: mocks.setPermissionCheckHandler,
       setPermissionRequestHandler: mocks.setPermissionRequestHandler,
     },
+  },
+  shell: {
+    openExternal: mocks.openExternal,
   },
 }))
 

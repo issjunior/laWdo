@@ -1,6 +1,7 @@
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
+import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 
 function numToLetra(n: number): string {
   if (n < 26) return String.fromCharCode(65 + n);
@@ -84,21 +85,15 @@ function isRecord(valor: unknown): valor is Record<string, unknown> {
 }
 
 function lerPeritoSessao(): PeritoSessaoData | null {
-  try {
-    const userJson = sessionStorage.getItem('lawdo_auth_user');
-    if (!userJson) return null;
-    const parsed: unknown = JSON.parse(userJson);
-    if (!isRecord(parsed)) return null;
-    return {
-      nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
-      cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
-      especialidade: typeof parsed.especialidade === 'string' ? parsed.especialidade : undefined,
-      lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
-      matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
-    };
-  } catch {
-    return null;
-  }
+  const parsed = lerUsuarioSessao();
+  if (!parsed) return null;
+  return {
+    nome: typeof parsed.nome === 'string' ? parsed.nome : undefined,
+    cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
+    especialidade: typeof parsed.especialidade === 'string' ? parsed.especialidade : undefined,
+    lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
+    matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+  };
 }
 
 export interface ExportacaoContext {
@@ -109,7 +104,7 @@ export interface ExportacaoContext {
   placeholdersPersonalizados?: Array<{ chave: string; valor: string }>;
 }
 
-export type FormatoValorPlaceholder = 'texto' | 'html' | 'html-inline';
+type FormatoValorPlaceholder = 'texto' | 'html' | 'html-inline';
 
 export interface ValorPlaceholderResolvido {
   chave: string;

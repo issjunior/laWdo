@@ -325,6 +325,9 @@ O diretório `spec/` documenta o **estado atual** do sistema — não é changel
 | `10 dashboard/` | Dashboard operacional | `src/renderer/pages/DashboardPage.tsx`, serviço, handler, IPC e tipos do dashboard |
 | `11 github actions/` | CI, Dependabot e preparação/promoção de releases | `.github/workflows/**`, `.github/dependabot.yml`, `scripts/release/**` |
 | `12 atualizacao/` | Consumo de atualizações, fechamento seguro, backup e instalação | `src/shared/atualizacao/**`, serviços e handlers de atualização, contexto de alterações pendentes e testes associados |
+| `13 diagnostico/` | Diagnóstico assistido local, capturas guiadas e transporte MCP | `scripts/diagnostico/**`, `src/shared/diagnostico/**`, serviços, ponte do renderer e testes de diagnóstico |
+| `14 backup/` | Backup protegido criado pelo usuário e sua restauração | página, serviços, handler IPC, preload e testes de backup |
+| `15 seguranca/` | Segurança Electron, autenticação, sessão local e recuperação do renderer | `src/main/security/**`, criação da janela, fronteiras IPC/preload, sessão do renderer, `ErrorBoundary` e testes de segurança |
 | `problemas diversos/` | Problemas e edge cases pontuais | (sem padrão — análise de conteúdo) |
 
 As specs `11 github actions` e `12 atualizacao` formam uma cadeia de confiança única. Mudanças em manifesto, serialização canônica, assinatura, chave, canais, plataformas, arquiteturas, formatos, nomes, hashes, URLs ou `requerBackupCompletoImagens` exigem revisão coordenada dos dois domínios.

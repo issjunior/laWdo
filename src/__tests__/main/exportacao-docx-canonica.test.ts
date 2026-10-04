@@ -48,7 +48,7 @@ describe('gerarODT', () => {
     const odt = await gerarODT(docx);
     expect(Buffer.from(odt).subarray(0, 2).toString('utf8')).toBe('PK');
     expect(odt.byteLength).toBeGreaterThan(1_000);
-  }, 30_000);
+  }, 60_000);
 
   it('mantém o conteúdo de células HTML no ODT', async () => {
     if (!(await verificarLibreOffice())) return;
@@ -59,5 +59,5 @@ describe('gerarODT', () => {
 
     expect(xml).toContain('TABELA 1 – MATERIAL');
     expect(xml).toContain('Cartuchos calibre 12');
-  }, 30_000);
+  }, 60_000);
 });

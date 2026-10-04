@@ -55,10 +55,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src/renderer'),
-      '@shared': path.resolve(__dirname, './src/shared'),
-      '@main': path.resolve(__dirname, './src/main'),
-      '@preload': path.resolve(__dirname, './src/preload'),
+      '@': path.resolve(import.meta.dirname, './src/renderer'),
+      '@shared': path.resolve(import.meta.dirname, './src/shared'),
+      '@main': path.resolve(import.meta.dirname, './src/main'),
+      '@preload': path.resolve(import.meta.dirname, './src/preload'),
     },
   },
 })

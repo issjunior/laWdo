@@ -545,7 +545,7 @@ const garantirColuna = async (tabela: string, coluna: string, definicao: string)
   return true;
 };
 
-export const garantirIntegridadeSchema = async (): Promise<ResultadoIntegridadeSchema> => {
+const garantirIntegridadeSchema = async (): Promise<ResultadoIntegridadeSchema> => {
   let tabelas = await listarTabelas();
   let ausentes = TABELAS_OBRIGATORIAS.filter(tabela => !tabelas.has(tabela));
   const reparosAplicados: string[] = [];

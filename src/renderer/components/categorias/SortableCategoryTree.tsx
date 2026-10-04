@@ -3,13 +3,11 @@ import {
   DndContext, closestCenter, useDraggable, useDroppable,
   DragOverlay, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import * as LucideIcons from 'lucide-react';
 import {
-  ChevronRight, GripVertical, Lock, FolderTree, type LucideIcon,
+  ChevronRight, GripVertical, Lock, FolderTree, Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
+import { obterIconeCategoria } from '@/lib/icones-categoria';
 
 export interface CategoriaNode {
   id: string;
@@ -78,7 +76,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     }
   }, [isOver, expanded, node.subcategorias.length]);
 
-  const IconComp = iconesLucide[node.icone] || LucideIcons.Folder;
+  const IconComp = obterIconeCategoria(node.icone, Folder);
   const isSys = node.is_sistema === 1;
 
   const handleClick = (e: React.MouseEvent) => {
@@ -271,7 +269,7 @@ export function SortableCategoryTree({
               `bg-${activeNode.cor}-100 dark:bg-${activeNode.cor}-900/30`,
             )}>
               {(() => {
-                const Icon = iconesLucide[activeNode.icone] || LucideIcons.Folder;
+                const Icon = obterIconeCategoria(activeNode.icone, Folder);
                 return <Icon size={14} />;
               })()}
             </div>

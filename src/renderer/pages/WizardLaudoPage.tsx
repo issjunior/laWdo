@@ -127,7 +127,10 @@ const WizardLaudoPage: React.FC = () => {
         try {
           const cached = JSON.parse(l.respostas_wizard);
           setRespostas(normalizarRespostasWizard(cached));
-        } catch {}
+        } catch (erro) {
+          window.ipcAPI.logWarning('wizard', `Respostas salvas inválidas: ${mensagemErro(erro)}`);
+          setRespostas({});
+        }
       } else {
         const respRes = await window.ipcAPI.laudo.getRespostasWizard(laudoId);
         if (respRes.success && Object.keys(respRes.data || {}).length > 0) {
@@ -171,7 +174,9 @@ const WizardLaudoPage: React.FC = () => {
         setPecasCalculadas(res.data || []);
         setPecasSelecionadas(new Set((res.data || []).map((p: PecaCalculada) => p.peca.id)));
       }
-    } catch {} finally { setPreviewLoading(false); }
+    } catch (erro) {
+      setError(mensagemErro(erro) || 'Não foi possível calcular as peças do wizard.');
+    } finally { setPreviewLoading(false); }
   }, [arvore, respostas]);
 
   useEffect(() => {

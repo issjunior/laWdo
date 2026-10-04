@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ErrorBoundary, reiniciarAplicacaoComFallback } from '@/components/ErrorBoundary'
 
 function ComponenteComFalha(): never {
   throw new Error('Falha simulada')
@@ -33,8 +33,11 @@ describe('ErrorBoundary', () => {
 
     const abrirJanela = vi.spyOn(window, 'open').mockImplementation(() => null)
     fireEvent.click(screen.getByRole('button', { name: 'Limpar Cache' }))
-    expect(window.localStorage.clear).toHaveBeenCalledTimes(1)
-    expect(window.sessionStorage.clear).toHaveBeenCalledTimes(1)
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith('dashboard_tipo_grafico')
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith('dashboard_secoes_expandidas')
+    expect(window.sessionStorage.removeItem).toHaveBeenCalledWith('lawdo_auth_user')
+    expect(window.localStorage.clear).not.toHaveBeenCalled()
+    expect(window.sessionStorage.clear).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Reportar Erro' }))
     expect(abrirJanela).toHaveBeenCalledWith(expect.stringMatching(/^mailto:support@pcpr\.pr\.gov\.br/), '_blank')
@@ -48,5 +51,14 @@ describe('ErrorBoundary', () => {
     )
 
     expect(screen.getByText('Recuperação alternativa')).toBeInTheDocument()
+  })
+
+  it('recarrega a interface quando o reinício assíncrono falha', async () => {
+    const recarregar = vi.fn()
+    await reiniciarAplicacaoComFallback(
+      vi.fn().mockRejectedValue(new Error('Falha no processo principal')),
+      recarregar,
+    )
+    expect(recarregar).toHaveBeenCalledTimes(1)
   })
 })

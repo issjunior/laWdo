@@ -9,9 +9,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Search, Edit, Trash2, Loader2, AlertCircle, Package, Settings2, type LucideIcon } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Loader2, AlertCircle, Package, Settings2, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import * as LucideIcons from 'lucide-react';
+import { obterIconeCategoria } from '@/lib/icones-categoria';
 import { DataTable } from '@/components/data-table/data-table';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
@@ -47,7 +47,6 @@ type PecaPayload = {
   ativo: boolean;
 };
 
-const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
 
 const getMensagemErro = (erro: unknown, fallback: string): string =>
   erro instanceof Error ? erro.message : fallback;
@@ -223,7 +222,7 @@ const PecasPage: React.FC = () => {
         const label = row.original.categoria_label;
         const cor = row.original.categoria_cor || 'slate';
         const icone = row.original.categoria_icone || 'Tag';
-        const IconComp = iconesLucide[icone] || LucideIcons.Tag;
+        const IconComp = obterIconeCategoria(icone, Tag);
         return label ? (
           <Badge variant="secondary" className={`text-xs gap-1 bg-${cor}-100 dark:bg-${cor}-900/30 text-${cor}-700 dark:text-${cor}-300`}>
             <IconComp size={12} /> {label}

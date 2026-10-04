@@ -1,6 +1,5 @@
 import React from 'react';
-import * as LucideIcons from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Tag } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -14,8 +13,7 @@ import {
 } from "@/components/ui/context-menu";
 import type { MenuSection, MenuEntry, MenuGroup } from '@/components/rep/exam-fields/types';
 import { getGroupCount } from '@/components/rep/exam-fields/services/b602.service';
-
-const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
+import { obterIconeCategoria } from '@/lib/icones-categoria';
 
 export interface PlaceholderItem {
   id: string;
@@ -92,7 +90,7 @@ export const PlaceholderContextMenu: React.FC<{
             const isExamCat = cat.id === categoriaExameId;
 
             if (isExamCat && exameMenuStructure && exameMenuStructure.length > 0) {
-              const IconComp = iconesLucide[cat.icone] || LucideIcons.Tag;
+              const IconComp = obterIconeCategoria(cat.icone, Tag);
               return (
                 <ContextMenuSub key={cat.id}>
                   <ContextMenuSubTrigger>
@@ -116,7 +114,7 @@ export const PlaceholderContextMenu: React.FC<{
 
             const items = placeholders.filter(p => p.categoria_id === cat.id);
             if (items.length === 0) return null;
-            const IconComp = iconesLucide[cat.icone] || LucideIcons.Tag;
+            const IconComp = obterIconeCategoria(cat.icone, Tag);
             return (
               <ContextMenuSub key={cat.id}>
                 <ContextMenuSubTrigger>

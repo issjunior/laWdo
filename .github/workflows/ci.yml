@@ -31,7 +31,7 @@ jobs:
           cache: npm
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --strict-allow-scripts
 
       - name: Verificar tipos
         run: npm run type-check

@@ -1,97 +1,112 @@
 # Painel de Saúde do Sistema
 
-> **Última consolidação:** 23/07/2026
-> **Propósito:** registrar o estado atual de build, tipagem, lint, testes, cobertura e auditoria de código morto.
-> **Escopo da medição:** validação completa após limpeza de lint e de superfície interna sem consumidor, seguida de smoke manual sem erros observados.
+> **Última consolidação:** 02/10/2026
+> **Propósito:** registrar o estado atual de ambiente, build, tipagem, lint, testes, cobertura e auditoria de código morto.
+> **Escopo da medição:** instalação limpa e sequência completa de gates, incluindo release, schema, empacotamento e smoke isolado no Windows.
 
 ---
 
-## Resumo Executivo
+## Resumo executivo
 
 | Métrica | Status | Resultado atual |
 |---|---|---|
-| **Build** (`npm run build`) | ✅ OK | main, preload e renderer compilam; permanece apenas o aviso de chunks grandes do Vite. |
+| **Ambiente** | ✅ Reprodutível | Node.js 24.21.0 e npm 11.17.0; instalação por `npm ci --strict-allow-scripts`. |
+| **Build** (`npm run build`) | ✅ OK | main, preload e renderer compilam; nenhum chunk supera 500 kB. |
 | **TypeScript** (`npm run type-check`) | ✅ OK | 0 erros em main, preload e renderer. |
 | **ESLint** (`npm run lint`) | ✅ OK | 0 erros e 0 warnings. |
-| **Testes** (`npm test`) | ✅ OK | 199 pass, 1 skip em 34 arquivos. |
-| **Cobertura** (`npm run test:coverage`) | ✅ OK com gate progressivo | statements 57,85%; branches 48,12%; funções 64,47%; linhas 59,9%. |
-| **Código morto** (`npm run prune:all`) | 🟡 Triado | renderer sem candidatos reais; apontamentos do main são falsos positivos conhecidos do `ts-prune` com NodeNext/imports `.js`. |
-| **Knip** (`npm run knip -- --no-exit-code`) | ✅ Observacional zerado | 0 dependências, devDependencies, exports, tipos e duplicatas apontados. |
-| **Dependências** (`npm audit`) | 🟡 Pendente de avaliação | 2 vulnerabilidades altas; nenhuma correção forçada foi aplicada. |
+| **Testes** (`npm test`) | ✅ OK | 555 pass, 2 skip em 109 arquivos. |
+| **Cobertura** (`npm run test:coverage`) | ✅ Acima do gate | statements 62,02%; branches 54,50%; funções 63,22%; linhas 64,93%. |
+| **Release e schema** | ✅ OK | 14 testes de release aprovados; smoke do schema concluído na versão 36. |
+| **Código morto** | ✅ Knip zerado | Knip sem achados; `ts-prune` permanece auxiliar e requer triagem qualitativa. |
+| **Dependências** | ✅ OK | árvore de primeiro nível válida e auditoria npm com 0 vulnerabilidades. |
+| **Pacote Windows** | ✅ OK | `npm run pack` e smoke do executável em perfil isolado aprovados. |
 
-Leitura prática: a aplicação está apta aos gates locais de código e passou no smoke manual. A cobertura permanece acima dos thresholds progressivos (`50%` statements, `35%` branches, `60%` funções e `50%` linhas), e Knip continua observacional para evitar bloquear o fluxo por classificação inadequada.
+Leitura prática: os gates locais estão verdes e o ambiente de desenvolvimento/CI está alinhado. Knip continua manual e observacional; não integra o gate de CI. O `ts-prune` ainda lista exports internos e contratos usados em módulo ou afetados por NodeNext, portanto seu relatório não autoriza remoção automática.
 
 ---
 
 ## Fontes de verdade e gates
 
-| Frente | Fonte canônica | Comando de verificação |
+| Frente | Fonte canônica | Verificação |
 |---|---|---|
-| Scripts e dependências | `package.json` e `package-lock.json` | comandos npm abaixo |
+| Runtime e scripts autorizados | `package.json`, `package-lock.json` e `.nvmrc` | `node --version`, `npm --version`, `npm ci --strict-allow-scripts` |
+| CI e release | `.github/workflows/*.yml` | CI e `npm run test:release` |
 | Tipagem | `tsconfig*.json` | `npm run type-check` |
-| Lint | configuração ESLint | `npm run lint` |
+| Lint | `eslint.config.js` | `npm run lint` |
 | Testes e cobertura | `vitest.config.ts` e `src/__tests__/` | `npm test`, `npm run test:coverage` |
-| Código morto | `tsconfig*.json`, `knip.json` e `DEAD_CODE_EXCEPTIONS.md` | `npm run prune:all`, `npm run knip -- --no-exit-code` |
+| Código morto | `knip.json`, `tsconfig*.json` e `DEAD_CODE_EXCEPTIONS.md` | `npm run knip`, `npm run dead-code:check` |
+| Distribuição | `electron-builder.yml` | `npm run build`, `npm run smoke:schema`, `npm run pack` e smoke Windows |
 
-O CI em `.github/workflows/ci.yml` executa `type-check`, `lint` e `test:coverage` com Node.js 24. Knip permanece manual/observacional; `ts-prune` exige triagem qualitativa dos itens do main antes de qualquer remoção.
+O CI fixa Node.js 24.21.0 e instala com `npm ci --strict-allow-scripts`. `package.json` exige Node `>=24.21.0 <25` e npm `>=11.17.0 <12`. Scripts de instalação estão autorizados por pacote e versão: `sqlite3@6.0.1`, `bcrypt@6.0.0` e `electron-winstaller@5.4.0`; `fsevents@2.3.3` é explicitamente negado por ser opcional e incompatível com Windows.
 
 ---
 
-## Medição de 23/07/2026
+## Medição vigente
+
+Executar na ordem:
 
 ```bash
+npm ci --strict-allow-scripts
+npm ls --depth=0
 npm run type-check
 npm run lint
 npm test
 npm run test:coverage
-npm run prune:all
-npm run knip -- --no-exit-code
+npm run test:release
 npm run build
+npm run knip
+npm run dead-code:check
+npm run smoke:schema
+npm run pack
+git diff --check
 ```
 
-| Data | Build | TypeScript | ESLint | Testes | Cobertura | Knip |
+| Data | Build | Tipos | Lint | Testes | Cobertura S/B/F/L | Knip |
 |---|---|---|---|---|---|---|
-| 19/07/2026 | — | 0 erros | 0 / 0 | 148 pass, 1 skip em 23 arquivos | medição anterior preservada | zerado |
-| **23/07/2026** | ✅ | 0 erros | 0 / 0 | **199 pass, 1 skip em 34 arquivos** | **57,85 / 48,12 / 64,47 / 59,9%** | **zerado** |
-
-A sequência da cobertura é statements, branches, funções e linhas. O build precisou rodar fora do sandbox, pois Vite/Tailwind requerem o binário nativo do `@tailwindcss/oxide`; fora do isolamento, ele concluiu normalmente.
-
----
+| 23/07/2026 | ✅ com aviso de chunk | 0 erros | 0 / 0 | 199 pass, 1 skip | 57,85 / 48,12 / 64,47 / 59,90% | zerado |
+| **02/10/2026** | ✅ sem chunk > 500 kB | 0 erros | 0 / 0 | **555 pass, 2 skip** | **62,02 / 54,50 / 63,22 / 64,93%** | **zerado** |
 
 ## Estado das frentes
 
-### Lint e tipos
+### Bundle e desempenho
 
-A frente está zerada. Capturas de exceção sem consumo foram simplificadas, contratos que existiam apenas para inferência de tipos foram declarados explicitamente e exports internos sem consumidores foram recolhidos. Essas alterações não mudam contratos IPC nem comportamento funcional.
+Imports curinga de `lucide-react` foram substituídos por um registro tipado de imports estáticos. O antigo chunk de aproximadamente 731 kB deixou de existir; o chunk `icones-categoria` mede 35,07 kB e o maior chunk atual mede 407,82 kB. Nomes de ícones continuam persistidos como string, com alias para nome legado e fallback explícito.
+
+Não houve captura comparável do diagnóstico assistido porque o servidor estava sem sessão `dev:diagnostico` ativa. A redução de bundle está comprovada pelo build, mas não implica ganho presumido de tempo de abertura.
 
 ### Testes e cobertura
 
-A suíte atual cobre integrações GDL/B-602, persistência, componentes do renderer, utilitários, serviços e catálogos. O gate progressivo continua adequado ao estado atual; elevar thresholds exige ampliação deliberada da cobertura, não apenas alteração de configuração.
+A suíte cobre as políticas de navegação Electron, preservação de senha, parsing seguro da sessão, resolução de ícones e recuperação do `ErrorBoundary`. Os thresholds progressivos continuam em `vitest.config.ts`; a medição vigente permanece acima deles.
+
+Os testes que invocam LibreOffice e fluxos grandes de REP possuem timeout local maior para absorver a instrumentação V8, sem alterar as asserções funcionais.
 
 ### Código morto
 
-O Knip não reporta itens. O `ts-prune` ainda apresenta itens do main que devem ser mantidos: são afetados por resolução NodeNext e imports relativos com extensão `.js`. A lista e a justificativa canônicas ficam em `DEAD_CODE_EXCEPTIONS.md`; não remover um item apenas pelo relatório.
+`src/main/diagnostico-mcp.ts` é entry point externo declarado no Knip, e CSS do renderer integra seu escopo. O resultado do Knip está zerado após remoção de implementações sem consumidor, exports indevidos e aliases de UI ociosos.
 
-### Build, smoke e dependências
+O `ts-prune` continua produzindo falsos positivos para NodeNext, exports públicos e símbolos usados no próprio módulo. As exceções duradouras devem permanecer justificadas em `DEAD_CODE_EXCEPTIONS.md`.
 
-O build completo está verde e o smoke manual posterior não observou erros. O Vite alerta sobre chunks acima de 500 kB após minificação; é uma limitação de tamanho conhecida, não bloqueante.
+### Dependências e empacotamento
 
-`npm audit` reporta 2 vulnerabilidades altas. Como a recomendação automática envolve `--force`, a atualização requer uma tranche própria com análise de impacto e nova validação completa.
-
----
+`jszip` é dependência direta de desenvolvimento porque os testes a importam diretamente. A instalação limpa encontra 0 vulnerabilidades. O pacote Windows reconstrói `bcrypt` e `sqlite3`, conclui a integridade do ASAR e permanece aberto no smoke com perfil de usuário isolado.
 
 ## Regras de manutenção
 
-- Após mudanças de código, executar `npm run type-check` e `npm run lint`; incluir `npm test` para mudanças de banco, IPC ou lógica.
-- Para mudanças que afetam a suíte, executar também `npm run test:coverage`.
-- Tratar `npm run prune:all` e Knip como auditorias: confirmar consumidores reais e exceções antes de remover código.
-- Alterações em Electron, módulos nativos ou empacotamento exigem `npm run pack` e smoke no Windows quando aplicável.
-- Atualizações de dependências com vulnerabilidades devem ser avaliadas isoladamente; não usar `npm audit fix --force` como correção automática.
+- Manter `.nvmrc`, `package.json` e todos os workflows alinhados na versão exata de Node.
+- Instalar em CI e validações reprodutíveis com `npm ci --strict-allow-scripts`; revisar qualquer novo lifecycle script antes de autorizá-lo.
+- Executar `type-check` e `lint` após código; incluir testes para banco, IPC ou lógica e cobertura quando a suíte mudar.
+- Tratar Knip e `ts-prune` como auditorias manuais; confirmar entry points e consumidores reais antes de remover símbolos.
+- Para Electron, módulos nativos ou empacotamento, executar `pack`, smoke de schema e smoke do executável no Windows.
+- Não elevar o limite de chunk para ocultar regressões; investigar importação e divisão de código.
+- Não usar `npm audit fix --force` como correção automática.
 
 ## Referências
 
 - `package.json`
+- `.nvmrc`
 - `vitest.config.ts`
-- `.github/workflows/ci.yml`
 - `knip.json`
+- `.github/workflows/ci.yml`
+- `spec/15 seguranca/seguranca_electron.md`
+- `spec/11 github actions/workflows_github_actions.md`
 - `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md`

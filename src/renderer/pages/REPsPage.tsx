@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Network, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Trash2, X, FileText, AlertTriangle, Eye, ClipboardPen, Clock, Network, RefreshCw, List, ArrowLeft } from 'lucide-react';
+import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { REP } from '@/lib/validators/rep.schema';
 import { z } from 'zod';
@@ -52,6 +53,8 @@ import { SolicitanteFormFields } from '@/components/solicitantes/SolicitanteForm
 import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormFields';
 import { RepStepper, useRepStepperContext } from '@/components/rep/RepStepper';
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal';
+import { GdlMinhasRepsModal } from '@/components/rep/GdlMinhasRepsModal';
+import type { MinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
 import { AtualizarRepGdlDialog } from '@/components/rep/AtualizarRepGdlDialog';
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { GdlPecasModal } from '@/components/rep/GdlPecasModal';
@@ -172,7 +175,8 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
         }
       }
     }
-  } catch {
+  } catch (erro) {
+    window.ipcAPI.logWarning('rep', `Campos específicos inválidos ao montar visualização: ${mensagemErro(erro, 'erro inesperado')}`);
   }
 
   let html = `<h2 style="font-size:18px;margin-bottom:16px">REP Nº ${s(rep.numero)}</h2>`;
@@ -291,7 +295,9 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
         }
         html += `</table>`;
       }
-    } catch {}
+    } catch (erro) {
+      window.ipcAPI.logWarning('rep', `Campos específicos inválidos ao montar tabelas: ${mensagemErro(erro, 'erro inesperado')}`);
+    }
   }
 
   // QUESITO ABERTO
@@ -395,13 +401,8 @@ function formatarNumeroREP(raw: string): string {
 }
 
 function getLoggedUserId(): string | undefined {
-  try {
-    const raw = sessionStorage.getItem('lawdo_auth_user');
-    if (!raw) return undefined;
-    return JSON.parse(raw).id;
-  } catch {
-    return undefined;
-  }
+  const id = lerUsuarioSessao()?.id;
+  return typeof id === 'string' ? id : undefined;
 }
 
 function prepareForApi(
@@ -744,6 +745,8 @@ export const REPsPage: React.FC = () => {
   const [tipoExameQCSubmitting, setTipoExameQCSubmitting] = useState(false);
 
   const [gdlModalOpen, setGdlModalOpen] = useState(false);
+  const [gdlListaModalOpen, setGdlListaModalOpen] = useState(false);
+  const [repInicialGdl, setRepInicialGdl] = useState<{ numero: string; ano: string } | null>(null);
   const [repParaAtualizarGdl, setRepParaAtualizarGdl] = useState<REP | null>(null);
   const [gdlPecasModalOpen, setGdlPecasModalOpen] = useState(false);
   const [camposPreenchidosGdl, setCamposPreenchidosGdl] = useState<Set<string>>(new Set());
@@ -764,7 +767,8 @@ export const REPsPage: React.FC = () => {
             );
             setRepsComLaudo(idsComLaudo);
           }
-        } catch {
+        } catch (erro) {
+          window.ipcAPI.logWarning('rep', `Não foi possível relacionar laudos às REPs: ${mensagemErro(erro, 'erro inesperado')}`);
         }
       } else {
         setError(r.error);
@@ -881,7 +885,7 @@ export const REPsPage: React.FC = () => {
     form.setValue('b602_local_uf', 'PR', { shouldValidate: true, shouldDirty: false });
   }, [b602LocalUf, form, tipoExameSelecionado?.codigo]);
 
-  const handleNovo = () => {
+  const handleNovo = useCallback(() => {
     setEditingRep(null);
     setError(null);
     setSuccess(null);
@@ -895,12 +899,33 @@ export const REPsPage: React.FC = () => {
     setSubmitting(false);
     setShowForm(true);
     document.body.style.pointerEvents = '';
-  };
+  }, [form]);
 
   const handleConsultarGdl = () => {
+    setRepInicialGdl(null);
     handleNovo();
     setGdlModalOpen(true);
   };
+
+  const handleSelecionarRepGdl = (rep: MinhaRepGdl) => {
+    handleNovo();
+    setRepInicialGdl({ numero: rep.numero, ano: rep.ano });
+    setGdlListaModalOpen(false);
+    setGdlModalOpen(true);
+  };
+
+  useEffect(() => {
+    const estado: unknown = location.state;
+    if (!estado || typeof estado !== 'object' || !('importarGdl' in estado)) return;
+    const entrada: unknown = estado.importarGdl;
+    if (!entrada || typeof entrada !== 'object' || !('numero' in entrada) || !('ano' in entrada)
+      || typeof entrada.numero !== 'string' || !/^\d+$/.test(entrada.numero)
+      || typeof entrada.ano !== 'string' || !/^\d{4}$/.test(entrada.ano)) return;
+    handleNovo();
+    setRepInicialGdl({ numero: entrada.numero, ano: entrada.ano });
+    setGdlModalOpen(true);
+    navigate('/reps', { replace: true, state: null });
+  }, [location.state, navigate, handleNovo]);
 
   const handleIdentificarPlaceholders = () => {
     handleNovo();
@@ -936,7 +961,8 @@ export const REPsPage: React.FC = () => {
         if (r.success && r.data && r.data.template_id) {
           templateId = r.data.template_id;
         }
-      } catch {
+      } catch (erro) {
+        window.ipcAPI.logWarning('rep', `Não foi possível identificar o template atual: ${mensagemErro(erro, 'erro inesperado')}`);
       }
 
       try {
@@ -1610,6 +1636,15 @@ export const REPsPage: React.FC = () => {
                 </Button>
                 <Button
                   variant="outline"
+                  onClick={() => setGdlListaModalOpen(true)}
+                  className="flex w-full items-center gap-2 sm:w-auto"
+                  title="Listar REPs do perito no GDL"
+                >
+                  <List size={16} />
+                  Listar REPs
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={handleIdentificarPlaceholders}
                   className="flex w-full items-center gap-2 sm:w-auto"
                   title="Exibir o placeholder correspondente a cada campo da REP"
@@ -1833,6 +1868,15 @@ export const REPsPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      <GdlMinhasRepsModal
+        open={gdlListaModalOpen}
+        onOpenChange={setGdlListaModalOpen}
+        onSelecionar={handleSelecionarRepGdl}
+        onConfigurarCredenciais={() => {
+          setGdlListaModalOpen(false);
+          navigate('/gdl-config');
+        }}
+      />
       <AtualizarRepGdlDialog
         open={repParaAtualizarGdl !== null}
         repId={repParaAtualizarGdl?.id ?? null}
@@ -1858,7 +1902,9 @@ export const REPsPage: React.FC = () => {
           <h1 className="text-2xl md:text-3xl font-bold">Requisições (REPs)</h1>
           <p className="text-muted-foreground mt-1">Gerencie as requisições de exame pericial</p>
         </div>
-        <Button onClick={handleNovo} className="flex items-center gap-2 w-full sm:w-auto"><Plus size={16} /> Nova REP</Button>
+        <Button variant="outline" onClick={handleCancelar} className="flex items-center gap-2 w-full sm:w-auto">
+          <ArrowLeft size={16} /> Voltar à lista
+        </Button>
       </div>
 
       {showForm && (
@@ -2306,7 +2352,11 @@ export const REPsPage: React.FC = () => {
       </Dialog>
       <GdlConsultaModal
         open={gdlModalOpen}
-        onOpenChange={setGdlModalOpen}
+        repInicial={repInicialGdl}
+        onOpenChange={aberto => {
+          setGdlModalOpen(aberto);
+          if (!aberto) setRepInicialGdl(null);
+        }}
         onAplicar={handleAplicarGdl}
         temDadosExistentes={formularioTemDadosRelevantesParaGdl(valoresFormulario, pecasB602)}
         pecasB602={pecasB602}

@@ -16,9 +16,9 @@ import { toast } from 'sonner';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { ManageCategoriesModal, CategoriaPlaceholderRow } from '@/components/placeholders/ManageCategoriesModal';
 import { SortableCategoryTree } from '@/components/categorias/SortableCategoryTree';
-import { Loader2, AlertCircle, Plus, Lock, Check, FolderTree, Search, Edit, Trash2, Settings, Hash, type LucideIcon } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { Loader2, AlertCircle, Plus, Lock, Check, FolderTree, Search, Edit, Trash2, Settings, Hash, Tag } from 'lucide-react';
 import { ALLOWED_COLORS, ICON_CATEGORIES } from '@/lib/category-constants';
+import { obterIconeCategoria } from '@/lib/icones-categoria';
 import {
   type CategoriaFull,
   findCat,
@@ -43,7 +43,6 @@ const emptyForm = (defaultCat: string): PlaceholderFormData => ({
 });
 
 const catEmptyForm = { label: '', descricao: '', cor: 'slate', icone: 'Tag', parent_id: '__none__' as string };
-const iconesLucide = LucideIcons as unknown as Record<string, LucideIcon>;
 
 const getMensagemErro = (erro: unknown, fallback: string): string =>
   erro instanceof Error ? erro.message : fallback;
@@ -288,7 +287,7 @@ export const PlaceholdersPage: React.FC = () => {
       cell: ({ row }) => {
         const cat = findCat(categorias, row.getValue('categoria_id') as string);
         if (!cat) return null;
-        const Icon = iconesLucide[cat.icone] || LucideIcons.Tag;
+        const Icon = obterIconeCategoria(cat.icone, Tag);
         const p = row.original;
         const sistema = PLACEHOLDERS_SISTEMA_CHAVES.includes(p.chave) || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(ep => ep.chave === p.chave);
         return (
@@ -511,8 +510,7 @@ export const PlaceholdersPage: React.FC = () => {
                           <p className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">{cat.label}</p>
                           <div className="flex flex-wrap gap-1.5">
                             {cat.icons.map(iconName => {
-                              const IconComp = iconesLucide[iconName];
-                              if (!IconComp) return null;
+                              const IconComp = obterIconeCategoria(iconName, Tag);
                               return (
                                 <button key={iconName} type="button"
                                   onClick={() => setCatFormData({ ...catFormData, icone: iconName })}

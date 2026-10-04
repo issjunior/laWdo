@@ -12,7 +12,7 @@ export interface TabelaIndicePlaceholder {
 
 export type AlinhamentoCelulaIndice = 'left' | 'center' | 'right' | 'justify';
 
-export interface CelulaIndicePlaceholder {
+interface CelulaIndicePlaceholder {
   valor: string;
   alinhamento: AlinhamentoCelulaIndice;
 }

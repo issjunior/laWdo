@@ -2,12 +2,12 @@ import type { Editor as TinyMceEditorInstance } from 'tinymce';
 
 export type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
 
-export interface PlaceholderPersonalizadoVisualizacao {
+interface PlaceholderPersonalizadoVisualizacao {
   chave: string;
   descricao?: string | null;
 }
 
-export interface ValorPlaceholderVisualizacao {
+interface ValorPlaceholderVisualizacao {
   valor: string;
   preenchido: boolean;
   formato: 'texto' | 'html' | 'html-inline';

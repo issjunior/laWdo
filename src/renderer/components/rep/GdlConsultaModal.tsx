@@ -93,6 +93,7 @@ interface EnvolvidoRevisao {
 
 interface GdlConsultaModalProps {
   open: boolean;
+  repInicial?: { numero: string; ano: string } | null;
   onOpenChange: (open: boolean) => void;
   onAplicar: (
     resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
@@ -294,6 +295,7 @@ function ListaCamposRevisao({
 
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   open,
+  repInicial,
   onOpenChange,
   onAplicar,
   temDadosExistentes,
@@ -369,10 +371,10 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   useEffect(() => {
     if (open) {
       setPasso('busca');
-      setNumeroRep('');
-      setAnoRep(ANO_ATUAL.toString());
-      setAnoManual(false);
-      setAnoManualValor('');
+      setNumeroRep(repInicial?.numero ?? '');
+      setAnoRep(repInicial?.ano ?? ANO_ATUAL.toString());
+      setAnoManual(Boolean(repInicial && !ANOS_OPCOES.includes(repInicial.ano)));
+      setAnoManualValor(repInicial && !ANOS_OPCOES.includes(repInicial.ano) ? repInicial.ano : '');
       setAnoManualErro(null);
       setErro(null);
       setAplicando(false);
@@ -420,7 +422,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
         }
       })();
     }
-  }, [open]);
+  }, [open, repInicial]);
 
   const handleAnoChange = (value: string) => {
     if (value === 'manual') {

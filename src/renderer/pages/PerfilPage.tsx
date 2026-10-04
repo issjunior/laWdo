@@ -23,6 +23,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { lerUsuarioSessao, salvarUsuarioSessao } from '@/lib/usuario-sessao';
 
 const perfilValidationSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
@@ -52,21 +53,12 @@ const perfilValidationSchema = z.object({
 
 type PerfilUpdateFormValues = z.infer<typeof perfilValidationSchema>;
 
-const AUTH_USER_KEY = 'lawdo_auth_user';
-
-type UsuarioSessao = Record<string, unknown>;
 type PerfilUpdatePayload = {
   nome: string;
   email: string;
   cargo: PerfilUpdateFormValues['cargo'];
   lotacao: string;
   senha?: string;
-};
-
-const parseUsuarioSessao = (raw: string | null): UsuarioSessao | null => {
-  if (!raw) return null;
-  const parsed: unknown = JSON.parse(raw);
-  return parsed && typeof parsed === 'object' ? parsed as UsuarioSessao : null;
 };
 
 const getString = (valor: unknown): string =>
@@ -102,8 +94,7 @@ export const PerfilPage: React.FC = () => {
   });
 
   const loadAvatar = useCallback(async () => {
-    const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    const user = parseUsuarioSessao(raw);
+    const user = lerUsuarioSessao();
     const id = getString(user?.id);
     if (!id) return;
 
@@ -114,34 +105,27 @@ export const PerfilPage: React.FC = () => {
           setFotoUrl(result.data.foto_url);
           return;
         }
-      } catch { }
+      } catch (erro) {
+        window.ipcAPI.logWarning('perfil', `Não foi possível carregar o avatar: ${getMensagemErro(erro, 'erro inesperado')}`);
+      }
     }
     setFotoUrl(null);
   }, []);
 
   useEffect(() => {
-    const rawUser = sessionStorage.getItem(AUTH_USER_KEY);
-    if (!rawUser) {
-      return;
-    }
-
-    try {
-      const user = parseUsuarioSessao(rawUser);
-      if (!user) return;
-      setUserId(getString(user.id));
-      form.reset({
-        nome: getString(user.name) || getString(user.nome),
-        username: getString(user.username),
-        email: getString(user.email),
-        cargo: getCargo(user.cargo),
-        lotacao: getString(user.lotacao),
-        senha: '',
-        confirmarSenha: '',
-      });
-      loadAvatar();
-    } catch {
-      // sem ação
-    }
+    const user = lerUsuarioSessao();
+    if (!user) return;
+    setUserId(getString(user.id));
+    form.reset({
+      nome: getString(user.name) || getString(user.nome),
+      username: getString(user.username),
+      email: getString(user.email),
+      cargo: getCargo(user.cargo),
+      lotacao: getString(user.lotacao),
+      senha: '',
+      confirmarSenha: '',
+    });
+    void loadAvatar();
   }, [form, loadAvatar]);
 
   const onSubmit = async (data: PerfilUpdateFormValues) => {
@@ -166,21 +150,15 @@ export const PerfilPage: React.FC = () => {
       }
 
       // Atualiza o sessionStorage com o novo nome
-      const rawUser = sessionStorage.getItem(AUTH_USER_KEY);
-      if (rawUser) {
-        try {
-          const user = parseUsuarioSessao(rawUser);
-          if (!user) return;
-          user.name = data.nome;
-          user.nome = data.nome;
-          user.email = data.email;
-          user.cargo = data.cargo;
-          user.lotacao = data.lotacao;
-          sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-
-          // Dispara um evento para atualizar o header
-          window.dispatchEvent(new Event('storage'));
-        } catch { }
+      const user = lerUsuarioSessao();
+      if (user) {
+        user.name = data.nome;
+        user.nome = data.nome;
+        user.email = data.email;
+        user.cargo = data.cargo;
+        user.lotacao = data.lotacao;
+        salvarUsuarioSessao(user);
+        window.dispatchEvent(new Event('storage'));
       }
 
       setSuccess('Perfil atualizado com sucesso.');
@@ -197,16 +175,11 @@ export const PerfilPage: React.FC = () => {
 
   const handleAvatarUpdated = useCallback((newFotoUrl: string) => {
     setFotoUrl(newFotoUrl);
-    const raw = sessionStorage.getItem(AUTH_USER_KEY);
-    if (raw) {
-      try {
-        const user = parseUsuarioSessao(raw);
-        if (!user) return;
-        user.foto_url = 'updated';
-        sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-        window.dispatchEvent(new Event('storage'));
-      } catch { }
-    }
+    const user = lerUsuarioSessao();
+    if (!user) return;
+    user.foto_url = 'updated';
+    salvarUsuarioSessao(user);
+    window.dispatchEvent(new Event('storage'));
   }, []);
 
   const userName = form.watch('nome') || 'Usuário';
@@ -446,7 +419,7 @@ export const PerfilPage: React.FC = () => {
 
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => {
-                  const user = parseUsuarioSessao(sessionStorage.getItem(AUTH_USER_KEY));
+                  const user = lerUsuarioSessao();
                   setIsChangingPassword(false);
                   form.reset({
                     nome: getString(user?.name) || getString(user?.nome),

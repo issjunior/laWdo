@@ -16,6 +16,7 @@ import {
 import { getMargens } from '@/lib/margens';
 import { buildHeaderTemplate } from '@/lib/pdf-header';
 import { CABECALHO_TODAS_PAGINAS_PADRAO } from '@shared/configuracoes/cabecalhos-padrao';
+import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 
 interface Placeholder {
   id: string;
@@ -136,16 +137,13 @@ export const CabecalhoPage: React.FC = () => {
       let peritoCargo = '';
       let peritoLotacao = '';
       let peritoMatricula = '';
-      try {
-        const userJson = sessionStorage.getItem('lawdo_auth_user');
-        if (userJson) {
-          const perito = JSON.parse(userJson) as PeritoSessao;
-          peritoNome = perito.nome || perito.name || '';
-          peritoCargo = perito.cargo || perito.role || '';
-          peritoLotacao = perito.lotacao || '';
-          peritoMatricula = perito.matricula || '';
-        }
-      } catch {}
+      const perito = lerUsuarioSessao() as PeritoSessao | null;
+      if (perito) {
+        peritoNome = perito.nome || perito.name || '';
+        peritoCargo = perito.cargo || perito.role || '';
+        peritoLotacao = perito.lotacao || '';
+        peritoMatricula = perito.matricula || '';
+      }
 
       const replacements: Record<string, string> = {
         '{{perito.nome}}': peritoNome,

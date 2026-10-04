@@ -7,7 +7,8 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { app, nativeImage, session } from 'electron';
 import type { Session } from 'electron';
-import { consultarPaginaRepGdl } from './gdl-pagina.service.js';
+import { consultarNaturezasMinhasRepsGdl, consultarPaginaRepGdl, listarPaginaMinhasRepsGdl } from './gdl-pagina.service.js';
+import type { NaturezaMinhaRepGdl, PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
@@ -290,6 +291,7 @@ async function requisitarGdl(
   headers: Record<string, string>,
   body?: string,
   timeout: number = 15000,
+  seguirRedirecionamentos = true,
 ): Promise<{ statusCode: number; data: string; redirecionado: boolean; paginaAutenticacao: boolean }> {
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
@@ -298,6 +300,7 @@ async function requisitarGdl(
     const resposta = await sessaoRede.fetch(url, {
       method,
       headers,
+      redirect: seguirRedirecionamentos ? 'follow' : 'manual',
       ...(body ? { body } : {}),
       signal: controller.signal,
     });
@@ -895,6 +898,27 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
   }
 }
 
+export async function listarMinhasReps(pagina: number): Promise<PaginaMinhasRepsGdl> {
+  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const credenciais = await carregarCredenciais(ambiente);
+  if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
+  return listarPaginaMinhasRepsGdl(credenciais, pagina, obterSessaoRedeGdl);
+}
+
+export async function obterIdentidadeMinhasReps(): Promise<string> {
+  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const credenciais = await carregarCredenciais(ambiente);
+  if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
+  return createHash('sha256').update(JSON.stringify({ ambiente, credenciais })).digest('hex');
+}
+
+export async function consultarNaturezasMinhasReps(listagemId: string): Promise<NaturezaMinhaRepGdl[]> {
+  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const credenciais = await carregarCredenciais(ambiente);
+  if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
+  return consultarNaturezasMinhasRepsGdl(credenciais, listagemId, obterSessaoRedeGdl);
+}
+
 export async function consultarRep(numero: string, ano: string): Promise<GdlConsultaResultado> {
   let ambiente: AmbienteGdl = 'homologacao';
   try {
@@ -1263,56 +1287,6 @@ export async function capturarImagensRepGdl(
     }
     }
     return { imagens, falhas };
-  } finally {
-    if (fs.existsSync(caminhoZip)) fs.unlinkSync(caminhoZip)
-  }
-}
-
-export async function capturarImagensRepGdlParaLaudo(
-  numero: string,
-  ano: string,
-  idsSelecao: string[],
-  salvarImagem: (imagem: { idSelecao: string; nomeArquivo: string; mimeType: string; bytes: Buffer; sha256: string }) => Promise<ImagemRepGdlAdicionadaAoLaudo | DuplicataImagemRepGdl>,
-): Promise<ResultadoCapturaImagensLaudoGdl> {
-  const idsUnicos = [...new Set(idsSelecao)]
-  if (idsUnicos.length === 0) return { imagens: [], falhas: [], duplicadas: [] }
-
-  const { arquivos, caminhoZip } = await baixarListaFotosRep(numero, ano)
-  try {
-    const porId = new Map(arquivos.map(arquivo => [arquivo.idSelecao, arquivo]))
-    const entradasZip = lerEntradasZipDoArquivo(caminhoZip)
-    const imagens: ImagemRepGdlAdicionadaAoLaudo[] = []
-    const falhas: ResultadoCapturaImagensLaudoGdl['falhas'] = []
-    const duplicadas: ResultadoCapturaImagensLaudoGdl['duplicadas'] = []
-    const hashesCapturados = new Set<string>()
-
-    for (const idSelecao of idsUnicos) {
-    const arquivo = porId.get(idSelecao)
-    if (!arquivo || !arquivo.provavelImagem || arquivo.status) {
-      falhas.push({ idSelecao, erro: 'Foto indisponível para captura na Lista de Fotos.' })
-      continue
-    }
-    try {
-      const entrada = entradasZip[arquivo.indiceEntradaZip]
-      if (!entrada) throw new Error('A foto não foi encontrada no arquivo retornado pelo GDL.')
-      const bytes = extrairEntradaZipDoArquivo(caminhoZip, entrada)
-      if (bytes.length === 0) throw new Error('O GDL retornou um arquivo vazio.')
-      const mimeType = detectarMimeImagem(bytes)
-      if (!mimeType) throw new Error('O conteúdo baixado não é uma imagem compatível.')
-      const sha256 = createHash('sha256').update(bytes).digest('hex')
-      if (hashesCapturados.has(sha256)) {
-        falhas.push({ idSelecao, erro: 'Imagem duplicada nesta captura.' })
-        continue
-      }
-      hashesCapturados.add(sha256)
-      const resultado = await salvarImagem({ idSelecao, nomeArquivo: arquivo.nomeArquivo, mimeType, bytes, sha256 })
-      if ('imagemExistenteId' in resultado) duplicadas.push(resultado)
-      else imagens.push(resultado)
-    } catch (erro) {
-      falhas.push({ idSelecao, erro: erro instanceof Error ? erro.message : 'Erro inesperado ao capturar arquivo.' })
-    }
-    }
-    return { imagens, falhas, duplicadas }
   } finally {
     if (fs.existsSync(caminhoZip)) fs.unlinkSync(caminhoZip)
   }

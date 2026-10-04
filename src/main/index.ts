@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, shell, globalShortcut, ipcMain } from 'elec
 import path from 'path';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
 import { CURRENT_SCHEMA_VERSION, setupDatabase } from './database/index.js';
@@ -24,6 +24,7 @@ import { capturaLogsService } from './services/captura-logs.service.js';
 import { definirAtivadorInstancia } from './utils/instancia-unica.js';
 import { carregarConteudoJanela } from './utils/carregamento-janela.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
+import { navegacaoAplicacaoPermitida } from './security/navegacao.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -494,6 +495,7 @@ const createWindow = async (): Promise<void> => {
   const endereco = process.env.NODE_ENV === 'development'
     ? 'http://localhost:3000'
     : path.join(__dirname, '../renderer/index.html');
+  const enderecoNavegacao = process.env.NODE_ENV === 'development' ? endereco : pathToFileURL(endereco).href;
   logDebug('Carregamento do conteúdo da janela principal iniciado', { modo: process.env.NODE_ENV === 'development' ? 'servidor' : 'arquivo' });
   if (process.env.NODE_ENV === 'development') {
     janela.webContents.openDevTools();
@@ -506,13 +508,10 @@ const createWindow = async (): Promise<void> => {
   const conteudoId = janela.webContents.id;
   janela.webContents.on('did-start-navigation', detalhes => authSessaoService.aoIniciarNavegacao(conteudoId, detalhes));
   janela.webContents.on('destroyed', () => authSessaoService.encerrar(conteudoId));
-  // Abrir links externos no navegador padrão
-  janela.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('mailto:')) {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    }
-    return { action: 'allow' };
+  janela.webContents.on('will-navigate', (evento, destino) => {
+    if (navegacaoAplicacaoPermitida(destino, enderecoNavegacao)) return;
+    evento.preventDefault();
+    log.warn('Navegação externa bloqueada na janela principal', { destino });
   });
 
   // Lidar com fechamento da janela

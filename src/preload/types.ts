@@ -59,7 +59,7 @@ export interface DashboardResponse<T> {
   error?: string
 }
 
-export interface LimiteUsoIaResposta {
+interface LimiteUsoIaResposta {
   provedor: 'groq' | 'gemini'
   categoria: 'requisicoes' | 'tokens' | 'diario' | 'gasto' | 'desconhecido'
   tentarNovamenteEm?: number
