@@ -498,7 +498,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                 </div>
                 <div className="rounded-lg bg-primary/5 p-3 border border-primary/10">
                   <p className="text-center text-xs text-muted-foreground">
-                    Se não conseguir verificar ou baixar atualizações pelo aplicativo, baixe o instalador manualmente em{' '}
+                    Baixe o instalador manualmente em{' '}
                     <a
                       href="https://issjunior.github.io/laWdo/"
                       target="_blank"
