@@ -96,6 +96,7 @@ let servidor: http.Server
 let baseUrl = ''
 let statusUnidades = 200
 let statusRep = 200
+let statusInvestigacao = 200
 let rejeitarLogin = false
 let sequenciaTeste = 0
 let redirecionarPaginaParaLogin = false
@@ -103,6 +104,7 @@ const statusRepPorBusca = new Map<string, number>()
 let statusFotos = 200
 let respostaRep = fixtureRep
 let respostaPaginaRep = '<input id="Content_RepMain_txtDateEntry" value="11/06/2024"><textarea id="Content_RepMain_txtOpenQuestion">QUESITO &amp; TESTE</textarea>'
+let respostaInvestigacao: string | null = null
 let respostaMinhasReps = ''
 const corposInvestigacao: string[] = []
 const configuracoes: Record<string, string> = {}
@@ -157,7 +159,7 @@ beforeAll(async () => {
       requisicao.on('data', parte => { corpo += String(parte) })
       requisicao.on('end', () => {
         corposInvestigacao.push(corpo)
-        responder(resposta, 200, JSON.stringify({
+        responder(resposta, statusInvestigacao, respostaInvestigacao ?? JSON.stringify({
           dadosREPs: [
             { numeroRep: '190/2026', naturezaExame: 'B602 - EXAME BALÍSTICO', envolvidos: { nome: 'ENVOLVIDO COMPLEMENTAR' } },
             { numeroRep: '999/2026', envolvidos: { nome: 'ENVOLVIDO DE OUTRA REP' } },
@@ -192,6 +194,7 @@ afterAll(async () => {
 beforeEach(() => {
   statusUnidades = 200
   statusRep = 200
+  statusInvestigacao = 200
   rejeitarLogin = false
   sequenciaTeste += 1
   redirecionarPaginaParaLogin = false
@@ -200,6 +203,7 @@ beforeEach(() => {
   statusFotos = 200
   respostaRep = fixtureRep
   respostaPaginaRep = '<input id="Content_RepMain_txtDateEntry" value="11/06/2024"><textarea id="Content_RepMain_txtOpenQuestion">QUESITO &amp; TESTE</textarea>'
+  respostaInvestigacao = null
   respostaMinhasReps = ''
   corposInvestigacao.length = 0
   requisicoesGdl.length = 0
@@ -291,6 +295,56 @@ describe('gdl.service', () => {
       numeroRep: '190',
       anoRep: '2026',
     })
+  })
+
+  it('prioriza a natureza identificável da consulta auxiliar sobre a página', async () => {
+    respostaPaginaRep = '<select id="Content_RepMain_ddlNatureExam"><option selected="selected">B601 - OUTRO EXAME</option></select>'
+
+    const resultado = await consultarRep('190', '2026')
+
+    expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
+    expect(resultado.erroNaturezaExame).toBeUndefined()
+  })
+
+  it('usa a natureza da página quando a consulta auxiliar falha', async () => {
+    statusInvestigacao = 503
+    respostaPaginaRep = '<select id="Content_RepMain_ddlNatureExam"><option selected="selected">B602 - EXAME BALÍSTICO</option></select>'
+
+    const resultado = await consultarRep('190', '2026')
+
+    expect(resultado.sucesso).toBe(true)
+    expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
+    expect(resultado.erroNaturezaExame).toBeUndefined()
+  })
+
+  it('usa a natureza da página quando a consulta auxiliar não encontra a REP', async () => {
+    respostaInvestigacao = JSON.stringify({ dadosREPs: [] })
+    respostaPaginaRep = '<select id="Content_RepMain_ddlNatureExam"><option selected="selected">B602 - EXAME BALÍSTICO</option></select>'
+
+    const resultado = await consultarRep('190', '2026')
+
+    expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
+  })
+
+  it('não identifica natureza quando a página redireciona para login e a consulta auxiliar falha', async () => {
+    statusInvestigacao = 503
+    redirecionarPaginaParaLogin = true
+
+    const resultado = await consultarRep('190', '2026')
+
+    expect(resultado.naturezaExame).toBeUndefined()
+    expect(resultado.erroNaturezaExame).toContain('Consulta auxiliar: uma ou mais consultas falharam')
+    expect(resultado.erroNaturezaExame).toContain('Página de detalhes: página de autenticação')
+  })
+
+  it('explica a ausência de natureza nas duas fontes sem presumir B-602', async () => {
+    respostaInvestigacao = JSON.stringify({ dadosREPs: [] })
+
+    const resultado = await consultarRep('190', '2026')
+
+    expect(resultado.naturezaExame).toBeUndefined()
+    expect(resultado.erroNaturezaExame).toContain('Consulta auxiliar: REP não encontrada no resultado')
+    expect(resultado.erroNaturezaExame).toContain('Página de detalhes: natureza ausente')
   })
 
   it('usa Produção quando Homologação está desabilitada ou falta configuração', async () => {

@@ -28,3 +28,17 @@ export interface SnapshotMinhasRepsGdl {
   reps: MinhaRepGdl[];
   atualizadoEm: string;
 }
+
+export const codigosFalhaListaRepsGdl = [
+  'credenciais', 'autenticacao', 'rede', 'tempo_esgotado', 'limite_gdl', 'servidor',
+  'sessao', 'estrutura', 'detalhes_reps', 'lista_inconsistente',
+  'cache_local', 'inesperado',
+] as const;
+
+export type CodigoFalhaListaRepsGdl = typeof codigosFalhaListaRepsGdl[number];
+
+export interface FalhaListaRepsGdl {
+  codigo: CodigoFalhaListaRepsGdl;
+  detalhes: string;
+  referencia: string;
+}

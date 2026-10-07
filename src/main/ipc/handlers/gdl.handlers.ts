@@ -4,6 +4,7 @@ import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
 import { obterMinhasRepsEmCache, atualizarMinhasRepsEmCache } from '../../services/gdl-minhas-reps-cache.service.js';
+import { classificarFalhaListaRepsGdl } from '../../services/gdl-minhas-reps-erro.service.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
@@ -40,12 +41,28 @@ export const registerGdlHandlers = (): void => {
   });
 
   ipcMain.handle('gdl:atualizar-minhas-reps-cache', async (event, forcar: unknown) => {
+    const inicio = Date.now();
     try {
       if (typeof forcar !== 'boolean') throw new Error('Opção de atualização inválida.');
       return { success: true, data: await atualizarMinhasRepsEmCache(authSessaoService.exigir(event.sender.id), forcar) };
     } catch (erro: unknown) {
-      logError('Falha ao atualizar Minhas REPs no GDL', erro);
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível atualizar as REPs do GDL.' };
+      const falha = classificarFalhaListaRepsGdl(erro);
+      const referencia = randomUUID();
+      logError('Falha ao atualizar Minhas REPs no GDL', {
+        referencia,
+        codigo: falha.codigo,
+        etapa: falha.etapa,
+        detalhes: falha.detalhes,
+        tipoErro: falha.tipoErro,
+        codigoSistema: falha.codigoSistema,
+        duracaoMs: Date.now() - inicio,
+        pilha: erro instanceof Error ? erro.stack?.split('\n').slice(1, 5).join('\n') : undefined,
+      });
+      return {
+        success: false,
+        error: falha.detalhes,
+        falha: { codigo: falha.codigo, detalhes: falha.detalhes, referencia },
+      };
     }
   });
   ipcMain.handle('gdl:preparar-atualizacao-rep', async (_event, repId: unknown) => {
@@ -150,7 +167,7 @@ export const registerGdlHandlers = (): void => {
       const naturezaExameGdl = resultado.naturezaExame?.trim() || '';
       const codigoExame = gdlService.extrairCodigoNaturezaExame(naturezaExameGdl);
       if (!codigoExame) {
-        return { success: false, error: 'O GDL não retornou uma natureza de exame identificável para esta REP.' };
+        return { success: false, error: resultado.erroNaturezaExame || 'O GDL não retornou uma natureza de exame identificável para esta REP.' };
       }
       if (codigoExame !== 'B-602') {
         return {

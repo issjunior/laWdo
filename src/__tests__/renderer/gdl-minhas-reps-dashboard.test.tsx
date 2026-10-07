@@ -46,10 +46,16 @@ describe('REPs do GDL no dashboard', () => {
   });
 
   it('preserva a lista salva e avisa quando a rede ou VPN falha', async () => {
-    atualizarMinhasRepsCache.mockResolvedValue({ success: false, error: 'Rede indisponível' });
+    atualizarMinhasRepsCache.mockResolvedValue({ success: false, falha: {
+      codigo: 'rede', detalhes: 'fetch failed (ERR_CONNECTION_REFUSED)', referencia: '85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e',
+    } });
     render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
     expect(await screen.findByText(/1 de 1 REPs/)).toBeInTheDocument();
-    expect(await screen.findByText(/A lista salva pode estar desatualizada/)).toBeInTheDocument();
+    expect(await screen.findByText(/Não foi possível alcançar o GDL/)).toHaveTextContent('Exibindo a última lista salva.');
+    expect(screen.queryByText(/ERR_CONNECTION_REFUSED/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Detalhes' }));
+    expect(screen.getByText(/ERR_CONNECTION_REFUSED/)).toBeInTheDocument();
+    expect(screen.getByText(/85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /REP 123\/2026/ })).toBeEnabled();
   });
 });

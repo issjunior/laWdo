@@ -59,13 +59,18 @@ describe('modal Minhas REPs do GDL com cache compartilhado', () => {
 
   it('mostra o cache se a atualização falhar e permite atualização manual', async () => {
     obterMinhasRepsCache.mockResolvedValue({ success: true, data: snapshot });
-    atualizarMinhasRepsCache.mockResolvedValueOnce({ success: false, error: 'VPN indisponível' })
+    atualizarMinhasRepsCache.mockResolvedValueOnce({ success: false, falha: {
+      codigo: 'autenticacao', detalhes: 'Login web não concluído.', referencia: '95327f98-48ad-41fd-8f89-0e94e97e67ce',
+    } })
       .mockResolvedValueOnce({ success: true, data: snapshot });
     abrirModal();
-    expect(await screen.findByText(/VPN indisponível/)).toBeInTheDocument();
+    expect(await screen.findByText(/O GDL não concluiu a autenticação/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Configurar GDL' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Detalhes' }));
+    expect(screen.getByText('Login web não concluído.')).toBeInTheDocument();
     expect(screen.getByText(/2 de 2 REPs/)).toBeInTheDocument();
     expect(screen.getByText(/Atualizado em/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
     await waitFor(() => expect(atualizarMinhasRepsCache).toHaveBeenCalledWith(true));
   });
 });

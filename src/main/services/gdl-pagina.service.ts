@@ -189,7 +189,9 @@ export async function listarPaginaMinhasRepsGdl(
     const inicial = await lerPaginaListagem(estado.rede, url, 'grade_inicial');
     if (inicial.statusCode !== 200 || inicial.paginaAutenticacao) {
       estado.autenticada = false;
-      throw new Error('Não foi possível abrir Minhas REPs no GDL.');
+      throw new Error(inicial.paginaAutenticacao
+        ? 'O GDL solicitou nova autenticação ao abrir Minhas REPs.'
+        : `Não foi possível abrir Minhas REPs no GDL (HTTP ${inicial.statusCode}).`);
     }
     resposta = await lerPaginaListagem(estado.rede, url, 'grade_filtro', montarFormularioMinhasRepsGdl(inicial.data, url, 'filtrar'));
   } else {
@@ -201,7 +203,9 @@ export async function listarPaginaMinhasRepsGdl(
   if (resposta.statusCode !== 200 || resposta.paginaAutenticacao) {
     estado.autenticada = false;
     estado.paginaMinhasReps = undefined;
-    throw new Error('A sessão de Minhas REPs não está disponível no GDL.');
+    throw new Error(resposta.paginaAutenticacao
+      ? 'O GDL solicitou nova autenticação durante a listagem de REPs.'
+      : `A sessão de Minhas REPs não está disponível no GDL (HTTP ${resposta.statusCode}).`);
   }
   const resultado = interpretarMinhasRepsGdl(resposta.data, pagina);
   estado.paginaMinhasReps = { numero: pagina, html: resposta.data };

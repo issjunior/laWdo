@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { CalendarDays, Camera, RefreshCw } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -21,6 +20,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { GdlConsultaEmAndamento } from '@/components/rep/GdlConsultaEmAndamento';
+import { GdlFalhaListaAlert, normalizarFalhaListaGdl } from '@/components/rep/GdlFalhaListaAlert';
+import type { FalhaListaGdlApresentavel } from '@/components/rep/GdlFalhaListaAlert';
 import { classesStatusRepGdl, GdlStatusBadge } from '@/components/rep/GdlStatusBadge';
 import type { MinhaRepGdl, StatusMinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
 
@@ -78,7 +79,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
   const [statusFiltro, setStatusFiltro] = useState<StatusMinhaRepGdl | 'todos'>('todos');
   const [naturezaFiltro, setNaturezaFiltro] = useState('todos');
   const [dataInicial, setDataInicial] = useState('');
@@ -106,15 +107,29 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
       }
       const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(forcar);
       if (geracao !== geracaoCarga.current) return;
-      if (!resposta.success)
-        throw new Error(resposta.error || 'Não foi possível listar as REPs do GDL.');
+      if (!resposta.success) {
+        setErro(normalizarFalhaListaGdl(resposta));
+        return;
+      }
       const validacao = esquemaSnapshot.safeParse(resposta.data);
-      if (!validacao.success) throw new Error('A lista de REPs retornou um formato inesperado.');
+      if (!validacao.success) {
+        window.ipcAPI.logError('gdl', 'Lista de REPs do GDL inválida no diálogo', {
+          campos: validacao.error.issues.map(ocorrencia => ocorrencia.path.join('.')),
+        });
+        setErro({ codigo: 'estrutura', detalhes: 'A resposta da lista não corresponde ao formato esperado pelo laWdo.' });
+        return;
+      }
       setReps(validacao.data.reps);
       setAtualizadoEm(validacao.data.atualizadoEm);
     } catch (falha: unknown) {
       if (geracao === geracaoCarga.current) {
-        setErro(falha instanceof Error ? falha.message : 'Não foi possível listar as REPs do GDL.');
+        window.ipcAPI.logError('gdl', 'Falha inesperada ao atualizar a lista no diálogo', {
+          tipoErro: falha instanceof Error ? falha.name : 'Erro desconhecido',
+        });
+        setErro({
+          codigo: 'inesperado',
+          detalhes: 'A interface não conseguiu concluir a atualização da lista. Consulte o log do aplicativo.',
+        });
       }
     } finally {
       if (geracao === geracaoCarga.current) setCarregando(false);
@@ -172,23 +187,8 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
             Selecione uma REP para continuar no importador do GDL.
           </DialogDescription>
         </DialogHeader>
-        {erro && (
-          <Alert variant="destructive" className="shrink-0">
-            <AlertDescription className="flex flex-wrap items-center gap-2">
-              <span>
-                {erro} {reps ? 'Exibindo a última lista salva.' : 'Nenhuma lista salva disponível.'}
-              </span>
-              {erro.includes('Credenciais não configuradas') && (
-                <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>
-                  Configurar credenciais
-                </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={() => void carregarTodas()}>
-                Tentar novamente
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(reps)}
+          onTentarNovamente={() => void carregarTodas(true)} onConfigurarCredenciais={onConfigurarCredenciais} />}
         <div className="shrink-0 space-y-3 border-b pb-3">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
             <div className="min-w-0">

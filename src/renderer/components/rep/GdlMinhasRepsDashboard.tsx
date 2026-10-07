@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GdlConsultaEmAndamento } from '@/components/rep/GdlConsultaEmAndamento';
+import { GdlFalhaListaAlert, normalizarFalhaListaGdl } from '@/components/rep/GdlFalhaListaAlert';
+import type { FalhaListaGdlApresentavel } from '@/components/rep/GdlFalhaListaAlert';
 import { GdlStatusBadge } from '@/components/rep/GdlStatusBadge';
 import type { MinhaRepGdl, SnapshotMinhasRepsGdl, StatusMinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
 
@@ -30,7 +32,7 @@ export function GdlMinhasRepsDashboard() {
   const navegar = useNavigate();
   const [snapshot, setSnapshot] = useState<SnapshotMinhasRepsGdl | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
   const [status, setStatus] = useState<StatusMinhaRepGdl | 'todos'>('todos');
   const [natureza, setNatureza] = useState('todos');
   const [dataInicial, setDataInicial] = useState('');
@@ -41,12 +43,27 @@ export function GdlMinhasRepsDashboard() {
     setErro(null);
     try {
       const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(forcar);
-      if (!resposta.success) throw new Error(resposta.error || 'Não foi possível consultar o GDL.');
+      if (!resposta.success) {
+        setErro(normalizarFalhaListaGdl(resposta));
+        return;
+      }
       const validacao = esquemaSnapshot.safeParse(resposta.data);
-      if (!validacao.success) throw new Error('A lista do GDL retornou um formato inesperado.');
+      if (!validacao.success) {
+        window.ipcAPI.logError('gdl', 'Lista de REPs do GDL inválida no Dashboard', {
+          campos: validacao.error.issues.map(ocorrencia => ocorrencia.path.join('.')),
+        });
+        setErro({ codigo: 'estrutura', detalhes: 'A resposta da lista não corresponde ao formato esperado pelo laWdo.' });
+        return;
+      }
       setSnapshot(validacao.data);
     } catch (falha: unknown) {
-      setErro(falha instanceof Error ? falha.message : 'Não foi possível acessar o GDL.');
+      window.ipcAPI.logError('gdl', 'Falha inesperada ao atualizar a lista no Dashboard', {
+        tipoErro: falha instanceof Error ? falha.name : 'Erro desconhecido',
+      });
+      setErro({
+        codigo: 'inesperado',
+        detalhes: 'A interface não conseguiu concluir a atualização da lista. Consulte o log do aplicativo.',
+      });
     } finally {
       setCarregando(false);
     }
@@ -85,11 +102,8 @@ export function GdlMinhasRepsDashboard() {
         </div>
         <Button variant="outline" size="sm" disabled={carregando} onClick={() => void atualizar(true)}><RefreshCw className="mr-2 h-4 w-4" />Atualizar</Button>
       </div>
-      {erro && <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-amber-400/50 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
-        <AlertTriangle className="h-4 w-4" />
-        <span>Não foi possível atualizar pelo GDL. Verifique a rede, a VPN e as credenciais. {snapshot ? 'A lista salva pode estar desatualizada.' : erro}</span>
-        <Button variant="outline" size="sm" onClick={() => navegar('/gdl-config')}>Configurar GDL</Button>
-      </div>}
+      {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(snapshot)}
+        onTentarNovamente={() => void atualizar(true)} onConfigurarCredenciais={() => navegar('/gdl-config')} />}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <div><Label htmlFor="gdl-dashboard-status">Status</Label><Select value={status} onValueChange={valor => setStatus(statusDisponiveis.find(item => item === valor) ?? 'todos')}><SelectTrigger id="gdl-dashboard-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os status</SelectItem>{statusDisponiveis.map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
         <div><Label htmlFor="gdl-dashboard-natureza">Natureza</Label><Select value={natureza} onValueChange={setNatureza}><SelectTrigger id="gdl-dashboard-natureza"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os exames</SelectItem>{naturezas.map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
