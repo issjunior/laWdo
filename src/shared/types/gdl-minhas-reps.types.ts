@@ -30,6 +30,7 @@ export interface SnapshotMinhasRepsGdl {
 }
 
 export const codigosFalhaListaRepsGdl = [
+  'desativada',
   'credenciais', 'autenticacao', 'rede', 'tempo_esgotado', 'limite_gdl', 'servidor',
   'sessao', 'estrutura', 'detalhes_reps', 'lista_inconsistente',
   'cache_local', 'inesperado',

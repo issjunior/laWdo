@@ -27,6 +27,10 @@ interface SessaoPaginaGdl {
 
 const sessoes = new Map<string, SessaoPaginaGdl>();
 
+export function interromperDetalhesMinhasRepsGdl(): void {
+  sessoes.forEach(estado => estado.consultaNaturezas?.controlador.abort());
+}
+
 function atributoHtml(tag: string, nome: string): string {
   const valor = tag.match(new RegExp(`\\b${nome}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] ?? '';
   return valor.replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&amp;/gi, '&');

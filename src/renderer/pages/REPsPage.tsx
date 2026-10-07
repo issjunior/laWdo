@@ -1874,7 +1874,7 @@ export const REPsPage: React.FC = () => {
         onSelecionar={handleSelecionarRepGdl}
         onConfigurarCredenciais={() => {
           setGdlListaModalOpen(false);
-          navigate('/gdl-config');
+          navigate('/gdl-config', { state: { focarListagemGdl: true } });
         }}
       />
       <AtualizarRepGdlDialog

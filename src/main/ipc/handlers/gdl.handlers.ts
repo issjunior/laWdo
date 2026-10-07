@@ -4,6 +4,8 @@ import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
 import { obterMinhasRepsEmCache, atualizarMinhasRepsEmCache } from '../../services/gdl-minhas-reps-cache.service.js';
+import { definirListagemRepsGdlHabilitada, obterListagemRepsGdlHabilitada } from '../../services/gdl-listagem-preferencia.service.js';
+import { interromperDetalhesMinhasRepsGdl } from '../../services/gdl-pagina.service.js';
 import { classificarFalhaListaRepsGdl } from '../../services/gdl-minhas-reps-erro.service.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
@@ -32,6 +34,27 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:obter-preferencia-listagem', async event => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      return { success: true, data: { habilitada: await obterListagemRepsGdlHabilitada() } };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível ler a preferência da listagem.' };
+    }
+  });
+
+  ipcMain.handle('gdl:definir-preferencia-listagem', async (event, habilitada: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (typeof habilitada !== 'boolean') throw new Error('Preferência de listagem inválida.');
+      await definirListagemRepsGdlHabilitada(habilitada);
+      if (!habilitada) interromperDetalhesMinhasRepsGdl();
+      return { success: true, data: { habilitada } };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível alterar a preferência da listagem.' };
+    }
+  });
+
   ipcMain.handle('gdl:obter-minhas-reps-cache', async event => {
     try {
       return { success: true, data: await obterMinhasRepsEmCache(authSessaoService.exigir(event.sender.id)) };

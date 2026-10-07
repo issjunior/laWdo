@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -94,6 +95,11 @@ export const GdlConfigPage: React.FC = () => {
   const [ambiente, setAmbiente] = useState('producao');
   const [homologacaoHabilitada, setHomologacaoHabilitada] = useState(false);
   const [salvandoHabilitacao, setSalvandoHabilitacao] = useState(false);
+  const [listagemHabilitada, setListagemHabilitada] = useState(false);
+  const [preferenciaCarregada, setPreferenciaCarregada] = useState(false);
+  const [salvandoListagem, setSalvandoListagem] = useState(false);
+  const [confirmarListagemOpen, setConfirmarListagemOpen] = useState(false);
+  const [erroListagem, setErroListagem] = useState<string | null>(null);
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [cpfUsuario, setCpfUsuario] = useState('');
@@ -144,6 +150,41 @@ export const GdlConfigPage: React.FC = () => {
   }, []);
 
   useEffect(() => { carregarConfigs(); }, [carregarConfigs]);
+
+
+  useEffect(() => {
+    let ativo = true;
+    void window.ipcAPI.gdl.obterPreferenciaListagem().then(resposta => {
+      if (!ativo) return;
+      if (!resposta.success || typeof resposta.data?.habilitada !== 'boolean') {
+        setErroListagem(resposta.error || 'Não foi possível consultar a preferência de listagem.');
+        return;
+      }
+      setListagemHabilitada(resposta.data.habilitada);
+      setPreferenciaCarregada(true);
+    }).catch((falha: unknown) => {
+      if (ativo) setErroListagem(getMensagemErro(falha, 'Não foi possível consultar a preferência de listagem.'));
+    });
+    return () => { ativo = false; };
+  }, []);
+
+  const alterarListagem = async (habilitar: boolean) => {
+    setSalvandoListagem(true);
+    setErroListagem(null);
+    try {
+      const resposta = await window.ipcAPI.gdl.definirPreferenciaListagem(habilitar);
+      if (!resposta.success || resposta.data?.habilitada !== habilitar) {
+        throw new Error(resposta.error || 'Não foi possível salvar a preferência de listagem.');
+      }
+      setListagemHabilitada(habilitar);
+      setConfirmarListagemOpen(false);
+      toast.success(habilitar ? 'Listagem de REPs ativada.' : 'Listagem de REPs desativada.');
+    } catch (falha: unknown) {
+      setErroListagem(getMensagemErro(falha, 'Não foi possível salvar a preferência de listagem.'));
+    } finally {
+      setSalvandoListagem(false);
+    }
+  };
 
   useEffect(() => {
     carregarCredenciaisAmbiente(ambiente);
@@ -373,6 +414,47 @@ export const GdlConfigPage: React.FC = () => {
           <AlertDescription>{erro}</AlertDescription>
         </Alert>
       )}
+
+      <Card id="gdl-listagem-reps">
+        <CardHeader>
+          <CardTitle>Listagem de REPs</CardTitle>
+          <CardDescription>
+            Controla a lista do Dashboard e de REPs → Listar REPs nesta instalação. A consulta e a importação de uma REP individual continuam disponíveis.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {listagemHabilitada
+              ? 'Ativada: as listas são atualizadas pelo GDL. A consulta de detalhes pode marcar REPs como “Laudo em Execução”.'
+              : 'Desativada: as listas mostram apenas cache com menos de 30 minutos e não consultam o GDL.'}
+          </p>
+          {erroListagem && <Alert variant="destructive"><AlertDescription>{erroListagem}</AlertDescription></Alert>}
+          <Button
+            type="button"
+            variant={listagemHabilitada ? 'outline' : 'default'}
+            aria-pressed={listagemHabilitada}
+            disabled={!preferenciaCarregada || salvandoListagem}
+            onClick={() => listagemHabilitada ? void alterarListagem(false) : setConfirmarListagemOpen(true)}
+          >
+            {salvandoListagem ? 'Salvando...' : listagemHabilitada ? 'Desativar listagem' : 'Ativar listagem'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={confirmarListagemOpen} onOpenChange={setConfirmarListagemOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ativar a listagem de REPs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A listagem consulta os detalhes das REPs no GDL e pode marcá-las como “Laudo em Execução”. Ao confirmar, Dashboard e REPs → Listar REPs poderão atualizar a lista automaticamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={salvandoListagem}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={salvandoListagem} onClick={evento => { evento.preventDefault(); void alterarListagem(true); }}>Confirmar ativação</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">

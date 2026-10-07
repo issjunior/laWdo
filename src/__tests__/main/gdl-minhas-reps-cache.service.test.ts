@@ -4,10 +4,14 @@ import path from 'node:path';
 
 const simulacao = vi.hoisted(() => ({
   diretorio: `${process.cwd()}/node_modules/.cache/gdl-cache-test-${process.pid}-${Math.random().toString(36).slice(2)}`,
-  identidade: vi.fn(), listar: vi.fn(), naturezas: vi.fn(),
+  identidade: vi.fn(), listar: vi.fn(), naturezas: vi.fn(), exigir: vi.fn(),
 }));
 
 vi.mock('electron', () => ({ app: { getPath: () => simulacao.diretorio } }));
+vi.mock('../../main/services/gdl-listagem-preferencia.service.js', () => ({
+  exigirListagemRepsGdlHabilitada: simulacao.exigir,
+  obterVersaoPreferenciaListagem: () => 0,
+}));
 vi.mock('../../main/services/gdl.service.js', () => ({
   obterIdentidadeMinhasReps: simulacao.identidade,
   listarMinhasReps: simulacao.listar,
@@ -20,6 +24,7 @@ const rep = { idGdl: 11, numero: '123', ano: '2026', naturezaExame: 'EXAME', nat
   status: 'Aberta e Distribuída', dataDesignacao: '2026-10-01T10:00', quantidadeFotos: 2 };
 
 beforeEach(() => {
+  simulacao.exigir.mockReset().mockResolvedValue(undefined);
   simulacao.identidade.mockReset().mockResolvedValue('credencial-a');
   simulacao.listar.mockReset().mockResolvedValue({ reps: [rep], paginaAtual: 1, temAnterior: false, temProxima: false, listagemId: 'lista-1' });
   simulacao.naturezas.mockReset().mockResolvedValue([{ idGdl: 11, naturezaExameComCodigo: 'B601 - EXAME' }]);
@@ -82,5 +87,24 @@ describe('cache da listagem GDL', () => {
     simulacao.naturezas.mockRejectedValueOnce(new Error('Detalhe indisponível'));
     await expect(atualizarMinhasRepsEmCache('usuario-d', true)).rejects.toThrow('Detalhe indisponível');
     expect(await obterMinhasRepsEmCache('usuario-d')).toEqual(anterior);
+  });
+
+  it('bloqueia a atualização desativada antes de consultar o GDL', async () => {
+    simulacao.exigir.mockRejectedValue(new Error('A listagem de REPs do GDL está desativada.'));
+    await expect(atualizarMinhasRepsEmCache('usuario-bloqueado', true)).rejects.toThrow('desativada');
+    expect(simulacao.listar).not.toHaveBeenCalled();
+  });
+
+  it('descarta a atualização interrompida e preserva o snapshot anterior', async () => {
+    const anterior = await atualizarMinhasRepsEmCache('usuario-interrompido', true);
+    let liberar: (valor: unknown) => void = () => undefined;
+    simulacao.listar.mockImplementationOnce(() => new Promise(resolve => { liberar = resolve; }));
+    const atualizacao = atualizarMinhasRepsEmCache('usuario-interrompido', true);
+    await vi.waitFor(() => expect(simulacao.listar).toHaveBeenCalledTimes(2));
+    simulacao.exigir.mockRejectedValue(new Error('A listagem de REPs do GDL está desativada.'));
+    liberar({ reps: [rep], paginaAtual: 1, temAnterior: false, temProxima: true, listagemId: 'lista-2' });
+    await expect(atualizacao).rejects.toThrow('desativada');
+    expect(simulacao.listar).toHaveBeenCalledTimes(2);
+    expect(await obterMinhasRepsEmCache('usuario-interrompido')).toEqual(anterior);
   });
 });

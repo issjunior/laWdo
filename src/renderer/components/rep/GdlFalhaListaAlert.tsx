@@ -21,6 +21,7 @@ export interface FalhaListaGdlApresentavel {
 }
 
 const mensagens: Record<CodigoFalhaListaRepsGdl, string> = {
+  desativada: 'A listagem de REPs do GDL está desativada. Ative-a em API GDL para consultar novamente.',
   credenciais: 'Configure suas credenciais do GDL para consultar a lista de REPs.',
   autenticacao: 'O GDL não concluiu a autenticação. Confira suas credenciais e tente novamente.',
   rede: 'Não foi possível alcançar o GDL. Confira a conexão e a VPN.',
@@ -52,7 +53,7 @@ interface GdlFalhaListaAlertProps {
 
 export function GdlFalhaListaAlert({ falha, listaSalva, onTentarNovamente, onConfigurarCredenciais }: GdlFalhaListaAlertProps) {
   const [detalhesAbertos, setDetalhesAbertos] = useState(false);
-  const configurarCredenciais = falha.codigo === 'credenciais' || falha.codigo === 'autenticacao';
+  const configurarCredenciais = falha.codigo === 'credenciais' || falha.codigo === 'autenticacao' || falha.codigo === 'desativada';
 
   return (
     <Alert className="shrink-0 border-amber-400/50 bg-amber-50 dark:bg-amber-950/30">
@@ -60,8 +61,8 @@ export function GdlFalhaListaAlert({ falha, listaSalva, onTentarNovamente, onCon
       <AlertDescription className="space-y-2">
         <p role="alert">{mensagens[falha.codigo]} {listaSalva ? 'Exibindo a última lista salva.' : 'Nenhuma lista salva disponível.'}</p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onTentarNovamente}>Tentar novamente</Button>
-          {configurarCredenciais && <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>Configurar GDL</Button>}
+          {falha.codigo !== 'desativada' && <Button variant="outline" size="sm" onClick={onTentarNovamente}>Tentar novamente</Button>}
+          {configurarCredenciais && <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>{falha.codigo === 'desativada' ? 'Abrir API GDL' : 'Configurar GDL'}</Button>}
           <Button variant="ghost" size="sm" aria-expanded={detalhesAbertos} onClick={() => setDetalhesAbertos(!detalhesAbertos)}>
             {detalhesAbertos ? 'Ocultar detalhes' : 'Detalhes'}
           </Button>

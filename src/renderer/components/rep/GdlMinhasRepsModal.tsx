@@ -20,10 +20,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { GdlConsultaEmAndamento } from '@/components/rep/GdlConsultaEmAndamento';
+import { GdlListagemPreferenciaAlert } from '@/components/rep/GdlListagemPreferenciaAlert';
 import { GdlFalhaListaAlert, normalizarFalhaListaGdl } from '@/components/rep/GdlFalhaListaAlert';
 import type { FalhaListaGdlApresentavel } from '@/components/rep/GdlFalhaListaAlert';
 import { classesStatusRepGdl, GdlStatusBadge } from '@/components/rep/GdlStatusBadge';
 import type { MinhaRepGdl, StatusMinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
+import { cacheListagemDesativadaDisponivel, VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS } from '@shared/gdl/listagem';
 
 const statusDisponiveis: StatusMinhaRepGdl[] = [
   'Aberta e Distribuída',
@@ -80,6 +82,9 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
+  const [listagemHabilitada, setListagemHabilitada] = useState<boolean | null>(null);
+  const [agora, setAgora] = useState(Date.now());
+  const [tentativaBloqueada, setTentativaBloqueada] = useState(false);
   const [statusFiltro, setStatusFiltro] = useState<StatusMinhaRepGdl | 'todos'>('todos');
   const [naturezaFiltro, setNaturezaFiltro] = useState('todos');
   const [dataInicial, setDataInicial] = useState('');
@@ -96,6 +101,12 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
     setSelecionada(null);
     setErro(null);
     try {
+      const preferencia = await window.ipcAPI.gdl.obterPreferenciaListagem();
+      if (geracao !== geracaoCarga.current) return;
+      if (!preferencia.success || typeof preferencia.data?.habilitada !== 'boolean') {
+        throw new Error(preferencia.error || 'Não foi possível verificar a preferência de listagem.');
+      }
+      setListagemHabilitada(preferencia.data.habilitada);
       if (!forcar) {
         const cache = await window.ipcAPI.gdl.obterMinhasRepsCache();
         if (geracao !== geracaoCarga.current) return;
@@ -105,6 +116,11 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
           setAtualizadoEm(validacaoCache.data.atualizadoEm);
         }
       }
+      if (!preferencia.data.habilitada) {
+        if (forcar) setTentativaBloqueada(true);
+        return;
+      }
+      setTentativaBloqueada(false);
       const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(forcar);
       if (geracao !== geracaoCarga.current) return;
       if (!resposta.success) {
@@ -142,21 +158,35 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
     setNaturezaFiltro('todos');
     setDataInicial('');
     setDataFinal('');
+    setListagemHabilitada(null);
+    setTentativaBloqueada(false);
     void carregarTodas();
     return () => {
       geracaoCarga.current += 1;
     };
   }, [open, carregarTodas]);
 
+  useEffect(() => {
+    if (!open || listagemHabilitada !== false || !atualizadoEm) return;
+    const restante = Date.parse(atualizadoEm) + VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS - Date.now();
+    if (restante <= 0) return;
+    const temporizador = setTimeout(() => setAgora(Date.now()), restante);
+    return () => clearTimeout(temporizador);
+  }, [open, listagemHabilitada, atualizadoEm]);
+
+  const repsExibidas = listagemHabilitada === true ||
+    (listagemHabilitada === false && atualizadoEm && cacheListagemDesativadaDisponivel(atualizadoEm, Math.max(agora, Date.now())))
+    ? reps
+    : null;
   const naturezas = useMemo(
     () =>
-      [...new Set(reps?.map(naturezaExibida) ?? [])].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    [reps]
+      [...new Set(repsExibidas?.map(naturezaExibida) ?? [])].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [repsExibidas]
   );
   const intervaloInvalido = Boolean(dataInicial && dataFinal && dataInicial > dataFinal);
   const repsFiltradas = useMemo(
     () =>
-      (reps ?? []).filter(rep => {
+      (repsExibidas ?? []).filter(rep => {
         if (intervaloInvalido) return false;
         if (statusFiltro !== 'todos' && rep.status !== statusFiltro) return false;
         if (naturezaFiltro !== 'todos' && naturezaExibida(rep) !== naturezaFiltro) return false;
@@ -165,7 +195,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
         if (dataFinal && (!dia || dia > dataFinal)) return false;
         return true;
       }),
-    [reps, statusFiltro, naturezaFiltro, dataInicial, dataFinal, intervaloInvalido]
+    [repsExibidas, statusFiltro, naturezaFiltro, dataInicial, dataFinal, intervaloInvalido]
   );
   const repSelecionada = repsFiltradas.find(rep => `${rep.numero}/${rep.ano}` === selecionada);
   const filtrosAtivos =
@@ -187,7 +217,13 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
             Selecione uma REP para continuar no importador do GDL.
           </DialogDescription>
         </DialogHeader>
-        {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(reps)}
+        {listagemHabilitada !== null && <GdlListagemPreferenciaAlert
+          habilitada={listagemHabilitada}
+          cacheVisivel={Boolean(repsExibidas)}
+          tentativaBloqueada={tentativaBloqueada}
+          onAbrirConfiguracao={onConfigurarCredenciais}
+        />}
+        {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(repsExibidas)}
           onTentarNovamente={() => void carregarTodas(true)} onConfigurarCredenciais={onConfigurarCredenciais} />}
         <div className="shrink-0 space-y-3 border-b pb-3">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
@@ -201,7 +237,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                   setStatusFiltro(statusDisponiveis.find(status => status === valor) ?? 'todos');
                   setSelecionada(null);
                 }}
-                disabled={!reps}
+                disabled={!repsExibidas}
               >
                 <SelectTrigger
                   id="filtro-status-rep"
@@ -246,7 +282,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                   setNaturezaFiltro(valor);
                   setSelecionada(null);
                 }}
-                disabled={!reps}
+                disabled={!repsExibidas}
               >
                 <SelectTrigger id="filtro-natureza-rep" className="h-9">
                   <SelectValue />
@@ -268,7 +304,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                     variant={dataInicial || dataFinal ? 'secondary' : 'outline'}
                     size="sm"
                     className="h-9 whitespace-nowrap"
-                    disabled={!reps}
+                    disabled={!repsExibidas}
                   >
                     <CalendarDays className="mr-2 h-4 w-4" /> Data da designação
                     {dataInicial || dataFinal ? ' · ativa' : ''}
@@ -329,19 +365,19 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span aria-live="polite">
-              {reps ? `${repsFiltradas.length} de ${reps.length} REPs` : '— REPs'}
-              {atualizadoEm &&
+              {repsExibidas ? `${repsFiltradas.length} de ${repsExibidas.length} REPs` : '— REPs'}
+              {repsExibidas && atualizadoEm &&
                 ` · Atualizado em ${new Date(atualizadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
             </span>
             {carregando && <GdlConsultaEmAndamento />}
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
-          {carregando && !reps ? (
+          {carregando && listagemHabilitada !== false && !repsExibidas ? (
             <div className="flex h-full min-h-40 items-center justify-center p-6 text-center text-sm text-muted-foreground">
               Aguardando a resposta do GDL...
             </div>
-          ) : reps && repsFiltradas.length > 0 ? (
+          ) : repsExibidas && repsFiltradas.length > 0 ? (
             <div role="radiogroup" aria-label="Selecionar REP do GDL" className="divide-y">
               {repsFiltradas.map(rep => {
                 const chave = `${rep.numero}/${rep.ano}`;
@@ -387,9 +423,9 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                 );
               })}
             </div>
-          ) : reps ? (
+          ) : repsExibidas ? (
             <p className="p-8 text-center text-sm text-muted-foreground">
-              {reps.length === 0
+              {repsExibidas.length === 0
                 ? 'Nenhuma REP com os status indicados foi encontrada.'
                 : 'Nenhuma REP corresponde aos filtros.'}
             </p>

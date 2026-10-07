@@ -29,7 +29,10 @@ export function classificarFalhaListaRepsGdl(erro: unknown): ClassificacaoFalhaL
   let codigo: CodigoFalhaListaRepsGdl = 'inesperado';
   let etapa = 'consulta_lista';
 
-  if (/^(?:EACCES|EPERM|ENOSPC|EROFS|EMFILE)$/.test(codigoSistema ?? '')) {
+  if (/listagem de REPs do GDL está desativada/i.test(mensagem)) {
+    codigo = 'desativada';
+    etapa = 'preferencia';
+  } else if (/^(?:EACCES|EPERM|ENOSPC|EROFS|EMFILE)$/.test(codigoSistema ?? '')) {
     codigo = 'cache_local';
     etapa = 'salvar_cache';
   } else if (mensagem === 'Credenciais não configuradas.') {
