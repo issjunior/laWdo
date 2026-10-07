@@ -9,6 +9,8 @@ import { app, nativeImage, session } from 'electron';
 import type { Session } from 'electron';
 import { consultarNaturezasMinhasRepsGdl, consultarPaginaRepGdl, listarPaginaMinhasRepsGdl } from './gdl-pagina.service.js';
 import type { NaturezaMinhaRepGdl, PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import { CHAVE_HOMOLOGACAO_GDL_HABILITADA, resolverAmbienteGdl } from '../../shared/gdl/ambiente.js';
+import type { AmbienteGdl } from '../../shared/gdl/ambiente.js';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
@@ -80,8 +82,6 @@ export interface GdlValidacaoSessao {
   anoRep?: string;
   dataHora?: string;
 }
-
-type AmbienteGdl = 'homologacao' | 'producao';
 
 const GDL_ESTADO_DIR = path.join(app.getPath('userData'), 'gdl');
 const GDL_ESTADO_FILE = path.join(GDL_ESTADO_DIR, 'validacao-sessao.json');
@@ -191,7 +191,15 @@ function carregarValidacaoSessaoPersistida(): void {
 }
 
 function normalizarAmbiente(ambiente?: string): AmbienteGdl {
-  return ambiente === 'producao' ? 'producao' : 'homologacao';
+  return ambiente === 'homologacao' ? 'homologacao' : 'producao';
+}
+
+async function obterAmbienteEfetivo(ambiente?: string): Promise<AmbienteGdl> {
+  const [configurado, habilitada] = await Promise.all([
+    ambiente === undefined ? configuracaoService.obter('gdl_ambiente') : Promise.resolve(ambiente),
+    configuracaoService.obter(CHAVE_HOMOLOGACAO_GDL_HABILITADA),
+  ]);
+  return resolverAmbienteGdl(configurado, habilitada);
 }
 
 function getAmbienteLabel(ambiente: AmbienteGdl): string {
@@ -827,7 +835,7 @@ async function consultarDadosNaInvestigacao(
 
 export async function testarConexao(ambiente: string): Promise<GdlTesteResultado> {
   const inicio = Date.now();
-  const amb = normalizarAmbiente(ambiente);
+  const amb = await obterAmbienteEfetivo(ambiente);
   const ambienteLabel = getAmbienteLabel(amb);
   let endpointRede = '';
   try {
@@ -899,30 +907,30 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
 }
 
 export async function listarMinhasReps(pagina: number): Promise<PaginaMinhasRepsGdl> {
-  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const ambiente = await obterAmbienteEfetivo();
   const credenciais = await carregarCredenciais(ambiente);
   if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
   return listarPaginaMinhasRepsGdl(credenciais, pagina, obterSessaoRedeGdl);
 }
 
 export async function obterIdentidadeMinhasReps(): Promise<string> {
-  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const ambiente = await obterAmbienteEfetivo();
   const credenciais = await carregarCredenciais(ambiente);
   if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
   return createHash('sha256').update(JSON.stringify({ ambiente, credenciais })).digest('hex');
 }
 
 export async function consultarNaturezasMinhasReps(listagemId: string): Promise<NaturezaMinhaRepGdl[]> {
-  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const ambiente = await obterAmbienteEfetivo();
   const credenciais = await carregarCredenciais(ambiente);
   if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
   return consultarNaturezasMinhasRepsGdl(credenciais, listagemId, obterSessaoRedeGdl);
 }
 
 export async function consultarRep(numero: string, ano: string): Promise<GdlConsultaResultado> {
-  let ambiente: AmbienteGdl = 'homologacao';
+  let ambiente: AmbienteGdl = 'producao';
   try {
-    ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+    ambiente = await obterAmbienteEfetivo();
     const creds = await carregarCredenciais(ambiente);
     if (!creds.login || !creds.senha) {
       limparValidacaoSessaoInterna(ambiente);
@@ -1036,7 +1044,7 @@ async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise
   credenciais: GdlCredenciais;
   ambiente: AmbienteGdl;
 }> {
-  const ambiente = normalizarAmbiente(await configuracaoService.obter('gdl_ambiente') || 'homologacao');
+  const ambiente = await obterAmbienteEfetivo();
   const credenciais = await carregarCredenciais(ambiente);
   if (!credenciais.login || !credenciais.senha) {
     throw new Error('Credenciais do GDL não configuradas.');
@@ -1342,7 +1350,10 @@ export async function validarCredenciais(
   numero: string,
   ano: string,
 ): Promise<GdlConsultaResultado> {
-  const amb = normalizarAmbiente(ambiente);
+  const amb = await obterAmbienteEfetivo(ambiente);
+  if (ambiente === 'homologacao' && amb !== 'homologacao') {
+    return { sucesso: false, dados: null, erro: 'Habilite o ambiente de Homologação antes de validar essas credenciais.' };
+  }
   try {
     const baseUrl = await carregarBaseUrl(amb);
     const { login, senha, cpfUsuario } = normalizarCredenciaisGdl(credenciais);

@@ -206,6 +206,7 @@ beforeEach(() => {
   requisicoesRecebidas = 0
   Object.assign(configuracoes, {
     gdl_ambiente: 'producao',
+    gdl_homologacao_habilitada: 'true',
     gdl_url_homologacao: `${baseUrl}/api`,
     gdl_url_producao: `${baseUrl}/api`,
     gdl_login_homologacao: 'usuario-hml',
@@ -221,7 +222,7 @@ beforeEach(() => {
 describe('gdl.service', () => {
   it('mantém a validação de sessão separada por ambiente', () => {
     expect(limparValidacaoSessao('producao')).toEqual({ ambiente: 'Produção', validado: false })
-    expect(limparValidacaoSessao('ambiente-invalido')).toEqual({ ambiente: 'Homologação', validado: false })
+    expect(limparValidacaoSessao('ambiente-invalido')).toEqual({ ambiente: 'Produção', validado: false })
     expect(obterValidacaoSessao('producao')).toEqual({ ambiente: 'Produção', validado: false })
   })
 
@@ -290,6 +291,25 @@ describe('gdl.service', () => {
       numeroRep: '190',
       anoRep: '2026',
     })
+  })
+
+  it('usa Produção quando Homologação está desabilitada ou falta configuração', async () => {
+    configuracoes.gdl_ambiente = 'homologacao'
+    configuracoes.gdl_homologacao_habilitada = 'false'
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: true, ambiente: 'producao' })
+    await expect(testarConexao('homologacao')).resolves.toMatchObject({ sucesso: true, ambiente: 'Produção' })
+
+    limparValidacaoSessao('homologacao')
+    limparValidacaoSessao('producao')
+    const requisicoesAntesDaValidacao = requisicoesRecebidas
+    await expect(validarCredenciais('homologacao', { login: 'usuario', senha: 'senha' }, '190', '2026'))
+      .resolves.toMatchObject({ sucesso: false, erro: 'Habilite o ambiente de Homologação antes de validar essas credenciais.' })
+    expect(requisicoesRecebidas).toBe(requisicoesAntesDaValidacao)
+    expect(obterValidacaoSessao('homologacao').validado).toBe(false)
+
+    delete configuracoes.gdl_ambiente
+    delete configuracoes.gdl_homologacao_habilitada
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: true, ambiente: 'producao' })
   })
 
   it('extrai os dados complementares da página de visualização da REP', () => {

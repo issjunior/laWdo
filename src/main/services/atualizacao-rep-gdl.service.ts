@@ -249,7 +249,7 @@ class AtualizacaoRepGdlService {
     if (!consulta.sucesso || !consulta.dados) throw new Error(consulta.erro || 'Não foi possível consultar a REP no GDL.')
     const codigo = gdlService.extrairCodigoNaturezaExame(consulta.naturezaExame?.trim() || '')
     if (codigo !== 'B-602') throw new Error(`O exame ${consulta.naturezaExame || 'retornado'} ainda não possui adaptador de atualização.`)
-    const importacao = converterRepGdl(codigo, consulta.dados, { origemInicial: 'gdl', ultimaConsulta: { ambiente: consulta.ambiente ?? 'homologacao', numeroRep: identificacao.numero, anoRep: identificacao.ano, consultadoEm: new Date().toISOString() } })
+    const importacao = converterRepGdl(codigo, consulta.dados, { origemInicial: 'gdl', ultimaConsulta: { ambiente: consulta.ambiente ?? 'producao', numeroRep: identificacao.numero, anoRep: identificacao.ano, consultadoEm: new Date().toISOString() } })
     const camposEspecificos = parseCamposEspecificos(rep.campos_especificos)
     const b602 = obterB602(camposEspecificos)
     const locaisB602 = mapaCamposB602(b602)

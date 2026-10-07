@@ -80,7 +80,7 @@ beforeAll(() => {
 
 describe('GdlConsultaModal', () => {
   beforeEach(() => {
-    obterConfiguracao.mockResolvedValue({ success: true, data: 'homologacao' })
+    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: chave === 'gdl_ambiente' ? 'homologacao' : 'true' }))
     testarConexao.mockResolvedValue({
       success: true,
       data: {
@@ -313,8 +313,8 @@ describe('GdlConsultaModal', () => {
     expect(screen.queryByText('net::ERR_NAME_NOT_RESOLVED')).not.toBeInTheDocument()
   })
 
-  it('identifica o ambiente de Produção antes da consulta', async () => {
-    obterConfiguracao.mockResolvedValue({ success: true, data: 'producao' })
+  it('identifica Produção quando a configuração antiga aponta para Homologação desabilitada', async () => {
+    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: chave === 'gdl_ambiente' ? 'homologacao' : 'false' }))
     testarConexao.mockResolvedValue({
       success: true,
       data: { sucesso: true, latencia: 25, ambiente: 'producao', statusCode: 200, autenticado: true },
@@ -331,6 +331,7 @@ describe('GdlConsultaModal', () => {
     )
 
     expect(await screen.findByText('Produção')).toBeInTheDocument()
+    await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('producao'))
     fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '109026' } })
     expect(screen.getByLabelText('Nº da REP')).toHaveValue('109.026')
     expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled()

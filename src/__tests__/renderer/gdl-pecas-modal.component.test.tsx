@@ -35,7 +35,7 @@ describe('GdlPecasModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     consultarRep.mockResolvedValue({ success: true, data: resultadoConsulta })
-    obterConfiguracao.mockResolvedValue({ success: true, data: 'homologacao' })
+    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: chave === 'gdl_ambiente' ? 'homologacao' : 'true' }))
     Object.defineProperty(window, 'ipcAPI', {
       value: {
         ...ipcApiOriginal,
@@ -91,8 +91,8 @@ describe('GdlPecasModal', () => {
     expect(screen.getByText('Já importada')).toBeInTheDocument()
   })
 
-  it('identifica Produção antes de consultar peças', async () => {
-    obterConfiguracao.mockResolvedValue({ success: true, data: 'producao' })
+  it('identifica Produção quando Homologação está desabilitada antes de consultar peças', async () => {
+    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: chave === 'gdl_ambiente' ? 'homologacao' : 'false' }))
 
     render(
       <GdlPecasModal
