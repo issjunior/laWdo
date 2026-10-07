@@ -154,7 +154,7 @@ function paginaInicial(downloads) {
     footer { padding-top: 10px; color: #5d7191; font-size: .7rem; } @media (max-width: 900px) { body { overflow: auto; } main { height: auto; min-height: 100svh; padding: 20px 0; } .conteudo { grid-template-columns: 1fr; gap: 24px; padding: 28px 0; } .apresentacao { justify-items: center; text-align: center; } .beneficios { justify-content: center; } .downloads { width: 100%; } } @media (max-width: 560px) { main { width: min(100% - 28px, 1180px); } .lista-downloads { grid-template-columns: 1fr; } .downloads-header { align-items: flex-start; flex-direction: column; gap: 7px; } .logo-principal { width: min(82%, 300px); } }
     .conteudo > div { min-width: 0; }
     .lista-downloads { align-items: start; gap: 12px; }
-    .download { min-width: 0; display: grid; gap: 10px; padding: 13px 16px; border-radius: 12px; }
+    .download { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; gap: 10px; padding: 13px 16px; border-radius: 12px; }
     .download:hover { transform: none; }
     .download-windows { grid-column: 1 / -1; }
     .download-cabecalho { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
