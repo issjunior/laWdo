@@ -33,6 +33,16 @@ describe('GdlConfigPage', () => {
     Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true })
   })
 
+  it('inicia com Homologação desabilitada quando não há configuração salva', async () => {
+    render(<GdlConfigPage />)
+
+    await waitFor(() => expect(obterConfiguracao).toHaveBeenCalledWith('gdl_homologacao_habilitada'))
+    expect(screen.getByRole('button', { name: 'Habilitar ambiente de homologação' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Ambiente selecionado: Produção')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Homologação.*Ambiente de testes/s })).not.toBeInTheDocument()
+    expect(salvarConfiguracao).not.toHaveBeenCalled()
+  })
+
   it('usa Produção por padrão e libera Homologação pelo botão no cabeçalho', async () => {
     configuracoes.set('gdl_ambiente', 'homologacao')
     render(<GdlConfigPage />)
