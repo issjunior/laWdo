@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -376,11 +375,29 @@ export const GdlConfigPage: React.FC = () => {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Conexão</CardTitle>
-          <CardDescription>
-            Credenciais de acesso à API REST do GDL. A senha é armazenada criptografada.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle>Conexão</CardTitle>
+            <CardDescription>
+              Credenciais de acesso à API REST do GDL. A senha é armazenada criptografada.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant={homologacaoHabilitada ? 'secondary' : 'outline'}
+            size="sm"
+            className="gap-2 self-start sm:shrink-0"
+            aria-pressed={homologacaoHabilitada}
+            disabled={salvandoHabilitacao || salvando}
+            onClick={() => void handleHabilitarHomologacao(!homologacaoHabilitada)}
+          >
+            <FlaskConical className="h-4 w-4" />
+            {salvandoHabilitacao
+              ? 'Salvando...'
+              : homologacaoHabilitada
+                ? 'Desabilitar ambiente de homologação'
+                : 'Habilitar ambiente de homologação'}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* ---------- Seleção de ambiente com cards ---------- */}
@@ -444,19 +461,6 @@ export const GdlConfigPage: React.FC = () => {
                   Ambiente real. Requer VPN da Polícia Científica.
                 </p>
               </button>
-            </div>
-            <div className="border-t pt-4 space-y-2">
-              <p className="text-sm font-medium">Configuração avançada</p>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="gdl-habilitar-homologacao"
-                  checked={homologacaoHabilitada}
-                  disabled={salvandoHabilitacao || salvando}
-                  onCheckedChange={valor => void handleHabilitarHomologacao(valor === true)}
-                />
-                <Label htmlFor="gdl-habilitar-homologacao">Habilitar ambiente de homologação</Label>
-              </div>
-              <p className="text-xs text-muted-foreground">Use somente para consultas de teste. As credenciais são mantidas separadas por ambiente.</p>
             </div>
           </div>
 

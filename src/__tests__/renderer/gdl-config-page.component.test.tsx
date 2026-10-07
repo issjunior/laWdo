@@ -33,7 +33,7 @@ describe('GdlConfigPage', () => {
     Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true })
   })
 
-  it('usa Produção por padrão e libera Homologação somente após marcar o check', async () => {
+  it('usa Produção por padrão e libera Homologação pelo botão no cabeçalho', async () => {
     configuracoes.set('gdl_ambiente', 'homologacao')
     render(<GdlConfigPage />)
 
@@ -41,10 +41,13 @@ describe('GdlConfigPage', () => {
     expect(screen.getByText('Ambiente selecionado: Produção')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Homologação.*Ambiente de testes/s })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Habilitar ambiente de homologação' }))
+    const botaoHabilitar = screen.getByRole('button', { name: 'Habilitar ambiente de homologação' })
+    expect(botaoHabilitar).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(botaoHabilitar)
     await waitFor(() => expect(configuracoes.get('gdl_homologacao_habilitada')).toBe('true'))
     expect(configuracoes.get('gdl_ambiente')).toBe('producao')
     expect(screen.getByRole('button', { name: /Homologação.*Ambiente de testes/s })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Desabilitar ambiente de homologação' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByText('Ambiente selecionado: Produção')).toBeInTheDocument()
   })
 
@@ -56,7 +59,7 @@ describe('GdlConfigPage', () => {
     render(<GdlConfigPage />)
 
     expect(await screen.findByText('Ambiente selecionado: Homologação')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Habilitar ambiente de homologação' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Desabilitar ambiente de homologação' }))
 
     await waitFor(() => expect(configuracoes.get('gdl_ambiente')).toBe('producao'))
     expect(configuracoes.get('gdl_homologacao_habilitada')).toBe('false')
