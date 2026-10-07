@@ -48,6 +48,7 @@ import type {
 } from '@shared/types/b602-gdl.types';
 import { combinarEnvolvido, separarEnvolvido } from '@shared/utils/envolvido';
 import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils';
+import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
 const EMAIL_SUPORTE_LAWDO = 'izaias.santos@policiacientifica.pr.gov.br';
@@ -315,7 +316,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
   const [preTeste, setPreTeste] = useState<PreTesteResultado | null>(null);
   const [preTesteTestando, setPreTesteTestando] = useState(false);
-  const [ambiente, setAmbiente] = useState<string>('homologacao');
+  const [ambiente, setAmbiente] = useState<string>('producao');
   const [ambienteCarregado, setAmbienteCarregado] = useState(false);
 
   const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoExame<DadosImportacaoB602> | null>(null);
@@ -388,8 +389,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       setAmbienteCarregado(false);
 
       (async () => {
-        const rAmb = await window.ipcAPI.configuracao.obter('gdl_ambiente');
-        const amb = (rAmb.success && rAmb.data) ? rAmb.data : 'homologacao';
+        const { ambiente: amb } = await obterPreferenciasAmbienteGdl();
         setAmbiente(amb);
         setAmbienteCarregado(true);
 

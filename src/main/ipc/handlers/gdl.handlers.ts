@@ -71,10 +71,10 @@ export const registerGdlHandlers = (): void => {
 
   ipcMain.handle('gdl:testar-conexao', async (_event, ambiente: string) => {
     try {
-      const resultado = await gdlService.testarConexao(ambiente || 'homologacao');
+      const resultado = await gdlService.testarConexao(ambiente || 'producao');
       return { success: true, data: resultado };
     } catch (error) {
-      const amb = ambiente || 'homologacao';
+      const amb = ambiente || 'producao';
       const ambLabel = amb === 'producao' ? 'Produção' : 'Homologação';
       logError(`Falha ao testar conexão GDL em ambiente ${ambLabel}`, error);
       return {
@@ -113,7 +113,7 @@ export const registerGdlHandlers = (): void => {
       }
 
       const resultado = await gdlService.validarCredenciais(
-        ambiente || 'homologacao',
+        ambiente || 'producao',
         {
           login: sanitizeInput(credenciais?.login || ''),
           senha: credenciais?.senha || '',
@@ -165,7 +165,7 @@ export const registerGdlHandlers = (): void => {
           ...converterRepGdl(codigoExame, resultado.dados, {
           origemInicial: 'gdl',
           ultimaConsulta: {
-            ambiente: resultado.ambiente ?? 'homologacao',
+            ambiente: resultado.ambiente ?? 'producao',
             numeroRep: sanitizeInput(numero),
             anoRep: sanitizeInput(ano),
             consultadoEm: new Date().toISOString(),

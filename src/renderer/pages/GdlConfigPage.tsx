@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -35,6 +36,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente';
+import { CHAVE_HOMOLOGACAO_GDL_HABILITADA } from '@shared/gdl/ambiente';
 
 const URL_HOMOLOGACAO = 'iishml01.pr.gov.br';
 const URL_PRODUCAO = 'www.gdl.sesp.parana';
@@ -89,7 +92,9 @@ const getMensagemErro = (erro: unknown, fallback: string): string =>
   obterMensagemOrientadaErroGdl(erro instanceof Error ? erro.message : fallback);
 
 export const GdlConfigPage: React.FC = () => {
-  const [ambiente, setAmbiente] = useState('homologacao');
+  const [ambiente, setAmbiente] = useState('producao');
+  const [homologacaoHabilitada, setHomologacaoHabilitada] = useState(false);
+  const [salvandoHabilitacao, setSalvandoHabilitacao] = useState(false);
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [cpfUsuario, setCpfUsuario] = useState('');
@@ -109,14 +114,17 @@ export const GdlConfigPage: React.FC = () => {
   const [validandoCredenciais, setValidandoCredenciais] = useState(false);
   const [erroValidacao, setErroValidacao] = useState<string | null>(null);
   const [sucessoValidacao, setSucessoValidacao] = useState<string | null>(null);
+  const carregamentoCredenciaisAtual = useRef(0);
 
   const carregarCredenciaisAmbiente = useCallback(async (amb: string) => {
+    const carregamento = ++carregamentoCredenciaisAtual.current;
     try {
       const [rLogin, rSenha, rCpf] = await Promise.all([
         window.ipcAPI.configuracao.obter(`gdl_login_${amb}`),
         window.ipcAPI.configuracao.obter(`gdl_senha_${amb}`),
         window.ipcAPI.configuracao.obter(`gdl_cpf_usuario_${amb}`),
       ]);
+      if (carregamento !== carregamentoCredenciaisAtual.current) return;
       setLogin(rLogin.success && rLogin.data ? rLogin.data : '');
       setSenha(rSenha.success && rSenha.data ? rSenha.data : '');
       setCpfUsuario(rCpf.success && rCpf.data ? rCpf.data : '');
@@ -127,14 +135,14 @@ export const GdlConfigPage: React.FC = () => {
 
   const carregarConfigs = useCallback(async () => {
     try {
-      const rAmbiente = await window.ipcAPI.configuracao.obter('gdl_ambiente');
-      const amb = (rAmbiente.success && rAmbiente.data) ? rAmbiente.data : 'homologacao';
-      setAmbiente(amb);
-      await carregarCredenciaisAmbiente(amb);
+      const preferencias = await obterPreferenciasAmbienteGdl();
+      setHomologacaoHabilitada(preferencias.homologacaoHabilitada);
+      setAmbiente(preferencias.ambiente);
     } catch {
-      // silencioso
+      setAmbiente('producao');
+      setHomologacaoHabilitada(false);
     }
-  }, [carregarCredenciaisAmbiente]);
+  }, []);
 
   useEffect(() => { carregarConfigs(); }, [carregarConfigs]);
 
@@ -184,12 +192,15 @@ export const GdlConfigPage: React.FC = () => {
     setCpfUsuario(formatarCPF(cpfUsuarioNormalizado));
     setSalvando(true);
     try {
-      await Promise.all([
-        window.ipcAPI.configuracao.salvar('gdl_ambiente', ambiente, 'texto', 'Ambiente da API GDL'),
+      const respostasCredenciais = await Promise.all([
         window.ipcAPI.configuracao.salvar(`gdl_login_${ambiente}`, loginNormalizado, 'texto', `Login GDL (${ambLabel})`),
         window.ipcAPI.configuracao.salvar(`gdl_senha_${ambiente}`, senhaNormalizada, 'senha', `Senha GDL (${ambLabel})`),
         window.ipcAPI.configuracao.salvar(`gdl_cpf_usuario_${ambiente}`, cpfUsuarioNormalizado, 'texto', `CPF usuário GDL (${ambLabel})`),
       ]);
+      const falhaCredencial = respostasCredenciais.find(resposta => !resposta.success);
+      if (falhaCredencial) throw new Error(falhaCredencial.error || 'Não foi possível salvar as credenciais.');
+      const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', ambiente, 'texto', 'Ambiente da API GDL');
+      if (!respostaAmbiente.success) throw new Error(respostaAmbiente.error || 'Não foi possível selecionar o ambiente.');
       const rValidacao = await window.ipcAPI.gdl.limparValidacaoSessao(ambiente);
       if (rValidacao.success && rValidacao.data) {
         setValidacaoSessao(rValidacao.data as ValidacaoSessaoGdl);
@@ -199,6 +210,38 @@ export const GdlConfigPage: React.FC = () => {
       setErro(getMensagemErro(e, 'Erro ao salvar configurações'));
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const handleHabilitarHomologacao = async (habilitar: boolean) => {
+    setErro(null);
+    setSalvandoHabilitacao(true);
+    try {
+      if (habilitar) {
+        const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', 'producao', 'texto', 'Ambiente da API GDL');
+        if (!respostaAmbiente.success) throw new Error(respostaAmbiente.error || 'Não foi possível selecionar Produção.');
+      }
+      const resposta = await window.ipcAPI.configuracao.salvar(
+        CHAVE_HOMOLOGACAO_GDL_HABILITADA,
+        String(habilitar),
+        'texto',
+        'Habilitação do ambiente de homologação GDL',
+      );
+      if (!resposta.success) throw new Error(resposta.error || 'Não foi possível salvar a preferência.');
+      setHomologacaoHabilitada(habilitar);
+
+      if (!habilitar) {
+        setAmbiente('producao');
+        setDiagnostico(null);
+        setValidacaoSessao(null);
+        const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', 'producao', 'texto', 'Ambiente da API GDL');
+        if (!respostaAmbiente.success) throw new Error(respostaAmbiente.error || 'Não foi possível selecionar Produção.');
+      }
+
+    } catch (falha: unknown) {
+      setErro(getMensagemErro(falha, 'Não foi possível atualizar o acesso à Homologação.'));
+    } finally {
+      setSalvandoHabilitacao(false);
     }
   };
 
@@ -318,7 +361,7 @@ export const GdlConfigPage: React.FC = () => {
           <Database className="h-6 w-6 text-primary" />
           API GDL
           <Badge variant={ambiente === 'producao' ? 'default' : 'secondary'} className="text-xs">
-            Ambiente em uso: {ambienteLabel}
+            Ambiente selecionado: {ambienteLabel}
           </Badge>
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -343,8 +386,9 @@ export const GdlConfigPage: React.FC = () => {
           {/* ---------- Seleção de ambiente com cards ---------- */}
           <div className="space-y-3">
             <Label>Ambiente</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`grid grid-cols-1 gap-3 ${homologacaoHabilitada ? 'sm:grid-cols-2' : ''}`}>
               {/* Card Homologação */}
+              {homologacaoHabilitada && (
               <button
                 type="button"
                 onClick={() => setAmbiente('homologacao')}
@@ -371,6 +415,7 @@ export const GdlConfigPage: React.FC = () => {
                   Ambiente de testes. Dados não refletem produção.
                 </p>
               </button>
+              )}
 
               {/* Card Produção */}
               <button
@@ -399,6 +444,19 @@ export const GdlConfigPage: React.FC = () => {
                   Ambiente real. Requer VPN da Polícia Científica.
                 </p>
               </button>
+            </div>
+            <div className="border-t pt-4 space-y-2">
+              <p className="text-sm font-medium">Configuração avançada</p>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="gdl-habilitar-homologacao"
+                  checked={homologacaoHabilitada}
+                  disabled={salvandoHabilitacao || salvando}
+                  onCheckedChange={valor => void handleHabilitarHomologacao(valor === true)}
+                />
+                <Label htmlFor="gdl-habilitar-homologacao">Habilitar ambiente de homologação</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">Use somente para consultas de teste. As credenciais são mantidas separadas por ambiente.</p>
             </div>
           </div>
 
@@ -452,7 +510,7 @@ export const GdlConfigPage: React.FC = () => {
           </div>
 
           <div className="flex gap-3">
-            <Button onClick={handleSalvar} disabled={salvando} className="gap-2">
+            <Button onClick={handleSalvar} disabled={salvando || salvandoHabilitacao} className="gap-2">
               <Shield className="h-4 w-4" />
               {salvando ? 'Salvando...' : 'Salvar Configurações'}
             </Button>

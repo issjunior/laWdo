@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator'
 import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '@shared/types/b602-gdl.types'
 import { TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo'
 import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils'
+import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente'
 
 interface GdlPecasModalProps {
   open: boolean
@@ -45,7 +46,7 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [ambiente, setAmbiente] = useState<'homologacao' | 'producao'>('homologacao')
+  const [ambiente, setAmbiente] = useState<'homologacao' | 'producao'>('producao')
   const [ambienteCarregado, setAmbienteCarregado] = useState(false)
   const consultaExecutadaRef = useRef<string | null>(null)
 
@@ -90,13 +91,10 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
     }
 
     setAmbienteCarregado(false)
-    void window.ipcAPI.configuracao.obter('gdl_ambiente').then(resultado => {
-      const ambienteConfigurado = resultado.success && resultado.data === 'producao'
-        ? 'producao'
-        : 'homologacao'
-      setAmbiente(ambienteConfigurado)
+    void obterPreferenciasAmbienteGdl().then(preferencias => {
+      setAmbiente(preferencias.ambiente)
     }).catch(() => {
-      setAmbiente('homologacao')
+      setAmbiente('producao')
     }).finally(() => {
       setAmbienteCarregado(true)
     })
