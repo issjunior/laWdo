@@ -462,6 +462,16 @@ export function aplicarVisualizacaoPlaceholders(
   return resultadoFinal;
 }
 
+export function restaurarVisualizacaoAposSalvar(
+  editores: Array<{ editor: TinyMceEditorInstance; conteudo: string }>,
+  opcoes: OpcoesAplicacaoPlaceholders,
+): Array<{ editor: TinyMceEditorInstance; resultado: ResultadoAplicacaoPlaceholders }> {
+  return editores.map(({ editor, conteudo }) => {
+    editor.setContent(conteudo);
+    return { editor, resultado: aplicarVisualizacaoPlaceholders(editor, opcoes) };
+  });
+}
+
 export function aplicarVisualizacaoPlaceholder(
   editor: TinyMceEditorInstance,
   ancora: HTMLElement,

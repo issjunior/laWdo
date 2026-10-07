@@ -95,9 +95,7 @@ describe('Button Component', () => {
     expect(button).toHaveClass('bg-primary') // classe padrão ainda presente
   })
 
-  it.skip('deve renderizar como elemento de link quando asChild é true (teste de integração do Slot)', () => {
-    // Este teste requer configuração adicional do Slot do Radix UI
-    // Vamos pular por enquanto e focar nos testes principais
+  it('deve renderizar como elemento de link quando asChild é true (teste de integração do Slot)', () => {
     render(
       <Button asChild>
         <a href="/teste">Link como Botão</a>

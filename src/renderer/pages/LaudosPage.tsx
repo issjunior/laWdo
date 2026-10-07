@@ -110,6 +110,7 @@ import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import {
   aplicarVisualizacaoPlaceholder,
   agendarVisualizacaoPlaceholders,
+  restaurarVisualizacaoAposSalvar,
   type ModoVisualizacaoPlaceholders,
 } from '@/lib/apresentacao-placeholders';
 import { buildPdfHeaderConfig } from '@/lib/pdf-header';
@@ -2287,23 +2288,37 @@ export const LaudosPage: React.FC = () => {
           prev.map(l => (l.id === editando.id ? { ...l, conteudo: conteudoFinal } : l))
         );
 
-        // Atualizar visualização atual
+        const editoresParaRestaurar: Array<{ editor: TinyMceEditorInstance; conteudo: string }> = [];
         if (editorMode === 'single') {
           const htmlEditorUnico = buildSingleHtmlFromSecoes(secoesNormalizadas);
           setSecoes(secoesNormalizadas);
           setSingleEditorHtml(htmlEditorUnico);
           const editor = obterEditorTinyMce('laudo-single-editor');
-          if (editor) {
-            executarSemRegistrar(() => editor.setContent(htmlEditorUnico));
-          }
+          if (editor) editoresParaRestaurar.push({ editor, conteudo: htmlEditorUnico });
         } else {
           setSecoes(secoesNormalizadas);
           secoesNormalizadas.forEach((sec, idx) => {
             const editor = obterEditorTinyMce(`secao-${idx}`);
-            if (editor) {
-              executarSemRegistrar(() => editor.setContent(sec.conteudo));
-            }
+            if (editor) editoresParaRestaurar.push({ editor, conteudo: sec.conteudo });
           });
+        }
+
+        try {
+          executarSemRegistrar(() => {
+            const resultados = restaurarVisualizacaoAposSalvar(editoresParaRestaurar, {
+              modo: modoVisualizacaoPlaceholders,
+              valores: mapaPlaceholdersResolvidos,
+              placeholdersPersonalizados: placeholders,
+              descreverPendente: descreverPlaceholderPendente,
+            });
+            resultados.forEach(({ editor, resultado }) => {
+              if (resultado.estado !== 'aplicado') aplicarModoNoEditor(editor);
+            });
+          });
+          conferirTabelasEditoresRef.current();
+        } catch (erro) {
+          window.ipcAPI.logWarning('laudo', `Falha ao atualizar a visualização após salvar: ${obterMensagemErro(erro, 'Erro inesperado')}`);
+          toast.warning('O laudo foi salvo, mas alguns campos não puderam ser atualizados visualmente. O conteúdo original foi preservado.');
         }
 
         concluirSalvamento();
