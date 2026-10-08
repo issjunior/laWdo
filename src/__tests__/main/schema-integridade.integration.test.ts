@@ -10,6 +10,7 @@ const tabelasEsperadas = [
   'imagens_laudo', 'categorias_placeholders', 'placeholders', 'logs_auditoria',
   'templates', 'secoes_template', 'configuracoes', 'wizards', 'etapas_wizard',
   'opcoes_etapa', 'pecas', 'regras_wizard', 'respostas_wizard', 'categorias_pecas',
+  'projeteis_personalizados',
 ]
 
 function executar(database: sqlite3.Database, sql: string): Promise<void> {
@@ -53,7 +54,7 @@ describe('integridade do schema', () => {
     const nomes = new Set(tabelas.map(tabela => tabela.name))
 
     expect(tabelasEsperadas.every(tabela => nomes.has(tabela))).toBe(true)
-    expect(versao[0]?.version).toBe(36)
+    expect(versao[0]?.version).toBe(37)
   })
 
   it('repara o banco v32 incompleto criado pela v0.1.7 sem apagar o banco', async () => {
@@ -86,7 +87,7 @@ describe('integridade do schema', () => {
     await executar(bancoLegado, 'ALTER TABLE logs_auditoria DROP COLUMN modulo')
     await executar(bancoLegado, 'ALTER TABLE laudos DROP COLUMN tipo_criacao')
     await executar(bancoLegado, 'DELETE FROM schema_version')
-    await executar(bancoLegado, 'INSERT INTO schema_version (version) VALUES (36)')
+    await executar(bancoLegado, 'INSERT INTO schema_version (version) VALUES (37)')
     await new Promise<void>((resolve, reject) => bancoLegado.close(erro => erro ? reject(erro) : resolve()))
 
     vi.resetModules()
@@ -118,7 +119,7 @@ describe('integridade do schema', () => {
     await fecharBanco?.()
     const bancoFuturo = new sqlite3.Database(path.join(diretorioBanco, 'laudopericial.db'))
     await executar(bancoFuturo, 'DELETE FROM schema_version')
-    await executar(bancoFuturo, 'INSERT INTO schema_version (version) VALUES (37)')
+    await executar(bancoFuturo, 'INSERT INTO schema_version (version) VALUES (38)')
     await new Promise<void>((resolve, reject) => bancoFuturo.close(erro => erro ? reject(erro) : resolve()))
 
     vi.resetModules()
@@ -129,6 +130,6 @@ describe('integridade do schema', () => {
     await expect(database.setupDatabase()).rejects.toThrow('SCHEMA_FUTURO_INCOMPATIVEL')
     await fecharBanco()
     const versaoPersistida = await consultarBanco<{ version: number }>(path.join(diretorioBanco, 'laudopericial.db'), 'SELECT version FROM schema_version')
-    expect(versaoPersistida).toEqual([{ version: 37 }])
+    expect(versaoPersistida).toEqual([{ version: 38 }])
   })
 })
