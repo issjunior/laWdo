@@ -191,17 +191,17 @@ Cada feature deve ter responsabilidade única e clara, com seus próprios servi�
 
 ---
 
-## Integração GDL — invariante somente leitura
+## Integração GDL — leitura com exceção temporária da listagem
 
-O laWdo usa o GDL exclusivamente como fonte de consulta para agilizar o preenchimento do laudo. A integração não é bidirecional e nunca administra o ciclo de vida da REP.
+O laWdo usa o GDL como fonte de consulta para agilizar o preenchimento do laudo. A integração não é bidirecional e não administra intencionalmente o ciclo de vida da REP. A única exceção temporária é a listagem de “Minhas REPs”, quando ativada expressamente na página API GDL: o fluxo atual abre detalhes e pode marcar REPs como “Laudo em Execução” no GDL. A preferência é local à instalação, começa desativada e bloqueia a atualização também no processo principal quando desligada. Essa exceção não se estende à consulta/importação individual nem autoriza novas operações de alteração de status. Quando houver endpoint de listagem comprovadamente sem esse efeito, revisar a consulta automática de detalhes e remover a exceção.
 
 - Nunca criar, editar, sobrescrever ou excluir REP, peça, foto, anexo ou qualquer registro no GDL.
-- Nunca alterar situação, etapa ou status da REP, incluindo concluir, reabrir, cancelar, devolver, liberar ou movimentar.
-- Nunca adicionar service, handler IPC, método de preload, botão, automação de navegador ou chamada de API que produza mutação no GDL.
+- Nunca adicionar operação explícita para alterar situação, etapa ou status da REP, incluindo concluir, reabrir, cancelar, devolver, liberar ou movimentar. A exceção acima cobre somente o efeito indireto da listagem ativada.
+- Nunca adicionar service, handler IPC, método de preload, botão, automação de navegador ou chamada de API que produza mutação no GDL fora dessa exceção restrita.
 - Permitir somente autenticação necessária à leitura, teste de conectividade, consultas e download de informações ou fotos.
-- Avaliar o efeito real do endpoint, não apenas o verbo HTTP: qualquer efeito de escrita é proibido, ainda que o endpoint utilize `GET`.
+- Avaliar o efeito real do endpoint, não apenas o verbo HTTP: efeitos de escrita são proibidos fora da exceção temporária da listagem, ainda que o endpoint utilize `GET`.
 - Dados importados podem ser complementados ou editados localmente no laWdo, mas nenhuma alteração local pode ser enviada ou sincronizada de volta ao GDL.
-- Em testes e validações manuais, comprovar a ausência de efeitos colaterais no GDL. Se uma operação tiver comportamento incerto, interromper o trabalho e confirmar antes de executá-la.
+- Em testes, usar respostas simuladas e não consultar REPs reais. Em validações manuais, observar os efeitos no GDL; se uma operação fora da exceção tiver comportamento incerto, interromper o trabalho e confirmar antes de executá-la.
 
 ---
 

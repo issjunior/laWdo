@@ -4,7 +4,9 @@ import {
   agendarVisualizacaoPlaceholders,
   aplicarVisualizacaoPlaceholder,
   aplicarVisualizacaoPlaceholders,
+  restaurarVisualizacaoAposSalvar,
 } from '../../renderer/lib/apresentacao-placeholders';
+import { removerFormatacaoPlaceholders } from '../../renderer/lib/utils';
 
 function criarEditor(body: HTMLBodyElement, pronto = true): TinyMceEditorInstance {
   return {
@@ -12,6 +14,7 @@ function criarEditor(body: HTMLBodyElement, pronto = true): TinyMceEditorInstanc
     destroyed: false,
     removed: false,
     getBody: () => body,
+    setContent: (conteudo: string) => { body.innerHTML = conteudo; },
     undoManager: {
       ignore: (callback: () => void) => callback(),
     },
@@ -50,6 +53,50 @@ describe('apresentacao-placeholders', () => {
     expect(aplicarVisualizacaoPlaceholders(editor, opcoes)).toMatchObject({ estado: 'aplicado', processados: 1 });
     expect(body.querySelectorAll('[data-placeholder-preview="true"]')).toHaveLength(1);
     expect(body.querySelector<HTMLElement>('[data-placeholder]')?.style.display).toBe('none');
+  });
+
+  it('mantém a tabela visível após salvar duas vezes no editor único sem persistir a prévia', () => {
+    const body = document.createElement('body');
+    body.innerHTML = '<p><span data-placeholder="{{tabela}}">{{tabela}}</span></p>';
+    document.body.append(body);
+    const editor = criarEditor(body);
+    const opcoes = criarOpcoes();
+
+    aplicarVisualizacaoPlaceholders(editor, opcoes);
+    for (let salvamento = 0; salvamento < 2; salvamento += 1) {
+      const conteudoPersistido = removerFormatacaoPlaceholders(body.innerHTML);
+      expect(conteudoPersistido).toContain('data-placeholder="{{tabela}}"');
+      expect(conteudoPersistido).not.toContain('data-placeholder-preview="true"');
+
+      const [restaurado] = restaurarVisualizacaoAposSalvar([{ editor, conteudo: conteudoPersistido }], opcoes);
+      expect(restaurado.resultado.estado).toBe('aplicado');
+      expect(body.querySelectorAll('[data-placeholder-preview-tabela="true"]')).toHaveLength(1);
+      expect(body.querySelectorAll('[data-placeholder]')).toHaveLength(1);
+    }
+  });
+
+  it('restaura os editores por seção e preserva a tabela personalizada no HTML salvo', () => {
+    const bodyPersonalizado = document.createElement('body');
+    bodyPersonalizado.innerHTML = [
+      '<p><span data-placeholder="{{tabela}}" data-placeholder-tabela-personalizada-id="t1">{{tabela}}</span></p>',
+      '<div data-placeholder-tabela-personalizada="true" data-placeholder-tabela-personalizada-id="t1"><table><tbody><tr><td>Valor editado</td></tr></tbody></table></div>',
+    ].join('');
+    const bodyPadrao = document.createElement('body');
+    bodyPadrao.innerHTML = '<p><span data-placeholder="{{tabela}}">{{tabela}}</span></p>';
+    document.body.append(bodyPersonalizado, bodyPadrao);
+    const opcoes = criarOpcoes();
+    const editores = [criarEditor(bodyPersonalizado), criarEditor(bodyPadrao)];
+
+    const conteudos = [bodyPersonalizado, bodyPadrao].map(body => removerFormatacaoPlaceholders(body.innerHTML));
+    expect(conteudos[0]).toContain('Valor editado');
+    expect(conteudos[0]).toContain('data-placeholder-tabela-personalizada="true"');
+
+    const resultados = restaurarVisualizacaoAposSalvar(editores.map((editor, indice) => ({ editor, conteudo: conteudos[indice] })), opcoes);
+    expect(resultados.map(item => item.resultado.estado)).toEqual(['aplicado', 'aplicado']);
+    expect(bodyPersonalizado.querySelectorAll('[data-placeholder-tabela-personalizada="true"]')).toHaveLength(1);
+    expect(bodyPersonalizado.querySelector('[data-placeholder-tabela-personalizada="true"]')?.textContent).toContain('Valor editado');
+    expect(bodyPersonalizado.querySelectorAll('[data-placeholder-preview="true"]')).toHaveLength(0);
+    expect(bodyPadrao.querySelectorAll('[data-placeholder-preview-tabela="true"]')).toHaveLength(1);
   });
 
   it('preserva somente o placeholder que falhar e continua os demais', () => {

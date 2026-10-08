@@ -1,12 +1,12 @@
 # laWdo
 
-Aplicação desktop para gestão de REPs e elaboração de laudos periciais. O laWdo mantém os dados sob controle local, organiza o fluxo técnico e usa IA somente quando o perito decide.
+Aplicação desktop para gestão de REPs e elaboração de laudos periciais. O laWdo é projetado para uso individual por instalação, embora permita cadastrar mais de um usuário. Mantém os dados sob controle local, organiza o fluxo técnico e usa IA somente quando o perito decide.
 
 ## Destaques
 
 - REPs, solicitantes, tipos de exame, templates, peças e placeholders em um único ambiente.
 - Editor de laudos com TinyMCE, seções, figuras, legendas, histórico e exportação em PDF, DOCX e ODT; ODT requer LibreOffice instalado.
-- Integração opcional e somente leitura com o GDL para consultar REPs, peças B-602 e imagens selecionadas.
+- Integração opcional com o GDL para consultar REPs, peças B-602 e imagens selecionadas. A listagem de REPs fica desativada por padrão; ao ativá-la, a consulta de detalhes pode marcar REPs como “Laudo em Execução” no GDL. É uma exceção temporária restrita à listagem ativada, enquanto não houver endpoint de listagem sem esse efeito.
 - Assistente com Groq e Gemini, consulta fundamentada por evidências e aplicação revisável, sem salvamento automático.
 - SQLite local, backups, auditoria, atualização segura e operação offline-first.
 

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { CalendarDays, Camera, RefreshCw } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -21,8 +20,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { GdlConsultaEmAndamento } from '@/components/rep/GdlConsultaEmAndamento';
+import { GdlListagemPreferenciaAlert } from '@/components/rep/GdlListagemPreferenciaAlert';
+import { GdlFalhaListaAlert, normalizarFalhaListaGdl } from '@/components/rep/GdlFalhaListaAlert';
+import type { FalhaListaGdlApresentavel } from '@/components/rep/GdlFalhaListaAlert';
 import { classesStatusRepGdl, GdlStatusBadge } from '@/components/rep/GdlStatusBadge';
 import type { MinhaRepGdl, StatusMinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
+import { cacheListagemDesativadaDisponivel, VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS } from '@shared/gdl/listagem';
 
 const statusDisponiveis: StatusMinhaRepGdl[] = [
   'Aberta e Distribuída',
@@ -78,7 +81,10 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
+  const [listagemHabilitada, setListagemHabilitada] = useState<boolean | null>(null);
+  const [agora, setAgora] = useState(Date.now());
+  const [tentativaBloqueada, setTentativaBloqueada] = useState(false);
   const [statusFiltro, setStatusFiltro] = useState<StatusMinhaRepGdl | 'todos'>('todos');
   const [naturezaFiltro, setNaturezaFiltro] = useState('todos');
   const [dataInicial, setDataInicial] = useState('');
@@ -95,6 +101,12 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
     setSelecionada(null);
     setErro(null);
     try {
+      const preferencia = await window.ipcAPI.gdl.obterPreferenciaListagem();
+      if (geracao !== geracaoCarga.current) return;
+      if (!preferencia.success || typeof preferencia.data?.habilitada !== 'boolean') {
+        throw new Error(preferencia.error || 'Não foi possível verificar a preferência de listagem.');
+      }
+      setListagemHabilitada(preferencia.data.habilitada);
       if (!forcar) {
         const cache = await window.ipcAPI.gdl.obterMinhasRepsCache();
         if (geracao !== geracaoCarga.current) return;
@@ -104,17 +116,36 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
           setAtualizadoEm(validacaoCache.data.atualizadoEm);
         }
       }
+      if (!preferencia.data.habilitada) {
+        if (forcar) setTentativaBloqueada(true);
+        return;
+      }
+      setTentativaBloqueada(false);
       const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(forcar);
       if (geracao !== geracaoCarga.current) return;
-      if (!resposta.success)
-        throw new Error(resposta.error || 'Não foi possível listar as REPs do GDL.');
+      if (!resposta.success) {
+        setErro(normalizarFalhaListaGdl(resposta));
+        return;
+      }
       const validacao = esquemaSnapshot.safeParse(resposta.data);
-      if (!validacao.success) throw new Error('A lista de REPs retornou um formato inesperado.');
+      if (!validacao.success) {
+        window.ipcAPI.logError('gdl', 'Lista de REPs do GDL inválida no diálogo', {
+          campos: validacao.error.issues.map(ocorrencia => ocorrencia.path.join('.')),
+        });
+        setErro({ codigo: 'estrutura', detalhes: 'A resposta da lista não corresponde ao formato esperado pelo laWdo.' });
+        return;
+      }
       setReps(validacao.data.reps);
       setAtualizadoEm(validacao.data.atualizadoEm);
     } catch (falha: unknown) {
       if (geracao === geracaoCarga.current) {
-        setErro(falha instanceof Error ? falha.message : 'Não foi possível listar as REPs do GDL.');
+        window.ipcAPI.logError('gdl', 'Falha inesperada ao atualizar a lista no diálogo', {
+          tipoErro: falha instanceof Error ? falha.name : 'Erro desconhecido',
+        });
+        setErro({
+          codigo: 'inesperado',
+          detalhes: 'A interface não conseguiu concluir a atualização da lista. Consulte o log do aplicativo.',
+        });
       }
     } finally {
       if (geracao === geracaoCarga.current) setCarregando(false);
@@ -127,21 +158,35 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
     setNaturezaFiltro('todos');
     setDataInicial('');
     setDataFinal('');
+    setListagemHabilitada(null);
+    setTentativaBloqueada(false);
     void carregarTodas();
     return () => {
       geracaoCarga.current += 1;
     };
   }, [open, carregarTodas]);
 
+  useEffect(() => {
+    if (!open || listagemHabilitada !== false || !atualizadoEm) return;
+    const restante = Date.parse(atualizadoEm) + VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS - Date.now();
+    if (restante <= 0) return;
+    const temporizador = setTimeout(() => setAgora(Date.now()), restante);
+    return () => clearTimeout(temporizador);
+  }, [open, listagemHabilitada, atualizadoEm]);
+
+  const repsExibidas = listagemHabilitada === true ||
+    (listagemHabilitada === false && atualizadoEm && cacheListagemDesativadaDisponivel(atualizadoEm, Math.max(agora, Date.now())))
+    ? reps
+    : null;
   const naturezas = useMemo(
     () =>
-      [...new Set(reps?.map(naturezaExibida) ?? [])].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    [reps]
+      [...new Set(repsExibidas?.map(naturezaExibida) ?? [])].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [repsExibidas]
   );
   const intervaloInvalido = Boolean(dataInicial && dataFinal && dataInicial > dataFinal);
   const repsFiltradas = useMemo(
     () =>
-      (reps ?? []).filter(rep => {
+      (repsExibidas ?? []).filter(rep => {
         if (intervaloInvalido) return false;
         if (statusFiltro !== 'todos' && rep.status !== statusFiltro) return false;
         if (naturezaFiltro !== 'todos' && naturezaExibida(rep) !== naturezaFiltro) return false;
@@ -150,7 +195,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
         if (dataFinal && (!dia || dia > dataFinal)) return false;
         return true;
       }),
-    [reps, statusFiltro, naturezaFiltro, dataInicial, dataFinal, intervaloInvalido]
+    [repsExibidas, statusFiltro, naturezaFiltro, dataInicial, dataFinal, intervaloInvalido]
   );
   const repSelecionada = repsFiltradas.find(rep => `${rep.numero}/${rep.ano}` === selecionada);
   const filtrosAtivos =
@@ -172,23 +217,14 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
             Selecione uma REP para continuar no importador do GDL.
           </DialogDescription>
         </DialogHeader>
-        {erro && (
-          <Alert variant="destructive" className="shrink-0">
-            <AlertDescription className="flex flex-wrap items-center gap-2">
-              <span>
-                {erro} {reps ? 'Exibindo a última lista salva.' : 'Nenhuma lista salva disponível.'}
-              </span>
-              {erro.includes('Credenciais não configuradas') && (
-                <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>
-                  Configurar credenciais
-                </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={() => void carregarTodas()}>
-                Tentar novamente
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        {listagemHabilitada !== null && <GdlListagemPreferenciaAlert
+          habilitada={listagemHabilitada}
+          cacheVisivel={Boolean(repsExibidas)}
+          tentativaBloqueada={tentativaBloqueada}
+          onAbrirConfiguracao={onConfigurarCredenciais}
+        />}
+        {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(repsExibidas)}
+          onTentarNovamente={() => void carregarTodas(true)} onConfigurarCredenciais={onConfigurarCredenciais} />}
         <div className="shrink-0 space-y-3 border-b pb-3">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
             <div className="min-w-0">
@@ -201,7 +237,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                   setStatusFiltro(statusDisponiveis.find(status => status === valor) ?? 'todos');
                   setSelecionada(null);
                 }}
-                disabled={!reps}
+                disabled={!repsExibidas}
               >
                 <SelectTrigger
                   id="filtro-status-rep"
@@ -246,7 +282,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                   setNaturezaFiltro(valor);
                   setSelecionada(null);
                 }}
-                disabled={!reps}
+                disabled={!repsExibidas}
               >
                 <SelectTrigger id="filtro-natureza-rep" className="h-9">
                   <SelectValue />
@@ -268,7 +304,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                     variant={dataInicial || dataFinal ? 'secondary' : 'outline'}
                     size="sm"
                     className="h-9 whitespace-nowrap"
-                    disabled={!reps}
+                    disabled={!repsExibidas}
                   >
                     <CalendarDays className="mr-2 h-4 w-4" /> Data da designação
                     {dataInicial || dataFinal ? ' · ativa' : ''}
@@ -329,19 +365,19 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span aria-live="polite">
-              {reps ? `${repsFiltradas.length} de ${reps.length} REPs` : '— REPs'}
-              {atualizadoEm &&
+              {repsExibidas ? `${repsFiltradas.length} de ${repsExibidas.length} REPs` : '— REPs'}
+              {repsExibidas && atualizadoEm &&
                 ` · Atualizado em ${new Date(atualizadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
             </span>
             {carregando && <GdlConsultaEmAndamento />}
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
-          {carregando && !reps ? (
+          {carregando && listagemHabilitada !== false && !repsExibidas ? (
             <div className="flex h-full min-h-40 items-center justify-center p-6 text-center text-sm text-muted-foreground">
               Aguardando a resposta do GDL...
             </div>
-          ) : reps && repsFiltradas.length > 0 ? (
+          ) : repsExibidas && repsFiltradas.length > 0 ? (
             <div role="radiogroup" aria-label="Selecionar REP do GDL" className="divide-y">
               {repsFiltradas.map(rep => {
                 const chave = `${rep.numero}/${rep.ano}`;
@@ -387,9 +423,9 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                 );
               })}
             </div>
-          ) : reps ? (
+          ) : repsExibidas ? (
             <p className="p-8 text-center text-sm text-muted-foreground">
-              {reps.length === 0
+              {repsExibidas.length === 0
                 ? 'Nenhuma REP com os status indicados foi encontrada.'
                 : 'Nenhuma REP corresponde aos filtros.'}
             </p>

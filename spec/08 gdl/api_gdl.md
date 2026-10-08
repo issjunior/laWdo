@@ -2,7 +2,11 @@
 
 ## Limite e fluxos
 
-A integração é exclusivamente de leitura no GDL. Há três consumidores: consulta/importação de REP, atualização local de REP existente e fotos para ilustrações. O renderer não recebe JSON bruto, credenciais, URLs de download, caminhos locais nem identificadores remotos; `gdl.service.ts` controla HTTP, credenciais e normalização. O laWdo nunca cria, edita, exclui ou altera status de qualquer registro no GDL.
+A integração usa o GDL como fonte de consulta. Há consulta/importação individual de REP, atualização local de REP existente, fotos para ilustrações e listagem de “Minhas REPs”. O renderer não recebe JSON bruto, credenciais, URLs de download, caminhos locais nem identificadores remotos; `gdl.service.ts` controla HTTP, credenciais e normalização. O laWdo não envia alterações locais ao GDL. Exceção temporária: a listagem ativada abre detalhes das REPs e pode marcá-las como “Laudo em Execução” no GDL, mesmo sem chamada explícita de alteração de status. Essa exceção não se estende à consulta individual.
+
+## Preferência da listagem de REPs
+
+A página API GDL controla a preferência por instalação, inicialmente desativada. Ativar exige confirmação sobre o possível efeito no status; desativar é imediato. O Dashboard e REPs → Listar REPs não atualizam a lista quando desligada: exibem somente o snapshot anterior com menos de 30 minutos e oferecem atalho à configuração. Com a opção ativada, o cache mantém a validade de dez minutos para atualização, e a lista segue consultando páginas e detalhes. O processo principal bloqueia o canal de atualização quando a preferência está desligada; desligá-la durante uma consulta impede novas páginas/detalhes e descarta o resultado parcial, mantendo o snapshot anterior. Requisições já enviadas podem terminar. Quando existir endpoint de listagem comprovadamente sem esse efeito, revisar a consulta automática de detalhes e retirar a exceção.
 
 ```text
 REPsPage ou LaudosPage → diálogo de revisão → preload → gdl.handlers

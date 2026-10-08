@@ -40,7 +40,7 @@ import type {
   DashboardResumo,
 } from '../types/dashboard.js';
 import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
-import type { SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
+import type { FalhaListaRepsGdl, SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
 import type { ListaImagensRepGdl, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
 import type {
@@ -235,8 +235,10 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
+    obterPreferenciaListagem: () => Promise<UserResponse<{ habilitada: boolean }>>;
+    definirPreferenciaListagem: (habilitada: boolean) => Promise<UserResponse<{ habilitada: boolean }>>;
     obterMinhasRepsCache: () => Promise<UserResponse<SnapshotMinhasRepsGdl | null>>;
-    atualizarMinhasRepsCache: (forcar: boolean) => Promise<UserResponse<SnapshotMinhasRepsGdl>>;
+    atualizarMinhasRepsCache: (forcar: boolean) => Promise<UserResponse<SnapshotMinhasRepsGdl> & { falha?: FalhaListaRepsGdl }>;
     testarConexao: (ambiente?: string) => Promise<UserResponse>;
     obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
@@ -528,6 +530,8 @@ const ALLOWED_CHANNELS = new Set([
   'configuracao:salvar',
 
   // GDL
+  'gdl:obter-preferencia-listagem',
+  'gdl:definir-preferencia-listagem',
   'gdl:testar-conexao',
   'gdl:obter-validacao-sessao',
   'gdl:limpar-validacao-sessao',
@@ -1361,6 +1365,11 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    obterPreferenciaListagem: (): Promise<UserResponse<{ habilitada: boolean }>> => invocarComDiagnostico('gdl:obter-preferencia-listagem'),
+    definirPreferenciaListagem: (habilitada: boolean): Promise<UserResponse<{ habilitada: boolean }>> => {
+      if (typeof habilitada !== 'boolean') throw new Error('Preferência de listagem inválida');
+      return invocarComDiagnostico('gdl:definir-preferencia-listagem', habilitada);
+    },
     obterMinhasRepsCache: (): Promise<UserResponse<SnapshotMinhasRepsGdl | null>> => invocarComDiagnostico('gdl:obter-minhas-reps-cache'),
     atualizarMinhasRepsCache: (forcar: boolean): Promise<UserResponse<SnapshotMinhasRepsGdl>> => {
       if (typeof forcar !== 'boolean') throw new Error('Opção de atualização inválida');

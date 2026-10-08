@@ -21,6 +21,8 @@ describe('GdlConfigPage', () => {
         configuracao: { ...ipcApiOriginal.configuracao, obter: obterConfiguracao, salvar: salvarConfiguracao },
         gdl: {
           ...ipcApiOriginal.gdl,
+          obterPreferenciaListagem: vi.fn().mockResolvedValue({ success: true, data: { habilitada: false } }),
+          definirPreferenciaListagem: vi.fn(async (habilitada: boolean) => ({ success: true, data: { habilitada } })),
           obterValidacaoSessao: vi.fn().mockResolvedValue({ success: true, data: { ambiente: 'Produção', validado: false } }),
           limparValidacaoSessao: vi.fn().mockResolvedValue({ success: true, data: { ambiente: 'Produção', validado: false } }),
         },
@@ -76,5 +78,22 @@ describe('GdlConfigPage', () => {
     expect(configuracoes.get('gdl_login_homologacao')).toBe('usuario-teste')
     expect(configuracoes.get('gdl_senha_homologacao')).toBe('senha-teste')
     expect(screen.getByText('Ambiente selecionado: Produção')).toBeInTheDocument()
+  })
+
+  it('exige confirmação para ativar a listagem e desativa imediatamente', async () => {
+    render(<GdlConfigPage />)
+    const ativar = await screen.findByRole('button', { name: 'Ativar listagem' })
+    await waitFor(() => expect(ativar).toBeEnabled())
+    fireEvent.click(ativar)
+    expect(screen.getByText(/pode marcá-las como “Laudo em Execução”/)).toBeInTheDocument()
+    const definir = window.ipcAPI.gdl.definirPreferenciaListagem as ReturnType<typeof vi.fn>
+    expect(definir).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(definir).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Ativar listagem' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar ativação' }))
+    await waitFor(() => expect(definir).toHaveBeenCalledWith(true))
+    fireEvent.click(await screen.findByRole('button', { name: 'Desativar listagem' }))
+    await waitFor(() => expect(definir).toHaveBeenCalledWith(false))
   })
 })

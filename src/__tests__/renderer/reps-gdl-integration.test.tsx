@@ -152,6 +152,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
           }),
           consultarRep,
           listarMinhasReps,
+          obterPreferenciaListagem: vi.fn().mockResolvedValue({ success: true, data: { habilitada: true } }),
           obterMinhasRepsCache: vi.fn().mockResolvedValue({ success: true, data: null }),
           atualizarMinhasRepsCache: vi.fn().mockImplementation(async () => {
             const pagina = await listarMinhasReps()

@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import { z } from 'zod';
 import * as gdlService from './gdl.service.js';
+import { exigirListagemRepsGdlHabilitada, obterVersaoPreferenciaListagem } from './gdl-listagem-preferencia.service.js';
 import type { MinhaRepGdl, SnapshotMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 
 const VALIDADE_MS = 10 * 60 * 1000;
@@ -37,19 +38,26 @@ async function lerSnapshot(arquivo: string): Promise<SnapshotMinhasRepsGdl | nul
   }
 }
 
-async function salvarSnapshot(arquivo: string, snapshot: SnapshotMinhasRepsGdl): Promise<void> {
+async function salvarSnapshot(arquivo: string, snapshot: SnapshotMinhasRepsGdl, versao: number): Promise<void> {
   await mkdir(path.dirname(arquivo), { recursive: true });
   const temporario = `${arquivo}.${randomUUID()}.tmp`;
-  await writeFile(temporario, JSON.stringify(snapshot), 'utf8');
-  await rename(temporario, arquivo);
+  try {
+    await writeFile(temporario, JSON.stringify(snapshot), 'utf8');
+    await exigirListagemRepsGdlHabilitada(versao);
+    await rename(temporario, arquivo);
+  } finally {
+    await rm(temporario, { force: true });
+  }
 }
 
-async function consultarTodas(): Promise<SnapshotMinhasRepsGdl> {
+async function consultarTodas(versao: number): Promise<SnapshotMinhasRepsGdl> {
   const reps: MinhaRepGdl[] = [];
   const paginasVistas = new Set<string>();
   let listagemId: string | null = null;
   for (let pagina = 1; pagina <= 500; pagina += 1) {
+    await exigirListagemRepsGdlHabilitada(versao);
     const resposta = await gdlService.listarMinhasReps(pagina);
+    await exigirListagemRepsGdlHabilitada(versao);
     if (resposta.paginaAtual !== pagina || (listagemId && resposta.listagemId !== listagemId)) {
       throw new Error('A paginação do GDL mudou durante a consulta.');
     }
@@ -60,7 +68,9 @@ async function consultarTodas(): Promise<SnapshotMinhasRepsGdl> {
     reps.push(...resposta.reps);
     if (!resposta.temProxima) {
       if (reps.length > 0) {
+        await exigirListagemRepsGdlHabilitada(versao);
         const naturezas = await gdlService.consultarNaturezasMinhasReps(listagemId);
+        await exigirListagemRepsGdlHabilitada(versao);
         const porId = new Map(naturezas.map(item => [item.idGdl, item.naturezaExameComCodigo]));
         if (porId.size !== reps.length || reps.some(rep => !porId.has(rep.idGdl))) {
           throw new Error('Os códigos de exame não correspondem à listagem atual.');
@@ -80,16 +90,23 @@ export async function obterMinhasRepsEmCache(usuarioId: string): Promise<Snapsho
 }
 
 export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: boolean): Promise<SnapshotMinhasRepsGdl> {
+  await exigirListagemRepsGdlHabilitada();
+  const versao = obterVersaoPreferenciaListagem();
   const { chave, arquivo } = await contexto(usuarioId);
   const ativa = consultas.get(chave);
   if (ativa) return ativa;
   const consulta = (async () => {
     const anterior = await lerSnapshot(arquivo);
-    if (!forcar && anterior && Date.now() - Date.parse(anterior.atualizadoEm) < VALIDADE_MS) return anterior;
+    if (!forcar && anterior && Date.now() - Date.parse(anterior.atualizadoEm) < VALIDADE_MS) {
+      await exigirListagemRepsGdlHabilitada(versao);
+      return anterior;
+    }
     const proxima = fila.then(async () => {
-      const snapshot = await consultarTodas();
+      await exigirListagemRepsGdlHabilitada(versao);
+      const snapshot = await consultarTodas(versao);
       if ((await contexto(usuarioId)).chave !== chave) throw new Error('A configuração do GDL mudou durante a consulta.');
-      await salvarSnapshot(arquivo, snapshot);
+      await exigirListagemRepsGdlHabilitada(versao);
+      await salvarSnapshot(arquivo, snapshot, versao);
       return snapshot;
     });
     fila = proxima.catch(() => undefined);

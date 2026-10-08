@@ -1,4 +1,5 @@
 import * as React from "react"
+import { createPortal } from "react-dom"
 import {
   ColumnFiltersState,
   ColumnVisibilityState,
@@ -49,6 +50,8 @@ interface DataTableProps<TData extends RowData> {
   defaultSorting?: SortingState
   /** Habilita row pinning (fixar linhas no topo/base) com botão Pin/PinOff por linha */
   enableRowPinning?: boolean
+  /** Elemento externo onde o controle de colunas deve aparecer */
+  destinoControleColunas?: HTMLElement | null
 }
 
 export function DataTable<TData extends RowData>({
@@ -60,6 +63,7 @@ export function DataTable<TData extends RowData>({
   hideSearch = false,
   defaultSorting = [],
   enableRowPinning = false,
+  destinoControleColunas = null,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>(defaultSorting)
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -91,24 +95,10 @@ export function DataTable<TData extends RowData>({
     },
   })
 
-  return (
-    <div className="space-y-4">
-      {/* Barra de ferramentas */}
-      <div className="flex items-center gap-3">
-        {!hideSearch && (
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={searchPlaceholder}
-              value={globalFilter ?? ""}
-              onChange={(event) => setGlobalFilter(String(event.target.value))}
-              className="pl-8"
-            />
-          </div>
-        )}
-        <DropdownMenu>
+  const controleColunas = (
+    <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="ml-auto">
+            <Button variant="outline" size="sm" className={destinoControleColunas ? undefined : "ml-auto"}>
               <Settings2 className="mr-2 h-4 w-4" />
               Colunas
             </Button>
@@ -138,8 +128,28 @@ export function DataTable<TData extends RowData>({
                 )
               })}
           </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+    </DropdownMenu>
+  )
+
+  return (
+    <div className="space-y-4">
+      {(!hideSearch || !destinoControleColunas) && (
+        <div className="flex items-center gap-3">
+          {!hideSearch && (
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={searchPlaceholder}
+                value={globalFilter ?? ""}
+                onChange={(event) => setGlobalFilter(String(event.target.value))}
+                className="pl-8"
+              />
+            </div>
+          )}
+          {!destinoControleColunas && controleColunas}
+        </div>
+      )}
+      {destinoControleColunas && createPortal(controleColunas, destinoControleColunas)}
 
       {/* Tabela */}
       <div className="rounded-md border">
