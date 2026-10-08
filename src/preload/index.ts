@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -138,6 +139,12 @@ type ExportacaoLaudoParams = {
 
 // Tipos para a API exposta
 export interface IpcAPI {
+  projetil: {
+    listarPersonalizados: () => Promise<{ success: boolean; data?: ProjetilReferencia[]; error?: string }>;
+    salvarPersonalizado: (dados: ProjetilPersonalizadoEntrada, id?: string) => Promise<{ success: boolean; data?: ProjetilReferencia; error?: string }>;
+    excluirPersonalizado: (id: string) => Promise<{ success: boolean; error?: string }>;
+    importarCsv: (texto: string) => Promise<{ success: boolean; data?: number; error?: string }>;
+  };
   // Utilitários
   ping: () => Promise<string>;
   getAppInfo: () => Promise<{
@@ -469,6 +476,10 @@ export interface IpcAPI {
 
 // Validar canais IPC permitidos
 const ALLOWED_CHANNELS = new Set([
+  'projetil:listarPersonalizados',
+  'projetil:salvarPersonalizado',
+  'projetil:excluirPersonalizado',
+  'projetil:importarCsv',
   // Utilitários
   'ping',
   'get-app-info',
@@ -1066,6 +1077,12 @@ const sendSeguro = (channel: string, ...args: IpcParams): void => {
 
 // Expor API segura para o renderer
 contextBridge.exposeInMainWorld('ipcAPI', {
+  projetil: {
+    listarPersonalizados: () => invocarComDiagnostico('projetil:listarPersonalizados'),
+    salvarPersonalizado: (dados: ProjetilPersonalizadoEntrada, id?: string) => invocarComDiagnostico('projetil:salvarPersonalizado', dados, id),
+    excluirPersonalizado: (id: string) => invocarComDiagnostico('projetil:excluirPersonalizado', id),
+    importarCsv: (texto: string) => invocarComDiagnostico('projetil:importarCsv', texto),
+  },
   // Utilitários
   ping: () => invokeSeguro<string>('ping'),
   getAppInfo: () => invokeSeguro('get-app-info'),

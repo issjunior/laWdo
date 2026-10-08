@@ -98,6 +98,7 @@ interface IpcCapturaLogsRenderer {
 }
 
 interface IpcAPIRendererLegada {
+  projetil: import('../shared/types/projetil.types.js').ProjetilIpcRenderer;
   ping: () => Promise<string>;
   getAppInfo: () => Promise<AppInfoLegado>;
   logInfo: (module: string, message: string) => void | Promise<void>;

@@ -12,6 +12,7 @@ import {
   Ruler,
   ScrollText,
   Settings,
+  Target,
   Users,
   Wand2,
 } from 'lucide-react'
@@ -63,6 +64,11 @@ export const itensMenu: ItemMenu[] = [
     items: [
       { title: 'Editor de Laudos', path: '/laudos', icon: FileText },
     ],
+  },
+  {
+    title: 'Projéteis',
+    icon: Target,
+    path: '/projeteis',
   },
   {
     title: 'Wizard',

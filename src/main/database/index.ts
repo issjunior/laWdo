@@ -23,7 +23,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 36;
+export const CURRENT_SCHEMA_VERSION = 37;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -2347,6 +2347,25 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       log.error('Erro ao aplicar migration versão 36', error);
       throw error;
     }
+  }
+
+  if (fromVersion < 37) {
+    await executeNonQuery(`
+      CREATE TABLE IF NOT EXISTS projeteis_personalizados (
+        id TEXT PRIMARY KEY,
+        calibre TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        massa_gramas REAL NOT NULL CHECK (massa_gramas > 0),
+        diametro_min_mm REAL,
+        diametro_max_mm REAL,
+        comprimento_min_mm REAL,
+        comprimento_max_mm REAL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK (diametro_min_mm IS NULL OR diametro_max_mm IS NULL OR diametro_min_mm <= diametro_max_mm),
+        CHECK (comprimento_min_mm IS NULL OR comprimento_max_mm IS NULL OR comprimento_min_mm <= comprimento_max_mm)
+      )
+    `);
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);
