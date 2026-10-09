@@ -10,7 +10,7 @@ const executarArquivo = promisify(execFile);
 
 test('valida que a versão atual corresponde à maior migration registrada', async () => {
   const { stdout } = await executarArquivo(process.execPath, ['scripts/release/validar-schema-release.mjs']);
-  assert.match(stdout, /Schema 37 validado/);
+  assert.match(stdout, /Schema 38 validado/);
 });
 
 test('rejeita manifesto cujo schema diverge do aplicativo', async () => {
@@ -33,7 +33,7 @@ test('rejeita manifesto cujo schema diverge do aplicativo', async () => {
   try {
     await assert.rejects(
       executarArquivo(process.execPath, ['scripts/release/validar-schema-release.mjs', '--manifesto', caminhoManifesto]),
-      /Manifesto informa schema 33, mas o aplicativo informa 37/,
+      /Manifesto informa schema 33, mas o aplicativo informa 38/,
     );
   } finally {
     await rm(diretorio, { recursive: true, force: true });
