@@ -4,7 +4,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const cabecalho = 'calibre;tipo;massa_gramas;diametro_min_mm;diametro_max_mm;comprimento_min_mm;comprimento_max_mm';
+const cabecalho = 'calibre;tipo;massa_gramas;calibre_real_mm;altura_maxima_mm';
 
 describe('importação de projéteis personalizados', () => {
   let diretorio = '';
@@ -28,16 +28,16 @@ describe('importação de projéteis personalizados', () => {
   });
 
   it('importa decimais brasileiros, ignora duplicatas e persiste os dados', async () => {
-    const csv = `${cabecalho}\n9 mm;ETOG;8,03;9;9,02;15,3;15,4\n9 mm;ETOG;8,03;9;9,02;15,3;15,4`;
+    const csv = `${cabecalho}\n9 mm;ETOG;8,03;9,02;15,4\n9 mm;ETOG;8,03;9,02;15,4`;
     expect(await servico.importarCsv(csv)).toBe(1);
     expect(await servico.importarCsv(csv)).toBe(0);
     expect(await servico.listar()).toEqual([expect.objectContaining({
-      calibre: '9 mm', massaGramas: 8.03, diametroMaxMm: 9.02,
+      calibre: '9 mm', massaGramas: 8.03, calibreRealMaxMm: 9.02,
     })]);
   });
 
   it('recusa arquivo inválido sem gravar suas linhas anteriores', async () => {
-    const csv = `${cabecalho}\n.32 Auto;ETOG;4,6;7,9;7,92;11,5;11,5\n.454 Casull;ETPP;16,85;11,45;11,42;17,8;17,8`;
+    const csv = `${cabecalho}\n.32 Auto;ETOG;4,6;7,92;11,5\n.454 Casull;ETPP;16,85;-11,42;17,8`;
     await expect(servico.importarCsv(csv)).rejects.toThrow('Linha 3');
     expect(await servico.listar()).toHaveLength(1);
   });

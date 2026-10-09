@@ -54,7 +54,7 @@ describe('integridade do schema', () => {
     const nomes = new Set(tabelas.map(tabela => tabela.name))
 
     expect(tabelasEsperadas.every(tabela => nomes.has(tabela))).toBe(true)
-    expect(versao[0]?.version).toBe(37)
+    expect(versao[0]?.version).toBe(38)
   })
 
   it('repara o banco v32 incompleto criado pela v0.1.7 sem apagar o banco', async () => {
@@ -119,7 +119,7 @@ describe('integridade do schema', () => {
     await fecharBanco?.()
     const bancoFuturo = new sqlite3.Database(path.join(diretorioBanco, 'laudopericial.db'))
     await executar(bancoFuturo, 'DELETE FROM schema_version')
-    await executar(bancoFuturo, 'INSERT INTO schema_version (version) VALUES (38)')
+    await executar(bancoFuturo, 'INSERT INTO schema_version (version) VALUES (39)')
     await new Promise<void>((resolve, reject) => bancoFuturo.close(erro => erro ? reject(erro) : resolve()))
 
     vi.resetModules()
@@ -130,6 +130,6 @@ describe('integridade do schema', () => {
     await expect(database.setupDatabase()).rejects.toThrow('SCHEMA_FUTURO_INCOMPATIVEL')
     await fecharBanco()
     const versaoPersistida = await consultarBanco<{ version: number }>(path.join(diretorioBanco, 'laudopericial.db'), 'SELECT version FROM schema_version')
-    expect(versaoPersistida).toEqual([{ version: 38 }])
+    expect(versaoPersistida).toEqual([{ version: 39 }])
   })
 })

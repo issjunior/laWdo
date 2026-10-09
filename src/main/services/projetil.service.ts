@@ -7,10 +7,8 @@ interface ProjetilPersonalizadoRow {
   calibre: string;
   tipo: string;
   massa_gramas: number;
-  diametro_min_mm: number | null;
-  diametro_max_mm: number | null;
-  comprimento_min_mm: number | null;
-  comprimento_max_mm: number | null;
+  calibre_real_mm: number | null;
+  altura_maxima_mm: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,29 +25,21 @@ export function validarProjetilPersonalizado(valor: unknown): ProjetilPersonaliz
   const calibre = typeof dados.calibre === 'string' ? dados.calibre.trim() : '';
   const tipo = typeof dados.tipo === 'string' ? dados.tipo.trim() : '';
   const massaGramas = numero(dados.massaGramas);
-  const diametroMinMm = numero(dados.diametroMinMm);
-  const diametroMaxMm = numero(dados.diametroMaxMm);
-  const comprimentoMinMm = numero(dados.comprimentoMinMm);
-  const comprimentoMaxMm = numero(dados.comprimentoMaxMm);
+  const calibreRealMm = numero(dados.calibreRealMm);
+  const alturaMaximaMm = numero(dados.alturaMaximaMm);
   if (!calibre || calibre.length > 120 || !tipo || tipo.length > 120) {
     throw new Error('Informe calibre e tipo com até 120 caracteres.');
   }
   if (massaGramas === null || !Number.isFinite(massaGramas) || massaGramas <= 0) {
     throw new Error('A massa deve ser um número positivo.');
   }
-  for (const [nome, minimo, maximo] of [
-    ['Diâmetro', diametroMinMm, diametroMaxMm],
-    ['Comprimento', comprimentoMinMm, comprimentoMaxMm],
-  ] as const) {
-    if ((minimo === null) !== (maximo === null)) throw new Error(`${nome}: informe os dois limites ou deixe ambos vazios.`);
-    if (minimo !== null && (!Number.isFinite(minimo) || !Number.isFinite(maximo) || minimo <= 0 || maximo === null || maximo < minimo)) {
-      throw new Error(`${nome}: intervalo inválido.`);
-    }
+  if ([calibreRealMm, alturaMaximaMm].some(medida => medida !== null && (!Number.isFinite(medida) || medida <= 0))) {
+    throw new Error('Use apenas medidas positivas.');
   }
-  if (diametroMinMm === null && comprimentoMinMm === null) {
+  if (calibreRealMm === null && alturaMaximaMm === null) {
     throw new Error('Informe ao menos uma dimensão do projétil.');
   }
-  return { calibre, tipo, massaGramas, diametroMinMm, diametroMaxMm, comprimentoMinMm, comprimentoMaxMm };
+  return { calibre, tipo, massaGramas, calibreRealMm, alturaMaximaMm };
 }
 
 function converter(row: ProjetilPersonalizadoRow): ProjetilReferencia {
@@ -58,11 +48,14 @@ function converter(row: ProjetilPersonalizadoRow): ProjetilReferencia {
     calibre: row.calibre,
     tipo: row.tipo,
     massaGramas: row.massa_gramas,
-    diametroMinMm: row.diametro_min_mm,
-    diametroMaxMm: row.diametro_max_mm,
-    comprimentoMinMm: row.comprimento_min_mm,
-    comprimentoMaxMm: row.comprimento_max_mm,
+    sigla: /\b[A-Z]{3,5}\b/.exec(row.tipo)?.[0] ?? null,
+    calibreRealMinMm: row.calibre_real_mm,
+    calibreRealMaxMm: row.calibre_real_mm,
+    alturaMinMm: row.altura_maxima_mm,
+    alturaMaxMm: row.altura_maxima_mm,
     situacao: 'personalizada',
+    fonte: 'Cadastro local',
+    localizacao: 'Neste computador',
   };
 }
 
@@ -71,18 +64,15 @@ function paraLinha(dados: ProjetilPersonalizadoEntrada) {
     calibre: dados.calibre,
     tipo: dados.tipo,
     massa_gramas: dados.massaGramas,
-    diametro_min_mm: dados.diametroMinMm,
-    diametro_max_mm: dados.diametroMaxMm,
-    comprimento_min_mm: dados.comprimentoMinMm,
-    comprimento_max_mm: dados.comprimentoMaxMm,
+    calibre_real_mm: dados.calibreRealMm,
+    altura_maxima_mm: dados.alturaMaximaMm,
   };
 }
 
 function chaveDuplicata(dados: ProjetilPersonalizadoEntrada): string {
   return JSON.stringify([
     dados.calibre.toLocaleLowerCase('pt-BR'), dados.tipo.toLocaleLowerCase('pt-BR'),
-    dados.massaGramas, dados.diametroMinMm, dados.diametroMaxMm,
-    dados.comprimentoMinMm, dados.comprimentoMaxMm,
+    dados.massaGramas, dados.calibreRealMm, dados.alturaMaximaMm,
   ]);
 }
 
@@ -126,7 +116,10 @@ class ProjetilService extends BaseService<ProjetilPersonalizadoRow> {
 
   async salvar(valor: unknown, id?: string): Promise<ProjetilReferencia> {
     const dados = validarProjetilPersonalizado(valor);
-    const duplicado = (await this.listar()).some(item => item.id !== id && chaveDuplicata(item) === chaveDuplicata(dados));
+    const duplicado = (await this.listar()).some(item => item.id !== id && chaveDuplicata({
+      calibre: item.calibre, tipo: item.tipo, massaGramas: item.massaGramas ?? 0,
+      calibreRealMm: item.calibreRealMinMm, alturaMaximaMm: item.alturaMinMm,
+    }) === chaveDuplicata(dados));
     if (duplicado) throw new Error('Já existe um projétil personalizado com os mesmos dados.');
     const linha = paraLinha(dados);
     if (id) {
@@ -148,7 +141,7 @@ class ProjetilService extends BaseService<ProjetilPersonalizadoRow> {
   async importarCsv(texto: string): Promise<number> {
     const linhas = lerCsv(texto.replace(/^\uFEFF/, ''));
     const cabecalho = linhas.shift()?.map(campo => campo.toLowerCase()) ?? [];
-    const colunas = ['calibre', 'tipo', 'massa_gramas', 'diametro_min_mm', 'diametro_max_mm', 'comprimento_min_mm', 'comprimento_max_mm'];
+    const colunas = ['calibre', 'tipo', 'massa_gramas', 'calibre_real_mm', 'altura_maxima_mm'];
     if (!colunas.every((coluna, indice) => cabecalho[indice] === coluna) || cabecalho.length !== colunas.length) {
       throw new Error(`Cabeçalho CSV esperado: ${colunas.join(';')}`);
     }
@@ -158,14 +151,16 @@ class ProjetilService extends BaseService<ProjetilPersonalizadoRow> {
       try {
         return validarProjetilPersonalizado({
           calibre: campos[0], tipo: campos[1], massaGramas: campos[2],
-          diametroMinMm: campos[3], diametroMaxMm: campos[4],
-          comprimentoMinMm: campos[5], comprimentoMaxMm: campos[6],
+          calibreRealMm: campos[3], alturaMaximaMm: campos[4],
         });
       } catch (erro) {
         throw new Error(`Linha ${indice + 2}: ${erro instanceof Error ? erro.message : 'dados inválidos'}`);
       }
     });
-    const chavesExistentes = new Set((await this.listar()).map(chaveDuplicata));
+    const chavesExistentes = new Set((await this.listar()).map(item => chaveDuplicata({
+      calibre: item.calibre, tipo: item.tipo, massaGramas: item.massaGramas ?? 0,
+      calibreRealMm: item.calibreRealMinMm, alturaMaximaMm: item.alturaMinMm,
+    })));
     const novasEntradas = entradas.filter(entrada => {
       const chave = chaveDuplicata(entrada);
       if (chavesExistentes.has(chave)) return false;

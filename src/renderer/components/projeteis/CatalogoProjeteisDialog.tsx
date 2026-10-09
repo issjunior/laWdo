@@ -6,11 +6,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { ProjetilReferencia, SituacaoProjetil } from '@shared/types/projetil.types';
+import { SiglaProjetil } from './SiglaProjetil';
+import { siglasProjeteis } from '@shared/catalogos/siglas-projeteis';
+import type { ProjetilReferencia } from '@shared/types/projetil.types';
 
 const TAMANHO_PAGINA = 12;
-type FiltroSituacao = SituacaoProjetil | 'todas';
-type FiltroMedidas = 'todas' | 'completas' | 'incompletas';
 
 interface CatalogoProjeteisDialogProps {
   aberto: boolean;
@@ -22,77 +22,42 @@ interface CatalogoProjeteisDialogProps {
   aoImportarCsv: (arquivo: File | undefined) => Promise<void>;
 }
 
-function rotuloMedida(minimo: number | null, maximo: number | null): string {
+function faixa(minimo: number | null, maximo: number | null, unidade: string): string {
   if (minimo === null || maximo === null) return 'Não informado';
-  return minimo === maximo ? `${minimo} mm` : `${minimo}–${maximo} mm`;
+  return minimo === maximo ? `${minimo} ${unidade}` : `${minimo}–${maximo} ${unidade}`;
 }
 
-export function CatalogoProjeteisDialog({
-  aberto, aoAlterarAbertura, referencias, aoNovo, aoEditar, aoExcluir, aoImportarCsv,
-}: CatalogoProjeteisDialogProps) {
+export function CatalogoProjeteisDialog({ aberto, aoAlterarAbertura, referencias, aoNovo, aoEditar, aoExcluir, aoImportarCsv }: CatalogoProjeteisDialogProps) {
   const [calibre, setCalibre] = useState('');
-  const [tipo, setTipo] = useState('');
-  const [situacao, setSituacao] = useState<FiltroSituacao>('todas');
-  const [medidas, setMedidas] = useState<FiltroMedidas>('todas');
+  const [sigla, setSigla] = useState('todas');
   const [pagina, setPagina] = useState(0);
-
-  const filtrados = useMemo(() => {
-    if (!aberto) return [];
-    const termoCalibre = calibre.trim().toLocaleLowerCase('pt-BR');
-    const termoTipo = tipo.trim().toLocaleLowerCase('pt-BR');
-    return referencias.filter(item => {
-      const completo = item.diametroMinMm !== null && item.diametroMaxMm !== null
-        && item.comprimentoMinMm !== null && item.comprimentoMaxMm !== null;
-      return item.calibre.toLocaleLowerCase('pt-BR').includes(termoCalibre)
-        && item.tipo.toLocaleLowerCase('pt-BR').includes(termoTipo)
-        && (situacao === 'todas' || item.situacao === situacao)
-        && (medidas === 'todas' || (medidas === 'completas' ? completo : !completo));
-    }).sort((a, b) => a.calibre.localeCompare(b.calibre, 'pt-BR')
-      || a.tipo.localeCompare(b.tipo, 'pt-BR')
-      || a.massaGramas - b.massaGramas);
-  }, [aberto, referencias, calibre, tipo, situacao, medidas]);
-
+  const siglas = useMemo(() => [...new Set(referencias.map(item => item.sigla).filter((valor): valor is string => Boolean(valor)))].sort(), [referencias]);
+  const filtrados = useMemo(() => referencias.filter(item => item.calibre.toLocaleLowerCase('pt-BR').includes(calibre.trim().toLocaleLowerCase('pt-BR'))
+    && (sigla === 'todas' || item.sigla === sigla)).sort((a, b) => a.calibre.localeCompare(b.calibre, 'pt-BR')
+      || a.tipo.localeCompare(b.tipo, 'pt-BR') || a.id.localeCompare(b.id, 'pt-BR')), [referencias, calibre, sigla]);
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / TAMANHO_PAGINA));
   const paginaAtual = Math.min(pagina, totalPaginas - 1);
   const itensPagina = filtrados.slice(paginaAtual * TAMANHO_PAGINA, (paginaAtual + 1) * TAMANHO_PAGINA);
 
   return <Dialog open={aberto} onOpenChange={aoAlterarAbertura}>
     {aberto && <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-4 p-4 sm:max-w-6xl sm:p-6">
-      <DialogHeader>
-        <DialogTitle>Catálogo completo de projéteis</DialogTitle>
-        <DialogDescription>Consulte todas as variantes disponíveis. Os filtros deste catálogo não alteram os candidatos da consulta.</DialogDescription>
-      </DialogHeader>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="space-y-1.5"><Label htmlFor="catalogo-calibre">Calibre</Label><Input id="catalogo-calibre" value={calibre} onChange={evento => { setCalibre(evento.target.value); setPagina(0); }} placeholder="Pesquisar calibre" /></div>
-        <div className="space-y-1.5"><Label htmlFor="catalogo-tipo">Tipo</Label><Input id="catalogo-tipo" value={tipo} onChange={evento => { setTipo(evento.target.value); setPagina(0); }} placeholder="Pesquisar tipo" /></div>
-        <div className="space-y-1.5"><Label htmlFor="catalogo-situacao">Nível</Label><Select value={situacao} onValueChange={(valor: FiltroSituacao) => { setSituacao(valor); setPagina(0); }}><SelectTrigger id="catalogo-situacao"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todos</SelectItem><SelectItem value="confirmada">Confirmada</SelectItem><SelectItem value="estimada">Estimada</SelectItem><SelectItem value="personalizada">Personalizada</SelectItem></SelectContent></Select></div>
-        <div className="space-y-1.5"><Label htmlFor="catalogo-medidas">Medidas</Label><Select value={medidas} onValueChange={(valor: FiltroMedidas) => { setMedidas(valor); setPagina(0); }}><SelectTrigger id="catalogo-medidas"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todas</SelectItem><SelectItem value="completas">Diâmetro e comprimento</SelectItem><SelectItem value="incompletas">Alguma medida ausente</SelectItem></SelectContent></Select></div>
+      <DialogHeader><DialogTitle>Catálogo completo de projéteis</DialogTitle><DialogDescription>Medidas aproximadas das fontes; compare cada variante com o projétil observado.</DialogDescription></DialogHeader>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5"><Label htmlFor="catalogo-calibre">Calibre nominal</Label><Input id="catalogo-calibre" value={calibre} onChange={evento => { setCalibre(evento.target.value); setPagina(0); }} placeholder="Pesquisar calibre" /></div>
+        <div className="space-y-1.5"><Label htmlFor="catalogo-sigla">Formato/Constituição</Label><Select value={sigla} onValueChange={valor => { setSigla(valor); setPagina(0); }}><SelectTrigger id="catalogo-sigla"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todos</SelectItem>{siglas.map(valor => <SelectItem key={valor} value={valor}>{valor} — {siglasProjeteis[valor] ?? 'Nome não documentado'}</SelectItem>)}</SelectContent></Select></div>
       </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm text-muted-foreground">{filtrados.length} variante{filtrados.length === 1 ? '' : 's'} encontrada{filtrados.length === 1 ? '' : 's'}</span>
-        <div className="flex flex-wrap gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"><Upload className="h-4 w-4" />Importar CSV<input type="file" accept=".csv,text/csv" className="sr-only" onChange={evento => { void aoImportarCsv(evento.target.files?.[0]); evento.target.value = ''; }} /></label>
-          <Button onClick={aoNovo}><Plus className="mr-2 h-4 w-4" />Novo personalizado</Button>
-        </div>
-      </div>
-
+      <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm text-muted-foreground">{filtrados.length} variante{filtrados.length === 1 ? '' : 's'} encontrada{filtrados.length === 1 ? '' : 's'}</span><div className="flex flex-wrap gap-2"><label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"><Upload className="h-4 w-4" />Importar CSV<input type="file" accept=".csv,text/csv" className="sr-only" onChange={evento => { void aoImportarCsv(evento.target.files?.[0]); evento.target.value = ''; }} /></label><Button onClick={aoNovo}><Plus className="mr-2 h-4 w-4" />Novo personalizado</Button></div></div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {itensPagina.map(item => <div key={item.id} className="rounded-lg border p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{item.calibre}</span><span className="text-sm text-muted-foreground">{item.tipo}</span><Badge variant={item.situacao === 'confirmada' ? 'default' : 'outline'}>{item.situacao === 'confirmada' ? 'Confirmada' : item.situacao === 'personalizada' ? 'Personalizada' : 'Estimada'}</Badge></div>
-            {item.situacao === 'personalizada' && <div className="flex gap-1"><Button variant="ghost" size="icon" aria-label={`Editar ${item.calibre}`} onClick={() => aoEditar(item)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" aria-label={`Excluir ${item.calibre}`} onClick={() => aoExcluir(item)}><Trash2 className="h-4 w-4" /></Button></div>}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground"><span>Massa: {item.massaGramas} g</span><span>Diâmetro: {rotuloMedida(item.diametroMinMm, item.diametroMaxMm)}</span><span>Comprimento: {rotuloMedida(item.comprimentoMinMm, item.comprimentoMaxMm)}</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-2"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{item.calibre}</span><SiglaProjetil sigla={item.sigla} /><span className="text-sm text-muted-foreground">{item.tipo}</span>{item.situacao === 'personalizada' && <Badge>Personalizado</Badge>}</div>{item.situacao === 'personalizada' && <div className="flex gap-1"><Button variant="ghost" size="icon" aria-label={`Editar ${item.calibre}`} onClick={() => aoEditar(item)}><Pencil className="h-4 w-4" /></Button><Button variant="ghost" size="icon" aria-label={`Excluir ${item.calibre}`} onClick={() => aoExcluir(item)}><Trash2 className="h-4 w-4" /></Button></div>}</div>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground"><span>Massa: {item.massaGramas === null ? 'Não informada' : `${item.massaGramas} g`}</span><span>Calibre real médio: {faixa(item.calibreRealMinMm, item.calibreRealMaxMm, 'mm')}</span><span>Altura máxima: {faixa(item.alturaMinMm, item.alturaMaxMm, 'mm')}</span></div>
+          <p className="mt-2 text-xs text-muted-foreground">Fonte: {item.fonte} · {item.localizacao}</p>
+          {item.observacao && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">{item.observacao}</p>}
+          {(item.liga || item.linha || item.comprimentoEstojoMm || item.massaNucleoGramas || item.massaCamisaGramas) && <details className="mt-2 text-xs"><summary className="cursor-pointer">Detalhes da referência</summary><div className="mt-1 space-y-1 text-muted-foreground">{item.liga && <p>Liga: {item.liga}</p>}{item.linha && <p>Linha: {item.linha}</p>}{item.comprimentoEstojoMm && <p>Comprimento do estojo: {item.comprimentoEstojoMm} mm</p>}{item.massaNucleoGramas && <p>Massa do núcleo: {item.massaNucleoGramas} g</p>}{item.massaCamisaGramas && <p>Massa da camisa: {item.massaCamisaGramas} g</p>}</div></details>}
         </div>)}
         {filtrados.length === 0 && <p className="rounded-md border p-6 text-center text-sm text-muted-foreground">Nenhuma variante corresponde aos filtros.</p>}
       </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm">
-        <p className="text-xs text-muted-foreground">CSV: calibre;tipo;massa_gramas;diametro_min_mm;diametro_max_mm;comprimento_min_mm;comprimento_max_mm</p>
-        <div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={paginaAtual === 0} onClick={() => setPagina(atual => atual - 1)}>Anterior</Button><span>{paginaAtual + 1} / {totalPaginas}</span><Button variant="outline" size="sm" disabled={paginaAtual >= totalPaginas - 1} onClick={() => setPagina(atual => atual + 1)}>Próxima</Button></div>
-      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm"><p className="text-xs text-muted-foreground">CSV: calibre;tipo;massa_gramas;calibre_real_mm;altura_maxima_mm</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={paginaAtual === 0} onClick={() => setPagina(atual => atual - 1)}>Anterior</Button><span>{paginaAtual + 1} / {totalPaginas}</span><Button variant="outline" size="sm" disabled={paginaAtual >= totalPaginas - 1} onClick={() => setPagina(atual => atual + 1)}>Próxima</Button></div></div>
     </DialogContent>}
   </Dialog>;
 }

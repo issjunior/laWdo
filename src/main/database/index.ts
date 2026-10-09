@@ -23,7 +23,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 37;
+export const CURRENT_SCHEMA_VERSION = 38;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -2366,6 +2366,20 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
         CHECK (comprimento_min_mm IS NULL OR comprimento_max_mm IS NULL OR comprimento_min_mm <= comprimento_max_mm)
       )
     `);
+  }
+
+  if (fromVersion < 38) {
+    const colunasProjetil = await executeQuery<{ name: string }>('PRAGMA table_info(projeteis_personalizados)');
+    const nomesColunasProjetil = new Set(colunasProjetil.map(coluna => coluna.name));
+    if (!nomesColunasProjetil.has('calibre_real_mm')) {
+      await executeNonQuery('ALTER TABLE projeteis_personalizados ADD COLUMN calibre_real_mm REAL');
+    }
+    if (!nomesColunasProjetil.has('altura_maxima_mm')) {
+      await executeNonQuery('ALTER TABLE projeteis_personalizados ADD COLUMN altura_maxima_mm REAL');
+    }
+    await executeNonQuery(`UPDATE projeteis_personalizados
+      SET calibre_real_mm = CASE WHEN diametro_min_mm = diametro_max_mm THEN diametro_min_mm ELSE NULL END,
+          altura_maxima_mm = CASE WHEN comprimento_min_mm = comprimento_max_mm THEN comprimento_min_mm ELSE NULL END`);
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);
