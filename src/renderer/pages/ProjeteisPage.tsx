@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { BookOpen, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronUp, FileText, Medal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CatalogoProjeteisDialog } from '@/components/projeteis/CatalogoProjeteisDialog';
 import { SiglaProjetil } from '@/components/projeteis/SiglaProjetil';
+import { RaiamentoProjetil } from '@/components/projeteis/RaiamentoProjetil';
 import { catalogoProjeteis } from '@shared/catalogos/projeteis.catalogo';
 import { siglasProjeteis } from '@shared/catalogos/siglas-projeteis';
 import { consultarProjeteis } from '@shared/utils/consulta-projeteis';
@@ -39,26 +40,45 @@ function erroMedidas(formulario: Formulario): string | null {
 
 function formatar(valor: number): string { return valor.toLocaleString('pt-BR', { maximumFractionDigits: 4 }); }
 
-function MedidaCandidata({ titulo, unidade, comparacao }: { titulo: string; unidade: string; comparacao: ComparacaoMedida }) {
+function MedidaCandidata({ titulo, unidade, comparacao, perdaMassa = false }: { titulo: string; unidade: string; comparacao: ComparacaoMedida; perdaMassa?: boolean }) {
   const { observado, referenciaMin, referenciaMax, diferenca, confiavel } = comparacao;
-  const referencia = referenciaMin === null || referenciaMax === null ? 'Não informado na fonte'
+  const referencia = referenciaMin === null || referenciaMax === null ? 'Não informada'
     : referenciaMin === referenciaMax ? `${formatar(referenciaMin)} ${unidade}` : `${formatar(referenciaMin)}–${formatar(referenciaMax)} ${unidade}`;
-  const situacao = observado === null ? 'Não medido' : diferenca === null ? 'Sem comparação'
-    : !confiavel ? 'Fora da classificação' : diferenca === 0 ? 'Dentro da faixa' : `Diferença: ${diferenca > 0 ? '+' : ''}${formatar(diferenca)} ${unidade}`;
-  return <div className={`rounded-md border px-3 py-2 text-sm ${confiavel && diferenca === 0 ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-border'}`}>
-    <div className="flex flex-wrap justify-between gap-1"><span className="font-medium">{titulo}</span><span className="text-muted-foreground">{situacao}</span></div>
-    <p>Referência: {referencia}</p><p>Medido: {observado === null ? 'Não informado' : `${formatar(observado)} ${unidade}`}</p>
-    {observado !== null && diferenca !== null && !confiavel && <p className="text-muted-foreground">Diferença observada: {diferenca > 0 ? '+' : ''}{formatar(diferenca)} {unidade}</p>}
+  const desvio = diferenca === null ? null : -diferenca;
+  const detalhe = observado === null ? 'Medida não informada'
+    : desvio === null ? 'Referência sem esta medida'
+      : perdaMassa ? 'Não calculada em perda de massa'
+        : desvio === 0 ? `0 ${unidade} · ${referenciaMin === referenciaMax ? 'mesmo valor' : 'dentro da faixa'}`
+          : `${desvio > 0 ? '+' : ''}${formatar(desvio)} ${unidade} · medido ${desvio > 0 ? 'acima' : 'abaixo'} ${referenciaMin === referenciaMax ? 'da referência' : 'do limite da faixa'}`;
+  return <div className={`rounded-md border px-3 py-3 text-sm ${confiavel && diferenca === 0 ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-border'}`}>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-1"><span className="font-medium">{titulo}</span>{!confiavel && !perdaMassa && observado !== null && <span className="text-xs text-muted-foreground">Fora da classificação</span>}</div>
+    <div className="grid grid-cols-2 gap-2">
+      <div><p className="text-xs text-muted-foreground">Referência</p><p className="font-semibold tabular-nums">{referencia}</p></div>
+      <div><p className="text-xs text-muted-foreground">Medido</p><p className="font-semibold tabular-nums">{observado === null ? 'Não informado' : `${formatar(observado)} ${unidade}`}</p></div>
+    </div>
+    <p className="mt-3 border-t pt-2 text-xs"><span className="font-medium">Diferença: </span><span className="text-muted-foreground">{detalhe}</span></p>
   </div>;
 }
 
-function CartaoCandidato({ resultado, posicao, perdaMassa }: { resultado: ResultadoProjetil; posicao: number; perdaMassa: boolean }) {
+const coresMedalha = [
+  'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+  'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300',
+];
+
+function CartaoCandidato({ resultado, posicao, perdaMassa, destacarPosicao }: { resultado: ResultadoProjetil; posicao: number; perdaMassa: boolean; destacarPosicao: boolean }) {
   const { projetil, calibreReal, altura, massa, dadosAusentes, grupoMassa } = resultado;
-  return <Card><CardContent className="space-y-3 py-4">
-    <div className="flex flex-wrap items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground" aria-label={`Posição ${posicao}`}>{posicao}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{projetil.calibre}</h3><SiglaProjetil sigla={projetil.sigla} /><span className="text-sm text-muted-foreground">{projetil.tipo}</span></div><p className="text-xs text-muted-foreground">{dadosAusentes ? 'Comparação parcial: referência sem medida selecionada' : 'Ordenado pelas medidas selecionadas'}</p></div>{projetil.situacao === 'personalizada' && <Badge>Personalizado</Badge>}</div>
-    <div className="grid gap-2 sm:grid-cols-3"><MedidaCandidata titulo="Calibre real médio" unidade="mm" comparacao={calibreReal} /><MedidaCandidata titulo="Altura máxima" unidade="mm" comparacao={altura} /><MedidaCandidata titulo="Massa" unidade="g" comparacao={massa} /></div>
+  const medalha = destacarPosicao && posicao <= 3;
+  return <Card className="flex overflow-hidden">
+    <div className="flex w-20 shrink-0 items-center justify-center border-r bg-muted/40 sm:w-24" role="img" aria-label={`Posição ${posicao} na ordem das referências`}>
+      {medalha ? <div className={`flex h-16 w-16 flex-col items-center justify-center rounded-2xl ${coresMedalha[posicao - 1]}`}><Medal className="h-9 w-9" aria-hidden="true" /><span className="text-sm font-bold leading-none">{posicao}º</span></div>
+        : <span className="flex h-12 w-12 items-center justify-center rounded-full border bg-background text-lg font-semibold text-muted-foreground">{posicao}</span>}
+    </div>
+    <CardContent className="min-w-0 flex-1 space-y-3 px-4 py-4 sm:px-5">
+    <div className="flex flex-wrap items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{projetil.calibre}</h3><SiglaProjetil sigla={projetil.sigla} />{projetil.tipo !== projetil.sigla && projetil.tipo !== projetil.calibre && projetil.tipo !== 'Formato não informado' && <span className="text-sm text-muted-foreground">{projetil.tipo}</span>}</div><p className="text-xs text-muted-foreground">{dadosAusentes ? 'Comparação parcial: referência sem medida selecionada' : 'Ordenado pelas medidas selecionadas'}</p></div>{projetil.situacao === 'personalizada' && <Badge>Personalizado</Badge>}</div>
+    <div className="grid gap-2 sm:grid-cols-3"><MedidaCandidata titulo="Calibre real médio" unidade="mm" comparacao={calibreReal} /><MedidaCandidata titulo="Altura máxima" unidade="mm" comparacao={altura} /><MedidaCandidata titulo="Massa" unidade="g" comparacao={massa} perdaMassa={perdaMassa} /></div>
     {perdaMassa && massa.observado !== null && <p className="text-xs text-muted-foreground">{grupoMassa === 0 ? 'Massa de referência igual ou superior à observada' : grupoMassa === 1 ? 'Massa não informada na fonte' : 'Massa de referência inferior à observada'}. A diferença não estima a perda.</p>}
-    <p className="text-xs text-muted-foreground">Fonte: {projetil.fonte} · {projetil.localizacao}</p>
+    <RaiamentoProjetil calibre={projetil.calibre} />
     {projetil.observacao && <p className="text-xs text-amber-700 dark:text-amber-400">{projetil.observacao}</p>}
     {(projetil.liga || projetil.linha || projetil.comprimentoEstojoMm || projetil.massaNucleoGramas || projetil.massaCamisaGramas) && <details className="text-xs"><summary className="cursor-pointer">Detalhes da referência</summary><div className="mt-1 space-y-1 text-muted-foreground">{projetil.liga && <p>Liga: {projetil.liga}</p>}{projetil.linha && <p>Linha: {projetil.linha}</p>}{projetil.comprimentoEstojoMm && <p>Comprimento do estojo: {projetil.comprimentoEstojoMm} mm</p>}{projetil.massaNucleoGramas && <p>Massa do núcleo: {projetil.massaNucleoGramas} g</p>}{projetil.massaCamisaGramas && <p>Massa da camisa: {projetil.massaCamisaGramas} g</p>}</div></details>}
   </CardContent></Card>;
@@ -175,19 +195,18 @@ export function ProjeteisPage() {
   return <div className="space-y-6 pb-8">
     <div className="flex flex-wrap items-start justify-between gap-3"><div className="space-y-1"><h1 className="text-2xl font-semibold">Identificação de projéteis</h1><p className="text-sm text-muted-foreground">Compare referências aproximadas. A ordem não determina o calibre por si só.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setPdfCarregado(false); setPdfErro(false); setPdfAberto(true); }}><FileText className="mr-2 h-4 w-4" />Consultar tabela em PDF</Button><Button variant="outline" onClick={() => setCatalogoAberto(true)}><BookOpen className="mr-2 h-4 w-4" />Ver catálogo completo</Button></div></div>
     <Card><CardHeader><CardTitle className="text-lg">Medidas observadas</CardTitle></CardHeader><CardContent className="space-y-5">
-      <div className="max-w-sm space-y-1.5"><Label htmlFor="estado-projetil">Estado do projétil</Label><Select value={estado} onValueChange={alterarEstado}><SelectTrigger id="estado-projetil"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="integro">Íntegro</SelectItem><SelectItem value="deformado">Deformado</SelectItem><SelectItem value="perda_massa">Com perda de massa</SelectItem></SelectContent></Select></div>
       <div className="grid gap-4 sm:grid-cols-3">{campos.map(campo => <div key={campo.chave} className="space-y-2"><Label htmlFor={`consulta-${campo.chave}`}>{campo.titulo} ({campo.unidade})</Label><Input id={`consulta-${campo.chave}`} inputMode="decimal" value={consultaForm[campo.chave]} onChange={evento => { setConsultaForm(atual => ({ ...atual, [campo.chave]: evento.target.value })); setMostrarMais(false); }} placeholder="Opcional" />{estado !== 'integro' && (campo.chave !== 'massaGramas' || estado === 'deformado') && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={confiaveis[campo.chave]} onChange={evento => setConfiaveis(atual => ({ ...atual, [campo.chave]: evento.target.checked }))} />Medida confiável para ordenar</label>}</div>)}</div>
-      <div className="max-w-sm space-y-1.5"><Label htmlFor="consulta-sigla">Formato/Constituição</Label><Select value={sigla} onValueChange={valor => { setSigla(valor); setMostrarMais(false); }}><SelectTrigger id="consulta-sigla"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todos</SelectItem>{siglas.map(valor => <SelectItem key={valor} value={valor}>{valor} — {siglasProjeteis[valor] ?? 'Nome não documentado'}</SelectItem>)}</SelectContent></Select></div>
+      <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="estado-projetil">Estado do projétil</Label><Select value={estado} onValueChange={alterarEstado}><SelectTrigger id="estado-projetil"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="integro">Íntegro</SelectItem><SelectItem value="deformado">Deformado</SelectItem><SelectItem value="perda_massa">Com perda de massa</SelectItem></SelectContent></Select></div><div className="space-y-1.5"><Label htmlFor="consulta-sigla">Formato/Constituição</Label><Select value={sigla} onValueChange={valor => { setSigla(valor); setMostrarMais(false); }}><SelectTrigger id="consulta-sigla"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todos</SelectItem>{siglas.map(valor => <SelectItem key={valor} value={valor}>{valor} — {siglasProjeteis[valor] ?? 'Nome não documentado'}</SelectItem>)}</SelectContent></Select></div></div>
       <p className="text-xs text-muted-foreground">Use vírgula ou ponto decimal. Informe somente medidas preservadas como confiáveis; diferenças das demais continuam visíveis.</p>
-      <p className="text-xs text-muted-foreground">Raiamento e orientação constam no resumo geral por grupos de calibre da fonte textual; não identificam individualmente as variantes deste catálogo.</p>
       {estado === 'perda_massa' && <p className="text-xs text-muted-foreground">A massa observada é um limite inferior: referências com massa igual ou maior aparecem primeiro, sem estimativa da perda.</p>}
       {erroConsulta && <p className="text-sm text-destructive" role="alert">{erroConsulta}</p>}
     </CardContent></Card>
-    <section className="space-y-3" aria-labelledby="titulo-candidatos"><div><h2 id="titulo-candidatos" className="text-lg font-semibold">{possuiClassificacao ? 'Referências por proximidade' : estado === 'perda_massa' && consulta.massaGramas !== null ? 'Referências por relação de massa' : 'Referências filtradas'}</h2><p className="text-xs text-muted-foreground">{possuiConsulta && !erroConsulta ? `${resultados.length} referência${resultados.length === 1 ? '' : 's'}; mostrando até ${mostrarMais ? 10 : 3}.` : 'Informe ao menos uma medida ou selecione um formato para consultar.'}</p></div>
-      {candidatosVisiveis.map((resultado, indice) => <CartaoCandidato key={resultado.projetil.id} resultado={resultado} posicao={indice + 1} perdaMassa={estado === 'perda_massa'} />)}
+    <section className="space-y-3" aria-labelledby="titulo-candidatos">
+      {candidatosVisiveis.map((resultado, indice) => <CartaoCandidato key={resultado.projetil.id} resultado={resultado} posicao={indice + 1} perdaMassa={estado === 'perda_massa'} destacarPosicao={possuiClassificacao} />)}
       {!possuiConsulta && !erroConsulta && <p className="rounded-md border p-6 text-sm text-muted-foreground">O catálogo permanece disponível em “Ver catálogo completo”.</p>}
       {possuiConsulta && !erroConsulta && candidatosVisiveis.length === 0 && <p className="rounded-md border p-6 text-sm text-muted-foreground">Nenhuma referência corresponde ao formato selecionado.</p>}
       {primeirosDez.length > 3 && <div className="flex justify-center"><Button variant="outline" onClick={() => setMostrarMais(atual => !atual)}>{mostrarMais ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}{mostrarMais ? 'Mostrar menos' : `Mostrar mais opções (${primeirosDez.length - 3})`}</Button></div>}
+      <div><h2 id="titulo-candidatos" className="text-lg font-semibold">{possuiClassificacao ? 'Referências por proximidade' : estado === 'perda_massa' && consulta.massaGramas !== null ? 'Referências por relação de massa' : 'Referências filtradas'}</h2><p className="text-xs text-muted-foreground">{possuiConsulta && !erroConsulta ? `${resultados.length} referência${resultados.length === 1 ? '' : 's'}; mostrando até ${mostrarMais ? 10 : 3}.` : 'Informe ao menos uma medida ou selecione um formato para consultar.'}</p>{possuiConsulta && !erroConsulta && <p className="text-xs text-muted-foreground">Diferença = medido − referência; em faixas, usa-se o limite mais próximo. Dentro da faixa, a diferença é zero.</p>}</div>
     </section>
     <CatalogoProjeteisDialog aberto={catalogoAberto} aoAlterarAbertura={setCatalogoAberto} referencias={referencias} aoNovo={() => abrirCadastro()} aoEditar={abrirCadastro} aoExcluir={item => { void excluirCadastro(item); }} aoImportarCsv={importarCsv} />
     <Dialog open={pdfAberto} onOpenChange={setPdfAberto}><DialogContent className="flex h-[90vh] w-[calc(100vw-2rem)] max-w-6xl flex-col sm:max-w-6xl"><DialogHeader><DialogTitle>Tabela de calibres — referência visual</DialogTitle><DialogDescription>Documento original, com dimensões aproximadas.</DialogDescription></DialogHeader><div className="relative min-h-0 flex-1 overflow-hidden rounded border bg-muted">{pdfAberto && <iframe src={pdfUrl} title="Tabela de calibres em PDF" className="h-full w-full border-0" onLoad={() => setPdfCarregado(true)} onError={() => setPdfErro(true)} />}{!pdfCarregado && !pdfErro && <p className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">Carregando PDF...</p>}{pdfErro && <p className="absolute inset-0 flex items-center justify-center text-sm text-destructive">Não foi possível carregar o PDF.</p>}</div></DialogContent></Dialog>
