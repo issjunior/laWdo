@@ -1,8 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { transformarFigura } from '../../renderer/components/laudo/EditorFiguraDialog';
+import { calcularCorteFigura, pontoPercentualFigura, transformarFigura } from '../../renderer/components/laudo/EditorFiguraDialog';
 
 describe('edição de figura', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('converte o ponteiro sobre uma prévia reduzida para porcentagens da imagem', () => {
+    expect(pontoPercentualFigura(250, 160, { left: 100, top: 60, width: 300, height: 200 }))
+      .toEqual({ x: 50, y: 50 });
+    expect(pontoPercentualFigura(500, 10, { left: 100, top: 60, width: 300, height: 200 }))
+      .toEqual({ x: 100, y: 0 });
+  });
+
+  it('cria o recorte por arraste em qualquer direção', () => {
+    expect(calcularCorteFigura({
+      tipo: 'criar', inicio: { x: 80, y: 70 },
+      corteInicial: { x: 0, y: 0, largura: 100, altura: 100 },
+    }, { x: 20, y: 10 })).toEqual({ x: 20, y: 10, largura: 60, altura: 60 });
+  });
+
+  it('move a seleção sem ultrapassar a imagem', () => {
+    expect(calcularCorteFigura({
+      tipo: 'mover', inicio: { x: 20, y: 20 },
+      corteInicial: { x: 30, y: 40, largura: 40, altura: 30 },
+    }, { x: 100, y: 100 })).toEqual({ x: 60, y: 70, largura: 40, altura: 30 });
+  });
+
+  it('redimensiona o retângulo mantendo o canto oposto fixo', () => {
+    expect(calcularCorteFigura({
+      tipo: 'redimensionar', inicio: { x: 20, y: 20 }, canto: 'superior-esquerdo',
+      corteInicial: { x: 20, y: 20, largura: 50, altura: 40 },
+    }, { x: 10, y: 30 })).toEqual({ x: 10, y: 30, largura: 60, altura: 30 });
+  });
 
   it('gira e recorta a partir da imagem-base preservando fundo branco', async () => {
     const original = globalThis.Image;

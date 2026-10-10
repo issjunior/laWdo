@@ -23,7 +23,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 40;
+export const CURRENT_SCHEMA_VERSION = 41;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -219,6 +219,7 @@ const createDatabaseSchema = async (): Promise<void> => {
         telefone TEXT,
         cargo TEXT,
         lotacao TEXT,
+        forma_tratamento TEXT NOT NULL DEFAULT 'masculino' CHECK (forma_tratamento IN ('masculino', 'feminino')),
         username TEXT NOT NULL UNIQUE,
         senha_hash TEXT NOT NULL,
         ativo BOOLEAN DEFAULT 1,
@@ -2408,6 +2409,11 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
     await garantirColuna('imagens_laudo', 'imagem_origem_id', 'TEXT');
     await garantirColuna('imagens_laudo', 'ajustes_json', 'TEXT');
     log.info('Migration v40: origem e ajustes de figuras editadas');
+  }
+
+  if (fromVersion < 41) {
+    await garantirColuna('users', 'forma_tratamento', "TEXT NOT NULL DEFAULT 'masculino' CHECK (forma_tratamento IN ('masculino', 'feminino'))");
+    log.info('Migration v41: forma de tratamento do perito');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);

@@ -6,13 +6,13 @@ const corDeFundoExportavel = (v: string): string | undefined => { const valor = 
 const alinhamento = (e: Element): AlinhamentoDocumento | undefined => (e.getAttribute('style') || '').match(/text-align:\s*(left|center|right|justify)/i)?.[1]?.toLowerCase() as AlinhamentoDocumento | undefined;
 function estilo(e: Element, p: EstiloTextoExportacao = {}): EstiloTextoExportacao { const t = e.tagName.toLowerCase(), c = e.getAttribute('style') || ''; return { ...p, negrito: p.negrito || /^(b|strong)$/.test(t) || /font-weight:\s*(bold|[6-9]00)/i.test(c), italico: p.italico || /^(i|em)$/.test(t) || /font-style:\s*italic/i.test(c), sublinhado: p.sublinhado || t === 'u' || /text-decoration[^;]*underline/i.test(c), tachado: p.tachado || /^(s|strike)$/.test(t) || /text-decoration[^;]*line-through/i.test(c), subscrito: p.subscrito || t === 'sub', sobrescrito: p.sobrescrito || t === 'sup', fonte: c.match(/font-family:\s*([^;,]+)/i)?.[1]?.replace(/["']/g, '').trim() || p.fonte, tamanhoPt: numero(c.match(/font-size:\s*([\d.]+)pt/i)?.[1] || null) || p.tamanhoPt, cor: cor(c.match(/(?:^|;)\s*color:\s*([^;]+)/i)?.[1] || '') || p.cor, realce: cor(c.match(/background-color:\s*([^;]+)/i)?.[1] || '') || p.realce, link: t === 'a' ? e.getAttribute('href') || undefined : p.link }; }
 function trechos(n: Node, p: EstiloTextoExportacao = {}): TrechoExportacao[] { if (n.nodeType === Node.TEXT_NODE) return n.textContent ? [{ texto: n.textContent, estilo: p }] : []; if (n.nodeType !== Node.ELEMENT_NODE) return []; const e = n as Element; if (e.tagName.toLowerCase() === 'br') return [{ texto: '', estilo: p, quebraLinha: true }]; return Array.from(e.childNodes).flatMap(f => trechos(f, estilo(e, p))); }
-function paragrafo(e: Element): ParagrafoExportacao { const c = e.getAttribute('style') || '', h = /^h([1-6])$/i.exec(e.tagName)?.[1]; return { tipo: 'paragrafo', trechos: trechos(e), alinhamento: alinhamento(e), nivelTitulo: h ? Number(h) : undefined, citacao: e.tagName.toLowerCase() === 'blockquote', preFormatado: e.tagName.toLowerCase() === 'pre', recuoEsquerdoPt: numero(c.match(/margin-left:\s*([\d.]+)pt/i)?.[1] || null), recuoDireitoPt: numero(c.match(/margin-right:\s*([\d.]+)pt/i)?.[1] || null), recuoPrimeiraLinhaPt: numero(c.match(/text-indent:\s*([\d.]+)pt/i)?.[1] || null), espacamentoAntesPt: numero(c.match(/margin-top:\s*([\d.]+)pt/i)?.[1] || null), espacamentoDepoisPt: numero(c.match(/margin-bottom:\s*([\d.]+)pt/i)?.[1] || null), espacamentoLinha: numero(c.match(/line-height:\s*([\d.]+)/i)?.[1] || null) }; }
+function paragrafo(e: Element, emTabela = false): ParagrafoExportacao { const c = e.getAttribute('style') || '', h = /^h([1-6])$/i.exec(e.tagName)?.[1]; const justificar = e.tagName.toLowerCase() === 'p' && !emTabela && !e.closest('td,th,figure'); return { tipo: 'paragrafo', trechos: trechos(e), alinhamento: alinhamento(e) || (justificar ? 'justify' : undefined), nivelTitulo: h ? Number(h) : undefined, citacao: e.tagName.toLowerCase() === 'blockquote', preFormatado: e.tagName.toLowerCase() === 'pre', recuoEsquerdoPt: numero(c.match(/margin-left:\s*([\d.]+)pt/i)?.[1] || null), recuoDireitoPt: numero(c.match(/margin-right:\s*([\d.]+)pt/i)?.[1] || null), recuoPrimeiraLinhaPt: numero(c.match(/text-indent:\s*([\d.]+)pt/i)?.[1] || null), espacamentoAntesPt: numero(c.match(/margin-top:\s*([\d.]+)pt/i)?.[1] || null), espacamentoDepoisPt: numero(c.match(/margin-bottom:\s*([\d.]+)pt/i)?.[1] || null), espacamentoLinha: numero(c.match(/line-height:\s*([\d.]+)/i)?.[1] || null) }; }
 function lista(e: Element, nivel = 0): ListaExportacao[] { const itens: ParagrafoExportacao[] = [], sub: ListaExportacao[] = []; for (const li of Array.from(e.querySelectorAll(':scope > li'))) { const c = li.cloneNode(true) as Element; c.querySelectorAll(':scope > ul,:scope > ol').forEach(x => x.remove()); itens.push(paragrafo(c)); li.querySelectorAll(':scope > ul,:scope > ol').forEach(x => sub.push(...lista(x, nivel + 1))); } return [{ tipo: 'lista', ordenada: e.tagName.toLowerCase() === 'ol', nivel, itens }, ...sub]; }
 function blocosCelula(celula: Element): BlocoExportacao[] {
   const resultado: BlocoExportacao[] = [];
   let grupoInline = celula.cloneNode(false) as Element;
   const concluirGrupo = () => {
-    if (grupoInline.textContent?.trim() || grupoInline.querySelector('br')) resultado.push(paragrafo(grupoInline));
+    if (grupoInline.textContent?.trim() || grupoInline.querySelector('br')) resultado.push(paragrafo(grupoInline, true));
     grupoInline = celula.cloneNode(false) as Element;
   };
 
@@ -24,13 +24,13 @@ function blocosCelula(celula: Element): BlocoExportacao[] {
     concluirGrupo();
     const contenedor = celula.ownerDocument.createElement('div');
     contenedor.appendChild(no.cloneNode(true));
-    resultado.push(...blocos(contenedor));
+    resultado.push(...blocos(contenedor, true));
   }
   concluirGrupo();
   return resultado;
 }
 
-function blocos(p: Element): BlocoExportacao[] {
+function blocos(p: Element, emTabela = false): BlocoExportacao[] {
   const resultado: BlocoExportacao[] = [];
   for (const elemento of Array.from(p.children)) {
     const tipo = elemento.tagName.toLowerCase();
@@ -80,8 +80,8 @@ function blocos(p: Element): BlocoExportacao[] {
       });
       continue;
     }
-    if (/^(p|div|blockquote|pre|h[1-6])$/.test(tipo)) resultado.push(paragrafo(elemento));
-    else resultado.push(...blocos(elemento));
+    if (/^(p|div|blockquote|pre|h[1-6])$/.test(tipo)) resultado.push(paragrafo(elemento, emTabela));
+    else resultado.push(...blocos(elemento, emTabela));
   }
   return resultado;
 }

@@ -272,6 +272,7 @@ const registerAuthHandlers = (): void => {
             nome: user.nome, // kept for compatibility with PerfilPage.tsx checking user.nome
             role: user.cargo || 'perito',
             cargo: user.cargo,
+            forma_tratamento: user.forma_tratamento,
             lotacao: user.lotacao,
             email: user.email,
             foto_url: user.foto_url || null,

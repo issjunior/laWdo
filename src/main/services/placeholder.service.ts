@@ -108,6 +108,11 @@ const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
   // Perito (4)
   { chave: 'perito_nome', valor: '', descricao: 'Nome completo do perito', categoria_id: 'cat-perito' },
   { chave: 'perito_cargo', valor: '', descricao: 'Cargo do perito', categoria_id: 'cat-perito' },
+  { chave: 'perito_artigo', valor: '', descricao: 'Artigo do perito (o/a)', categoria_id: 'cat-perito' },
+  { chave: 'perito_titulo', valor: '', descricao: 'Título do perito (Perito/Perita)', categoria_id: 'cat-perito' },
+  { chave: 'perito_designado', valor: '', descricao: 'Forma designado/designada', categoria_id: 'cat-perito' },
+  { chave: 'perito_pelo', valor: '', descricao: 'Contração pelo/pela', categoria_id: 'cat-perito' },
+  { chave: 'perito_qual', valor: '', descricao: 'Pronome o qual/a qual', categoria_id: 'cat-perito' },
   { chave: 'perito_lotacao', valor: '', descricao: 'Lotação/unidade do perito', categoria_id: 'cat-perito' },
   { chave: 'perito_matricula', valor: '', descricao: 'Matrícula funcional do perito', categoria_id: 'cat-perito' },
   // Datas (2)

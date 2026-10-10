@@ -698,6 +698,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               line-height: 1.6;
               padding: 12px;
             }
+            p:not(table p):not(figure p) { text-align: justify; }
             body.dark-content {
               background-color: #222f3e;
               color: #fff;

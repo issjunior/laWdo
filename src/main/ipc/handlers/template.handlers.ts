@@ -308,6 +308,7 @@ export const registerTemplateHandlers = (): void => {
   h2 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
   h3 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
   p { margin-bottom: 8px; }
+  p:not(table p):not(figure p) { text-align: justify; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
   table th, table td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
   table th { background: #f5f5f5; font-weight: 600; }

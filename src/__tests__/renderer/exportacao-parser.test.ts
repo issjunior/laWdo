@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { parseHtmlParaEstrutura } from '../../renderer/lib/exportacao-parser';
 
 describe('parseHtmlParaEstrutura', () => {
+  it('justifica parágrafos comuns sem sobrescrever alinhamentos explícitos ou títulos', () => {
+    const blocos = parseHtmlParaEstrutura('<h2>Título</h2><p>Texto</p><p style="text-align:center">Centralizado</p><table><tr><td><p>Célula</p></td></tr></table>').secoes[0].blocos;
+    expect(blocos[0]).toMatchObject({ tipo: 'paragrafo', alinhamento: undefined });
+    expect(blocos[1]).toMatchObject({ tipo: 'paragrafo', alinhamento: 'justify' });
+    expect(blocos[2]).toMatchObject({ tipo: 'paragrafo', alinhamento: 'center' });
+    const tabela = blocos[3];
+    expect(tabela).toMatchObject({ tipo: 'tabela' });
+    if (tabela.tipo === 'tabela') expect(tabela.linhas[0][0].paragrafos[0].alinhamento).toBeUndefined();
+  });
   it('preserva estilos aninhados, listas, tabela mesclada, figura e elementos semânticos', () => {
     const documento = parseHtmlParaEstrutura(`
       <h2>Seção</h2><p style="text-align:justify;line-height:1.5;margin-left:12pt">

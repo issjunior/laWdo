@@ -9,6 +9,7 @@ export interface UsuarioSessao {
   email: string;
   role?: string | null;
   cargo?: string | null;
+  forma_tratamento: 'masculino' | 'feminino';
   lotacao?: string | null;
   foto_url?: string | null;
   matricula?: string | null;
@@ -42,6 +43,7 @@ export function normalizarUsuarioSessao(valor: unknown): UsuarioSessao | null {
     || !nome
     || !ehTextoOpcional(valor.role)
     || !ehTextoOpcional(valor.cargo)
+    || (valor.forma_tratamento !== undefined && valor.forma_tratamento !== 'masculino' && valor.forma_tratamento !== 'feminino')
     || !ehTextoOpcional(valor.lotacao)
     || !ehTextoOpcional(valor.foto_url)
     || !ehTextoOpcional(valor.matricula)
@@ -54,6 +56,7 @@ export function normalizarUsuarioSessao(valor: unknown): UsuarioSessao | null {
     name: nome,
     nome,
     email: valor.email,
+    forma_tratamento: valor.forma_tratamento === 'feminino' ? 'feminino' : 'masculino',
     ...(valor.role !== undefined ? { role: valor.role } : {}),
     ...(valor.cargo !== undefined ? { cargo: valor.cargo } : {}),
     ...(valor.lotacao !== undefined ? { lotacao: valor.lotacao } : {}),

@@ -2,6 +2,7 @@ import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/pl
 import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
+import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 
 function numToLetra(n: number): string {
@@ -79,6 +80,7 @@ interface PeritoSessaoData {
   especialidade?: string;
   lotacao?: string;
   matricula?: string;
+  forma_tratamento?: FormaTratamentoLaudo;
 }
 
 function isRecord(valor: unknown): valor is Record<string, unknown> {
@@ -94,6 +96,7 @@ function lerPeritoSessao(): PeritoSessaoData | null {
     especialidade: typeof parsed.especialidade === 'string' ? parsed.especialidade : undefined,
     lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
     matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+    forma_tratamento: parsed.forma_tratamento,
   };
 }
 
@@ -171,6 +174,7 @@ function criarResumoLacresSaidaB602(
 export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, string> {
   const repData = ctx.repData;
   const perito = lerPeritoSessao();
+  const formasPerito = obterFormasPerito(perito?.cargo, perito?.forma_tratamento);
   const dataExtensoRecebimentoRep = extrairDataExecucaoLaudo(repData.campos_especificos)
     || repData.data_requisicao;
 
@@ -220,11 +224,11 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
     'longitude': repData.longitude || '',
 
     'perito.nome': perito?.nome || '',
-    'perito.cargo': perito?.cargo || 'Perito Criminal',
+    'perito.cargo': formasPerito.perito_cargo,
     'perito.especialidade': perito?.especialidade || '',
 
     'perito_nome': perito?.nome || '',
-    'perito_cargo': perito?.cargo || 'Perito Criminal',
+    ...formasPerito,
     'perito_lotacao': perito?.lotacao || '',
     'perito_matricula': perito?.matricula || '',
 

@@ -1,5 +1,5 @@
+import { useRef } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
-import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 
 interface EditorCampoLaudoProps {
   valor: string;
@@ -7,11 +7,12 @@ interface EditorCampoLaudoProps {
 }
 
 export function EditorCampoLaudo({ valor, onChange }: EditorCampoLaudoProps) {
+  const valorInicial = useRef(valor);
   return <Editor
     licenseKey="gpl"
     tinymceScriptSrc="./tinymce/tinymce.min.js"
-    initialValue={valor}
-    onEditorChange={html => onChange(normalizarHtmlCampo(html))}
+    initialValue={valorInicial.current}
+    onEditorChange={onChange}
     init={{
       menubar: false,
       statusbar: false,
@@ -26,6 +27,7 @@ export function EditorCampoLaudo({ valor, onChange }: EditorCampoLaudoProps) {
       content_css: './tinymce/skins/content/default/content.css',
       language: 'pt_BR',
       language_url: './tinymce/langs/pt_BR.js',
+      content_style: 'body { text-align: justify; }',
     }}
   />;
 }

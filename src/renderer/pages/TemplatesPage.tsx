@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
+import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import {
   Plus, Search, Edit, Trash2, Copy, ArrowLeft,
   FileText, Layers, Eye, LayoutGrid, List, Upload,
@@ -367,6 +368,7 @@ interface PeritoSessaoData {
   role?: string;
   lotacao?: string;
   matricula?: string;
+  forma_tratamento?: FormaTratamentoLaudo;
 }
 
 type TinymceWindow = Window & {
@@ -398,6 +400,7 @@ const lerPeritoSessao = (): PeritoSessaoData => {
     role: typeof parsed.role === 'string' ? parsed.role : undefined,
     lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
     matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+    forma_tratamento: parsed.forma_tratamento,
   };
 };
 
@@ -1139,7 +1142,8 @@ export const TemplatesPage: React.FC = () => {
     let peritoMatricula = '';
     const perito = lerPeritoSessao();
     peritoNome = perito.nome || perito.name || '';
-    peritoCargo = perito.cargo || perito.role || '';
+    const formasPerito = obterFormasPerito(perito.cargo || perito.role, perito.forma_tratamento);
+    peritoCargo = formasPerito.perito_cargo;
     peritoLotacao = perito.lotacao || '';
     peritoMatricula = perito.matricula || '';
 
@@ -1148,6 +1152,7 @@ export const TemplatesPage: React.FC = () => {
       '{{perito.cargo}}': peritoCargo,
       '{{perito_nome}}': peritoNome,
       '{{perito_cargo}}': peritoCargo,
+      ...Object.fromEntries(Object.entries(formasPerito).map(([chave, valor]) => [`{{${chave}}}`, valor])),
       '{{perito_lotacao}}': peritoLotacao,
       '{{perito_matricula}}': peritoMatricula,
       '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),

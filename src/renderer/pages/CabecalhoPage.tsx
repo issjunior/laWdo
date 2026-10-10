@@ -17,6 +17,7 @@ import { getMargens } from '@/lib/margens';
 import { buildHeaderTemplate } from '@/lib/pdf-header';
 import { CABECALHO_TODAS_PAGINAS_PADRAO } from '@shared/configuracoes/cabecalhos-padrao';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
+import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 
 interface Placeholder {
   id: string;
@@ -36,6 +37,7 @@ interface PeritoSessao {
   role?: string;
   lotacao?: string;
   matricula?: string;
+  forma_tratamento?: FormaTratamentoLaudo;
 }
 
 function mensagemErro(error: unknown): string {
@@ -138,9 +140,10 @@ export const CabecalhoPage: React.FC = () => {
       let peritoLotacao = '';
       let peritoMatricula = '';
       const perito = lerUsuarioSessao() as PeritoSessao | null;
+      const formasPerito = obterFormasPerito(perito?.cargo || perito?.role, perito?.forma_tratamento);
       if (perito) {
         peritoNome = perito.nome || perito.name || '';
-        peritoCargo = perito.cargo || perito.role || '';
+        peritoCargo = formasPerito.perito_cargo;
         peritoLotacao = perito.lotacao || '';
         peritoMatricula = perito.matricula || '';
       }
@@ -150,6 +153,7 @@ export const CabecalhoPage: React.FC = () => {
         '{{perito.cargo}}': peritoCargo,
         '{{perito_nome}}': peritoNome,
         '{{perito_cargo}}': peritoCargo,
+        ...Object.fromEntries(Object.entries(formasPerito).map(([chave, valor]) => [`{{${chave}}}`, valor])),
         '{{perito_lotacao}}': peritoLotacao,
         '{{perito_matricula}}': peritoMatricula,
         '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),

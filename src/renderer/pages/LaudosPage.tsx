@@ -63,7 +63,7 @@ import {
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
 import { extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
-import { obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
+import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
 import { localizarFiguraPorIndice } from '@/lib/figuras';
 import {
@@ -570,7 +570,8 @@ export const LaudosPage: React.FC = () => {
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
   const [figuraSubstituicaoSolicitada, setFiguraSubstituicaoSolicitada] = useState<string | null>(null);
   const [dialogoCampoReservadoAberto, setDialogoCampoReservadoAberto] = useState(false);
-  const [valorCampoReservado, setValorCampoReservado] = useState('');
+  const [valorInicialCampoReservado, setValorInicialCampoReservado] = useState('');
+  const rascunhoCampoReservadoRef = useRef('');
   const [erroCampoReservado, setErroCampoReservado] = useState<string | null>(null);
   const campoReservadoSelecionadoRef = useRef<CampoReservadoSelecionado | null>(null);
 
@@ -2201,7 +2202,9 @@ export const LaudosPage: React.FC = () => {
 
   const solicitarPreenchimentoCampoReservado = useCallback((campo: CampoReservadoSelecionado) => {
     campoReservadoSelecionadoRef.current = campo;
-    setValorCampoReservado(obterHtmlCampo(campo.elemento));
+    const valorInicial = obterHtmlCampo(campo.elemento);
+    rascunhoCampoReservadoRef.current = valorInicial;
+    setValorInicialCampoReservado(valorInicial);
     setErroCampoReservado(null);
     setDialogoCampoReservadoAberto(true);
   }, []);
@@ -2209,12 +2212,13 @@ export const LaudosPage: React.FC = () => {
   const fecharDialogoCampoReservado = useCallback(() => {
     campoReservadoSelecionadoRef.current = null;
     setDialogoCampoReservadoAberto(false);
-    setValorCampoReservado('');
+    rascunhoCampoReservadoRef.current = '';
+    setValorInicialCampoReservado('');
     setErroCampoReservado(null);
   }, []);
 
   const confirmarPreenchimentoCampoReservado = useCallback(() => {
-    const valor = valorCampoReservado;
+    const valor = normalizarHtmlCampo(rascunhoCampoReservadoRef.current);
     if (!new DOMParser().parseFromString(valor, 'text/html').body.textContent?.trim()) {
       setErroCampoReservado('Informe um valor para substituir o campo pendente.');
       return;
@@ -2234,7 +2238,7 @@ export const LaudosPage: React.FC = () => {
     atualizarConteudoDoEditor(editor);
     registrarAlteracao();
     fecharDialogoCampoReservado();
-  }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, valorCampoReservado]);
+  }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao]);
 
   const restaurarValorDaRep = useCallback(() => {
     const selecionado = campoReservadoSelecionadoRef.current;
@@ -3976,7 +3980,7 @@ export const LaudosPage: React.FC = () => {
                 const valor = chave ? mapaPlaceholdersResolvidos[chave]?.valor : '';
                 return chave ? (valor ? new DOMParser().parseFromString(valor, 'text/html').body.textContent || 'Não preenchido' : 'Não preenchido') : 'Campo sem vínculo com a REP';
               })()}</p>
-              {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorCampoReservado} onChange={html => { setValorCampoReservado(html); setErroCampoReservado(null); }} />}
+              {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorInicialCampoReservado} onChange={html => { rascunhoCampoReservadoRef.current = html; setErroCampoReservado(null); }} />}
               {erroCampoReservado && <p className="text-sm text-destructive">{erroCampoReservado}</p>}
             </div>
             <DialogFooter>

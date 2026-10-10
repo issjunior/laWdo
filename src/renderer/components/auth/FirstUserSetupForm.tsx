@@ -47,6 +47,7 @@ const firstUserSchema = z
       'Perito Oficial Criminal',
       'Técnico de Perícia Oficial',
     ]),
+    forma_tratamento: z.enum(['masculino', 'feminino']),
     lotacao: z.string().min(3, 'Lotação deve ter pelo menos 3 caracteres'),
     senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
     confirmarSenha: z.string(),
@@ -85,6 +86,7 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
       username: '',
       email: '',
       cargo: 'Perito Oficial Criminal',
+      forma_tratamento: 'masculino',
       lotacao: '',
       senha: '',
       confirmarSenha: '',
@@ -225,11 +227,29 @@ export const FirstUserSetupForm: React.FC<FirstUserSetupFormProps> = ({
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="Perito Oficial Criminal">
-                            Perito Oficial Criminal
+                            {form.watch('forma_tratamento') === 'feminino' ? 'Perita Oficial Criminal' : 'Perito Oficial Criminal'}
                           </SelectItem>
                           <SelectItem value="Técnico de Perícia Oficial">
-                            Técnico de Perícia Oficial
+                            {form.watch('forma_tratamento') === 'feminino' ? 'Técnica de Perícia Oficial' : 'Técnico de Perícia Oficial'}
                           </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="forma_tratamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Forma de tratamento no laudo</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="masculino">Masculino</SelectItem>
+                          <SelectItem value="feminino">Feminino</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
