@@ -1,84 +1,35 @@
-import type { ConsultaProjetil, ProjetilReferencia, ResultadoProjetil } from '../types/projetil.types.js';
+import type { ComparacaoMedida, ConsultaProjetil, ProjetilReferencia, ResultadoProjetil } from '../types/projetil.types.js';
 
-type EstadoDimensao = 'coincide' | 'ausente' | 'nao_informado' | 'diverge';
-
-interface ComparacaoDimensao {
-  estado: EstadoDimensao;
-  distanciaCentro: number;
+function comparar(observado: number | null, minimo: number | null, maximo: number | null, confiavel: boolean): ComparacaoMedida {
+  const diferenca = observado === null || minimo === null || maximo === null
+    ? null : observado < minimo ? minimo - observado : observado > maximo ? maximo - observado : 0;
+  return { observado, referenciaMin: minimo, referenciaMax: maximo, diferenca, confiavel };
 }
 
-function compararDimensao(
-  consultaMin: number | null,
-  consultaMax: number | null,
-  referenciaMin: number | null,
-  referenciaMax: number | null,
-): ComparacaoDimensao {
-  if (consultaMin === null && consultaMax === null) return { estado: 'nao_informado', distanciaCentro: 0 };
-  if (referenciaMin === null || referenciaMax === null) return { estado: 'ausente', distanciaCentro: 0 };
-  const minimo = consultaMin ?? consultaMax;
-  const maximo = consultaMax ?? consultaMin;
-  if (minimo === null || maximo === null || referenciaMax < minimo || referenciaMin > maximo) {
-    return { estado: 'diverge', distanciaCentro: 0 };
-  }
-  return {
-    estado: 'coincide',
-    distanciaCentro: Math.abs((minimo + maximo) / 2 - (referenciaMin + referenciaMax) / 2),
-  };
+function distancia(comparacao: ComparacaoMedida): number {
+  if (!comparacao.confiavel || comparacao.observado === null) return 0;
+  return comparacao.diferenca === null ? Number.POSITIVE_INFINITY : Math.abs(comparacao.diferenca);
 }
 
-function prioridadeSituacao(projetil: ProjetilReferencia): number {
-  return projetil.situacao === 'confirmada' ? 0 : 1;
-}
-
-export function consultarProjeteis(
-  referencias: ProjetilReferencia[],
-  consulta: ConsultaProjetil,
-): ResultadoProjetil[] {
-  const possuiDimensao = consulta.diametroMinMm !== null || consulta.diametroMaxMm !== null
-    || consulta.comprimentoMinMm !== null || consulta.comprimentoMaxMm !== null;
-
-  return referencias.flatMap((projetil) => {
-    const diametro = compararDimensao(
-      consulta.diametroMinMm, consulta.diametroMaxMm,
-      projetil.diametroMinMm, projetil.diametroMaxMm,
-    );
-    const comprimento = compararDimensao(
-      consulta.comprimentoMinMm, consulta.comprimentoMaxMm,
-      projetil.comprimentoMinMm, projetil.comprimentoMaxMm,
-    );
-    if (diametro.estado === 'diverge' || comprimento.estado === 'diverge') return [];
-
-    const compatibilidade: ResultadoProjetil['compatibilidade'] = possuiDimensao
-      && diametro.estado !== 'ausente' && comprimento.estado !== 'ausente'
-      ? 'compativel' : 'parcial';
-    return [{
-      projetil,
-      compatibilidade,
-      diametro: diametro.estado,
-      comprimento: comprimento.estado,
-      diferencaMassaGramas: consulta.massaGramas === null
-        ? null : Math.abs(projetil.massaGramas - consulta.massaGramas),
-      distanciaDiametro: diametro.distanciaCentro,
-      distanciaComprimento: comprimento.distanciaCentro,
-    }];
+export function consultarProjeteis(referencias: ProjetilReferencia[], consulta: ConsultaProjetil): ResultadoProjetil[] {
+  return referencias.filter(item => !consulta.sigla || item.sigla === consulta.sigla).map(projetil => {
+    const calibreReal = comparar(consulta.calibreRealMm, projetil.calibreRealMinMm, projetil.calibreRealMaxMm, consulta.medidasConfiaveis.calibreRealMm);
+    const altura = comparar(consulta.alturaMaximaMm, projetil.alturaMinMm, projetil.alturaMaxMm, consulta.medidasConfiaveis.alturaMaximaMm);
+    const massaConfiavel = consulta.estado !== 'perda_massa' && consulta.medidasConfiaveis.massaGramas;
+    const massa = comparar(consulta.massaGramas, projetil.massaGramas, projetil.massaGramas, massaConfiavel);
+    const dadosAusentes = [calibreReal, altura, massa].filter(medida => medida.confiavel && medida.observado !== null && medida.diferenca === null).length;
+    const grupoMassa = consulta.estado !== 'perda_massa' || consulta.massaGramas === null ? 0
+      : projetil.massaGramas === null ? 1 : projetil.massaGramas >= consulta.massaGramas ? 0 : 2;
+    return { projetil, calibreReal, altura, massa, dadosAusentes, grupoMassa };
   }).sort((a, b) => {
-    if (a.compatibilidade !== b.compatibilidade) return a.compatibilidade === 'compativel' ? -1 : 1;
-    if (a.diametro !== b.diametro && (a.diametro === 'ausente' || b.diametro === 'ausente')) {
-      return a.diametro === 'ausente' ? 1 : -1;
+    if (a.grupoMassa !== b.grupoMassa) return a.grupoMassa - b.grupoMassa;
+    if (a.dadosAusentes !== b.dadosAusentes) return a.dadosAusentes - b.dadosAusentes;
+    for (const chave of ['calibreReal', 'massa', 'altura'] as const) {
+      const diferenca = distancia(a[chave]) - distancia(b[chave]);
+      if (diferenca !== 0 && !Number.isNaN(diferenca)) return diferenca;
     }
-    const distanciaDiametro = a.distanciaDiametro - b.distanciaDiametro;
-    if (distanciaDiametro !== 0) return distanciaDiametro;
-    if (a.comprimento !== b.comprimento && (a.comprimento === 'ausente' || b.comprimento === 'ausente')) {
-      return a.comprimento === 'ausente' ? 1 : -1;
-    }
-    const distanciaComprimento = a.distanciaComprimento - b.distanciaComprimento;
-    if (distanciaComprimento !== 0) return distanciaComprimento;
-    const massa = (a.diferencaMassaGramas ?? 0) - (b.diferencaMassaGramas ?? 0);
-    if (massa !== 0) return massa;
-    const situacao = prioridadeSituacao(a.projetil) - prioridadeSituacao(b.projetil);
-    if (situacao !== 0) return situacao;
     return a.projetil.calibre.localeCompare(b.projetil.calibre, 'pt-BR')
       || a.projetil.tipo.localeCompare(b.projetil.tipo, 'pt-BR')
       || a.projetil.id.localeCompare(b.projetil.id, 'pt-BR');
-  }).map(({ distanciaDiametro: _diametro, distanciaComprimento: _comprimento, ...resultado }) => resultado);
+  });
 }

@@ -30,3 +30,7 @@ A sidebar esquerda suporta recolhimento temporário enquanto o dock está expand
 Features devem reutilizar wrappers existentes para botões, diálogos, menus, selects, sidebar e painéis redimensionáveis. Uma abstração nova só se justifica quando reduz duplicação real ou estabiliza um comportamento compartilhado; diferenças exclusivas de uma feature permanecem no componente da própria feature. Alterações no dock devem preservar, em conjunto, limites, persistência por interação, montagem estável do editor, rolagem externa do documento e recolhimento sob largura insuficiente.
 
 Testes de layout cobrem limites, persistência de largura, trilho, montagem estável do editor e interação temporária com a sidebar; `painel-lateral-redimensionavel.component.test.tsx` cobre a estrutura sticky e o limiar mínimo.
+
+## Controle de colunas da tabela compartilhada
+
+`src/renderer/components/data-table/data-table.tsx` mantém filtro e controle de colunas no cabeçalho por padrão. Com `destinoControleColunas`, envia o controle por portal ao elemento fornecido pela página, preservando o estado da mesma tabela; quando a busca está oculta, não monta uma barra vazia. O Dashboard do GDL usa esse posicionamento para manter o controle de colunas ao lado de Atualizar.

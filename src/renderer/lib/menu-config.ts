@@ -15,6 +15,7 @@ import {
   Target,
   Users,
   Wand2,
+  Wrench,
 } from 'lucide-react'
 
 type ItemMenuBase = {
@@ -66,9 +67,13 @@ export const itensMenu: ItemMenu[] = [
     ],
   },
   {
-    title: 'Projéteis',
-    icon: Target,
-    path: '/projeteis',
+    title: 'Ferramentas',
+    icon: Wrench,
+    abertoPorPadrao: false,
+    beta: true,
+    items: [
+      { title: 'Projéteis', path: '/projeteis', icon: Target },
+    ],
   },
   {
     title: 'Wizard',

@@ -110,6 +110,7 @@ describe('migração de imagem legada em banco íntegro', () => {
         'INSERT INTO imagens_laudo (id, laudo_id, caminho, legenda, numero_figura, sequencia) VALUES (?, ?, ?, ?, ?, ?)',
         ['imagem-legada-1', 'laudo-legado-1', caminhoImagemLegada, 'Foto legada', 1, 1],
       )
+      await executar(bancoLegado, 'DROP TABLE projeteis_personalizados')
       await executar(bancoLegado, 'DELETE FROM schema_version')
       await executar(bancoLegado, 'INSERT INTO schema_version (version) VALUES (28)')
       await new Promise<void>((resolve, reject) => bancoLegado.close(erro => erro ? reject(erro) : resolve()))

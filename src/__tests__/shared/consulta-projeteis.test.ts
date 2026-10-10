@@ -3,65 +3,51 @@ import { consultarProjeteis } from '@shared/utils/consulta-projeteis';
 import type { ConsultaProjetil, ProjetilReferencia } from '@shared/types/projetil.types';
 
 const referencia = (id: string, alteracoes: Partial<ProjetilReferencia> = {}): ProjetilReferencia => ({
-  id, calibre: id, tipo: 'ETOG', massaGramas: 8,
-  diametroMinMm: 9, diametroMaxMm: 9.02,
-  comprimentoMinMm: 15.4, comprimentoMaxMm: 15.4,
-  situacao: 'estimada', ...alteracoes,
+  id, calibre: id, tipo: 'ETOG', sigla: 'ETOG', massaGramas: 8,
+  calibreRealMinMm: 9, calibreRealMaxMm: 9.02, alturaMinMm: 15.4, alturaMaxMm: 15.4,
+  situacao: 'estimada', fonte: 'fonte', localizacao: 'linha 1', ...alteracoes,
 });
 
 const consulta: ConsultaProjetil = {
-  massaGramas: 8, diametroMinMm: 9, diametroMaxMm: 9.1,
-  comprimentoMinMm: 15.3, comprimentoMaxMm: 15.5,
+  calibreRealMm: 9.01, alturaMaximaMm: 15.4, massaGramas: 8, estado: 'integro',
+  medidasConfiaveis: { calibreRealMm: true, alturaMaximaMm: true, massaGramas: true }, sigla: null,
 };
 
 describe('consulta de projéteis', () => {
-  it('exclui medidas contraditórias e coloca referências parciais depois das completas', () => {
-    const resultado = consultarProjeteis([
-      referencia('completa'),
-      referencia('sem-comprimento', { comprimentoMinMm: null, comprimentoMaxMm: null }),
-      referencia('sem-diametro', { diametroMinMm: null, diametroMaxMm: null }),
-      referencia('fora', { comprimentoMinMm: 18, comprimentoMaxMm: 18 }),
+  it('ordena pela proximidade sem eliminar divergências e posiciona dados ausentes depois', () => {
+    const resultados = consultarProjeteis([
+      referencia('fora', { calibreRealMinMm: 9.1, calibreRealMaxMm: 9.1 }),
+      referencia('sem-altura', { alturaMinMm: null, alturaMaxMm: null }),
+      referencia('dentro'),
     ], consulta);
-    expect(resultado.map(item => item.projetil.id)).toEqual(['completa', 'sem-comprimento', 'sem-diametro']);
-    expect(resultado.map(item => item.compatibilidade)).toEqual(['compativel', 'parcial', 'parcial']);
-    expect(resultado[0]).toMatchObject({ diametro: 'coincide', comprimento: 'coincide' });
-    expect(resultado[1]).toMatchObject({ comprimento: 'ausente' });
+    expect(resultados.map(item => item.projetil.id)).toEqual(['dentro', 'fora', 'sem-altura']);
+    expect(resultados[0]?.calibreReal.diferenca).toBe(0);
+    expect(resultados[1]?.calibreReal.diferenca).toBeCloseTo(0.09);
   });
 
-  it('usa proximidade de diâmetro antes de comprimento e massa', () => {
-    const resultado = consultarProjeteis([
-      referencia('massa-proxima', { massaGramas: 8, diametroMinMm: 9.08, diametroMaxMm: 9.08, comprimentoMinMm: 15.4, comprimentoMaxMm: 15.4 }),
-      referencia('diametro-proximo', { massaGramas: 15, diametroMinMm: 9.05, diametroMaxMm: 9.05, comprimentoMinMm: 15.3, comprimentoMaxMm: 15.3 }),
+  it('usa calibre real, massa e altura nesta ordem', () => {
+    const resultados = consultarProjeteis([
+      referencia('massa-proxima', { calibreRealMinMm: 9.05, calibreRealMaxMm: 9.05 }),
+      referencia('calibre-proximo', { massaGramas: 10, calibreRealMinMm: 9.02, calibreRealMaxMm: 9.02 }),
     ], consulta);
-    expect(resultado.map(item => item.projetil.id)).toEqual(['diametro-proximo', 'massa-proxima']);
+    expect(resultados[0]?.projetil.id).toBe('calibre-proximo');
   });
 
-  it('usa comprimento antes de massa quando o diâmetro empata', () => {
-    const resultado = consultarProjeteis([
-      referencia('massa-proxima', { comprimentoMinMm: 15.5, comprimentoMaxMm: 15.5 }),
-      referencia('comprimento-proximo', { massaGramas: 30 }),
-    ], consulta);
-    expect(resultado.map(item => item.projetil.id)).toEqual(['comprimento-proximo', 'massa-proxima']);
+  it('com perda de massa, prioriza referências iguais ou mais pesadas e não estima perda', () => {
+    const resultados = consultarProjeteis([
+      referencia('cinco', { massaGramas: 5 }),
+      referencia('dez', { massaGramas: 10 }),
+      referencia('oito', { massaGramas: 8 }),
+    ], { ...consulta, massaGramas: 6, estado: 'perda_massa', medidasConfiaveis: { calibreRealMm: false, alturaMaximaMm: false, massaGramas: false } });
+    expect(resultados.map(item => item.projetil.id)).toEqual(['dez', 'oito', 'cinco']);
+    expect(resultados[0]?.massa.confiavel).toBe(false);
   });
 
-  it('usa o selo apenas como desempate e preserva a ordem completa para o Top 10', () => {
-    const itens = Array.from({ length: 12 }, (_, indice) => referencia(`item-${indice + 1}`, {
-      massaGramas: 8 + indice / 10,
-    })).reverse();
-    itens.push(referencia('confirmada', { situacao: 'confirmada', massaGramas: 8 }));
-    const resultado = consultarProjeteis(itens, consulta);
-    expect(resultado[0]?.projetil.id).toBe('confirmada');
-    expect(resultado.slice(1, 10).map(item => item.projetil.id)).toEqual(
-      Array.from({ length: 9 }, (_, indice) => `item-${indice + 1}`),
-    );
-    expect(resultado).toHaveLength(13);
-  });
-
-  it('compara apenas a massa quando nenhuma dimensão foi informada', () => {
-    const resultado = consultarProjeteis([
-      referencia('pesada', { massaGramas: 30 }), referencia('proxima', { massaGramas: 8.1 }),
-    ], { massaGramas: 8, diametroMinMm: null, diametroMaxMm: null, comprimentoMinMm: null, comprimentoMaxMm: null });
-    expect(resultado.map(item => item.projetil.id)).toEqual(['proxima', 'pesada']);
-    expect(resultado[0]?.compatibilidade).toBe('parcial');
+  it('ignora medidas não confiáveis e filtra por sigla', () => {
+    const resultados = consultarProjeteis([
+      referencia('a', { calibreRealMinMm: 8, calibreRealMaxMm: 8 }),
+      referencia('b', { calibreRealMinMm: 9, calibreRealMaxMm: 9, sigla: 'EXPO' }),
+    ], { ...consulta, estado: 'deformado', medidasConfiaveis: { calibreRealMm: false, alturaMaximaMm: false, massaGramas: false }, sigla: 'ETOG' });
+    expect(resultados.map(item => item.projetil.id)).toEqual(['a']);
   });
 });

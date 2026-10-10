@@ -1,0 +1,18 @@
+export const siglasProjeteis: Record<string, string> = {
+  CHOG: 'Chumbo nu ogival',
+  CHPP: 'Chumbo ponta plana',
+  CHCV: 'Chumbo canto vivo',
+  CSCV: 'Chumbo semi canto vivo',
+  ETOG: 'Encamisado total ogival',
+  ETPP: 'Encamisado total ponta plana',
+  EXPP: 'Expansivo ponta plana',
+  EXPO: 'Encamisado expansivo ponta oca',
+  CXPO: 'Cobre expansivo ponta oca',
+  NTA: 'Munição não tóxica',
+  OTM: 'Open Tip Match',
+  SAT: 'Steel Arrow Tip',
+  SEPO: 'Semiencamisado ponta oca',
+  SEPP: 'Semiencamisado ponta plana',
+  CHPO: 'Chumbo ponta oca',
+  ETP: 'Encamisado total pontiagudo',
+};
