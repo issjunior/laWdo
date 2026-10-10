@@ -9,15 +9,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import { EditorFiguraDialog, type AjustesFigura } from '@/components/laudo/EditorFiguraDialog';
 
 interface SeletorFiguraDialogProps {
+  laudoId: string;
   aberto: boolean;
   figuraAlvo: ImagemLaudo | null;
   imagens: ImagemLaudo[];
   imagemSelecionadaId: string | null;
   onAbertoChange: (aberto: boolean) => void;
   onSelecionar: (imagemId: string) => void;
-  onConfirmar: (legenda: string) => void;
+  onConfirmar: (legenda: string, imagemEditada?: { dataUri: string; ajustes: AjustesFigura }) => void;
   onBuscarGdl: () => void;
   onGerarLegenda?: (imagemId: string) => Promise<string | null>;
 }
@@ -43,6 +45,7 @@ function TextoTruncado({ texto, className }: { texto: string; className: string 
 }
 
 export function SeletorFiguraDialog({
+  laudoId,
   aberto,
   figuraAlvo,
   imagens,
@@ -57,13 +60,24 @@ export function SeletorFiguraDialog({
   const [legenda, setLegenda] = useState('');
   const [gerandoLegenda, setGerandoLegenda] = useState(false);
   const [erroLegenda, setErroLegenda] = useState<string | null>(null);
+  const [editorImagemAberto, setEditorImagemAberto] = useState(false);
+  const [imagemOriginal, setImagemOriginal] = useState('');
+  const [imagemEditada, setImagemEditada] = useState<{ dataUri: string; ajustes: AjustesFigura } | undefined>();
 
   useEffect(() => {
     if (!aberto) return;
     setLegenda(figuraAlvo?.legenda || '');
     setErroLegenda(null);
   }, [aberto, figuraAlvo?.id, figuraAlvo?.legenda]);
-  useEffect(() => setErroLegenda(null), [imagemSelecionadaId]);
+  useEffect(() => { setErroLegenda(null); setImagemEditada(undefined); }, [imagemSelecionadaId]);
+
+  const abrirEditorImagem = async () => {
+    if (!imagemSelecionada) return;
+    const resposta = await window.ipcAPI.ilustracoes.obterImagem(laudoId, imagemSelecionada.id);
+    if (!resposta.success || !resposta.data?.dataUri) { setErroLegenda(resposta.error || 'A imagem não está disponível.'); return; }
+    setImagemOriginal(resposta.data.dataUri);
+    setEditorImagemAberto(true);
+  };
 
   const gerarLegenda = async () => {
     if (!imagemSelecionada) return;
@@ -130,7 +144,7 @@ export function SeletorFiguraDialog({
                 <div className="grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-stretch gap-2">
                   <section className="grid min-w-0 grid-rows-[auto_1fr_auto] gap-2"><p className="text-xs font-medium text-muted-foreground">Figura original</p><div className="aspect-[4/3] w-full overflow-hidden rounded-md border bg-muted">{figuraAlvo ? <ImagemPreview src={figuraAlvo.thumbnailUrl || figuraAlvo.url} alt={figuraAlvo.legenda || 'Figura original'} textoFallback="Imagem original indisponível" /> : <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">Figura original não disponível</div>}</div><div className="min-h-11 rounded-md bg-muted/50 p-2"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Legenda atual</p><TextoTruncado texto={figuraAlvo?.legenda || 'Sem legenda'} className="line-clamp-2 text-xs" /></div></section>
                   <div aria-label="Figura original será substituída pela nova figura" className="flex h-full items-center justify-center text-primary"><ArrowRight className="h-6 w-6" /></div>
-                  <section className="grid min-w-0 grid-rows-[auto_1fr_auto] gap-2"><p className="text-xs font-medium text-muted-foreground">Nova figura</p><div className="aspect-[4/3] w-full overflow-hidden rounded-md border bg-muted">{imagemSelecionada ? <ImagemPreview src={imagemSelecionada.thumbnailUrl || imagemSelecionada.url} alt={imagemSelecionada.nomeArquivo || imagemSelecionada.legenda || 'Nova figura'} textoFallback="Imagem selecionada indisponível" /> : <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">Selecione uma miniatura</div>}</div><div className="min-h-11 rounded-md bg-muted/50 p-2"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Arquivo selecionado</p><TextoTruncado texto={imagemSelecionada?.nomeArquivo || imagemSelecionada?.legenda || 'Aguardando seleção'} className="line-clamp-2 text-xs" /></div></section>
+                  <section className="grid min-w-0 grid-rows-[auto_1fr_auto] gap-2"><p className="text-xs font-medium text-muted-foreground">Nova figura</p><div className="aspect-[4/3] w-full overflow-hidden rounded-md border bg-muted">{imagemSelecionada ? <ImagemPreview src={imagemEditada?.dataUri || imagemSelecionada.thumbnailUrl || imagemSelecionada.url} alt={imagemSelecionada.nomeArquivo || imagemSelecionada.legenda || 'Nova figura'} textoFallback="Imagem selecionada indisponível" /> : <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">Selecione uma miniatura</div>}</div><div className="min-h-11 rounded-md bg-muted/50 p-2"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Arquivo selecionado</p><TextoTruncado texto={imagemSelecionada?.nomeArquivo || imagemSelecionada?.legenda || 'Aguardando seleção'} className="line-clamp-2 text-xs" /></div></section>
                 </div>
 
                 <div className="space-y-2 border-t pt-4">
@@ -144,7 +158,8 @@ export function SeletorFiguraDialog({
           </div>
         </div>
 
-        <DialogFooter><Button variant="outline" onClick={() => onAbertoChange(false)}>Cancelar</Button><Button onClick={() => onConfirmar(legenda.trim())} disabled={!imagemSelecionada || gerandoLegenda}>Substituir figura</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => onAbertoChange(false)}>Cancelar</Button><Button variant="secondary" onClick={() => void abrirEditorImagem()} disabled={!imagemSelecionada}>Editar imagem</Button><Button onClick={() => onConfirmar(legenda.trim(), imagemEditada)} disabled={!imagemSelecionada || gerandoLegenda}>Substituir figura</Button></DialogFooter>
+        <EditorFiguraDialog aberto={editorImagemAberto} origem={imagemOriginal} onAbertoChange={setEditorImagemAberto} onAplicar={(dataUri, ajustes) => setImagemEditada({ dataUri, ajustes })} />
       </DialogContent>
       </TooltipProvider>
     </Dialog>

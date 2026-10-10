@@ -29,6 +29,7 @@ describe('SeletorFiguraDialog', () => {
     const onConfirmar = vi.fn();
     render(
       <SeletorFiguraDialog
+        laudoId="laudo-teste"
         aberto
         figuraAlvo={figuraOriginal}
         imagens={[imagemDisponivel]}
@@ -47,13 +48,14 @@ describe('SeletorFiguraDialog', () => {
     fireEvent.change(legenda, { target: { value: 'Vista frontal do objeto' } });
     fireEvent.click(screen.getByRole('button', { name: 'Substituir figura' }));
 
-    expect(onConfirmar).toHaveBeenCalledWith('Vista frontal do objeto');
+    expect(onConfirmar).toHaveBeenCalledWith('Vista frontal do objeto', undefined);
   });
 
   it('gera uma legenda da nova figura por IA', async () => {
     const onGerarLegenda = vi.fn().mockResolvedValue('Vista lateral da arma apreendida');
     render(
       <SeletorFiguraDialog
+        laudoId="laudo-teste"
         aberto
         figuraAlvo={figuraOriginal}
         imagens={[imagemDisponivel]}

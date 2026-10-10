@@ -255,6 +255,7 @@ interface SubstituirImagemPayload {
   newImageId?: string;
   figureElement?: HTMLElement;
   newUrl: string;
+  imagemOrigemId?: string;
 }
 
 const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
@@ -750,6 +751,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               background-color: rgba(138,180,248,0.15);
               color: #8ab4f8;
             }
+            .placeholder-personalizado { background-color: rgba(139,92,246,0.16); color: #6d28d9; border-bottom: 2px dotted #8b5cf6; cursor: pointer; }
+            body.dark-content .placeholder-personalizado { color: #c4b5fd; }
             .campo-reservado {
               background-color: rgba(255,193,7,0.2);
               color: #b45309;
@@ -1107,6 +1110,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 }
                 if (data.newImageId) {
                   figure.setAttribute('data-image-id', data.newImageId);
+                }
+                if (data.imagemOrigemId) {
+                  figure.setAttribute('data-image-original-id', data.imagemOrigemId);
+                  if (!figure.hasAttribute('data-figure-id')) figure.setAttribute('data-figure-id', crypto.randomUUID());
+                } else {
+                  figure.removeAttribute('data-image-original-id');
                 }
                 figure.removeAttribute('data-dummy');
                 figure.style.cursor = '';

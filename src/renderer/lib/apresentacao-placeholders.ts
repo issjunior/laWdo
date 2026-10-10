@@ -1,4 +1,5 @@
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
+import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 
 export type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
 
@@ -289,6 +290,7 @@ interface ContextoProcessamentoPlaceholder {
 
 function limparApresentacaoAncora(ancora: HTMLElement): void {
   ancora.classList.remove('campo-reservado');
+  ancora.classList.remove('placeholder-personalizado');
   ancora.removeAttribute('data-reservado');
   ancora.removeAttribute('data-placeholder-apresentacao');
   ancora.removeAttribute('data-tooltip-xxx');
@@ -341,6 +343,14 @@ function processarAncoraPlaceholder(ancora: HTMLElement, contexto: ContextoProce
     limparApresentacaoAncora(ancora);
     if (opcoes.modo === 'chaves') {
       ancora.textContent = chaveBruta;
+    } else if (ancora.hasAttribute('data-placeholder-personalizado-html')) {
+      try {
+        ancora.innerHTML = normalizarHtmlCampo(decodeURIComponent(ancora.getAttribute('data-placeholder-personalizado-html') || ''));
+      } catch {
+        ancora.textContent = chaveBruta;
+      }
+      ancora.classList.add('placeholder-personalizado');
+      ancora.setAttribute('data-placeholder-apresentacao', 'dados');
     } else if (!resolvido?.preenchido) {
       const aviso = opcoes.descreverPendente(chave, opcoes.placeholdersPersonalizados, opcoes.valores);
       ancora.textContent = 'XXX';

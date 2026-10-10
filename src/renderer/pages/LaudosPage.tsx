@@ -63,7 +63,9 @@ import {
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
 import { extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
-import { preencherCampoReservado } from '@/lib/campos-reservados';
+import { obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
+import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
+import { localizarFiguraPorIndice } from '@/lib/figuras';
 import {
   Dialog,
   DialogContent,
@@ -1096,6 +1098,7 @@ export const LaudosPage: React.FC = () => {
           sequencia: idx + 1,
           created_at: '',
           dummy,
+          imagemOrigemId: fig.getAttribute('data-image-original-id') || undefined,
         };
       })
       .filter(f => f.id && f.url);
@@ -1280,7 +1283,8 @@ export const LaudosPage: React.FC = () => {
     onInsertAll: (imagens: ImagemLaudo[]) => void;
     onSyncToggle: (enabled: boolean) => void;
     onScrollToFigure: (imageId: string) => void;
-    onReplaceImage: (imageId: string, imagem: ImagemLaudo) => void;
+    onReplaceImage: (imageId: string, imagem: ImagemLaudo, indice?: number) => void;
+    onEditImage: (indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => void;
     onGerarLegenda: (imageId: string) => Promise<string | null>;
     syncCurrentState: () => void;
   }>({
@@ -1293,6 +1297,7 @@ export const LaudosPage: React.FC = () => {
     onSyncToggle: () => {},
     onScrollToFigure: () => {},
     onReplaceImage: () => {},
+    onEditImage: () => {},
     onGerarLegenda: async () => null,
     syncCurrentState: () => {},
   });
@@ -1557,13 +1562,26 @@ export const LaudosPage: React.FC = () => {
       }
       return legenda;
     },
-    onReplaceImage: (imageId, imagem) => {
+    onReplaceImage: (imageId, imagem, indice) => {
       setImagemSelecionadaIaId(atual => atual === imageId ? null : atual);
       const executarReplace = () => {
+        if (indice !== undefined) {
+          const ids = editorMode === 'single' ? ['laudo-single-editor'] : secoes.map((_, indiceSecao) => `secao-${indiceSecao}`);
+          const alvo = localizarFiguraPorIndice(ids.map(obterEditorTinyMce).filter((editor): editor is TinyMceEditorInstance => Boolean(editor)), indice);
+          if (!alvo || alvo.figura.getAttribute('data-image-id') !== imageId) return;
+          alvo.editor.execCommand('replaceLaudoImage', false, { figureElement: alvo.figura, newImageId: imagem.id, newUrl: imagem.url, imagemOrigemId: imagem.imagemOrigemId });
+          const html = alvo.editor.getContent();
+          if (editorMode === 'single') { setSingleEditorHtml(html); setSecoes(parseSingleHtmlToSecoes(html, secoes)); }
+          else {
+            const indiceSecao = Number(alvo.editor.id.replace('secao-', ''));
+            if (Number.isInteger(indiceSecao)) atualizarConteudoSecao(indiceSecao, html);
+          }
+          return;
+        }
         if (editorMode === 'single') {
           const editor = obterEditorTinyMce('laudo-single-editor');
           if (editor) {
-            editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: imagem.url });
+            editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: imagem.url, imagemOrigemId: imagem.imagemOrigemId });
             const novoHtml = editor.getContent();
             setSingleEditorHtml(novoHtml);
             setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
@@ -1574,7 +1592,7 @@ export const LaudosPage: React.FC = () => {
             if (editor) {
               const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
               if (figure) {
-                editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: imagem.url });
+                editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: imagem.url, imagemOrigemId: imagem.imagemOrigemId });
                 atualizarConteudoSecao(idx, editor.getContent());
                 break;
               }
@@ -1587,6 +1605,25 @@ export const LaudosPage: React.FC = () => {
         toast.success('Figura substituída');
       };
       executarReplace();
+    },
+    onEditImage: (indice, imagem, imagemOrigemId, imagemAnteriorId) => {
+      const ids = editorMode === 'single' ? ['laudo-single-editor'] : secoes.map((_, indiceSecao) => `secao-${indiceSecao}`);
+      const alvo = localizarFiguraPorIndice(ids.map(obterEditorTinyMce).filter((editor): editor is TinyMceEditorInstance => Boolean(editor)), indice);
+      if (!alvo || alvo.figura.getAttribute('data-dummy') === 'true' || alvo.figura.getAttribute('data-image-id') !== imagemAnteriorId) {
+        throw new Error('A figura mudou desde que a edição foi aberta. Abra a edição novamente.');
+      }
+      alvo.editor.execCommand('replaceLaudoImage', false, {
+        figureElement: alvo.figura, newImageId: imagem.id, newUrl: imagem.url, imagemOrigemId,
+      });
+      const html = alvo.editor.getContent();
+      if (editorMode === 'single') {
+        setSingleEditorHtml(html);
+        setSecoes(parseSingleHtmlToSecoes(html, secoes));
+      } else {
+        const indiceSecao = Number(alvo.editor.id.replace('secao-', ''));
+        if (Number.isInteger(indiceSecao)) atualizarConteudoSecao(indiceSecao, html);
+      }
+      registrarAlteracao();
     },
     syncCurrentState: () => {
       window.ipcAPI.ilustracoes.syncToPanel({
@@ -1639,7 +1676,10 @@ export const LaudosPage: React.FC = () => {
           if (isString(args[0])) cbs.onScrollToFigure(args[0]);
           break;
         case 'replaceImage':
-          if (isString(args[0]) && isImagemLaudo(args[1])) cbs.onReplaceImage(args[0], args[1]);
+          if (isString(args[0]) && isImagemLaudo(args[1])) cbs.onReplaceImage(args[0], args[1], typeof args[2] === 'number' ? args[2] : undefined);
+          break;
+        case 'editImage':
+          if (typeof args[0] === 'number' && isImagemLaudo(args[1]) && isString(args[2]) && isString(args[3])) cbs.onEditImage(args[0], args[1], args[2], args[3]);
           break;
         case 'generateCaption':
           if (isString(args[0])) void cbs.onGerarLegenda(args[0]);
@@ -2161,7 +2201,7 @@ export const LaudosPage: React.FC = () => {
 
   const solicitarPreenchimentoCampoReservado = useCallback((campo: CampoReservadoSelecionado) => {
     campoReservadoSelecionadoRef.current = campo;
-    setValorCampoReservado('');
+    setValorCampoReservado(obterHtmlCampo(campo.elemento));
     setErroCampoReservado(null);
     setDialogoCampoReservadoAberto(true);
   }, []);
@@ -2174,8 +2214,8 @@ export const LaudosPage: React.FC = () => {
   }, []);
 
   const confirmarPreenchimentoCampoReservado = useCallback(() => {
-    const valor = valorCampoReservado.trim();
-    if (!valor) {
+    const valor = valorCampoReservado;
+    if (!new DOMParser().parseFromString(valor, 'text/html').body.textContent?.trim()) {
       setErroCampoReservado('Informe um valor para substituir o campo pendente.');
       return;
     }
@@ -2195,6 +2235,25 @@ export const LaudosPage: React.FC = () => {
     registrarAlteracao();
     fecharDialogoCampoReservado();
   }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, valorCampoReservado]);
+
+  const restaurarValorDaRep = useCallback(() => {
+    const selecionado = campoReservadoSelecionadoRef.current;
+    const editor = selecionado ? obterEditorTinyMce(selecionado.editorId) : null;
+    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento)) return;
+    editor.undoManager.transact(() => {
+      if (restaurarCampoReservado(selecionado.elemento)) {
+        aplicarVisualizacaoPlaceholder(editor, selecionado.elemento, {
+          modo: modoVisualizacaoPlaceholders,
+          valores: mapaPlaceholdersResolvidos,
+          placeholdersPersonalizados: placeholders,
+          descreverPendente: descreverPlaceholderPendente,
+        });
+      }
+    });
+    atualizarConteudoDoEditor(editor);
+    registrarAlteracao();
+    fecharDialogoCampoReservado();
+  }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders]);
 
   const localizarBlocoNoEditor = useCallback((referencia: BlocoCondicionalSelecionado) => {
     const editor = obterEditorTinyMce(referencia.editorId);
@@ -3635,6 +3694,7 @@ export const LaudosPage: React.FC = () => {
         onRecolher={() => setPanelCollapsed(true)}
         onFechar={() => setIlustracoesPanelOpen(false)}
         onReplaceImage={panelCallbacksRef.current.onReplaceImage}
+        onEditImage={panelCallbacksRef.current.onEditImage}
         onGerarLegenda={gerarLegendaImagemIa}
         figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
         onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
@@ -3905,28 +3965,22 @@ export const LaudosPage: React.FC = () => {
         }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Preencher campo manualmente</DialogTitle>
+              <DialogTitle>Personalizar texto neste laudo</DialogTitle>
               <DialogDescription>
                 O valor será aplicado somente neste laudo e não altera a REP.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              <label htmlFor="valor-campo-reservado" className="text-sm font-medium">Valor</label>
-              <Input
-                id="valor-campo-reservado"
-                value={valorCampoReservado}
-                onChange={evento => {
-                  setValorCampoReservado(evento.target.value);
-                  setErroCampoReservado(null);
-                }}
-                onKeyDown={evento => {
-                  if (evento.key === 'Enter') confirmarPreenchimentoCampoReservado();
-                }}
-                autoFocus
-              />
+              <p className="text-sm font-medium">Valor da REP: {(() => {
+                const chave = campoReservadoSelecionadoRef.current?.elemento.getAttribute('data-placeholder')?.slice(2, -2);
+                const valor = chave ? mapaPlaceholdersResolvidos[chave]?.valor : '';
+                return chave ? (valor ? new DOMParser().parseFromString(valor, 'text/html').body.textContent || 'Não preenchido' : 'Não preenchido') : 'Campo sem vínculo com a REP';
+              })()}</p>
+              {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorCampoReservado} onChange={html => { setValorCampoReservado(html); setErroCampoReservado(null); }} />}
               {erroCampoReservado && <p className="text-sm text-destructive">{erroCampoReservado}</p>}
             </div>
             <DialogFooter>
+              {campoReservadoSelecionadoRef.current?.elemento.hasAttribute('data-placeholder-personalizado-html') && campoReservadoSelecionadoRef.current.elemento.hasAttribute('data-placeholder') && <Button type="button" variant="secondary" onClick={restaurarValorDaRep}>Restaurar valor da REP</Button>}
               <Button type="button" variant="outline" onClick={fecharDialogoCampoReservado}>Cancelar</Button>
               <Button type="button" onClick={confirmarPreenchimentoCampoReservado}>Aplicar valor</Button>
             </DialogFooter>

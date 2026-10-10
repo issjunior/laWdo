@@ -8,6 +8,7 @@ export interface ImagemLaudoResumo {
   legenda: string
   origem: 'local' | 'gdl'
   sequencia: number
+  imagemOrigemId?: string | null
   createdAt: string
 }
 
@@ -27,6 +28,8 @@ export interface SalvarImagemLaudoEntrada {
   legenda: string
   origem: 'local' | 'gdl'
   sequencia: number
+  imagemOrigemId?: string
+  ajustesJson?: string
 }
 
 export interface SalvarImagemLaudoBytesEntrada {

@@ -2,6 +2,7 @@ import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/pl
 import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
+import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 
 function numToLetra(n: number): string {
   if (n < 26) return String.fromCharCode(65 + n);
@@ -510,8 +511,22 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
       bloco.removeAttribute('contenteditable');
     });
     removerAncorasTabelasPersonalizadas(doc);
+    doc.querySelectorAll<HTMLElement>('[data-placeholder-personalizado-livre="true"]').forEach(campo => {
+      campo.classList.remove('placeholder-personalizado');
+      campo.removeAttribute('data-placeholder-personalizado-livre');
+      campo.removeAttribute('data-placeholder-personalizado-html');
+      campo.removeAttribute('aria-label');
+    });
     const placeholderSpans = doc.querySelectorAll('span[data-placeholder]');
     placeholderSpans.forEach(span => {
+      const htmlPersonalizado = span.getAttribute('data-placeholder-personalizado-html');
+      if (htmlPersonalizado) {
+        try {
+          const fragmento = criarFragmentoResolvido(doc, normalizarHtmlCampo(decodeURIComponent(htmlPersonalizado)));
+          span.replaceWith(fragmento);
+          return;
+        } catch { /* valor inválido volta à resolução da REP */ }
+      }
       const rawPlaceholder = span.getAttribute('data-placeholder') || '';
       const chaveMatch = rawPlaceholder.match(/^\{\{(.+)\}\}$/);
       if (chaveMatch) {

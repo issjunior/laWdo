@@ -77,9 +77,13 @@ const IlustracoesPanelWindow: React.FC = () => {
     sendAction('scrollToFigure', imageId);
   }, [sendAction]);
 
-  const handleReplaceImage = useCallback((imageId: string, imagem: ImagemLaudo) => {
-    sendAction('replaceImage', imageId, imagem);
+  const handleReplaceImage = useCallback((imageId: string, imagem: ImagemLaudo, indice?: number) => {
+    sendAction('replaceImage', imageId, imagem, indice);
     toast.success('Figura enviada para substituição');
+  }, [sendAction]);
+
+  const handleEditImage = useCallback((indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => {
+    sendAction('editImage', indice, imagem, imagemOrigemId, imagemAnteriorId);
   }, [sendAction]);
 
   const handleGerarLegenda = useCallback(async (imageId: string): Promise<string | null> => {
@@ -130,6 +134,7 @@ const IlustracoesPanelWindow: React.FC = () => {
             onSyncToggle={handleSyncToggle}
             onScrollToFigure={handleScrollToFigure}
             onReplaceImage={handleReplaceImage}
+            onEditImage={handleEditImage}
             onGerarLegenda={handleGerarLegenda}
             figurasNoEditor={figurasNoEditor}
             syncEnabled={syncEnabled}

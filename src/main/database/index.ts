@@ -23,7 +23,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 39;
+export const CURRENT_SCHEMA_VERSION = 40;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -2402,6 +2402,12 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       return contagem[0]?.total ?? 0;
     });
     log.info('Migration v39: cadastros personalizados de projéteis removidos', { quantidade: removidos });
+  }
+
+  if (fromVersion < 40) {
+    await garantirColuna('imagens_laudo', 'imagem_origem_id', 'TEXT');
+    await garantirColuna('imagens_laudo', 'ajustes_json', 'TEXT');
+    log.info('Migration v40: origem e ajustes de figuras editadas');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);
