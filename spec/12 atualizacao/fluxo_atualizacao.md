@@ -91,3 +91,7 @@ O processo principal continua responsável por rede, arquivos, assinatura, backu
 - Alterações em canais, manifesto, chave ou formatos exigem revisão coordenada com `spec/11 github actions/workflows_github_actions.md`.
 
 `src/__tests__/main/atualizacao.service.test.ts` cobre estado inicial, HTTP ausente, falha de rede amigável, download válido, persistência da última verificação e agendamento validado. `src/__tests__/renderer/header-atualizacao.component.test.tsx` cobre o resumo amigável, detalhes inicialmente recolhidos e disponibilidade da cópia. Permanecem sem cobertura ponta a ponta timeout real, autorização IPC, instalação por processo, AppImage real e ciclo entre release publicada e aplicativo.
+
+## Acesso manual ao instalador
+
+O modal de Atualizações no Header também aponta para `https://issjunior.github.io/laWdo/`, a página pública de downloads gerada pelo feed. O link abre o navegador externo para instalação manual quando o usuário escolher esse caminho; não altera a validação, o estado nem o fluxo de instalação automática do `AtualizacaoService`. A apresentação da página pública fica no produtor descrito em `spec/11 github actions/workflows_github_actions.md`.

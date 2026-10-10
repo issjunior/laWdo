@@ -205,6 +205,21 @@
         "src/__tests__/renderer/usuario-sessao.test.ts",
         "src/__tests__/renderer/error-boundary.component.test.tsx"
       ]
+    },
+    {
+      "subdiretorio": "16 ferramentas",
+      "descricao": "Ferramentas autônomas de apoio à atividade pericial.",
+      "globsCodigo": [
+        "scripts/projeteis/**",
+        "src/shared/catalogos/*projeteis*",
+        "src/shared/types/projetil.types.ts",
+        "src/shared/utils/consulta-projeteis.ts",
+        "src/main/services/projetil.service.ts",
+        "src/main/ipc/handlers/projetil.handlers.ts",
+        "src/renderer/pages/ProjeteisPage.tsx",
+        "src/renderer/components/projeteis/**",
+        "src/__tests__/**/*projetil*"
+      ]
     }
   ],
   "specs": [
@@ -780,6 +795,23 @@
         "src/__tests__/main/*security*.test.ts",
         "src/__tests__/renderer/usuario-sessao.test.ts",
         "src/__tests__/renderer/error-boundary.component.test.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/16 ferramentas/identificacao_projeteis.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Catálogo, consulta, apresentação e persistência local de projéteis.",
+      "globsCodigo": [
+        "scripts/projeteis/**",
+        "src/shared/catalogos/*projeteis*",
+        "src/shared/types/projetil.types.ts",
+        "src/shared/utils/consulta-projeteis.ts",
+        "src/main/services/projetil.service.ts",
+        "src/main/ipc/handlers/projetil.handlers.ts",
+        "src/renderer/pages/ProjeteisPage.tsx",
+        "src/renderer/components/projeteis/**",
+        "src/__tests__/**/*projetil*"
       ]
     }
   ]
