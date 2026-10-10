@@ -12,7 +12,9 @@ Ao abrir um laudo, a visualização padrão é `Dados da REP`; o usuário pode a
 
 No modo de dados, placeholder textual preenchido exibe o valor mantendo a âncora não editável. Valor ausente exibe `XXX` destacado. Para valor HTML, a âncora canônica é ocultada e a prévia é inserida como elemento irmão identificado por `data-placeholder-preview`; tabelas não são inseridas dentro do `span` da chave. No formato `html-inline`, a âncora recebe somente o fragmento resolvido; isso preserva campos reservados dentro de uma frase, como os lacres de saída B-602. No modo de chaves, a prévia é removida e a âncora volta a mostrar a chave.
 
-Um `XXX` âmbar pode receber valor manual por duplo clique. A substituição é local ao laudo: quando a ocorrência pertence a um placeholder pendente, remove o vínculo `data-placeholder` antes de gravar o texto. Assim, reaplicar a visualização de dados da REP não a sobrescreve, e o valor manual não é enviado à REP ou ao GDL.
+Duplo clique em uma âncora azul ou em `XXX` âmbar abre **Personalizar texto neste laudo**. O TinyMCE compacto aceita texto multilinha e formatação inline limitada. A personalização pertence somente à ocorrência e fica em `data-placeholder-personalizado-html` (HTML normalizado e codificado), com destaque violeta; a chave `data-placeholder` é preservada quando existe. A digitação não altera `initialValue` do modal. Salvar, reabrir, trocar o modo de visualização e atualizar a REP local mantêm o valor manual. Apenas uma ocorrência vinculada oferece **Restaurar valor da REP**, que remove o atributo local e reaplica o valor do mapa já carregado, sem nova consulta ao GDL. `XXX` autoral sem chave permanece texto livre personalizado.
+
+Os placeholders de concordância do perito são registrados em `placeholder.service.ts` e disponibilizados também a templates personalizados. O resolvedor deriva suas formas do perfil validado na sessão; alterar o perfil afeta novas resoluções, não a prosa livre nem personalizações locais. A categoria e o conjunto de chaves de sistema são protegidos em `PlaceholdersPage.tsx`.
 
 ## Índice de placeholders
 
@@ -40,9 +42,9 @@ A conferência visual ocorre após exclusão, inserção, personalização, rest
 
 ## Normalização e fronteiras
 
-Antes de salvar, `removerFormatacaoPlaceholders()` remove prévias, controles transitórios e atributos de apresentação, restaura o texto da âncora a partir de `data-placeholder` e preserva o marcador persistido de supressão de bloco. Portanto, valores reais e HTML de prévia nunca devem substituir o contrato salvo. Campos preenchidos manualmente não possuem mais `data-placeholder`; por isso são preservados como texto local.
+Antes de salvar, `removerFormatacaoPlaceholders()` remove prévias, controles transitórios e atributos de apresentação, restaura o texto da âncora a partir de `data-placeholder` e preserva o marcador persistido de supressão de bloco. Portanto, valores reais e HTML de prévia nunca devem substituir o contrato salvo. A personalização manual conserva a chave da ocorrência quando existe e seu atributo local codificado; a limpeza remove somente apresentação transitória.
 
-A exportação também remove resíduos transitórios e resolve novamente a partir da REP. Dados externos desconhecidos, inclusive campos GDL sem placeholder definido, permanecem preservados na peça, mas não viram HTML arbitrário.
+A exportação também remove resíduos transitórios e resolve novamente a partir da REP apenas as ocorrências sem personalização local. Dados externos desconhecidos, inclusive campos GDL sem placeholder definido, permanecem preservados na peça, mas não viram HTML arbitrário.
 
 ## Verificação
 

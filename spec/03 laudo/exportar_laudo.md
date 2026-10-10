@@ -6,6 +6,10 @@
 
 `construirMapaPlaceholdersResolvidos()` expõe, por chave, valor, preenchimento e formato (`texto`, `html` estrutural ou `html-inline`). O resumo de lacres de saída B-602 é um valor inline: armas são referenciadas individualmente por letra, estojos são agrupados, e cada lacre ausente gera `XXX` reservado. Editor, IA, preview e exportação devem consumir esse mesmo mapa; não duplicar a resolução em componentes.
 
+### Identidade e concordância do perito
+
+`users.forma_tratamento` é `masculino` ou `feminino`, com padrão masculino na migration v41 e no cadastro. O login transporta a escolha pela sessão local validada; `obterFormasPerito()` deriva `perito_cargo`, `perito_artigo`, `perito_titulo`, `perito_designado`, `perito_pelo` e `perito_qual`. O cargo conhecido alterna Perito/Perita ou Técnico/Técnica; cargo desconhecido permanece literal. O mapa de exportação e as prévias de templates e cabeçalhos usam essas formas. O texto livre não recebe flexão automática; a concordância depende de placeholders escritos no modelo. `perito-tratamento.test.ts` e `exportacao-placeholders.test.ts` cobrem os dois valores.
+
 ### Placeholders personalizados
 
 O contexto de resolução recebe os placeholders personalizados cadastrados, com chave e valor padrão. Eles entram primeiro no mapa para estarem disponíveis em editor, IA, preview e exportação; chaves conhecidas da REP, do perito ou calculadas pelo B-602 são preenchidas depois e têm precedência. Chave vazia é ignorada e valor padrão ausente torna-se texto vazio, preservando o comportamento de `XXX` para placeholder não preenchido.
@@ -21,6 +25,8 @@ A leitura do JSON é defensiva: JSON inválido, estrutura ausente ou valor não 
 
 A escrita canônica no editor é `<div data-quebra-pagina="true" style="break-after: page;"></div>`. Na leitura, `normalizarQuebrasPaginaHtml()` também aceita `<!-- pagebreak -->` e divs equivalentes, normalizando-as antes do parser. O marcador deve permanecer um bloco independente para preservar sua posição relativa aos demais blocos.
 
+Parágrafos `<p>` sem `text-align` explícito recebem `justify` no documento canônico, exceto dentro de tabelas e figuras; títulos e alinhamentos manuais mantêm seu valor. As folhas de impressão de PDF e preview aplicam o mesmo padrão, sem alterar o HTML salvo. DOCX consome o alinhamento canônico e ODT deriva dele. `exportacao-parser.test.ts` protege essa precedência.
+
 A validação no processo principal rejeita documentos fora desse contrato antes da geração. Não é uma fronteira IPC permissiva: dados inválidos não seguem para os conversores.
 
 ### Tabelas no documento canônico
@@ -28,6 +34,8 @@ A validação no processo principal rejeita documentos fora desse contrato antes
 `exportacao-parser.ts` transforma texto direto e formatação inline de `<td>`/`<th>` em parágrafos da célula, preserva blocos mistos na ordem e representa `<caption>` como parágrafo antes da tabela. DOCX consome esse documento canônico; ODT converte o DOCX gerado pelo mesmo caminho. Por isso, texto de células não pode depender de um `<p>` explícito no HTML.
 
 ## Regras de saída
+
+Em ocorrência personalizada, a exportação prefere o HTML local de `data-placeholder-personalizado-html`, remove o destaque violeta e não consulta novamente o GDL. **Restaurar valor da REP** remove essa personalização e volta a resolver o valor já disponível no mapa local. Campos livres personalizados também saem sem o destaque visual.
 
 A exportação remove prévias transitórias de placeholder, controles de tabelas e blocos condicionais, atributos de edição e qualquer bloco com `data-cond-suprimido="true"`. Placeholders sem valor resolvem para `<span class="campo-reservado" data-reservado="true">XXX</span>`. Bloco pericial não excluído que contenha somente espaço ou parágrafo vazio recebe um parágrafo com o mesmo marcador. `XXX` não bloqueia a exportação.
 
@@ -39,7 +47,7 @@ PDF e preview aplicam `break-after: page` e `page-break-after: always` ao marcad
 
 ## Invariantes
 
-- O HTML persistido mantém as chaves canônicas; valores resolvidos e prévias não devem ser gravados.
+- O HTML persistido mantém as chaves canônicas; valores resolvidos e prévias transitórias não devem ser gravados. A personalização manual por ocorrência é uma exceção intencional, persistida como HTML sanitizado no atributo local da âncora.
 - Valores HTML de placeholders vêm do resolvedor; tabelas personalizadas vinculadas usam a cópia local persistida. Prévias transitórias e atributos de apresentação não entram na saída.
 - Dados desconhecidos do GDL não se tornam placeholders automaticamente.
 - A data de execução GDL afeta somente `data_extenso_recebimento_rep`; não altera a data de recebimento, a REP persistida fora do metadado nem o GDL.

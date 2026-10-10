@@ -45,6 +45,8 @@ Logs de autenticação podem conter o login sanitizado e o identificador do usu�
 
 `lawdo_auth_user` é a única chave canônica do usuário autenticado no `sessionStorage`. O parser recebe `unknown`, exige `id`, `username`, nome e e-mail textuais, valida campos opcionais e mantém somente propriedades conhecidas. `name` e `nome` são normalizados para o mesmo valor por compatibilidade.
 
+`forma_tratamento` aceita somente `masculino` ou `feminino`; sessão antiga sem esse campo recebe `masculino`. A migration v41 cria a coluna em `users` com esse padrão. Cadastro e atualização do perfil validam a enumeração no renderer e no handler IPC; login inclui o valor no objeto de sessão. O campo é uma preferência local de redação e não altera a autorização da sessão.
+
 JSON malformado, arrays, valores primitivos ou objetos incompatíveis resultam em `null`; quando lidos do storage, o valor inválido é removido. Componentes devem usar `lerUsuarioSessao` e `salvarUsuarioSessao`, sem repetir `JSON.parse` ou assertions locais.
 
 ## Recuperação de falhas do renderer

@@ -10,6 +10,12 @@ O HTML do laudo é a fonte das figuras inseridas. A fila do Painel de Ilustraç�
 | imagem disponível | `imagens_laudo` e arquivo local | `IlustracoesPanel` |
 | imagem arquivada | `disponivel_painel = 0` | backup; fora do painel |
 
+## Edição local por ocorrência
+
+O painel e **Substituir figura** abrem `EditorFiguraDialog` para a imagem escolhida. A prévia mostra a imagem orientada inteira; arrastar cria o retângulo de corte, e suas alças permitem mover e redimensionar. A área externa fica escurecida. O corte é limitado à imagem e convertido de percentuais da prévia para pixels da resolução original. Giros de 90°, rotação livre e espelhamento são aplicados em canvas; a rotação livre preenche as áreas vazias com branco e redefine o corte para a imagem inteira. **Selecionar imagem inteira** desfaz só o corte; **Restaurar imagem** limpa os ajustes e usa a base local, sem novo download do GDL.
+
+O resultado é uma nova ocorrência/derivação local: `imagem_origem_id` aponta para a base preservada e `ajustes_json` registra os ajustes. A v40 adiciona essas colunas. O serviço valida ID, vínculo ao mesmo laudo, data URI e JSON antes de persistir; a base não pode ser excluída enquanto houver derivação. Duas figuras que usam a mesma foto podem ter ajustes independentes. A reconciliação do painel considera IDs de ocorrência, e o backup completo inclui arquivos da base e das versões editadas porque ambos permanecem referenciados em `imagens_laudo`. O teste `imagem-editada.integration.test.ts` cobre persistência/restauração local; `editor-figura.test.ts` e `editor-figura.component.test.tsx` cobrem geometria e interação do recorte.
+
 ## Painel e legenda assistida
 
 Upload e captura GDL entram na fila persistida. O painel permite inserir, excluir, reordenar, ampliar e substituir figuras. Em cada item, o botão de geração de legenda fica entre Ampliar e Substituir, pois atua sobre aquela figura. A edição da legenda é enviada com debounce; quando a fila retorna um valor persistido diferente, o campo local é sincronizado para não conservar valor obsoleto.

@@ -12,22 +12,22 @@ A conversão é literal e case-insensitive; por isso também alcança ocorrênci
 
 ## Preenchimento manual no laudo
 
-No editor de laudos, o duplo clique em um campo âmbar cujo texto ainda é exatamente `XXX` abre o diálogo de preenchimento manual. O diálogo aceita texto simples não vazio, aplica-o somente à ocorrência selecionada dentro de uma transação de undo e registra alteração pendente no editor único ou por seções. Cancelar ou fechar o diálogo não altera o HTML; se o editor ou o elemento deixar de existir antes da confirmação, o valor não é aplicado.
+O duplo clique em `XXX` âmbar ou placeholder azul abre o modal de personalização da ocorrência. O editor compacto aceita linhas e formatação básica; `normalizarHtmlCampo()` limita a saída a texto, quebras, negrito, itálico, sublinhado, sobrescrito e subscrito e rejeita valor vazio. O rascunho fica em referência, enquanto `initialValue` permanece fixo até fechar, evitando salto de cursor. Aplicar usa transação de undo e marca a edição pendente; cancelar não altera o HTML.
 
-O preenchimento remove o destaque e os metadados de campo reservado. Quando o `XXX` veio de um placeholder sem valor na REP, também remove `data-placeholder` e seus atributos de apresentação: a escolha passa a ser texto local persistido no laudo e não pode ser sobrescrita por uma nova resolução visual dos dados da REP. Esse fluxo nunca altera REP ou GDL.
+`preencherCampoReservado()` grava o HTML codificado em `data-placeholder-personalizado-html`, troca o destaque por violeta e preserva `data-placeholder` quando a ocorrência veio de chave da REP. Sem chave, grava `data-placeholder-personalizado-livre`. O modal oferece **Restaurar valor da REP** apenas para ocorrência vinculada personalizada; a ação remove a sobreposição local e reaplica o mapa atual sem consultar GDL. A alteração nunca é enviada à REP ou ao GDL.
 
 ## Laudos e exportação
 
 No laudo, `XXX` também representa ausência de valor resolvido e conteúdo narrativo vazio de bloco pericial não suprimido. Nesses casos ele é produzido pelo resolvedor de exportação e pelo modo `Dados da REP`, não por conversão do texto autoral. O campo pendente não impede preview, PDF, ODT ou exportação.
 
-A normalização anterior ao salvamento remove apenas atributos transitórios de apresentação de placeholders; preserva campos reservados que já pertençam ao conteúdo autoral. Um campo preenchido manualmente já não possui marcador nem vínculo de placeholder e é preservado como texto literal. Blocos suprimidos são removidos na exportação e, portanto, não recebem `XXX`.
+A normalização anterior ao salvamento remove apenas atributos transitórios de apresentação de placeholders; preserva campos reservados que já pertençam ao conteúdo autoral. Um campo preenchido manualmente deixa de ser pendência; se havia chave de placeholder, ela continua no HTML canônico junto ao valor local codificado. Blocos suprimidos são removidos na exportação e, portanto, não recebem `XXX`.
 
 ## Responsabilidades
 
 | Área | Responsabilidade |
 | --- | --- |
 | `TinyMceEditor.tsx` | estilos, conversão opcional em templates e detecção do duplo clique no iframe |
-| `campos-reservados.ts` | identifica o marcador elegível e normaliza a substituição local |
+| `campos-reservados.ts` e `EditorCampoLaudo.tsx` | identificam a ocorrência, normalizam o HTML permitido e mantêm o valor inicial estável |
 | `LaudosPage.tsx` | diálogo shadcn, referência temporária ao campo, undo e sincronização do HTML |
 | `utils.ts` | conversão textual e limpeza transitória antes do salvamento |
 | `exportacao-placeholders.ts` | criação de `XXX` para valores e blocos pendentes |
@@ -37,4 +37,4 @@ A diferença entre `XXX` autoral e `XXX` derivado precisa ser preservada para qu
 
 ## Verificação
 
-`campos-reservados.test.ts` cobre identificação exclusiva do `XXX` âmbar, substituição autoral, desligamento de placeholder pendente e rejeição de valor vazio. A interação real de duplo clique e foco do diálogo permanece sujeita a smoke manual no TinyMCE.
+`campos-reservados.test.ts` cobre personalização, restauração e rejeição de valor vazio; `editor-campo-laudo.component.test.tsx` cobre a estabilidade do valor inicial ao digitar e reabrir. A interação real de duplo clique e foco do diálogo permanece sujeita a smoke manual no TinyMCE.

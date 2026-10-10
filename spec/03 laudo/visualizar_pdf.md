@@ -14,6 +14,8 @@ O HTML de impressão não introduz padding lateral alternativo: as margens de im
 
 ## Saída e verificação
 
+O CSS de preview e PDF justifica parágrafos narrativos sem alinhamento próprio, excluindo tabelas e figuras. Alinhamento inline escolhido no editor prevalece. Valores personalizados por ocorrência aparecem com sua formatação, sem o destaque violeta do editor; as âncoras não personalizadas continuam resolvidas pelo mapa da REP/perito.
+
 `renumerarTabelasHtml()` ignora prévias transitórias e aplica a sequência no documento completo após a resolução, inclusive quando tabelas B-602 carregam números fixos. A prévia pela lista confere somente o HTML gerado, pois não há editor para sincronizar.
 
 Seções condicionais inativas ou suprimidas não aparecem na saída. Placeholders pendentes podem aparecer como `XXX`; isso informa dado ausente. Tabelas resolvidas recebem largura máxima de 100% no HTML e nas folhas de estilo do PDF/ODT.

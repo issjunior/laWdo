@@ -14,6 +14,8 @@ A toolbar usa `wrap` e agrupa histórico, formatação, fonte/cores, alinhamento
 
 `pagebreak` grava o marcador canônico `data-quebra-pagina="true"`; o comentário legado `<!-- pagebreak -->` continua aceito pela normalização de exportação. A skin observa o tema sem remontar o editor. Em tela cheia, `repNumero` insere identificação fora do conteúdo editável; ela não integra o HTML salvo.
 
+Parágrafos narrativos sem alinhamento explícito aparecem justificados por padrão no iframe do TinyMCE. O seletor exclui parágrafos de tabelas e figuras; estilos inline escolhidos pelo usuário prevalecem. O editor compacto de personalização (`EditorCampoLaudo.tsx`) também inicia justificado e mantém HTML multilinha com negrito, itálico, sublinhado, sobrescrito e subscrito. Ele captura `initialValue` em referência por abertura; o rascunho fica em referência na página e é normalizado somente ao aplicar, evitando reposicionar o cursor a cada tecla.
+
 ## Extensões e composição
 
 O editor preserva comandos de placeholders, figuras, tabelas resolvidas e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto indicadores de quebra. Controles visuais de blocos e tabelas vivem somente no iframe.
@@ -22,4 +24,4 @@ A composição entre editor único e por seções pertence a `LaudosPage.tsx`. S
 
 ## Relações e verificação
 
-Mudanças em recuo ou quebra devem ser coordenadas com `src/renderer/lib/exportacao-parser.ts`, `src/shared/types/exportacao.types.ts`, `src/shared/utils/quebra-pagina.ts` e `src/main/services/exportacao.service.ts`. `src/__tests__/renderer/tiny-mce-editor-config.test.ts` cobre catálogo, toolbar, medidas, tela cheia, remoção de instância anterior e mudança da chave de montagem. A interação real do TinyMCE, seleção múltipla e alternância visual de tema continuam dependentes de smoke manual.
+Mudanças em recuo, quebra ou alinhamento devem ser coordenadas com `src/renderer/lib/exportacao-parser.ts`, `src/shared/types/exportacao.types.ts`, `src/shared/utils/quebra-pagina.ts` e `src/main/services/exportacao.service.ts`. `src/__tests__/renderer/tiny-mce-editor-config.test.ts` cobre catálogo, toolbar, medidas, tela cheia, remoção de instância anterior e mudança da chave de montagem. A interação real do TinyMCE, seleção múltipla e alternância visual de tema continuam dependentes de smoke manual.

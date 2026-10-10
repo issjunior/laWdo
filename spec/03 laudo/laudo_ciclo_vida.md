@@ -14,6 +14,8 @@ Na atualização seletiva pelo GDL, o serviço recebe também o `campos_especifi
 
 A atualização pelo GDL reúne REP e reconciliação na mesma transação local; falha em qualquer etapa desfaz o caminho. A edição comum da REP continua sequencial e pode persistir a REP se a sincronização posterior falhar.
 
+Personalizações manuais de texto ficam na ocorrência do HTML do laudo, não na REP. A visualização, o salvamento e a atualização local da REP preservam o atributo de personalização; o valor manual continua prevalecendo até **Restaurar valor da REP**. Isso não cria escrita no GDL.
+
 ## Status, verificação e limites
 
 `updateStatus()` controla datas de conclusão e entrega. Atualização GDL de REP vinculada a laudo concluído ou entregue exige confirmação, reabre o laudo para `Em andamento`, retorna a REP a `Em Andamento` e registra motivo `atualizacao_gdl`. Sem confirmação, o main recusa a operação.
