@@ -47,7 +47,7 @@ describe('saída do assistente de laudo', () => {
     ], { initialEntries: ['/laudos/laudo-1/wizard'] });
     render(<RouterProvider router={roteador} />);
     expect(await screen.findByText('Pergunta parcial')).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('Sim'));
+    fireEvent.click(await screen.findByLabelText('Sim'));
     fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Salvar e sair' }));
     await waitFor(() => expect(roteador.state.location.pathname).toBe('/laudos'));
