@@ -33,6 +33,10 @@ function imagemEhMarcadorQuebraPagina(img: HTMLImageElement): boolean {
   return img.classList.contains('mce-pagebreak');
 }
 
+function imagemEhTemporariaEditor(img: HTMLImageElement): boolean {
+  return Boolean(img.closest('[data-mce-bogus="all"], .mce-clonedresizable'));
+}
+
 /** Converte um <img> órfão em um elemento <figure class="laudo-figure"> com id e figcaption */
 function wrapImgAsFigure(img: HTMLImageElement): HTMLElement {
   const id = crypto.randomUUID();
@@ -55,7 +59,7 @@ function processarImagensPuras(raiz: Node): number {
 
   for (const img of imagens) {
     const htmlImg = img as HTMLImageElement;
-    if (htmlImg.closest('.laudo-figure') || imagemEhMarcadorQuebraPagina(htmlImg)) continue;
+    if (htmlImg.closest('.laudo-figure') || imagemEhMarcadorQuebraPagina(htmlImg) || imagemEhTemporariaEditor(htmlImg)) continue;
     if (!htmlImg.src || (!htmlImg.src.startsWith('data:') && !htmlImg.src.startsWith('http') && !htmlImg.src.startsWith('blob:'))) continue;
 
     const figure = wrapImgAsFigure(htmlImg);
@@ -75,6 +79,7 @@ function scanEditorForRawImages(editor: TinyMceEditorInstance): number {
     (img) =>
       !img.closest('.laudo-figure') &&
       !imagemEhMarcadorQuebraPagina(img) &&
+      !imagemEhTemporariaEditor(img) &&
       (img.src?.startsWith('data:') || img.src?.startsWith('http') || img.src?.startsWith('blob:'))
   ) as HTMLImageElement[];
 
@@ -1470,7 +1475,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                       if (node.nodeType !== 1) continue;
                       const el = node as Element;
 
-                      if (el.tagName === 'IMG' && !el.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(el as HTMLImageElement)) {
+                      if (el.tagName === 'IMG' && !el.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(el as HTMLImageElement) && !imagemEhTemporariaEditor(el as HTMLImageElement)) {
                         const src = (el as HTMLImageElement).src;
                         if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
                           rawImages.push(el as HTMLImageElement);
@@ -1478,7 +1483,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                       }
 
                       el.querySelectorAll('img').forEach(nestedImg => {
-                        if (!nestedImg.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(nestedImg as HTMLImageElement)) {
+                        if (!nestedImg.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(nestedImg as HTMLImageElement) && !imagemEhTemporariaEditor(nestedImg as HTMLImageElement)) {
                           const src = (nestedImg as HTMLImageElement).src;
                           if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
                             rawImages.push(nestedImg as HTMLImageElement);
@@ -1495,6 +1500,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
                   editor.undoManager.transact(() => {
                     for (const img of rawImages) {
+                      if (!body.contains(img) || img.closest('.laudo-figure') || imagemEhTemporariaEditor(img)) continue;
                       const figure = wrapImgAsFigure(img);
                       img.parentNode?.replaceChild(figure, img);
                     }
