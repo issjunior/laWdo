@@ -15,17 +15,13 @@ import {
 } from '@/lib/apresentacao-placeholders';
 import { encontrarCampoReservado } from '@/lib/campos-reservados';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
+import { criarHtmlFigura } from '@/lib/figura-html';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
 
 /** Markup interno da figura (sem <br> ao final) — usado para criar elementos DOM */
 function buildFigureInnerHtml(url: string, id: string, legenda: string): string {
-  return (
-    `<figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;">` +
-    `<img src="${url}" alt="${legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />` +
-    `<figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">Figura XX${legenda ? ': ' + legenda : ''}</figcaption>` +
-    `</figure>`
-  );
+  return criarHtmlFigura(url, id, legenda);
 }
 
 /** Markup completo da figura com <br> ao final — ideal para insertContent */
@@ -146,6 +142,7 @@ interface TinyMceEditorProps {
   editorId?: string;
   /** Callback disparado quando uma imagem é inserida via botão de imagem do editor */
   onImageInserted?: () => void;
+  onSolicitarInsercaoFigura?: (editor: TinyMceEditorInstance) => void;
   /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
@@ -324,7 +321,7 @@ export function obterPluginsTinyMce(alturaAutomatica: boolean): string[] {
   return alturaAutomatica ? [...PLUGINS_TINYMCE, 'autoresize'] : [...PLUGINS_TINYMCE];
 }
 
-export function obterToolbarTinyMce(exibirControlesCondicionais: boolean): string {
+export function obterToolbarTinyMce(exibirControlesCondicionais: boolean, modoLaudo = false): string {
   return [
     'undo redo formatacao',
     'bold italic underline strikethrough subscript superscript',
@@ -333,7 +330,7 @@ export function obterToolbarTinyMce(exibirControlesCondicionais: boolean): strin
     'outdent indent lineheight recuoprimeiralinha',
     'blockquote hr',
     'searchreplace pastetext visualblocks',
-    'link image table charmap nonbreaking pagebreak fullscreen',
+    `link ${modoLaudo ? 'inserirfiguralaudo' : 'image'} table charmap nonbreaking pagebreak fullscreen`,
     exibirControlesCondicionais ? 'condbloco suprimirblocopericial' : '',
   ].filter(Boolean).join(' | ');
 }
@@ -468,6 +465,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   repNumero,
   editorId,
   onImageInserted,
+  onSolicitarInsercaoFigura,
   placeholderChaves,
   onEditorInit,
   onDummyFigureClick,
@@ -571,7 +569,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
     if (!fragment) return;
     const convertidas = processarImagensPuras(fragment);
     if (convertidas > 0) {
-      onImageInserted?.();
+      window.requestAnimationFrame(() => onImageInserted?.());
     }
   };
 
@@ -690,7 +688,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           remove_script_host: false,
           convert_urls: false,
           plugins: obterPluginsTinyMce(alturaAutomatica),
-          toolbar: obterToolbarTinyMce(Boolean(condToggles?.length)),
+          toolbar: obterToolbarTinyMce(Boolean(condToggles?.length), Boolean(_laudoId && onSolicitarInsercaoFigura)),
           content_style: `
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -988,6 +986,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: TinyMceEditorInstance) => {
+            editor.on('Undo Redo', () => window.requestAnimationFrame(() => onImageInserted?.()));
+            if (_laudoId && onSolicitarInsercaoFigura) {
+              editor.ui.registry.addButton('inserirfiguralaudo', {
+                text: 'Inserir figura',
+                tooltip: 'Inserir figura na posição do cursor',
+                onAction: () => onSolicitarInsercaoFigura(editor),
+              });
+            }
             editor.on('FullscreenStateChanged', evento => {
               sincronizarIdentificacaoFullscreen(
                 editor.getContainer(),
@@ -1127,7 +1133,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const id = crypto.randomUUID();
               const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'><rect width='600' height='400' fill='%233a3a3a' rx='8'/><rect x='235' y='115' width='130' height='100' rx='8' fill='none' stroke='%23888' stroke-width='2.5'/><circle cx='265' cy='145' r='11' fill='none' stroke='%23888' stroke-width='2.5'/><polyline points='235,195 275,162 325,195' fill='none' stroke='%23888' stroke-width='2.5'/><text x='300' y='260' text-anchor='middle' fill='%23aaa' font-size='20' font-family='sans-serif' font-weight='500'>INSERIR IMAGEM</text><text x='300' y='290' text-anchor='middle' fill='%23777' font-size='13' font-family='sans-serif'>Clique para substituir</text></svg>`;
               const src = `data:image/svg+xml;base64,${btoa(svg)}`;
-              const html = `<figure class="laudo-figure" data-image-id="${id}" data-dummy="true" style="text-align:center;margin:12px auto;max-width:100%;cursor:pointer"><img src="${src}" alt="Figura XX" style="max-width:100%;height:auto;border:1px solid #444;border-radius:4px;padding:4px"/><figcaption style="font-size:13px;color:#666;font-weight:bold;margin-top:4px">Figura XX</figcaption></figure><br>`;
+              const html = criarHtmlFigura(src, id, '', true) + '<br>';
               editor.insertContent(html);
             });
 

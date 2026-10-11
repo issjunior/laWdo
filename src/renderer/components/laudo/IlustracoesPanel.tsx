@@ -151,6 +151,9 @@ interface IlustracoesPanelProps {
   onGerarLegenda?: (imageId: string) => Promise<string | null>;
   figuraSubstituicaoSolicitada?: string | null;
   onFiguraSubstituicaoSolicitadaConsumida?: () => void;
+  insercaoNoCursorSolicitada?: number | null;
+  onInsercaoNoCursorConsumida?: () => void;
+  onInserirNoCursor?: (imagem: ImagemLaudo) => boolean;
 }
 
 interface SortableItemProps {
@@ -245,7 +248,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
                     <Plus size={14} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Inserir no laudo</TooltipContent>
+                <TooltipContent>Insere a figura ao final da seção ILUSTRAÇÕES. Se a seção não existir, ela será criada.</TooltipContent>
               </Tooltip>
 
               <Tooltip>
@@ -468,6 +471,9 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onGerarLegenda,
   figuraSubstituicaoSolicitada,
   onFiguraSubstituicaoSolicitadaConsumida,
+  insercaoNoCursorSolicitada,
+  onInsercaoNoCursorConsumida,
+  onInserirNoCursor,
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -476,6 +482,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const [figuraSubstituicaoIndice, setFiguraSubstituicaoIndice] = useState<number | null>(null);
   const [imagemSubstituicaoId, setImagemSubstituicaoId] = useState<string | null>(null);
   const [seletorSubstituicaoAberto, setSeletorSubstituicaoAberto] = useState(false);
+  const [seletorInsercaoAberto, setSeletorInsercaoAberto] = useState(false);
+  const insercaoNoCursorEmAndamentoRef = useRef(false);
   const [preenchimentoDummiesAberto, setPreenchimentoDummiesAberto] = useState(false);
   const [indiceEdicao, setIndiceEdicao] = useState<number | null>(null);
   const [origemEdicao, setOrigemEdicao] = useState('');
@@ -524,6 +532,12 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     setSeletorSubstituicaoAberto(true);
     onFiguraSubstituicaoSolicitadaConsumida?.();
   }, [figuraSubstituicaoSolicitada, onFiguraSubstituicaoSolicitadaConsumida]);
+  useEffect(() => {
+    if (insercaoNoCursorSolicitada === null || insercaoNoCursorSolicitada === undefined) return;
+    setImagemSubstituicaoId(null);
+    setSeletorInsercaoAberto(true);
+    onInsercaoNoCursorConsumida?.();
+  }, [insercaoNoCursorSolicitada, onInsercaoNoCursorConsumida]);
   const hashesGdlCapturados = useRef(new Set<string>());
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
@@ -730,29 +744,40 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   };
 
   const handleDeleteFiguraEditor = (id: string) => {
-    void window.ipcAPI.ilustracoes.excluirImagem(laudoId, id).then(resultado => {
-      if (!resultado.success) toast.error(resultado.error || 'Não foi possível excluir o arquivo da figura.');
+    const figura = figurasNoEditor?.find(item => item.id === id);
+    if (figura?.dummy) {
+      onDeleteImage?.(id);
+      return;
+    }
+    void window.ipcAPI.ilustracoes.disponibilizarImagem(laudoId, id).then(resultado => {
+      if (!resultado.success) {
+        toast.error(resultado.error || 'Não foi possível devolver a imagem ao painel.');
+        return;
+      }
+      onDeleteImage?.(id);
+      if (figura) setImagens(atuais => atuais.some(imagem => imagem.id === id) ? atuais : [...atuais, figura]);
     });
-    onDeleteImage?.(id);
   };
 
   const handleInsertAll = async () => {
-    if (!onInsertAll || imagens.length === 0) return;
-    if (imagens.length > MINIATURAS_POR_LOTE && !confirm(`Inserir ${imagens.length} imagens pode consumir muita memória no editor. Deseja continuar?`)) return;
+    const disponiveis = imagens.filter(imagem => !figurasNoEditor?.some(figura => figura.id === imagem.id));
+    if (!onInsertAll || disponiveis.length === 0) return;
+    if (disponiveis.length > MINIATURAS_POR_LOTE && !confirm(`Inserir ${disponiveis.length} imagens pode consumir muita memória no editor. Deseja continuar?`)) return;
     const inicio = performance.now();
     try {
       const completas: ImagemLaudo[] = [];
-      for (const imagem of imagens) completas.push(await carregarImagemCompleta(imagem));
+      for (const imagem of disponiveis) completas.push(await carregarImagemCompleta(imagem));
       onInsertAll(completas);
       void arquivarImagensInseridas(completas.map(imagem => imagem.id));
-      setImagens([]);
+      setImagens(atuais => atuais.filter(imagem => !completas.some(inserida => inserida.id === imagem.id)));
       registrarDesempenhoIlustracao('inserir_todas', inicio, { imagens: completas.length, imagensMemoria: completas.length });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível preparar as imagens para inserção.');
     }
   };
 
-  const filteredImagens = [...imagens]
+  const idsNoEditor = new Set((figurasNoEditor || []).map(figura => figura.id));
+  const filteredImagens = imagens.filter(imagem => !idsNoEditor.has(imagem.id))
     .sort((a, b) => a.sequencia - b.sequencia);
   const figurasReaisNoEditor = (figurasNoEditor || []).filter(figura => !figura.dummy);
 
@@ -854,7 +879,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
               <TooltipContent>Buscar imagens da REP</TooltipContent>
             </Tooltip>
 
-            {onInsertAll && imagens.length > 0 ? (
+            {onInsertAll && filteredImagens.length > 0 ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="secondary" className="h-14 min-w-0 flex-col gap-1 px-2" onClick={() => { void handleInsertAll(); }} aria-label="Inserir todas as imagens no laudo">
@@ -862,7 +887,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                     <span className="whitespace-nowrap text-xs font-medium">Inserir</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Inserir todas as imagens no laudo</TooltipContent>
+                <TooltipContent>Insere a figura ao final da seção ILUSTRAÇÕES. Se a seção não existir, ela será criada.</TooltipContent>
               </Tooltip>
             ) : (
               <div aria-hidden="true" />
@@ -1013,6 +1038,61 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         origem={origemEdicao}
         onAbertoChange={aberto => { if (!aberto) setIndiceEdicao(null); }}
         onAplicar={aplicarEdicao}
+      />
+
+      <SeletorFiguraDialog
+        modo="inserir"
+        laudoId={laudoId}
+        aberto={seletorInsercaoAberto}
+        figuraAlvo={null}
+        imagens={filteredImagens}
+        imagemSelecionadaId={imagemSubstituicaoId}
+        onAbertoChange={aberto => { setSeletorInsercaoAberto(aberto); if (!aberto) setImagemSubstituicaoId(null); }}
+        onSelecionar={setImagemSubstituicaoId}
+        onBuscarGdl={() => { setSeletorInsercaoAberto(false); setModalGdlAberto(true); }}
+        onGerarLegenda={onGerarLegenda}
+        onCarregarArquivo={async arquivo => {
+          try {
+            const dataUri = await readFileAsDataUri(arquivo);
+            const imagem = await criarImagemLaudo(dataUri, '', undefined, undefined, undefined, arquivo.name);
+            const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
+              id: imagem.id, nomeArquivo: arquivo.name, dataUri, legenda: '', origem: 'local', sequencia: imagens.length + 1,
+            });
+            if (!resposta.success) throw new Error(resposta.error || 'Não foi possível armazenar a imagem.');
+            setImagens(atuais => [...atuais, imagem]);
+            setImagemSubstituicaoId(imagem.id);
+          } catch (erro: unknown) {
+            toast.error(erro instanceof Error ? erro.message : 'Não foi possível carregar a imagem.');
+          }
+        }}
+        onConfirmar={(legenda, imagemEditada) => {
+          if (insercaoNoCursorEmAndamentoRef.current) return;
+          const selecionada = imagens.find(imagem => imagem.id === imagemSubstituicaoId);
+          if (!selecionada) return;
+          insercaoNoCursorEmAndamentoRef.current = true;
+          void (async () => {
+            const original = await carregarImagemCompleta(selecionada);
+            const id = crypto.randomUUID();
+            const dataUri = imagemEditada?.dataUri || original.url;
+            const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
+              id, nomeArquivo: `figura-inserida-${id}`, dataUri, legenda, origem: 'local',
+              sequencia: original.sequencia, imagemOrigemId: original.id,
+              ajustesJson: imagemEditada ? JSON.stringify(imagemEditada.ajustes) : undefined,
+            });
+            if (!resposta.success) throw new Error(resposta.error || 'Não foi possível salvar a figura.');
+            const inserida = onInserirNoCursor?.({ ...original, id, url: dataUri, thumbnailUrl: dataUri, legenda, imagemOrigemId: original.id });
+            if (!inserida) {
+              await window.ipcAPI.ilustracoes.excluirImagem(laudoId, id);
+              toast.error('A posição escolhida não está mais disponível. Selecione novamente o local no editor.');
+              return;
+            }
+            const arquivamento = await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, id);
+            if (!arquivamento.success) toast.error(arquivamento.error || 'Não foi possível atualizar o painel de imagens.');
+            setSeletorInsercaoAberto(false);
+            setImagemSubstituicaoId(null);
+          })().catch((erro: unknown) => toast.error(erro instanceof Error ? erro.message : 'Não foi possível inserir a figura.'))
+            .finally(() => { insercaoNoCursorEmAndamentoRef.current = false; });
+        }}
       />
 
       <SeletorFiguraDialog

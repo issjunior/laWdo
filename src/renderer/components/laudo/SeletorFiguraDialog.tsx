@@ -12,6 +12,7 @@ import type { ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
 import { EditorFiguraDialog, type AjustesFigura } from '@/components/laudo/EditorFiguraDialog';
 
 interface SeletorFiguraDialogProps {
+  modo?: 'substituir' | 'inserir';
   laudoId: string;
   aberto: boolean;
   figuraAlvo: ImagemLaudo | null;
@@ -21,6 +22,7 @@ interface SeletorFiguraDialogProps {
   onSelecionar: (imagemId: string) => void;
   onConfirmar: (legenda: string, imagemEditada?: { dataUri: string; ajustes: AjustesFigura }) => void;
   onBuscarGdl: () => void;
+  onCarregarArquivo?: (arquivo: File) => Promise<void>;
   onGerarLegenda?: (imagemId: string) => Promise<string | null>;
 }
 
@@ -45,6 +47,7 @@ function TextoTruncado({ texto, className }: { texto: string; className: string 
 }
 
 export function SeletorFiguraDialog({
+  modo = 'substituir',
   laudoId,
   aberto,
   figuraAlvo,
@@ -54,6 +57,7 @@ export function SeletorFiguraDialog({
   onSelecionar,
   onConfirmar,
   onBuscarGdl,
+  onCarregarArquivo,
   onGerarLegenda,
 }: SeletorFiguraDialogProps) {
   const imagemSelecionada = imagens.find(imagem => imagem.id === imagemSelecionadaId) || null;
@@ -70,6 +74,9 @@ export function SeletorFiguraDialog({
     setErroLegenda(null);
   }, [aberto, figuraAlvo?.id, figuraAlvo?.legenda]);
   useEffect(() => { setErroLegenda(null); setImagemEditada(undefined); }, [imagemSelecionadaId]);
+  useEffect(() => {
+    if (modo === 'inserir' && imagemSelecionada) setLegenda(imagemSelecionada.legenda);
+  }, [modo, imagemSelecionada]);
 
   const abrirEditorImagem = async () => {
     if (!imagemSelecionada) return;
@@ -106,20 +113,20 @@ export function SeletorFiguraDialog({
       <TooltipProvider delayDuration={200}>
       <DialogContent className="flex max-h-[92vh] max-w-6xl flex-col gap-5 overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Substituir figura</DialogTitle>
-          <DialogDescription>Selecione uma imagem, compare-a com a figura atual e confirme a legenda que será exibida no laudo.</DialogDescription>
+          <DialogTitle>{modo === 'inserir' ? 'Inserir figura' : 'Substituir figura'}</DialogTitle>
+          <DialogDescription>{modo === 'inserir' ? 'Selecione uma imagem e revise a legenda antes de inseri-la na posição escolhida.' : 'Selecione uma imagem, compare-a com a figura atual e confirme a legenda que será exibida no laudo.'}</DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(470px,1.2fr)]">
             <Card className="min-w-0">
-              <CardHeader className="space-y-1 p-4 pb-3"><CardTitle className="text-sm">Escolha a nova figura</CardTitle><p className="text-xs text-muted-foreground">Miniaturas compactas mantêm mais imagens visíveis e destacam a seleção atual.</p></CardHeader>
+              <CardHeader className="space-y-1 p-4 pb-3"><CardTitle className="text-sm">Escolha a nova figura</CardTitle><p className="text-xs text-muted-foreground">Miniaturas compactas mantêm mais imagens visíveis e destacam a seleção atual.</p>{onCarregarArquivo && <label className="cursor-pointer text-xs text-primary">Carregar arquivo local<input type="file" accept="image/*" className="sr-only" onChange={event => { const arquivo = event.target.files?.[0]; if (arquivo) void onCarregarArquivo(arquivo); event.target.value = ''; }} /></label>}</CardHeader>
               <CardContent className="p-4 pt-0">
                 {imagens.length === 0 ? (
                   <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/40 p-6 text-center">
                     <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                    <div className="space-y-1"><p className="text-sm font-medium">Nenhuma imagem está disponível</p><p className="text-xs text-muted-foreground">Busque fotos na REP para continuar a substituição.</p></div>
-                    <Button variant="outline" onClick={onBuscarGdl}><Search className="mr-2 h-4 w-4" />Buscar na REP</Button>
+                    <div className="space-y-1"><p className="text-sm font-medium">Nenhuma imagem está disponível</p><p className="text-xs text-muted-foreground">{modo === 'inserir' ? 'Carregue uma imagem local para continuar.' : 'Busque fotos na REP para continuar.'}</p></div>
+                    {modo === 'substituir' && <Button variant="outline" onClick={onBuscarGdl}><Search className="mr-2 h-4 w-4" />Buscar na REP</Button>}
                   </div>
                 ) : (
                   <div className="h-[344px] overflow-y-auto pr-1"><div className="grid grid-cols-3 gap-3">
@@ -139,11 +146,11 @@ export function SeletorFiguraDialog({
             </Card>
 
             <Card className="min-w-0">
-              <CardHeader className="space-y-1 p-4 pb-3"><CardTitle className="text-sm">Substituir Figuras</CardTitle><p className="text-xs text-muted-foreground">Revise lado a lado antes de substituir a figura no laudo.</p></CardHeader>
+              <CardHeader className="space-y-1 p-4 pb-3"><CardTitle className="text-sm">{modo === 'inserir' ? 'Prévia da figura' : 'Substituir Figuras'}</CardTitle><p className="text-xs text-muted-foreground">Revise a imagem e a legenda antes de confirmar.</p></CardHeader>
               <CardContent className="space-y-4 p-4 pt-0">
-                <div className="grid grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)] items-stretch gap-2">
-                  <section className="grid min-w-0 grid-rows-[auto_1fr_auto] gap-2"><p className="text-xs font-medium text-muted-foreground">Figura original</p><div className="aspect-[4/3] w-full overflow-hidden rounded-md border bg-muted">{figuraAlvo ? <ImagemPreview src={figuraAlvo.thumbnailUrl || figuraAlvo.url} alt={figuraAlvo.legenda || 'Figura original'} textoFallback="Imagem original indisponível" /> : <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">Figura original não disponível</div>}</div><div className="min-h-11 rounded-md bg-muted/50 p-2"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Legenda atual</p><TextoTruncado texto={figuraAlvo?.legenda || 'Sem legenda'} className="line-clamp-2 text-xs" /></div></section>
-                  <div aria-label="Figura original será substituída pela nova figura" className="flex h-full items-center justify-center text-primary"><ArrowRight className="h-6 w-6" /></div>
+                <div className={`grid items-stretch gap-2 ${modo === 'inserir' ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_2rem_minmax(0,1fr)]'}`}>
+                  {modo === 'substituir' && <section className="grid min-w-0 grid-rows-[auto_1fr_auto] gap-2"><p className="text-xs font-medium text-muted-foreground">Figura original</p><div className="aspect-[4/3] w-full overflow-hidden rounded-md border bg-muted">{figuraAlvo ? <ImagemPreview src={figuraAlvo.thumbnailUrl || figuraAlvo.url} alt={figuraAlvo.legenda || 'Figura original'} textoFallback="Imagem original indisponível" /> : <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">Figura original não disponível</div>}</div><div className="min-h-11 rounded-md bg-muted/50 p-2"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Legenda atual</p><TextoTruncado texto={figuraAlvo?.legenda || 'Sem legenda'} className="line-clamp-2 text-xs" /></div></section>}
+                  {modo === 'substituir' && <div aria-label="Figura original será substituída pela nova figura" className="flex h-full items-center justify-center text-primary"><ArrowRight className="h-6 w-6" /></div>}
                   <section className="grid min-w-0 grid-rows-[auto_1fr_auto] gap-2"><p className="text-xs font-medium text-muted-foreground">Nova figura</p><div className="aspect-[4/3] w-full overflow-hidden rounded-md border bg-muted">{imagemSelecionada ? <ImagemPreview src={imagemEditada?.dataUri || imagemSelecionada.thumbnailUrl || imagemSelecionada.url} alt={imagemSelecionada.nomeArquivo || imagemSelecionada.legenda || 'Nova figura'} textoFallback="Imagem selecionada indisponível" /> : <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">Selecione uma miniatura</div>}</div><div className="min-h-11 rounded-md bg-muted/50 p-2"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Arquivo selecionado</p><TextoTruncado texto={imagemSelecionada?.nomeArquivo || imagemSelecionada?.legenda || 'Aguardando seleção'} className="line-clamp-2 text-xs" /></div></section>
                 </div>
 
@@ -158,7 +165,7 @@ export function SeletorFiguraDialog({
           </div>
         </div>
 
-        <DialogFooter><Button variant="outline" onClick={() => onAbertoChange(false)}>Cancelar</Button><Button variant="secondary" onClick={() => void abrirEditorImagem()} disabled={!imagemSelecionada}>Editar imagem</Button><Button onClick={() => onConfirmar(legenda.trim(), imagemEditada)} disabled={!imagemSelecionada || gerandoLegenda}>Substituir figura</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => onAbertoChange(false)}>Cancelar</Button><Button variant="secondary" onClick={() => void abrirEditorImagem()} disabled={!imagemSelecionada}>Editar imagem</Button><Button onClick={() => onConfirmar(legenda.trim(), imagemEditada)} disabled={!imagemSelecionada || gerandoLegenda}>{modo === 'inserir' ? 'Inserir figura' : 'Substituir figura'}</Button></DialogFooter>
         <EditorFiguraDialog aberto={editorImagemAberto} origem={imagemOriginal} onAbertoChange={setEditorImagemAberto} onAplicar={(dataUri, ajustes) => setImagemEditada({ dataUri, ajustes })} />
       </DialogContent>
       </TooltipProvider>

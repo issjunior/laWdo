@@ -25,6 +25,29 @@ const imagemDisponivel = {
 };
 
 describe('SeletorFiguraDialog', () => {
+  it('oferece prévia e legenda da imagem na inserção, sem confirmar ao cancelar', () => {
+    const onConfirmar = vi.fn();
+    const onAbertoChange = vi.fn();
+    render(
+      <SeletorFiguraDialog
+        modo="inserir"
+        laudoId="laudo-teste"
+        aberto
+        figuraAlvo={null}
+        imagens={[imagemDisponivel]}
+        imagemSelecionadaId="imagem-nova"
+        onAbertoChange={onAbertoChange}
+        onSelecionar={vi.fn()}
+        onConfirmar={onConfirmar}
+        onBuscarGdl={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Prévia da figura')).toBeInTheDocument();
+    expect(screen.getByLabelText('Legenda da nova figura')).toHaveValue('Nome sugerido pelo arquivo');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(onAbertoChange).toHaveBeenCalledWith(false);
+    expect(onConfirmar).not.toHaveBeenCalled();
+  });
   it('replica e permite editar a legenda da figura original antes de confirmar', () => {
     const onConfirmar = vi.fn();
     render(

@@ -10,6 +10,26 @@ export function localizarFiguraPorIndice(editores: TinyMceEditorInstance[], indi
   return figuras[indice] || null;
 }
 
+export function renumerarFigurasNosEditores(editores: TinyMceEditorInstance[]): boolean {
+  let numero = 0;
+  let alterou = false;
+  for (const editor of editores) {
+    for (const figura of editor.getBody()?.querySelectorAll<HTMLElement>('.laudo-figure') || []) {
+      numero += 1;
+      const legenda = figura.querySelector('figcaption');
+      if (!legenda) continue;
+      const texto = (legenda.textContent || '').replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '').trim();
+      const atualizado = `Figura ${String(numero).padStart(2, '0')}${texto ? `: ${texto}` : ''}`;
+      if (legenda.textContent === atualizado) continue;
+      legenda.textContent = atualizado;
+      const imagem = figura.querySelector('img');
+      if (imagem) imagem.alt = atualizado;
+      alterou = true;
+    }
+  }
+  return alterou;
+}
+
 /**
  * Reindexa todas as figuras no HTML do laudo, garantindo que a numeração (Figura 01, 02...)
  * siga a ordem física de aparição no documento.
