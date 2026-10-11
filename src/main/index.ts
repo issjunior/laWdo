@@ -380,18 +380,21 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const canal = typeof entrada.canal === 'string' ? entrada.canal : 'desconhecido';
     const correlacaoId = typeof entrada.correlacaoId === 'string' ? entrada.correlacaoId : undefined;
     const duracaoMs = typeof entrada.duracaoMs === 'number' ? entrada.duracaoMs : undefined;
+    const resultadoFuncional = entrada.resultadoFuncional === 'sucesso' || entrada.resultadoFuncional === 'falha' || entrada.resultadoFuncional === 'indeterminado'
+      ? entrada.resultadoFuncional : undefined;
+    const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
     void sessao.servicoEventos?.registrar({
       origem: 'preload',
       categoria,
-      nivel: fase === 'erro' ? 'error' : nivel,
+      nivel: fase === 'erro' || resultadoFuncional === 'falha' ? 'error' : nivel,
       janelaId: BrowserWindow.fromWebContents(evento.sender)?.id,
       rota: evento.sender.getURL(),
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {
