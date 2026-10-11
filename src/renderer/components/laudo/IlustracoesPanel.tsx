@@ -59,7 +59,7 @@ import { SeletorFiguraDialog } from '@/components/laudo/SeletorFiguraDialog';
 import { EditorFiguraDialog, type AjustesFigura } from '@/components/laudo/EditorFiguraDialog';
 import { PreencherDummiesDialog } from '@/components/laudo/PreencherDummiesDialog';
 import type { ImagemRepGdlAdicionadaAoLaudo } from '@shared/types/gdl-arquivos.types';
-import type { ImagemLaudoResumo } from '@shared/types/imagem-laudo.types';
+import type { ImagemLaudoResumo, ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
 
 const MINIATURAS_POR_LOTE = 30;
 const MINIATURA_PENDENTE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -134,7 +134,7 @@ interface IlustracoesPanelProps {
   onInsertAll?: (imagens: ImagemLaudo[]) => void;
   onDeleteImage?: (imageId: string) => void;
   onReorder?: (imagens: ImagemLaudo[]) => void;
-  onRefreshHtml: () => void;
+  onRefreshHtml: (restaurarLegendas?: boolean) => Promise<ResultadoAtualizacaoFiguras>;
   /** Lista de figuras já existentes no editor (extraídas do HTML pelo LaudosPage) */
   figurasNoEditor?: ImagemLaudo[];
   /** Callback quando o painel altera a legenda de uma figura existente no editor */
@@ -547,6 +547,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const [lensZoom, setLensZoom] = useState(2);
   const [lensSize, setLensSize] = useState(250);
   const [lensOn, setLensOn] = useState(true);
+  const [atualizandoFiguras, setAtualizandoFiguras] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -646,7 +647,9 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       setImagens(reindexed);
       void window.ipcAPI.ilustracoes.atualizarOrdem(laudoId, reindexed.map(imagem => ({ id: imagem.id, sequencia: imagem.sequencia })));
       onReorder?.(reindexed);
-      onRefreshHtml();
+      void onRefreshHtml().catch((erro: unknown) => {
+        toast.error(erro instanceof Error ? erro.message : 'Não foi possível atualizar as figuras.');
+      });
     }
   };
 
@@ -975,11 +978,20 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                 <ListChecks size={16} /> Preencher figuras do template
               </Button>
             )}
-            <Button variant="outline" className="w-full gap-2" onClick={() => {
-              onRefreshHtml();
-              toast.success('Figuras atualizadas e renumeradas');
+            <Button variant="outline" className="w-full gap-2" disabled={atualizandoFiguras} onClick={() => {
+              setAtualizandoFiguras(true);
+              void onRefreshHtml(true).then(resultado => {
+                if (resultado.erro) { toast.error(resultado.erro); return; }
+                const detalhes = resultado.restauradas
+                  ? `${resultado.restauradas} legenda(s) restaurada(s)${resultado.semDescricao ? `; ${resultado.semDescricao} sem descrição recuperável` : ''}.`
+                  : 'Nenhuma legenda ausente encontrada.';
+                if (resultado.falhasConsulta) toast.warning(`${detalhes} Não foi possível consultar ${resultado.falhasConsulta} imagem(ns).`);
+                else toast.success(`Figuras atualizadas e renumeradas. ${detalhes}`);
+              }).catch((erro: unknown) => {
+                toast.error(erro instanceof Error ? erro.message : 'Não foi possível atualizar as figuras.');
+              }).finally(() => setAtualizandoFiguras(false));
             }}>
-              <ListChecks size={16} /> Atualizar Figuras
+              <ListChecks size={16} /> {atualizandoFiguras ? 'Atualizando figuras...' : 'Atualizar Figuras'}
             </Button>
           </div>
           <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar px-4">

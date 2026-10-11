@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect, useId, useLayoutEffect, useCallback } from 'react';
+import type { EventoEditorLaudo } from '@shared/diagnostico/contratos';
+import { registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
 import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
@@ -16,6 +18,7 @@ import {
 import { encontrarCampoReservado } from '@/lib/campos-reservados';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 import { criarHtmlFigura } from '@/lib/figura-html';
+import { atualizarNumeroFigura } from '@/lib/figuras';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
 
@@ -135,6 +138,7 @@ interface TinyMceEditorProps {
   /** Modo NÃO controlado: conteúdo inicial fixo, sem sincronização automática. Ideal para editores com HTML complexo (ex: seções). */
   initialValue?: string;
   onChange: (html: string, origem?: 'usuario' | 'normalizacao-inicial') => void;
+  diagnosticoLaudo?: Pick<EventoEditorLaudo, 'sessao' | 'montagem' | 'modo'>;
   height?: number;
   /** Faz o editor crescer junto com o documento, deixando a rolagem a cargo da página. */
   alturaAutomatica?: boolean;
@@ -463,6 +467,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   value,
   initialValue,
   onChange,
+  diagnosticoLaudo,
   height = 300,
   alturaAutomatica = false,
   placeholder,
@@ -493,7 +498,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const onEstruturaTabelasAlteradaRef = useRef(onEstruturaTabelasAlterada);
   const onCampoReservadoDuploCliqueRef = useRef(onCampoReservadoDuploClique);
   const editorProntoParaAlteracoesRef = useRef(false);
-  const frameLiberarAlteracoesRef = useRef<number | null>(null);
+  const faseInicializacaoRef = useRef('aguardando_montagem');
   const [preparado, setPreparado] = useState(false);
   const [ready, setReady] = useState(false);
   const [tentativaInicializacao, setTentativaInicializacao] = useState(0);
@@ -501,36 +506,62 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
   const [stableInitialValue] = useState(initialValue);
   const isUncontrolled = initialValue !== undefined;
+  const diagnosticoLaudoRef = useRef(diagnosticoLaudo);
+  diagnosticoLaudoRef.current = diagnosticoLaudo;
+  const registrarInicializacao = useCallback((evento: EventoEditorLaudo['evento'], dados: Pick<EventoEditorLaudo, 'tentativaInterna' | 'motivo'> = {}) => {
+    const contexto = diagnosticoLaudoRef.current;
+    if (contexto) registrarDiagnosticoEditorLaudo({ ...contexto, evento, ...dados });
+  }, []);
 
   useLayoutEffect(() => {
-    removerInstanciaTinyMceAnterior(editorIdResolvido);
+    if (removerInstanciaTinyMceAnterior(editorIdResolvido)) registrarInicializacao('editor_anterior_removido');
     setPreparado(true);
-  }, [editorIdResolvido]);
+  }, [editorIdResolvido, registrarInicializacao]);
 
   const reiniciarEditor = useCallback(() => {
-    removerInstanciaTinyMceAnterior(editorIdResolvido);
+    if (removerInstanciaTinyMceAnterior(editorIdResolvido)) registrarInicializacao('editor_anterior_removido', { tentativaInterna: tentativaInicializacao });
+    registrarInicializacao('editor_nova_tentativa', { tentativaInterna: tentativaInicializacao + 1 });
+    faseInicializacaoRef.current = 'nova_tentativa';
     editorRef.current = null;
     editorProntoParaAlteracoesRef.current = false;
     setReady(false);
     setFalhaInicializacao(null);
     setTentativaInicializacao(atual => atual + 1);
-  }, [editorIdResolvido]);
+  }, [editorIdResolvido, registrarInicializacao, tentativaInicializacao]);
 
   useEffect(() => {
     if (!preparado || ready || falhaInicializacao) return;
+    registrarInicializacao('editor_iniciando', { tentativaInterna: tentativaInicializacao });
 
     const timeout = window.setTimeout(() => {
+      const instancia = (window as TinymceWindow).tinymce?.get(editorIdResolvido);
+      const documento = instancia?.getDoc();
+      const folhasEstilo = documento ? Array.from(documento.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')) : [];
+      const detalhes = {
+        tentativa: tentativaInicializacao + 1,
+        limiteMs: TEMPO_LIMITE_INICIALIZACAO_MS,
+        fase: faseInicializacaoRef.current,
+        tamanhoInicial: stableInitialValue?.length ?? value?.length ?? 0,
+        instanciaRegistrada: Boolean(instancia),
+        documentoIframe: documento?.readyState ?? 'indisponivel',
+        folhasEstilo: folhasEstilo.length,
+        folhasEstiloPendentes: folhasEstilo.filter(folha => !folha.sheet).length,
+        capturaProblemaAtiva: window.ipcAPI?.diagnosticoInterno?.capturaProblemaAtiva?.() === true,
+      };
+      registrarInicializacao('editor_timeout', { tentativaInterna: tentativaInicializacao, motivo: 'tempo_limite' });
       if (tentativaInicializacao + 1 < MAX_TENTATIVAS_AUTOMATICAS) {
+        window.ipcAPI?.logWarning('laudo', `Editor excedeu o tempo de inicialização; nova tentativa. ${JSON.stringify(detalhes)}`);
         reiniciarEditor();
         return;
       }
 
+      window.ipcAPI?.logError('laudo', 'Editor não concluiu a inicialização', detalhes);
       removerInstanciaTinyMceAnterior(editorIdResolvido);
       setFalhaInicializacao('O editor demorou mais que o esperado para abrir.');
     }, TEMPO_LIMITE_INICIALIZACAO_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [editorIdResolvido, falhaInicializacao, preparado, ready, reiniciarEditor, tentativaInicializacao]);
+  }, [editorIdResolvido, falhaInicializacao, preparado, ready, reiniciarEditor, tentativaInicializacao, registrarInicializacao, stableInitialValue, value]);
 
   useEffect(() => {
     placeholderChavesRef.current = placeholderChaves;
@@ -555,12 +586,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useEffect(() => {
     onCampoReservadoDuploCliqueRef.current = onCampoReservadoDuploClique;
   }, [onCampoReservadoDuploClique]);
-
-  useEffect(() => () => {
-    if (frameLiberarAlteracoesRef.current !== null) {
-      window.cancelAnimationFrame(frameLiberarAlteracoesRef.current);
-    }
-  }, []);
 
   const imagesUploadHandler: UploadImagemHandler = (blobInfo) =>
     new Promise<string>((resolve) => {
@@ -636,17 +661,13 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
         id={editorIdResolvido}
         licenseKey="gpl"
         tinymceScriptSrc="./tinymce/tinymce.min.js"
-        onInit={(_evt, editor) => {
-          editorRef.current = editor;
-          setFalhaInicializacao(null);
-          setReady(true);
-          onEditorInit?.(editor);
-          frameLiberarAlteracoesRef.current = window.requestAnimationFrame(() => {
-            editorProntoParaAlteracoesRef.current = true;
-            frameLiberarAlteracoesRef.current = null;
-          });
-        }}
+        onScriptsLoad={() => registrarInicializacao('editor_script_carregado', { tentativaInterna: tentativaInicializacao })}
         onScriptsLoadError={(erro) => {
+          registrarInicializacao('editor_script_falhou', { tentativaInterna: tentativaInicializacao, motivo: 'erro' });
+          window.ipcAPI?.logError('laudo', 'Falha ao carregar recursos do editor', {
+            tentativa: tentativaInicializacao + 1,
+            erro: erro instanceof Error ? erro.message : 'Erro inesperado',
+          });
           setFalhaInicializacao(erro instanceof Error && erro.message
             ? erro.message
             : 'Não foi possível carregar os recursos do editor.');
@@ -660,6 +681,18 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial',
         )}
         init={{
+          init_instance_callback: editor => {
+            editor.getContainer()?.querySelector('iframe.tox-edit-area__iframe')?.setAttribute('data-diagnostico-pronto', 'true');
+            registrarInicializacao('editor_pronto', { tentativaInterna: tentativaInicializacao });
+            faseInicializacaoRef.current = 'pronto';
+            editorRef.current = editor;
+            normalizarBlocosCondicionais(editor.getBody(), condToggles);
+            sincronizarAcoesBlocosCondicionais(editor.getBody());
+            onEditorInit?.(editor);
+            editorProntoParaAlteracoesRef.current = true;
+            setFalhaInicializacao(null);
+            setReady(true);
+          },
           ...obterOpcoesAlturaEditor(height, alturaAutomatica),
           menubar: false,
           placeholder,
@@ -991,6 +1024,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: TinyMceEditorInstance) => {
+            registrarInicializacao('editor_setup_iniciado', { tentativaInterna: tentativaInicializacao });
+            faseInicializacaoRef.current = 'setup';
+            for (const fase of ['PreInit', 'PostRender', 'SkinLoaded', 'BeforeSetContent', 'SetContent', 'LoadContent']) {
+              editor.on(fase, () => { if (!editorProntoParaAlteracoesRef.current) faseInicializacaoRef.current = fase; });
+            }
+            editor.on('remove', () => registrarInicializacao('editor_instancia_removida', { tentativaInterna: tentativaInicializacao }));
             editor.on('Undo Redo', () => window.requestAnimationFrame(() => onImageInserted?.()));
             if (_laudoId && onSolicitarInsercaoFigura) {
               editor.ui.registry.addButton('inserirfiguralaudo', {
@@ -1078,18 +1117,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const body = editor.getBody();
               const figures = body.querySelectorAll('.laudo-figure');
               figures.forEach((figure: Element, index: number) => {
-                const num = index + 1;
-                const numFormatado = num.toString().padStart(2, '0');
-                const figcaption = figure.querySelector('figcaption');
-                const img = figure.querySelector('img');
-                if (figcaption) {
-                  const legendaAtual = figcaption.textContent || '';
-                  const textoLimpo = legendaAtual.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '');
-                  figcaption.textContent = textoLimpo ? `Figura ${numFormatado}: ${textoLimpo}` : `Figura ${numFormatado}`;
-                  if (img) {
-                    (img as HTMLImageElement).alt = figcaption.textContent;
-                  }
-                }
+                atualizarNumeroFigura(figure, index + 1);
               });
               editor.undoManager.add();
             });
@@ -1244,6 +1272,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             // Usamos init + listener nativo porque contextmenu:false desabilita o plugin
             // e o editor event 'contextmenu' nunca dispara.
             editor.on('init', () => {
+              registrarInicializacao('editor_init_evento', { tentativaInterna: tentativaInicializacao });
               const doc = editor.getDoc();
               if (!doc) return;
               const body = editor.getBody();
@@ -1656,6 +1685,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (reservadoTimer) clearTimeout(reservadoTimer);
               });
             }
+            registrarInicializacao('editor_setup_concluido', { tentativaInterna: tentativaInicializacao });
           },
         }}
       />}

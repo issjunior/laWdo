@@ -37,3 +37,7 @@ O alvo é capturado antes da chamada. Placeholders e valores imutáveis são tok
 Descrição de imagem recebe somente IDs e é validada contra `imagens_laudo`. O modo normal devolve texto para cópia; o modo `legenda` é usado pelo Painel de Ilustrações e impõe uma linha técnico-pericial de até 15 palavras. Mudanças devem alinhar tipos shared, preload, canais permitidos, handler, serviço, controlador e ambas as projeções do painel.
 
 Testes cobrem contratos, lotes, consultas e evidências, falhas, comandos remotos, aplicação e layout; múltiplos monitores continuam sendo verificação manual ampla. No dock, cabeçalho e aviso de revisão permanecem fixos, e somente a lista de mensagens rola; isso é compartilhado com as regras de altura visível dos painéis em `spec/04 layout/componentes_ui_base.md`.
+
+## Personalização textual no contexto
+
+`ia-contexto.ts` respeita personalização textual por ocorrência: decodifica e normaliza `data-placeholder-personalizado-html` antes de consultar o mapa da REP. A versão HTML mantém o fragmento permitido; a versão textual converte quebras em espaços. Atributo inválido segue o caminho normal de resolução. Assim, consultas e evidências usam o texto local personalizado. `ia-contexto.test.ts` cobre essa precedência.

@@ -67,7 +67,7 @@ A atualização offline mantém o mesmo contrato de assinatura, versão, platafo
 
 ## IPC, backup e instalação
 
-Antes da instalação imediata, o main solicita autorização ao mesmo `webContents` por UUID e expira após 15 segundos. Alterações pendentes e expiração possuem mensagens próprias; a autorização não salva nem descarta conteúdo. Depois dela, o backup obrigatório precisa terminar antes de o instalador ser iniciado.
+Antes da instalação imediata, o main solicita autorização ao mesmo `webContents` por UUID e expira após 15 segundos. Alterações pendentes e expiração possuem mensagens próprias; a autorização não salva nem descarta conteúdo. O provider consulta os verificadores atuais do editor e do wizard, incluindo salvamento em andamento; não depende apenas de um booleano atrasado em relação ao DOM. Depois da autorização, o backup obrigatório precisa terminar antes de o instalador ser iniciado. O diálogo de salvar/descartar da navegação e do fechamento normal não é acionado por essa autorização de atualização; seu protocolo está em `spec/04 layout/janelas_desktop.md`.
 
 O backup permanece responsabilidade de `BackupAtualizacaoService`. A falha é classificada e apresentada pelo fluxo de atualização, mas não altera sua política de snapshot, backup completo, retenção ou persistência, documentadas em `backup_pre_atualizacao.md`.
 

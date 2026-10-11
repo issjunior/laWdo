@@ -35,6 +35,8 @@ O preload expõe somente wrappers específicos incluídos em `ALLOWED_CHANNELS`.
 
 Ao adicionar um canal, atualizar em conjunto handler, allowlist, `IpcAPI`, validação de entrada e consumidor. Dados de IPC são fronteira insegura e não devem ser convertidos por cast direto.
 
+O fechamento normal usa wrappers específicos e valida que proteção, confirmação e cancelamento venham do `webContents` principal; confirmar exige solicitação pendente. Logout passa pelo controle de alterações do editor/wizard antes de limpar a sessão. Os limites estão em `spec/04 layout/janelas_desktop.md` e `spec/03 laudo/laudo_ciclo_vida.md`.
+
 ## Autenticação
 
 O login é normalizado com `trim`; a senha não é sanitizada nem aparada. Espaços e caracteres especiais fazem parte do segredo e são encaminhados exatamente ao comparador de hash. A fronteira valida tipo, presença e limites de tamanho antes da autenticação.
@@ -51,7 +53,7 @@ JSON malformado, arrays, valores primitivos ou objetos incompatíveis resultam e
 
 ## Recuperação de falhas do renderer
 
-O `ErrorBoundary` tenta `restartApp` e aguarda a Promise. Se a API estiver ausente ou rejeitar, recarrega a janela. A navegação de recuperação usa `#/`, compatível com `HashRouter`.
+O `ErrorBoundary` tenta `restartApp` e aguarda a Promise. Se a API estiver ausente ou rejeitar, recarrega a janela. A navegação de recuperação usa `#/`, compatível com o roteador em hash (`createHashRouter` em `App.tsx`).
 
 A limpeza de estado remove somente chaves conhecidas de sessão e preferências de UI. Não usa `localStorage.clear()` nem `sessionStorage.clear()`, para não apagar dados que não participam da falha.
 

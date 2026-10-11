@@ -28,3 +28,11 @@ Com o mesmo `monitorId`, área útil e escala, a janela recupera posição e tam
 Toda restauração limita tamanho a 90% da área útil e aplica mínimos de 1024 x 768, limitando também posição à região visível. Assim, dados vindos de JSON, backup ou uma configuração de outro arranjo de monitores não deixam a janela inacessível. Os limites mínimos podem exceder monitores menores; nesse caso a própria restrição mínima da aplicação prevalece.
 
 O estado é específico do dispositivo, mas pode acompanhar backups por estar em `configuracoes`; a normalização v2 existe justamente para essa portabilidade parcial. Testes em `src/__tests__/main/estado-janela-principal.test.ts` cobrem manutenção absoluta no monitor compatível e transformação proporcional quando o monitor salvo não está disponível.
+
+## Fechamento protegido da janela principal
+
+Enquanto `AlteracoesPendentesProvider` está montado, o preload envia `janela:proteger-fechamento(true)`; o cleanup desativa a proteção. O main aceita somente booleano enviado pelo próprio `webContents` principal. Ao receber `close`, impede o fechamento e envia `janela:solicitar-fechamento`, mantendo no máximo uma solicitação pendente.
+
+O renderer verifica o conteúdo atual e oferece o diálogo compartilhado de saída quando necessário. `janela:confirmar-fechamento` só é aceito da janela principal e com solicitação pendente; autoriza nova chamada a `close`. `janela:cancelar-fechamento` limpa a pendência, permitindo tentar novamente. Listeners e handlers são removidos em `closed`. As APIs ficam em `src/preload/index.ts`; a declaração legada usada pelo renderer também deve ser mantida em `src/renderer/index.tsx`.
+
+Esse protocolo protege a saída normal, não é autosave nem recuperação após crash. Não existe timeout de confirmação no main: um renderer sem resposta pode manter o fechamento bloqueado enquanto a proteção estiver ativa. Janelas destacadas não recebem essa guarda da janela principal. A regra de salvar/descartar pertence a `spec/03 laudo/laudo_ciclo_vida.md`; o handshake de atualização tem contrato próprio.

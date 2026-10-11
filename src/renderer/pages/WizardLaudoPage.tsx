@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,7 +95,19 @@ const WizardLaudoPage: React.FC = () => {
   const [visibleEtapas, setVisibleEtapas] = useState<EtapaWizard[]>([]);
   const [mapaExpandido, setMapaExpandido] = useState(true);
   const [alteracoesPendentes, setAlteracoesPendentes] = useState(false);
-  useRegistrarAlteracoesPendentes(`wizard-laudo-${laudoId ?? 'novo'}`, alteracoesPendentes);
+  const respostasRef = useRef(respostas);
+  respostasRef.current = respostas;
+  const respostasSalvasRef = useRef('{}');
+  const geracaoConcluidaRef = useRef(false);
+  const salvarProgressoRef = useRef<() => Promise<boolean>>(async () => false);
+  const erroSalvamentoRef = useRef<string | null>(null);
+  useRegistrarAlteracoesPendentes(`wizard-laudo-${laudoId ?? 'novo'}`, {
+    pendente: alteracoesPendentes,
+    salvando: saving && !geracaoConcluidaRef.current,
+    verificar: () => !geracaoConcluidaRef.current && JSON.stringify(respostasRef.current) !== respostasSalvasRef.current,
+    salvar: () => salvarProgressoRef.current(),
+    erro: () => erroSalvamentoRef.current,
+  });
 
   const loadDados = useCallback(async () => {
     if (!laudoId) return;
@@ -126,7 +138,10 @@ const WizardLaudoPage: React.FC = () => {
       if (l.respostas_wizard && l.respostas_wizard !== '{}') {
         try {
           const cached = JSON.parse(l.respostas_wizard);
-          setRespostas(normalizarRespostasWizard(cached));
+          const carregadas = normalizarRespostasWizard(cached);
+          respostasSalvasRef.current = JSON.stringify(carregadas);
+          respostasRef.current = carregadas;
+          setRespostas(carregadas);
         } catch (erro) {
           window.ipcAPI.logWarning('wizard', `Respostas salvas inválidas: ${mensagemErro(erro)}`);
           setRespostas({});
@@ -134,7 +149,10 @@ const WizardLaudoPage: React.FC = () => {
       } else {
         const respRes = await window.ipcAPI.laudo.getRespostasWizard(laudoId);
         if (respRes.success && Object.keys(respRes.data || {}).length > 0) {
-          setRespostas(normalizarRespostasWizard(respRes.data));
+          const carregadas = normalizarRespostasWizard(respRes.data);
+          respostasSalvasRef.current = JSON.stringify(carregadas);
+          respostasRef.current = carregadas;
+          setRespostas(carregadas);
         }
       }
     } catch (e: unknown) {
@@ -185,9 +203,7 @@ const WizardLaudoPage: React.FC = () => {
   }, [calcularPecas]);
 
   const handleResposta = (etapaId: string, valor: string | string[]) => {
-    setAlteracoesPendentes(true);
-    setRespostas(prev => {
-      const novo = { ...prev, [etapaId]: valor };
+    const novo = { ...respostasRef.current, [etapaId]: valor };
       if (arvore) {
         const clearChildren = (etapas: EtapaWizard[], changedId: string) => {
           for (const e of etapas) {
@@ -203,23 +219,35 @@ const WizardLaudoPage: React.FC = () => {
         };
         clearChildren(arvore.etapas, etapaId);
       }
-      return novo;
-    });
+    respostasRef.current = novo;
+    setRespostas(novo);
+    setAlteracoesPendentes(JSON.stringify(novo) !== respostasSalvasRef.current);
   };
 
-  const handleSalvarProgresso = async () => {
-    if (!laudo) return;
+  const handleSalvarProgresso = async (): Promise<boolean> => {
+    if (!laudo || saving) return false;
+    const respostasParaSalvar = respostasRef.current;
     setSaving(true);
+    erroSalvamentoRef.current = null;
     try {
-      const res = await window.ipcAPI.laudo.salvarProgressoWizard(laudo.id, respostas);
+      const res = await window.ipcAPI.laudo.salvarProgressoWizard(laudo.id, respostasParaSalvar);
       if (res.success) {
-        setAlteracoesPendentes(false);
+        respostasSalvasRef.current = JSON.stringify(respostasParaSalvar);
+        const semPendencias = JSON.stringify(respostasRef.current) === respostasSalvasRef.current;
+        setAlteracoesPendentes(!semPendencias);
         toast.success('Progresso salvo. Você pode continuar depois.');
+        return semPendencias;
       }
-      else toast.error(res.error || 'Erro ao salvar');
-    } catch (e: unknown) { toast.error(mensagemErro(e) || 'Erro'); }
+      erroSalvamentoRef.current = res.error || 'Erro ao salvar';
+      toast.error(erroSalvamentoRef.current);
+    } catch (e: unknown) {
+      erroSalvamentoRef.current = mensagemErro(e) || 'Erro ao salvar';
+      toast.error(erroSalvamentoRef.current);
+    }
     finally { setSaving(false); }
+    return false;
   };
+  salvarProgressoRef.current = handleSalvarProgresso;
 
   const handleGerar = async () => {
     if (!laudo || !arvore) return;
@@ -239,6 +267,8 @@ const WizardLaudoPage: React.FC = () => {
         pecas_selecionadas: Array.from(pecasSelecionadas),
       });
       if (res.success) {
+        geracaoConcluidaRef.current = true;
+        respostasSalvasRef.current = JSON.stringify(respostasRef.current);
         setAlteracoesPendentes(false);
         toast.success('Laudo preenchido! Você pode continuar editando no editor.');
         navigate('/laudos');
@@ -345,10 +375,7 @@ const WizardLaudoPage: React.FC = () => {
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => {
-            if (alteracoesPendentes && !window.confirm('Há alterações não salvas. Deseja sair mesmo assim?')) return;
-            navigate('/laudos');
-          }}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/laudos')}>
             <ArrowLeft size={16} className="mr-1" /> Voltar
           </Button>
           <div>
@@ -361,7 +388,7 @@ const WizardLaudoPage: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSalvarProgresso} disabled={saving}>
+          <Button variant="outline" onClick={() => { void handleSalvarProgresso(); }} disabled={saving}>
             {saving ? <Loader2 size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />}
             Salvar Progresso
           </Button>

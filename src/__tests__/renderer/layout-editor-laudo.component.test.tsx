@@ -10,6 +10,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAtalhoSalvarLaudo } from '@/hooks/useAtalhoSalvarLaudo';
 import { useGerenciadorAlteracoesLaudo } from '@/hooks/useGerenciadorAlteracoesLaudo';
+import { DialogoSaidaLaudo } from '@/components/laudo/editor/DialogoSaidaLaudo';
 
 function HarnessAtalhoSalvar({
   bloqueado = false,
@@ -23,6 +24,68 @@ function HarnessAtalhoSalvar({
 }
 
 describe('layout do editor de laudo', () => {
+  it('estabelece a referência depois que o editor normaliza o carregamento', () => {
+    const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
+    act(() => result.current.iniciarSessao('<p style="color:red">Texto</p>', true));
+    const sessao = result.current.obterSessao();
+    const carregado = '<p style="color: red;">Texto</p>';
+    act(() => {
+      expect(result.current.iniciarSalvamento()).toBe(false);
+      expect(result.current.atualizarConteudo(carregado)).toBe(false);
+      result.current.concluirInicializacao(carregado, sessao);
+    });
+    expect(result.current.inicializando).toBe(false);
+    act(() => expect(result.current.atualizarConteudo(carregado)).toBe(false));
+    act(() => result.current.atualizarConteudo('<p>Novo texto</p>'));
+    expect(result.current.alteracoesPendentes).toBe(true);
+    act(() => result.current.concluirInicializacao('<p>Novo texto</p>', sessao));
+    expect(result.current.alteracoesPendentes).toBe(true);
+    act(() => result.current.atualizarConteudo(carregado));
+    expect(result.current.alteracoesPendentes).toBe(false);
+  });
+
+  it('não absorve uma edição do usuário feita antes de concluir a inicialização', () => {
+    const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
+    act(() => result.current.iniciarSessao('original', true));
+    const sessao = result.current.obterSessao();
+    act(() => {
+      result.current.registrarAlteracao('usuario');
+      result.current.atualizarConteudo('editado');
+      result.current.concluirInicializacao('editado', sessao);
+    });
+    expect(result.current.alteracoesPendentes).toBe(true);
+  });
+  it('foca a opção segura e mantém o modal aberto ao iniciar salvamento', async () => {
+    const aoSalvar = vi.fn();
+    const aoAlterarAbertura = vi.fn();
+    const { rerender } = render(
+      <DialogoSaidaLaudo aberto salvando={false} erro={null} aoAlterarAbertura={aoAlterarAbertura} aoDescartar={vi.fn()} aoSalvar={aoSalvar} />,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Continuar editando' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar e sair' }));
+    expect(aoSalvar).toHaveBeenCalledTimes(1);
+    expect(aoAlterarAbertura).not.toHaveBeenCalled();
+
+    rerender(<DialogoSaidaLaudo aberto salvando erro="Falha ao salvar" aoAlterarAbertura={aoAlterarAbertura} aoDescartar={vi.fn()} aoSalvar={aoSalvar} />);
+    expect(screen.getByRole('button', { name: 'Salvando…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Sair sem salvar' })).toBeDisabled();
+    expect(screen.getByText('Falha ao salvar')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(aoAlterarAbertura).not.toHaveBeenCalled();
+
+    rerender(<DialogoSaidaLaudo aberto salvando={false} erro="Falha ao salvar" aoAlterarAbertura={aoAlterarAbertura} aoDescartar={vi.fn()} aoSalvar={aoSalvar} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar e sair' }));
+    expect(aoSalvar).toHaveBeenCalledTimes(2);
+  });
+
+  it('permite Escape para continuar editando', async () => {
+    const aoAlterarAbertura = vi.fn();
+    render(<DialogoSaidaLaudo aberto salvando={false} erro={null} aoAlterarAbertura={aoAlterarAbertura} aoDescartar={vi.fn()} aoSalvar={vi.fn()} />);
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(aoAlterarAbertura).toHaveBeenCalledWith(false);
+  });
   it('hierarquiza visualização, exportação e salvamento no cabeçalho', () => {
     const onIrAoFinal = vi.fn();
     render(
@@ -167,31 +230,82 @@ describe('layout do editor de laudo', () => {
     expect(screen.queryByRole('button', { name: 'Exportar' })).not.toBeInTheDocument();
   });
 
-  it('ignora a normalização inicial e registra somente mudanças efetivas', () => {
+  it('compara o conteúdo atual com a versão salva, inclusive após desfazer', () => {
     const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
 
     act(() => {
-      result.current.iniciarSessao();
+      result.current.iniciarSessao('<p>Original</p>');
       result.current.registrarAlteracao('normalizacao-inicial');
     });
     expect(result.current.estadoSalvamento).toBe('salvo');
 
-    act(() => result.current.registrarAlteracao());
+    act(() => result.current.atualizarConteudo('<p>Editado</p>'));
     expect(result.current.estadoSalvamento).toBe('pendente');
+
+    act(() => result.current.atualizarConteudo('<p>Original</p>'));
+    expect(result.current.alteracoesPendentes).toBe(false);
+
+    act(() => result.current.atualizarConteudo('<p>Editado</p>'));
+    expect(result.current.alteracoesPendentes).toBe(true);
   });
 
   it('impede salvamentos concorrentes e preserva mudanças feitas durante o salvamento', () => {
     const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
 
-    act(() => result.current.iniciarSessao());
+    act(() => result.current.iniciarSessao('original'));
     act(() => {
       expect(result.current.iniciarSalvamento()).toBe(true);
       expect(result.current.iniciarSalvamento()).toBe(false);
-      result.current.registrarAlteracao();
-      result.current.concluirSalvamento();
+      expect(result.current.estaSalvando()).toBe(true);
+      result.current.atualizarConteudo('nova edição');
+      result.current.concluirSalvamento('salvo', 'nova edição', result.current.obterSessao());
     });
 
     expect(result.current.estadoSalvamento).toBe('pendente');
+    expect(result.current.estaSalvando()).toBe(false);
+  });
+
+  it('ignora a conclusão de uma sessão anterior', () => {
+    const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
+    act(() => result.current.iniciarSessao('primeiro'));
+    const sessaoAnterior = result.current.obterSessao();
+    act(() => result.current.iniciarSessao('segundo'));
+    act(() => result.current.concluirSalvamento('primeiro', 'primeiro', sessaoAnterior));
+    expect(result.current.estadoSalvamento).toBe('salvo');
+    expect(result.current.atualizarConteudo('segundo')).toBe(false);
+  });
+
+  it('mantém a pendência após falha e permite nova tentativa de salvar', () => {
+    const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
+    act(() => result.current.iniciarSessao('original'));
+    act(() => result.current.atualizarConteudo('alterado'));
+    const sessao = result.current.obterSessao();
+
+    act(() => {
+      expect(result.current.iniciarSalvamento()).toBe(true);
+      result.current.falharSalvamento(sessao);
+    });
+    expect(result.current.estadoSalvamento).toBe('erro');
+    expect(result.current.alteracoesPendentes).toBe(true);
+
+    act(() => {
+      expect(result.current.iniciarSalvamento()).toBe(true);
+      result.current.concluirSalvamento('alterado', 'alterado', sessao);
+    });
+    expect(result.current.alteracoesPendentes).toBe(false);
+  });
+
+  it('não marca pendência após um evento tardio sem diferença no conteúdo', () => {
+    const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
+    act(() => result.current.iniciarSessao('original'));
+    const sessao = result.current.obterSessao();
+    act(() => {
+      result.current.iniciarSalvamento();
+      result.current.concluirSalvamento('salvo', 'salvo', sessao);
+      result.current.registrarAlteracao();
+      result.current.atualizarConteudo('salvo');
+    });
+    expect(result.current.alteracoesPendentes).toBe(false);
   });
 
   it('salva com Ctrl+S e bloqueia o atalho durante outra operação', () => {

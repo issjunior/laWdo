@@ -50,11 +50,13 @@ import type {
   ImagemLaudoResumo,
   MiniaturaImagemLaudo,
   ResultadoReconciliacaoImagensLaudo,
+  ResultadoAtualizacaoFiguras,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
 import type { AutorizacaoReinicioAtualizacao, ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
 import type { AmostraDesempenho, EstadoCapturaDesempenho, EventoDesempenhoEntrada } from '../shared/desempenho/contratos.js';
 import type { EstadoCapturaLogs, ResumoCapturaLogs, SondaCapturaLogs } from '../shared/captura-logs/contratos.js';
+import type { EventoEditorLaudo } from '../shared/diagnostico/contratos.js';
 
 // O preload sandboxado não pode carregar módulos locais em tempo de execução.
 function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
@@ -165,6 +167,10 @@ export interface IpcAPI {
   // Sistema
   restartApp: () => Promise<void>;
   closeApp: () => Promise<void>;
+  protegerFechamento: (ativo: boolean) => void;
+  onSolicitarFechamento: (callback: () => void) => () => void;
+  confirmarFechamento: () => Promise<void>;
+  cancelarFechamento: () => Promise<void>;
   openDevTools: () => void;
   atualizarBarraTitulo: (cores: { cor: string; corSimbolo: string }) => Promise<void>;
 
@@ -450,6 +456,8 @@ export interface IpcAPI {
   diagnosticoInterno: {
     atualizarContextoRenderer: (contexto: Record<string, unknown>) => void;
     registrarErroFatalRenderer: (erro: Record<string, unknown>) => void;
+    capturaProblemaAtiva: () => boolean;
+    registrarEventoEditorLaudo: (evento: EventoEditorLaudo) => void;
   };
 
   // Painel de Ilustrações (janela separada)
@@ -466,10 +474,10 @@ export interface IpcAPI {
     atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => Promise<{ success: boolean; error?: string }>;
     openPanel: (laudoId: string, tituloLaudo?: string) => void;
     closePanel: () => void;
-    syncToPanel: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => void;
+    syncToPanel: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null; tema?: string; resultadoAtualizacao?: ResultadoAtualizacaoFiguras }) => void;
     sendAction: (action: string, ...args: unknown[]) => void;
     onPanelAction: (cb: (action: string, ...args: unknown[]) => void) => () => void;
-    onStateSync: (cb: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => void) => () => void;
+    onStateSync: (cb: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null; tema?: string; resultadoAtualizacao?: ResultadoAtualizacaoFiguras }) => void) => () => void;
     onPanelClosed: (cb: () => void) => () => void;
   };
 }
@@ -493,6 +501,9 @@ const ALLOWED_CHANNELS = new Set([
   // Sistema
   'restart-app',
   'close-app',
+  'janela:proteger-fechamento',
+  'janela:confirmar-fechamento',
+  'janela:cancelar-fechamento',
   'open-dev-tools',
   'janela:atualizar-barra-titulo',
 
@@ -838,6 +849,7 @@ function descreverElementoDiagnostico(alvo: EventTarget | null): Record<string, 
 
 let ultimoRegistroRolagemDiagnostico = 0;
 let capturaProblemaDiagnosticoAtiva = false;
+let editorProntoParaSondasDiagnostico = false;
 let ultimoWheelDiagnostico = 0;
 let ultimaEntradaUsuarioDiagnostico = 0;
 let observadorIframesDiagnostico: MutationObserver | null = null;
@@ -847,16 +859,22 @@ let observadorPerformanceDiagnostico: PerformanceObserver | null = null;
 const iframesDiagnosticoInstalados = new WeakSet<HTMLIFrameElement>();
 const posicoesRolagemDiagnostico = new Map<string, number>();
 
+function ativarSondasIframesDiagnostico(): void {
+  instalarSondasIframesDiagnostico();
+  observadorIframesDiagnostico ??= new MutationObserver(instalarSondasIframesDiagnostico);
+  observadorIframesDiagnostico.observe(document.documentElement, { childList: true, subtree: true });
+}
+
 ipcRenderer.on('diagnostico:alterar-captura', (_evento, dados: unknown) => {
   capturaProblemaDiagnosticoAtiva = Boolean(
     dados && typeof dados === 'object' && (dados as Record<string, unknown>).ativa && (dados as Record<string, unknown>).finalidade === 'problema',
   );
   if (capturaProblemaDiagnosticoAtiva) {
-    instalarSondasIframesDiagnostico();
+    editorProntoParaSondasDiagnostico = Boolean(document.querySelector('iframe.tox-edit-area__iframe[data-diagnostico-pronto="true"]'));
     instalarSondasLayoutDiagnostico();
-    observadorIframesDiagnostico ??= new MutationObserver(instalarSondasIframesDiagnostico);
-    observadorIframesDiagnostico.observe(document.documentElement, { childList: true, subtree: true });
+    if (editorProntoParaSondasDiagnostico) ativarSondasIframesDiagnostico();
   } else {
+    editorProntoParaSondasDiagnostico = false;
     observadorIframesDiagnostico?.disconnect();
     observadorIframesDiagnostico = null;
     observadorEstruturalDiagnostico?.disconnect();
@@ -904,7 +922,7 @@ function instalarSondasLayoutDiagnostico(): void {
     if (!capturaProblemaDiagnosticoAtiva) return;
     const relevantes = mudancas.filter(mudanca => mudanca.target instanceof HTMLElement && mudanca.target.closest('[data-diagnostico-id]')).slice(0, 10);
     if (relevantes.length) registrarEventoInterfaceDiagnostico('mutacao_estrutural', relevantes[0]?.target ?? null, { quantidade: relevantes.length });
-    instalarSondasIframesDiagnostico();
+    if (editorProntoParaSondasDiagnostico) instalarSondasIframesDiagnostico();
   });
   observadorEstruturalDiagnostico.observe(document.documentElement, { childList: true, subtree: true });
   if (typeof PerformanceObserver !== 'undefined') {
@@ -1008,7 +1026,7 @@ function registrarInteracaoIframeDiagnostico(evento: Event): void {
 }
 
 function instalarSondasIframesDiagnostico(): void {
-  for (const iframe of Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe.tox-edit-area__iframe'))) {
+  for (const iframe of Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe.tox-edit-area__iframe[data-diagnostico-pronto="true"]'))) {
     if (iframesDiagnosticoInstalados.has(iframe)) continue;
     iframesDiagnosticoInstalados.add(iframe);
     iframe.addEventListener('load', () => {
@@ -1115,6 +1133,14 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   // Sistema
   restartApp: () => invokeSeguro<void>('restart-app'),
   closeApp: () => invokeSeguro<void>('close-app'),
+  protegerFechamento: ativo => sendSeguro('janela:proteger-fechamento', ativo),
+  onSolicitarFechamento: callback => {
+    const listener = () => callback();
+    ipcRenderer.on('janela:solicitar-fechamento', listener);
+    return () => ipcRenderer.removeListener('janela:solicitar-fechamento', listener);
+  },
+  confirmarFechamento: () => invokeSeguro<void>('janela:confirmar-fechamento'),
+  cancelarFechamento: () => invokeSeguro<void>('janela:cancelar-fechamento'),
   openDevTools: () => sendSeguro('open-dev-tools'),
   atualizarBarraTitulo: cores => invokeSeguro<void>('janela:atualizar-barra-titulo', cores),
 
@@ -1721,6 +1747,17 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     },
     registrarErroFatalRenderer: (erro: Record<string, unknown>) => {
       enviarComDiagnostico('diagnostico:erro-fatal-renderer', erro);
+    },
+    capturaProblemaAtiva: () => capturaProblemaDiagnosticoAtiva,
+    registrarEventoEditorLaudo: (evento: EventoEditorLaudo) => {
+      if (evento.evento === 'editor_pronto' && capturaProblemaDiagnosticoAtiva) {
+        editorProntoParaSondasDiagnostico = true;
+        ativarSondasIframesDiagnostico();
+      } else if (evento.evento === 'sessao_encerrada' || evento.evento === 'editor_iniciando') {
+        editorProntoParaSondasDiagnostico = false;
+        observadorIframesDiagnostico?.disconnect();
+      }
+      if (capturaProblemaDiagnosticoAtiva) enviarComDiagnostico('diagnostico:registrar-evento', { tipo: 'editor_laudo', ...evento });
     },
   },
 

@@ -12,6 +12,13 @@ export interface ImagemLaudoResumo {
   createdAt: string
 }
 
+export interface ResultadoAtualizacaoFiguras {
+  restauradas: number
+  semDescricao: number
+  falhasConsulta: number
+  erro?: string
+}
+
 export interface ImagemLaudoPersistida extends ImagemLaudoResumo {
   dataUri: string
 }
