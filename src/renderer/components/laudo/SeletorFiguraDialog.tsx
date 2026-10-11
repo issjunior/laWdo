@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Image as ImageIcon, ImageOff, LoaderCircle, Search, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Check, Image as ImageIcon, ImageOff, LoaderCircle, Search, Sparkles, Upload } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -67,6 +67,7 @@ export function SeletorFiguraDialog({
   const [editorImagemAberto, setEditorImagemAberto] = useState(false);
   const [imagemOriginal, setImagemOriginal] = useState('');
   const [imagemEditada, setImagemEditada] = useState<{ dataUri: string; ajustes: AjustesFigura } | undefined>();
+  const entradaArquivoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!aberto) return;
@@ -120,7 +121,7 @@ export function SeletorFiguraDialog({
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(470px,1.2fr)]">
             <Card className="min-w-0">
-              <CardHeader className="space-y-1 p-4 pb-3"><CardTitle className="text-sm">Escolha a nova figura</CardTitle><p className="text-xs text-muted-foreground">Miniaturas compactas mantêm mais imagens visíveis e destacam a seleção atual.</p>{onCarregarArquivo && <label className="cursor-pointer text-xs text-primary">Carregar arquivo local<input type="file" accept="image/*" className="sr-only" onChange={event => { const arquivo = event.target.files?.[0]; if (arquivo) void onCarregarArquivo(arquivo); event.target.value = ''; }} /></label>}</CardHeader>
+              <CardHeader className="space-y-1 p-4 pb-3"><CardTitle className="text-sm">Escolha a nova figura</CardTitle><p className="text-xs text-muted-foreground">Miniaturas compactas mantêm mais imagens visíveis e destacam a seleção atual.</p>{onCarregarArquivo && <><Button type="button" variant="outline" size="sm" className="self-start" onClick={() => entradaArquivoRef.current?.click()}><Upload className="h-4 w-4" />Carregar arquivo local</Button><input ref={entradaArquivoRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} onChange={event => { const arquivo = event.target.files?.[0]; if (arquivo) void onCarregarArquivo(arquivo); event.target.value = ''; }} /></>}</CardHeader>
               <CardContent className="p-4 pt-0">
                 {imagens.length === 0 ? (
                   <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/40 p-6 text-center">
