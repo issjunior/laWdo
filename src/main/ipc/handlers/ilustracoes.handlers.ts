@@ -85,6 +85,8 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         || typeof dados.legenda !== 'string' || (dados.origem !== 'local' && dados.origem !== 'gdl') || typeof dados.sequencia !== 'number') {
         throw new Error('Dados da imagem inválidos.')
       }
+      if (dados.imagemOrigemId !== undefined && typeof dados.imagemOrigemId !== 'string') throw new Error('Origem da imagem inválida.')
+      if (dados.ajustesJson !== undefined && typeof dados.ajustesJson !== 'string') throw new Error('Ajustes da imagem inválidos.')
       return { success: true, data: await executarMedido('salvar_imagem', () => salvarImagemLaudo(laudoId, dados as SalvarImagemLaudoEntrada), { imagens: 1, bytesEntrada: dados.dataUri.length }) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao salvar imagem do laudo.' }

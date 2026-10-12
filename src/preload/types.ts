@@ -25,6 +25,7 @@ export interface UserCreateData {
   telefone?: string
   cargo?: string
   lotacao?: string
+  forma_tratamento?: 'masculino' | 'feminino'
   username?: string
 }
 
@@ -34,6 +35,7 @@ export interface UserUpdateData {
   telefone?: string
   cargo?: string
   lotacao?: string
+  forma_tratamento?: 'masculino' | 'feminino'
 }
 
 export interface UserProfileUpdateData {
@@ -43,6 +45,7 @@ export interface UserProfileUpdateData {
   telefone?: string
   cargo?: string
   lotacao?: string
+  forma_tratamento?: 'masculino' | 'feminino'
   senha?: string
 }
 

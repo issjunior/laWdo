@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
 import { Button } from '@/components/ui/button';
 import { PanelRightOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import type { ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
 
 interface SyncState {
   figurasNoEditor: ImagemLaudo[];
   syncEnabled: boolean;
   figuraAtivaId: string | null;
   tema?: string;
+  resultadoAtualizacao?: ResultadoAtualizacaoFiguras;
 }
 
 const IlustracoesPanelWindow: React.FC = () => {
@@ -21,6 +23,11 @@ const IlustracoesPanelWindow: React.FC = () => {
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const atualizacaoPendenteRef = useRef<{
+    resolver: (resultado: ResultadoAtualizacaoFiguras) => void;
+    rejeitar: (erro: Error) => void;
+    temporizador: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   useEffect(() => {
     const unsubState = window.ipcAPI.ilustracoes.onStateSync((data: SyncState) => {
@@ -28,6 +35,11 @@ const IlustracoesPanelWindow: React.FC = () => {
       setSyncEnabled(data.syncEnabled ?? true);
       setFiguraAtivaId(data.figuraAtivaId ?? null);
       setReady(true);
+      if (data.resultadoAtualizacao && atualizacaoPendenteRef.current) {
+        clearTimeout(atualizacaoPendenteRef.current.temporizador);
+        atualizacaoPendenteRef.current.resolver(data.resultadoAtualizacao);
+        atualizacaoPendenteRef.current = null;
+      }
 
       if (data.tema === 'dark') {
         document.body.classList.add('dark');
@@ -36,7 +48,14 @@ const IlustracoesPanelWindow: React.FC = () => {
       }
     });
 
-    return unsubState;
+    return () => {
+      unsubState();
+      if (atualizacaoPendenteRef.current) {
+        clearTimeout(atualizacaoPendenteRef.current.temporizador);
+        atualizacaoPendenteRef.current.rejeitar(new Error('A janela do painel foi fechada.'));
+        atualizacaoPendenteRef.current = null;
+      }
+    };
   }, []);
 
   const sendAction = useCallback((action: string, ...args: unknown[]) => {
@@ -65,8 +84,19 @@ const IlustracoesPanelWindow: React.FC = () => {
     sendAction('reorder', imagens);
   }, [sendAction]);
 
-  const handleRefreshHtml = useCallback(() => {
-    sendAction('refreshHtml');
+  const handleRefreshHtml = useCallback((restaurarLegendas = false): Promise<ResultadoAtualizacaoFiguras> => {
+    if (!restaurarLegendas) {
+      sendAction('refreshHtml', false);
+      return Promise.resolve({ restauradas: 0, semDescricao: 0, falhasConsulta: 0 });
+    }
+    return new Promise((resolver, rejeitar) => {
+      const temporizador = setTimeout(() => {
+        atualizacaoPendenteRef.current = null;
+        rejeitar(new Error('O editor não respondeu à atualização das figuras.'));
+      }, 15000);
+      atualizacaoPendenteRef.current = { resolver, rejeitar, temporizador };
+      sendAction('refreshHtml', true);
+    });
   }, [sendAction]);
 
   const handleSyncToggle = useCallback((enabled: boolean) => {
@@ -77,9 +107,13 @@ const IlustracoesPanelWindow: React.FC = () => {
     sendAction('scrollToFigure', imageId);
   }, [sendAction]);
 
-  const handleReplaceImage = useCallback((imageId: string, imagem: ImagemLaudo) => {
-    sendAction('replaceImage', imageId, imagem);
+  const handleReplaceImage = useCallback((imageId: string, imagem: ImagemLaudo, indice?: number) => {
+    sendAction('replaceImage', imageId, imagem, indice);
     toast.success('Figura enviada para substituição');
+  }, [sendAction]);
+
+  const handleEditImage = useCallback((indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => {
+    sendAction('editImage', indice, imagem, imagemOrigemId, imagemAnteriorId);
   }, [sendAction]);
 
   const handleGerarLegenda = useCallback(async (imageId: string): Promise<string | null> => {
@@ -130,6 +164,7 @@ const IlustracoesPanelWindow: React.FC = () => {
             onSyncToggle={handleSyncToggle}
             onScrollToFigure={handleScrollToFigure}
             onReplaceImage={handleReplaceImage}
+            onEditImage={handleEditImage}
             onGerarLegenda={handleGerarLegenda}
             figurasNoEditor={figurasNoEditor}
             syncEnabled={syncEnabled}

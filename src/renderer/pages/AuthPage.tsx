@@ -104,6 +104,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
         email: data.email,
         senha: data.senha,
         cargo: data.cargo,
+        forma_tratamento: data.forma_tratamento,
         lotacao: data.lotacao,
       })
 

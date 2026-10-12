@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildPlaceholderMapping } from '../../renderer/lib/exportacao-placeholders'
 
 describe('placeholders de exportação', () => {
@@ -31,5 +31,23 @@ describe('placeholders de exportação', () => {
     })
 
     expect(placeholders.nome_laboratorio).toBe('Núcleo de Perícias')
+  })
+
+  it('resolve as expressões do perito conforme o perfil da sessão', () => {
+    const usuario = { id: 'perita-1', username: 'perita', nome: 'Ana', email: 'ana@example.test', cargo: 'Perito Oficial Criminal', forma_tratamento: 'feminino' }
+    try {
+      vi.mocked(window.sessionStorage.getItem).mockReturnValue(JSON.stringify(usuario))
+      expect(buildPlaceholderMapping({ repData: {} })).toMatchObject({
+        perito_nome: 'Ana',
+        perito_cargo: 'Perita Oficial Criminal',
+        perito_artigo: 'a',
+        perito_titulo: 'Perita',
+        perito_designado: 'designada',
+        perito_pelo: 'pela',
+        perito_qual: 'a qual',
+      })
+    } finally {
+      vi.mocked(window.sessionStorage.getItem).mockReset()
+    }
   })
 })

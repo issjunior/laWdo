@@ -24,6 +24,7 @@ import { capturaLogsService } from './services/captura-logs.service.js';
 import { definirAtivadorInstancia } from './utils/instancia-unica.js';
 import { carregarConteudoJanela } from './utils/carregamento-janela.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
+import { schemaEventoEditorLaudo } from '../shared/diagnostico/contratos.js';
 import { navegacaoAplicacaoPermitida } from './security/navegacao.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -376,6 +377,20 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
   ipcMain.on('diagnostico:registrar-evento', (evento, dados: unknown) => {
     if (!dados || typeof dados !== 'object') return;
     const entrada = dados as Record<string, unknown>;
+    if (entrada.tipo === 'editor_laudo') {
+      if (capturaDiagnostico?.finalidadeAtiva() !== 'problema') return;
+      const { tipo: _tipo, ...dadosEditor } = entrada;
+      void _tipo;
+      const validado = schemaEventoEditorLaudo.safeParse(dadosEditor);
+      if (!validado.success) return;
+      void sessaoDiagnostico?.servicoEventos?.registrar({
+        origem: 'renderer', categoria: 'acao', nivel: 'info',
+        janelaId: BrowserWindow.fromWebContents(evento.sender)?.id,
+        rota: evento.sender.getURL(),
+        dados: { tipo: 'editor_laudo', ...validado.data },
+      });
+      return;
+    }
     const fase = typeof entrada.fase === 'string' ? entrada.fase : 'desconhecida';
     const canal = typeof entrada.canal === 'string' ? entrada.canal : 'desconhecido';
     const correlacaoId = typeof entrada.correlacaoId === 'string' ? entrada.correlacaoId : undefined;
@@ -495,6 +510,31 @@ const createWindow = async (): Promise<void> => {
 
   // Carregar a aplicação React
   const janela = mainWindow;
+  let protecaoSaidaAtiva = false;
+  let fechamentoPendente = false;
+  let fechamentoAutorizado = false;
+  const aoAlterarProtecao = (evento: Electron.IpcMainEvent, ativo: unknown) => {
+    if (evento.sender !== janela.webContents || typeof ativo !== 'boolean') return;
+    protecaoSaidaAtiva = ativo;
+  };
+  const aoConfirmarFechamento = (evento: Electron.IpcMainInvokeEvent) => {
+    if (evento.sender !== janela.webContents || !fechamentoPendente) return;
+    fechamentoPendente = false;
+    fechamentoAutorizado = true;
+    janela.close();
+  };
+  ipcMain.on('janela:proteger-fechamento', aoAlterarProtecao);
+  ipcMain.handle('janela:confirmar-fechamento', aoConfirmarFechamento);
+  ipcMain.handle('janela:cancelar-fechamento', evento => {
+    if (evento.sender === janela.webContents) fechamentoPendente = false;
+  });
+  janela.on('close', evento => {
+    if (!protecaoSaidaAtiva || fechamentoAutorizado || janela.webContents.isDestroyed()) return;
+    evento.preventDefault();
+    if (fechamentoPendente) return;
+    fechamentoPendente = true;
+    janela.webContents.send('janela:solicitar-fechamento');
+  });
   const endereco = process.env.NODE_ENV === 'development'
     ? 'http://localhost:3000'
     : path.join(__dirname, '../renderer/index.html');
@@ -519,6 +559,9 @@ const createWindow = async (): Promise<void> => {
 
   // Lidar com fechamento da janela
   janela.on('closed', () => {
+    ipcMain.removeListener('janela:proteger-fechamento', aoAlterarProtecao);
+    ipcMain.removeHandler('janela:confirmar-fechamento');
+    ipcMain.removeHandler('janela:cancelar-fechamento');
     registrarEventoDiagnostico('janela', 'info', { evento: 'fechada' });
     void capturaDiagnostico?.interromper('Janela encerrada durante a captura.');
     if (mainWindow === janela) mainWindow = null;

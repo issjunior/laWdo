@@ -29,6 +29,8 @@ interface ImagemLaudoRow {
   legenda: string
   origem: 'local' | 'gdl'
   sequencia: number
+  imagem_origem_id: string | null
+  ajustes_json: string | null
   disponivel_painel: number
   created_at: string
 }
@@ -98,6 +100,7 @@ function criarResumoImagem(registro: ImagemLaudoRow): ImagemLaudoResumo {
     legenda: registro.legenda,
     origem: registro.origem,
     sequencia: registro.sequencia,
+    imagemOrigemId: registro.imagem_origem_id,
     createdAt: registro.created_at,
   }
 }
@@ -132,13 +135,14 @@ export async function reconciliarImagensLaudo(
     'SELECT * FROM imagens_laudo WHERE laudo_id = ? ORDER BY sequencia, created_at',
     [laudoId],
   )
+  const idsOriginais = new Set(registros.map(registro => registro.imagem_origem_id).filter((id): id is string => Boolean(id)))
   const idsConhecidos = new Set(registros.map(registro => registro.id))
   let recuperadasParaPainel = 0
   let arquivadasComoInseridas = 0
   let arquivosAusentes = 0
   await withTransaction(async () => {
     for (const registro of registros) {
-      const deveFicarNoPainel = !idsInseridos.has(registro.id)
+      const deveFicarNoPainel = !idsInseridos.has(registro.id) && !idsOriginais.has(registro.id)
       const disponivelEsperado = deveFicarNoPainel ? 1 : 0
       if (registro.disponivel_painel !== disponivelEsperado) {
         await executeNonQuery('UPDATE imagens_laudo SET disponivel_painel = ? WHERE id = ? AND laudo_id = ?', [disponivelEsperado, registro.id, laudoId])
@@ -250,6 +254,17 @@ export async function salvarImagemLaudo(
   const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
   const id = validarIdentificador(entrada.id, 'Imagem')
   const { mimeType, bytes } = interpretarDataUri(entrada.dataUri)
+  if (entrada.imagemOrigemId) {
+    const imagemOrigemId = validarIdentificador(entrada.imagemOrigemId, 'Imagem de origem')
+    if (imagemOrigemId === id) throw new Error('Uma imagem editada não pode ser sua própria origem.')
+    const origem = await executeQuery<{ id: string }>('SELECT id FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemOrigemId, laudoId])
+    if (origem.length === 0) throw new Error('Imagem de origem não encontrada neste laudo.')
+  }
+  if (entrada.ajustesJson) {
+    let ajustes: unknown
+    try { ajustes = JSON.parse(entrada.ajustesJson) } catch { throw new Error('Ajustes da figura inválidos.') }
+    if (!ajustes || typeof ajustes !== 'object' || Array.isArray(ajustes)) throw new Error('Ajustes da figura inválidos.')
+  }
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const extensao = EXTENSAO_POR_MIME[mimeType]
   const diretorioLaudo = path.join(DIRETORIO_IMAGENS, laudoId)
@@ -266,8 +281,8 @@ export async function salvarImagemLaudo(
 
   await executeNonQuery(
     `INSERT INTO imagens_laudo
-      (id, laudo_id, nome_arquivo, caminho_relativo, mime_type, tamanho, sha256, legenda, origem, sequencia)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, laudo_id, nome_arquivo, caminho_relativo, mime_type, tamanho, sha256, legenda, origem, sequencia, imagem_origem_id, ajustes_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        nome_arquivo = excluded.nome_arquivo,
        caminho_relativo = excluded.caminho_relativo,
@@ -277,8 +292,10 @@ export async function salvarImagemLaudo(
        legenda = excluded.legenda,
        origem = excluded.origem,
        sequencia = excluded.sequencia,
+       imagem_origem_id = COALESCE(excluded.imagem_origem_id, imagens_laudo.imagem_origem_id),
+       ajustes_json = COALESCE(excluded.ajustes_json, imagens_laudo.ajustes_json),
        disponivel_painel = 1`,
-    [id, laudoId, nomeSeguro(entrada.nomeArquivo), caminhoRelativo, mimeType, bytes.length, sha256, entrada.legenda, entrada.origem, entrada.sequencia],
+    [id, laudoId, nomeSeguro(entrada.nomeArquivo), caminhoRelativo, mimeType, bytes.length, sha256, entrada.legenda, entrada.origem, entrada.sequencia, entrada.imagemOrigemId ?? null, entrada.ajustesJson ?? null],
   )
 
   if (anterior && anterior.caminho_relativo !== caminhoRelativo) await removerArquivoSemReferencias(anterior.caminho_relativo)
@@ -371,6 +388,8 @@ export async function excluirImagemLaudo(laudoIdEntrada: string, imagemIdEntrada
   const imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
   const registro = (await executeQuery<ImagemLaudoRow>('SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId]))[0]
   if (!registro) return
+  const derivados = await executeQuery<{ id: string }>('SELECT id FROM imagens_laudo WHERE imagem_origem_id = ? AND laudo_id = ? LIMIT 1', [imagemId, laudoId])
+  if (derivados.length > 0) throw new Error('Esta imagem é a base de uma figura editada e não pode ser excluída.')
   await executeNonQuery('DELETE FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId])
   await removerArquivoSemReferencias(registro.caminho_relativo)
 }

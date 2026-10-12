@@ -14,6 +14,7 @@ export interface UserRow extends DatabaseRow {
   telefone?: string | null
   cargo?: string | null
   lotacao?: string | null
+  forma_tratamento: 'masculino' | 'feminino'
   username: string
   senha_hash: string
   foto_url?: string | null

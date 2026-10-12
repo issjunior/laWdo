@@ -35,7 +35,7 @@ export function removerFormatacaoPlaceholders(html: string): string {
     const chave = placeholder.getAttribute('data-placeholder');
     if (!chave) return;
     const tabelaPersonalizada = placeholder.hasAttribute('data-placeholder-tabela-personalizada-id');
-    placeholder.textContent = chave;
+    if (!placeholder.hasAttribute('data-placeholder-personalizado-html')) placeholder.textContent = chave;
     placeholder.removeAttribute('data-placeholder-apresentacao');
     if (!tabelaPersonalizada) placeholder.removeAttribute('data-placeholder-preview-id');
     placeholder.classList.remove('campo-reservado');

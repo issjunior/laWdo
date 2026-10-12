@@ -32,9 +32,9 @@ class UserService extends BaseService<UserRow> {
 
       const sql = `
         INSERT INTO users (
-          id, nome, email, matricula, telefone, cargo, lotacao, username, senha_hash, ativo, data_criacao, data_atualizacao
+          id, nome, email, matricula, telefone, cargo, lotacao, forma_tratamento, username, senha_hash, ativo, data_criacao, data_atualizacao
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
 
       await executeNonQuery(sql, [
@@ -45,6 +45,7 @@ class UserService extends BaseService<UserRow> {
         data.telefone || null,
         data.cargo || null,
         data.lotacao || null,
+        data.forma_tratamento,
         data.username,
         data.senha_hash,
         data.ativo ?? 1,

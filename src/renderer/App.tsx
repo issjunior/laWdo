@@ -1,5 +1,5 @@
-import React, { useState, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Link } from 'react-router';
+import React, { useState, lazy, Suspense, useMemo } from 'react';
+import { createHashRouter, createRoutesFromElements, RouterProvider, Route, Link, Outlet } from 'react-router';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -31,7 +31,7 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { DiagnosticoBridge } from '@/components/diagnostico/DiagnosticoBridge';
 import { DesempenhoBridge } from '@/components/desempenho/DesempenhoBridge';
-import { AlteracoesPendentesProvider } from '@/contexts/AlteracoesPendentesContext';
+import { AlteracoesPendentesProvider, useSolicitarSaida } from '@/contexts/AlteracoesPendentesContext';
 import { CHAVE_USUARIO_SESSAO, lerUsuarioSessao, salvarUsuarioSessao, type UsuarioSessao } from '@/lib/usuario-sessao';
 import './styles/globals.css';
 
@@ -75,6 +75,18 @@ const NotFoundPage = () => (
   </div>
 );
 
+const EstruturaRoteada = ({ onLogout, currentUser }: {
+  onLogout: () => void;
+  currentUser: UsuarioSessao | null;
+}) => {
+  const solicitarSaida = useSolicitarSaida();
+  return (
+    <Layout onLogout={() => solicitarSaida(onLogout)} currentUser={currentUser}>
+      <Outlet />
+    </Layout>
+  );
+};
+
 const App = () => {
   const isPanelWindow = window.location.hash.startsWith('#/panel-ilustracoes') || window.location.hash.startsWith('#/painel-ia');
   const [currentUser, setCurrentUser] = useState<UsuarioSessao | null>(() => {
@@ -93,6 +105,37 @@ const App = () => {
     setCurrentUser(null);
   };
 
+  const roteador = useMemo(() => createHashRouter(createRoutesFromElements(
+    <Route element={<AlteracoesPendentesProvider><DiagnosticoBridge currentUser={currentUser} painelIlustracoes={isPanelWindow} /><DesempenhoBridge /><Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}><Outlet /></Suspense></AlteracoesPendentesProvider>}>
+      <Route path="/panel-ilustracoes" element={<IlustracoesPanelWindow />} />
+      <Route path="/painel-ia" element={<PainelIaWindow />} />
+      <Route element={<EstruturaRoteada onLogout={handleLogout} currentUser={currentUser} />}>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/solicitantes" element={<SolicitantesPage />} />
+        <Route path="/tipos-exame" element={<TiposExamePage />} />
+        <Route path="/perfil" element={<PerfilPage />} />
+        <Route path="/cabecalho" element={<CabecalhoPage />} />
+        <Route path="/reps" element={<REPsPage />} />
+        <Route path="/placeholders" element={<PlaceholdersPage />} />
+        <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/laudos" element={<LaudosPage />} />
+        <Route path="/modelos-ia" element={<ModelosIAPage />} />
+        <Route path="/backup" element={<BackupPage currentUser={currentUser} />} />
+        <Route path="/projeteis" element={<ProjeteisPage />} />
+        <Route path="/logs" element={<LogsPage />} />
+        <Route path="/gdl-config" element={<GdlConfigPage />} />
+        <Route path="/margens" element={<MargensPage />} />
+        <Route path="/pecas" element={<PecasPage />} />
+        <Route path="/categorias-pecas" element={<CategoriasPecasPage />} />
+        <Route path="/wizards" element={<WizardsPage />} />
+        <Route path="/wizards/:id" element={<WizardEditorPage />} />
+        <Route path="/reps/:repId/wizard" element={<WizardLaudoPage />} />
+        <Route path="/laudos/:laudoId/wizard" element={<WizardLaudoPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Route>
+  )), [currentUser, isPanelWindow]);
+
   return (
     <ErrorBoundary>
       <Toaster
@@ -105,46 +148,7 @@ const App = () => {
       {!currentUser && !isPanelWindow ? (
         <AuthPage onAuthenticated={handleAuthenticated} />
       ) : (
-        <HashRouter>
-          <AlteracoesPendentesProvider>
-            <DiagnosticoBridge currentUser={currentUser} painelIlustracoes={isPanelWindow} />
-            <DesempenhoBridge />
-            <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Carregando...</div>}>
-            <Routes>
-              <Route path="/panel-ilustracoes" element={<IlustracoesPanelWindow />} />
-              <Route path="/painel-ia" element={<PainelIaWindow />} />
-              <Route path="*" element={
-                <Layout onLogout={handleLogout} currentUser={currentUser}>
-                  <Routes>
-                    <Route path="/" element={<DashboardPage />} />
-                    <Route path="/solicitantes" element={<SolicitantesPage />} />
-                    <Route path="/tipos-exame" element={<TiposExamePage />} />
-                    <Route path="/perfil" element={<PerfilPage />} />
-                    <Route path="/cabecalho" element={<CabecalhoPage />} />
-                    <Route path="/reps" element={<REPsPage />} />
-                    <Route path="/placeholders" element={<PlaceholdersPage />} />
-                    <Route path="/templates" element={<TemplatesPage />} />
-                    <Route path="/laudos" element={<LaudosPage />} />
-                    <Route path="/modelos-ia" element={<ModelosIAPage />} />
-                    <Route path="/backup" element={<BackupPage currentUser={currentUser} />} />
-                    <Route path="/projeteis" element={<ProjeteisPage />} />
-                    <Route path="/logs" element={<LogsPage />} />
-                    <Route path="/gdl-config" element={<GdlConfigPage />} />
-                    <Route path="/margens" element={<MargensPage />} />
-                    <Route path="/pecas" element={<PecasPage />} />
-                    <Route path="/categorias-pecas" element={<CategoriasPecasPage />} />
-                    <Route path="/wizards" element={<WizardsPage />} />
-                    <Route path="/wizards/:id" element={<WizardEditorPage />} />
-                    <Route path="/reps/:repId/wizard" element={<WizardLaudoPage />} />
-                    <Route path="/laudos/:laudoId/wizard" element={<WizardLaudoPage />} />
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
-                </Layout>
-              } />
-            </Routes>
-            </Suspense>
-          </AlteracoesPendentesProvider>
-        </HashRouter>
+        <RouterProvider router={roteador} />
       )}
     </ErrorBoundary>
   );

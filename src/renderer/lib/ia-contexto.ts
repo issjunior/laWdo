@@ -1,8 +1,16 @@
 import type { MapaPlaceholdersResolvidos } from '@/lib/exportacao-placeholders'
+import { normalizarHtmlCampo } from '@/lib/campos-reservados'
 
 function converterHtmlEmTexto(valor: string): string {
   const documento = new DOMParser().parseFromString(valor, 'text/html')
+  documento.querySelectorAll('br').forEach(quebra => quebra.replaceWith(documento.createTextNode(' ')))
   return documento.body.textContent?.replace(/\s+/g, ' ').trim() || ''
+}
+
+function obterPersonalizacao(elemento: HTMLElement): string | null {
+  const valor = elemento.getAttribute('data-placeholder-personalizado-html')
+  if (!valor) return null
+  try { return normalizarHtmlCampo(decodeURIComponent(valor)) } catch { return null }
 }
 
 function removerAncorasTabelasPersonalizadas(documento: Document): void {
@@ -31,6 +39,14 @@ export function resolverHtmlContextoIa(html: string, mapa: MapaPlaceholdersResol
   documento.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional], script, style').forEach(elemento => elemento.remove())
   removerAncorasTabelasPersonalizadas(documento)
   documento.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(elemento => {
+    const personalizado = obterPersonalizacao(elemento)
+    if (personalizado) {
+      elemento.innerHTML = personalizado
+      elemento.removeAttribute('data-placeholder')
+      elemento.removeAttribute('data-placeholder-personalizado-html')
+      elemento.classList.remove('placeholder-personalizado')
+      return
+    }
     const chaveBruta = elemento.getAttribute('data-placeholder') || ''
     const chave = chaveBruta.match(/^\{\{(.+)\}\}$/)?.[1]
     if (!chave) return
@@ -56,6 +72,12 @@ export function resolverTextoContextoIa(
   documento.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional], script, style').forEach(elemento => elemento.remove())
   removerAncorasTabelasPersonalizadas(documento)
   documento.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(elemento => {
+    const personalizado = obterPersonalizacao(elemento)
+    if (personalizado) {
+      elemento.textContent = converterHtmlEmTexto(personalizado)
+      elemento.removeAttribute('data-placeholder')
+      return
+    }
     const chaveBruta = elemento.getAttribute('data-placeholder') || ''
     const chave = chaveBruta.match(/^\{\{(.+)\}\}$/)?.[1]
     if (!chave) return

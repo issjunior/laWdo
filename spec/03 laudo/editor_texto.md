@@ -14,12 +14,24 @@ A toolbar usa `wrap` e agrupa histórico, formatação, fonte/cores, alinhamento
 
 `pagebreak` grava o marcador canônico `data-quebra-pagina="true"`; o comentário legado `<!-- pagebreak -->` continua aceito pela normalização de exportação. A skin observa o tema sem remontar o editor. Em tela cheia, `repNumero` insere identificação fora do conteúdo editável; ela não integra o HTML salvo.
 
+Parágrafos narrativos sem alinhamento explícito aparecem justificados por padrão no iframe do TinyMCE. O seletor exclui parágrafos de tabelas e figuras; estilos inline escolhidos pelo usuário prevalecem. O editor compacto de personalização (`EditorCampoLaudo.tsx`) também inicia justificado e mantém HTML multilinha com negrito, itálico, sublinhado, sobrescrito e subscrito. Ele captura `initialValue` em referência por abertura; o rascunho fica em referência na página e é normalizado somente ao aplicar, evitando reposicionar o cursor a cada tecla.
+
 ## Extensões e composição
 
-O editor preserva comandos de placeholders, figuras, tabelas resolvidas e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto indicadores de quebra. Controles visuais de blocos e tabelas vivem somente no iframe.
+O editor preserva comandos de placeholders, figuras, tabelas resolvidas e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto indicadores de quebra e clones temporários de redimensionamento (`data-mce-bogus="all"` e `.mce-clonedresizable`). O observador revalida a presença da imagem no documento e a ausência de wrapper antes da conversão, evitando duplicação durante resize. Controles visuais de blocos e tabelas vivem somente no iframe.
 
 A composição entre editor único e por seções pertence a `LaudosPage.tsx`. Seções possuem `id`, `parentId` e `nivel`; agrupadores vazios não criam editor ocioso e subseções órfãs permanecem no primeiro nível. Após uma atualização externa — inclusive a reconciliação de uma REP — `handleEditar()` recarrega o laudo, incrementa a versão de montagem e faz o TinyMCE refletir o HTML do banco imediatamente.
 
 ## Relações e verificação
 
-Mudanças em recuo ou quebra devem ser coordenadas com `src/renderer/lib/exportacao-parser.ts`, `src/shared/types/exportacao.types.ts`, `src/shared/utils/quebra-pagina.ts` e `src/main/services/exportacao.service.ts`. `src/__tests__/renderer/tiny-mce-editor-config.test.ts` cobre catálogo, toolbar, medidas, tela cheia, remoção de instância anterior e mudança da chave de montagem. A interação real do TinyMCE, seleção múltipla e alternância visual de tema continuam dependentes de smoke manual.
+Mudanças em recuo, quebra ou alinhamento devem ser coordenadas com `src/renderer/lib/exportacao-parser.ts`, `src/shared/types/exportacao.types.ts`, `src/shared/utils/quebra-pagina.ts` e `src/main/services/exportacao.service.ts`. `src/__tests__/renderer/tiny-mce-editor-config.test.ts` cobre catálogo, toolbar, medidas, tela cheia, remoção de instância anterior e mudança da chave de montagem. A interação real do TinyMCE, seleção múltipla e alternância visual de tema continuam dependentes de smoke manual.
+
+## Prontidão e inserção de figuras
+
+A prontidão é concluída em `init_instance_callback`, após o carregamento inicial: normaliza blocos condicionais, instala suas ações e chama `onEditorInit` antes de liberar `onChange` como alteração de usuário. Eventos anteriores usam `normalizacao-inicial`; o evento `init` isolado não estabelece a referência de conteúdo salvo. Na página de laudos, o editor único conclui a inicialização da sessão com o HTML normalizado. A comparação de pendências e a proteção contra respostas de sessões antigas ficam em `useGerenciadorAlteracoesLaudo.ts`.
+
+Timeouts registram tentativa, última fase, tamanho inicial e disponibilidade do documento e das folhas de estilo, sem gravar HTML. O marcador `data-diagnostico-pronto` no iframe permite instalar sondas após a inicialização; o contrato fica em `spec/13 diagnostico/diagnostico_assistido.md`.
+
+Em laudos com callback de inserção, a toolbar troca o comando genérico de imagem por **Inserir figura**. A página captura editor e bookmark e abre o seletor no dock integrado; demais consumidores conservam o comando usual. `figura-html.ts` produz o markup compartilhado com escape de atributos e legenda. O fluxo está em `spec/03 laudo/fluxo_ilustracao.md`.
+
+`tiny-mce-editor-inicializacao.component.test.tsx` cobre a ordem entre carregamento inicial e liberação de alterações; `conteudo-comparavel-laudo.test.ts` cobre a comparação canônica. O ambiente simulado não substitui a abertura real do iframe no Electron.
