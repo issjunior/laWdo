@@ -14,7 +14,7 @@ export interface LocalizacaoOriginalDiagnostico {
   arquivo?: string;
   linha?: number;
   coluna?: number;
-  motivo?: 'MAPA_AUSENTE' | 'MAPEAMENTO_AUSENTE' | 'ORIGEM_FORA_DO_BUILD' | 'MAPA_INVALIDO';
+  motivo?: 'MAPA_AUSENTE' | 'MAPEAMENTO_AUSENTE' | 'ORIGEM_FORA_DO_BUILD' | 'MAPA_INVALIDO' | 'FALHA_RESOLUCAO';
 }
 
 const base64Vlq = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
