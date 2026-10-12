@@ -350,7 +350,16 @@
       "descricao": "Fluxo atual de ilustracoes em laudos.",
       "globsCodigo": [
         "src/renderer/components/laudo/**",
-        "src/renderer/pages/LaudosPage.tsx"
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/lib/figuras.ts",
+        "src/renderer/lib/figura-html.ts",
+        "src/renderer/lib/ilustracoes-secoes.ts",
+        "src/renderer/pages/IlustracoesPanelWindow.tsx",
+        "src/main/services/imagem-laudo.service.ts",
+        "src/main/ipc/handlers/ilustracoes*.ts",
+        "src/shared/types/imagem-laudo.types.ts",
+        "src/__tests__/renderer/figuras-ocorrencia.test.ts",
+        "src/__tests__/renderer/ilustracoes-secoes.test.ts"
       ]
     },
     {
@@ -378,7 +387,8 @@
         "src/renderer/pages/LaudosPage.tsx",
         "src/renderer/styles/globals.css",
         "src/shared/utils/quebra-pagina.ts",
-        "src/__tests__/renderer/tiny-mce-editor-*.test.ts"
+        "src/__tests__/renderer/tiny-mce-editor-*.test.ts",
+        "src/__tests__/renderer/tiny-mce-editor-*.test.tsx"
       ]
     },
     {
@@ -411,7 +421,17 @@
       "globsCodigo": [
         "src/main/services/laudo.service.ts",
         "src/main/ipc/handlers/laudo.handlers.ts",
-        "src/renderer/pages/LaudosPage.tsx"
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/contexts/AlteracoesPendentesContext.tsx",
+        "src/renderer/hooks/useGerenciadorAlteracoesLaudo.ts",
+        "src/renderer/lib/conteudo-comparavel-laudo.ts",
+        "src/renderer/components/laudo/editor/DialogoSaidaLaudo.tsx",
+        "src/renderer/pages/WizardLaudoPage.tsx",
+        "src/renderer/App.tsx",
+        "src/__tests__/renderer/alteracoes-pendentes-saida.component.test.tsx",
+        "src/__tests__/renderer/conteudo-comparavel-laudo.test.ts",
+        "src/__tests__/renderer/wizard-laudo-saida.component.test.tsx",
+        "src/__tests__/renderer/layout-editor-laudo.component.test.tsx"
       ]
     },
     {
@@ -756,7 +776,12 @@
         "src/__tests__/shared/diagnostico-contratos.test.ts",
         "package.json",
         "tsconfig.json",
-        "tsconfig.preload.json"
+        "tsconfig.preload.json",
+        "src/renderer/lib/diagnostico-editor-laudo.ts",
+        "src/renderer/hooks/useGerenciadorAlteracoesLaudo.ts",
+        "src/renderer/components/editor/TinyMceEditor.tsx",
+        "src/__tests__/renderer/diagnostico-editor-laudo.test.ts",
+        "src/__tests__/renderer/tiny-mce-editor-inicializacao.component.test.tsx"
       ]
     },
     {
@@ -812,6 +837,21 @@
         "src/renderer/pages/ProjeteisPage.tsx",
         "src/renderer/components/projeteis/**",
         "src/__tests__/**/*projetil*"
+      ]
+    },
+    {
+      "arquivo": "spec/04 layout/janelas_desktop.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Persistência, restauração adaptativa e fechamento protegido da janela principal.",
+      "globsCodigo": [
+        "src/main/index.ts",
+        "src/main/utils/estado-janela-principal.ts",
+        "src/preload/index.ts",
+        "src/renderer/index.tsx",
+        "src/renderer/contexts/AlteracoesPendentesContext.tsx",
+        "src/__tests__/main/estado-janela-principal.test.ts",
+        "src/__tests__/renderer/alteracoes-pendentes-saida.component.test.tsx"
       ]
     }
   ]

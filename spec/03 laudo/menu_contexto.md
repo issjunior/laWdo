@@ -31,3 +31,7 @@ Placeholders cujo valor é uma tabela HTML continuam sendo inseridos como âncor
 Um novo tipo de exame deve declarar sua `MenuSection[]`, registrá-la em `EXAM_MENU_REGISTRY` e fornecer somente os placeholders agregados ou escalares que precisam existir no catálogo. A lógica dinâmica deve permanecer nos metadados do exame e nos helpers da própria feature, sem acoplar o menu a formatos brutos do processo principal.
 
 A inserção só altera o HTML local do editor. Ela não cria nem modifica dados na REP ou no GDL.
+
+## Inserção de figuras em laudos
+
+A toolbar do laudo oferece **Inserir figura** na seleção capturada, usando o seletor do Painel de Ilustrações. Esse comando não é a inserção do painel ao final da seção ILUSTRAÇÕES. Instância e bookmark são revalidados antes de escrever; se o alvo deixou de existir, a operação falha sem escolher outro destino. O fluxo está em `spec/03 laudo/fluxo_ilustracao.md`.

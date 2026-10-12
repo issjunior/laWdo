@@ -30,6 +30,7 @@ const perfilValidationSchema = z.object({
   username: z.string().optional(),
   email: z.string().email('E-mail inválido'),
   cargo: z.enum(['Perito Oficial Criminal', 'Técnico de Perícia Oficial']),
+  forma_tratamento: z.enum(['masculino', 'feminino']),
   lotacao: z.string().min(3, 'Lotação deve ter pelo menos 3 caracteres'),
   senha: z.string().optional(),
   confirmarSenha: z.string().optional(),
@@ -57,6 +58,7 @@ type PerfilUpdatePayload = {
   nome: string;
   email: string;
   cargo: PerfilUpdateFormValues['cargo'];
+  forma_tratamento: PerfilUpdateFormValues['forma_tratamento'];
   lotacao: string;
   senha?: string;
 };
@@ -87,6 +89,7 @@ export const PerfilPage: React.FC = () => {
       username: '',
       email: '',
       cargo: 'Perito Oficial Criminal',
+      forma_tratamento: 'masculino',
       lotacao: '',
       senha: '',
       confirmarSenha: '',
@@ -121,6 +124,7 @@ export const PerfilPage: React.FC = () => {
       username: getString(user.username),
       email: getString(user.email),
       cargo: getCargo(user.cargo),
+      forma_tratamento: user.forma_tratamento,
       lotacao: getString(user.lotacao),
       senha: '',
       confirmarSenha: '',
@@ -139,7 +143,7 @@ export const PerfilPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const updatePayload: PerfilUpdatePayload = { nome: data.nome, email: data.email, cargo: data.cargo, lotacao: data.lotacao };
+      const updatePayload: PerfilUpdatePayload = { nome: data.nome, email: data.email, cargo: data.cargo, forma_tratamento: data.forma_tratamento, lotacao: data.lotacao };
       if (isChangingPassword && data.senha) {
         updatePayload.senha = data.senha;
       }
@@ -156,6 +160,7 @@ export const PerfilPage: React.FC = () => {
         user.nome = data.nome;
         user.email = data.email;
         user.cargo = data.cargo;
+        user.forma_tratamento = data.forma_tratamento;
         user.lotacao = data.lotacao;
         salvarUsuarioSessao(user);
         window.dispatchEvent(new Event('storage'));
@@ -325,8 +330,8 @@ export const PerfilPage: React.FC = () => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Perito Oficial Criminal">Perito Oficial Criminal</SelectItem>
-                          <SelectItem value="Técnico de Perícia Oficial">Técnico de Perícia Oficial</SelectItem>
+                          <SelectItem value="Perito Oficial Criminal">{form.watch('forma_tratamento') === 'feminino' ? 'Perita Oficial Criminal' : 'Perito Oficial Criminal'}</SelectItem>
+                          <SelectItem value="Técnico de Perícia Oficial">{form.watch('forma_tratamento') === 'feminino' ? 'Técnica de Perícia Oficial' : 'Técnico de Perícia Oficial'}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -336,6 +341,23 @@ export const PerfilPage: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 gap-4">
+                <FormField
+                  control={form.control}
+                  name="forma_tratamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Forma de tratamento no laudo</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="masculino">Masculino</SelectItem>
+                          <SelectItem value="feminino">Feminino</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="lotacao"

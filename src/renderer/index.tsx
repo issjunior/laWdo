@@ -106,6 +106,10 @@ interface IpcAPIRendererLegada {
   logWarning: (module: string, message: string) => void | Promise<void>;
   restartApp?: () => Promise<void>;
   closeApp: () => Promise<void>;
+  protegerFechamento: (ativo: boolean) => void;
+  onSolicitarFechamento: (callback: () => void) => () => void;
+  confirmarFechamento: () => Promise<void>;
+  cancelarFechamento: () => Promise<void>;
   openDevTools?: () => void;
   login: (username: string, password: string) => Promise<IpcRespostaLegada>;
   logout: () => Promise<{ success: boolean }>;
@@ -167,7 +171,12 @@ interface IpcAPIRendererLegada {
   log: IpcGrupoLegado;
   desempenho: IpcDesempenhoRenderer;
   capturaLogs: IpcCapturaLogsRenderer;
-  diagnosticoInterno: IpcGrupoLegado;
+  diagnosticoInterno: {
+    atualizarContextoRenderer: (contexto: Record<string, unknown>) => void;
+    registrarErroFatalRenderer: (erro: Record<string, unknown>) => void;
+    capturaProblemaAtiva: () => boolean;
+    registrarEventoEditorLaudo: (evento: import('../shared/diagnostico/contratos.js').EventoEditorLaudo) => void;
+  };
   ilustracoes: IpcIlustracoesLegado;
 }
 
@@ -262,6 +271,10 @@ const initApp = async () => {
         login: async () => ({ success: true, user: { id: 1, name: 'Usuario Mock', username: 'mock', email: 'mock@pcp.pr.gov.br', cargo: 'Perito Oficial Criminal', lotacao: 'Curitiba', foto_url: null } }),
         logout: async () => ({ success: true }),
         closeApp: async () => undefined,
+        protegerFechamento: () => undefined,
+        onSolicitarFechamento: () => () => undefined,
+        confirmarFechamento: async () => undefined,
+        cancelarFechamento: async () => undefined,
         dashboard: {
           resumo: async () => ({ success: true, data: null }),
           consultarLaudos: async () => ({ success: true, data: null }),

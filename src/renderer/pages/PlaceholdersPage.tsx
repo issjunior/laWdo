@@ -53,7 +53,7 @@ const PLACEHOLDERS_SISTEMA_CHAVES = [
   'latitude', 'longitude', 'data_acionamento_local', 'data_chegada_local', 'data_saida_local',
   'numero_bo', 'numero_ip', 'lacre_entrada', 'lacre_saida', 'observacoes_rep',
   'solicitante_nome', 'tipo_exame_nome', 'tipo_exame_codigo',
-  'perito_nome', 'perito_cargo', 'perito_lotacao', 'perito_matricula',
+  'perito_nome', 'perito_cargo', 'perito_artigo', 'perito_titulo', 'perito_designado', 'perito_pelo', 'perito_qual', 'perito_lotacao', 'perito_matricula',
   'data_atual',
   'data_extenso_recebimento_rep'
 ];

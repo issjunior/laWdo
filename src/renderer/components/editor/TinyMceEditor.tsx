@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect, useId, useLayoutEffect, useCallback } from 'react';
+import type { EventoEditorLaudo } from '@shared/diagnostico/contratos';
+import { registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
 import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
@@ -15,17 +17,14 @@ import {
 } from '@/lib/apresentacao-placeholders';
 import { encontrarCampoReservado } from '@/lib/campos-reservados';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
+import { criarHtmlFigura } from '@/lib/figura-html';
+import { atualizarNumeroFigura } from '@/lib/figuras';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
 
 /** Markup interno da figura (sem <br> ao final) — usado para criar elementos DOM */
 function buildFigureInnerHtml(url: string, id: string, legenda: string): string {
-  return (
-    `<figure class="laudo-figure" data-image-id="${id}" style="text-align: center; margin: 12px auto; max-width: 100%;">` +
-    `<img src="${url}" alt="${legenda}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" />` +
-    `<figcaption style="font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;">Figura XX${legenda ? ': ' + legenda : ''}</figcaption>` +
-    `</figure>`
-  );
+  return criarHtmlFigura(url, id, legenda);
 }
 
 /** Markup completo da figura com <br> ao final — ideal para insertContent */
@@ -35,6 +34,10 @@ function buildFigureHtml(url: string, id: string, legenda: string): string {
 
 function imagemEhMarcadorQuebraPagina(img: HTMLImageElement): boolean {
   return img.classList.contains('mce-pagebreak');
+}
+
+function imagemEhTemporariaEditor(img: HTMLImageElement): boolean {
+  return Boolean(img.closest('[data-mce-bogus="all"], .mce-clonedresizable'));
 }
 
 /** Converte um <img> órfão em um elemento <figure class="laudo-figure"> com id e figcaption */
@@ -59,7 +62,7 @@ function processarImagensPuras(raiz: Node): number {
 
   for (const img of imagens) {
     const htmlImg = img as HTMLImageElement;
-    if (htmlImg.closest('.laudo-figure') || imagemEhMarcadorQuebraPagina(htmlImg)) continue;
+    if (htmlImg.closest('.laudo-figure') || imagemEhMarcadorQuebraPagina(htmlImg) || imagemEhTemporariaEditor(htmlImg)) continue;
     if (!htmlImg.src || (!htmlImg.src.startsWith('data:') && !htmlImg.src.startsWith('http') && !htmlImg.src.startsWith('blob:'))) continue;
 
     const figure = wrapImgAsFigure(htmlImg);
@@ -79,6 +82,7 @@ function scanEditorForRawImages(editor: TinyMceEditorInstance): number {
     (img) =>
       !img.closest('.laudo-figure') &&
       !imagemEhMarcadorQuebraPagina(img) &&
+      !imagemEhTemporariaEditor(img) &&
       (img.src?.startsWith('data:') || img.src?.startsWith('http') || img.src?.startsWith('blob:'))
   ) as HTMLImageElement[];
 
@@ -134,6 +138,7 @@ interface TinyMceEditorProps {
   /** Modo NÃO controlado: conteúdo inicial fixo, sem sincronização automática. Ideal para editores com HTML complexo (ex: seções). */
   initialValue?: string;
   onChange: (html: string, origem?: 'usuario' | 'normalizacao-inicial') => void;
+  diagnosticoLaudo?: Pick<EventoEditorLaudo, 'sessao' | 'montagem' | 'modo'>;
   height?: number;
   /** Faz o editor crescer junto com o documento, deixando a rolagem a cargo da página. */
   alturaAutomatica?: boolean;
@@ -146,6 +151,7 @@ interface TinyMceEditorProps {
   editorId?: string;
   /** Callback disparado quando uma imagem é inserida via botão de imagem do editor */
   onImageInserted?: () => void;
+  onSolicitarInsercaoFigura?: (editor: TinyMceEditorInstance) => void;
   /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
@@ -255,6 +261,7 @@ interface SubstituirImagemPayload {
   newImageId?: string;
   figureElement?: HTMLElement;
   newUrl: string;
+  imagemOrigemId?: string;
 }
 
 const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
@@ -323,7 +330,7 @@ export function obterPluginsTinyMce(alturaAutomatica: boolean): string[] {
   return alturaAutomatica ? [...PLUGINS_TINYMCE, 'autoresize'] : [...PLUGINS_TINYMCE];
 }
 
-export function obterToolbarTinyMce(exibirControlesCondicionais: boolean): string {
+export function obterToolbarTinyMce(exibirControlesCondicionais: boolean, modoLaudo = false): string {
   return [
     'undo redo formatacao',
     'bold italic underline strikethrough subscript superscript',
@@ -332,7 +339,7 @@ export function obterToolbarTinyMce(exibirControlesCondicionais: boolean): strin
     'outdent indent lineheight recuoprimeiralinha',
     'blockquote hr',
     'searchreplace pastetext visualblocks',
-    'link image table charmap nonbreaking pagebreak fullscreen',
+    `link ${modoLaudo ? 'inserirfiguralaudo' : 'image'} table charmap nonbreaking pagebreak fullscreen`,
     exibirControlesCondicionais ? 'condbloco suprimirblocopericial' : '',
   ].filter(Boolean).join(' | ');
 }
@@ -460,6 +467,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   value,
   initialValue,
   onChange,
+  diagnosticoLaudo,
   height = 300,
   alturaAutomatica = false,
   placeholder,
@@ -467,6 +475,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   repNumero,
   editorId,
   onImageInserted,
+  onSolicitarInsercaoFigura,
   placeholderChaves,
   onEditorInit,
   onDummyFigureClick,
@@ -489,7 +498,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const onEstruturaTabelasAlteradaRef = useRef(onEstruturaTabelasAlterada);
   const onCampoReservadoDuploCliqueRef = useRef(onCampoReservadoDuploClique);
   const editorProntoParaAlteracoesRef = useRef(false);
-  const frameLiberarAlteracoesRef = useRef<number | null>(null);
+  const faseInicializacaoRef = useRef('aguardando_montagem');
   const [preparado, setPreparado] = useState(false);
   const [ready, setReady] = useState(false);
   const [tentativaInicializacao, setTentativaInicializacao] = useState(0);
@@ -497,36 +506,62 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
   const [stableInitialValue] = useState(initialValue);
   const isUncontrolled = initialValue !== undefined;
+  const diagnosticoLaudoRef = useRef(diagnosticoLaudo);
+  diagnosticoLaudoRef.current = diagnosticoLaudo;
+  const registrarInicializacao = useCallback((evento: EventoEditorLaudo['evento'], dados: Pick<EventoEditorLaudo, 'tentativaInterna' | 'motivo'> = {}) => {
+    const contexto = diagnosticoLaudoRef.current;
+    if (contexto) registrarDiagnosticoEditorLaudo({ ...contexto, evento, ...dados });
+  }, []);
 
   useLayoutEffect(() => {
-    removerInstanciaTinyMceAnterior(editorIdResolvido);
+    if (removerInstanciaTinyMceAnterior(editorIdResolvido)) registrarInicializacao('editor_anterior_removido');
     setPreparado(true);
-  }, [editorIdResolvido]);
+  }, [editorIdResolvido, registrarInicializacao]);
 
   const reiniciarEditor = useCallback(() => {
-    removerInstanciaTinyMceAnterior(editorIdResolvido);
+    if (removerInstanciaTinyMceAnterior(editorIdResolvido)) registrarInicializacao('editor_anterior_removido', { tentativaInterna: tentativaInicializacao });
+    registrarInicializacao('editor_nova_tentativa', { tentativaInterna: tentativaInicializacao + 1 });
+    faseInicializacaoRef.current = 'nova_tentativa';
     editorRef.current = null;
     editorProntoParaAlteracoesRef.current = false;
     setReady(false);
     setFalhaInicializacao(null);
     setTentativaInicializacao(atual => atual + 1);
-  }, [editorIdResolvido]);
+  }, [editorIdResolvido, registrarInicializacao, tentativaInicializacao]);
 
   useEffect(() => {
     if (!preparado || ready || falhaInicializacao) return;
+    registrarInicializacao('editor_iniciando', { tentativaInterna: tentativaInicializacao });
 
     const timeout = window.setTimeout(() => {
+      const instancia = (window as TinymceWindow).tinymce?.get(editorIdResolvido);
+      const documento = instancia?.getDoc();
+      const folhasEstilo = documento ? Array.from(documento.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')) : [];
+      const detalhes = {
+        tentativa: tentativaInicializacao + 1,
+        limiteMs: TEMPO_LIMITE_INICIALIZACAO_MS,
+        fase: faseInicializacaoRef.current,
+        tamanhoInicial: stableInitialValue?.length ?? value?.length ?? 0,
+        instanciaRegistrada: Boolean(instancia),
+        documentoIframe: documento?.readyState ?? 'indisponivel',
+        folhasEstilo: folhasEstilo.length,
+        folhasEstiloPendentes: folhasEstilo.filter(folha => !folha.sheet).length,
+        capturaProblemaAtiva: window.ipcAPI?.diagnosticoInterno?.capturaProblemaAtiva?.() === true,
+      };
+      registrarInicializacao('editor_timeout', { tentativaInterna: tentativaInicializacao, motivo: 'tempo_limite' });
       if (tentativaInicializacao + 1 < MAX_TENTATIVAS_AUTOMATICAS) {
+        window.ipcAPI?.logWarning('laudo', `Editor excedeu o tempo de inicialização; nova tentativa. ${JSON.stringify(detalhes)}`);
         reiniciarEditor();
         return;
       }
 
+      window.ipcAPI?.logError('laudo', 'Editor não concluiu a inicialização', detalhes);
       removerInstanciaTinyMceAnterior(editorIdResolvido);
       setFalhaInicializacao('O editor demorou mais que o esperado para abrir.');
     }, TEMPO_LIMITE_INICIALIZACAO_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [editorIdResolvido, falhaInicializacao, preparado, ready, reiniciarEditor, tentativaInicializacao]);
+  }, [editorIdResolvido, falhaInicializacao, preparado, ready, reiniciarEditor, tentativaInicializacao, registrarInicializacao, stableInitialValue, value]);
 
   useEffect(() => {
     placeholderChavesRef.current = placeholderChaves;
@@ -552,12 +587,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
     onCampoReservadoDuploCliqueRef.current = onCampoReservadoDuploClique;
   }, [onCampoReservadoDuploClique]);
 
-  useEffect(() => () => {
-    if (frameLiberarAlteracoesRef.current !== null) {
-      window.cancelAnimationFrame(frameLiberarAlteracoesRef.current);
-    }
-  }, []);
-
   const imagesUploadHandler: UploadImagemHandler = (blobInfo) =>
     new Promise<string>((resolve) => {
       const reader = new FileReader();
@@ -570,7 +599,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
     if (!fragment) return;
     const convertidas = processarImagensPuras(fragment);
     if (convertidas > 0) {
-      onImageInserted?.();
+      window.requestAnimationFrame(() => onImageInserted?.());
     }
   };
 
@@ -632,17 +661,13 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
         id={editorIdResolvido}
         licenseKey="gpl"
         tinymceScriptSrc="./tinymce/tinymce.min.js"
-        onInit={(_evt, editor) => {
-          editorRef.current = editor;
-          setFalhaInicializacao(null);
-          setReady(true);
-          onEditorInit?.(editor);
-          frameLiberarAlteracoesRef.current = window.requestAnimationFrame(() => {
-            editorProntoParaAlteracoesRef.current = true;
-            frameLiberarAlteracoesRef.current = null;
-          });
-        }}
+        onScriptsLoad={() => registrarInicializacao('editor_script_carregado', { tentativaInterna: tentativaInicializacao })}
         onScriptsLoadError={(erro) => {
+          registrarInicializacao('editor_script_falhou', { tentativaInterna: tentativaInicializacao, motivo: 'erro' });
+          window.ipcAPI?.logError('laudo', 'Falha ao carregar recursos do editor', {
+            tentativa: tentativaInicializacao + 1,
+            erro: erro instanceof Error ? erro.message : 'Erro inesperado',
+          });
           setFalhaInicializacao(erro instanceof Error && erro.message
             ? erro.message
             : 'Não foi possível carregar os recursos do editor.');
@@ -656,6 +681,18 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial',
         )}
         init={{
+          init_instance_callback: editor => {
+            editor.getContainer()?.querySelector('iframe.tox-edit-area__iframe')?.setAttribute('data-diagnostico-pronto', 'true');
+            registrarInicializacao('editor_pronto', { tentativaInterna: tentativaInicializacao });
+            faseInicializacaoRef.current = 'pronto';
+            editorRef.current = editor;
+            normalizarBlocosCondicionais(editor.getBody(), condToggles);
+            sincronizarAcoesBlocosCondicionais(editor.getBody());
+            onEditorInit?.(editor);
+            editorProntoParaAlteracoesRef.current = true;
+            setFalhaInicializacao(null);
+            setReady(true);
+          },
           ...obterOpcoesAlturaEditor(height, alturaAutomatica),
           menubar: false,
           placeholder,
@@ -689,7 +726,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           remove_script_host: false,
           convert_urls: false,
           plugins: obterPluginsTinyMce(alturaAutomatica),
-          toolbar: obterToolbarTinyMce(Boolean(condToggles?.length)),
+          toolbar: obterToolbarTinyMce(Boolean(condToggles?.length), Boolean(_laudoId && onSolicitarInsercaoFigura)),
           content_style: `
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -697,6 +734,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               line-height: 1.6;
               padding: 12px;
             }
+            p:not(table p):not(figure p) { text-align: justify; }
             body.dark-content {
               background-color: #222f3e;
               color: #fff;
@@ -750,6 +788,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               background-color: rgba(138,180,248,0.15);
               color: #8ab4f8;
             }
+            .placeholder-personalizado { background-color: rgba(139,92,246,0.16); color: #6d28d9; border-bottom: 2px dotted #8b5cf6; cursor: pointer; }
+            body.dark-content .placeholder-personalizado { color: #c4b5fd; }
             .campo-reservado {
               background-color: rgba(255,193,7,0.2);
               color: #b45309;
@@ -984,6 +1024,20 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: TinyMceEditorInstance) => {
+            registrarInicializacao('editor_setup_iniciado', { tentativaInterna: tentativaInicializacao });
+            faseInicializacaoRef.current = 'setup';
+            for (const fase of ['PreInit', 'PostRender', 'SkinLoaded', 'BeforeSetContent', 'SetContent', 'LoadContent']) {
+              editor.on(fase, () => { if (!editorProntoParaAlteracoesRef.current) faseInicializacaoRef.current = fase; });
+            }
+            editor.on('remove', () => registrarInicializacao('editor_instancia_removida', { tentativaInterna: tentativaInicializacao }));
+            editor.on('Undo Redo', () => window.requestAnimationFrame(() => onImageInserted?.()));
+            if (_laudoId && onSolicitarInsercaoFigura) {
+              editor.ui.registry.addButton('inserirfiguralaudo', {
+                text: 'Inserir figura',
+                tooltip: 'Inserir figura na posição do cursor',
+                onAction: () => onSolicitarInsercaoFigura(editor),
+              });
+            }
             editor.on('FullscreenStateChanged', evento => {
               sincronizarIdentificacaoFullscreen(
                 editor.getContainer(),
@@ -1063,18 +1117,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const body = editor.getBody();
               const figures = body.querySelectorAll('.laudo-figure');
               figures.forEach((figure: Element, index: number) => {
-                const num = index + 1;
-                const numFormatado = num.toString().padStart(2, '0');
-                const figcaption = figure.querySelector('figcaption');
-                const img = figure.querySelector('img');
-                if (figcaption) {
-                  const legendaAtual = figcaption.textContent || '';
-                  const textoLimpo = legendaAtual.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '');
-                  figcaption.textContent = textoLimpo ? `Figura ${numFormatado}: ${textoLimpo}` : `Figura ${numFormatado}`;
-                  if (img) {
-                    (img as HTMLImageElement).alt = figcaption.textContent;
-                  }
-                }
+                atualizarNumeroFigura(figure, index + 1);
               });
               editor.undoManager.add();
             });
@@ -1108,6 +1151,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (data.newImageId) {
                   figure.setAttribute('data-image-id', data.newImageId);
                 }
+                if (data.imagemOrigemId) {
+                  figure.setAttribute('data-image-original-id', data.imagemOrigemId);
+                  if (!figure.hasAttribute('data-figure-id')) figure.setAttribute('data-figure-id', crypto.randomUUID());
+                } else {
+                  figure.removeAttribute('data-image-original-id');
+                }
                 figure.removeAttribute('data-dummy');
                 figure.style.cursor = '';
               });
@@ -1117,7 +1166,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const id = crypto.randomUUID();
               const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'><rect width='600' height='400' fill='%233a3a3a' rx='8'/><rect x='235' y='115' width='130' height='100' rx='8' fill='none' stroke='%23888' stroke-width='2.5'/><circle cx='265' cy='145' r='11' fill='none' stroke='%23888' stroke-width='2.5'/><polyline points='235,195 275,162 325,195' fill='none' stroke='%23888' stroke-width='2.5'/><text x='300' y='260' text-anchor='middle' fill='%23aaa' font-size='20' font-family='sans-serif' font-weight='500'>INSERIR IMAGEM</text><text x='300' y='290' text-anchor='middle' fill='%23777' font-size='13' font-family='sans-serif'>Clique para substituir</text></svg>`;
               const src = `data:image/svg+xml;base64,${btoa(svg)}`;
-              const html = `<figure class="laudo-figure" data-image-id="${id}" data-dummy="true" style="text-align:center;margin:12px auto;max-width:100%;cursor:pointer"><img src="${src}" alt="Figura XX" style="max-width:100%;height:auto;border:1px solid #444;border-radius:4px;padding:4px"/><figcaption style="font-size:13px;color:#666;font-weight:bold;margin-top:4px">Figura XX</figcaption></figure><br>`;
+              const html = criarHtmlFigura(src, id, '', true) + '<br>';
               editor.insertContent(html);
             });
 
@@ -1223,6 +1272,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             // Usamos init + listener nativo porque contextmenu:false desabilita o plugin
             // e o editor event 'contextmenu' nunca dispara.
             editor.on('init', () => {
+              registrarInicializacao('editor_init_evento', { tentativaInterna: tentativaInicializacao });
               const doc = editor.getDoc();
               if (!doc) return;
               const body = editor.getBody();
@@ -1454,7 +1504,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                       if (node.nodeType !== 1) continue;
                       const el = node as Element;
 
-                      if (el.tagName === 'IMG' && !el.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(el as HTMLImageElement)) {
+                      if (el.tagName === 'IMG' && !el.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(el as HTMLImageElement) && !imagemEhTemporariaEditor(el as HTMLImageElement)) {
                         const src = (el as HTMLImageElement).src;
                         if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
                           rawImages.push(el as HTMLImageElement);
@@ -1462,7 +1512,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                       }
 
                       el.querySelectorAll('img').forEach(nestedImg => {
-                        if (!nestedImg.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(nestedImg as HTMLImageElement)) {
+                        if (!nestedImg.closest('.laudo-figure') && !imagemEhMarcadorQuebraPagina(nestedImg as HTMLImageElement) && !imagemEhTemporariaEditor(nestedImg as HTMLImageElement)) {
                           const src = (nestedImg as HTMLImageElement).src;
                           if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
                             rawImages.push(nestedImg as HTMLImageElement);
@@ -1479,6 +1529,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
                   editor.undoManager.transact(() => {
                     for (const img of rawImages) {
+                      if (!body.contains(img) || img.closest('.laudo-figure') || imagemEhTemporariaEditor(img)) continue;
                       const figure = wrapImgAsFigure(img);
                       img.parentNode?.replaceChild(figure, img);
                     }
@@ -1634,6 +1685,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (reservadoTimer) clearTimeout(reservadoTimer);
               });
             }
+            registrarInicializacao('editor_setup_concluido', { tentativaInterna: tentativaInicializacao });
           },
         }}
       />}

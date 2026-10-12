@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { laudoPadraoB602V1 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v1';
 import { laudoPadraoB602V4 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v4';
 import { laudoPadraoB602V5 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v5';
+import { laudoPadraoB602V6 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v6';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 
@@ -64,6 +65,17 @@ describe('catálogo de templates integrados', () => {
     expect(conteudoEstojos).toContain('text-align: justify; text-indent: 35.43pt;');
     expect(conteudoEstojos.match(/data-image-id="dummy-b602-estojos-[12]"/g)).toHaveLength(2);
     expect(conteudoEstojos).toContain('Os estojos percutidos e deflagrados foram retornados à Central de Custódia');
+  });
+
+  it('parametriza as expressões do perito na versão 6', () => {
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V6)).not.toThrow();
+    expect(laudoPadraoB602V6.versao).toBe(6);
+    const conteudo = laudoPadraoB602V6.secoes.map(secao => secao.conteudo).join(' ');
+    for (const chave of ['perito_designado', 'perito_artigo', 'perito_cargo', 'perito_titulo', 'perito_pelo', 'perito_qual']) {
+      expect(conteudo).toContain(`{{${chave}}}`);
+    }
+    expect(conteudo).not.toContain('o Perito');
+    expect(conteudo).not.toContain('pelo Perito');
   });
 
   it('rejeita chaves de seção duplicadas', () => {

@@ -150,6 +150,39 @@ export const schemaEventoDiagnostico = z.strictObject({
 });
 
 export type EventoDiagnostico = z.infer<typeof schemaEventoDiagnostico>;
+
+export const schemaEventoEditorLaudo = z.strictObject({
+  evento: z.enum(['sessao_aberta', 'sessao_encerrada', 'inicializacao_concluida', 'inicializacao_ignorada', 'alteracao_recebida', 'conteudo_comparado', 'visualizacao_aplicada', 'tabelas_corrigidas', 'salvamento_iniciado', 'salvamento_concluido', 'salvamento_falhou', 'voltar_solicitado', 'editor_iniciando', 'editor_anterior_removido', 'editor_nova_tentativa', 'editor_timeout', 'editor_script_carregado', 'editor_script_falhou', 'editor_setup_iniciado', 'editor_setup_concluido', 'editor_init_evento', 'editor_instancia_removida', 'editor_pronto']),
+  sessao: z.number().int().nonnegative(),
+  montagem: z.number().int().nonnegative(),
+  modo: z.enum(['single', 'multi']),
+  origem: z.enum(['usuario', 'ia', 'normalizacao-inicial', 'automatica']).optional(),
+  motivo: z.enum(['sessao_inativa', 'sessao_anterior', 'inicializacao_nao_pendente', 'salvamento_em_andamento', 'aguardando_inicializacao', 'sem_alteracao', 'alteracao_real', 'erro', 'tempo_limite']).optional(),
+  pendente: z.boolean().optional(),
+  referenciaTamanho: z.number().int().nonnegative().optional(),
+  atualTamanho: z.number().int().nonnegative().optional(),
+  ocultosReferencia: z.number().int().nonnegative().optional(),
+  ocultosAtual: z.number().int().nonnegative().optional(),
+  previasReferencia: z.number().int().nonnegative().optional(),
+  previasAtual: z.number().int().nonnegative().optional(),
+  tentativaInterna: z.number().int().nonnegative().optional(),
+  diferencas: z.array(z.strictObject({
+    posicao: z.string().regex(/^(?:\d+)(?:\/\d+)*$/).max(80),
+    tag: z.string().regex(/^[a-z][a-z0-9-]*$/).max(40),
+    atributo: z.string().regex(/^[a-z][a-z0-9:-]*$/).max(60).optional(),
+    categoria: z.enum(['texto', 'estilo', 'imagem', 'tabela', 'estrutura']),
+    tamanhoAnterior: z.number().int().nonnegative().optional(),
+    tamanhoAtual: z.number().int().nonnegative().optional(),
+    apenasEspacosAnterior: z.boolean().optional(),
+    apenasEspacosAtual: z.boolean().optional(),
+    espacosInicioAnterior: z.number().int().nonnegative().optional(),
+    espacosInicioAtual: z.number().int().nonnegative().optional(),
+    espacosFimAnterior: z.number().int().nonnegative().optional(),
+    espacosFimAtual: z.number().int().nonnegative().optional(),
+  })).max(10).optional(),
+});
+
+export type EventoEditorLaudo = z.infer<typeof schemaEventoEditorLaudo>;
 export type CodigoErroDiagnostico = (typeof codigosErroDiagnostico)[number];
 
 export interface RespostaDiagnosticoSucesso<TDados> {

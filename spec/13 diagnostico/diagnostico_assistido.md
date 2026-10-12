@@ -167,3 +167,13 @@ A retenção preserva a sessão ativa e remove sessões antigas até restarem ci
 A cobertura automatizada inclui contratos/envelopes, sessão, ACL, pipe, encerramento, NDJSON, sanitização, captura única, artefato, idempotência, limite de amostras, degradação, métricas, comparação e source maps.
 
 A validação manual complementar é iniciar `npm run dev:diagnostico`, confirmar `diagnostico_status` e executar uma captura curta do cenário desejado. Não há teste automatizado de Electron com a janela real para todas as sondas de preload/TinyMCE, recuperação de capturas após reinício ou retenção durante captura.
+
+## Eventos específicos do editor de laudos
+
+`diagnostico-editor-laudo.ts`, `useGerenciadorAlteracoesLaudo.ts`, `LaudosPage.tsx` e `TinyMceEditor.tsx` registram o tipo `editor_laudo` somente durante captura de problema. O preload confere a finalidade e o main repete essa guarda antes de validar `schemaEventoEditorLaudo` estrito. Evento inválido é descartado. O fluxo não acrescenta ferramenta MCP nem coleta esses detalhes em captura de desempenho.
+
+Os eventos correlacionam sessão, montagem, modo single/multi, origem e tentativa de inicialização: script, setup, init, prontidão, timeout, remoção, comparação e salvamento. A comparação relata tamanhos, quantidades de âncoras ocultas/prévias e até dez diferenças com posição estrutural, tag, nome do atributo e categoria. Diferenças textuais registram comprimentos e contagens de espaços, nunca o texto, HTML, valores de atributos ou imagens. A travessia limita o resultado a dez diferenças, mas o parsing inicial ainda percorre os dois documentos; esse custo só é assumido durante a captura de problema.
+
+Sondas de iframe esperam `data-diagnostico-pronto="true"`, definido no callback final de inicialização. Ao iniciar a captura, o preload detecta editores já prontos; durante inicialização/encerramento, desconecta o observador de iframes. Logs usuais de timeout continuam disponíveis fora da captura, com metadados de fase e recursos, sem HTML.
+
+`diagnostico-editor-laudo.test.ts` verifica finalidade, resumo estrutural, limite de diferenças e rejeição de campos extras; `tiny-mce-editor-inicializacao.component.test.tsx` verifica a liberação das alterações após o callback inicial. Ambos são simulados e não comprovam todas as sondas em iframe Electron real.

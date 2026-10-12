@@ -35,6 +35,8 @@ O preload expõe somente wrappers específicos incluídos em `ALLOWED_CHANNELS`.
 
 Ao adicionar um canal, atualizar em conjunto handler, allowlist, `IpcAPI`, validação de entrada e consumidor. Dados de IPC são fronteira insegura e não devem ser convertidos por cast direto.
 
+O fechamento normal usa wrappers específicos e valida que proteção, confirmação e cancelamento venham do `webContents` principal; confirmar exige solicitação pendente. Logout passa pelo controle de alterações do editor/wizard antes de limpar a sessão. Os limites estão em `spec/04 layout/janelas_desktop.md` e `spec/03 laudo/laudo_ciclo_vida.md`.
+
 ## Autenticação
 
 O login é normalizado com `trim`; a senha não é sanitizada nem aparada. Espaços e caracteres especiais fazem parte do segredo e são encaminhados exatamente ao comparador de hash. A fronteira valida tipo, presença e limites de tamanho antes da autenticação.
@@ -45,11 +47,13 @@ Logs de autenticação podem conter o login sanitizado e o identificador do usu�
 
 `lawdo_auth_user` é a única chave canônica do usuário autenticado no `sessionStorage`. O parser recebe `unknown`, exige `id`, `username`, nome e e-mail textuais, valida campos opcionais e mantém somente propriedades conhecidas. `name` e `nome` são normalizados para o mesmo valor por compatibilidade.
 
+`forma_tratamento` aceita somente `masculino` ou `feminino`; sessão antiga sem esse campo recebe `masculino`. A migration v41 cria a coluna em `users` com esse padrão. Cadastro e atualização do perfil validam a enumeração no renderer e no handler IPC; login inclui o valor no objeto de sessão. O campo é uma preferência local de redação e não altera a autorização da sessão.
+
 JSON malformado, arrays, valores primitivos ou objetos incompatíveis resultam em `null`; quando lidos do storage, o valor inválido é removido. Componentes devem usar `lerUsuarioSessao` e `salvarUsuarioSessao`, sem repetir `JSON.parse` ou assertions locais.
 
 ## Recuperação de falhas do renderer
 
-O `ErrorBoundary` tenta `restartApp` e aguarda a Promise. Se a API estiver ausente ou rejeitar, recarrega a janela. A navegação de recuperação usa `#/`, compatível com `HashRouter`.
+O `ErrorBoundary` tenta `restartApp` e aguarda a Promise. Se a API estiver ausente ou rejeitar, recarrega a janela. A navegação de recuperação usa `#/`, compatível com o roteador em hash (`createHashRouter` em `App.tsx`).
 
 A limpeza de estado remove somente chaves conhecidas de sessão e preferências de UI. Não usa `localStorage.clear()` nem `sessionStorage.clear()`, para não apagar dados que não participam da falha.
 

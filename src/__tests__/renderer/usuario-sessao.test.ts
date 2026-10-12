@@ -14,6 +14,7 @@ describe('usuário persistido na sessão', () => {
       name: 'Perito',
       nome: 'Perito',
       email: 'perito@example.test',
+      forma_tratamento: 'masculino',
     });
   });
 
@@ -29,6 +30,12 @@ describe('usuário persistido na sessão', () => {
       email: 'perito@example.test',
       foto_url: 42,
     })).toBeNull();
+  });
+
+  it('preserva a forma feminina e rejeita valores desconhecidos', () => {
+    const usuario = { id: 'usuario-1', username: 'perita', nome: 'Perita', email: 'perita@example.test' };
+    expect(normalizarUsuarioSessao({ ...usuario, forma_tratamento: 'feminino' })?.forma_tratamento).toBe('feminino');
+    expect(normalizarUsuarioSessao({ ...usuario, forma_tratamento: 'neutro' })).toBeNull();
   });
 
   it('remove do storage um valor inválido', () => {

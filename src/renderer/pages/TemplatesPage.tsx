@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
+import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import {
   Plus, Search, Edit, Trash2, Copy, ArrowLeft,
   FileText, Layers, Eye, LayoutGrid, List, Upload,
@@ -20,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
+import { criarHtmlFigura } from '@/lib/figura-html';
 import { converterPlaceholdersTextuais } from '@/lib/utils';
 import { z } from 'zod';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
@@ -367,6 +369,7 @@ interface PeritoSessaoData {
   role?: string;
   lotacao?: string;
   matricula?: string;
+  forma_tratamento?: FormaTratamentoLaudo;
 }
 
 type TinymceWindow = Window & {
@@ -398,6 +401,7 @@ const lerPeritoSessao = (): PeritoSessaoData => {
     role: typeof parsed.role === 'string' ? parsed.role : undefined,
     lotacao: typeof parsed.lotacao === 'string' ? parsed.lotacao : undefined,
     matricula: typeof parsed.matricula === 'string' ? parsed.matricula : undefined,
+    forma_tratamento: parsed.forma_tratamento,
   };
 };
 
@@ -422,12 +426,7 @@ function gerarSvgPlaceholderBase64(): string {
 function buildDummyFigureHtml(): string {
   const id = crypto.randomUUID();
   const src = gerarSvgPlaceholderBase64();
-  return (
-    `<figure class="laudo-figure" data-image-id="${id}" data-dummy="true" style="text-align:center;margin:12px auto;max-width:100%;cursor:pointer">` +
-    `<img src="${src}" alt="Figura XX" style="max-width:100%;height:auto;border:1px solid #444;border-radius:4px;padding:4px"/>` +
-    `<figcaption style="font-size:13px;color:#666;font-weight:bold;margin-top:4px">Figura XX</figcaption>` +
-    `</figure><br>`
-  );
+  return criarHtmlFigura(src, id, '', true) + '<br>';
 }
 
 interface SortableSecaoTemplateItemProps {
@@ -1139,7 +1138,8 @@ export const TemplatesPage: React.FC = () => {
     let peritoMatricula = '';
     const perito = lerPeritoSessao();
     peritoNome = perito.nome || perito.name || '';
-    peritoCargo = perito.cargo || perito.role || '';
+    const formasPerito = obterFormasPerito(perito.cargo || perito.role, perito.forma_tratamento);
+    peritoCargo = formasPerito.perito_cargo;
     peritoLotacao = perito.lotacao || '';
     peritoMatricula = perito.matricula || '';
 
@@ -1148,6 +1148,7 @@ export const TemplatesPage: React.FC = () => {
       '{{perito.cargo}}': peritoCargo,
       '{{perito_nome}}': peritoNome,
       '{{perito_cargo}}': peritoCargo,
+      ...Object.fromEntries(Object.entries(formasPerito).map(([chave, valor]) => [`{{${chave}}}`, valor])),
       '{{perito_lotacao}}': peritoLotacao,
       '{{perito_matricula}}': peritoMatricula,
       '{{data_atual}}': new Date().toLocaleDateString('pt-BR'),

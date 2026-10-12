@@ -4,6 +4,13 @@ import { resolverHtmlContextoIa, resolverTextoContextoIa } from '@/lib/ia-contex
 import { criarChaveMemoriaConsultaIa } from '@/lib/ia-consulta-contexto'
 
 describe('contexto resolvido da IA', () => {
+  it('usa o texto personalizado da ocorrência após atualizar os dados da REP', () => {
+    const htmlPersonalizado = encodeURIComponent('<strong>Valor</strong><br>local')
+    const html = `<span data-placeholder="{{arma}}" data-placeholder-personalizado-html="${htmlPersonalizado}">{{arma}}</span>`
+    const mapa = { arma: { chave: 'arma', valor: 'Valor novo da REP', preenchido: true, formato: 'texto' as const } }
+    expect(resolverTextoContextoIa(html, mapa)).toBe('Valor local')
+    expect(resolverHtmlContextoIa(html, mapa)).toContain('<strong>Valor</strong><br>local')
+  })
   it('substitui placeholders por dados reais sem alterar o HTML original', () => {
     const html = '<p>Na data de <span data-placeholder="{{data_extenso_recebimento_rep}}">{{data_extenso_recebimento_rep}}</span>, em {{cidade}}.</p>'
     const resultado = resolverTextoContextoIa(html, {

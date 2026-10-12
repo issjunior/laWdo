@@ -87,6 +87,10 @@ export const registerUserHandlers = (): void => {
       }
       const senhaHash = await bcrypt.hash(userData.senha, 10)
 
+      if (userData.forma_tratamento !== undefined && userData.forma_tratamento !== 'masculino' && userData.forma_tratamento !== 'feminino') {
+        return { success: false, error: 'Forma de tratamento inválida' }
+      }
+
       // Sanitizar dados de entrada
       const sanitizedData = {
         nome: sanitizeInput(userData.nome),
@@ -95,6 +99,7 @@ export const registerUserHandlers = (): void => {
         telefone: userData.telefone ? sanitizeInput(userData.telefone) : null,
         cargo: userData.cargo ? sanitizeInput(userData.cargo) : null,
         lotacao: userData.lotacao ? sanitizeInput(userData.lotacao) : null,
+        forma_tratamento: userData.forma_tratamento || 'masculino',
         username: userData.username ? sanitizeInput(userData.username) : usernameBase,
         senha_hash: senhaHash,
         ativo: 1
@@ -136,6 +141,10 @@ export const registerUserHandlers = (): void => {
       if (updateData.telefone) sanitizedData.telefone = sanitizeInput(updateData.telefone)
       if (updateData.cargo) sanitizedData.cargo = sanitizeInput(updateData.cargo)
       if (updateData.lotacao) sanitizedData.lotacao = sanitizeInput(updateData.lotacao)
+      if (updateData.forma_tratamento !== undefined) {
+        if (updateData.forma_tratamento !== 'masculino' && updateData.forma_tratamento !== 'feminino') return { success: false, error: 'Forma de tratamento inválida' }
+        sanitizedData.forma_tratamento = updateData.forma_tratamento
+      }
 
       logDebug('Atualizando usuário', { id })
       const updatedUser = await userService.update(id, sanitizedData)
@@ -273,6 +282,10 @@ export const registerUserHandlers = (): void => {
       if (profileData.telefone) sanitizedData.telefone = sanitizeInput(profileData.telefone)
       if (profileData.cargo) sanitizedData.cargo = sanitizeInput(profileData.cargo)
       if (profileData.lotacao) sanitizedData.lotacao = sanitizeInput(profileData.lotacao)
+      if (profileData.forma_tratamento !== undefined) {
+        if (profileData.forma_tratamento !== 'masculino' && profileData.forma_tratamento !== 'feminino') return { success: false, error: 'Forma de tratamento inválida' }
+        sanitizedData.forma_tratamento = profileData.forma_tratamento
+      }
       if (profileData.email) sanitizedData.email = sanitizeInput(profileData.email).toLowerCase()
       if (profileData.senha && typeof profileData.senha === 'string' && profileData.senha.length >= 6) {
         sanitizedData.senha_hash = await bcrypt.hash(profileData.senha, 10)
