@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
+import type { FalhaPdf } from '../shared/types/pdf.types.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -323,7 +324,7 @@ export interface IpcAPI {
     gerarWizard: (params: IpcPayload) => Promise<UserResponse>;
     salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => Promise<UserResponse>;
     getRespostasWizard: (laudoId: string) => Promise<UserResponse>;
-    exportar: (params: ExportacaoLaudoParams) => Promise<UserResponse>;
+    exportar: (params: ExportacaoLaudoParams) => Promise<UserResponse & { falhaPdf?: FalhaPdf }>;
     verificarLibreOffice: () => Promise<UserResponse>;
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };

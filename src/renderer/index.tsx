@@ -39,6 +39,7 @@ interface IpcRespostaLegada {
   data?: IpcDadoLegado;
   user?: IpcDadoLegado;
   error: string;
+  falhaPdf?: unknown;
   limiteRequisicoes?: LimiteUsoIa;
   message?: string;
   total?: number;
