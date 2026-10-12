@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -71,17 +71,12 @@ import {
   Square,
 } from 'lucide-react';
 import {
-  CONFIGURACAO_IMAGEM_IA_PADRAO,
-  CONFIGURACAO_PRIVACIDADE_IA_PADRAO,
-  configuracaoImagemIaValida,
-  configuracaoPrivacidadeIaValida,
   deveMascararConteudoIa,
   PERFIL_RESPOSTA_IA_PADRAO,
-  type ConfiguracaoPrivacidadeIa,
-  type ConfiguracaoImagemIa,
   type PerfilRespostaIa,
 } from '@shared/types/ia.types';
 import { listarModelosIa } from '@shared/catalogos/modelos-ia.catalogo';
+import { CONFIGURACAO_PROVEDOR_IA_PADRAO, useConfiguracoesIa, type EstadoCarregamentoIa, type MotivoErroCarregamentoIa } from '@/hooks/useConfiguracoesIa';
 
 const iaConfigSchema = z.object({
   provedor: z.enum(['groq', 'gemini']),
@@ -130,6 +125,29 @@ const formatarTempoTeste = (segundos: number): string => {
 interface MensagemTesteConexaoIa {
   titulo: string;
   mensagem: string;
+}
+
+function EstadoLeituraConfiguracaoIa({ estado, nome, motivoErro, tentarNovamente }: {
+  estado: EstadoCarregamentoIa;
+  nome: string;
+  motivoErro?: MotivoErroCarregamentoIa | null;
+  tentarNovamente: () => void;
+}) {
+  if (estado === 'pronto') return null;
+  return (
+    <Alert variant={estado === 'erro' ? 'destructive' : 'default'} role={estado === 'erro' ? 'alert' : 'status'}>
+      {estado === 'erro' ? <AlertTriangle className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />}
+      <AlertTitle>{estado === 'erro' ? `Não foi possível carregar ${nome}` : `Carregando ${nome}`}</AlertTitle>
+      <AlertDescription className="flex flex-wrap items-center gap-3">
+        {estado === 'erro'
+          ? motivoErro === 'valor_invalido'
+            ? 'A configuração salva tem formato inválido. O salvamento está bloqueado até que a leitura seja corrigida.'
+            : 'A leitura falhou. O salvamento está bloqueado até que a leitura seja concluída.'
+          : 'Aguarde a leitura das configurações salvas.'}
+        {estado === 'erro' && <Button type="button" variant="outline" size="sm" onClick={tentarNovamente}>Tentar novamente</Button>}
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 const obterMensagemErroConexaoIa = (erro: string | undefined, provedor: string): MensagemTesteConexaoIa => {
@@ -222,11 +240,8 @@ export const ModelosIAPage: React.FC = () => {
     message: string;
   } | null>(null);
   const [tempoTesteSegundos, setTempoTesteSegundos] = useState(0);
-  const [perfil, setPerfil] = useState<PerfilRespostaIa>(PERFIL_RESPOSTA_IA_PADRAO);
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [salvandoPrivacidade, setSalvandoPrivacidade] = useState(false);
-  const [privacidade, setPrivacidade] = useState<ConfiguracaoPrivacidadeIa>(CONFIGURACAO_PRIVACIDADE_IA_PADRAO);
-  const [configuracaoImagem, setConfiguracaoImagem] = useState<ConfiguracaoImagemIa>(CONFIGURACAO_IMAGEM_IA_PADRAO);
   const [salvandoConfiguracaoImagem, setSalvandoConfiguracaoImagem] = useState(false);
   const [configuracaoAberta, setConfiguracaoAberta] = useState(false);
   const [guiaChaveAberto, setGuiaChaveAberto] = useState(false);
@@ -235,15 +250,10 @@ export const ModelosIAPage: React.FC = () => {
 
   const form = useForm<IAConfigForm>({
     resolver: zodResolver(iaConfigSchema),
-    defaultValues: {
-      provedor: 'groq',
-      apiKeyGroq: '',
-      apiKeyGemini: '',
-      modeloGroq: 'llama-3.3-70b-versatile',
-      modeloGemini: 'gemini-2.5-flash',
-    },
+    defaultValues: CONFIGURACAO_PROVEDOR_IA_PADRAO,
     mode: 'onBlur',
   });
+  const { estados, motivosErro, recarregarGrupo, perfil, setPerfil, privacidade, setPrivacidade, configuracaoImagem, setConfiguracaoImagem } = useConfiguracoesIa(form);
 
   const provedor = form.watch('provedor');
 
@@ -254,63 +264,8 @@ export const ModelosIAPage: React.FC = () => {
     return () => window.clearInterval(intervalo);
   }, [testando]);
 
-  const carregarConfig = useCallback(async () => {
-    try {
-      const rProvedor = await window.ipcAPI.configuracao.obter('provedor_ia');
-      if (rProvedor.success && rProvedor.data) {
-        form.setValue('provedor', rProvedor.data as 'groq' | 'gemini');
-      }
-
-      const rKeyGroq = await window.ipcAPI.configuracao.obter('api_key_groq');
-      if (rKeyGroq.success && rKeyGroq.data) {
-        form.setValue('apiKeyGroq', rKeyGroq.data);
-      }
-
-      const rKeyGemini = await window.ipcAPI.configuracao.obter('api_key_gemini');
-      if (rKeyGemini.success && rKeyGemini.data) {
-        form.setValue('apiKeyGemini', rKeyGemini.data);
-      }
-
-      const rModeloGroq = await window.ipcAPI.configuracao.obter('modelo_ia_padrao');
-      if (rModeloGroq.success && rModeloGroq.data) {
-        form.setValue('modeloGroq', rModeloGroq.data);
-      }
-
-      const rModeloGemini = await window.ipcAPI.configuracao.obter('modelo_gemini_padrao');
-      if (rModeloGemini.success && rModeloGemini.data) {
-        form.setValue('modeloGemini', rModeloGemini.data);
-      }
-
-      const rPerfil = await window.ipcAPI.ia.obterPerfil();
-      if (rPerfil.success && rPerfil.data) setPerfil(rPerfil.data);
-      const rPrivacidade = await window.ipcAPI.configuracao.obter('privacidade_ia');
-      if (rPrivacidade.success && typeof rPrivacidade.data === 'string') {
-        try {
-          const valor: unknown = JSON.parse(rPrivacidade.data);
-          if (configuracaoPrivacidadeIaValida(valor)) setPrivacidade(valor);
-        } catch {
-          setPrivacidade(CONFIGURACAO_PRIVACIDADE_IA_PADRAO);
-        }
-      }
-      const rConfiguracaoImagem = await window.ipcAPI.configuracao.obter('qualidade_imagem_ia');
-      if (rConfiguracaoImagem.success && typeof rConfiguracaoImagem.data === 'string') {
-        try {
-          const valor: unknown = JSON.parse(rConfiguracaoImagem.data);
-          if (configuracaoImagemIaValida(valor)) setConfiguracaoImagem(valor);
-        } catch {
-          setConfiguracaoImagem(CONFIGURACAO_IMAGEM_IA_PADRAO);
-        }
-      }
-    } catch {
-      // silencioso
-    }
-  }, [form]);
-
-  useEffect(() => {
-    carregarConfig();
-  }, [carregarConfig]);
-
   const handleSalvar = form.handleSubmit(async (data) => {
+    if (estados.provedor !== 'pronto') return;
     try {
       setSalvando(true);
       setError(null);
@@ -322,7 +277,6 @@ export const ModelosIAPage: React.FC = () => {
         window.ipcAPI.configuracao.salvar('api_key_gemini', data.apiKeyGemini || '', 'api_key', 'Chave de API Gemini'),
         window.ipcAPI.configuracao.salvar('modelo_ia_padrao', data.modeloGroq, 'texto', 'Modelo padrão Groq'),
         window.ipcAPI.configuracao.salvar('modelo_gemini_padrao', data.modeloGemini, 'texto', 'Modelo padrão Gemini'),
-        window.ipcAPI.configuracao.salvar('privacidade_ia', JSON.stringify(privacidade), 'json', 'Política de privacidade do conteúdo enviado à IA'),
       ]);
 
       const falha = resultados.find((r) => !r.success);
@@ -343,6 +297,7 @@ export const ModelosIAPage: React.FC = () => {
   const provedorNome = provedor === 'gemini' ? 'Gemini' : 'Groq';
 
   const handleTestarConexao = async () => {
+    if (estados.provedor !== 'pronto') return;
     const operationId = crypto.randomUUID();
     operacaoTesteConexaoRef.current = operationId;
     try {
@@ -400,6 +355,7 @@ export const ModelosIAPage: React.FC = () => {
   };
 
   const salvarPerfil = async () => {
+    if (estados.perfil !== 'pronto') return;
     try {
       setSalvandoPerfil(true);
       setError(null);
@@ -410,12 +366,15 @@ export const ModelosIAPage: React.FC = () => {
       }
       setSuccess('Preferências das respostas salvas com sucesso!');
       setTimeout(() => setSuccess(null), 3000);
+    } catch (erro: unknown) {
+      setError(getMensagemErro(erro));
     } finally {
       setSalvandoPerfil(false);
     }
   };
 
   const salvarPrivacidade = async () => {
+    if (estados.privacidade !== 'pronto') return;
     try {
       setSalvandoPrivacidade(true);
       setError(null);
@@ -438,6 +397,7 @@ export const ModelosIAPage: React.FC = () => {
   };
 
   const salvarConfiguracaoImagem = async () => {
+    if (estados.imagem !== 'pronto') return;
     try {
       setSalvandoConfiguracaoImagem(true);
       setError(null);
@@ -529,7 +489,7 @@ export const ModelosIAPage: React.FC = () => {
           <div className="grid gap-3 sm:grid-cols-2">
             <Button type="button" variant="outline" className="h-auto justify-start gap-3 p-4" onClick={() => setConfiguracaoAberta(true)}>
               <KeyRound className="h-5 w-5 text-primary" />
-              <span className="text-left"><span className="block font-medium">Configurar provedor</span><span className="block text-xs font-normal text-muted-foreground">Modelo, chave e conexão</span></span>
+              <span className="text-left"><span className="block font-medium">Configurar provedor</span><span className="block text-xs font-normal text-muted-foreground">{estados.provedor === 'erro' ? 'Falha ao carregar; abra para tentar novamente' : 'Modelo, chave e conexão'}</span></span>
             </Button>
             <Button type="button" variant="outline" className="h-auto justify-start gap-3 p-4" onClick={() => setGuiaChaveAberto(true)}>
               <BookOpen className="h-5 w-5 text-primary" />
@@ -545,6 +505,7 @@ export const ModelosIAPage: React.FC = () => {
               <CardDescription>Escolha como o conteúdo do laudo será enviado à IA.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <EstadoLeituraConfiguracaoIa estado={estados.privacidade} motivoErro={motivosErro.privacidade} nome="a privacidade" tentarNovamente={() => void recarregarGrupo('privacidade')} />
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg border p-4">
                   <div className="space-y-1">
@@ -567,7 +528,7 @@ export const ModelosIAPage: React.FC = () => {
                 </Alert>
               </div>
               <div className="flex justify-end">
-                <Button type="button" onClick={() => void salvarPrivacidade()} disabled={salvandoPrivacidade}>
+                <Button type="button" onClick={() => void salvarPrivacidade()} disabled={salvandoPrivacidade || estados.privacidade !== 'pronto'}>
                   {salvandoPrivacidade ? 'Salvando...' : 'Salvar privacidade do conteúdo'}
                 </Button>
               </div>
@@ -582,6 +543,11 @@ export const ModelosIAPage: React.FC = () => {
               <CardDescription>Defina o equilíbrio entre fidelidade visual, consumo de tokens e uso de internet ao descrever figuras.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 lg:grid-cols-2">
+              {estados.imagem !== 'pronto' && (
+                <div className="lg:col-span-2">
+                  <EstadoLeituraConfiguracaoIa estado={estados.imagem} motivoErro={motivosErro.imagem} nome="a qualidade da imagem" tentarNovamente={() => void recarregarGrupo('imagem')} />
+                </div>
+              )}
               <div className="space-y-4">
                 <div className="space-y-3 rounded-lg border p-4">
                   <div className="flex items-baseline justify-between gap-3">
@@ -604,7 +570,7 @@ export const ModelosIAPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button type="button" onClick={() => void salvarConfiguracaoImagem()} disabled={salvandoConfiguracaoImagem}>
+                  <Button type="button" onClick={() => void salvarConfiguracaoImagem()} disabled={salvandoConfiguracaoImagem || estados.imagem !== 'pronto'}>
                     {salvandoConfiguracaoImagem ? 'Salvando...' : 'Salvar qualidade da imagem'}
                   </Button>
                 </div>
@@ -638,6 +604,7 @@ export const ModelosIAPage: React.FC = () => {
               <CardDescription>Oriente como a IA deve elaborar as respostas. Estas preferências não alteram o provedor, modelo ou chaves.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              <EstadoLeituraConfiguracaoIa estado={estados.perfil} motivoErro={motivosErro.perfil} nome="as preferências das respostas" tentarNovamente={() => void recarregarGrupo('perfil')} />
               <TooltipProvider>
               <div className="grid gap-5 md:grid-cols-2">
                 <div className="space-y-2">
@@ -687,7 +654,7 @@ export const ModelosIAPage: React.FC = () => {
               </TooltipProvider>
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button type="button" variant="outline" onClick={() => setPerfil(PERFIL_RESPOSTA_IA_PADRAO)}>Restaurar padrão</Button>
-                <Button type="button" onClick={() => void salvarPerfil()} disabled={salvandoPerfil}>{salvandoPerfil ? 'Salvando...' : 'Salvar preferências'}</Button>
+                <Button type="button" onClick={() => void salvarPerfil()} disabled={salvandoPerfil || estados.perfil !== 'pronto'}>{salvandoPerfil ? 'Salvando...' : 'Salvar preferências'}</Button>
               </div>
             </CardContent>
           </Card>
@@ -710,6 +677,7 @@ export const ModelosIAPage: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              <EstadoLeituraConfiguracaoIa estado={estados.provedor} motivoErro={motivosErro.provedor} nome="as configurações do provedor" tentarNovamente={() => void recarregarGrupo('provedor')} />
               {/* Provedor de IA */}
               <FormField
                 control={form.control}
@@ -831,7 +799,7 @@ export const ModelosIAPage: React.FC = () => {
                   type="button"
                   variant={testando ? 'destructive' : 'outline'}
                   onClick={() => testando ? void cancelarTesteConexao() : void handleTestarConexao()}
-                  disabled={!testando && !chaveAtual}
+                  disabled={!testando && (estados.provedor !== 'pronto' || !chaveAtual)}
                   className="gap-2"
                 >
                   {testando ? (
@@ -841,7 +809,7 @@ export const ModelosIAPage: React.FC = () => {
                   )}
                   {testando ? `Cancelar teste · ${formatarTempoTeste(tempoTesteSegundos)}` : 'Testar Conexão'}
                 </Button>
-                <Button type="button" onClick={() => void handleSalvar()} disabled={salvando || testando} className="gap-2">
+                <Button type="button" onClick={() => void handleSalvar()} disabled={salvando || testando || estados.provedor !== 'pronto'} className="gap-2">
                   <Save size={16} />
                   {salvando ? 'Salvando...' : 'Salvar Configurações'}
                 </Button>
