@@ -15,7 +15,12 @@ const mocks = vi.hoisted(() => ({
   atualizarStatusLaudo: vi.fn(),
   sincronizarSecoes: vi.fn(),
   auditar: vi.fn(),
+  listarTipos: vi.fn(),
+  buscarTemplate: vi.fn(),
 }))
+
+vi.mock('../../main/services/tipo-exame.service.js', () => ({ tipoExameService: { findAllOrdered: mocks.listarTipos } }))
+vi.mock('../../main/services/template.service.js', () => ({ templateService: { findById: mocks.buscarTemplate } }))
 
 vi.mock('../../main/database/sqlite.js', () => ({
   executeNonQuery: mocks.executar,
@@ -144,6 +149,20 @@ describe('AtualizacaoRepGdlService', () => {
     mocks.atualizarStatusRep.mockResolvedValue(undefined)
     mocks.atualizarStatusLaudo.mockResolvedValue(undefined)
     mocks.sincronizarSecoes.mockResolvedValue(undefined)
+    mocks.listarTipos.mockResolvedValue([{ id: 'tipo-gdl', codigo: 'B-602', ativo: true }])
+    mocks.buscarTemplate.mockResolvedValue(null)
+  })
+
+  it('reutiliza a consulta detalhada e exige seleção explícita para tipo e vazio confirmado', async () => {
+    const consulta = await mocks.consultarRep();
+    mocks.consultarRep.mockClear();
+    const previa = await atualizacaoRepGdlService.preparar('rep-1', consulta, ['observacoes']);
+    expect(mocks.consultarRep).not.toHaveBeenCalled();
+    expect(previa.diferencas.find(item => item.id === 'campo:tipo_exame_id')?.selecionadaPorPadrao).toBe(false);
+    expect(previa.diferencas.find(item => item.id === 'campo:observacoes')).toMatchObject({ valorGdl: 'Vazio confirmado no GDL', selecionadaPorPadrao: false });
+    await atualizacaoRepGdlService.aplicar({ operacaoId: previa.operacaoId, diferencasSelecionadas: ['campo:observacoes'], reabrirLaudo: false });
+    expect(mocks.executar.mock.calls[0][0]).not.toContain('tipo_exame_id =');
+    expect(mocks.executar.mock.calls[0][1][0]).toBe('');
   })
 
   it('aplica somente as diferenças selecionadas e preserva peças locais não selecionadas', async () => {

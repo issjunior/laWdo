@@ -1,3 +1,4 @@
+import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
@@ -249,6 +250,7 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
+    copiarEmailSuporte: () => Promise<UserResponse<{ email: string }>>;
     obterPreferenciaListagem: () => Promise<UserResponse<{ habilitada: boolean }>>;
     definirPreferenciaListagem: (habilitada: boolean) => Promise<UserResponse<{ habilitada: boolean }>>;
     obterMinhasRepsCache: () => Promise<UserResponse<SnapshotMinhasRepsGdl | null>>;
@@ -257,7 +259,12 @@ export interface IpcAPI {
     obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
+    identificarRep: (numero: string, ano: string, naturezaLista?: string) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
+    completarConsultaRep: (consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
+    descartarConsultaRep: () => Promise<UserResponse>;
+    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
     consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
+    completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     prepararAtualizacaoRep: (repId: string) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<UserResponse<ResultadoAtualizacaoRepGdl>>;
     listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ListaImagensRepGdl>>;
@@ -560,9 +567,15 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:limpar-validacao-sessao',
   'gdl:validar-credenciais',
   'gdl:consultar-rep',
+  'gdl:identificar-rep',
+  'gdl:copiar-email-suporte',
+  'gdl:completar-consulta-rep',
+  'gdl:descartar-consulta-rep',
+  'gdl:converter-consulta-rep',
   'gdl:obter-minhas-reps-cache',
   'gdl:atualizar-minhas-reps-cache',
   'gdl:preparar-atualizacao-rep',
+  'gdl:completar-atualizacao-rep',
   'gdl:aplicar-atualizacao-rep',
   'gdl:listar-imagens-laudo',
   'gdl:obter-miniaturas-imagens-laudo',
@@ -1425,6 +1438,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    copiarEmailSuporte: (): Promise<UserResponse<{ email: string }>> => invocarComDiagnostico('gdl:copiar-email-suporte'),
     obterPreferenciaListagem: (): Promise<UserResponse<{ habilitada: boolean }>> => invocarComDiagnostico('gdl:obter-preferencia-listagem'),
     definirPreferenciaListagem: (habilitada: boolean): Promise<UserResponse<{ habilitada: boolean }>> => {
       if (typeof habilitada !== 'boolean') throw new Error('Preferência de listagem inválida');
@@ -1450,6 +1464,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       }
       return invocarComDiagnostico('gdl:validar-credenciais', ambiente.trim(), credenciais, numero.trim(), ano.trim());
     },
+    identificarRep: (numero: string, ano: string, naturezaLista?: string): Promise<UserResponse<ConsultaIdentificacaoRepGdl>> =>
+      invocarComDiagnostico('gdl:identificar-rep', numero.replace(/\D/g, ''), ano.trim(), naturezaLista),
+    completarConsultaRep: (consultaId: string, abrirDetalhes: boolean): Promise<UserResponse<ConsultaIdentificacaoRepGdl>> => invocarComDiagnostico('gdl:completar-consulta-rep', consultaId, abrirDetalhes),
+    descartarConsultaRep: (): Promise<UserResponse> => invocarComDiagnostico('gdl:descartar-consulta-rep'),
+    converterConsultaRep: (consultaId: string, tipoExameId: string): Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>> =>
+      invocarComDiagnostico('gdl:converter-consulta-rep', consultaId, tipoExameId),
     consultarRep: (numero: string, ano: string) => {
       if (typeof numero !== 'string' || !numero.trim()) {
         throw new Error('Número da REP é obrigatório');
@@ -1459,6 +1479,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       }
       return invocarComDiagnostico('gdl:consultar-rep', numero.trim(), ano.trim());
     },
+    completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean): Promise<UserResponse<PreviaAtualizacaoRepGdl>> => invocarComDiagnostico('gdl:completar-atualizacao-rep', repId, consultaId, abrirDetalhes),
     prepararAtualizacaoRep: (repId: string): Promise<UserResponse<PreviaAtualizacaoRepGdl>> => {
       if (typeof repId !== 'string' || !repId.trim()) throw new Error('REP inválida');
       return invocarComDiagnostico('gdl:preparar-atualizacao-rep', repId);

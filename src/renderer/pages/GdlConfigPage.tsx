@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -138,7 +137,6 @@ export const GdlConfigPage: React.FC = () => {
   const [listagemHabilitada, setListagemHabilitada] = useState(false);
   const [preferenciaCarregada, setPreferenciaCarregada] = useState(false);
   const [salvandoListagem, setSalvandoListagem] = useState(false);
-  const [confirmarListagemOpen, setConfirmarListagemOpen] = useState(false);
   const [erroListagem, setErroListagem] = useState<string | null>(null);
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
@@ -245,7 +243,6 @@ export const GdlConfigPage: React.FC = () => {
         throw new Error(resposta.error || 'Não foi possível salvar a preferência de listagem.');
       }
       setListagemHabilitada(habilitar);
-      setConfirmarListagemOpen(false);
       toast.success(habilitar ? 'Listagem de REPs ativada.' : 'Listagem de REPs desativada.');
     } catch (falha: unknown) {
       setErroListagem(getMensagemErro(falha, 'Não foi possível salvar a preferência de listagem.'));
@@ -557,7 +554,7 @@ export const GdlConfigPage: React.FC = () => {
             {!preferenciaCarregada
               ? 'Preferência de listagem não confirmada.'
               : listagemHabilitada
-              ? 'Ativada: as listas são atualizadas pelo GDL. A consulta de detalhes pode marcar REPs como “Laudo em Execução”.'
+              ? 'Ativada: as listas são atualizadas pelo GDL e os exames são identificados pelo catálogo local.'
               : 'Desativada: as listas mostram apenas cache com menos de 30 minutos e não consultam o GDL.'}
           </p>
           {erroListagem && <Alert variant="destructive"><AlertDescription className="flex items-center gap-3">{erroListagem}<Button type="button" variant="outline" size="sm" onClick={() => void carregarPreferenciaListagem()}>Tentar novamente</Button></AlertDescription></Alert>}
@@ -566,27 +563,14 @@ export const GdlConfigPage: React.FC = () => {
             variant={listagemHabilitada ? 'outline' : 'default'}
             aria-pressed={listagemHabilitada}
             disabled={!preferenciaCarregada || salvandoListagem}
-            onClick={() => listagemHabilitada ? void alterarListagem(false) : setConfirmarListagemOpen(true)}
+            onClick={() => void alterarListagem(!listagemHabilitada)}
           >
             {salvandoListagem ? 'Salvando...' : listagemHabilitada ? 'Desativar listagem' : 'Ativar listagem'}
           </Button>
         </CardContent>
       </Card>
 
-      <AlertDialog open={confirmarListagemOpen} onOpenChange={setConfirmarListagemOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ativar a listagem de REPs?</AlertDialogTitle>
-            <AlertDialogDescription>
-              A listagem consulta os detalhes das REPs no GDL e pode marcá-las como “Laudo em Execução”. Ao confirmar, Dashboard e REPs → Listar REPs poderão atualizar a lista automaticamente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={salvandoListagem}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction disabled={salvandoListagem} onClick={evento => { evento.preventDefault(); void alterarListagem(true); }}>Confirmar ativação</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
 
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">

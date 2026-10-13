@@ -1,3 +1,4 @@
+import { codigoExameParaFormulario, normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useForm, type Path, type Resolver } from 'react-hook-form';
@@ -113,12 +114,15 @@ type LaudoResumo = { rep_id: string };
 type RegistroRep = REP & Record<string, ValorDesconhecido>;
 type CampoRep = Path<REPFormData>;
 
+const esquemaTiposExameResumo = z.array(z.object({ id: z.string(), nome: z.string(), codigo: z.string() }));
+const esquemaTemplatesResumo = z.array(z.object({ id: z.string(), nome: z.string(), chave_integrada: z.string().nullish() }));
+
 const CODIGO_EXAME_B602 = 'B-602';
 const CHAVE_TEMPLATE_PADRAO_B602 = 'laudo-padrao-b602';
 const NOME_TEMPLATE_PADRAO_B602 = 'Laudo Padrão B-602';
 
 function obterTemplatePadraoB602(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
-  if (codigoExame !== CODIGO_EXAME_B602) return undefined;
+  if (!codigoExame || normalizarCodigoExame(codigoExame) !== normalizarCodigoExame(CODIGO_EXAME_B602)) return undefined;
 
   return templates.find(template => template.chave_integrada === CHAVE_TEMPLATE_PADRAO_B602)
     ?? templates.find(template => template.nome === NOME_TEMPLATE_PADRAO_B602);
@@ -746,7 +750,7 @@ export const REPsPage: React.FC = () => {
 
   const [gdlModalOpen, setGdlModalOpen] = useState(false);
   const [gdlListaModalOpen, setGdlListaModalOpen] = useState(false);
-  const [repInicialGdl, setRepInicialGdl] = useState<{ numero: string; ano: string } | null>(null);
+  const [repInicialGdl, setRepInicialGdl] = useState<{ numero: string; ano: string; naturezaExame?: string } | null>(null);
   const [repParaAtualizarGdl, setRepParaAtualizarGdl] = useState<REP | null>(null);
   const [gdlPecasModalOpen, setGdlPecasModalOpen] = useState(false);
   const [camposPreenchidosGdl, setCamposPreenchidosGdl] = useState<Set<string>>(new Set());
@@ -783,36 +787,51 @@ export const REPsPage: React.FC = () => {
 
   const carregarTiposExame = useCallback(async () => {
     const r = await window.ipcAPI.tipoExame.findAll();
-    if (r.success && r.data) setTiposExame(r.data);
+    if (r.success && r.data) {
+      const validacao = esquemaTiposExameResumo.safeParse(r.data);
+      if (validacao.success) setTiposExame(validacao.data.map(tipo => ({ ...tipo, codigo: codigoExameParaFormulario(tipo.codigo) })));
+      else setError('O cadastro de tipos de exame retornou dados inválidos.');
+    }
   }, []);
 
   useEffect(() => { carregarREPs(); carregarSolicitantes(); carregarTiposExame(); }, [carregarREPs, carregarSolicitantes, carregarTiposExame]);
 
   const tipoExameId = form.watch('tipo_exame_id');
 
-  // Quando o tipo de exame muda, busca os templates vinculados e limpa template_id
+  // Preserva o template atual quando ele continua vinculado ao tipo escolhido.
   useEffect(() => {
-    if (editLoadRef.current) {
-      editLoadRef.current = false;
-    } else {
-      form.setValue('template_id', '', { shouldValidate: false });
-    }
+    const preservarTemplateInicial = editLoadRef.current;
+    editLoadRef.current = false;
+    let cancelado = false;
     if (!showForm || !tipoExameId) {
       setTemplatesVinculados([]);
+      if (!tipoExameId) form.setValue('template_id', '', { shouldValidate: false });
       return;
     }
     (async () => {
       const r = await window.ipcAPI.template.findByTipoExame(tipoExameId);
+      if (cancelado) return;
       if (r.success && r.data) {
-        const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        const validacao = esquemaTemplatesResumo.safeParse(r.data);
+        if (!validacao.success) {
+          setError('Não foi possível validar os templates do tipo de exame.');
+          setTemplatesVinculados([]);
+          return;
+        }
+        const ordenados = [...validacao.data].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
         setTemplatesVinculados(ordenados);
+        const templateAtual = form.getValues('template_id');
+        if (!preservarTemplateInicial && templateAtual && !ordenados.some(template => template.id === templateAtual)) {
+          form.setValue('template_id', '', { shouldValidate: false });
+        }
         const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
         const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
-        if (templatePadrao) form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
+        if (templatePadrao && !form.getValues('template_id')) form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
       } else {
         setTemplatesVinculados([]);
       }
     })();
+    return () => { cancelado = true; };
   }, [form, tipoExameId, showForm, tiposExame]);
 
 
@@ -909,7 +928,7 @@ export const REPsPage: React.FC = () => {
 
   const handleSelecionarRepGdl = (rep: MinhaRepGdl) => {
     handleNovo();
-    setRepInicialGdl({ numero: rep.numero, ano: rep.ano });
+    setRepInicialGdl({ numero: rep.numero, ano: rep.ano, naturezaExame: rep.naturezaExame });
     setGdlListaModalOpen(false);
     setGdlModalOpen(true);
   };
@@ -922,7 +941,7 @@ export const REPsPage: React.FC = () => {
       || typeof entrada.numero !== 'string' || !/^\d+$/.test(entrada.numero)
       || typeof entrada.ano !== 'string' || !/^\d{4}$/.test(entrada.ano)) return;
     handleNovo();
-    setRepInicialGdl({ numero: entrada.numero, ano: entrada.ano });
+    setRepInicialGdl({ numero: entrada.numero, ano: entrada.ano, naturezaExame: 'naturezaExame' in entrada && typeof entrada.naturezaExame === 'string' ? entrada.naturezaExame : undefined });
     setGdlModalOpen(true);
     navigate('/reps', { replace: true, state: null });
   }, [location.state, navigate, handleNovo]);
@@ -1394,13 +1413,13 @@ export const REPsPage: React.FC = () => {
     }
 
     const tipoExameGdl = tiposExame.find(
-      tipo => tipo.codigo.trim().toUpperCase() === codigoExameGdl,
+      tipo => normalizarCodigoExame(tipo.codigo) === normalizarCodigoExame(codigoExameGdl),
     );
     if (!tipoExameGdl) {
       setError(`O tipo de exame ${resultado.codigoExame} não está cadastrado localmente.`);
       return;
     }
-    if (tipoExameSelecionado && tipoExameSelecionado.id !== tipoExameGdl.id) {
+    if (form.getValues('tipo_exame_id') && form.getValues('tipo_exame_id') !== tipoExameGdl.id) {
       setError(`A consulta retornou dados ${resultado.codigoExame}. Confirme a troca do tipo de exame antes de aplicar.`);
       return;
     }
@@ -1415,7 +1434,9 @@ export const REPsPage: React.FC = () => {
       const valorAtual = form.getValues(campo);
       const valorPadrao = valoresPadrao[campo];
       const campoSemDadoDoUsuario = !valorAtual || valorAtual === valorPadrao;
-      if (substituirDadosGdl || campoSemDadoDoUsuario) {
+      const limpezaSelecionada = (key === 'observacoes' || key === 'data_requisicao')
+        && resultado.camposVaziosConfirmados?.includes(key) && resultado.limpezasSelecionadas?.includes(key);
+      if (limpezaSelecionada || (value && (substituirDadosGdl || campoSemDadoDoUsuario))) {
         const valorNormalizado = campo === 'numero' && typeof value === 'string'
           ? formatarNumeroREP(value)
           : value;
@@ -2353,6 +2374,13 @@ export const REPsPage: React.FC = () => {
       <GdlConsultaModal
         open={gdlModalOpen}
         repInicial={repInicialGdl}
+        tipoExameAtualId={form.getValues('tipo_exame_id')}
+        onDefinirTipo={(tipoId, numero, ano) => {
+          const tipo = tiposExame.find(item => item.id === tipoId);
+          if (!tipo) return;
+          form.setValue('tipo_exame_id', tipoId, { shouldValidate: true });
+          if (!form.getValues('numero')) form.setValue('numero', formatarNumeroREP(`${numero}/${ano}`));
+        }}
         onOpenChange={aberto => {
           setGdlModalOpen(aberto);
           if (!aberto) setRepInicialGdl(null);

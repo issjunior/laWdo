@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { esquemaConsultaIdentificacaoRepGdl, normalizarCodigoExame } from '@shared/gdl/natureza-exame';
+import type { ConsultaIdentificacaoRepGdl } from '@shared/gdl/natureza-exame';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,8 +10,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { GdlStatusBadge } from './GdlStatusBadge';
+import { EMAIL_SUPORTE_LAWDO } from '@shared/gdl/suporte';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +55,6 @@ import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/
 import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
-const EMAIL_SUPORTE_LAWDO = 'izaias.santos@policiacientifica.pr.gov.br';
 
 const ANO_ATUAL = new Date().getFullYear();
 const ANOS_OPCOES = Array.from({ length: 10 }, (_, i) => (ANO_ATUAL - i).toString());
@@ -94,7 +97,9 @@ interface EnvolvidoRevisao {
 
 interface GdlConsultaModalProps {
   open: boolean;
-  repInicial?: { numero: string; ano: string } | null;
+  repInicial?: { numero: string; ano: string; naturezaExame?: string } | null;
+  onDefinirTipo: (tipoId: string, numero: string, ano: string) => void;
+  tipoExameAtualId?: string;
   onOpenChange: (open: boolean) => void;
   onAplicar: (
     resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
@@ -106,7 +111,7 @@ interface GdlConsultaModalProps {
   onConfigurarCredenciais: () => void;
 }
 
-type Passo = 'busca' | 'revisao';
+type Passo = 'busca' | 'identificacao' | 'revisao';
 
 interface PreTesteResultado {
   ok: boolean;
@@ -297,12 +302,20 @@ function ListaCamposRevisao({
 export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   open,
   repInicial,
+  onDefinirTipo,
+  tipoExameAtualId,
   onOpenChange,
   onAplicar,
   temDadosExistentes,
   pecasB602,
   onConfigurarCredenciais,
 }) => {
+  const geracaoConsulta = useRef(0);
+  const [identificacao, setIdentificacao] = useState<ConsultaIdentificacaoRepGdl | null>(null);
+  const [tipoIdentificadoId, setTipoIdentificadoId] = useState('');
+  const [convertendo, setConvertendo] = useState(false);
+  const [limpezasSelecionadas, setLimpezasSelecionadas] = useState<Array<'observacoes' | 'data_requisicao'>>([]);
+  const [importacaoIndisponivel, setImportacaoIndisponivel] = useState(false);
   const [passo, setPasso] = useState<Passo>('busca');
   const [numeroRep, setNumeroRep] = useState('');
   const [anoRep, setAnoRep] = useState(ANO_ATUAL.toString());
@@ -328,6 +341,20 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const avisoNaturezaEmDesenvolvimento = erro
     ? separarAvisoNaturezaEmDesenvolvimento(erro)
     : null;
+  const tipoIdentificado = identificacao?.tiposLocais.find(tipo => tipo.id === tipoIdentificadoId);
+  const codigoIdentificado = tipoIdentificado ? normalizarCodigoExame(tipoIdentificado.codigo) : identificacao?.identificacao.codigoSugerido;
+  const naturezaSemImportacao = Boolean(codigoIdentificado && identificacao?.codigosImportacaoDisponiveis
+    && !identificacao.codigosImportacaoDisponiveis.some(codigo => normalizarCodigoExame(codigo) === codigoIdentificado));
+
+  const copiarEmailSuporte = async () => {
+    try {
+      const resposta = await window.ipcAPI.gdl.copiarEmailSuporte();
+      if (!resposta.success) throw new Error(resposta.error || 'Falha ao copiar o e-mail.');
+      const dados = z.object({ email: z.literal(EMAIL_SUPORTE_LAWDO) }).parse(resposta.data);
+      toast.success(`E-mail copiado: ${dados.email}`);
+    }
+    catch { toast.error(`Não foi possível copiar o e-mail. Contato: ${EMAIL_SUPORTE_LAWDO}`); }
+  };
 
   const montarPreTeste = (data: GdlTesteRespostaApi): PreTesteResultado => ({
     ok: data.sucesso,
@@ -370,8 +397,14 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   }, [ambiente]);
 
   useEffect(() => {
+    geracaoConsulta.current += 1;
     if (open) {
+      setBuscando(false);
+      setConvertendo(false);
       setPasso('busca');
+      setIdentificacao(null);
+      setTipoIdentificadoId('');
+      setImportacaoIndisponivel(false);
       setNumeroRep(repInicial?.numero ?? '');
       setAnoRep(repInicial?.ano ?? ANO_ATUAL.toString());
       setAnoManual(Boolean(repInicial && !ANOS_OPCOES.includes(repInicial.ano)));
@@ -422,6 +455,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
         }
       })();
     }
+    return () => { geracaoConsulta.current += 1; void window.ipcAPI.gdl.descartarConsultaRep?.().catch(() => undefined); };
   }, [open, repInicial]);
 
   const handleAnoChange = (value: string) => {
@@ -460,37 +494,75 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   };
 
   const handleBuscar = async () => {
+    const geracao = ++geracaoConsulta.current;
     setErro(null);
     setBuscando(true);
     try {
-      const r = await window.ipcAPI.gdl.consultarRep(numeroRep.trim(), anoRep.trim());
-      if (r.success && r.data) {
-        const resultado: ResultadoImportacaoExame<DadosImportacaoB602> = r.data;
-        const indiceOrigemInicial = obterIndiceOrigemSelecionada(resultado);
-        const origemInicial = indiceOrigemInicial === null
-          ? undefined
-          : resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis[indiceOrigemInicial];
-        const mapeados = montarCamposMapeados(resultado, origemInicial);
-        setResultadoConsulta(resultado);
-        setIndiceOrigemSelecionada(indiceOrigemInicial);
-        setIdsPecasSelecionadas(new Set(
-          resultado.camposEspecificos.pecas.map(peca => `gdl-${peca.codPecaGdl ?? peca.idLocal}`),
-        ));
-        setIndicesEnvolvidosSelecionados(new Set(
-          montarEnvolvidosRevisao(resultado)
-            .filter(envolvido => envolvido.indice < 10)
-            .map(envolvido => envolvido.indice),
-        ));
-        setCamposMapeados(mapeados);
-        setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados));
-        setPasso('revisao');
-      } else {
-        setErro(r.error || 'Erro ao consultar REP');
+      const r = await window.ipcAPI.gdl.identificarRep(numeroRep.replace(/\D/g, ''), anoRep.trim(), repInicial?.naturezaExame);
+      if (geracao !== geracaoConsulta.current) return;
+      if (!r.success || !r.data) throw new Error(r.error || 'Erro ao consultar REP');
+      let dados = esquemaConsultaIdentificacaoRepGdl.parse(r.data);
+      if (dados.detalhes?.estado === 'aguardando_confirmacao') {
+        setIdentificacao(dados);
+        setPasso('identificacao');
+        const resposta = await window.ipcAPI.gdl.completarConsultaRep(dados.consultaId, true);
+        if (geracao !== geracaoConsulta.current) return;
+        if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível concluir a consulta detalhada.');
+        dados = esquemaConsultaIdentificacaoRepGdl.parse(resposta.data);
       }
-    } catch (e: unknown) {
-      setErro(getMensagemErro(e, 'Erro ao consultar REP'));
+      setIdentificacao(dados);
+      const codigo = dados.identificacao.codigoSugerido;
+      const tipos = dados.tiposLocais.filter(tipo => normalizarCodigoExame(tipo.codigo) === codigo);
+      const tipoAtual = dados.tiposLocais.find(tipo => tipo.id === tipoExameAtualId);
+      const codigoAtual = tipoAtual ? normalizarCodigoExame(tipoAtual.codigo) : '';
+      const atualCompativel = tipoAtual && (dados.identificacao.codigoExplicito
+        ? codigoAtual === dados.identificacao.codigoExplicito
+        : !dados.identificacao.candidatos.length || dados.identificacao.candidatos.some(item => item.codigo === codigoAtual));
+      setTipoIdentificadoId(atualCompativel ? tipoAtual.id : tipos.length === 1 ? tipos[0].id : '');
+      setPasso('identificacao');
+    } catch (erro: unknown) {
+      if (geracao === geracaoConsulta.current) setErro(getMensagemErro(erro, 'Erro ao consultar REP'));
     } finally {
-      setBuscando(false);
+      if (geracao === geracaoConsulta.current) setBuscando(false);
+    }
+  };
+
+  const handleConverter = async () => {
+    if (!identificacao || !tipoIdentificadoId) return;
+    const geracao = geracaoConsulta.current;
+    setErro(null);
+    setConvertendo(true);
+    try {
+      const r = await window.ipcAPI.gdl.converterConsultaRep(identificacao.consultaId, tipoIdentificadoId);
+      if (geracao !== geracaoConsulta.current) return;
+      if (!r.success || !r.data) {
+        setImportacaoIndisponivel(Boolean(r.error?.includes('não possui adaptador')));
+        throw new Error(r.error || 'Não foi possível preparar a importação.');
+      }
+      const resultado: ResultadoImportacaoExame<DadosImportacaoB602> = r.data;
+      const indiceOrigemInicial = obterIndiceOrigemSelecionada(resultado);
+      const origemInicial = indiceOrigemInicial === null
+        ? undefined
+        : resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis[indiceOrigemInicial];
+      const mapeados = montarCamposMapeados(resultado, origemInicial);
+      setResultadoConsulta(resultado);
+      setLimpezasSelecionadas([]);
+      setIndiceOrigemSelecionada(indiceOrigemInicial);
+      setIdsPecasSelecionadas(new Set(
+        resultado.camposEspecificos.pecas.map(peca => `gdl-${peca.codPecaGdl ?? peca.idLocal}`),
+      ));
+      setIndicesEnvolvidosSelecionados(new Set(
+        montarEnvolvidosRevisao(resultado)
+          .filter(envolvido => envolvido.indice < 10)
+          .map(envolvido => envolvido.indice),
+      ));
+      setCamposMapeados(mapeados);
+      setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados));
+      setPasso('revisao');
+    } catch (erro: unknown) {
+      if (geracao === geracaoConsulta.current) setErro(getMensagemErro(erro, 'Não foi possível preparar a importação.'));
+    } finally {
+      if (geracao === geracaoConsulta.current) setConvertendo(false);
     }
   };
 
@@ -534,8 +606,10 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           camposGeraisComEnvolvidos[`b602_envolvidos_${indice}`] = envolvido.nome;
         });
 
+      if (tipoIdentificadoId) onDefinirTipo(tipoIdentificadoId, numeroRep, anoRep);
       await onAplicar({
         ...resultadoComOrigem,
+        ...(limpezasSelecionadas.length ? { limpezasSelecionadas } : {}),
         camposGerais: camposGeraisComEnvolvidos,
         camposEspecificos: {
           ...resultadoComOrigem.camposEspecificos,
@@ -558,6 +632,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   }
 
   const handleClose = () => {
+    geracaoConsulta.current += 1;
+    void window.ipcAPI.gdl.descartarConsultaRep?.().catch(() => undefined);
     setPasso('busca');
     setErro(null);
     onOpenChange(false);
@@ -743,6 +819,14 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                 </div>
               )}
 
+              <Alert className="border-amber-500/30 bg-amber-500/5 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-400">
+                <AlertTriangle className="size-4" />
+                <AlertTitle>Status da REP no GDL</AlertTitle>
+                <AlertDescription className="text-sm leading-relaxed text-muted-foreground">
+                  A consulta detalhada pode alterar o status da REP para <GdlStatusBadge status="Laudo em Execução" /> no GDL.
+                </AlertDescription>
+              </Alert>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="gdl-numero-rep">Nº da REP</Label>
@@ -815,8 +899,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                         size="sm"
                         className="gap-2"
                         onClick={() => {
-                          void navigator.clipboard.writeText(EMAIL_SUPORTE_LAWDO);
-                          toast.success(`E-mail copiado: ${EMAIL_SUPORTE_LAWDO}`);
+                          void copiarEmailSuporte();
                         }}
                       >
                         <Mail className="h-4 w-4" />
@@ -850,8 +933,64 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           </>
         )}
 
+        {passo === 'identificacao' && identificacao && (
+          <div className="space-y-4 overflow-y-auto">
+            <p className="text-sm">REP {numeroRep}/{anoRep}</p>
+            <p className="text-sm text-muted-foreground">Natureza recebida: {identificacao.identificacao.textoOriginal || 'Não informada'}</p>
+            {!identificacao.identificacao.codigoExplicito && identificacao.identificacao.codigoSugerido && (
+              <p className="text-sm text-muted-foreground">Sugestão local: {identificacao.identificacao.codigoSugerido}. Confirme o tipo de exame.</p>
+            )}
+            {buscando && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Consultando os detalhes da REP...</p>}
+            {identificacao.detalhes?.origemNatureza === 'detalhes' && <p className="text-sm text-muted-foreground">Natureza confirmada na página da REP.</p>}
+            {naturezaSemImportacao && <Alert>
+              <AlertTriangle className="size-4" />
+              <AlertTitle>Exame ainda em desenvolvimento</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p>O formulário para a natureza de exame <strong className="font-semibold text-foreground">{identificacao.identificacao.textoOriginal || codigoIdentificado}</strong> ainda está em desenvolvimento no laWdo. Os dados não foram importados.</p>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => void copiarEmailSuporte()}><Mail className="size-4" />Dúvidas/Sugestões</Button>
+              </AlertDescription>
+            </Alert>}
+            <Label htmlFor="gdl-tipo-local">Tipo de exame local</Label>
+            <Select value={tipoIdentificadoId} onValueChange={valor => {
+              setTipoIdentificadoId(valor);
+              setErro(null);
+              setImportacaoIndisponivel(false);
+            }} disabled={convertendo || identificacao.detalhes?.estado === 'aguardando_confirmacao'}>
+              <SelectTrigger id="gdl-tipo-local"><SelectValue placeholder="Selecione o tipo de exame" /></SelectTrigger>
+              <SelectContent>
+                {identificacao.tiposLocais.filter(tipo => {
+                  const codigo = normalizarCodigoExame(tipo.codigo);
+                  const natureza = identificacao.identificacao;
+                  return natureza.codigoExplicito ? codigo === natureza.codigoExplicito
+                    : natureza.candidatos.length === 0 || natureza.candidatos.some(item => item.codigo === codigo);
+                }).map(tipo => <SelectItem key={tipo.id} value={tipo.id}>{tipo.codigo} - {tipo.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {!tipoIdentificadoId && identificacao.identificacao.codigoSugerido && (
+              <p className="text-sm text-muted-foreground">Cadastre ou ative o tipo local correspondente. O aplicativo não criará um cadastro automaticamente.</p>
+            )}
+            {identificacao.avisos.map(aviso => <p key={aviso} className="text-sm text-muted-foreground">{aviso}</p>)}
+            {erro && <Alert variant="destructive"><AlertDescription>{erro}</AlertDescription></Alert>}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={handleClose} disabled={convertendo}>Cancelar</Button>
+              {(importacaoIndisponivel || naturezaSemImportacao) && <Button variant="outline" disabled={!tipoIdentificadoId} onClick={() => {
+                onDefinirTipo(tipoIdentificadoId, numeroRep, anoRep);
+                onOpenChange(false);
+              }}>Usar tipo e preencher localmente</Button>}
+              <Button disabled={!tipoIdentificadoId || convertendo || naturezaSemImportacao || identificacao.detalhes?.estado === 'aguardando_confirmacao'} onClick={() => void handleConverter()}>
+                {convertendo ? 'Preparando...' : 'Confirmar tipo e revisar dados'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {passo === 'revisao' && (
           <>
+            {resultadoConsulta?.camposVaziosConfirmados?.map(campo => <label key={campo} className="flex items-center gap-2 text-sm">
+              <Checkbox checked={limpezasSelecionadas.includes(campo)} onCheckedChange={marcado => setLimpezasSelecionadas(atuais => marcado === true ? [...atuais.filter(item => item !== campo), campo] : atuais.filter(item => item !== campo))} />
+              Limpar {campo === 'observacoes' ? 'quesito/observações' : 'data de recebimento'} local: campo vazio confirmado no GDL
+            </label>)}
+
             <div className="flex-1 overflow-y-auto min-h-0 space-y-3 px-1">
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium flex items-center gap-1">
@@ -1079,7 +1218,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
             <Separator className="shrink-0" />
 
             <div className="flex justify-between shrink-0 pt-3">
-              <Button variant="outline" onClick={() => setPasso('busca')} className="gap-2">
+              <Button variant="outline" onClick={() => setPasso('identificacao')} className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
               </Button>

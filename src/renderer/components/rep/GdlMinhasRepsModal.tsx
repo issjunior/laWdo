@@ -1,3 +1,4 @@
+import { apresentarNaturezaExame } from '@shared/gdl/natureza-exame';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { CalendarDays, Camera, RefreshCw } from 'lucide-react';
@@ -47,6 +48,8 @@ const esquemaSnapshot = z.object({
         .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
         .nullable(),
       quantidadeFotos: z.number().int().nonnegative().nullable(),
+      naturezaConfirmada: z.boolean().optional(), naturezaDivergente: z.boolean().optional(),
+      naturezaConsultadaEm: z.string().optional(), statusNecessitaAtualizacao: z.boolean().optional(),
     })
   ),
   atualizadoEm: z.string().datetime(),
@@ -61,7 +64,7 @@ function formatarDataDesignacao(data: string): string {
 }
 
 function naturezaExibida(rep: MinhaRepGdl): string {
-  return rep.naturezaExameComCodigo ?? rep.naturezaExame;
+  return rep.naturezaExameComCodigo ?? apresentarNaturezaExame(rep.naturezaExame);
 }
 
 interface GdlMinhasRepsModalProps {
@@ -150,6 +153,17 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
     } finally {
       if (geracao === geracaoCarga.current) setCarregando(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const atualizarLocal = () => {
+      void window.ipcAPI.gdl.obterMinhasRepsCache().then(resposta => {
+        const validacao = esquemaSnapshot.safeParse(resposta.data);
+        if (resposta.success && validacao.success) { setReps(validacao.data.reps); setAtualizadoEm(validacao.data.atualizadoEm); }
+      }).catch(() => undefined);
+    };
+    window.addEventListener('focus', atualizarLocal);
+    return () => window.removeEventListener('focus', atualizarLocal);
   }, []);
 
   useEffect(() => {
@@ -398,6 +412,8 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">REP {formatarNumeroRep(rep)}</span>
                         <GdlStatusBadge status={rep.status} />
+                        {rep.statusNecessitaAtualizacao && <span className="text-xs text-muted-foreground">Atualize a lista para conferir o status.</span>}
+                        {rep.naturezaDivergente && <span className="text-xs text-muted-foreground">Natureza divergente; confirme na consulta individual.</span>}
                       </span>
                       <span
                         className="mt-1 block truncate text-muted-foreground"

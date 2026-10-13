@@ -1,11 +1,13 @@
-import { ipcMain } from 'electron';
+import { observarConsultaGdl } from '../../services/gdl-diagnostico.service.js';
+import { identificarRepGdl, completarConsultaRepGdl, obterConsultaRepConcluida, converterConsultaRepGdl, descartarConsultaRepGdl } from '../../services/gdl-consulta-local.service.js';
+import { clipboard, ipcMain, type WebContents } from 'electron';
+import { EMAIL_SUPORTE_LAWDO } from '../../../shared/gdl/suporte.js';
 import { randomUUID } from 'crypto';
 import { logError } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
 import { obterMinhasRepsEmCache, atualizarMinhasRepsEmCache } from '../../services/gdl-minhas-reps-cache.service.js';
 import { definirListagemRepsGdlHabilitada, obterListagemRepsGdlHabilitada } from '../../services/gdl-listagem-preferencia.service.js';
-import { interromperDetalhesMinhasRepsGdl } from '../../services/gdl-pagina.service.js';
 import { classificarFalhaListaRepsGdl } from '../../services/gdl-minhas-reps-erro.service.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
@@ -14,6 +16,26 @@ import { repService } from '../../services/rep.service.js';
 import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
 import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
 import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
+
+const remetentesConsultaGdl = new WeakSet<object>();
+const revisoesAtualizacaoGdl = new Map<string, { remetenteId: number; usuarioId: string; identidade: string; expiraEm: number }>();
+
+async function vincularRevisaoAtualizacaoGdl(remetenteId: number, consultaId: string, operacaoId: string): Promise<void> {
+  const identidade = await gdlService.obterIdentidadeMinhasReps();
+  await obterConsultaRepConcluida(remetenteId, consultaId);
+  for (const [id, revisao] of revisoesAtualizacaoGdl) if (revisao.expiraEm <= Date.now() || revisao.remetenteId === remetenteId) revisoesAtualizacaoGdl.delete(id);
+  revisoesAtualizacaoGdl.set(operacaoId, { remetenteId, usuarioId: authSessaoService.exigir(remetenteId), identidade, expiraEm: Date.now() + 10 * 60 * 1000 });
+}
+
+function vigiarConsultaGdl(remetente: WebContents): void {
+  if (remetentesConsultaGdl.has(remetente)) return;
+  remetentesConsultaGdl.add(remetente);
+  const id = remetente.id;
+  remetente.once('destroyed', () => {
+    descartarConsultaRepGdl(id);
+    for (const [operacaoId, revisao] of revisoesAtualizacaoGdl) if (revisao.remetenteId === id) revisoesAtualizacaoGdl.delete(operacaoId);
+  });
+}
 
 function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string } | null {
   const correspondencia = numero.trim().match(/^([\d.\s]+)\s*[/\\-]\s*(\d{4})$/);
@@ -34,6 +56,15 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:copiar-email-suporte', async event => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      await clipboard.writeText(EMAIL_SUPORTE_LAWDO);
+      return { success: true, data: { email: EMAIL_SUPORTE_LAWDO } };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível copiar o e-mail de suporte.' };
+    }
+  });
   ipcMain.handle('gdl:obter-preferencia-listagem', async event => {
     try {
       authSessaoService.exigir(event.sender.id);
@@ -48,7 +79,6 @@ export const registerGdlHandlers = (): void => {
       authSessaoService.exigir(event.sender.id);
       if (typeof habilitada !== 'boolean') throw new Error('Preferência de listagem inválida.');
       await definirListagemRepsGdlHabilitada(habilitada);
-      if (!habilitada) interromperDetalhesMinhasRepsGdl();
       return { success: true, data: { habilitada } };
     } catch (erro: unknown) {
       return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível alterar a preferência da listagem.' };
@@ -88,30 +118,60 @@ export const registerGdlHandlers = (): void => {
       };
     }
   });
-  ipcMain.handle('gdl:preparar-atualizacao-rep', async (_event, repId: unknown) => {
+  ipcMain.handle('gdl:preparar-atualizacao-rep', async (event, repId: unknown) => {
     try {
-      if (typeof repId !== 'string' || !repId.trim()) return { success: false, error: 'REP inválida.' };
-      return { success: true, data: await atualizacaoRepGdlService.preparar(repId) };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Não foi possível preparar a atualização da REP.' };
-    }
+      vigiarConsultaGdl(event.sender);
+      authSessaoService.exigir(event.sender.id);
+      if (typeof repId !== 'string' || !repId.trim()) throw new Error('REP inválida.');
+      const rep = await repService.findById(repId);
+      if (!rep) throw new Error('REP não encontrada.');
+      const numero = extrairNumeroEAnoDaRep(rep.numero);
+      if (!numero) throw new Error('Número de REP inválido.');
+      const identificacao = await identificarRepGdl(event.sender.id, numero.numero, numero.ano);
+      if (identificacao.detalhes?.estado === 'aguardando_confirmacao') return { success: true, data: {
+        operacaoId: '', repId, repNumero: rep.numero, codigoExame: identificacao.identificacao.codigoSugerido ?? '', diferencas: [], avisos: identificacao.avisos, consultaDetalhes: identificacao,
+      } };
+      const consulta = await obterConsultaRepConcluida(event.sender.id, identificacao.consultaId);
+      const previa = await atualizacaoRepGdlService.preparar(repId, consulta.resultado, consulta.camposVaziosConfirmados);
+      await vincularRevisaoAtualizacaoGdl(event.sender.id, identificacao.consultaId, previa.operacaoId);
+      return { success: true, data: { ...previa, avisos: [...new Set([...previa.avisos, ...consulta.avisos])] } };
+    } catch (erro: unknown) { return { success: false, error: erro instanceof Error ? erro.message : 'Falha ao preparar atualização.' }; }
+  });
+  ipcMain.handle('gdl:completar-atualizacao-rep', async (event, repId: unknown, consultaId: unknown, abrirDetalhes: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (typeof repId !== 'string' || typeof consultaId !== 'string' || typeof abrirDetalhes !== 'boolean') throw new Error('Decisão inválida.');
+      await completarConsultaRepGdl(event.sender.id, consultaId, abrirDetalhes);
+      const consulta = await obterConsultaRepConcluida(event.sender.id, consultaId);
+      const rep = await repService.findById(repId);
+      const numero = rep && extrairNumeroEAnoDaRep(rep.numero);
+      if (!numero || numero.numero !== consulta.numero || numero.ano !== consulta.ano) throw new Error('A revisão não corresponde à REP local.');
+      const previa = await atualizacaoRepGdlService.preparar(repId, consulta.resultado, consulta.camposVaziosConfirmados);
+      await vincularRevisaoAtualizacaoGdl(event.sender.id, consultaId, previa.operacaoId);
+      return { success: true, data: { ...previa, avisos: [...new Set([...previa.avisos, ...consulta.avisos])] } };
+    } catch (erro: unknown) { return { success: false, error: erro instanceof Error ? erro.message : 'Falha ao preparar atualização.' }; }
   });
 
-  ipcMain.handle('gdl:aplicar-atualizacao-rep', async (_event, entrada: unknown) => {
+  ipcMain.handle('gdl:aplicar-atualizacao-rep', async (event, entrada: unknown) => {
     try {
       if (!entrada || typeof entrada !== 'object') return { success: false, error: 'Dados de atualização inválidos.' };
       const dados = entrada as Partial<AplicarAtualizacaoRepGdlEntrada>;
       if (typeof dados.operacaoId !== 'string' || !Array.isArray(dados.diferencasSelecionadas) || typeof dados.reabrirLaudo !== 'boolean'
         || dados.diferencasSelecionadas.some(id => typeof id !== 'string')) return { success: false, error: 'Dados de atualização inválidos.' };
-      return { success: true, data: await atualizacaoRepGdlService.aplicar(dados as AplicarAtualizacaoRepGdlEntrada) };
+      const revisao = revisoesAtualizacaoGdl.get(dados.operacaoId);
+      if (!revisao || revisao.remetenteId !== event.sender.id || revisao.usuarioId !== authSessaoService.exigir(event.sender.id)
+        || revisao.expiraEm <= Date.now() || revisao.identidade !== await gdlService.obterIdentidadeMinhasReps()) throw new Error('A revisão expirou ou a sessão GDL mudou. Consulte novamente.');
+      const resultado = await atualizacaoRepGdlService.aplicar(dados as AplicarAtualizacaoRepGdlEntrada);
+      revisoesAtualizacaoGdl.delete(dados.operacaoId);
+      return { success: true, data: resultado };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Não foi possível aplicar a atualização da REP.' };
     }
   });
 
-  ipcMain.handle('gdl:testar-conexao', async (_event, ambiente: string) => {
+  ipcMain.handle('gdl:testar-conexao', async (event, ambiente: string) => {
     try {
-      const resultado = await gdlService.testarConexao(ambiente || 'producao');
+      const resultado = await observarConsultaGdl(event.sender.id, '', '', () => gdlService.testarConexao(ambiente || 'producao'));
       return { success: true, data: resultado };
     } catch (error) {
       const amb = ambiente || 'producao';
@@ -146,13 +206,13 @@ export const registerGdlHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('gdl:validar-credenciais', async (_event, ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => {
+  ipcMain.handle('gdl:validar-credenciais', async (event, ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => {
     try {
       if (!numero || typeof numero !== 'string' || !ano || typeof ano !== 'string') {
         return { success: false, error: 'Número e ano da REP são obrigatórios.' };
       }
 
-      const resultado = await gdlService.validarCredenciais(
+      const resultado = await observarConsultaGdl(event.sender.id, sanitizeInput(numero), sanitizeInput(ano), () => gdlService.validarCredenciais(
         ambiente || 'producao',
         {
           login: sanitizeInput(credenciais?.login || ''),
@@ -161,7 +221,7 @@ export const registerGdlHandlers = (): void => {
         },
         sanitizeInput(numero),
         sanitizeInput(ano),
-      );
+      ));
 
       if (!resultado.sucesso) {
         return { success: false, error: resultado.erro || 'Erro ao validar credenciais do GDL' };
@@ -177,13 +237,54 @@ export const registerGdlHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('gdl:consultar-rep', async (_event, numero: string, ano: string) => {
+  ipcMain.handle('gdl:identificar-rep', async (event, numero: unknown, ano: unknown, naturezaLista: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (typeof numero !== 'string' || !/^\d{1,12}$/.test(numero)
+        || typeof ano !== 'string' || !/^\d{4}$/.test(ano)
+        || (naturezaLista !== undefined && (typeof naturezaLista !== 'string' || naturezaLista.length > 500))) {
+        throw new Error('Identificação da REP inválida.');
+      }
+      vigiarConsultaGdl(event.sender);
+      const data = await identificarRepGdl(event.sender.id, numero, ano, naturezaLista);
+      return { success: true, data };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível identificar o exame.' };
+    }
+  });
+
+  ipcMain.handle('gdl:completar-consulta-rep', async (event, consultaId: unknown, abrirDetalhes: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (typeof consultaId !== 'string' || typeof abrirDetalhes !== 'boolean') throw new Error('Decisão de consulta inválida.');
+      return { success: true, data: await completarConsultaRepGdl(event.sender.id, consultaId, abrirDetalhes) };
+    } catch (erro: unknown) { return { success: false, error: erro instanceof Error ? erro.message : 'Falha ao consultar detalhes.' }; }
+  });
+  ipcMain.handle('gdl:descartar-consulta-rep', async event => {
+    authSessaoService.exigir(event.sender.id);
+    descartarConsultaRepGdl(event.sender.id);
+    return { success: true };
+  });
+
+  ipcMain.handle('gdl:converter-consulta-rep', async (event, consultaId: unknown, tipoExameId: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (typeof consultaId !== 'string' || typeof tipoExameId !== 'string' || !tipoExameId.trim()) {
+        throw new Error('Escolha do tipo de exame inválida.');
+      }
+      return { success: true, data: await converterConsultaRepGdl(event.sender.id, consultaId, tipoExameId) };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível converter os dados.' };
+    }
+  });
+
+  ipcMain.handle('gdl:consultar-rep', async (event, numero: string, ano: string) => {
     try {
       if (!numero || typeof numero !== 'string' || !ano || typeof ano !== 'string') {
         return { success: false, error: 'Número e ano da REP são obrigatórios.' };
       }
 
-      const resultado = await gdlService.consultarRep(sanitizeInput(numero), sanitizeInput(ano));
+      const resultado = await observarConsultaGdl(event.sender.id, sanitizeInput(numero), sanitizeInput(ano), () => gdlService.consultarRep(sanitizeInput(numero), sanitizeInput(ano)));
       if (!resultado.sucesso || !resultado.dados) {
         return { success: false, error: resultado.erro || 'Erro ao consultar REP no GDL' };
       }

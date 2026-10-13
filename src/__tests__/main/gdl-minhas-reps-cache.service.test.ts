@@ -20,14 +20,14 @@ vi.mock('../../main/services/gdl.service.js', () => ({
 
 import { atualizarMinhasRepsEmCache, obterMinhasRepsEmCache } from '../../main/services/gdl-minhas-reps-cache.service';
 
-const rep = { idGdl: 11, numero: '123', ano: '2026', naturezaExame: 'EXAME', naturezaExameComCodigo: null,
+const rep = { idGdl: 11, numero: '123', ano: '2026', naturezaExame: 'EXAME DE CONSTATAÇÃO', naturezaExameComCodigo: null,
   status: 'Aberta e Distribuída', dataDesignacao: '2026-10-01T10:00', quantidadeFotos: 2 };
 
 beforeEach(() => {
   simulacao.exigir.mockReset().mockResolvedValue(undefined);
   simulacao.identidade.mockReset().mockResolvedValue('credencial-a');
   simulacao.listar.mockReset().mockResolvedValue({ reps: [rep], paginaAtual: 1, temAnterior: false, temProxima: false, listagemId: 'lista-1' });
-  simulacao.naturezas.mockReset().mockResolvedValue([{ idGdl: 11, naturezaExameComCodigo: 'B601 - EXAME' }]);
+  simulacao.naturezas.mockReset().mockResolvedValue([{ idGdl: 11, naturezaExameComCodigo: 'B601 - EXAME DE CONSTATAÇÃO' }]);
 });
 
 afterAll(async () => {
@@ -40,7 +40,7 @@ afterAll(async () => {
 describe('cache da listagem GDL', () => {
   it('grava somente a lista completa e reutiliza o resultado por dez minutos', async () => {
     const primeira = await atualizarMinhasRepsEmCache('usuario-a', false);
-    expect(primeira.reps[0].naturezaExameComCodigo).toBe('B601 - EXAME');
+    expect(primeira.reps[0].naturezaExameComCodigo).toBe('B601 - EXAME DE CONSTATAÇÃO');
     expect(await obterMinhasRepsEmCache('usuario-a')).toEqual(primeira);
     expect(await atualizarMinhasRepsEmCache('usuario-a', false)).toEqual(primeira);
     expect(simulacao.listar).toHaveBeenCalledTimes(1);
@@ -78,15 +78,13 @@ describe('cache da listagem GDL', () => {
     expect(await obterMinhasRepsEmCache('usuario-b')).toBeNull();
   });
 
-  it('mantém o snapshot anterior quando a paginação ou detalhes falham', async () => {
+  it('mantém o snapshot anterior quando a paginação falha', async () => {
     const anterior = await atualizarMinhasRepsEmCache('usuario-d', true);
     simulacao.listar.mockResolvedValueOnce({ reps: [rep], paginaAtual: 1, temAnterior: false, temProxima: true, listagemId: 'lista-2' })
       .mockRejectedValueOnce(new Error('VPN indisponível'));
     await expect(atualizarMinhasRepsEmCache('usuario-d', true)).rejects.toThrow('VPN indisponível');
     expect(await obterMinhasRepsEmCache('usuario-d')).toEqual(anterior);
-    simulacao.naturezas.mockRejectedValueOnce(new Error('Detalhe indisponível'));
-    await expect(atualizarMinhasRepsEmCache('usuario-d', true)).rejects.toThrow('Detalhe indisponível');
-    expect(await obterMinhasRepsEmCache('usuario-d')).toEqual(anterior);
+    expect(simulacao.naturezas).not.toHaveBeenCalled();
   });
 
   it('bloqueia a atualização desativada antes de consultar o GDL', async () => {

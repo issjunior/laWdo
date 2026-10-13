@@ -83,6 +83,7 @@ const schemaCategoriasCaptura = z.array(z.enum(['sessao', 'janela', 'acao', 'con
 export const schemaIniciarCapturaEntrada = z.discriminatedUnion('finalidade', [
   z.strictObject({
     finalidade: z.literal('problema'),
+    capturarConsultasGdl: z.boolean().default(false),
     cenario: z.string().trim().min(10).max(500),
     janelaId: schemaJanelaId.optional(),
     categorias: schemaCategoriasCaptura.optional(),
@@ -98,6 +99,23 @@ export const schemaIniciarCapturaEntrada = z.discriminatedUnion('finalidade', [
 export const schemaStatusCapturaEntrada = z.strictObject({
   capturaId: schemaUuid.optional(),
 });
+
+export function obterFormaFerramentaDiagnostico(schema: z.ZodType): Record<string, z.ZodType> {
+  if (schema instanceof z.ZodObject) return schema.shape;
+  if (!(schema instanceof z.ZodDiscriminatedUnion)) throw new Error('Contrato diagnóstico não suportado.');
+  const campos: Record<string, z.ZodType> = {};
+  for (const opcao of schema.options) {
+    if (!(opcao instanceof z.ZodObject)) throw new Error('Contrato diagnóstico não suportado.');
+    for (const [chave, campo] of Object.entries(opcao.shape)) {
+      if (!(campo instanceof z.ZodType)) throw new Error('Campo diagnóstico não suportado.');
+      const semPadrao = campo instanceof z.ZodDefault ? campo.removeDefault() : campo;
+      if (!(semPadrao instanceof z.ZodType)) throw new Error('Campo diagnóstico não suportado.');
+      campos[chave] = semPadrao.optional();
+    }
+  }
+  campos.finalidade = z.enum(['problema', 'desempenho']);
+  return campos;
+}
 
 export const schemaFinalizarCapturaEntrada = z.strictObject({
   capturaId: schemaUuid,

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   criarRespostaDiagnosticoErro,
   criarRespostaDiagnosticoSucesso,
+  obterFormaFerramentaDiagnostico,
   schemaCapturarTelaEntrada,
   schemaCriarSnapshotEntrada,
   schemaDiagnosticoStatusEntrada,
@@ -60,9 +61,7 @@ async function encaminhar(operacao: string, payload: unknown): Promise<{ sessao:
 }
 
 function registrarFerramenta(nome: string, schema: z.ZodType, descricao: string, imagem = false): void {
-  const inputSchema = schema instanceof z.ZodObject
-    ? schema.shape
-    : { finalidade: z.enum(['problema', 'desempenho']), cenario: z.string().optional(), janelaId: z.number().int().positive().optional(), categorias: z.array(z.enum(['sessao', 'janela', 'acao', 'console', 'erro', 'ipc'])).optional(), duracaoSegundos: z.number().int().min(30).max(300).optional(), cenarioDesempenho: z.enum(['ocioso', 'abertura_laudo', 'uso_editor', 'painel_ia', 'geral']).optional() };
+  const inputSchema = obterFormaFerramentaDiagnostico(schema);
   servidor.registerTool(nome, { description: descricao, inputSchema }, async entrada => {
     const requestId = randomUUID();
     const resultado = await encaminhar(nome, entrada);
@@ -105,7 +104,7 @@ registrarFerramenta('inspecionar_interface', schemaInspecionarInterfaceEntrada, 
 registrarFerramenta('executar_acao', schemaExecutarAcaoEntrada, 'Clica ou digita sobre um elemento da última revisão.');
 registrarFerramenta('obter_eventos', schemaObterEventosEntrada, 'Consulta eventos já persistidos pela sessão.');
 registrarFerramenta('criar_snapshot', schemaCriarSnapshotEntrada, 'Cria um artefato diagnóstico coerente da sessão.');
-registrarFerramenta('iniciar_captura', schemaIniciarCapturaEntrada, 'Inicia uma captura guiada de problema ou desempenho.');
+registrarFerramenta('iniciar_captura', schemaIniciarCapturaEntrada, 'Inicia uma captura guiada de problema ou desempenho. Em problema, capturarConsultasGdl ativa resumos limitados das consultas de leitura realizadas durante a captura.');
 registrarFerramenta('status_captura', schemaStatusCapturaEntrada, 'Informa o estado resumido de uma captura guiada.');
 registrarFerramenta('finalizar_captura', schemaFinalizarCapturaEntrada, 'Finaliza uma captura guiada e gera o dossiê local.');
 registrarFerramenta('consultar_captura', schemaConsultarCapturaEntrada, 'Lê uma parte tipada de uma captura já finalizada.');

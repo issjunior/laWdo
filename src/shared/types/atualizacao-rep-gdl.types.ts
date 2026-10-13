@@ -1,3 +1,4 @@
+import type { ConsultaIdentificacaoRepGdl } from '../gdl/natureza-exame.js';
 export type CategoriaDiferencaRepGdl = 'campo' | 'peca'
 
 export interface DetalheDiferencaAtualizacaoRepGdl {
@@ -25,6 +26,7 @@ export interface ImpactoLaudoAtualizacaoRepGdl {
 }
 
 export interface PreviaAtualizacaoRepGdl {
+  consultaDetalhes?: ConsultaIdentificacaoRepGdl
   operacaoId: string
   repId: string
   repNumero: string

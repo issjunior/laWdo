@@ -1,5 +1,7 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { obterListaRepositorioGdl, registrarGradeGdl } from './gdl-repositorio.service.js';
+import { identificarNaturezaExame } from '../../shared/gdl/natureza-exame.js';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
 import { z } from 'zod';
@@ -22,33 +24,31 @@ const esquemaSnapshot = z.object({ reps: z.array(esquemaRep), atualizadoEm: z.st
 const consultas = new Map<string, Promise<SnapshotMinhasRepsGdl>>();
 let fila: Promise<unknown> = Promise.resolve();
 
-async function contexto(usuarioId: string): Promise<{ chave: string; arquivo: string }> {
+async function contexto(usuarioId: string): Promise<{ chave: string; identidadeGdl: string; arquivo: string }> {
   const identidadeGdl = await gdlService.obterIdentidadeMinhasReps();
   const chave = createHash('sha256').update(JSON.stringify({ usuarioId, identidadeGdl })).digest('hex');
-  return { chave, arquivo: path.join(app.getPath('userData'), 'gdl', `minhas-reps-${chave}.json`) };
+  return { chave, identidadeGdl, arquivo: path.join(app.getPath('userData'), 'gdl', `minhas-reps-${chave}.json`) };
+}
+
+function normalizarNaturezaRep(rep: MinhaRepGdl): MinhaRepGdl {
+  const identificacao = identificarNaturezaExame(rep.naturezaExame);
+  const candidata = identificacao.candidatos.find(item => item.codigo === identificacao.codigoSugerido);
+  return { ...rep, naturezaExameComCodigo: candidata ? `${candidata.codigo} - ${candidata.descricao}` : null };
 }
 
 async function lerSnapshot(arquivo: string): Promise<SnapshotMinhasRepsGdl | null> {
   try {
     const conteudo: unknown = JSON.parse(await readFile(arquivo, 'utf8'));
-    return esquemaSnapshot.safeParse(conteudo).data ?? null;
+    const snapshot = esquemaSnapshot.safeParse(conteudo).data;
+    if (!snapshot) return null;
+    snapshot.reps = snapshot.reps.map(normalizarNaturezaRep);
+    return snapshot;
   } catch (erro: unknown) {
     if (erro instanceof Error && 'code' in erro && erro.code === 'ENOENT') return null;
     return null;
   }
 }
 
-async function salvarSnapshot(arquivo: string, snapshot: SnapshotMinhasRepsGdl, versao: number): Promise<void> {
-  await mkdir(path.dirname(arquivo), { recursive: true });
-  const temporario = `${arquivo}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporario, JSON.stringify(snapshot), 'utf8');
-    await exigirListagemRepsGdlHabilitada(versao);
-    await rename(temporario, arquivo);
-  } finally {
-    await rm(temporario, { force: true });
-  }
-}
 
 async function consultarTodas(versao: number): Promise<SnapshotMinhasRepsGdl> {
   const reps: MinhaRepGdl[] = [];
@@ -67,17 +67,7 @@ async function consultarTodas(versao: number): Promise<SnapshotMinhasRepsGdl> {
     paginasVistas.add(assinatura);
     reps.push(...resposta.reps);
     if (!resposta.temProxima) {
-      if (reps.length > 0) {
-        await exigirListagemRepsGdlHabilitada(versao);
-        const naturezas = await gdlService.consultarNaturezasMinhasReps(listagemId);
-        await exigirListagemRepsGdlHabilitada(versao);
-        const porId = new Map(naturezas.map(item => [item.idGdl, item.naturezaExameComCodigo]));
-        if (porId.size !== reps.length || reps.some(rep => !porId.has(rep.idGdl))) {
-          throw new Error('Os códigos de exame não correspondem à listagem atual.');
-        }
-        for (const rep of reps) rep.naturezaExameComCodigo = porId.get(rep.idGdl) ?? null;
-      }
-      const snapshot = { reps, atualizadoEm: new Date().toISOString() };
+      const snapshot = { reps: reps.map(normalizarNaturezaRep), atualizadoEm: new Date().toISOString() };
       return esquemaSnapshot.parse(snapshot);
     }
   }
@@ -85,18 +75,22 @@ async function consultarTodas(versao: number): Promise<SnapshotMinhasRepsGdl> {
 }
 
 export async function obterMinhasRepsEmCache(usuarioId: string): Promise<SnapshotMinhasRepsGdl | null> {
-  const { arquivo } = await contexto(usuarioId);
-  return lerSnapshot(arquivo);
+  const { arquivo, identidadeGdl } = await contexto(usuarioId);
+  const atual = await obterListaRepositorioGdl(usuarioId, identidadeGdl);
+  if (atual) return atual;
+  const anterior = await lerSnapshot(arquivo);
+  if (anterior) await registrarGradeGdl(usuarioId, identidadeGdl, anterior);
+  return anterior ? obterListaRepositorioGdl(usuarioId, identidadeGdl) : null;
 }
 
 export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: boolean): Promise<SnapshotMinhasRepsGdl> {
   await exigirListagemRepsGdlHabilitada();
   const versao = obterVersaoPreferenciaListagem();
-  const { chave, arquivo } = await contexto(usuarioId);
+  const { chave, identidadeGdl } = await contexto(usuarioId);
   const ativa = consultas.get(chave);
   if (ativa) return ativa;
   const consulta = (async () => {
-    const anterior = await lerSnapshot(arquivo);
+    const anterior = await obterMinhasRepsEmCache(usuarioId);
     if (!forcar && anterior && Date.now() - Date.parse(anterior.atualizadoEm) < VALIDADE_MS) {
       await exigirListagemRepsGdlHabilitada(versao);
       return anterior;
@@ -106,8 +100,12 @@ export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: bool
       const snapshot = await consultarTodas(versao);
       if ((await contexto(usuarioId)).chave !== chave) throw new Error('A configuração do GDL mudou durante a consulta.');
       await exigirListagemRepsGdlHabilitada(versao);
-      await salvarSnapshot(arquivo, snapshot, versao);
-      return snapshot;
+      await registrarGradeGdl(usuarioId, identidadeGdl, snapshot, async () => {
+        await exigirListagemRepsGdlHabilitada(versao);
+        if ((await contexto(usuarioId)).chave !== chave) throw new Error('A configuração do GDL mudou durante a consulta.');
+      });
+      await exigirListagemRepsGdlHabilitada(versao);
+      return (await obterListaRepositorioGdl(usuarioId, identidadeGdl)) ?? snapshot;
     });
     fila = proxima.catch(() => undefined);
     return proxima;

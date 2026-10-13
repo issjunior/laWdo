@@ -1,3 +1,4 @@
+import type { IdentificacaoNaturezaExameGdl } from '../gdl/natureza-exame.js';
 export type OrigemPecaB602 = 'manual' | 'gdl'
 
 export interface CamposComunsPecaB602 {
@@ -36,6 +37,7 @@ export interface AvisoImportacao {
 
 export interface MetadadosIntegracaoGdl {
   origemInicial: 'manual' | 'gdl'
+  identificacaoNatureza?: IdentificacaoNaturezaExameGdl
   dataExecucaoLaudo?: string
   origemSolicitacaoSelecionada?: ReferenciaOrigemGdl
   dadosSolicitacao?: DadosSolicitacaoGdl
@@ -69,7 +71,10 @@ export interface DadosInvestigacaoGdl {
 }
 
 export interface ResultadoImportacaoExame<TDados> {
+  camposVaziosConfirmados?: Array<'observacoes' | 'data_requisicao'>
+  limpezasSelecionadas?: Array<'observacoes' | 'data_requisicao'>
   codigoExame: string
+  identificacaoNatureza?: IdentificacaoNaturezaExameGdl
   naturezaExameGdl?: string
   camposGerais: Record<string, string>
   camposEspecificos: TDados

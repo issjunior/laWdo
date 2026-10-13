@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AtualizarRepGdlDialog } from '@/components/rep/AtualizarRepGdlDialog'
+import { identificarNaturezaExame } from '../../shared/gdl/natureza-exame'
 
 const ipcApiOriginal = window.ipcAPI
 const prepararAtualizacaoRep = vi.fn()
@@ -53,6 +54,19 @@ describe('AtualizarRepGdlDialog', () => {
     expect(screen.getByText('LS-001')).toBeInTheDocument()
     expect(screen.getByText('LS-002')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ocultar alterações' })).toBeInTheDocument()
+  })
+
+  it('aguarda a decisão dos detalhes sem declarar a REP atualizada', async () => {
+    prepararAtualizacaoRep.mockResolvedValueOnce({ success: true, data: {
+      operacaoId: '', repId: 'rep-1', repNumero: '109.026-2026', codigoExame: 'B-602', avisos: [], diferencas: [],
+      consultaDetalhes: { consultaId: '11111111-1111-4111-8111-111111111111', identificacao: identificarNaturezaExame('B602 - EXAME DE EFICIÊNCIA E PRESTABILIDADE'), tiposLocais: [], avisos: [],
+        detalhes: { estado: 'aguardando_confirmacao', statusAtual: 'ABERTA E DISTRIBUÍDA', motivoConfirmacao: 'A abertura pode avançar o status.' } },
+    } });
+    render(<AtualizarRepGdlDialog open repId="rep-1" onOpenChange={vi.fn()} onConcluida={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'Continuar e abrir detalhes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Usar somente dados da API' })).toBeInTheDocument();
+    expect(screen.queryByText(/A REP já está atualizada/)).not.toBeInTheDocument();
+    expect(aplicarAtualizacaoRep).not.toHaveBeenCalled();
   })
 
   it('fecha o modal depois de aplicar a atualização com sucesso', async () => {
