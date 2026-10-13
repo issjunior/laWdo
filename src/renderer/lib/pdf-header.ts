@@ -1,3 +1,17 @@
+import type { FalhaPdf } from '@shared/types/pdf.types';
+
+export class ErroCabecalhoPdf extends Error {
+  readonly falhaPdf: FalhaPdf = {
+    codigo: 'CABECALHO_INDISPONIVEL',
+    etapa: 'carregamento',
+    tentarNovamente: true,
+    origem: 'cabecalho',
+  };
+  constructor() {
+    super('Não foi possível ler a configuração do cabeçalho do PDF.');
+  }
+}
+
 const DATA_PLACEHOLDER_SPAN_RE = /<span\b[^>]*\bdata-placeholder="\{\{([^}]+)\}\}"[^>]*>[\s\S]*?<\/span>/gi;
 
 function stripDataPlaceholderSpans(html: string): string {
@@ -44,6 +58,7 @@ export interface PdfHeaderConfig {
 export interface PdfHeaderOptions {
   numeroRepFallback?: string;
   extraReplacements?: Record<string, string>;
+  estrito?: boolean;
 }
 
 /**
@@ -51,10 +66,25 @@ export interface PdfHeaderOptions {
  * Centralizes the DB loading + template building logic that was duplicated across pages.
  */
 export async function buildPdfHeaderConfig(opts: PdfHeaderOptions = {}): Promise<PdfHeaderConfig> {
-  const [headerLaudoResult, headerPaginasResult] = await Promise.all([
-    window.ipcAPI.configuracao.obter('cabecalho_laudo'),
-    window.ipcAPI.configuracao.obter('cabecalho_paginas'),
-  ]);
+  let headerLaudoResult: Awaited<ReturnType<typeof window.ipcAPI.configuracao.obter>>;
+  let headerPaginasResult: Awaited<ReturnType<typeof window.ipcAPI.configuracao.obter>>;
+  try {
+    [headerLaudoResult, headerPaginasResult] = await Promise.all([
+      window.ipcAPI.configuracao.obter('cabecalho_laudo'),
+      window.ipcAPI.configuracao.obter('cabecalho_paginas'),
+    ]);
+  } catch (erro: unknown) {
+    if (opts.estrito) throw new ErroCabecalhoPdf();
+    throw erro;
+  }
+
+  if (opts.estrito && (
+    !headerLaudoResult.success || !headerPaginasResult.success
+    || (headerLaudoResult.data != null && typeof headerLaudoResult.data !== 'string')
+    || (headerPaginasResult.data != null && typeof headerPaginasResult.data !== 'string')
+  )) {
+    throw new ErroCabecalhoPdf();
+  }
 
   const cabecalhoPrimeiraPagina = (headerLaudoResult.success && headerLaudoResult.data) ? headerLaudoResult.data : '';
   const cabecalhoPaginasHtml = (headerPaginasResult.success && headerPaginasResult.data) ? headerPaginasResult.data : '';

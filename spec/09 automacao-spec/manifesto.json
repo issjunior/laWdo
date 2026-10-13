@@ -63,7 +63,13 @@
         "src/main/ipc/handlers/rep.handlers.ts",
         "src/main/services/rep.service.ts",
         "src/main/types/database.ts",
-        "src/main/database/index.ts"
+        "src/main/database/index.ts",
+        "src/renderer/pages/TiposExamePage.tsx",
+        "src/renderer/components/tipos-exame/**",
+        "src/renderer/lib/validators/tipo-exame.schema.ts",
+        "src/main/services/tipo-exame.service.ts",
+        "src/main/ipc/handlers/tipo-exame.handlers.ts",
+        "src/__tests__/renderer/tipos-exame-page.component.test.tsx"
       ]
     },
     {
@@ -852,6 +858,20 @@
         "src/renderer/contexts/AlteracoesPendentesContext.tsx",
         "src/__tests__/main/estado-janela-principal.test.ts",
         "src/__tests__/renderer/alteracoes-pendentes-saida.component.test.tsx"
+      ]
+    },
+    {
+      "arquivo": "spec/02 rep/tipos_exame.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Cadastro, listagem, totais, status e recuperacao de tipos de exame.",
+      "globsCodigo": [
+        "src/renderer/pages/TiposExamePage.tsx",
+        "src/renderer/components/tipos-exame/**",
+        "src/renderer/lib/validators/tipo-exame.schema.ts",
+        "src/main/services/tipo-exame.service.ts",
+        "src/main/ipc/handlers/tipo-exame.handlers.ts",
+        "src/__tests__/renderer/tipos-exame-page.component.test.tsx"
       ]
     }
   ]

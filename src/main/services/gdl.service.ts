@@ -1,3 +1,4 @@
+import { definirAmbienteConsultaGdl, destinoApiGdlPermitido, registrarRespostaGdl } from './gdl-diagnostico.service.js';
 import fs from 'fs';
 import path from 'path';
 import { createHash, randomUUID } from 'crypto';
@@ -7,9 +8,8 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { app, nativeImage, session } from 'electron';
 import type { Session } from 'electron';
-import { consultarNaturezasMinhasRepsGdl, consultarPaginaRepGdl, listarPaginaMinhasRepsGdl } from './gdl-pagina.service.js';
-import { obterNaturezaExameDaRepGdl } from './gdl-minhas-reps.service.js';
-import type { NaturezaMinhaRepGdl, PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import { listarPaginaMinhasRepsGdl, lerDetalhesRepAutorizadaGdl } from './gdl-pagina.service.js';
+import type { PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import { CHAVE_HOMOLOGACAO_GDL_HABILITADA, resolverAmbienteGdl } from '../../shared/gdl/ambiente.js';
 import type { AmbienteGdl } from '../../shared/gdl/ambiente.js';
 import { getLogger } from '../utils/logger.js';
@@ -74,6 +74,7 @@ export interface GdlConsultaResultado {
   ambiente?: AmbienteGdl;
   naturezaExame?: string;
   erroNaturezaExame?: string;
+  statusRep?: string;
   erro?: string;
 }
 
@@ -301,8 +302,9 @@ async function requisitarGdl(
   headers: Record<string, string>,
   body?: string,
   timeout: number = 15000,
-  seguirRedirecionamentos = true,
 ): Promise<{ statusCode: number; data: string; redirecionado: boolean; paginaAutenticacao: boolean }> {
+  if (!destinoApiGdlPermitido(url, method)) throw new Error('Operação GDL não permitida: somente consultas de leitura.');
+  const inicio = performance.now();
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
   const temporizador = setTimeout(() => controller.abort(), timeout);
@@ -310,110 +312,29 @@ async function requisitarGdl(
     const resposta = await sessaoRede.fetch(url, {
       method,
       headers,
-      redirect: seguirRedirecionamentos ? 'follow' : 'manual',
+      redirect: 'manual',
       ...(body ? { body } : {}),
       signal: controller.signal,
     });
+    const data = await resposta.text();
+    await registrarRespostaGdl({ etapa: 'resposta_original', operacao: new URL(url).pathname.split('/api/')[1],
+      metodo: method, duracaoMs: performance.now() - inicio, statusHttp: resposta.status,
+      redirecionamentoBloqueado: resposta.status >= 300 && resposta.status < 400 }, data);
+    if (resposta.status >= 300 && resposta.status < 400) throw new Error('Redirecionamento da API GDL bloqueado para preservar a consulta de leitura.');
     return {
       statusCode: resposta.status,
-      data: await resposta.text(),
+      data,
       redirecionado: resposta.redirected,
       paginaAutenticacao: /\/(?:Account\/|Login(?:\.aspx)?(?:\/|$))/i.test(new URL(resposta.url || url).pathname),
     };
   } catch (error) {
+    await registrarRespostaGdl({ etapa: 'falha_transporte', operacao: new URL(url).pathname.split('/api/')[1], metodo: method, duracaoMs: performance.now() - inicio, timeout: controller.signal.aborted });
     if (controller.signal.aborted) {
       throw new Error(`Timeout após ${timeout}ms`);
     }
     throw error;
   } finally {
     clearTimeout(temporizador);
-  }
-}
-
-function decodificarEntidadesHtml(texto: string): string {
-  return texto
-    .replace(/&#(\d+);/g, (_entidade, codigo: string) => String.fromCodePoint(Number(codigo)))
-    .replace(/&#x([0-9a-f]+);/gi, (_entidade, codigo: string) => String.fromCodePoint(Number.parseInt(codigo, 16)))
-    .replace(/&quot;/gi, '"')
-    .replace(/&apos;|&#39;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&amp;/gi, '&');
-}
-
-export function extrairQuesitoAbertoDaPaginaGdl(conteudo: string): string {
-  const correspondencia = conteudo.match(
-    /<textarea\b[^>]*(?:id|name)=["'][^"']*txtOpenQuestion["'][^>]*>([\s\S]*?)<\/textarea>/i,
-  );
-  return correspondencia ? decodificarEntidadesHtml(correspondencia[1]).trim() : '';
-}
-
-export function extrairDataEntradaSolicitacaoDaPaginaGdl(conteudo: string): string {
-  const correspondencia = conteudo.match(
-    /<input\b(?=[^>]*(?:id|name)=["'][^"']*txtDateEntry["'])(?=[^>]*\bvalue=["']([^"']*)["'])[^>]*>/i,
-  );
-  const valor = correspondencia ? decodificarEntidadesHtml(correspondencia[1]).trim() : '';
-  const dataIso = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (dataIso) return `${dataIso[1]}-${dataIso[2]}-${dataIso[3]}`;
-
-  const dataBrasileira = valor.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s|$)/);
-  return dataBrasileira ? `${dataBrasileira[3]}-${dataBrasileira[2]}-${dataBrasileira[1]}` : '';
-}
-
-interface DadosComplementaresDaPaginaGdl {
-  quesitoAberto: string;
-  dataEntradaSolicitacao: string;
-  naturezaExame?: string;
-  motivoNatureza: string;
-}
-
-async function consultarDadosComplementaresDaPaginaGdl(
-  credenciais: GdlCredenciais,
-  codRep: number,
-): Promise<DadosComplementaresDaPaginaGdl> {
-  try {
-    const resposta = await consultarPaginaRepGdl(credenciais, codRep, obterSessaoRedeGdl);
-    const campoDataPresente = /<input\b[^>]*(?:id|name)=["'][^"']*txtDateEntry["']/i.test(resposta.data);
-    const campoQuesitoPresente = /<textarea\b[^>]*(?:id|name)=["'][^"']*txtOpenQuestion["']/i.test(resposta.data);
-    const paginaDisponivel = resposta.statusCode === 200 && !resposta.paginaAutenticacao;
-    const naturezaExame = paginaDisponivel ? obterNaturezaExameDaRepGdl(resposta.data) ?? undefined : undefined;
-    const dadosPagina = paginaDisponivel
-      ? {
-        quesitoAberto: extrairQuesitoAbertoDaPaginaGdl(resposta.data),
-        dataEntradaSolicitacao: extrairDataEntradaSolicitacaoDaPaginaGdl(resposta.data),
-        naturezaExame,
-        motivoNatureza: naturezaExame ? '' : 'natureza ausente na página de detalhes',
-      }
-      : {
-        quesitoAberto: '',
-        dataEntradaSolicitacao: '',
-        motivoNatureza: resposta.paginaAutenticacao
-          ? 'página de autenticação recebida em vez dos detalhes'
-          : `página de detalhes respondeu HTTP ${resposta.statusCode}`,
-      };
-    if (!dadosPagina.dataEntradaSolicitacao || !campoQuesitoPresente) {
-      log.warn('Leitura complementar da REP GDL incompleta.', {
-        codRep,
-        statusCode: resposta.statusCode,
-        redirecionado: resposta.redirecionado,
-        paginaAutenticacao: resposta.paginaAutenticacao,
-        campoDataPresente,
-        campoQuesitoPresente,
-        dataExtraida: Boolean(dadosPagina.dataEntradaSolicitacao),
-        quesitoExtraido: Boolean(dadosPagina.quesitoAberto),
-      });
-    }
-    return dadosPagina;
-  } catch (erro) {
-    log.warn('Não foi possível complementar dados da página da REP GDL.', {
-      codRep,
-      erro: erro instanceof Error ? erro.message : String(erro),
-    });
-    return {
-      quesitoAberto: '',
-      dataEntradaSolicitacao: '',
-      motivoNatureza: 'falha ao consultar a página de detalhes',
-    };
   }
 }
 
@@ -771,6 +692,7 @@ export function extrairFiltrosParaConsultaInvestigacao(rep: GdlRepValidada): Fil
 }
 
 interface DadosInvestigacaoComplementares {
+  statusRep?: string;
   envolvidos: unknown[];
   naturezaExame?: string;
   motivoNatureza: string;
@@ -807,47 +729,40 @@ async function consultarDadosNaInvestigacao(
   const url = `${baseUrl}/repsInvestigacaoPolicial/listarReps`;
   const envolvidos: unknown[] = [];
   const naturezasExame = new Set<string>();
+  const statusEncontrados = new Set<string>();
+  let statusIncompleto = false;
   let houveRespostaValida = false;
   let houveRepCorrespondente = false;
   let houveFalha = false;
 
   for (const filtro of filtros) {
-    const corpo = JSON.stringify({
-      ...(filtro.numeroCaso ? { numeroCaso: filtro.numeroCaso } : {
-        numeroOrigem: filtro.numeroOrigem,
-        anoOrigem: filtro.anoOrigem,
-      }),
-      numPagina: 1,
-      tamPagina: 10,
-    });
-    try {
-      const { statusCode, data } = await requisitarGdl(url, 'POST', headers, corpo, 15000);
-
-      if (statusCode !== 200) {
-        houveFalha = true;
-        log.warn('Consulta auxiliar de envolvidos no GDL não retornou sucesso', {
-          codRep: rep.codRep,
-          statusCode,
-        });
-        continue;
-      }
-
-      const resposta = interpretarGdlListaRepsInvestigacaoJson(data);
-      houveRespostaValida = true;
-      const repsCorrespondentes = resposta.dadosREPs
-        .filter(item => repInvestigacaoCorresponde(item, rep));
-      if (repsCorrespondentes.length > 0) houveRepCorrespondente = true;
-      envolvidos.push(...repsCorrespondentes.flatMap(item => item.envolvidos === undefined ? [] : [item.envolvidos]));
-      repsCorrespondentes.forEach(item => {
-        if (item.naturezaExame.trim()) naturezasExame.add(item.naturezaExame.trim());
-      });
-    } catch (erro) {
-      houveFalha = true;
-      log.warn('Falha na consulta auxiliar de envolvidos no GDL', {
-        codRep: rep.codRep,
-        erro: erro instanceof Error ? erro.message : 'Erro inesperado',
-      });
+    const paginas = new Set<string>();
+    let finalizada = false;
+    for (let pagina = 1; pagina <= 100; pagina++) {
+      const corpo = JSON.stringify({ ...(filtro.numeroCaso ? { numeroCaso: filtro.numeroCaso } : {
+        numeroOrigem: filtro.numeroOrigem, anoOrigem: filtro.anoOrigem,
+      }), numPagina: pagina, tamPagina: 10 });
+      try {
+        const { statusCode, data } = await requisitarGdl(url, 'POST', headers, corpo, 15000);
+        if (statusCode !== 200) { houveFalha = true; finalizada = true; break; }
+        const resposta = interpretarGdlListaRepsInvestigacaoJson(data);
+        await registrarRespostaGdl({ etapa: 'resposta_normalizada' }, undefined, resposta);
+        const assinatura = JSON.stringify(resposta.dadosREPs);
+        if (paginas.has(assinatura) && resposta.dadosREPs.length) { houveFalha = true; finalizada = true; break; }
+        paginas.add(assinatura);
+        houveRespostaValida = true;
+        const correspondentes = resposta.dadosREPs.filter(item => repInvestigacaoCorresponde(item, rep));
+        if (correspondentes.length) houveRepCorrespondente = true;
+        envolvidos.push(...correspondentes.flatMap(item => item.envolvidos === undefined ? [] : [item.envolvidos]));
+        for (const item of correspondentes) {
+          if (item.naturezaExame.trim()) naturezasExame.add(item.naturezaExame.trim());
+          if (item.statusRep.trim()) statusEncontrados.add(item.statusRep.trim()); else statusIncompleto = true;
+        }
+        if (correspondentes.length || !resposta.dadosREPs.length || resposta.dadosREPs.length < 10
+          || (resposta.quantRegistros !== undefined && pagina * 10 >= resposta.quantRegistros)) { finalizada = true; break; }
+      } catch { houveFalha = true; finalizada = true; break; }
     }
+    if (!finalizada) houveFalha = true;
   }
 
   if (naturezasExame.size > 1) {
@@ -858,8 +773,9 @@ async function consultarDadosNaInvestigacao(
   }
   return {
     envolvidos,
-    naturezaExame: naturezasExame.values().next().value,
-    motivoNatureza: naturezasExame.size > 0 ? '' : houveFalha
+    statusRep: !houveFalha && !statusIncompleto && houveRepCorrespondente && statusEncontrados.size === 1 ? statusEncontrados.values().next().value : undefined,
+    naturezaExame: naturezasExame.size === 1 ? naturezasExame.values().next().value : undefined,
+    motivoNatureza: naturezasExame.size > 1 ? 'naturezas divergentes na consulta auxiliar' : naturezasExame.size > 0 ? '' : houveFalha
       ? 'uma ou mais consultas falharam'
       : !houveRespostaValida ? 'sem resposta válida'
         : !houveRepCorrespondente ? 'REP não encontrada no resultado'
@@ -870,6 +786,7 @@ async function consultarDadosNaInvestigacao(
 export async function testarConexao(ambiente: string): Promise<GdlTesteResultado> {
   const inicio = Date.now();
   const amb = await obterAmbienteEfetivo(ambiente);
+  definirAmbienteConsultaGdl(amb);
   const ambienteLabel = getAmbienteLabel(amb);
   let endpointRede = '';
   try {
@@ -954,17 +871,11 @@ export async function obterIdentidadeMinhasReps(): Promise<string> {
   return createHash('sha256').update(JSON.stringify({ ambiente, credenciais })).digest('hex');
 }
 
-export async function consultarNaturezasMinhasReps(listagemId: string): Promise<NaturezaMinhaRepGdl[]> {
-  const ambiente = await obterAmbienteEfetivo();
-  const credenciais = await carregarCredenciais(ambiente);
-  if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
-  return consultarNaturezasMinhasRepsGdl(credenciais, listagemId, obterSessaoRedeGdl);
-}
-
 export async function consultarRep(numero: string, ano: string): Promise<GdlConsultaResultado> {
   let ambiente: AmbienteGdl = 'producao';
   try {
     ambiente = await obterAmbienteEfetivo();
+    definirAmbienteConsultaGdl(ambiente);
     const creds = await carregarCredenciais(ambiente);
     if (!creds.login || !creds.senha) {
       limparValidacaoSessaoInterna(ambiente);
@@ -986,30 +897,12 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
-      const dadosPagina = await consultarDadosComplementaresDaPaginaGdl(creds, parsed.codRep);
-      const quesitoAberto = parsed.quesitoAberto || dadosPagina.quesitoAberto;
-      const repComComplementos = {
-        ...parsed,
-        ...(quesitoAberto ? { quesitoAberto } : {}),
-        dataEntradaSolicitacao: dadosPagina.dataEntradaSolicitacao,
-      };
-      const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, repComComplementos);
-      const naturezaInvestigacao = dadosComplementares.naturezaExame?.trim() || '';
-      const naturezaPagina = dadosPagina.naturezaExame?.trim() || '';
-      const naturezaExame = extrairCodigoNaturezaExame(naturezaInvestigacao)
-        ? naturezaInvestigacao
-        : extrairCodigoNaturezaExame(naturezaPagina) ? naturezaPagina : undefined;
-      const motivoInvestigacao = naturezaInvestigacao ? 'valor não identificável' : dadosComplementares.motivoNatureza;
-      const motivoPagina = naturezaPagina ? 'valor não identificável' : dadosPagina.motivoNatureza;
+      await registrarRespostaGdl({ etapa: 'resposta_normalizada', ambiente }, undefined, parsed);
+      const repComComplementos = parsed;
+      const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, parsed);
+      const naturezaExame = dadosComplementares.naturezaExame?.trim() || undefined;
       const erroNaturezaExame = naturezaExame ? undefined
-        : `Não foi possível identificar a natureza de exame da REP. Consulta auxiliar: ${motivoInvestigacao}. Página de detalhes: ${motivoPagina}.`;
-      if (!naturezaExame) {
-        log.warn('Natureza de exame não identificada na consulta GDL.', {
-          codRep: parsed.codRep,
-          consultaAuxiliar: motivoInvestigacao,
-          paginaDetalhes: motivoPagina,
-        });
-      }
+        : `Natureza de exame não identificada pela API: ${dadosComplementares.motivoNatureza}. Selecione o tipo localmente.`;
       const dadosComEnvolvidos = dadosComplementares.envolvidos.length > 0
         ? { ...repComComplementos, envolvidos: [...repComComplementos.envolvidos, ...dadosComplementares.envolvidos] }
         : repComComplementos;
@@ -1021,7 +914,7 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
         envolvidosEncontrados: dadosComplementares.envolvidos.length,
         naturezaExameEncontrada: Boolean(naturezaExame),
         origemNaturezaExame: naturezaExame
-          ? naturezaExame === naturezaInvestigacao ? 'consulta_auxiliar' : 'pagina_detalhes'
+          ? 'consulta_auxiliar'
           : 'nenhuma',
       });
       return {
@@ -1029,6 +922,7 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
         dados: dadosComEnvolvidos,
         ambiente,
         naturezaExame,
+        statusRep: dadosComplementares.statusRep,
         erroNaturezaExame,
       };
     }
@@ -1123,10 +1017,7 @@ function repInvestigacaoCorresponde(repInvestigacao: { numeroRep: string; numero
   const numeroRepRetornado = repInvestigacao.numeroRep.replace(/\D/g, '')
   if (numeroRepRetornado === numeroRepEsperado) return true
 
-  const numeroCasoRep = typeof rep.numeroCaso === 'number'
-    ? String(rep.numeroCaso)
-    : typeof rep.numeroCaso === 'string' ? rep.numeroCaso.replace(/\D/g, '') : ''
-  return !!numeroCasoRep && repInvestigacao.numeroCaso.replace(/\D/g, '') === numeroCasoRep
+  return false
 }
 
 function montarUrlListaFotos(baseUrlApi: string, codRep: number, numero: string, ano: string): string {
@@ -1405,6 +1296,7 @@ export async function validarCredenciais(
   ano: string,
 ): Promise<GdlConsultaResultado> {
   const amb = await obterAmbienteEfetivo(ambiente);
+  definirAmbienteConsultaGdl(amb);
   if (ambiente === 'homologacao' && amb !== 'homologacao') {
     return { sucesso: false, dados: null, erro: 'Habilite o ambiente de Homologação antes de validar essas credenciais.' };
   }
@@ -1453,4 +1345,10 @@ export async function validarCredenciais(
     log.error(`Falha ao validar credenciais GDL com REP ${numero}/${ano} (${ambLabel})`, { erro: mensagem, numero, ano });
     return { sucesso: false, dados: null, erro: mensagem };
   }
+}
+
+
+export async function consultarDetalhesRepAutorizada(id: number, numero: string, ano: string, validarContexto: () => Promise<void>, sinal: AbortSignal) {
+  const credenciais = await carregarCredenciais(await obterAmbienteEfetivo());
+  return lerDetalhesRepAutorizadaGdl(credenciais, id, numero, ano, obterSessaoRedeGdl, validarContexto, sinal);
 }

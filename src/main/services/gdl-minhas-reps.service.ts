@@ -140,34 +140,6 @@ export function interpretarMinhasRepsGdl(html: string, paginaAtual: number): Omi
   };
 }
 
-export function obterNaturezaExameDaRepGdl(html: string): string | null {
-  const seletor = buscarPorId(parseDocument(html), 'Content_RepMain_ddlNatureExam');
-  if (!seletor || seletor.name !== 'select') return null;
-  const selecionada = DomUtils.findOne(elemento => elemento.name === 'option'
-    && Object.hasOwn(elemento.attribs, 'selected'), seletor);
-  const texto = selecionada ? DomUtils.textContent(selecionada).trim() : '';
-  return texto || null;
-}
-
-export async function complementarNaturezasMinhasRepsGdl(
-  reps: MinhaRepGdl[],
-  consultarDetalhe: (idGdl: number) => Promise<string | null>,
-  registrarFalha: (erro: unknown, duracaoMs: number) => void,
-  continuar: () => boolean = () => true,
-): Promise<void> {
-  for (let indice = 0; indice < reps.length; indice += 2) {
-    if (!continuar()) return;
-    await Promise.all(reps.slice(indice, indice + 2).map(async rep => {
-      const inicio = performance.now();
-      try {
-        rep.naturezaExameComCodigo = await consultarDetalhe(rep.idGdl);
-      } catch (erro: unknown) {
-        registrarFalha(erro, Math.round(performance.now() - inicio));
-      }
-    }));
-  }
-}
-
 export function obterEventoNavegacaoMinhasReps(html: string, paginaAtual: number, paginaDesejada: number): string {
   const eventos = obterEventosDePagina(obterGrade(html));
   const candidatos = paginaDesejada > paginaAtual

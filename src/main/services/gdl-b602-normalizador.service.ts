@@ -437,7 +437,7 @@ export function converterRepB602(
     avisos: [
       ...(!rep.dataEntradaSolicitacao ? [{
         codigo: 'DATA_ENTRADA_SOLICITACAO_NAO_RETORNADA',
-        mensagem: 'A Data de Entrada/Solicitação não foi retornada pela página da REP no GDL; preencha a Data de recebimento manualmente.',
+        mensagem: 'A Data de Entrada/Solicitação não foi fornecida pela API do GDL; preencha a Data de recebimento manualmente.',
       }] : []),
       ...(quantidadeFuncionamentosPreenchidos > 0 ? [{
         codigo: 'FUNCIONAMENTO_NAO_TESTADO_PADRAO',

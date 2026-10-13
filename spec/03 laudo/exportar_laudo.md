@@ -39,11 +39,13 @@ Em ocorrência personalizada, a exportação prefere o HTML local de `data-place
 
 A exportação remove prévias transitórias de placeholder, controles de tabelas e blocos condicionais, atributos de edição e qualquer bloco com `data-cond-suprimido="true"`. Placeholders sem valor resolvem para `<span class="campo-reservado" data-reservado="true">XXX</span>`. Bloco pericial não excluído que contenha somente espaço ou parágrafo vazio recebe um parágrafo com o mesmo marcador. `XXX` não bloqueia a exportação.
 
-Valores estruturais são inseridos como fragmento HTML. Tabelas recebem largura e largura máxima de 100%; a geração de PDF e ODT também força essas regras para impedir estouro horizontal. Quando uma tabela foi personalizada no laudo, a cópia local substitui a resolução da âncora vinculada; identificadores, classes e controles exclusivamente visuais são removidos da saída.
+Valores estruturais são inseridos como fragmento HTML. Tabelas recebem largura e largura máxima de 100%. No PDF, tabelas de placeholders marcadas por `data-placeholder-celula-fixa` também recebem layout fixo, padding reduzido e quebra de texto; as de dez ou mais colunas usam fonte menor. A prévia e a exportação compartilham essas regras em `pdf-tabelas.ts`, necessárias porque `max-width: 100%` sozinho não contém uma tabela larga. ODT mantém seu caminho próprio de conversão. Quando uma tabela foi personalizada no laudo, a cópia local substitui a resolução da âncora vinculada; identificadores, classes e controles exclusivamente visuais são removidos da saída.
 
 Na exportação iniciada pelo editor, `LaudosPage.tsx` lê primeiro os editores abertos, confere e corrige seus títulos `TABELA N`, e só então monta o HTML a exportar. Depois de resolver todos os placeholders, `renumerarTabelasHtml()` confere o HTML final; isso impede que os títulos fixos B-602 restaurem números antigos. Falha na conferência anterior à geração interrompe a operação com erro, antes de produzir arquivo.
 
-PDF e preview aplicam `break-after: page` e `page-break-after: always` ao marcador. DOCX converte o recuo para twips (`w:firstLine`) e cada bloco de quebra em `PageBreak` nativo; ODT é produzido a partir do DOCX canônico pelo LibreOffice.
+PDF e preview aplicam `break-after: page` e `page-break-after: always` ao marcador. Ambos usam `gerarPdfPreparado()` para aguardar carregamento, fontes e imagens antes de imprimir, com limites de 15 segundos para preparação e 30 segundos para impressão. A leitura de cabeçalho é estrita: falha não vira ausência confirmada. Falhas de PDF têm código e etapa tipados e oferecem nova tentativa na interface, sem descartar as edições atuais.
+
+Na exportação, o buffer completo é gravado em arquivo temporário no diretório de destino e só então movido para o nome escolhido. Uma falha de preparação ou impressão não substitui o arquivo existente. DOCX converte o recuo para twips (`w:firstLine`) e cada bloco de quebra em `PageBreak` nativo; ODT é produzido a partir do DOCX canônico pelo LibreOffice.
 
 ## Invariantes
 

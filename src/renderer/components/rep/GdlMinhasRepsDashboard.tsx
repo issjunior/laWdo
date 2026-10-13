@@ -1,3 +1,4 @@
+import { apresentarNaturezaExame } from '@shared/gdl/natureza-exame';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
@@ -23,6 +24,8 @@ const esquemaSnapshot = z.object({
     naturezaExame: z.string().min(1), naturezaExameComCodigo: z.string().min(1).nullable(),
     status: z.enum(statusDisponiveis), dataDesignacao: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).nullable(),
     quantidadeFotos: z.number().int().nonnegative().nullable(),
+      naturezaConfirmada: z.boolean().optional(), naturezaDivergente: z.boolean().optional(),
+      naturezaConsultadaEm: z.string().optional(), statusNecessitaAtualizacao: z.boolean().optional(),
   })),
 });
 
@@ -77,6 +80,17 @@ export function GdlMinhasRepsDashboard() {
   }, []);
 
   useEffect(() => {
+    const atualizarLocal = () => {
+      void window.ipcAPI.gdl.obterMinhasRepsCache().then(resposta => {
+        const validacao = esquemaSnapshot.safeParse(resposta.data);
+        if (resposta.success && validacao.success) setSnapshot(validacao.data);
+      }).catch(() => undefined);
+    };
+    window.addEventListener('focus', atualizarLocal);
+    return () => window.removeEventListener('focus', atualizarLocal);
+  }, []);
+
+  useEffect(() => {
     let ativo = true;
     void Promise.all([window.ipcAPI.gdl.obterPreferenciaListagem(), window.ipcAPI.gdl.obterMinhasRepsCache()]).then(([preferencia, resposta]) => {
       if (!ativo) return;
@@ -100,7 +114,7 @@ export function GdlMinhasRepsDashboard() {
   const snapshotExibido = snapshot && (listagemHabilitada || cacheListagemDesativadaDisponivel(snapshot.atualizadoEm, Math.max(agora, Date.now()))) ? snapshot : null;
 
   const selecionar = useCallback((rep: MinhaRepGdl) => {
-    navegar('/reps', { state: { importarGdl: { numero: rep.numero, ano: rep.ano } } });
+    navegar('/reps', { state: { importarGdl: { numero: rep.numero, ano: rep.ano, naturezaExame: rep.naturezaExame } } });
   }, [navegar]);
 
   const colunas = useMemo<DefinicaoColunaTabela<MinhaRepGdl>[]>(() => [
@@ -120,13 +134,13 @@ export function GdlMinhasRepsDashboard() {
     {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-      cell: ({ row }) => <GdlStatusBadge status={row.original.status} />,
+      cell: ({ row }) => <div><GdlStatusBadge status={row.original.status} />{row.original.statusNecessitaAtualizacao && <p className="mt-1 text-xs text-muted-foreground">Atualize a lista para conferir o status.</p>}</div>,
     },
     {
       id: 'natureza',
-      accessorFn: rep => rep.naturezaExameComCodigo ?? rep.naturezaExame,
+      accessorFn: rep => rep.naturezaExameComCodigo ?? apresentarNaturezaExame(rep.naturezaExame),
       header: ({ column }) => <DataTableColumnHeader column={column} title="Natureza" />,
-      cell: ({ row }) => row.original.naturezaExameComCodigo ?? row.original.naturezaExame,
+      cell: ({ row }) => <div>{row.original.naturezaExameComCodigo ?? apresentarNaturezaExame(row.original.naturezaExame)}{row.original.naturezaDivergente && <p className="mt-1 text-xs text-muted-foreground">Natureza divergente; confirme na consulta individual.</p>}</div>,
     },
     {
       id: 'fotos',

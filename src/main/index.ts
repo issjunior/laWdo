@@ -1,7 +1,8 @@
+import { configurarObservadorGdl } from './services/gdl-diagnostico.service.js';
 import { app, BrowserWindow, dialog, shell, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
@@ -16,6 +17,7 @@ import { DiagnosticoPipeService } from './services/diagnostico-pipe.service.js';
 import { DiagnosticoInterfaceService } from './services/diagnostico-interface.service.js';
 import { DiagnosticoCapturaService } from './services/diagnostico-captura.service.js';
 import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.service.js';
+import { prepararAvisoConsoleDiagnostico } from './services/diagnostico-console.service.js';
 import { iaExecucaoService } from './services/ia-execucao.service.js';
 import { authSessaoService } from './services/auth-sessao.service.js';
 import { concluirRestauracaoPendente, reverterRestauracaoPendente } from './services/backup.service.js';
@@ -184,6 +186,19 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     alterarSonda: (ativa, finalidade) => {
       const janela = obterJanelaDiagnostico();
       janela?.webContents.send('diagnostico:alterar-captura', { ativa, finalidade });
+    },
+  });
+  configurarObservadorGdl({
+    obterCaptura: remetenteId => {
+      const janela = BrowserWindow.getAllWindows().find(item => item.webContents.id === remetenteId);
+      return janela ? capturaDiagnostico?.obterCapturaGdl(janela.id) ?? null : null;
+    },
+    registrar: async (contexto, dados) => {
+      const atual = capturaDiagnostico?.obterCapturaGdl(contexto.janelaId);
+      if (atual?.capturaId !== contexto.capturaId) return;
+      await sessao.servicoEventos?.registrar({ origem: 'main', categoria: 'ipc', nivel: 'info',
+        janelaId: contexto.janelaId, correlacaoId: contexto.correlacaoId,
+        dados: { evento: 'consulta_gdl', capturaId: contexto.capturaId, numeroRep: contexto.numero, anoRep: contexto.ano, ...dados } });
     },
   });
   const pipe = new DiagnosticoPipeService(
@@ -395,18 +410,21 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const canal = typeof entrada.canal === 'string' ? entrada.canal : 'desconhecido';
     const correlacaoId = typeof entrada.correlacaoId === 'string' ? entrada.correlacaoId : undefined;
     const duracaoMs = typeof entrada.duracaoMs === 'number' ? entrada.duracaoMs : undefined;
+    const resultadoFuncional = entrada.resultadoFuncional === 'sucesso' || entrada.resultadoFuncional === 'falha' || entrada.resultadoFuncional === 'indeterminado'
+      ? entrada.resultadoFuncional : undefined;
+    const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
     void sessao.servicoEventos?.registrar({
       origem: 'preload',
       categoria,
-      nivel: fase === 'erro' ? 'error' : nivel,
+      nivel: fase === 'erro' || resultadoFuncional === 'falha' ? 'error' : nivel,
       janelaId: BrowserWindow.fromWebContents(evento.sender)?.id,
       rota: evento.sender.getURL(),
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {
@@ -495,9 +513,14 @@ const createWindow = async (): Promise<void> => {
   });
   mainWindow.webContents.on('console-message', ({ level, message, lineNumber, sourceId, frame }) => {
     const nivel = level === 'error' ? 'error' : level === 'warning' ? 'warn' : level === 'debug' ? 'debug' : 'info';
-    void sourceMapsDiagnostico?.resolver(sourceId, lineNumber, 1).then(localizacaoOriginal => {
-      const assinatura = createHash('sha256').update(message).digest('hex').slice(0, 16);
-      registrarEventoDiagnostico('console', nivel, { assinatura, linha: lineNumber, origem: sourceId, principal: frame?.parent === null, localizacaoOriginal, agregada: capturaDiagnostico?.finalidadeAtiva() === 'desempenho' }, mainWindow ?? undefined);
+    void prepararAvisoConsoleDiagnostico({
+      mensagem: message,
+      origem: sourceId,
+      linha: lineNumber,
+      principal: frame?.parent === null,
+      agregada: capturaDiagnostico?.finalidadeAtiva() === 'desempenho',
+    }, sourceMapsDiagnostico).then(dados => {
+      registrarEventoDiagnostico('console', nivel, dados, mainWindow ?? undefined);
     });
   });
 

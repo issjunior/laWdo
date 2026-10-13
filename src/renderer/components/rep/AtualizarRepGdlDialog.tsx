@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { esquemaConsultaIdentificacaoRepGdl } from '@shared/gdl/natureza-exame';
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -18,6 +19,7 @@ interface AtualizarRepGdlDialogProps {
 function previaAtualizacaoValida(valor: unknown): valor is PreviaAtualizacaoRepGdl {
   if (!valor || typeof valor !== 'object') return false
   const previa = valor as Record<string, unknown>
+  if (previa.consultaDetalhes !== undefined && !esquemaConsultaIdentificacaoRepGdl.safeParse(previa.consultaDetalhes).success) return false
   return typeof previa.operacaoId === 'string'
     && typeof previa.repId === 'string'
     && typeof previa.repNumero === 'string'
@@ -65,6 +67,7 @@ function obterMensagemErroGdl(erro: string): { titulo: string; descricao: string
 }
 
 export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }: AtualizarRepGdlDialogProps) {
+  const geracaoConsulta = useRef(0)
   const [previa, setPrevia] = useState<PreviaAtualizacaoRepGdl | null>(null)
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [erro, setErro] = useState<string | null>(null)
@@ -77,16 +80,17 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
 
   useEffect(() => {
     if (!open || !repId) return
+    const geracao = ++geracaoConsulta.current
     let ativa = true
     setPrevia(null); setErro(null); setReabrirLaudo(false); setDetalhesAbertos(new Set()); setCarregando(true)
     void window.ipcAPI.gdl.prepararAtualizacaoRep(repId).then(resposta => {
-      if (!ativa) return
+      if (!ativa || geracao !== geracaoConsulta.current) return
       if (!resposta.success || !previaAtualizacaoValida(resposta.data)) { setErro(resposta.error || 'Não foi possível consultar a REP no GDL.'); return }
       const dados = resposta.data
       setPrevia(dados)
       setSelecionadas(new Set(dados.diferencas.filter(diferenca => diferenca.selecionadaPorPadrao).map(diferenca => diferenca.id)))
     }).catch(() => { if (ativa) setErro('Não foi possível consultar a REP no GDL.') }).finally(() => { if (ativa) setCarregando(false) })
-    return () => { ativa = false }
+    return () => { ativa = false; geracaoConsulta.current += 1; void window.ipcAPI.gdl.descartarConsultaRep?.().catch(() => undefined) }
   }, [open, repId, tentativaConsulta])
 
   const grupos = useMemo(() => {
@@ -118,10 +122,24 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
     } catch { setErro('Não foi possível aplicar a atualização.') } finally { setAplicando(false) }
   }
 
+  const completarDetalhes = async (abrir: boolean) => {
+    if (!repId || !previa?.consultaDetalhes) return
+    const geracao = geracaoConsulta.current
+    setCarregando(true); setErro(null)
+    try {
+      const resposta = await window.ipcAPI.gdl.completarAtualizacaoRep(repId, previa.consultaDetalhes.consultaId, abrir)
+      if (geracao !== geracaoConsulta.current) return
+      if (!resposta.success || !previaAtualizacaoValida(resposta.data)) throw new Error(resposta.error || 'Falha ao concluir a consulta.')
+      setPrevia(resposta.data)
+      setSelecionadas(new Set(resposta.data.diferencas.filter(item => item.selecionadaPorPadrao).map(item => item.id)))
+    } catch (erro: unknown) { if (geracao === geracaoConsulta.current) setErro(erro instanceof Error ? erro.message : 'Falha ao concluir a consulta.') }
+    finally { if (geracao === geracaoConsulta.current) setCarregando(false) }
+  }
+
   const requerReabertura = Boolean(previa?.impactoLaudo?.requerReabertura)
   const semDiferencas = previa?.diferencas.length === 0
   const podeReconciliarLaudo = Boolean(semDiferencas && previa?.impactoLaudo)
-  const podeConfirmar = (selecionadas.size > 0 || podeReconciliarLaudo) && (!requerReabertura || reabrirLaudo)
+  const podeConfirmar = !previa?.consultaDetalhes && (selecionadas.size > 0 || podeReconciliarLaudo) && (!requerReabertura || reabrirLaudo)
   const mensagemErro = erro ? obterMensagemErroGdl(erro) : null
 
   return <>
@@ -131,6 +149,16 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
           <DialogTitle className="flex items-center gap-2"><RefreshCw className="size-5" />Atualizar REP pelo GDL</DialogTitle>
           <DialogDescription>{previa ? `REP ${previa.repNumero} · ${previa.codigoExame}` : erro ? 'A consulta ao GDL não pôde ser concluída.' : 'Consultando informações atualizadas no GDL.'}</DialogDescription>
         </DialogHeader>
+        {previa?.consultaDetalhes && !carregando && <Alert>
+          <AlertTitle>Consulta detalhada da REP</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>{previa.consultaDetalhes.detalhes?.motivoConfirmacao}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void completarDetalhes(true)}>Continuar e abrir detalhes</Button>
+              <Button variant="outline" onClick={() => void completarDetalhes(false)}>Usar somente dados da API</Button>
+            </div>
+          </AlertDescription>
+        </Alert>}
         {carregando && <div className="flex items-center gap-2 py-8 text-muted-foreground"><Loader2 className="size-4 animate-spin" />Consultando o GDL...</div>}
         {mensagemErro && <Alert variant="destructive">
           <WifiOff className="size-4" />
@@ -146,7 +174,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
             </details>
           </AlertDescription>
         </Alert>}
-        {previa && <div className="space-y-5">
+        {previa && !previa.consultaDetalhes && <div className="space-y-5">
           {previa.avisos.map(aviso => <Alert key={aviso}><AlertDescription>{aviso}</AlertDescription></Alert>)}
           {semDiferencas ? <Alert><AlertDescription>{podeReconciliarLaudo ? 'A REP já está atualizada. Você ainda pode reconciliar a estrutura do laudo vinculado com os dados locais.' : 'A REP já está atualizada com as informações retornadas pelo GDL.'}</AlertDescription></Alert> : grupos.map(([grupo, diferencas]) => <section key={grupo} className="space-y-2"><h3 className="text-sm font-semibold">{grupo}</h3><div className="divide-y rounded-md border">{diferencas.map(diferenca => {
             const possuiDetalhes = Boolean(diferenca.detalhes?.length)

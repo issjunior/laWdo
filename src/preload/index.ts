@@ -1,5 +1,7 @@
+import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
+import type { FalhaPdf } from '../shared/types/pdf.types.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -248,6 +250,7 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
+    copiarEmailSuporte: () => Promise<UserResponse<{ email: string }>>;
     obterPreferenciaListagem: () => Promise<UserResponse<{ habilitada: boolean }>>;
     definirPreferenciaListagem: (habilitada: boolean) => Promise<UserResponse<{ habilitada: boolean }>>;
     obterMinhasRepsCache: () => Promise<UserResponse<SnapshotMinhasRepsGdl | null>>;
@@ -256,7 +259,12 @@ export interface IpcAPI {
     obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
     validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
+    identificarRep: (numero: string, ano: string, naturezaLista?: string) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
+    completarConsultaRep: (consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
+    descartarConsultaRep: () => Promise<UserResponse>;
+    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
     consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
+    completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     prepararAtualizacaoRep: (repId: string) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<UserResponse<ResultadoAtualizacaoRepGdl>>;
     listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ListaImagensRepGdl>>;
@@ -323,7 +331,7 @@ export interface IpcAPI {
     gerarWizard: (params: IpcPayload) => Promise<UserResponse>;
     salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => Promise<UserResponse>;
     getRespostasWizard: (laudoId: string) => Promise<UserResponse>;
-    exportar: (params: ExportacaoLaudoParams) => Promise<UserResponse>;
+    exportar: (params: ExportacaoLaudoParams) => Promise<UserResponse & { falhaPdf?: FalhaPdf }>;
     verificarLibreOffice: () => Promise<UserResponse>;
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
@@ -559,9 +567,15 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:limpar-validacao-sessao',
   'gdl:validar-credenciais',
   'gdl:consultar-rep',
+  'gdl:identificar-rep',
+  'gdl:copiar-email-suporte',
+  'gdl:completar-consulta-rep',
+  'gdl:descartar-consulta-rep',
+  'gdl:converter-consulta-rep',
   'gdl:obter-minhas-reps-cache',
   'gdl:atualizar-minhas-reps-cache',
   'gdl:preparar-atualizacao-rep',
+  'gdl:completar-atualizacao-rep',
   'gdl:aplicar-atualizacao-rep',
   'gdl:listar-imagens-laudo',
   'gdl:obter-miniaturas-imagens-laudo',
@@ -812,10 +826,21 @@ function descarregarResumoIpc(): void {
   if (resumoIpc.length) ipcRenderer.send('desempenho:registrar', { origem: 'ipc', categoria: 'canal', evento: 'resumo_ipc', resumoIpc });
 }
 
-function registrarIpcDesempenho(canal: string, duracaoMs: number, sucesso: boolean, entrada: unknown[], resposta?: unknown): void {
+type ResultadoFuncionalIpc = 'sucesso' | 'falha' | 'indeterminado';
+type DesfechoIpc = ResultadoFuncionalIpc | 'rejeicao_transporte';
+
+function classificarResultadoFuncionalIpc(resposta: unknown): ResultadoFuncionalIpc {
+  if (resposta === null || typeof resposta !== 'object' || Array.isArray(resposta) || !Object.prototype.hasOwnProperty.call(resposta, 'success')) return 'indeterminado';
+  if (!('success' in resposta) || typeof resposta.success !== 'boolean') return 'indeterminado';
+  return resposta.success ? 'sucesso' : 'falha';
+}
+
+function registrarIpcDesempenho(canal: string, duracaoMs: number, desfecho: DesfechoIpc, entrada: unknown[], resposta?: unknown): void {
   const bytesEntrada = Array.from(entrada as unknown[]).reduce<number>((total, item) => total + tamanhoAproximado(item), 0);
-  const evento: EventoDesempenhoEntrada = { origem: 'ipc', categoria: 'canal', evento: sucesso ? 'concluido' : 'falhou', canal, duracaoMs, metadados: { sucesso, falhou: !sucesso, bytesEntrada, bytesSaida: tamanhoAproximado(resposta) } };
-  if (!sucesso || duracaoMs >= 2_000) { ipcRenderer.send('desempenho:registrar', evento); return; }
+  const sucesso = desfecho === 'sucesso' ? true : desfecho === 'indeterminado' ? null : false;
+  const falhou = desfecho === 'indeterminado' ? null : desfecho !== 'sucesso';
+  const evento: EventoDesempenhoEntrada = { origem: 'ipc', categoria: 'canal', evento: desfecho === 'sucesso' ? 'concluido' : desfecho === 'indeterminado' ? 'indeterminado' : 'falhou', canal, duracaoMs, metadados: { sucesso, falhou, bytesEntrada, bytesSaida: tamanhoAproximado(resposta) } };
+  if (falhou || duracaoMs >= 2_000) { ipcRenderer.send('desempenho:registrar', evento); return; }
   if (perfilDesempenhoAtual === 'detalhado') {
     eventosIpcDetalhados.push(evento);
     if (eventosIpcDetalhados.length >= 100) descarregarIpcDetalhado(); else agendarIpcDetalhado();
@@ -1054,21 +1079,26 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
   return (ipcRenderer.invoke(channel, ...args) as Promise<T>).then(
     resposta => {
       if (!canaisDiagnosticoInternos.has(channel)) {
-        registrarEventoIpcDiagnostico({ fase: 'sucesso', canal: channel, correlacaoId, duracaoMs: performance.now() - inicio });
-        registrarIpcDesempenho(channel, performance.now() - inicio, true, args, resposta);
+        const resultadoFuncional = classificarResultadoFuncionalIpc(resposta);
+        const duracaoMs = performance.now() - inicio;
+        const fase = resultadoFuncional === 'sucesso' ? 'sucesso' : resultadoFuncional === 'falha' ? 'falha_funcional' : 'resposta_indeterminada';
+        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs });
+        registrarIpcDesempenho(channel, duracaoMs, resultadoFuncional, args, resposta);
       }
       return resposta;
     },
     erro => {
       if (!canaisDiagnosticoInternos.has(channel)) {
+        const duracaoMs = performance.now() - inicio;
         registrarEventoIpcDiagnostico({
           fase: 'erro',
+          resultadoFuncional: 'indeterminado',
+          tipoFalha: 'transporte',
           canal: channel,
           correlacaoId,
-          duracaoMs: performance.now() - inicio,
-          erro: erro instanceof Error ? erro.message : 'Erro IPC não identificável',
+          duracaoMs,
         });
-        registrarIpcDesempenho(channel, performance.now() - inicio, false, args);
+        registrarIpcDesempenho(channel, duracaoMs, 'rejeicao_transporte', args);
       }
       throw erro;
     },
@@ -1408,6 +1438,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    copiarEmailSuporte: (): Promise<UserResponse<{ email: string }>> => invocarComDiagnostico('gdl:copiar-email-suporte'),
     obterPreferenciaListagem: (): Promise<UserResponse<{ habilitada: boolean }>> => invocarComDiagnostico('gdl:obter-preferencia-listagem'),
     definirPreferenciaListagem: (habilitada: boolean): Promise<UserResponse<{ habilitada: boolean }>> => {
       if (typeof habilitada !== 'boolean') throw new Error('Preferência de listagem inválida');
@@ -1433,6 +1464,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       }
       return invocarComDiagnostico('gdl:validar-credenciais', ambiente.trim(), credenciais, numero.trim(), ano.trim());
     },
+    identificarRep: (numero: string, ano: string, naturezaLista?: string): Promise<UserResponse<ConsultaIdentificacaoRepGdl>> =>
+      invocarComDiagnostico('gdl:identificar-rep', numero.replace(/\D/g, ''), ano.trim(), naturezaLista),
+    completarConsultaRep: (consultaId: string, abrirDetalhes: boolean): Promise<UserResponse<ConsultaIdentificacaoRepGdl>> => invocarComDiagnostico('gdl:completar-consulta-rep', consultaId, abrirDetalhes),
+    descartarConsultaRep: (): Promise<UserResponse> => invocarComDiagnostico('gdl:descartar-consulta-rep'),
+    converterConsultaRep: (consultaId: string, tipoExameId: string): Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>> =>
+      invocarComDiagnostico('gdl:converter-consulta-rep', consultaId, tipoExameId),
     consultarRep: (numero: string, ano: string) => {
       if (typeof numero !== 'string' || !numero.trim()) {
         throw new Error('Número da REP é obrigatório');
@@ -1442,6 +1479,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       }
       return invocarComDiagnostico('gdl:consultar-rep', numero.trim(), ano.trim());
     },
+    completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean): Promise<UserResponse<PreviaAtualizacaoRepGdl>> => invocarComDiagnostico('gdl:completar-atualizacao-rep', repId, consultaId, abrirDetalhes),
     prepararAtualizacaoRep: (repId: string): Promise<UserResponse<PreviaAtualizacaoRepGdl>> => {
       if (typeof repId !== 'string' || !repId.trim()) throw new Error('REP inválida');
       return invocarComDiagnostico('gdl:preparar-atualizacao-rep', repId);

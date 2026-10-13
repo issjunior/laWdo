@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   criarRespostaDiagnosticoErro,
   criarRespostaDiagnosticoSucesso,
   gerarSchemasJsonFerramentasDiagnostico,
+  obterFormaFerramentaDiagnostico,
   schemaExecutarAcaoEntrada,
   schemaInspecionarInterfaceEntrada,
   schemaIniciarCapturaEntrada,
@@ -11,6 +13,13 @@ import {
 } from '@shared/diagnostico/contratos.js';
 
 describe('contratos de diagnóstico assistido', () => {
+  it('anuncia e preserva a opção GDL no schema da ferramenta MCP', () => {
+    const ferramenta = z.object(obterFormaFerramentaDiagnostico(schemaIniciarCapturaEntrada));
+    const entrada = ferramenta.parse({ finalidade: 'problema', cenario: 'Consultar os campos da API GDL.', capturarConsultasGdl: true });
+    expect(entrada.capturarConsultasGdl).toBe(true);
+    expect(schemaIniciarCapturaEntrada.parse(entrada)).toMatchObject({ capturarConsultasGdl: true });
+    expect(schemaIniciarCapturaEntrada.safeParse(ferramenta.parse({ finalidade: 'desempenho', capturarConsultasGdl: true })).success).toBe(false);
+  });
   it('aplica os limites e valores padrão da inspeção', () => {
     expect(schemaInspecionarInterfaceEntrada.parse({})).toEqual({
       limiteElementos: 500,

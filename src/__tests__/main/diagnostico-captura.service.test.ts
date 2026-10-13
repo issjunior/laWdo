@@ -31,7 +31,7 @@ describe('DiagnosticoCapturaService', () => {
   it('fecha o intervalo da reprodução, preserva artefato e é idempotente', async () => {
     const { servico, eventos, sonda, diretorio } = await criarServico();
     await eventos.registrar({ origem: 'preload', categoria: 'acao', nivel: 'info', dados: { tipo: 'clique_usuario' } });
-    const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'A rolagem salta ao abrir uma seção com imagens.' });
+    const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'A rolagem salta ao abrir uma seção com imagens.', capturarConsultasGdl: false });
     const capturaId = String(inicio.capturaId);
     await eventos.registrar({ origem: 'preload', categoria: 'acao', nivel: 'debug', dados: { tipo: 'scroll', y: 10, maximoY: 1000 } });
     await eventos.registrar({ origem: 'preload', categoria: 'acao', nivel: 'debug', dados: { tipo: 'scroll', y: 600, maximoY: 1000 } });
@@ -99,4 +99,18 @@ describe('DiagnosticoCapturaService', () => {
     expect(servico.status(String(inicio.capturaId))).toMatchObject({ perfilDesempenho: 'essencial', degradacao: { ativa: true, motivo: 'FILA_PERSISTENCIA' } });
     await servico.finalizar({ capturaId: String(inicio.capturaId) });
   });
+});
+
+
+it('coleta GDL somente na janela optante e encerra antes de finalizar', async () => {
+  const { servico } = await criarServico();
+  const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'Consultar a REP simulada com campos ausentes.', capturarConsultasGdl: true });
+  expect(servico.obterCapturaGdl(1)).toMatchObject({ capturaId: inicio.capturaId });
+  expect(servico.obterCapturaGdl(2)).toBeNull();
+  const finalizando = servico.finalizar({ capturaId: String(inicio.capturaId) });
+  expect(servico.obterCapturaGdl(1)).toBeNull();
+  await finalizando;
+  const segunda = await servico.iniciar({ finalidade: 'problema', cenario: 'Consultar outra REP sem ativar a coleta.', capturarConsultasGdl: false });
+  expect(servico.obterCapturaGdl(1)).toBeNull();
+  await servico.finalizar({ capturaId: String(segunda.capturaId) });
 });

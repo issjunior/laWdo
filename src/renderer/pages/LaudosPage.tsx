@@ -118,7 +118,9 @@ import {
   restaurarVisualizacaoAposSalvar,
   type ModoVisualizacaoPlaceholders,
 } from '@/lib/apresentacao-placeholders';
-import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { buildPdfHeaderConfig, ErroCabecalhoPdf } from '@/lib/pdf-header';
+import { mensagemFalhaPdf, validarFalhaPdf } from '@/lib/falha-pdf';
+import type { FalhaPdf } from '@shared/types/pdf.types';
 import {
   construirMapaPlaceholdersResolvidos,
   limparIndicadoresCondicionais,
@@ -543,6 +545,13 @@ export const LaudosPage: React.FC = () => {
     erro: () => error,
   });
   const [error, setError] = useState<string | null>(null);
+  const [erroPdf, setErroPdf] = useState<{ mensagem: string; repetir: () => void } | null>(null);
+  const mostrarFalhaPdf = useCallback((valor: unknown, repetir: () => void) => {
+    const falha: FalhaPdf = validarFalhaPdf(valor)
+      ? valor
+      : { codigo: 'FALHA_PDF', etapa: 'impressao', tentarNovamente: true };
+    setErroPdf({ mensagem: `${mensagemFalhaPdf(falha)} Código de suporte: ${falha.codigo}.`, repetir });
+  }, []);
   const [success, setSuccess] = useState<string | null>(null);
 
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1844,6 +1853,10 @@ export const LaudosPage: React.FC = () => {
     try {
       setCarregandoPreview(true);
       setError(null);
+      setErroPdf(null);
+      setPreviewOpen(false);
+      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl('');
       const secoesAtuais = conferirTabelasEditores(true);
       
       // 1. Buscar dados da REP para placeholders
@@ -1881,6 +1894,7 @@ export const LaudosPage: React.FC = () => {
       // 2. Buscar cabeçalho das configurações
       const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        estrito: true,
       });
 
       // 3. Montar HTML completo
@@ -1923,10 +1937,10 @@ export const LaudosPage: React.FC = () => {
         setNomeArquivoPreview(nomeArquivo);
         setPreviewOpen(true);
       } else {
-        setError(result.error || 'Erro ao gerar PDF do laudo');
+        mostrarFalhaPdf(result.falhaPdf, () => { void handlePreview(); });
       }
     } catch (e: unknown) {
-      setError('Erro ao gerar preview: ' + obterMensagemErro(e, 'Erro inesperado'));
+      mostrarFalhaPdf(e instanceof ErroCabecalhoPdf ? e.falhaPdf : undefined, () => { void handlePreview(); });
     } finally {
       setCarregandoPreview(false);
     }
@@ -1936,6 +1950,10 @@ export const LaudosPage: React.FC = () => {
     try {
       setListaPreviewLoading(true);
       setError(null);
+      setErroPdf(null);
+      setListaPreviewOpen(false);
+      if (listaPreviewBlobUrl) URL.revokeObjectURL(listaPreviewBlobUrl);
+      setListaPreviewBlobUrl('');
 
       const rRep = await window.ipcAPI.rep.findById(laudo.rep_id);
       if (!rRep.success || !rRep.data) {
@@ -1969,6 +1987,7 @@ export const LaudosPage: React.FC = () => {
 
       const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        estrito: true,
       });
 
       let html = reindexarHtmlEstrutural(laudo.conteudo || '<p>&nbsp;</p>');
@@ -2005,14 +2024,14 @@ export const LaudosPage: React.FC = () => {
         setNomeArquivoListaPreview(nomeArquivo);
         setListaPreviewOpen(true);
       } else {
-        setError(result.error || 'Erro ao gerar PDF do laudo');
+        mostrarFalhaPdf(result.falhaPdf, () => { void handleListaPreview(laudo); });
       }
     } catch (e: unknown) {
-      setError('Erro ao gerar preview: ' + obterMensagemErro(e, 'Erro inesperado'));
+      mostrarFalhaPdf(e instanceof ErroCabecalhoPdf ? e.falhaPdf : undefined, () => { void handleListaPreview(laudo); });
     } finally {
       setListaPreviewLoading(false);
     }
-  }, [listaPreviewBlobUrl, placeholders]);
+  }, [listaPreviewBlobUrl, placeholders, mostrarFalhaPdf]);
 
   const baixarPdfVisualizado = (url: string, nomeArquivo: string) => {
     if (!url) return;
@@ -2030,6 +2049,7 @@ export const LaudosPage: React.FC = () => {
     try {
       setExportando(true);
       setError(null);
+      setErroPdf(null);
 
       const labelFormato = formato === 'pdf' ? 'PDF' : formato === 'docx' ? 'Word (.docx)' : 'ODT (.odt)';
       toastId = toast.loading(`Exportando laudo como ${labelFormato}...`);
@@ -2066,6 +2086,7 @@ export const LaudosPage: React.FC = () => {
 
       const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        estrito: formato === 'pdf',
       });
 
       const secoesAtuais = conferirTabelasEditores(true);
@@ -2094,7 +2115,8 @@ export const LaudosPage: React.FC = () => {
         if (result.success) {
           toast.success('Documento PDF exportado com sucesso', { id: toastId });
         } else if (result.error !== 'Operação cancelada pelo usuário') {
-          toast.error(result.error || 'Erro ao exportar PDF', { id: toastId });
+          toast.dismiss(toastId);
+          mostrarFalhaPdf(result.falhaPdf, () => { void handleExportar('pdf'); });
         } else {
           toast.dismiss(toastId);
         }
@@ -2149,7 +2171,12 @@ export const LaudosPage: React.FC = () => {
         }
       }
     } catch (e: unknown) {
-      toast.error('Erro ao exportar: ' + obterMensagemErro(e, 'Erro inesperado'), { id: toastId });
+      if (formato === 'pdf') {
+        toast.dismiss(toastId);
+        mostrarFalhaPdf(e instanceof ErroCabecalhoPdf ? e.falhaPdf : undefined, () => { void handleExportar('pdf'); });
+      } else {
+        toast.error('Erro ao exportar: ' + obterMensagemErro(e, 'Erro inesperado'), { id: toastId });
+      }
     } finally {
       setExportando(false);
     }
@@ -3870,6 +3897,15 @@ export const LaudosPage: React.FC = () => {
         />
 
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+        {erroPdf && <Alert variant="destructive">
+          <AlertDescription>
+            <p>{erroPdf.mensagem}</p>
+            <div className="mt-2 flex gap-2">
+              <Button type="button" variant="outline" onClick={erroPdf.repetir}>Tentar novamente</Button>
+              <Button type="button" variant="ghost" onClick={() => setErroPdf(null)}>Fechar</Button>
+            </div>
+          </AlertDescription>
+        </Alert>}
         {success && <Alert><AlertDescription>{success}</AlertDescription></Alert>}
 
         <Card className="flex flex-col overflow-visible">
@@ -4377,6 +4413,15 @@ export const LaudosPage: React.FC = () => {
         <CardContent>
           {filtroDashboard.size > 0 && <div className="mb-4 flex items-center justify-between rounded-md border border-primary/20 bg-accent/60 p-3 text-sm"><span>Filtro aplicado pelo dashboard.</span><Button variant="outline" size="sm" onClick={() => navigate('/laudos')}>Limpar filtro</Button></div>}
           {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
+          {erroPdf && <Alert variant="destructive" className="mb-4">
+            <AlertDescription>
+              <p>{erroPdf.mensagem}</p>
+              <div className="mt-2 flex gap-2">
+                <Button type="button" variant="outline" onClick={erroPdf.repetir}>Tentar novamente</Button>
+                <Button type="button" variant="ghost" onClick={() => setErroPdf(null)}>Fechar</Button>
+              </div>
+            </AlertDescription>
+          </Alert>}
           {success && <Alert className="mb-4 bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
 
           {loading ? (

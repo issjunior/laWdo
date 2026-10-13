@@ -1,3 +1,4 @@
+import { identificarNaturezaExame } from '@shared/gdl/natureza-exame'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,6 +86,7 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
 const ipcApiOriginal = window.ipcAPI
 const criarRep = vi.fn()
 const consultarRep = vi.fn()
+const identificarRep = vi.fn()
 const listarMinhasReps = vi.fn()
 
 beforeAll(() => {
@@ -97,6 +99,12 @@ beforeAll(() => {
 describe('integração da consulta geral GDL com REPsPage', () => {
   beforeEach(() => {
     criarRep.mockResolvedValue({ success: true, data: { id: 'rep-criada' } })
+    identificarRep.mockResolvedValue({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame('B602 - EXAME BALÍSTICO'),
+      tiposLocais: [{ id: 'tipo-b602', codigo: 'B-602', nome: 'Balística' }],
+      avisos: [],
+    } })
     consultarRep.mockResolvedValue({ success: true, data: resultadoConsulta })
     listarMinhasReps.mockResolvedValue({
       success: true,
@@ -151,6 +159,8 @@ describe('integração da consulta geral GDL com REPsPage', () => {
             },
           }),
           consultarRep,
+          identificarRep,
+          converterConsultaRep: consultarRep,
           listarMinhasReps,
           obterPreferenciaListagem: vi.fn().mockResolvedValue({ success: true, data: { habilitada: true } }),
           obterMinhasRepsCache: vi.fn().mockResolvedValue({ success: true, data: null }),
@@ -183,6 +193,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
 
     fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
     expect(await screen.findAllByText('109026-2026')).not.toHaveLength(0)
     expect(screen.getByText('3216-2026/JO')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'Preencher PESSOA TESTE automaticamente' })).toBeChecked()
@@ -200,9 +211,26 @@ describe('integração da consulta geral GDL com REPsPage', () => {
       'O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.',
       { duration: 12000 },
     )
-    expect(consultarRep).toHaveBeenCalledWith('109026', '2026')
+    expect(identificarRep).toHaveBeenCalledWith('109026', '2026', undefined)
     expect(criarRep).not.toHaveBeenCalled()
   }, 20_000)
+
+  it('vincula B602 sem hífen ao formulário específico sem alterar o cadastro', async () => {
+    const tipoLocal = { id: 'tipo-b602', codigo: 'B602', nome: 'Balística' };
+    vi.mocked(window.ipcAPI.tipoExame.findAll).mockResolvedValueOnce({ success: true, error: '', data: [tipoLocal] });
+    render(<MemoryRouter><REPsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova REP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GDL' }));
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Preencher formulário' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText('CARABINA(S)')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /tipo de exame/i })).toHaveTextContent('B-602 - Balística');
+    expect(tipoLocal.codigo).toBe('B602');
+    expect(criarRep).not.toHaveBeenCalled();
+  });
 
   it('encaminha a REP selecionada ao fluxo de importação já existente', async () => {
     render(<MemoryRouter><REPsPage /></MemoryRouter>)
@@ -217,7 +245,8 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     expect(await screen.findByLabelText('Nº da REP')).toHaveValue('109.026')
     expect(consultarRep).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-    await waitFor(() => expect(consultarRep).toHaveBeenCalledWith('109026', '2026'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
+    await waitFor(() => expect(identificarRep).toHaveBeenCalledWith('109026', '2026', 'B-602 - EXAME BALÍSTICO'))
     expect(criarRep).not.toHaveBeenCalled()
   }, 20_000)
 
@@ -226,7 +255,8 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     expect(await screen.findByLabelText('Nº da REP')).toHaveValue('109.026')
     expect(consultarRep).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-    await waitFor(() => expect(consultarRep).toHaveBeenCalledWith('109026', '2026'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
+    await waitFor(() => expect(identificarRep).toHaveBeenCalledWith('109026', '2026', undefined))
   }, 20_000)
 
   it('preserva o quesito local ao mesclar uma consulta GDL', async () => {
@@ -237,6 +267,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'GDL' }))
     fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Aplicar ao Formulário' }))
 
     expect(screen.getByLabelText('Quesito Aberto')).toHaveValue('Quesito editado localmente.')
@@ -250,6 +281,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'GDL' }))
     fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
     fireEvent.click((await screen.findAllByRole('radio'))[1])
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar ao Formulário' }))
 

@@ -1,7 +1,8 @@
+import { interpretarDetalhesRepGdl } from './gdl-detalhes.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { session, type Session } from 'electron';
-import { complementarNaturezasMinhasRepsGdl, interpretarMinhasRepsGdl, montarFormularioMinhasRepsGdl, obterEventoNavegacaoMinhasReps, obterNaturezaExameDaRepGdl } from './gdl-minhas-reps.service.js';
-import type { MinhaRepGdl, NaturezaMinhaRepGdl, PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import { interpretarMinhasRepsGdl, montarFormularioMinhasRepsGdl, obterEventoNavegacaoMinhasReps } from './gdl-minhas-reps.service.js';
+import type { PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import { getLogger } from '../utils/logger.js';
 
 const log = getLogger('gdl');
@@ -21,15 +22,10 @@ interface SessaoPaginaGdl {
   autenticando?: Promise<void>;
   paginaMinhasReps?: { numero: number; html: string };
   listagemId?: string;
-  repsMinhasReps?: MinhaRepGdl[];
-  consultaNaturezas?: { listagemId: string; controlador: AbortController };
+  detalhesPermitidos: Set<string>;
 }
 
 const sessoes = new Map<string, SessaoPaginaGdl>();
-
-export function interromperDetalhesMinhasRepsGdl(): void {
-  sessoes.forEach(estado => estado.consultaNaturezas?.controlador.abort());
-}
 
 function atributoHtml(tag: string, nome: string): string {
   const valor = tag.match(new RegExp(`\\b${nome}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] ?? '';
@@ -75,7 +71,7 @@ export function destinoPaginaGdlPermitido(base: string, endereco: string, metodo
   if (caminho === `${prefixo}rep/minhasreps.aspx`) return !url.search && ['GET', 'POST'].includes(metodo);
   if (metodo !== 'GET') return false;
   if (caminho === `${prefixo}default.aspx`) return !url.search;
-  return caminho === `${prefixo}rep/default.aspx` && /^\?rep_id=[1-9]\d*$/.test(url.search);
+  return false;
 }
 
 export function paginaGdlExigeLogin(html: string): boolean {
@@ -83,10 +79,10 @@ export function paginaGdlExigeLogin(html: string): boolean {
     || /<input\b[^>]*id=["']Content_txtPass["']/i.test(html);
 }
 
-async function lerPagina(rede: Session, url: string, corpo?: string, sinal?: AbortSignal) {
+async function lerPagina(rede: Session, url: string, corpo?: string, sinal?: AbortSignal, seguirRedirecionamentos = true) {
   const resposta = await rede.fetch(url, {
     method: corpo === undefined ? 'GET' : 'POST',
-    redirect: 'follow', credentials: 'include', cache: 'no-store',
+    redirect: seguirRedirecionamentos ? 'follow' : 'manual', credentials: 'include', cache: 'no-store',
     signal: sinal ? AbortSignal.any([sinal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     headers: corpo === undefined ? { Accept: 'text/html' } : { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
     ...(corpo === undefined ? {} : { body: corpo }),
@@ -97,19 +93,20 @@ async function lerPagina(rede: Session, url: string, corpo?: string, sinal?: Abo
     paginaAutenticacao: Boolean(resposta.url && /\/Account\/Login\.aspx/i.test(new URL(resposta.url).pathname)) || paginaGdlExigeLogin(data) };
 }
 
-async function obterSessaoAutenticadaGdl(credenciais: CredenciaisPaginaGdl, prepararRede: (rede: Session) => void) {
+async function obterSessaoAutenticadaGdl(credenciais: CredenciaisPaginaGdl, prepararRede: (rede: Session) => void, finalidade: 'lista' | 'detalhes' = 'lista') {
   const base = credenciais.baseUrl.replace(/\/api$/i, '');
   const assinatura = createHash('sha256').update(JSON.stringify(credenciais)).digest('hex');
-  let estado = sessoes.get(base);
+  const chaveSessao = `${base}:${finalidade}`;
+  let estado = sessoes.get(chaveSessao);
   if (!estado || estado.assinatura !== assinatura) {
     if (estado) await estado.rede.clearStorageData({ storages: ['cookies'] });
     const rede = session.fromPartition(`gdl-web-${randomUUID()}`, { cache: false });
     prepararRede(rede);
     rede.webRequest.onBeforeRequest((requisicao, callback) => {
-      callback({ cancel: !destinoPaginaGdlPermitido(base, requisicao.url, requisicao.method) });
+      callback({ cancel: !destinoPaginaGdlPermitido(base, requisicao.url, requisicao.method) && !(requisicao.method === 'GET' && estado?.detalhesPermitidos.has(requisicao.url)) });
     });
-    estado = { assinatura, rede, autenticada: false, tentarApos: 0 };
-    sessoes.set(base, estado);
+    estado = { assinatura, rede, autenticada: false, tentarApos: 0, detalhesPermitidos: new Set() };
+    sessoes.set(chaveSessao, estado);
   }
   const atual = estado;
   if (Date.now() < atual.tentarApos) throw new Error('Autenticação web indisponível; aguarde um minuto antes de tentar novamente.');
@@ -167,14 +164,6 @@ async function lerPaginaListagem(rede: Session, url: string, etapa: string, corp
   }
 }
 
-export async function consultarPaginaRepGdl(credenciais: CredenciaisPaginaGdl, codRep: number, prepararRede: (rede: Session) => void) {
-  if (!Number.isSafeInteger(codRep) || codRep <= 0) throw new Error('Identificador de REP inválido.');
-  const { base, estado } = await obterSessaoAutenticadaGdl(credenciais, prepararRede);
-  const resposta = await lerPagina(estado.rede, `${base}/REP/Default.aspx?rep_id=${codRep}`);
-  if (resposta.paginaAutenticacao || [401, 403].includes(resposta.statusCode)) estado.autenticada = false;
-  return resposta;
-}
-
 export async function listarPaginaMinhasRepsGdl(
   credenciais: CredenciaisPaginaGdl,
   pagina: number,
@@ -185,10 +174,7 @@ export async function listarPaginaMinhasRepsGdl(
   const url = `${base}/REP/MinhasReps.aspx`;
   let resposta;
   if (pagina === 1) {
-    estado.consultaNaturezas?.controlador.abort();
-    estado.consultaNaturezas = undefined;
     estado.listagemId = randomUUID();
-    estado.repsMinhasReps = [];
     estado.paginaMinhasReps = undefined;
     const inicial = await lerPaginaListagem(estado.rede, url, 'grade_inicial');
     if (inicial.statusCode !== 200 || inicial.paginaAutenticacao) {
@@ -200,7 +186,7 @@ export async function listarPaginaMinhasRepsGdl(
     resposta = await lerPaginaListagem(estado.rede, url, 'grade_filtro', montarFormularioMinhasRepsGdl(inicial.data, url, 'filtrar'));
   } else {
     const anterior = estado.paginaMinhasReps;
-    if (!anterior || !estado.listagemId || !estado.repsMinhasReps) throw new Error('Abra novamente a lista de REPs para iniciar a paginação.');
+    if (!anterior || !estado.listagemId) throw new Error('Abra novamente a lista de REPs para iniciar a paginação.');
     const evento = obterEventoNavegacaoMinhasReps(anterior.html, anterior.numero, pagina);
     resposta = await lerPaginaListagem(estado.rede, url, 'grade_paginacao', montarFormularioMinhasRepsGdl(anterior.html, url, evento));
   }
@@ -213,52 +199,28 @@ export async function listarPaginaMinhasRepsGdl(
   }
   const resultado = interpretarMinhasRepsGdl(resposta.data, pagina);
   estado.paginaMinhasReps = { numero: pagina, html: resposta.data };
-  estado.repsMinhasReps?.push(...resultado.reps);
   if (!estado.listagemId) throw new Error('Sessão da listagem de REPs inválida.');
   return { ...resultado, listagemId: estado.listagemId };
 }
 
-export async function consultarNaturezasMinhasRepsGdl(
-  credenciais: CredenciaisPaginaGdl,
-  listagemId: string,
-  prepararRede: (rede: Session) => void,
-): Promise<NaturezaMinhaRepGdl[]> {
-  if (!/^[a-f0-9-]{36}$/i.test(listagemId)) throw new Error('Sessão da listagem de REPs inválida.');
-  const { base, estado } = await obterSessaoAutenticadaGdl(credenciais, prepararRede);
-  if (estado.listagemId !== listagemId || !estado.repsMinhasReps) {
-    throw new Error('A listagem de REPs foi atualizada. Consulte novamente.');
-  }
-  estado.consultaNaturezas?.controlador.abort();
-  const controlador = new AbortController();
-  estado.consultaNaturezas = { listagemId, controlador };
-  const reps = [...estado.repsMinhasReps];
-  const inicio = performance.now();
-  let houveFalha = false;
+
+export async function lerDetalhesRepAutorizadaGdl(
+  credenciais: CredenciaisPaginaGdl, id: number, numero: string, ano: string,
+  prepararRede: (rede: Session) => void, validarContexto: () => Promise<void>, sinal: AbortSignal,
+) {
+  await validarContexto();
+  if (sinal.aborted) throw new Error('Consulta substituída.');
+  const { base, estado } = await obterSessaoAutenticadaGdl(credenciais, prepararRede, 'detalhes');
+  await validarContexto();
+  if (sinal.aborted) throw new Error('Consulta substituída.');
+  const url = `${base}/REP/Default.aspx?rep_id=${id}`;
+  // A sessão permite somente esta URL durante a leitura individual autorizada.
+  if (estado.detalhesPermitidos.has(url)) throw new Error('Uma leitura detalhada desta REP já está em andamento.');
+  estado.detalhesPermitidos.add(url);
   try {
-    await complementarNaturezasMinhasRepsGdl(reps, async idGdl => {
-      const detalhe = await lerPagina(estado.rede, `${base}/REP/Default.aspx?rep_id=${idGdl}`, undefined, controlador.signal);
-      if (detalhe.statusCode !== 200 || detalhe.paginaAutenticacao) {
-        if (detalhe.paginaAutenticacao || [401, 403].includes(detalhe.statusCode)) estado.autenticada = false;
-        throw new Error(`Resposta de detalhe indisponível (${detalhe.statusCode}).`);
-      }
-      return obterNaturezaExameDaRepGdl(detalhe.data);
-    }, (erro, duracaoMs) => {
-      if (controlador.signal.aborted) return;
-      houveFalha = true;
-      log.warn('Falha na leitura complementar da natureza de exame no GDL.', {
-        etapa: 'detalhe_rep', duracaoMs,
-        erro: erro instanceof Error ? erro.message : 'Erro inesperado',
-      });
-    }, () => estado.listagemId === listagemId && !controlador.signal.aborted);
-  } finally {
-    if (estado.consultaNaturezas?.controlador === controlador) estado.consultaNaturezas = undefined;
-  }
-  if (controlador.signal.aborted) return [];
-  if (houveFalha) throw new Error('Não foi possível consultar todos os códigos de exame do GDL.');
-  if (estado.listagemId !== listagemId) throw new Error('A listagem de REPs foi atualizada. Consulte novamente.');
-  const duracaoMs = Math.round(performance.now() - inicio);
-  if (duracaoMs >= 3000) log.warn('Leitura complementar das naturezas de exame concluída.', {
-    etapa: 'detalhes_reps', duracaoMs, quantidade: reps.length,
-  });
-  return reps.map(rep => ({ idGdl: rep.idGdl, naturezaExameComCodigo: rep.naturezaExameComCodigo }));
+    const resposta = await lerPagina(estado.rede, url, undefined, sinal, false);
+    if (resposta.statusCode !== 200 || resposta.paginaAutenticacao) throw new Error('A leitura dos detalhes não foi concluída. A API foi preservada.');
+    await validarContexto();
+    return interpretarDetalhesRepGdl(resposta.data, id, numero, ano);
+  } finally { estado.detalhesPermitidos.delete(url); }
 }

@@ -64,8 +64,6 @@ import {
   capturarImagensRepGdl,
   capturarImagensDaSessaoGdlParaLaudo,
   consultarRep,
-  extrairDataEntradaSolicitacaoDaPaginaGdl,
-  extrairQuesitoAbertoDaPaginaGdl,
   extrairCodigoNaturezaExame,
   extrairFiltrosParaConsultaInvestigacao,
   fecharSessaoImagensRepGdl,
@@ -77,7 +75,7 @@ import {
   validarCredenciais,
 } from '../../main/services/gdl.service'
 import { interpretarGdlRepJson } from '../../main/services/gdl.schema'
-import { consultarNaturezasMinhasRepsGdl, destinoPaginaGdlPermitido, listarPaginaMinhasRepsGdl, montarFormularioLoginGdl, paginaGdlExigeLogin } from '../../main/services/gdl-pagina.service'
+import { destinoPaginaGdlPermitido, lerDetalhesRepAutorizadaGdl, listarPaginaMinhasRepsGdl, montarFormularioLoginGdl, paginaGdlExigeLogin } from '../../main/services/gdl-pagina.service'
 
 const formularioLogin = '<form method="post" action="./Login.aspx"><input type="hidden" name="__VIEWSTATE" value="estado&amp;teste"><input type="hidden" name="__EVENTVALIDATION" value="validacao"><input name="ctl00$Content$txtUser"><input name="ctl00$Content$txtPass" type="password"><input type="submit" name="ctl00$Content$btnLogin" value="Entrar"><input type="submit" name="ctl00$Content$btn_NewPass" value="Nova senha"></form>'
 
@@ -126,6 +124,7 @@ beforeAll(async () => {
       return
     }
     if (url.pathname.endsWith('/rep/obter')) {
+      if (statusRep === 302) resposta.setHeader('Location', '/REP/Default.aspx?rep_id=123')
       responder(resposta, statusRepPorBusca.get(url.search) ?? statusRep, respostaRep)
       return
     }
@@ -286,7 +285,8 @@ describe('gdl.service', () => {
     expect(resultado.sucesso).toBe(true)
     expect(resultado.ambiente).toBe('homologacao')
     expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
-    expect(resultado.dados?.quesitoAberto).toBe('QUESITO & TESTE')
+    expect(resultado.dados?.quesitoAberto).toBe('')
+    expect(requisicoesGdl.some(item => item.caminho.endsWith('/REP/Default.aspx'))).toBe(false)
     expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
     expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
     expect(corposInvestigacao).toHaveLength(2)
@@ -297,7 +297,7 @@ describe('gdl.service', () => {
     })
   })
 
-  it('prioriza a natureza identificável da consulta auxiliar sobre a página', async () => {
+  it('obtém a natureza pela API sem acessar os detalhes', async () => {
     respostaPaginaRep = '<select id="Content_RepMain_ddlNatureExam"><option selected="selected">B601 - OUTRO EXAME</option></select>'
 
     const resultado = await consultarRep('190', '2026')
@@ -306,45 +306,21 @@ describe('gdl.service', () => {
     expect(resultado.erroNaturezaExame).toBeUndefined()
   })
 
-  it('usa a natureza da página quando a consulta auxiliar falha', async () => {
+  it('permite identificação local quando a consulta auxiliar falha, sem acessar detalhes', async () => {
     statusInvestigacao = 503
-    respostaPaginaRep = '<select id="Content_RepMain_ddlNatureExam"><option selected="selected">B602 - EXAME BALÍSTICO</option></select>'
-
     const resultado = await consultarRep('190', '2026')
-
     expect(resultado.sucesso).toBe(true)
-    expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
-    expect(resultado.erroNaturezaExame).toBeUndefined()
-  })
-
-  it('usa a natureza da página quando a consulta auxiliar não encontra a REP', async () => {
-    respostaInvestigacao = JSON.stringify({ dadosREPs: [] })
-    respostaPaginaRep = '<select id="Content_RepMain_ddlNatureExam"><option selected="selected">B602 - EXAME BALÍSTICO</option></select>'
-
-    const resultado = await consultarRep('190', '2026')
-
-    expect(resultado.naturezaExame).toBe('B602 - EXAME BALÍSTICO')
-  })
-
-  it('não identifica natureza quando a página redireciona para login e a consulta auxiliar falha', async () => {
-    statusInvestigacao = 503
-    redirecionarPaginaParaLogin = true
-
-    const resultado = await consultarRep('190', '2026')
-
     expect(resultado.naturezaExame).toBeUndefined()
-    expect(resultado.erroNaturezaExame).toContain('Consulta auxiliar: uma ou mais consultas falharam')
-    expect(resultado.erroNaturezaExame).toContain('Página de detalhes: página de autenticação')
+    expect(resultado.erroNaturezaExame).toContain('uma ou mais consultas falharam')
+    expect(requisicoesGdl.some(item => item.caminho.endsWith('/REP/Default.aspx'))).toBe(false)
   })
 
-  it('explica a ausência de natureza nas duas fontes sem presumir B-602', async () => {
+  it('não presume uma natureza quando a API não encontra a REP', async () => {
     respostaInvestigacao = JSON.stringify({ dadosREPs: [] })
-
     const resultado = await consultarRep('190', '2026')
-
     expect(resultado.naturezaExame).toBeUndefined()
-    expect(resultado.erroNaturezaExame).toContain('Consulta auxiliar: REP não encontrada no resultado')
-    expect(resultado.erroNaturezaExame).toContain('Página de detalhes: natureza ausente')
+    expect(resultado.erroNaturezaExame).toContain('REP não encontrada no resultado')
+    expect(requisicoesGdl.some(item => item.caminho.endsWith('/REP/Default.aspx'))).toBe(false)
   })
 
   it('usa Produção quando Homologação está desabilitada ou falta configuração', async () => {
@@ -364,17 +340,6 @@ describe('gdl.service', () => {
     delete configuracoes.gdl_ambiente
     delete configuracoes.gdl_homologacao_habilitada
     await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: true, ambiente: 'producao' })
-  })
-
-  it('extrai os dados complementares da página de visualização da REP', () => {
-    expect(extrairQuesitoAbertoDaPaginaGdl(
-      '<textarea name="ctl00$Content$RepMain$txtOpenQuestion">REP DE TESTE &#x50;ARA O LAWDO</textarea>',
-    )).toBe('REP DE TESTE PARA O LAWDO')
-    expect(extrairQuesitoAbertoDaPaginaGdl('<html>Sem quesito</html>')).toBe('')
-    expect(extrairDataEntradaSolicitacaoDaPaginaGdl(
-      '<input value="04/02/2025" name="ctl00$Content$RepMain$txtDateEntry">',
-    )).toBe('2025-02-04')
-    expect(extrairDataEntradaSolicitacaoDaPaginaGdl('<html>Sem data</html>')).toBe('')
   })
 
   it('trata ausência de credenciais e respostas HTTP da consulta de REP', async () => {
@@ -497,49 +462,20 @@ describe('gdl.service', () => {
 
     expect(resultado.sucesso).toBe(true)
     expect(resultado.ambiente).toBe('producao')
-    expect(resultado.dados?.dataEntradaSolicitacao).toBe('2024-06-11')
-    expect(resultado.dados?.quesitoAberto).toBe('QUESITO & TESTE')
+    expect(resultado.dados?.dataEntradaSolicitacao).toBe('')
+    expect(resultado.dados?.quesitoAberto).toBe('')
+    expect(requisicoesGdl.some(item => item.caminho.endsWith('/REP/Default.aspx'))).toBe(false)
     expect(resultado.dados?.envolvidos).toContainEqual({ nome: 'ENVOLVIDO COMPLEMENTAR' })
     expect(resultado.dados?.envolvidos).not.toContainEqual({ nome: 'ENVOLVIDO DE OUTRA REP' })
     expect(corposInvestigacao).toHaveLength(2)
-    expect(requisicoesGdl.filter(requisicao => requisicao.caminho.endsWith('/REP/Default.aspx'))).toHaveLength(1)
+    expect(requisicoesGdl.filter(requisicao => requisicao.caminho.endsWith('/REP/Default.aspx'))).toHaveLength(0)
   })
 
-  it('registra o redirecionamento para login sem expor credenciais ou conteúdo da REP', async () => {
-    redirecionarPaginaParaLogin = true
+  it('preserva quesito e data quando fornecidos pela API, sem autenticar na interface web', async () => {
+    respostaRep = JSON.stringify({ ...interpretarGdlRepJson(fixtureRep), quesitoAberto: 'QUESITO DA API', dataEntradaSolicitacao: '2026-10-01' })
     const resultado = await consultarRep('190', '2026')
-    expect(resultado.sucesso).toBe(true)
-    expect(resultado.dados?.dataEntradaSolicitacao).toBe('')
-    expect(resultado.dados?.quesitoAberto).toBe('')
-    expect(mocks.registrarAviso).toHaveBeenCalledWith('Leitura complementar da REP GDL incompleta.', {
-      codRep: resultado.dados?.codRep,
-      statusCode: 200,
-      redirecionado: true,
-      paginaAutenticacao: true,
-      campoDataPresente: false,
-      campoQuesitoPresente: false,
-      dataExtraida: false,
-      quesitoExtraido: false,
-    })
-  })
-
-  it('registra campos presentes mas vazios no HTML, mantendo a consulta pela API', async () => {
-    respostaPaginaRep = '<input id="Content_RepMain_txtDateEntry" value=""><textarea id="Content_RepMain_txtOpenQuestion"></textarea>'
-    const resultado = await consultarRep('190', '2026')
-    expect(resultado.sucesso).toBe(true)
-    expect(resultado.dados?.dataEntradaSolicitacao).toBe('')
-    expect(resultado.dados?.quesitoAberto).toBe('')
-    expect(mocks.registrarAviso).toHaveBeenCalledWith('Leitura complementar da REP GDL incompleta.', {
-      codRep: resultado.dados?.codRep,
-      statusCode: 200,
-      redirecionado: false,
-      paginaAutenticacao: false,
-      campoDataPresente: true,
-      campoQuesitoPresente: true,
-      dataExtraida: false,
-      quesitoExtraido: false,
-    })
-    expect(requisicoesGdl.filter(requisicao => requisicao.caminho.endsWith('/REP/Default.aspx'))).toHaveLength(1)
+    expect(resultado.dados).toMatchObject({ quesitoAberto: 'QUESITO DA API', dataEntradaSolicitacao: '2026-10-01' })
+    expect(requisicoesGdl.some(item => /\/Account\/|\/REP\/Default\.aspx/.test(item.caminho))).toBe(false)
   })
 
   it('reutiliza o ZIP temporário da sessão até o modal ser fechado', async () => {
@@ -587,37 +523,15 @@ describe('gdl.service', () => {
     expect(requisicoesGdl.every(requisicao => requisicao.metodo === 'GET' || (
       requisicao.metodo === 'POST' && (requisicao.caminho.endsWith('/repsInvestigacaoPolicial/listarReps') || requisicao.caminho === '/Account/Login.aspx')
     ))).toBe(true)
-    expect(requisicoesGdl.filter(requisicao => requisicao.metodo === 'POST')).toHaveLength(3)
+    expect(requisicoesGdl.filter(requisicao => requisicao.metodo === 'POST')).toHaveLength(2)
   })
 
-  it('reutiliza o login web com URL de resposta vazia no Electron e mantém um GET de página por consulta', async () => {
-    await consultarRep('190', '2026')
-    await consultarRep('190', '2026')
-    expect(requisicoesGdl.filter(r => r.metodo === 'POST' && r.caminho === '/Account/Login.aspx')).toHaveLength(1)
-    expect(requisicoesGdl.filter(r => r.caminho === '/REP/Default.aspx')).toHaveLength(2)
-  })
-
-  it('preserva a consulta API e evita repetir login rejeitado imediatamente', async () => {
+  it('consultas individuais repetidas nunca autenticam nem abrem detalhes na interface web', async () => {
     rejeitarLogin = true
-    for (let i = 0; i < 2; i++) {
-      const resultado = await consultarRep('190', '2026')
-      expect(resultado.sucesso).toBe(true)
-      expect(resultado.dados?.dataEntradaSolicitacao).toBe('')
-    }
-    expect(requisicoesGdl.filter(r => r.metodo === 'POST' && r.caminho === '/Account/Login.aspx')).toHaveLength(1)
-    expect(requisicoesGdl.some(r => r.caminho === '/REP/Default.aspx')).toBe(false)
-  })
-
-  it('renova a sessão expirada na próxima consulta, sem repetir o GET da REP na mesma consulta', async () => {
-    await consultarRep('190', '2026')
     redirecionarPaginaParaLogin = true
-    const expirada = await consultarRep('190', '2026')
-    expect(expirada.dados?.dataEntradaSolicitacao).toBe('')
-    redirecionarPaginaParaLogin = false
-    const renovada = await consultarRep('190', '2026')
-    expect(renovada.dados?.dataEntradaSolicitacao).toBe('2024-06-11')
-    expect(requisicoesGdl.filter(r => r.metodo === 'POST' && r.caminho === '/Account/Login.aspx')).toHaveLength(2)
-    expect(requisicoesGdl.filter(r => r.caminho === '/REP/Default.aspx')).toHaveLength(3)
+    await consultarRep('190', '2026')
+    await consultarRep('190', '2026')
+    expect(requisicoesGdl.some(item => /\/Account\/|\/REP\/Default\.aspx/.test(item.caminho))).toBe(false)
   })
 
   it('envia somente o botão de autenticação e rejeita formulário com destino diferente', () => {
@@ -632,7 +546,7 @@ describe('gdl.service', () => {
 
   it('bloqueia mutações e destinos fora da lista fechada da sessão web', () => {
     expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/Account/Login.aspx`, 'POST')).toBe(true)
-    expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/REP/Default.aspx?rep_id=123`, 'GET')).toBe(true)
+    expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/REP/Default.aspx?rep_id=123`, 'GET')).toBe(false)
     expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/REP/MinhasReps.aspx`, 'GET')).toBe(true)
     expect(destinoPaginaGdlPermitido(baseUrl, `${baseUrl}/REP/MinhasReps.aspx`, 'POST')).toBe(true)
     for (const [caminho, metodo] of [['/REP/Default.aspx?rep_id=123', 'POST'], ['/REP/Default.aspx', 'GET'], ['/REP/MinhasReps.aspx?acao=concluir', 'POST'], ['/Account/Logout.aspx', 'GET'], ['/REP/CancelarREP.aspx', 'GET'], ['/REP/Concluir_REP.aspx?cod_rep=123', 'GET'], ['/Account/Login.aspx?acao=outra', 'POST']]) {
@@ -641,7 +555,7 @@ describe('gdl.service', () => {
     expect(destinoPaginaGdlPermitido(baseUrl, 'https://outro.example/Account/Login.aspx', 'POST')).toBe(false)
   })
 
-  it('lista a grade antes dos detalhes e restringe a consulta complementar à sessão atual', async () => {
+  it('lista a grade sem consultar detalhes', async () => {
     respostaMinhasReps = `<form method="post" action="./MinhasReps.aspx">
       <input name="__VIEWSTATE" value="estado"><input name="__EVENTVALIDATION" value="validacao">
       <select id="Content_ddlYear"><option value="0">Todos</option></select>
@@ -658,12 +572,6 @@ describe('gdl.service', () => {
     expect(pagina.reps).toHaveLength(1)
     expect(pagina.reps[0].naturezaExameComCodigo).toBeNull()
     expect(requisicoesGdl.slice(inicioRequisicoes).some(item => item.caminho.endsWith('/REP/Default.aspx'))).toBe(false)
-    const naturezas = await consultarNaturezasMinhasRepsGdl(credenciais, pagina.listagemId, () => undefined)
-    expect(naturezas).toEqual([{ idGdl: 123, naturezaExameComCodigo: 'B601 - EXAME DE CONSTATAÇÃO' }])
-    expect(requisicoesGdl.slice(inicioRequisicoes).filter(item => item.caminho.endsWith('/REP/Default.aspx')))
-      .toEqual([{ metodo: 'GET', caminho: '/REP/Default.aspx', busca: '?rep_id=123' }])
-    await listarPaginaMinhasRepsGdl(credenciais, 1, () => undefined)
-    await expect(consultarNaturezasMinhasRepsGdl(credenciais, pagina.listagemId, () => undefined)).rejects.toThrow('atualizada')
   })
 
   it('valida arquivos ZIP e deriva filtros únicos para a investigação', () => {
@@ -684,3 +592,61 @@ describe('gdl.service', () => {
     expect(extrairFiltrosParaConsultaInvestigacao({ ...rep, origens: [], numeroCaso: 0 })).toEqual([])
   })
 })
+
+
+describe('proteção e observação do transporte JSON GDL', () => {
+  it('bloqueia redirecionamento antes de acessar os detalhes', async () => {
+    statusRep = 302;
+    const inicio = requisicoesGdl.length;
+    await expect(consultarRep('190', '2026')).resolves.toMatchObject({ sucesso: false });
+    expect(requisicoesGdl.slice(inicio)).toEqual([{ metodo: 'GET', caminho: '/api/rep/obter', busca: '?numero=190&ano=2026' }]);
+  });
+  it('observa a consulta e as subconsultas sem acrescentar requisições', async () => {
+    const { configurarObservadorGdl, observarConsultaGdl } = await import('../../main/services/gdl-diagnostico.service');
+    const registrar = vi.fn().mockResolvedValue(undefined);
+    configurarObservadorGdl({ obterCaptura: id => ({ capturaId: 'captura-simulada', janelaId: id }), registrar });
+    try {
+      const inicio = requisicoesGdl.length;
+      await consultarRep('190', '2026');
+      const esperadas = requisicoesGdl.slice(inicio);
+      const inicioCaptura = requisicoesGdl.length;
+      await observarConsultaGdl(1, '190', '2026', () => consultarRep('190', '2026'));
+      expect(requisicoesGdl.slice(inicioCaptura)).toEqual(esperadas);
+      expect(registrar.mock.calls.some(([, dados]) => dados.etapa === 'resposta_original')).toBe(true);
+      expect(registrar.mock.calls.some(([, dados]) => dados.etapa === 'resposta_normalizada')).toBe(true);
+      expect(new Set(registrar.mock.calls.map(([contexto]) => contexto.correlacaoId)).size).toBe(1);
+    } finally { configurarObservadorGdl(null); }
+  });
+});
+
+
+describe('transporte restrito de detalhes individuais', () => {
+  const credenciais = () => ({ baseUrl: `${baseUrl}/api`, login: 'detalhes-usuario', senha: `detalhes-${sequenciaTeste}` });
+  it('usa somente GET no detalhe autorizado, sem submeter o formulário da REP', async () => {
+    respostaPaginaRep = '<form action="./Default.aspx?rep_id=123"><div id="TitleContainer">REP 190/2026</div><select id="Content_RepMain_ddlNatureExam"><option value="998" selected>B602 - EXAME DE EFICIÊNCIA E PRESTABILIDADE</option></select><input id="Content_RepMain_txtDateEntry" value="21/08/2026"><textarea id="Content_RepMain_txtOpenQuestion">Quesito de teste</textarea></form>';
+    const inicio = requisicoesGdl.length;
+    const validar = vi.fn().mockResolvedValue(undefined);
+    await expect(lerDetalhesRepAutorizadaGdl(credenciais(), 123, '190', '2026', () => undefined, validar, new AbortController().signal)).resolves.toMatchObject({ dataSolicitacao: { valor: '2026-08-21' } });
+    const detalhes = requisicoesGdl.slice(inicio).filter(item => item.caminho === '/REP/Default.aspx');
+    expect(detalhes).toEqual([{ metodo: 'GET', caminho: '/REP/Default.aspx', busca: '?rep_id=123' }]);
+    expect(validar).toHaveBeenCalledTimes(3);
+  });
+  it('não inicia rede sem contexto válido e não segue redirecionamento da página de detalhes', async () => {
+    const inicio = requisicoesGdl.length;
+    await expect(lerDetalhesRepAutorizadaGdl(credenciais(), 123, '190', '2026', () => undefined, async () => { throw new Error('Contexto expirado'); }, new AbortController().signal)).rejects.toThrow('expirado');
+    expect(requisicoesGdl).toHaveLength(inicio);
+    redirecionarPaginaParaLogin = true;
+    await expect(lerDetalhesRepAutorizadaGdl(credenciais(), 123, '190', '2026', () => undefined, async () => undefined, new AbortController().signal)).rejects.toThrow('não foi concluída');
+    expect(requisicoesGdl.slice(inicio).filter(item => item.caminho === '/REP/Default.aspx')).toHaveLength(1);
+    const detalhe = requisicoesGdl.map(item => item.caminho).lastIndexOf('/REP/Default.aspx');
+    expect(requisicoesGdl.slice(detalhe + 1)).toEqual([]);
+  });
+});
+
+it('não confirma outra REP do mesmo caso e pagina a busca por identidade exata', async () => {
+  respostaInvestigacao = JSON.stringify({ quantRegistros: 20, dadosREPs: Array.from({ length: 10 }, (_, indice) => ({ numeroRep: `${900 + indice}/2026`, numeroCaso: 99, naturezaExame: 'I806 - EXAME DE CONSTATAÇÃO', statusRep: 'LAUDO EM EXECUÇÃO' })) });
+  const resultado = await consultarRep('190', '2026');
+  expect(resultado.statusRep).toBeUndefined();
+  expect(resultado.naturezaExame).toBeUndefined();
+  expect(corposInvestigacao.some(corpo => JSON.parse(corpo).numPagina === 2)).toBe(true);
+});

@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -36,7 +35,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente';
+import { obterPreferenciasAmbienteGdlEstritas } from '@/lib/gdl-ambiente';
 import { CHAVE_HOMOLOGACAO_GDL_HABILITADA } from '@shared/gdl/ambiente';
 
 const URL_HOMOLOGACAO = 'iishml01.pr.gov.br';
@@ -71,6 +70,38 @@ interface ValidacaoSessaoGdl {
   dataHora?: string;
 }
 
+type EstadoLeitura = 'carregando' | 'pronto' | 'erro';
+
+function lerConfiguracaoGdl(resposta: unknown): string | null {
+  if (!resposta || typeof resposta !== 'object' || !('success' in resposta) || resposta.success !== true || !('data' in resposta)) {
+    throw new Error('Não foi possível ler as credenciais do GDL.');
+  }
+  if (resposta.data !== null && typeof resposta.data !== 'string') throw new Error('As credenciais salvas do GDL são inválidas.');
+  return resposta.data;
+}
+
+function lerValidacaoGdl(resposta: unknown, ambienteEsperado: string): ValidacaoSessaoGdl {
+  if (!resposta || typeof resposta !== 'object' || !('success' in resposta) || resposta.success !== true || !('data' in resposta)) {
+    throw new Error('Não foi possível ler o estado de validação do GDL.');
+  }
+  const dados = resposta.data;
+  if (!dados || typeof dados !== 'object' || !('ambiente' in dados) || typeof dados.ambiente !== 'string'
+    || dados.ambiente !== (ambienteEsperado === 'producao' ? 'Produção' : 'Homologação')
+    || !('validado' in dados) || typeof dados.validado !== 'boolean'
+    || ('numeroRep' in dados && dados.numeroRep !== undefined && typeof dados.numeroRep !== 'string')
+    || ('anoRep' in dados && dados.anoRep !== undefined && typeof dados.anoRep !== 'string')
+    || ('dataHora' in dados && dados.dataHora !== undefined && typeof dados.dataHora !== 'string')) {
+    throw new Error('O estado de validação do GDL é inválido.');
+  }
+  return {
+    ambiente: dados.ambiente,
+    validado: dados.validado,
+    numeroRep: 'numeroRep' in dados && typeof dados.numeroRep === 'string' ? dados.numeroRep : undefined,
+    anoRep: 'anoRep' in dados && typeof dados.anoRep === 'string' ? dados.anoRep : undefined,
+    dataHora: 'dataHora' in dados && typeof dados.dataHora === 'string' ? dados.dataHora : undefined,
+  };
+}
+
 const obterMensagemOrientadaErroGdl = (erro: string): string => {
   const erroNormalizado = erro.toUpperCase();
 
@@ -94,11 +125,18 @@ const getMensagemErro = (erro: unknown, fallback: string): string =>
 export const GdlConfigPage: React.FC = () => {
   const [ambiente, setAmbiente] = useState('producao');
   const [homologacaoHabilitada, setHomologacaoHabilitada] = useState(false);
+  const [estadoPreferencias, setEstadoPreferencias] = useState<EstadoLeitura>('carregando');
+  const [erroPreferencias, setErroPreferencias] = useState<string | null>(null);
+  const [estadoCredenciais, setEstadoCredenciais] = useState<EstadoLeitura>('carregando');
+  const [erroCredenciais, setErroCredenciais] = useState<string | null>(null);
+  const [ambienteCredenciais, setAmbienteCredenciais] = useState<string | null>(null);
+  const [estadoValidacao, setEstadoValidacao] = useState<EstadoLeitura>('carregando');
+  const [erroEstadoValidacao, setErroEstadoValidacao] = useState<string | null>(null);
+  const [ambienteValidacao, setAmbienteValidacao] = useState<string | null>(null);
   const [salvandoHabilitacao, setSalvandoHabilitacao] = useState(false);
   const [listagemHabilitada, setListagemHabilitada] = useState(false);
   const [preferenciaCarregada, setPreferenciaCarregada] = useState(false);
   const [salvandoListagem, setSalvandoListagem] = useState(false);
-  const [confirmarListagemOpen, setConfirmarListagemOpen] = useState(false);
   const [erroListagem, setErroListagem] = useState<string | null>(null);
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
@@ -120,55 +158,83 @@ export const GdlConfigPage: React.FC = () => {
   const [erroValidacao, setErroValidacao] = useState<string | null>(null);
   const [sucessoValidacao, setSucessoValidacao] = useState<string | null>(null);
   const carregamentoCredenciaisAtual = useRef(0);
+  const carregamentoValidacaoAtual = useRef(0);
+  const carregamentoListagemAtual = useRef(0);
+  const credenciaisEditadasRef = useRef({ login: false, senha: false, cpf: false });
+  const ambienteCarregadoRef = useRef<string | null>(null);
+  const ambienteAtualRef = useRef(ambiente);
+  ambienteAtualRef.current = ambiente;
 
   const carregarCredenciaisAmbiente = useCallback(async (amb: string) => {
     const carregamento = ++carregamentoCredenciaisAtual.current;
+    setAmbienteCredenciais(amb);
+    setEstadoCredenciais('carregando');
+    setErroCredenciais(null);
     try {
       const [rLogin, rSenha, rCpf] = await Promise.all([
         window.ipcAPI.configuracao.obter(`gdl_login_${amb}`),
         window.ipcAPI.configuracao.obter(`gdl_senha_${amb}`),
         window.ipcAPI.configuracao.obter(`gdl_cpf_usuario_${amb}`),
       ]);
-      if (carregamento !== carregamentoCredenciaisAtual.current) return;
-      setLogin(rLogin.success && rLogin.data ? rLogin.data : '');
-      setSenha(rSenha.success && rSenha.data ? rSenha.data : '');
-      setCpfUsuario(rCpf.success && rCpf.data ? rCpf.data : '');
-    } catch {
-      // silencioso
+      if (carregamento !== carregamentoCredenciaisAtual.current || ambienteAtualRef.current !== amb) return;
+      const loginLido = lerConfiguracaoGdl(rLogin) ?? '';
+      const senhaLida = lerConfiguracaoGdl(rSenha) ?? '';
+      const cpfLido = lerConfiguracaoGdl(rCpf) ?? '';
+      if (!credenciaisEditadasRef.current.login) setLogin(loginLido);
+      if (!credenciaisEditadasRef.current.senha) setSenha(senhaLida);
+      if (!credenciaisEditadasRef.current.cpf) setCpfUsuario(cpfLido);
+      setAmbienteCredenciais(amb);
+      setEstadoCredenciais('pronto');
+    } catch (falha: unknown) {
+      if (carregamento !== carregamentoCredenciaisAtual.current || ambienteAtualRef.current !== amb) return;
+      setErroCredenciais(getMensagemErro(falha, 'Não foi possível ler as credenciais do GDL.'));
+      setEstadoCredenciais('erro');
     }
   }, []);
 
   const carregarConfigs = useCallback(async () => {
+    setEstadoPreferencias('carregando');
+    setErroPreferencias(null);
     try {
-      const preferencias = await obterPreferenciasAmbienteGdl();
+      const preferencias = await obterPreferenciasAmbienteGdlEstritas();
       setHomologacaoHabilitada(preferencias.homologacaoHabilitada);
       setAmbiente(preferencias.ambiente);
-    } catch {
-      setAmbiente('producao');
-      setHomologacaoHabilitada(false);
+      setEstadoPreferencias('pronto');
+    } catch (falha: unknown) {
+      setErroPreferencias(getMensagemErro(falha, 'Não foi possível ler as preferências de ambiente do GDL.'));
+      setEstadoPreferencias('erro');
     }
   }, []);
 
   useEffect(() => { carregarConfigs(); }, [carregarConfigs]);
 
 
-  useEffect(() => {
-    let ativo = true;
-    void window.ipcAPI.gdl.obterPreferenciaListagem().then(resposta => {
-      if (!ativo) return;
+  const carregarPreferenciaListagem = useCallback(async () => {
+    const carregamento = ++carregamentoListagemAtual.current;
+    setPreferenciaCarregada(false);
+    setErroListagem(null);
+    try {
+      const resposta = await window.ipcAPI.gdl.obterPreferenciaListagem();
+      if (carregamento !== carregamentoListagemAtual.current) return;
       if (!resposta.success || typeof resposta.data?.habilitada !== 'boolean') {
-        setErroListagem(resposta.error || 'Não foi possível consultar a preferência de listagem.');
-        return;
+        throw new Error(resposta.error || 'Não foi possível consultar a preferência de listagem.');
       }
       setListagemHabilitada(resposta.data.habilitada);
       setPreferenciaCarregada(true);
-    }).catch((falha: unknown) => {
-      if (ativo) setErroListagem(getMensagemErro(falha, 'Não foi possível consultar a preferência de listagem.'));
-    });
-    return () => { ativo = false; };
+    } catch (falha: unknown) {
+      if (carregamento === carregamentoListagemAtual.current) {
+        setErroListagem(getMensagemErro(falha, 'Não foi possível consultar a preferência de listagem.'));
+      }
+    }
   }, []);
 
+  useEffect(() => {
+    void carregarPreferenciaListagem();
+    return () => { carregamentoListagemAtual.current += 1; };
+  }, [carregarPreferenciaListagem]);
+
   const alterarListagem = async (habilitar: boolean) => {
+    if (!preferenciaCarregada) return;
     setSalvandoListagem(true);
     setErroListagem(null);
     try {
@@ -177,7 +243,6 @@ export const GdlConfigPage: React.FC = () => {
         throw new Error(resposta.error || 'Não foi possível salvar a preferência de listagem.');
       }
       setListagemHabilitada(habilitar);
-      setConfirmarListagemOpen(false);
       toast.success(habilitar ? 'Listagem de REPs ativada.' : 'Listagem de REPs desativada.');
     } catch (falha: unknown) {
       setErroListagem(getMensagemErro(falha, 'Não foi possível salvar a preferência de listagem.'));
@@ -186,21 +251,49 @@ export const GdlConfigPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    carregarCredenciaisAmbiente(ambiente);
-  }, [ambiente, carregarCredenciaisAmbiente]);
+  const carregarValidacaoAmbiente = useCallback(async (amb: string) => {
+    const carregamento = ++carregamentoValidacaoAtual.current;
+    setAmbienteValidacao(amb);
+    setEstadoValidacao('carregando');
+    setErroEstadoValidacao(null);
+    try {
+      const resposta = await window.ipcAPI.gdl.obterValidacaoSessao(amb);
+      if (carregamento !== carregamentoValidacaoAtual.current || ambienteAtualRef.current !== amb) return;
+      const validacao = lerValidacaoGdl(resposta, amb);
+      setValidacaoSessao(validacao);
+      setAmbienteValidacao(amb);
+      setEstadoValidacao('pronto');
+    } catch (falha: unknown) {
+      if (carregamento !== carregamentoValidacaoAtual.current || ambienteAtualRef.current !== amb) return;
+      setErroEstadoValidacao(getMensagemErro(falha, 'Não foi possível ler o estado de validação do GDL.'));
+      setEstadoValidacao('erro');
+    }
+  }, []);
 
   useEffect(() => {
-    window.ipcAPI.gdl.obterValidacaoSessao(ambiente)
-      .then((r: { success: boolean; data?: unknown }) => {
-        if (r.success && r.data) {
-          setValidacaoSessao(r.data as ValidacaoSessaoGdl);
-        } else {
-          setValidacaoSessao(null);
-        }
-      })
-      .catch(() => setValidacaoSessao(null));
-  }, [ambiente]);
+    if (estadoPreferencias !== 'pronto') return;
+    if (ambienteCarregadoRef.current !== ambiente) {
+      credenciaisEditadasRef.current = { login: false, senha: false, cpf: false };
+      setLogin('');
+      setSenha('');
+      setCpfUsuario('');
+      ambienteCarregadoRef.current = ambiente;
+    }
+    setAmbienteCredenciais(null);
+    setValidacaoSessao(null);
+    setAmbienteValidacao(null);
+    setDiagnostico(null);
+    setModalValidacaoOpen(false);
+    void carregarCredenciaisAmbiente(ambiente);
+    void carregarValidacaoAmbiente(ambiente);
+    return () => {
+      carregamentoCredenciaisAtual.current += 1;
+      carregamentoValidacaoAtual.current += 1;
+    };
+  }, [ambiente, estadoPreferencias, carregarCredenciaisAmbiente, carregarValidacaoAmbiente]);
+
+  const credenciaisProntas = estadoPreferencias === 'pronto' && estadoCredenciais === 'pronto' && ambienteCredenciais === ambiente;
+  const validacaoPronta = estadoPreferencias === 'pronto' && estadoValidacao === 'pronto' && ambienteValidacao === ambiente;
 
   const formatarCPF = (v: string) => {
     const d = v.replace(/\D/g, '').slice(0, 11);
@@ -211,6 +304,7 @@ export const GdlConfigPage: React.FC = () => {
   };
 
   const handleSalvar = async () => {
+    if (!credenciaisProntas) return;
     setErro(null);
     setSalvarErro(null);
 
@@ -241,9 +335,20 @@ export const GdlConfigPage: React.FC = () => {
       if (falhaCredencial) throw new Error(falhaCredencial.error || 'Não foi possível salvar as credenciais.');
       const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', ambiente, 'texto', 'Ambiente da API GDL');
       if (!respostaAmbiente.success) throw new Error(respostaAmbiente.error || 'Não foi possível selecionar o ambiente.');
+      carregamentoValidacaoAtual.current += 1;
+      setEstadoValidacao('carregando');
       const rValidacao = await window.ipcAPI.gdl.limparValidacaoSessao(ambiente);
-      if (rValidacao.success && rValidacao.data) {
-        setValidacaoSessao(rValidacao.data as ValidacaoSessaoGdl);
+      if (ambienteAtualRef.current === ambiente) {
+        try {
+          const validacao = lerValidacaoGdl(rValidacao, ambiente);
+          setValidacaoSessao(validacao);
+          setAmbienteValidacao(ambiente);
+          setErroEstadoValidacao(null);
+          setEstadoValidacao('pronto');
+        } catch (falha: unknown) {
+          setErroEstadoValidacao(getMensagemErro(falha, 'Não foi possível ler o estado de validação do GDL.'));
+          setEstadoValidacao('erro');
+        }
       }
       toast.success(`Credenciais de ${ambLabel} salvas com sucesso!`);
     } catch (e: unknown) {
@@ -254,6 +359,7 @@ export const GdlConfigPage: React.FC = () => {
   };
 
   const handleHabilitarHomologacao = async (habilitar: boolean) => {
+    if (estadoPreferencias !== 'pronto') return;
     setErro(null);
     setSalvandoHabilitacao(true);
     try {
@@ -268,15 +374,14 @@ export const GdlConfigPage: React.FC = () => {
         'Habilitação do ambiente de homologação GDL',
       );
       if (!resposta.success) throw new Error(resposta.error || 'Não foi possível salvar a preferência.');
-      setHomologacaoHabilitada(habilitar);
-
       if (!habilitar) {
+        const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', 'producao', 'texto', 'Ambiente da API GDL');
+        if (!respostaAmbiente.success) throw new Error(respostaAmbiente.error || 'Não foi possível selecionar Produção.');
         setAmbiente('producao');
         setDiagnostico(null);
         setValidacaoSessao(null);
-        const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', 'producao', 'texto', 'Ambiente da API GDL');
-        if (!respostaAmbiente.success) throw new Error(respostaAmbiente.error || 'Não foi possível selecionar Produção.');
       }
+      setHomologacaoHabilitada(habilitar);
 
     } catch (falha: unknown) {
       setErro(getMensagemErro(falha, 'Não foi possível atualizar o acesso à Homologação.'));
@@ -286,25 +391,29 @@ export const GdlConfigPage: React.FC = () => {
   };
 
   const handleTestar = async () => {
+    if (!credenciaisProntas) return;
+    const ambienteTeste = ambiente;
     setErro(null);
     setSalvarErro(null);
     setDiagnostico(null);
     setTestando(true);
     try {
       const r = await window.ipcAPI.gdl.testarConexao(ambiente);
+      if (ambienteAtualRef.current !== ambienteTeste) return;
       if (r.success && r.data) {
         setDiagnostico(r.data);
       } else {
         setErro(obterMensagemOrientadaErroGdl(r.error || 'Erro ao testar conexão'));
       }
     } catch (e: unknown) {
-      setErro(getMensagemErro(e, 'Erro ao testar conexão'));
+      if (ambienteAtualRef.current === ambienteTeste) setErro(getMensagemErro(e, 'Erro ao testar conexão'));
     } finally {
       setTestando(false);
     }
   };
 
   const abrirModalValidacao = () => {
+    if (!credenciaisProntas || !validacaoPronta) return;
     setErroValidacao(null);
     setSucessoValidacao(null);
     setNumeroRepValidacao('');
@@ -341,6 +450,8 @@ export const GdlConfigPage: React.FC = () => {
   };
 
   const handleValidarCredenciais = async () => {
+    if (!credenciaisProntas || !validacaoPronta) return;
+    const ambienteValidado = ambiente;
     setErroValidacao(null);
     setSucessoValidacao(null);
 
@@ -366,24 +477,31 @@ export const GdlConfigPage: React.FC = () => {
         numeroRepValidacao.trim(),
         anoRepValidacao.trim(),
       );
+      if (ambienteAtualRef.current !== ambienteValidado) return;
 
       if (r.success && r.data) {
         const rSessao = await window.ipcAPI.gdl.obterValidacaoSessao(ambiente);
-        if (rSessao.success && rSessao.data) {
-          setValidacaoSessao(rSessao.data as ValidacaoSessaoGdl);
-        }
+        if (ambienteAtualRef.current !== ambienteValidado) return;
+        const validacao = lerValidacaoGdl(rSessao, ambienteValidado);
+        setValidacaoSessao(validacao);
+        setAmbienteValidacao(ambienteValidado);
         setSucessoValidacao(`Credenciais validadas com sucesso usando a REP ${formatarRep(numeroRepValidacao, anoRepValidacao)}.`);
       } else {
         setErroValidacao(obterMensagemOrientadaErroGdl(r.error || 'Não foi possível validar as credenciais no GDL.'));
       }
     } catch (e: unknown) {
-      setErroValidacao(getMensagemErro(e, 'Erro ao validar credenciais no GDL.'));
+      if (ambienteAtualRef.current === ambienteValidado) {
+        setErroValidacao(getMensagemErro(e, 'Erro ao validar credenciais no GDL.'));
+        setErroEstadoValidacao('Não foi possível confirmar o estado de validação. Tente consultar novamente.');
+        setEstadoValidacao('erro');
+      }
     } finally {
       setValidandoCredenciais(false);
     }
   };
 
   const isHomologacao = ambiente === 'homologacao';
+  const ambienteConfirmado = estadoPreferencias === 'pronto';
   const ambienteLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
   const valorSelectAnoValidacao = anoManualValidacao ? 'manual' : (anoRepValidacao || undefined);
   const formatarEndpoint = (endpoint: string) => endpoint ? endpoint.replace(endpoint.split('/api')[0], '') : '—';
@@ -400,8 +518,8 @@ export const GdlConfigPage: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
           <Database className="h-6 w-6 text-primary" />
           API GDL
-          <Badge variant={ambiente === 'producao' ? 'default' : 'secondary'} className="text-xs">
-            Ambiente selecionado: {ambienteLabel}
+          <Badge variant={estadoPreferencias === 'pronto' && ambiente === 'producao' ? 'default' : 'secondary'} className="text-xs">
+            {estadoPreferencias === 'pronto' ? `Ambiente selecionado: ${ambienteLabel}` : 'Ambiente não confirmado'}
           </Badge>
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -415,6 +533,15 @@ export const GdlConfigPage: React.FC = () => {
         </Alert>
       )}
 
+      {estadoPreferencias !== 'pronto' && (
+        <Alert variant={estadoPreferencias === 'erro' ? 'destructive' : 'default'}>
+          <AlertDescription className="flex items-center gap-3">
+            {estadoPreferencias === 'erro' ? erroPreferencias : 'Carregando preferências de ambiente do GDL...'}
+            {estadoPreferencias === 'erro' && <Button type="button" variant="outline" size="sm" onClick={() => void carregarConfigs()}>Tentar novamente</Button>}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card id="gdl-listagem-reps">
         <CardHeader>
           <CardTitle>Listagem de REPs</CardTitle>
@@ -424,37 +551,26 @@ export const GdlConfigPage: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {listagemHabilitada
-              ? 'Ativada: as listas são atualizadas pelo GDL. A consulta de detalhes pode marcar REPs como “Laudo em Execução”.'
+            {!preferenciaCarregada
+              ? 'Preferência de listagem não confirmada.'
+              : listagemHabilitada
+              ? 'Ativada: as listas são atualizadas pelo GDL e os exames são identificados pelo catálogo local.'
               : 'Desativada: as listas mostram apenas cache com menos de 30 minutos e não consultam o GDL.'}
           </p>
-          {erroListagem && <Alert variant="destructive"><AlertDescription>{erroListagem}</AlertDescription></Alert>}
+          {erroListagem && <Alert variant="destructive"><AlertDescription className="flex items-center gap-3">{erroListagem}<Button type="button" variant="outline" size="sm" onClick={() => void carregarPreferenciaListagem()}>Tentar novamente</Button></AlertDescription></Alert>}
           <Button
             type="button"
             variant={listagemHabilitada ? 'outline' : 'default'}
             aria-pressed={listagemHabilitada}
             disabled={!preferenciaCarregada || salvandoListagem}
-            onClick={() => listagemHabilitada ? void alterarListagem(false) : setConfirmarListagemOpen(true)}
+            onClick={() => void alterarListagem(!listagemHabilitada)}
           >
             {salvandoListagem ? 'Salvando...' : listagemHabilitada ? 'Desativar listagem' : 'Ativar listagem'}
           </Button>
         </CardContent>
       </Card>
 
-      <AlertDialog open={confirmarListagemOpen} onOpenChange={setConfirmarListagemOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ativar a listagem de REPs?</AlertDialogTitle>
-            <AlertDialogDescription>
-              A listagem consulta os detalhes das REPs no GDL e pode marcá-las como “Laudo em Execução”. Ao confirmar, Dashboard e REPs → Listar REPs poderão atualizar a lista automaticamente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={salvandoListagem}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction disabled={salvandoListagem} onClick={evento => { evento.preventDefault(); void alterarListagem(true); }}>Confirmar ativação</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
 
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
@@ -470,7 +586,7 @@ export const GdlConfigPage: React.FC = () => {
             size="sm"
             className="gap-2 self-start sm:shrink-0"
             aria-pressed={homologacaoHabilitada}
-            disabled={salvandoHabilitacao || salvando}
+            disabled={estadoPreferencias !== 'pronto' || salvandoHabilitacao || salvando}
             onClick={() => void handleHabilitarHomologacao(!homologacaoHabilitada)}
           >
             <FlaskConical className="h-4 w-4" />
@@ -482,6 +598,17 @@ export const GdlConfigPage: React.FC = () => {
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
+          {!credenciaisProntas && estadoPreferencias === 'pronto' && (
+            <Alert variant={estadoCredenciais === 'erro' && ambienteCredenciais === ambiente ? 'destructive' : 'default'}>
+              <AlertDescription className="flex items-center gap-3">
+                {estadoCredenciais === 'erro' ? erroCredenciais : 'Carregando credenciais do ambiente...'}
+                {estadoCredenciais === 'erro' && <Button type="button" variant="outline" size="sm" onClick={() => void carregarCredenciaisAmbiente(ambiente)}>Tentar novamente</Button>}
+              </AlertDescription>
+            </Alert>
+          )}
+          {credenciaisProntas && !login && !senha && (
+            <p className="text-sm text-muted-foreground">Não há login e senha salvos para este ambiente.</p>
+          )}
           {/* ---------- Seleção de ambiente com cards ---------- */}
           <div className="space-y-3">
             <Label>Ambiente</Label>
@@ -490,9 +617,10 @@ export const GdlConfigPage: React.FC = () => {
               {homologacaoHabilitada && (
               <button
                 type="button"
+                disabled={estadoPreferencias !== 'pronto' || salvando || testando || validandoCredenciais || salvandoHabilitacao}
                 onClick={() => setAmbiente('homologacao')}
                 className={`text-left p-4 rounded-lg border-2 transition-all ${
-                  isHomologacao
+                  ambienteConfirmado && isHomologacao
                     ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
                     : 'border-muted-foreground/20 hover:border-muted-foreground/40 opacity-80 hover:opacity-100'
                 }`}
@@ -502,7 +630,7 @@ export const GdlConfigPage: React.FC = () => {
                   <span className={`font-semibold text-sm ${isHomologacao ? 'text-primary' : ''}`}>
                     Homologação
                   </span>
-                  {isHomologacao && (
+                  {ambienteConfirmado && isHomologacao && (
                     <Badge variant="default" className="ml-auto text-xs">Ativo</Badge>
                   )}
                 </div>
@@ -519,9 +647,10 @@ export const GdlConfigPage: React.FC = () => {
               {/* Card Produção */}
               <button
                 type="button"
+                disabled={estadoPreferencias !== 'pronto' || salvando || testando || validandoCredenciais || salvandoHabilitacao}
                 onClick={() => setAmbiente('producao')}
                 className={`text-left p-4 rounded-lg border-2 transition-all ${
-                  !isHomologacao
+                  ambienteConfirmado && !isHomologacao
                     ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
                     : 'border-muted-foreground/20 hover:border-muted-foreground/40 opacity-80 hover:opacity-100'
                 }`}
@@ -531,7 +660,7 @@ export const GdlConfigPage: React.FC = () => {
                   <span className={`font-semibold text-sm ${!isHomologacao ? 'text-primary' : ''}`}>
                     Produção
                   </span>
-                  {!isHomologacao && (
+                  {!isHomologacao && estadoPreferencias === 'pronto' && (
                     <Badge variant="default" className="ml-auto text-xs">Ativo</Badge>
                   )}
                 </div>
@@ -552,8 +681,8 @@ export const GdlConfigPage: React.FC = () => {
               <Input
                 id="gdl-login"
                 value={login}
-                onChange={e => setLogin(e.target.value)}
-                placeholder="Seu usuário do GDL"
+                onChange={e => { credenciaisEditadasRef.current.login = true; setLogin(e.target.value); }}
+                placeholder={estadoCredenciais === 'erro' ? 'Leitura indisponível' : 'Seu usuário do GDL'}
               />
             </div>
             <div className="space-y-2">
@@ -563,8 +692,8 @@ export const GdlConfigPage: React.FC = () => {
                   id="gdl-senha"
                   type={showPassword ? 'text' : 'password'}
                   value={senha}
-                  onChange={e => setSenha(e.target.value)}
-                  placeholder="••••••••"
+                  onChange={e => { credenciaisEditadasRef.current.senha = true; setSenha(e.target.value); }}
+                  placeholder={estadoCredenciais === 'erro' ? 'Leitura indisponível' : '••••••••'}
                   className="pr-10"
                 />
                 <button
@@ -584,7 +713,7 @@ export const GdlConfigPage: React.FC = () => {
             <Input
               id="gdl-cpf"
               value={cpfUsuario}
-              onChange={e => setCpfUsuario(formatarCPF(e.target.value))}
+              onChange={e => { credenciaisEditadasRef.current.cpf = true; setCpfUsuario(formatarCPF(e.target.value)); }}
               placeholder="000.000.000-00"
               maxLength={14}
             />
@@ -596,7 +725,7 @@ export const GdlConfigPage: React.FC = () => {
           </div>
 
           <div className="flex gap-3">
-            <Button onClick={handleSalvar} disabled={salvando || salvandoHabilitacao} className="gap-2">
+            <Button onClick={handleSalvar} disabled={!credenciaisProntas || salvando || salvandoHabilitacao} className="gap-2">
               <Shield className="h-4 w-4" />
               {salvando ? 'Salvando...' : 'Salvar Configurações'}
             </Button>
@@ -666,7 +795,7 @@ export const GdlConfigPage: React.FC = () => {
                   </p>
                 )}
 
-                <Button variant="outline" onClick={handleTestar} disabled={testando} className="gap-2 w-full">
+                <Button variant="outline" onClick={handleTestar} disabled={!credenciaisProntas || testando} className="gap-2 w-full">
                   <Wifi className="h-4 w-4" />
                   {testando ? 'Testando...' : 'Testar Rede'}
                 </Button>
@@ -684,26 +813,36 @@ export const GdlConfigPage: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {(!validacaoPronta || !credenciaisProntas) && estadoPreferencias === 'pronto' && (
+                  <Alert variant={estadoValidacao === 'erro' ? 'destructive' : 'default'}>
+                    <AlertDescription className="flex items-center gap-3">
+                      {estadoValidacao === 'erro' ? erroEstadoValidacao : 'Carregando o estado de validação...'}
+                      {estadoValidacao === 'erro' && <Button type="button" variant="outline" size="sm" onClick={() => void carregarValidacaoAmbiente(ambiente)}>Tentar novamente</Button>}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="rounded-lg border p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">Status da sessão</span>
-                    <Badge variant={validacaoSessao?.validado ? 'default' : 'secondary'} className="text-xs ml-auto">
-                      {validacaoSessao?.validado ? 'Validada' : 'Pendente'}
+                    <Badge variant={validacaoPronta && validacaoSessao?.validado ? 'default' : 'secondary'} className="text-xs ml-auto">
+                      {!validacaoPronta ? 'Indisponível' : validacaoSessao?.validado ? 'Validada' : 'Pendente'}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {validacaoSessao?.validado
+                    {!validacaoPronta
+                      ? 'O estado de validação ainda não foi confirmado.'
+                      : validacaoSessao?.validado
                       ? `Credenciais validadas nesta sessão com a REP ${formatarRep(validacaoSessao.numeroRep || '', validacaoSessao.anoRep || '')}.`
                       : 'A validação de credenciais acontece quando uma REP válida é consultada com sucesso no ambiente atual.'}
                   </p>
-                  {validacaoSessao?.validado && (
+                  {validacaoPronta && validacaoSessao?.validado && (
                     <p className="text-xs text-muted-foreground">
                       Última validação: {formatarDataHora(validacaoSessao.dataHora)}
                     </p>
                   )}
                 </div>
 
-                <Button variant="outline" onClick={abrirModalValidacao} className="gap-2 w-full">
+                <Button variant="outline" onClick={abrirModalValidacao} disabled={!credenciaisProntas || !validacaoPronta} className="gap-2 w-full">
                   <Search className="h-4 w-4" />
                   Validar Credenciais
                 </Button>
@@ -782,7 +921,7 @@ export const GdlConfigPage: React.FC = () => {
               <Button variant="outline" onClick={() => setModalValidacaoOpen(false)} disabled={validandoCredenciais}>
                 Fechar
               </Button>
-              <Button onClick={handleValidarCredenciais} disabled={validandoCredenciais} className="gap-2">
+              <Button onClick={handleValidarCredenciais} disabled={!credenciaisProntas || !validacaoPronta || validandoCredenciais} className="gap-2">
                 {validandoCredenciais ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 {validandoCredenciais ? 'Validando...' : 'Validar'}
               </Button>
