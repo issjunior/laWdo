@@ -55,6 +55,21 @@ describe('DesempenhoService', () => {
     expect(amostras.find(amostra => amostra.evento === 'concluido')).toMatchObject({ canal: null, operacao: null });
   });
 
+  it('mantém falhas funcionais rápidas no perfil importante', async () => {
+    const servico = await criarServico();
+    await servico.registrar({
+      origem: 'ipc', categoria: 'canal', evento: 'falhou', canal: 'configuracao:obter', duracaoMs: 5,
+      metadados: { sucesso: false, falhou: true },
+    });
+
+    expect(await servico.listar()).toEqual([
+      expect.objectContaining({
+        evento: 'falhou', severidade: 'importante', canal: 'configuracao:obter',
+        metadados: expect.objectContaining({ sucesso: false, falhou: true }),
+      }),
+    ]);
+  });
+
   it('exporta CSV com campos de correlação e protege a fila de eventos informativos', async () => {
     const servico = await criarServico();
     await servico.iniciarDetalhada();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,9 +14,15 @@ import { TipoExameFormFields } from '@/components/tipos-exame/TipoExameFormField
 
 export const TiposExamePage: React.FC = () => {
   const [tiposExame, setTiposExame] = useState<TipoExame[]>([]);
-  const [todosTipos, setTodosTipos] = useState<TipoExame[]>([]);
+  const [todosTipos, setTodosTipos] = useState<TipoExame[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erroLista, setErroLista] = useState<string | null>(null);
+  const [erroTotais, setErroTotais] = useState<string | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState(false);
+  const mostrarTodosRef = useRef(mostrarTodos);
+  mostrarTodosRef.current = mostrarTodos;
+  const sequenciaListaRef = useRef(0);
+  const sequenciaTotaisRef = useRef(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTipo, setEditingTipo] = useState<TipoExame | null>(null);
   const [formData, setFormData] = useState<CreateTipoExameInput>({
@@ -26,87 +32,62 @@ export const TiposExamePage: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const inativosCount = todosTipos.filter(t => !t.ativo).length;
+  const inativosCount = todosTipos?.filter(t => !t.ativo).length ?? 0;
 
   const getMensagemErro = (erro: unknown, fallback: string): string =>
     erro instanceof Error ? erro.message : fallback;
 
-  // Carregar tipos de exame
-  const carregarTiposExame = useCallback(async () => {
+  const carregarLista = useCallback(async () => {
+    const sequencia = ++sequenciaListaRef.current;
+    const incluirInativos = mostrarTodosRef.current;
+    setLoading(true);
+    setErroLista(null);
     try {
-      setLoading(true);
-      setError(null);
-
-      const result = await window.ipcAPI.tipoExame.findAll();
-
-      if (result.success && result.data) {
-        setTiposExame(result.data);
-      } else {
-        setError(result.error || 'Erro ao carregar tipos de exame');
-      }
+      const result = await (incluirInativos
+        ? window.ipcAPI.tipoExame.findAllSemFiltroStatus()
+        : window.ipcAPI.tipoExame.findAll());
+      if (sequencia !== sequenciaListaRef.current) return;
+      if (!result.success || !Array.isArray(result.data)) throw new Error(result.error || 'Erro ao carregar tipos de exame');
+      setTiposExame(result.data);
     } catch (err: unknown) {
-      setError(getMensagemErro(err, 'Erro ao carregar tipos de exame'));
+      if (sequencia === sequenciaListaRef.current) setErroLista(getMensagemErro(err, 'Erro ao carregar tipos de exame'));
     } finally {
-      setLoading(false);
+      if (sequencia === sequenciaListaRef.current) setLoading(false);
     }
   }, []);
 
-  const carregarTiposTodos = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const result = await window.ipcAPI.tipoExame.findAllSemFiltroStatus();
-
-      if (result.success && result.data) {
-        setTiposExame(result.data);
-      } else {
-        setError(result.error || 'Erro ao carregar tipos de exame');
-      }
-    } catch (err: unknown) {
-      setError(getMensagemErro(err, 'Erro ao carregar tipos de exame'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Carrega lista completa para o card de total
   const carregarTodosTipos = useCallback(async () => {
+    const sequencia = ++sequenciaTotaisRef.current;
+    setErroTotais(null);
     try {
       const allResult = await window.ipcAPI.tipoExame.findAllSemFiltroStatus();
-      if (allResult.success && allResult.data) {
-        setTodosTipos(allResult.data);
+      if (sequencia !== sequenciaTotaisRef.current) return;
+      if (!allResult.success || !Array.isArray(allResult.data)) throw new Error(allResult.error || 'Não foi possível carregar os totais.');
+      setTodosTipos(allResult.data);
+    } catch (err: unknown) {
+      if (sequencia === sequenciaTotaisRef.current) {
+        setTodosTipos(null);
+        setErroTotais(getMensagemErro(err, 'Não foi possível carregar os totais.'));
       }
-    } catch {
-      // silencioso
     }
   }, []);
 
-  // Carregar na inicialização
   useEffect(() => {
-    carregarTiposExame();
-    carregarTodosTipos();
-  }, [carregarTiposExame, carregarTodosTipos]);
+    void carregarTodosTipos();
+    return () => { sequenciaTotaisRef.current += 1; };
+  }, [carregarTodosTipos]);
 
   useEffect(() => {
-    if (mostrarTodos) {
-      carregarTiposTodos();
-    } else {
-      carregarTiposExame();
-    }
-  }, [mostrarTodos, carregarTiposExame, carregarTiposTodos]);
+    void carregarLista();
+    return () => { sequenciaListaRef.current += 1; };
+  }, [mostrarTodos, carregarLista]);
 
   // Alternar status ativo/inativo
   const handleToggleStatus = useCallback(async (id: string) => {
     try {
       const result = await window.ipcAPI.tipoExame.toggleStatus(id);
       if (result.success) {
-        if (mostrarTodos) {
-          await carregarTiposTodos();
-        } else {
-          await carregarTiposExame();
-        }
-        await carregarTodosTipos();
+        await Promise.all([carregarLista(), carregarTodosTipos()]);
         toast.success(result.message || 'Status alterado com sucesso!');
       } else {
         toast.error(result.error || 'Erro ao alterar status');
@@ -114,7 +95,7 @@ export const TiposExamePage: React.FC = () => {
     } catch {
       toast.error('Erro ao alterar status do tipo de exame');
     }
-  }, [mostrarTodos, carregarTiposTodos, carregarTiposExame, carregarTodosTipos]);
+  }, [carregarLista, carregarTodosTipos]);
 
   // Abrir diálogo para novo tipo
   const handleNovo = () => {
@@ -163,12 +144,7 @@ export const TiposExamePage: React.FC = () => {
 
         if (result.success && result.data) {
           setSuccess('Tipo de exame atualizado com sucesso!');
-          if (mostrarTodos) {
-            await carregarTiposTodos();
-          } else {
-            await carregarTiposExame();
-          }
-          await carregarTodosTipos();
+          await Promise.all([carregarLista(), carregarTodosTipos()]);
           setTimeout(() => setDialogOpen(false), 1000);
         } else {
           setError(result.error || 'Erro ao atualizar tipo de exame');
@@ -178,12 +154,7 @@ export const TiposExamePage: React.FC = () => {
 
         if (result.success && result.data) {
           setSuccess('Tipo de exame criado com sucesso!');
-          if (mostrarTodos) {
-            await carregarTiposTodos();
-          } else {
-            await carregarTiposExame();
-          }
-          await carregarTodosTipos();
+          await Promise.all([carregarLista(), carregarTodosTipos()]);
           setTimeout(() => setDialogOpen(false), 1000);
         } else {
           setError(result.error || 'Erro ao criar tipo de exame');
@@ -204,12 +175,7 @@ export const TiposExamePage: React.FC = () => {
       const result = await window.ipcAPI.tipoExame.delete(id);
 
       if (result.success) {
-        if (mostrarTodos) {
-          await carregarTiposTodos();
-        } else {
-          await carregarTiposExame();
-        }
-        await carregarTodosTipos();
+        await Promise.all([carregarLista(), carregarTodosTipos()]);
         toast.success('Tipo de exame excluído com sucesso!');
       } else {
         toast.error(result.error || 'Erro ao excluir');
@@ -217,7 +183,7 @@ export const TiposExamePage: React.FC = () => {
     } catch {
       toast.error('Erro ao excluir tipo de exame');
     }
-  }, [mostrarTodos, carregarTiposTodos, carregarTiposExame, carregarTodosTipos]);
+  }, [carregarLista, carregarTodosTipos]);
 
   // Definições de colunas da DataTable
   const columnDefs = useMemo<DefinicaoColunaTabela<TipoExame>[]>(() => [
@@ -338,6 +304,13 @@ export const TiposExamePage: React.FC = () => {
         </div>
 
         {/* Cards de estatísticas */}
+        {erroTotais && (
+          <div role="alert" className="flex items-center gap-3 text-sm text-destructive">
+            <AlertCircle size={16} />
+            <span>Totais indisponíveis: {erroTotais}</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => void carregarTodosTipos()}>Tentar novamente</Button>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -345,7 +318,7 @@ export const TiposExamePage: React.FC = () => {
               <FlaskConical size={16} className="text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{todosTipos.length}</p>
+              <p className="text-3xl font-bold">{todosTipos?.length ?? '—'}</p>
               <p className="text-xs text-muted-foreground mt-1">Tipos de exame cadastrados</p>
             </CardContent>
           </Card>
@@ -357,7 +330,7 @@ export const TiposExamePage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                {todosTipos.filter((t) => !!t.ativo).length}
+                {todosTipos ? todosTipos.filter((t) => !!t.ativo).length : '—'}
               </p>
               <p className="text-xs text-muted-foreground mt-1">Disponíveis para laudos</p>
             </CardContent>
@@ -373,7 +346,7 @@ export const TiposExamePage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-red-600 dark:text-red-400">
-                {inativosCount}
+                {todosTipos ? inativosCount : '—'}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {inativosCount > 0 && !mostrarTodos ? 'Clique para revelar' : 'Ocultos da lista'}
@@ -396,10 +369,12 @@ export const TiposExamePage: React.FC = () => {
               <div>
                 <CardTitle>Lista de Tipos de Exame</CardTitle>
                 <CardDescription>
-                  {mostrarTodos
+                  {loading ? 'Carregando lista...'
+                    : erroLista ? 'Lista indisponível'
+                    : mostrarTodos
                     ? `${tiposExame.length} tipo(s) no total`
                     : `${tiposExame.length} ativo(s)`}
-                  {!mostrarTodos && inativosCount > 0 && (
+                  {!loading && !erroLista && !mostrarTodos && inativosCount > 0 && (
                     <span className="text-red-600 ml-2">({inativosCount} inativo{inativosCount > 1 ? 's' : ''} oculto{inativosCount > 1 ? 's' : ''})</span>
                   )}
                 </CardDescription>
@@ -421,10 +396,11 @@ export const TiposExamePage: React.FC = () => {
                 <Loader2 size={24} className="animate-spin" />
                 <span className="text-sm">Carregando tipos de exame...</span>
               </div>
-            ) : error && tiposExame.length === 0 ? (
+            ) : erroLista ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
                 <AlertCircle size={24} className="text-destructive" />
-                <span className="text-sm text-destructive">{error}</span>
+                <span className="text-sm text-destructive">{erroLista}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => void carregarLista()}>Tentar novamente</Button>
               </div>
             ) : tiposExame.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">

@@ -14,6 +14,7 @@ describe('GdlConfigPage', () => {
   beforeEach(() => {
     configuracoes.clear()
     obterConfiguracao.mockClear()
+    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: configuracoes.get(chave) ?? null }))
     salvarConfiguracao.mockClear()
     Object.defineProperty(window, 'ipcAPI', {
       value: {
@@ -95,5 +96,106 @@ describe('GdlConfigPage', () => {
     await waitFor(() => expect(definir).toHaveBeenCalledWith(true))
     fireEvent.click(await screen.findByRole('button', { name: 'Desativar listagem' }))
     await waitFor(() => expect(definir).toHaveBeenCalledWith(false))
+  })
+
+  it('não confirma Produção nem libera ações quando as preferências falham', async () => {
+    obterConfiguracao.mockImplementation(async (chave: string) => chave === 'gdl_ambiente'
+      ? { success: false, data: null }
+      : { success: true, data: configuracoes.get(chave) ?? null })
+    render(<GdlConfigPage />)
+
+    expect(await screen.findByText('Ambiente não confirmado')).toBeInTheDocument()
+    expect(screen.getByText('Não foi possível ler as preferências de ambiente do GDL.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Testar Rede' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Validar Credenciais' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Ativar listagem' })).toBeEnabled()
+
+    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: configuracoes.get(chave) ?? null }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+    expect(await screen.findByText('Ambiente selecionado: Produção')).toBeInTheDocument()
+  })
+
+  it('não aceita preferência de ambiente inválida como Produção confirmada', async () => {
+    configuracoes.set('gdl_ambiente', 'ambiente-desconhecido')
+    render(<GdlConfigPage />)
+
+    expect(await screen.findByText('A preferência de ambiente do GDL é inválida.')).toBeInTheDocument()
+    expect(screen.getByText('Ambiente não confirmado')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeDisabled()
+  })
+
+  it('mantém a preferência de listagem independente e oferece nova tentativa', async () => {
+    const obterListagem = window.ipcAPI.gdl.obterPreferenciaListagem as ReturnType<typeof vi.fn>
+    obterListagem.mockResolvedValue({ success: false, error: 'Falha na preferência de listagem' })
+    render(<GdlConfigPage />)
+
+    expect(await screen.findByText('Falha na preferência de listagem')).toBeInTheDocument()
+    expect(screen.getByText('Preferência de listagem não confirmada.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ativar listagem' })).toBeDisabled()
+    obterListagem.mockResolvedValue({ success: true, data: { habilitada: false } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ativar listagem' })).toBeEnabled())
+  })
+
+  it('falha ao ler senha sem tratá-la como ausente e preserva edição na nova tentativa', async () => {
+    obterConfiguracao.mockImplementation(async (chave: string) => chave === 'gdl_senha_producao'
+      ? { success: false, data: null }
+      : { success: true, data: configuracoes.get(chave) ?? null })
+    render(<GdlConfigPage />)
+
+    expect(await screen.findByText('Não foi possível ler as credenciais do GDL.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'edicao-local' } })
+    configuracoes.set('gdl_login_producao', 'login-salvo')
+    configuracoes.set('gdl_senha_producao', 'senha-salva')
+    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: configuracoes.get(chave) ?? null }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeEnabled())
+    expect(screen.getByLabelText('Login')).toHaveValue('edicao-local')
+    expect(screen.getByLabelText('Senha')).toHaveValue('senha-salva')
+  })
+
+  it('distingue falha de leitura da validação de sessão e recupera por nova tentativa', async () => {
+    const obterValidacao = window.ipcAPI.gdl.obterValidacaoSessao as ReturnType<typeof vi.fn>
+    obterValidacao.mockResolvedValue({ success: false, error: 'Falha de leitura' })
+    render(<GdlConfigPage />)
+
+    expect(await screen.findByText('Não foi possível ler o estado de validação do GDL.')).toBeInTheDocument()
+    expect(screen.getByText('Indisponível')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Validar Credenciais' })).toBeDisabled()
+    obterValidacao.mockResolvedValue({ success: true, data: { ambiente: 'Produção', validado: false } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+    await waitFor(() => expect(screen.getByText('Pendente')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Validar Credenciais' })).toBeEnabled()
+  })
+
+  it('ignora credenciais e validação atrasadas do ambiente anterior', async () => {
+    configuracoes.set('gdl_homologacao_habilitada', 'true')
+    configuracoes.set('gdl_login_producao', 'usuario-producao')
+    let concluirLoginHomologacao: ((valor: { success: boolean; data: string }) => void) | undefined
+    obterConfiguracao.mockImplementation(async (chave: string) => {
+      if (chave === 'gdl_login_homologacao') return new Promise(resolve => { concluirLoginHomologacao = resolve })
+      return { success: true, data: configuracoes.get(chave) ?? null }
+    })
+    const obterValidacao = window.ipcAPI.gdl.obterValidacaoSessao as ReturnType<typeof vi.fn>
+    let concluirValidacaoHomologacao: ((valor: { success: boolean; data: { ambiente: string; validado: boolean } }) => void) | undefined
+    obterValidacao.mockImplementation((ambiente: string) => ambiente === 'homologacao'
+      ? new Promise(resolve => { concluirValidacaoHomologacao = resolve })
+      : Promise.resolve({ success: true, data: { ambiente: 'Produção', validado: false } }))
+    render(<GdlConfigPage />)
+    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario-producao'))
+
+    fireEvent.click(screen.getByRole('button', { name: /Homologação.*Ambiente de testes/s }))
+    await waitFor(() => expect(concluirLoginHomologacao).toBeDefined())
+    await waitFor(() => expect(concluirValidacaoHomologacao).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: /Produção.*Ambiente real/s }))
+    concluirLoginHomologacao?.({ success: true, data: 'usuario-antigo' })
+    concluirValidacaoHomologacao?.({ success: true, data: { ambiente: 'Homologação', validado: true } })
+
+    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario-producao'))
+    expect(screen.getByText('Pendente')).toBeInTheDocument()
+    expect(screen.queryByText('Validada')).not.toBeInTheDocument()
   })
 })

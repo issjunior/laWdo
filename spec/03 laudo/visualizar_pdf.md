@@ -10,7 +10,13 @@ A prévia aberta no editor parte do conteúdo atual dos editores, inclusive alte
 
 `getMargens()` sempre devolve margens válidas: configuração persistida normalizada ou o padrão `{ top: 2.5, right: 2, bottom: 2.5, left: 3 }` em centímetros. Para PDF, `exportacao.service.ts` e `template.handlers.ts` usam as mesmas margens efetivas. Quando existe cabeçalho de páginas, a margem superior é no mínimo 2,5 cm, mesmo se uma configuração menor chegar à camada de impressão. O `headerTemplate` é encaminhado explicitamente na exportação do laudo; assim o cálculo não depende do cabeçalho exclusivo da primeira página.
 
-O HTML de impressão não introduz padding lateral alternativo: as margens de impressão definem a área útil e o documento usa os valores efetivos. Tabelas têm largura máxima de 100%, `thead` como `table-header-group` e `tr` com `break-inside: avoid`. Em continuação de tabela, o cabeçalho da página e o cabeçalho da tabela ficam abaixo da margem superior, sem sobreposição.
+O HTML de impressão não introduz padding lateral alternativo: as margens de impressão definem a área útil e o documento usa os valores efetivos. Tabelas usam largura máxima de 100%, `thead` como `table-header-group` e `tr` com `break-inside: avoid`. As tabelas de placeholders identificadas por `data-placeholder-celula-fixa` também usam layout fixo, padding reduzido e quebra de texto para não ultrapassar a área imprimível; a partir de dez colunas, a fonte é menor. A regra compartilhada em `pdf-tabelas.ts` é aplicada na prévia e na exportação, inclusive a tabelas já inseridas no laudo. Em continuação de tabela, o cabeçalho da página e o cabeçalho da tabela ficam abaixo da margem superior, sem sobreposição.
+
+## Prontidão e recuperação
+
+`gerarPdfPreparado()` é compartilhado pela prévia e exportação. Após carregar o HTML em uma janela oculta com sandbox, verifica fontes e decodificação de imagens do corpo, inclusive URLs de imagem em estilos; verifica os recursos do cabeçalho em documento auxiliar isolado antes de imprimir. A preparação tem limite de 15 segundos e a impressão, de 30 segundos. Timeout, encerramento do renderer ou falha de recurso encerram a operação e limpam janelas e arquivos temporários; não há espera fixa nem PDF parcial. Os logs registram tempos, contagens e códigos, sem HTML ou conteúdo pericial.
+
+A página lê as duas configurações do cabeçalho em modo estrito: falha ou valor inválido impede gerar silenciosamente uma prévia sem cabeçalho. O IPC devolve falha tipada com código, etapa e possibilidade de nova tentativa; a interface mostra orientação persistente, **Tentar novamente** e **Fechar**. Uma nova tentativa usa o conteúdo atual do editor, e uma falha não reapresenta a prévia anterior como se fosse a atual.
 
 ## Saída e verificação
 

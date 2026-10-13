@@ -21,6 +21,7 @@ function perfilPersistivel(valor: unknown): valor is 'importante' | 'critico' { 
 function identificadorSeguro(valor: string | undefined): string | null { return valor && PADRAO_IDENTIFICADOR.test(valor) ? valor : null; }
 function severidadePara(entrada: EventoDesempenhoEntrada): SeveridadeDesempenho {
   if (entrada.evento === 'renderer_sem_resposta' || entrada.evento === 'renderer_encerrado' || (entrada.duracaoMs ?? 0) >= 2_000) return 'critico';
+  if (entrada.origem === 'ipc' && entrada.evento === 'falhou') return 'importante';
   if ((entrada.duracaoMs ?? 0) >= 250 || (entrada.metricas?.atrasoEventLoopMs ?? 0) >= 200 || (entrada.metricas?.longTaskMaximaMs ?? 0) >= 200) return 'importante';
   return 'info';
 }

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
+import type { FalhaPdf } from '../shared/types/pdf.types.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -323,7 +324,7 @@ export interface IpcAPI {
     gerarWizard: (params: IpcPayload) => Promise<UserResponse>;
     salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => Promise<UserResponse>;
     getRespostasWizard: (laudoId: string) => Promise<UserResponse>;
-    exportar: (params: ExportacaoLaudoParams) => Promise<UserResponse>;
+    exportar: (params: ExportacaoLaudoParams) => Promise<UserResponse & { falhaPdf?: FalhaPdf }>;
     verificarLibreOffice: () => Promise<UserResponse>;
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
@@ -812,10 +813,21 @@ function descarregarResumoIpc(): void {
   if (resumoIpc.length) ipcRenderer.send('desempenho:registrar', { origem: 'ipc', categoria: 'canal', evento: 'resumo_ipc', resumoIpc });
 }
 
-function registrarIpcDesempenho(canal: string, duracaoMs: number, sucesso: boolean, entrada: unknown[], resposta?: unknown): void {
+type ResultadoFuncionalIpc = 'sucesso' | 'falha' | 'indeterminado';
+type DesfechoIpc = ResultadoFuncionalIpc | 'rejeicao_transporte';
+
+function classificarResultadoFuncionalIpc(resposta: unknown): ResultadoFuncionalIpc {
+  if (resposta === null || typeof resposta !== 'object' || Array.isArray(resposta) || !Object.prototype.hasOwnProperty.call(resposta, 'success')) return 'indeterminado';
+  if (!('success' in resposta) || typeof resposta.success !== 'boolean') return 'indeterminado';
+  return resposta.success ? 'sucesso' : 'falha';
+}
+
+function registrarIpcDesempenho(canal: string, duracaoMs: number, desfecho: DesfechoIpc, entrada: unknown[], resposta?: unknown): void {
   const bytesEntrada = Array.from(entrada as unknown[]).reduce<number>((total, item) => total + tamanhoAproximado(item), 0);
-  const evento: EventoDesempenhoEntrada = { origem: 'ipc', categoria: 'canal', evento: sucesso ? 'concluido' : 'falhou', canal, duracaoMs, metadados: { sucesso, falhou: !sucesso, bytesEntrada, bytesSaida: tamanhoAproximado(resposta) } };
-  if (!sucesso || duracaoMs >= 2_000) { ipcRenderer.send('desempenho:registrar', evento); return; }
+  const sucesso = desfecho === 'sucesso' ? true : desfecho === 'indeterminado' ? null : false;
+  const falhou = desfecho === 'indeterminado' ? null : desfecho !== 'sucesso';
+  const evento: EventoDesempenhoEntrada = { origem: 'ipc', categoria: 'canal', evento: desfecho === 'sucesso' ? 'concluido' : desfecho === 'indeterminado' ? 'indeterminado' : 'falhou', canal, duracaoMs, metadados: { sucesso, falhou, bytesEntrada, bytesSaida: tamanhoAproximado(resposta) } };
+  if (falhou || duracaoMs >= 2_000) { ipcRenderer.send('desempenho:registrar', evento); return; }
   if (perfilDesempenhoAtual === 'detalhado') {
     eventosIpcDetalhados.push(evento);
     if (eventosIpcDetalhados.length >= 100) descarregarIpcDetalhado(); else agendarIpcDetalhado();
@@ -1054,21 +1066,26 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
   return (ipcRenderer.invoke(channel, ...args) as Promise<T>).then(
     resposta => {
       if (!canaisDiagnosticoInternos.has(channel)) {
-        registrarEventoIpcDiagnostico({ fase: 'sucesso', canal: channel, correlacaoId, duracaoMs: performance.now() - inicio });
-        registrarIpcDesempenho(channel, performance.now() - inicio, true, args, resposta);
+        const resultadoFuncional = classificarResultadoFuncionalIpc(resposta);
+        const duracaoMs = performance.now() - inicio;
+        const fase = resultadoFuncional === 'sucesso' ? 'sucesso' : resultadoFuncional === 'falha' ? 'falha_funcional' : 'resposta_indeterminada';
+        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs });
+        registrarIpcDesempenho(channel, duracaoMs, resultadoFuncional, args, resposta);
       }
       return resposta;
     },
     erro => {
       if (!canaisDiagnosticoInternos.has(channel)) {
+        const duracaoMs = performance.now() - inicio;
         registrarEventoIpcDiagnostico({
           fase: 'erro',
+          resultadoFuncional: 'indeterminado',
+          tipoFalha: 'transporte',
           canal: channel,
           correlacaoId,
-          duracaoMs: performance.now() - inicio,
-          erro: erro instanceof Error ? erro.message : 'Erro IPC não identificável',
+          duracaoMs,
         });
-        registrarIpcDesempenho(channel, performance.now() - inicio, false, args);
+        registrarIpcDesempenho(channel, duracaoMs, 'rejeicao_transporte', args);
       }
       throw erro;
     },

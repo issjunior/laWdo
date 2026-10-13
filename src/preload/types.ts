@@ -1,3 +1,5 @@
+import type { FalhaPdf } from '../shared/types/pdf.types.js'
+
 /**
  * Tipos para os handlers IPC específicos de usuário
  */
@@ -78,6 +80,7 @@ export interface UserResponse<T = unknown> {
   data?: T
   message?: string
   error?: string
+  falhaPdf?: FalhaPdf
   limiteRequisicoes?: LimiteUsoIaResposta
   total?: number
 }

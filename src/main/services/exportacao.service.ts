@@ -1,6 +1,7 @@
-import { app, dialog, BrowserWindow } from 'electron';
+import { dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { randomUUID } from 'node:crypto';
 import type { DocumentoExportacao, MargensExportacao } from '../../shared/types/exportacao.types.js';
 import { normalizarQuebrasPaginaHtml } from '../../shared/utils/quebra-pagina.js';
 import { obterNomeArquivoLaudo } from '../../shared/utils/nomes-documentos-rep.js';
@@ -9,6 +10,9 @@ import type {
   ParagraphChild,
 } from 'docx';
 import { getLogger } from '../utils/logger.js';
+import { ErroGeracaoPdf, gerarPdfPreparado } from './pdf-prontidao.service.js';
+import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from './pdf-tabelas.js';
+import type { FalhaPdf } from '../../shared/types/pdf.types.js';
 
 const log = getLogger('exportacao');
 
@@ -77,10 +81,6 @@ function normalizarMargensPdf(margens?: ExportarParams['margens'], possuiCabecal
 }
 
 async function gerarPDF(html: string, margens?: ExportarParams['margens'], headerTemplate?: string): Promise<Buffer> {
-  let win: BrowserWindow | null = null;
-  let tmpPath: string | null = null;
-
-  try {
     const margensEfetivas = normalizarMargensPdf(margens, Boolean(headerTemplate));
     const bodyPadding = '0 0 12px 0';
     const leftPad = `${margensEfetivas.left}cm`;
@@ -90,6 +90,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<title>Laudo</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -105,6 +106,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   table { border-collapse: collapse; width: 100% !important; max-width: 100% !important; margin: 12px 0; }
   table th, table td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
   table th { background: #f5f5f5; font-weight: 600; }
+  ${ESTILOS_TABELAS_PLACEHOLDER_PDF}
   thead { display: table-header-group; }
   tr { break-inside: avoid; page-break-inside: avoid; }
   ul, ol { margin: 8px 0; padding-left: 24px; }
@@ -117,16 +119,6 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
 </head>
 <body>${normalizarQuebrasPaginaHtml(html)}</body>
 </html>`;
-
-    win = new BrowserWindow({
-      width: 800, height: 600, show: false,
-      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
-    });
-
-    tmpPath = path.join(app.getPath('temp'), `export-pdf-${Date.now()}.html`);
-    fs.writeFileSync(tmpPath, docHtml, 'utf-8');
-    await win.loadFile(tmpPath);
-    await new Promise(resolve => setTimeout(resolve, 800));
 
     const pdfMargins = {
       top: margensEfetivas.top * CM_TO_INCHES,
@@ -158,13 +150,9 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
       printOptions.footerTemplate = '<html><head></head><body></body></html>';
     }
 
-    const buffer = Buffer.from(await win.webContents.printToPDF(printOptions));
+    const buffer = await gerarPdfPreparado(docHtml, printOptions, headerTemplate);
     log.debug('PDF exportado com sucesso');
     return buffer;
-  } finally {
-    if (win) { try { win.close(); } catch { /* ignora */ } }
-    if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch { /* ignora */ } }
-  }
 }
 
 function normalizarTipoImagemDocx(formato: string): TipoImagemDocx | null {
@@ -306,7 +294,7 @@ export async function verificarLibreOffice(): Promise<boolean> {
   return verificacaoLibreOfficeEmAndamento;
 }
 
-export async function exportarLaudo(params: ExportarParams): Promise<{ success: boolean; path?: string; error?: string }> {
+export async function exportarLaudo(params: ExportarParams): Promise<{ success: boolean; path?: string; error?: string; falhaPdf?: FalhaPdf }> {
   try {
     if (params.formato === 'odt' && !(await verificarLibreOffice())) {
       return { success: false, error: 'LibreOffice não está disponível para exportar ODT' };
@@ -351,15 +339,24 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
         return { success: false, error: `Formato não suportado: ${params.formato}` };
     }
 
-    fs.writeFileSync(filePath, buffer);
+    const arquivoTemporario = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${randomUUID()}.tmp`);
+    try {
+      fs.writeFileSync(arquivoTemporario, buffer);
+      fs.renameSync(arquivoTemporario, filePath);
+    } finally {
+      try { fs.unlinkSync(arquivoTemporario); } catch { /* arquivo já movido ou removido */ }
+    }
     log.debug(`Laudo exportado: ${filePath}`);
 
     return { success: true, path: filePath };
   } catch (error: unknown) {
-    log.error('Erro ao exportar laudo', { laudoId: params.laudoId, formato: params.formato, error });
+    log.error('Erro ao exportar laudo', error instanceof ErroGeracaoPdf
+      ? { formato: params.formato, falhaPdf: error.falhaPdf }
+      : { laudoId: params.laudoId, formato: params.formato, error });
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erro desconhecido ao exportar',
+      error: error instanceof ErroGeracaoPdf ? 'Não foi possível preparar o PDF.' : error instanceof Error ? error.message : 'Erro desconhecido ao exportar',
+      falhaPdf: error instanceof ErroGeracaoPdf ? error.falhaPdf : undefined,
     };
   }
 }

@@ -1,12 +1,12 @@
-import { ipcMain, BrowserWindow, app, dialog } from 'electron';
+import { ipcMain, BrowserWindow, dialog } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { auditDelete, auditExport } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService, type SalvarTemplateCompletoInput } from '../../services/template.service.js';
-import path from 'path';
-import fs from 'fs';
 import { exportarPacoteTemplate, importarPacoteTemplate, lerPreviaPacoteTemplate } from '../../services/template-pacote.service.js';
 import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincronizar-templates-integrados.js';
+import { ErroGeracaoPdf, gerarPdfPreparado } from '../../services/pdf-prontidao.service.js';
+import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from '../../services/pdf-tabelas.js';
 
 const CM_TO_INCHES = 1 / 2.54;
 const MARGENS_PADRAO_PDF = { top: 2.5, right: 2, bottom: 2.5, left: 3 };
@@ -272,8 +272,6 @@ export const registerTemplateHandlers = (): void => {
 
   /** Gerar PDF de preview do laudo (exibido no Dialog via protocolo customizado) */
   ipcMain.handle('template:previewPDF', async (_event, opts: { html: string; margins?: { top: number; right: number; bottom: number; left: number }; headerTemplate?: string; titulo?: string }) => {
-    let win: BrowserWindow | null = null;
-    let tmpPath: string | null = null;
     try {
       const { html, margins, headerTemplate } = opts;
       const titulo = typeof opts.titulo === 'string' && opts.titulo.trim()
@@ -312,6 +310,7 @@ export const registerTemplateHandlers = (): void => {
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
   table th, table td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
   table th { background: #f5f5f5; font-weight: 600; }
+  ${ESTILOS_TABELAS_PLACEHOLDER_PDF}
   thead { display: table-header-group; }
   tr { break-inside: avoid; page-break-inside: avoid; }
   ul, ol { margin: 8px 0; padding-left: 24px; }
@@ -325,18 +324,6 @@ export const registerTemplateHandlers = (): void => {
 </head>
 <body>${html}</body>
 </html>`;
-
-      win = new BrowserWindow({
-        width: 800,
-        height: 600,
-        show: false,
-        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
-      });
-
-      tmpPath = path.join(app.getPath('temp'), `preview-${Date.now()}.html`);
-      fs.writeFileSync(tmpPath, docHtml, 'utf-8');
-      await win.loadFile(tmpPath);
-      await new Promise(resolve => setTimeout(resolve, 800));
 
       const pdfMargins = {
         top: margensEfetivas.top * CM_TO_INCHES,
@@ -382,21 +369,18 @@ export const registerTemplateHandlers = (): void => {
         printOptions.footerTemplate = '<html><head></head><body></body></html>';
       }
 
-      const buffer = Buffer.from(await win.webContents.printToPDF(printOptions));
-
-      win.close();
-      win = null;
-
-      try { fs.unlinkSync(tmpPath); } catch { /* ignora */ }
+      const buffer = await gerarPdfPreparado(docHtml, printOptions, headerTemplate);
 
       const base64PDF = buffer.toString('base64');
       logDebug('PDF de preview gerado com sucesso (imagens otimizadas)');
       return { success: true, data: base64PDF };
     } catch (error: unknown) {
-      logError('Erro ao gerar PDF de preview', error);
-      if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch { /* ignora */ } }
-      if (win) { try { win.close(); } catch { /* ignora */ } }
-      return { success: false, error: mensagemErro(error) };
+      logError('Erro ao gerar PDF de preview', error instanceof ErroGeracaoPdf ? error.falhaPdf : error);
+      return {
+        success: false,
+        error: error instanceof ErroGeracaoPdf ? 'Não foi possível preparar o PDF.' : mensagemErro(error),
+        falhaPdf: error instanceof ErroGeracaoPdf ? error.falhaPdf : undefined,
+      };
     }
   });
 };
