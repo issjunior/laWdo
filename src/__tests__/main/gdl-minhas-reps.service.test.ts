@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  complementarNaturezasMinhasRepsGdl,
   interpretarMinhasRepsGdl,
   montarFormularioMinhasRepsGdl,
   obterEventoNavegacaoMinhasReps,
-  obterNaturezaExameDaRepGdl,
 } from '../../main/services/gdl-minhas-reps.service';
 
 const urlPagina = 'https://gdl.example/SAC/GDL_IC_NET/REP/MinhasReps.aspx';
@@ -70,37 +68,4 @@ describe('listagem de Minhas REPs do GDL', () => {
     expect(() => interpretarMinhasRepsGdl(html.replace('<td>5</td>', '<td>muitas</td>'), 1)).toThrow();
   });
 
-  it('lê exatamente a opção selecionada da natureza da própria REP', () => {
-    const detalhe = (codigo: string) => `<select id="Content_RepMain_ddlNatureExam">
-      <option value="">Selecione</option>
-      <option value="B601" ${codigo === 'B601' ? 'selected="selected"' : ''}>B601 - EXAME DE CONSTATAÇÃO</option>
-      <option value="I806" ${codigo === 'I806' ? 'selected="selected"' : ''}>I806 - EXAME DE CONSTATAÇÃO</option>
-    </select>`;
-    expect(obterNaturezaExameDaRepGdl(detalhe('B601'))).toBe('B601 - EXAME DE CONSTATAÇÃO');
-    expect(obterNaturezaExameDaRepGdl(detalhe('I806'))).toBe('I806 - EXAME DE CONSTATAÇÃO');
-    expect(obterNaturezaExameDaRepGdl(detalhe(''))).toBeNull();
-  });
-
-  it('preserva a lista e a ordem quando uma consulta de detalhe é abortada', async () => {
-    const reps = interpretarMinhasRepsGdl(html, 1).reps;
-    const falhas: unknown[] = [];
-    let ativas = 0;
-    let maximoSimultaneo = 0;
-    await complementarNaturezasMinhasRepsGdl(reps, async idGdl => {
-      ativas += 1;
-      maximoSimultaneo = Math.max(maximoSimultaneo, ativas);
-      await new Promise(resolver => setTimeout(resolver, 0));
-      ativas -= 1;
-      if (idGdl === 124) throw new DOMException('The operation was aborted', 'AbortError');
-      return `${idGdl} - NATUREZA INFORMADA PELO GDL`;
-    }, erro => { falhas.push(erro); });
-    expect(maximoSimultaneo).toBe(2);
-    expect(reps.map(rep => rep.idGdl)).toEqual([123, 124, 125]);
-    expect(reps.map(rep => rep.naturezaExameComCodigo)).toEqual([
-      '123 - NATUREZA INFORMADA PELO GDL', null, '125 - NATUREZA INFORMADA PELO GDL',
-    ]);
-    expect(reps[1].naturezaExame).toBe('B-602 - EXAME');
-    expect(falhas).toHaveLength(1);
-    expect(falhas[0]).toMatchObject({ name: 'AbortError' });
-  });
 });

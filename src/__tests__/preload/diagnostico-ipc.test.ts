@@ -13,6 +13,7 @@ const electronSimulado = ({
 });
 
 interface ApiTeste {
+  gdl: { copiarEmailSuporte(): Promise<unknown> };
   configuracao: { obter(chave: string): Promise<unknown> };
 }
 
@@ -67,6 +68,12 @@ describe('classificação do resultado IPC no preload', () => {
     expect(eventos).toHaveLength(2);
     expect(eventos[0]).toMatchObject({ fase: 'inicio', canal: 'configuracao:obter' });
     expect(eventos[1]).toMatchObject({ fase: 'sucesso', resultadoFuncional: 'sucesso', canal: 'configuracao:obter', correlacaoId: eventos[0]?.correlacaoId });
+  });
+
+  it('expõe somente a ação específica para copiar o e-mail sem argumentos', async () => {
+    electronSimulado.invocar.mockResolvedValue({ success: true });
+    await ipcAPI.gdl.copiarEmailSuporte();
+    expect(electronSimulado.invocar).toHaveBeenCalledWith('gdl:copiar-email-suporte');
   });
 
   it('registra resposta negativa como falha funcional sem rejeitar a chamada', async () => {

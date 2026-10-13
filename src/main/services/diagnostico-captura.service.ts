@@ -212,6 +212,7 @@ export class DiagnosticoCapturaService {
 
   private async finalizarInternamente(captura: CapturaAtiva, classificacao: ClassificacaoCaptura, observacao: string | undefined, automatico: boolean): Promise<FinalizacaoCaptura> {
     if (captura.resultado) return captura.resultado;
+    captura.estado = 'finalizada';
     if (captura.timerFinalizacao) clearTimeout(captura.timerFinalizacao);
     if (captura.timerAmostragem) clearInterval(captura.timerAmostragem);
     this.dependencias.alterarSonda(false, captura.finalidade);
@@ -283,6 +284,14 @@ export class DiagnosticoCapturaService {
   async interromper(motivo: string): Promise<void> {
     if (!this.capturaAtiva) return;
     await this.finalizarInternamente(this.capturaAtiva, 'interrompido', motivo, false);
+  }
+
+  obterCapturaGdl(janelaId: number): { capturaId: string; janelaId: number } | null {
+    const captura = this.capturaAtiva;
+    if (!captura || captura.estado !== 'coletando' || captura.janelaId !== janelaId
+      || captura.entrada.finalidade !== 'problema' || !captura.entrada.capturarConsultasGdl
+      || Date.now() >= Date.parse(captura.finalizaEm)) return null;
+    return { capturaId: captura.capturaId, janelaId };
   }
 
   finalidadeAtiva(): FinalidadeCaptura | null {

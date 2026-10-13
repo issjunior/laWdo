@@ -1,3 +1,4 @@
+import { identificarNaturezaExame } from '@shared/gdl/natureza-exame'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal'
@@ -70,6 +71,9 @@ const ipcApiOriginal = window.ipcAPI
 const obterConfiguracao = vi.fn()
 const testarConexao = vi.fn()
 const consultarRep = vi.fn()
+const identificarRep = vi.fn()
+const completarConsultaRep = vi.fn()
+const copiarEmailSuporte = vi.fn()
 
 beforeAll(() => {
   HTMLElement.prototype.hasPointerCapture = () => false
@@ -91,13 +95,20 @@ describe('GdlConsultaModal', () => {
         autenticado: true,
       },
     })
+    identificarRep.mockResolvedValue({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame('B602 - EXAME BALÍSTICO'),
+      tiposLocais: [{ id: 'tipo-b602', codigo: 'B-602', nome: 'Balística' }],
+      avisos: [],
+    } })
     consultarRep.mockResolvedValue({ success: true, data: resultadoConsulta })
+    copiarEmailSuporte.mockResolvedValue({ success: true, data: { email: 'izaias.junior@policiacientifica.pr.gov.br' } })
 
     Object.defineProperty(window, 'ipcAPI', {
       value: {
         ...ipcApiOriginal,
         configuracao: { obter: obterConfiguracao },
-        gdl: { testarConexao, consultarRep },
+        gdl: { testarConexao, consultarRep, identificarRep, completarConsultaRep, copiarEmailSuporte, converterConsultaRep: consultarRep },
       },
       writable: true,
     })
@@ -109,7 +120,9 @@ describe('GdlConsultaModal', () => {
 
   async function buscarRep() {
     fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
     expect(await screen.findAllByText('190-2026')).not.toHaveLength(0)
   }
 
@@ -123,6 +136,7 @@ describe('GdlConsultaModal', () => {
         onAplicar={onAplicar}
         temDadosExistentes={false}
         pecasB602={[]}
+        onDefinirTipo={vi.fn()}
         onConfigurarCredenciais={vi.fn()}
       />,
     )
@@ -180,6 +194,7 @@ describe('GdlConsultaModal', () => {
         onAplicar={onAplicar}
         temDadosExistentes
         pecasB602={[pecaUm, pecaAusente]}
+        onDefinirTipo={vi.fn()}
         onConfigurarCredenciais={vi.fn()}
       />,
     )
@@ -240,6 +255,7 @@ describe('GdlConsultaModal', () => {
         onAplicar={onAplicar}
         temDadosExistentes={false}
         pecasB602={[]}
+        onDefinirTipo={vi.fn()}
         onConfigurarCredenciais={vi.fn()}
       />,
     )
@@ -274,6 +290,7 @@ describe('GdlConsultaModal', () => {
         onAplicar={onAplicar}
         temDadosExistentes={false}
         pecasB602={[]}
+        onDefinirTipo={vi.fn()}
         onConfigurarCredenciais={vi.fn()}
       />,
     )
@@ -305,6 +322,7 @@ describe('GdlConsultaModal', () => {
         onAplicar={vi.fn()}
         temDadosExistentes={false}
         pecasB602={[]}
+        onDefinirTipo={vi.fn()}
         onConfigurarCredenciais={vi.fn()}
       />,
     )
@@ -326,6 +344,7 @@ describe('GdlConsultaModal', () => {
         onAplicar={vi.fn()}
         temDadosExistentes={false}
         pecasB602={[]}
+        onDefinirTipo={vi.fn()}
         onConfigurarCredenciais={vi.fn()}
       />,
     )
@@ -337,29 +356,80 @@ describe('GdlConsultaModal', () => {
     expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled()
   })
 
-  it('oferece o e-mail de suporte quando a natureza ainda não possui formulário', async () => {
-    consultarRep.mockResolvedValueOnce({
-      success: false,
-      error: 'O formulário para a natureza de exame B-612 - EXAME DE CONFRONTO BALÍSTICO ainda está em desenvolvimento no laWdo. Os dados não foram importados.',
-    })
-    render(
-      <GdlConsultaModal
-        open
-        onOpenChange={vi.fn()}
-        onAplicar={vi.fn()}
-        temDadosExistentes={false}
-        pecasB602={[]}
-        onConfigurarCredenciais={vi.fn()}
-      />,
-    )
-
-    await waitFor(() => expect(testarConexao).toHaveBeenCalledWith('homologacao'))
-    fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } })
+  it('permite usar o tipo local sem importar quando não há adaptador', async () => {
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame('B612 - EXAME DE CONFRONTO BALÍSTICO'),
+      tiposLocais: [{ id: 'tipo-b612', codigo: 'B-612', nome: 'Confronto' }], avisos: [],
+    } })
+    consultarRep.mockResolvedValueOnce({ success: false, error: 'O exame B-612 não possui adaptador de importação GDL.' })
+    const definirTipo = vi.fn()
+    const aplicar = vi.fn()
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={aplicar} temDadosExistentes={false}
+      pecasB602={[]} onDefinirTipo={definirTipo} onConfigurarCredenciais={vi.fn()} />)
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-
-    expect(await screen.findByText('B-612 - EXAME DE CONFRONTO BALÍSTICO')).toHaveClass('font-semibold')
-    expect(screen.getByRole('button', { name: 'Dúvidas/Sugestões' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Usar tipo e preencher localmente' }))
+    expect(definirTipo).toHaveBeenCalledWith('tipo-b612', '190', '2026')
+    expect(aplicar).not.toHaveBeenCalled()
+    expect(identificarRep).toHaveBeenCalledTimes(1)
   })
+
+  it('sugere B601 e permite trocar para I806 sem repetir a consulta', async () => {
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame('EXAME DE CONSTATAÇÃO'),
+      tiposLocais: [
+        { id: 'tipo-b601', codigo: 'B-601', nome: 'Constatação balística' },
+        { id: 'tipo-i806', codigo: 'I806', nome: 'Constatação veicular' },
+      ], avisos: [],
+    } });
+    consultarRep.mockResolvedValueOnce({ success: false, error: 'O exame I-806 não possui adaptador de importação GDL.' });
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={vi.fn()} temDadosExistentes={false}
+      pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    const tipo = await screen.findByLabelText('Tipo de exame local');
+    expect(tipo).toHaveTextContent('B-601 - Constatação balística');
+    fireEvent.click(tipo);
+    fireEvent.click(await screen.findByRole('option', { name: 'I806 - Constatação veicular' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar tipo e revisar dados' }));
+    await waitFor(() => expect(consultarRep).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', 'tipo-i806'));
+    expect(identificarRep).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserva a escolha local existente quando a API só fornece uma descrição ambígua', async () => {
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame('EXAME DE CONSTATAÇÃO'),
+      tiposLocais: [{ id: 'tipo-b601', codigo: 'B601', nome: 'Balística' }, { id: 'tipo-i806', codigo: 'I806', nome: 'Veicular' }], avisos: [],
+    } });
+    render(<GdlConsultaModal open tipoExameAtualId="tipo-i806" onOpenChange={vi.fn()} onAplicar={vi.fn()}
+      temDadosExistentes pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    expect(await screen.findByLabelText('Tipo de exame local')).toHaveTextContent('I806 - Veicular');
+    expect(consultarRep).not.toHaveBeenCalled();
+  });
+
+  it('não habilita a conversão quando o código explícito não está cadastrado localmente', async () => {
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame('I806 - EXAME DE CONSTATAÇÃO'),
+      tiposLocais: [{ id: 'tipo-b601', codigo: 'B601', nome: 'Balística' }], avisos: [],
+    } });
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={vi.fn()} temDadosExistentes={false}
+      pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    expect(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' })).toBeDisabled();
+    expect(consultarRep).not.toHaveBeenCalled();
+  });
 
   it('reserva o aviso de Funcionamento para a confirmação após preencher o formulário', async () => {
     consultarRep.mockResolvedValueOnce({
@@ -380,6 +450,7 @@ describe('GdlConsultaModal', () => {
         onAplicar={vi.fn()}
         temDadosExistentes={false}
         pecasB602={[]}
+        onDefinirTipo={vi.fn()}
         onConfigurarCredenciais={vi.fn()}
       />,
     )
@@ -389,4 +460,53 @@ describe('GdlConsultaModal', () => {
 
     expect(screen.queryByText('O campo Funcionamento foi definido automaticamente como "NÃO TESTADO" para as peças importadas nas quais essa informação não foi retornada pelo GDL.')).not.toBeInTheDocument()
   })
+  it('abre os detalhes automaticamente e avisa sobre o status sem botões de decisão', async () => {
+    const dados = { consultaId: '11111111-1111-4111-8111-111111111111', identificacao: identificarNaturezaExame('B602 - EXAME BALÍSTICO'),
+      tiposLocais: [{ id: 'tipo-b602', codigo: 'B-602', nome: 'Balística' }], avisos: [] };
+    identificarRep.mockResolvedValue({ success: true, data: { ...dados, detalhes: { estado: 'aguardando_confirmacao', statusAtual: 'ABERTA E DISTRIBUÍDA', motivoConfirmacao: 'Abrir os detalhes pode alterar para Laudo em Execução.' } } });
+    completarConsultaRep.mockResolvedValue({ success: true, data: { ...dados, detalhes: { estado: 'confirmados', statusAtual: 'ABERTA E DISTRIBUÍDA', origemNatureza: 'detalhes' } } });
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={vi.fn()} temDadosExistentes={false} pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    expect(screen.getByText('Status da REP no GDL')).toBeInTheDocument();
+    expect(screen.getByText('Laudo em Execução')).toHaveClass('bg-amber-100', 'text-amber-800');
+    expect(completarConsultaRep).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    await waitFor(() => expect(completarConsultaRep).toHaveBeenCalledWith(dados.consultaId, true));
+    expect(await screen.findByText('Natureza confirmada na página da REP.')).toBeInTheDocument();
+    expect(screen.queryByText('Status da REP no GDL')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continuar e abrir detalhes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Usar somente dados da API' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirmar tipo e revisar dados' })).toBeEnabled();
+    expect(completarConsultaRep).toHaveBeenCalledTimes(1);
+  });
+  it('avisa sobre B601 sem cadastro local e copia o e-mail sem tentar converter', async () => {
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111', identificacao: identificarNaturezaExame('B601 - EXAME DE CONSTATAÇÃO'),
+      tiposLocais: [], avisos: [], codigosImportacaoDisponiveis: ['B-602'],
+    } });
+      render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={vi.fn()} temDadosExistentes={false} pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+      fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } });
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+      fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+      expect(await screen.findByText('Exame ainda em desenvolvimento')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Dúvidas/Sugestões' }));
+      await waitFor(() => expect(copiarEmailSuporte).toHaveBeenCalledWith());
+      expect(screen.getByRole('button', { name: 'Confirmar tipo e revisar dados' })).toBeDisabled();
+      expect(consultarRep).not.toHaveBeenCalled();
+  });
+
+  it('oferece limpeza de campo vazio confirmado somente por escolha explícita', async () => {
+    consultarRep.mockResolvedValue({ success: true, data: { ...resultadoConsulta, camposVaziosConfirmados: ['observacoes'], camposGerais: { ...resultadoConsulta.camposGerais, observacoes: '' } } });
+    const aplicar = vi.fn();
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={aplicar} temDadosExistentes={false} pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    await buscarRep();
+    const limpeza = screen.getByRole('checkbox', { name: /Limpar quesito/ });
+    expect(limpeza).not.toBeChecked();
+    fireEvent.click(limpeza);
+    fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }));
+    await waitFor(() => expect(aplicar).toHaveBeenCalled());
+    expect(aplicar.mock.calls[0][0].limpezasSelecionadas).toEqual(['observacoes']);
+  });
+
 })

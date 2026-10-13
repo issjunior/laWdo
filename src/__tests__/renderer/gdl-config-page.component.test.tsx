@@ -81,19 +81,15 @@ describe('GdlConfigPage', () => {
     expect(screen.getByText('Ambiente selecionado: Produção')).toBeInTheDocument()
   })
 
-  it('exige confirmação para ativar a listagem e desativa imediatamente', async () => {
+  it('ativa e desativa a listagem sem confirmação de alteração de status', async () => {
     render(<GdlConfigPage />)
     const ativar = await screen.findByRole('button', { name: 'Ativar listagem' })
     await waitFor(() => expect(ativar).toBeEnabled())
     fireEvent.click(ativar)
-    expect(screen.getByText(/pode marcá-las como “Laudo em Execução”/)).toBeInTheDocument()
     const definir = window.ipcAPI.gdl.definirPreferenciaListagem as ReturnType<typeof vi.fn>
-    expect(definir).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
-    expect(definir).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Ativar listagem' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar ativação' }))
     await waitFor(() => expect(definir).toHaveBeenCalledWith(true))
+    expect(screen.queryByText(/pode marcá-las/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: 'Desativar listagem' }))
     await waitFor(() => expect(definir).toHaveBeenCalledWith(false))
   })

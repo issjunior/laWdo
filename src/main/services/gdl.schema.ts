@@ -125,10 +125,12 @@ const gdlRepInvestigacaoSchema = z.object({
   naturezaExame: textoOpcional,
   numeroRep: textoOpcional,
   numeroCaso: textoFlexivel,
+  statusRep: textoOpcional,
 }).catchall(z.unknown())
 
 const gdlListaRepsInvestigacaoSchema = z.object({
   dadosREPs: z.array(gdlRepInvestigacaoSchema).default([]),
+  quantRegistros: z.number().int().nonnegative().optional(),
 }).catchall(z.unknown())
 
 export type GdlPecaValidada = z.output<typeof gdlPecaSchema>

@@ -1,3 +1,6 @@
+import { tipoExameService } from './tipo-exame.service.js'
+import { normalizarCodigoExame } from '../../shared/gdl/natureza-exame.js'
+import { templateService } from './template.service.js'
 import { randomUUID } from 'crypto'
 import { withTransaction, executeNonQuery } from '../database/sqlite.js'
 import { converterRepGdl } from './gdl-adaptadores.service.js'
@@ -32,7 +35,7 @@ const DURACAO_OPERACAO_MS = 10 * 60 * 1000
 
 const CAMPOS_REP = new Set([
   'tipo_solicitacao', 'numero_documento', 'data_documento', 'observacoes',
-  'autoridade_solicitante', 'data_requisicao',
+  'autoridade_solicitante', 'data_requisicao', 'tipo_exame_id',
 ])
 
 function extrairNumeroEAno(numero: string): { numero: string, ano: string } | null {
@@ -79,7 +82,7 @@ function mapaCamposB602(b602: Record<string, unknown>): Record<string, string> {
 
 function rotuloCampo(campo: string): string {
   const rotulos: Record<string, string> = {
-    tipo_solicitacao: 'Tipo de solicitação', numero_documento: 'Número do documento',
+    tipo_exame_id: 'Tipo de exame', tipo_solicitacao: 'Tipo de solicitação', numero_documento: 'Número do documento',
     data_documento: 'Data do documento', observacoes: 'Quesito/observações',
     autoridade_solicitante: 'Autoridade solicitante', data_requisicao: 'Data da requisição',
     b602_local_cidade: 'Cidade do local', b602_numero_bo: 'Boletim de ocorrência',
@@ -240,25 +243,32 @@ function aplicarCamposB602(b602Atual: Record<string, unknown>, importacao: Resul
 }
 
 class AtualizacaoRepGdlService {
-  async preparar(repId: string): Promise<PreviaAtualizacaoRepGdl> {
+  async preparar(repId: string, consultaExistente?: gdlService.GdlConsultaResultado, camposVaziosConfirmados: Array<'observacoes' | 'data_requisicao'> = []): Promise<PreviaAtualizacaoRepGdl> {
     const rep = await repService.findById(repId)
     if (!rep) throw new Error('REP não encontrada.')
     const identificacao = extrairNumeroEAno(rep.numero)
     if (!identificacao) throw new Error('O número da REP deve estar no formato número/ano para consultar o GDL.')
-    const consulta = await gdlService.consultarRep(identificacao.numero, identificacao.ano)
+    const consulta = consultaExistente ?? await gdlService.consultarRep(identificacao.numero, identificacao.ano)
     if (!consulta.sucesso || !consulta.dados) throw new Error(consulta.erro || 'Não foi possível consultar a REP no GDL.')
     const codigo = gdlService.extrairCodigoNaturezaExame(consulta.naturezaExame?.trim() || '')
     if (codigo !== 'B-602') throw new Error(`O exame ${consulta.naturezaExame || 'retornado'} ainda não possui adaptador de atualização.`)
     const importacao = converterRepGdl(codigo, consulta.dados, { origemInicial: 'gdl', ultimaConsulta: { ambiente: consulta.ambiente ?? 'producao', numeroRep: identificacao.numero, anoRep: identificacao.ano, consultadoEm: new Date().toISOString() } })
+    importacao.camposVaziosConfirmados = camposVaziosConfirmados;
+    for (const campo of camposVaziosConfirmados) importacao.camposGerais[campo] = '';
+    if (consultaExistente) {
+      const tipo = (await tipoExameService.findAllOrdered()).find(item => normalizarCodigoExame(item.codigo) === normalizarCodigoExame(codigo));
+      if (!tipo) throw new Error('Cadastre ou ative o tipo de exame confirmado no GDL.');
+      importacao.camposGerais.tipo_exame_id = tipo.id;
+    }
     const camposEspecificos = parseCamposEspecificos(rep.campos_especificos)
     const b602 = obterB602(camposEspecificos)
     const locaisB602 = mapaCamposB602(b602)
     const diferencas: DiferencaAtualizacaoRepGdl[] = []
     for (const [campo, valor] of Object.entries(importacao.camposGerais)) {
-      if (!valor.trim() || campo === 'numero') continue
+      if ((!valor.trim() && !camposVaziosConfirmados.some(item => item === campo)) || campo === 'numero') continue
       const local = campo.startsWith('b602_') ? (locaisB602[campo] ?? '') : valorTexto(rep[campo as keyof REPRow])
       if (local === valor) continue
-      diferencas.push({ id: `campo:${campo}`, categoria: 'campo', grupo: campo.startsWith('b602_') ? 'Dados B-602' : 'Dados da REP', rotulo: rotuloCampo(campo), valorLocal: local || 'Não preenchido', valorGdl: valor, selecionadaPorPadrao: true })
+      diferencas.push({ id: `campo:${campo}`, categoria: 'campo', grupo: campo.startsWith('b602_') ? 'Dados B-602' : 'Dados da REP', rotulo: rotuloCampo(campo), valorLocal: local || 'Não preenchido', valorGdl: valor || 'Vazio confirmado no GDL', selecionadaPorPadrao: Boolean(valor.trim()) && campo !== 'tipo_exame_id' })
     }
     const pecasAtuais = Array.isArray(b602.pecas) ? b602.pecas as PecaB602[] : []
     diferencas.push(...compararPecas(pecasAtuais, importacao.camposEspecificos.pecas))
@@ -278,13 +288,18 @@ class AtualizacaoRepGdlService {
     const selecionados = new Set(entrada.diferencasSelecionadas)
     const idsValidos = new Set(operacao.diferencas.map(diferenca => diferenca.id))
     if ([...selecionados].some(id => !idsValidos.has(id))) throw new Error('A seleção de diferenças é inválida.')
+    const novoTipo = operacao.importacao.camposGerais.tipo_exame_id;
+    if (laudo && novoTipo && novoTipo !== rep.tipo_exame_id && selecionados.has('campo:tipo_exame_id')) {
+      const template = await templateService.findById(laudo.template_id);
+      if (template?.tipo_exame_id && template.tipo_exame_id !== novoTipo) throw new Error('Selecione um template compatível com o novo tipo no laudo antes de aplicar a troca de tipo.');
+    }
     const camposEspecificos = parseCamposEspecificos(rep.campos_especificos)
     const b602Atual = obterB602(camposEspecificos)
     const b602 = aplicarCamposB602(b602Atual, operacao.importacao, selecionados)
     const novoCamposEspecificos = { ...camposEspecificos, b602, integracaoGdl: operacao.importacao.metadadosIntegracaoGdl }
     const atualizacoes: Array<[string, unknown]> = []
     for (const [campo, valor] of Object.entries(operacao.importacao.camposGerais)) {
-      if (CAMPOS_REP.has(campo) && selecionados.has(`campo:${campo}`) && valor.trim()) atualizacoes.push([campo, valor])
+      if (CAMPOS_REP.has(campo) && selecionados.has(`campo:${campo}`) && (valor.trim() || operacao.importacao.camposVaziosConfirmados?.some(item => item === campo))) atualizacoes.push([campo, valor])
     }
     atualizacoes.push(['campos_especificos', JSON.stringify(novoCamposEspecificos)])
     await withTransaction(async () => {

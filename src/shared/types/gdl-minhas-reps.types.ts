@@ -9,6 +9,10 @@ export interface MinhaRepGdl {
   status: StatusMinhaRepGdl;
   dataDesignacao: string | null;
   quantidadeFotos: number | null;
+  naturezaConfirmada?: boolean;
+  naturezaDivergente?: boolean;
+  naturezaConsultadaEm?: string;
+  statusNecessitaAtualizacao?: boolean;
 }
 
 export interface PaginaMinhasRepsGdl {
@@ -17,11 +21,6 @@ export interface PaginaMinhasRepsGdl {
   paginaAtual: number;
   temAnterior: boolean;
   temProxima: boolean;
-}
-
-export interface NaturezaMinhaRepGdl {
-  idGdl: number;
-  naturezaExameComCodigo: string | null;
 }
 
 export interface SnapshotMinhasRepsGdl {

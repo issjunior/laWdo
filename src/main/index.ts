@@ -1,3 +1,4 @@
+import { configurarObservadorGdl } from './services/gdl-diagnostico.service.js';
 import { app, BrowserWindow, dialog, shell, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -185,6 +186,19 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     alterarSonda: (ativa, finalidade) => {
       const janela = obterJanelaDiagnostico();
       janela?.webContents.send('diagnostico:alterar-captura', { ativa, finalidade });
+    },
+  });
+  configurarObservadorGdl({
+    obterCaptura: remetenteId => {
+      const janela = BrowserWindow.getAllWindows().find(item => item.webContents.id === remetenteId);
+      return janela ? capturaDiagnostico?.obterCapturaGdl(janela.id) ?? null : null;
+    },
+    registrar: async (contexto, dados) => {
+      const atual = capturaDiagnostico?.obterCapturaGdl(contexto.janelaId);
+      if (atual?.capturaId !== contexto.capturaId) return;
+      await sessao.servicoEventos?.registrar({ origem: 'main', categoria: 'ipc', nivel: 'info',
+        janelaId: contexto.janelaId, correlacaoId: contexto.correlacaoId,
+        dados: { evento: 'consulta_gdl', capturaId: contexto.capturaId, numeroRep: contexto.numero, anoRep: contexto.ano, ...dados } });
     },
   });
   const pipe = new DiagnosticoPipeService(

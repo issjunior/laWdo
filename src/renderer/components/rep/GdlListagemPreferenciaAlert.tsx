@@ -11,7 +11,7 @@ interface GdlListagemPreferenciaAlertProps {
 
 export function GdlListagemPreferenciaAlert({ habilitada, cacheVisivel, tentativaBloqueada, onAbrirConfiguracao }: GdlListagemPreferenciaAlertProps) {
   if (habilitada) {
-    return <p className="text-xs text-amber-700 dark:text-amber-300">A listagem abre detalhes das REPs e pode marcá-las como “Laudo em Execução” no GDL.</p>;
+    return <p className="text-xs text-muted-foreground">Os códigos sugeridos são identificados pelo catálogo local. Confirme o tipo de exame ao selecionar uma REP.</p>;
   }
 
   return (

@@ -16,6 +16,10 @@ const adaptadoresPorExame = new Map<string, AdaptadorImportacaoGdl>([
   ['B-602', converterRepB602],
 ])
 
+export function listarCodigosImportacaoGdl(): string[] {
+  return [...adaptadoresPorExame.keys()];
+}
+
 export function converterRepGdl(
   codigoExame: string,
   rep: GdlRepValidada,
