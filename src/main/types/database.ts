@@ -120,6 +120,8 @@ export interface SecaoTemplateRow extends DatabaseRow {
   condicao?: string | null
   repetir_para?: string | null
   repetir_titulo?: string | null
+  ocultar_titulo?: number
+  contar_na_numeracao?: number
   chave_integrada?: string | null
   created_at: string
   updated_at: string

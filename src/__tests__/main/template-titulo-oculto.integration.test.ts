@@ -1,0 +1,131 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import AdmZip from 'adm-zip';
+import { app } from 'electron';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { SecaoTemplateRow } from '../../main/types/database';
+
+describe('persistência da ocultação de títulos', () => {
+  let diretorio: string;
+  let banco: typeof import('../../main/database/index');
+  let sqlite: typeof import('../../main/database/sqlite');
+  let servico: typeof import('../../main/services/template.service')['templateService'];
+  let pacote: typeof import('../../main/services/template-pacote.service');
+  let templateId: string;
+
+  beforeAll(async () => {
+    // O adm-zip precisa reconhecer Buffer como Uint8Array do Node, fora do realm do jsdom.
+    vi.stubGlobal('Uint8Array', Object.getPrototypeOf(Buffer.prototype).constructor);
+    diretorio = await fs.mkdtemp(path.join(os.tmpdir(), 'lawdo-titulo-oculto-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    vi.resetModules();
+    banco = await import('../../main/database/index');
+    sqlite = await import('../../main/database/sqlite');
+    await banco.setupDatabase();
+    servico = (await import('../../main/services/template.service')).templateService;
+    pacote = await import('../../main/services/template-pacote.service');
+    await sqlite.executeNonQuery("INSERT INTO tipos_exame (id, codigo, nome) VALUES ('tipo-titulo', 'TESTE-TITULO', 'Exame de teste')");
+    const template = await servico.salvarCompleto({
+      nome: 'Template com título oculto', tipo_exame_id: 'tipo-titulo',
+      secoes: [
+        { chave_local: 'pai', nome: 'Introdução', ocultar_titulo: true, contar_na_numeracao: false, conteudo: '<p>Texto inicial</p>' },
+        { chave_local: 'filho', parent_id: 'pai', nome: 'Subseção', conteudo: '<p>Texto filho</p>' },
+      ],
+    });
+    templateId = template.id;
+  });
+
+  afterAll(async () => {
+    await sqlite?.closeDatabase();
+    if (diretorio) await fs.rm(diretorio, { recursive: true, force: true });
+    vi.unstubAllGlobals();
+  });
+
+  function conferir(secoes: SecaoTemplateRow[]) {
+    expect(secoes.map(secao => secao.ocultar_titulo)).toEqual([1, 0]);
+    expect(secoes.map(secao => secao.contar_na_numeracao)).toEqual([0, 1]);
+    expect(secoes[1].parent_id).toBe(secoes[0].id);
+    expect(secoes[0].conteudo).toBe('<p>Texto inicial</p>');
+  }
+
+  it('persiste, atualiza e duplica a escolha independentemente da hierarquia', async () => {
+    const secoes = await servico.findSecoesByTemplate(templateId);
+    conferir(secoes);
+    const copia = await servico.clonar(templateId);
+    conferir(await servico.findSecoesByTemplate(copia.id));
+    await servico.salvarCompleto({
+      id: copia.id, nome: copia.nome, tipo_exame_id: 'tipo-titulo',
+      secoes: (await servico.findSecoesByTemplate(copia.id)).map(secao => ({
+        id: secao.id, chave_local: secao.id, nome: secao.nome,
+        parent_id: secao.parent_id, conteudo: secao.conteudo, ocultar_titulo: false, contar_na_numeracao: secao.contar_na_numeracao !== 0,
+      })),
+    });
+    expect((await servico.findSecoesByTemplate(copia.id)).map(secao => secao.ocultar_titulo)).toEqual([0, 0]);
+    conferir(await servico.findSecoesByTemplate(templateId));
+  });
+
+  it('exporta e importa o pacote mantendo preferência, conteúdo e relações', async () => {
+    const caminho = path.join(diretorio, 'template.zip');
+    expect(await pacote.exportarPacoteTemplate(templateId, caminho)).toEqual({ success: true });
+    const conferido = new AdmZip(caminho);
+    expect(() => JSON.parse(conferido.readAsText('template.json'))).not.toThrow();
+    expect(() => JSON.parse(conferido.readAsText('manifest.json'))).not.toThrow();
+    expect((await pacote.lerPreviaPacoteTemplate(caminho)).secoes.map(secao => secao.ocultar_titulo)).toEqual([true, false]);
+    expect((await pacote.lerPreviaPacoteTemplate(caminho)).secoes.map(secao => secao.contar_na_numeracao)).toEqual([false, true]);
+    const resultado = await pacote.importarPacoteTemplate(caminho, false);
+    expect(resultado.success).toBe(true);
+    const importados = await sqlite.executeQuery<{ id: string }>("SELECT id FROM templates WHERE nome = ?", [resultado.nome]);
+    conferir(await servico.findSecoesByTemplate(importados[0].id));
+
+    const zip = new AdmZip(caminho);
+    const legado: unknown = JSON.parse(zip.readAsText('template.json'));
+    if (!legado || typeof legado !== 'object' || !('secoes' in legado) || !Array.isArray(legado.secoes)) throw new Error('Pacote de teste inválido');
+    const secoesLegadas: unknown[] = legado.secoes;
+    for (const secao of secoesLegadas) {
+      if (secao && typeof secao === 'object') {
+        if ('ocultar_titulo' in secao) delete secao.ocultar_titulo;
+        if ('contar_na_numeracao' in secao) delete secao.contar_na_numeracao;
+      }
+    }
+    const dados = Buffer.from(JSON.stringify(legado));
+    zip.updateFile('template.json', dados);
+    zip.updateFile('manifest.json', Buffer.from(JSON.stringify({ tipo: 'template', versao: 1, checksum: crypto.createHash('sha256').update(dados).digest('hex') })));
+    const caminhoLegado = path.join(diretorio, 'legado.zip');
+    zip.writeZip(caminhoLegado);
+    expect((await pacote.lerPreviaPacoteTemplate(caminhoLegado)).secoes.map(secao => secao.ocultar_titulo)).toEqual([false, false]);
+    expect((await pacote.lerPreviaPacoteTemplate(caminhoLegado)).secoes.map(secao => secao.contar_na_numeracao)).toEqual([true, true]);
+    expect((await pacote.importarPacoteTemplate(caminhoLegado, false)).success).toBe(true);
+  });
+
+  it('migra da versão 41 sem alterar conteúdo ou ocultar títulos existentes', async () => {
+    await sqlite.executeNonQuery('ALTER TABLE secoes_template DROP COLUMN ocultar_titulo');
+    await sqlite.executeNonQuery('ALTER TABLE secoes_template DROP COLUMN contar_na_numeracao');
+    await sqlite.executeNonQuery('DELETE FROM schema_version');
+    await sqlite.executeNonQuery('INSERT INTO schema_version (version) VALUES (41)');
+    await sqlite.closeDatabase();
+    await banco.setupDatabase();
+    expect(await banco.getSchemaVersion()).toBe(43);
+    const secoes = await servico.findSecoesByTemplate(templateId);
+    expect(secoes.map(secao => secao.ocultar_titulo)).toEqual([0, 0]);
+    expect(secoes.map(secao => secao.contar_na_numeracao)).toEqual([1, 1]);
+    expect(secoes[0].conteudo).toBe('<p>Texto inicial</p>');
+    expect(secoes[1].parent_id).toBe(secoes[0].id);
+  });
+
+  it('migra da versão 42 preservando títulos ocultos e ativando a contagem', async () => {
+    const secoesAnteriores = await servico.findSecoesByTemplate(templateId);
+    await servico.updateSecao(secoesAnteriores[0].id, { ocultar_titulo: 1 });
+    await sqlite.executeNonQuery('ALTER TABLE secoes_template DROP COLUMN contar_na_numeracao');
+    await sqlite.executeNonQuery('DELETE FROM schema_version');
+    await sqlite.executeNonQuery('INSERT INTO schema_version (version) VALUES (42)');
+    await sqlite.closeDatabase();
+    await banco.setupDatabase();
+    expect(await banco.getSchemaVersion()).toBe(43);
+    const secoes = await servico.findSecoesByTemplate(templateId);
+    expect(secoes.map(secao => secao.contar_na_numeracao)).toEqual([1, 1]);
+    expect(secoes[0].ocultar_titulo).toBe(1);
+    expect(secoes[0].conteudo).toBe('<p>Texto inicial</p>');
+  });
+});

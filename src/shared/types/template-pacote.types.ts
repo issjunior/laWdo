@@ -13,6 +13,8 @@ export interface SecaoPacoteTemplate {
   condicao?: string | null;
   repetir_para?: string | null;
   repetir_titulo?: string | null;
+  ocultar_titulo?: boolean;
+  contar_na_numeracao?: boolean;
 }
 
 export interface PacoteTemplate {

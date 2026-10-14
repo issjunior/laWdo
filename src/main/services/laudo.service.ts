@@ -1,3 +1,4 @@
+import { calcularNumeracaoSecoes } from '../../shared/utils/numeracao-secoes.js';
 import { BaseService } from './base.service.js';
 import { LaudoRow } from '../types/database.js';
 import { getLogger } from '../utils/logger.js';
@@ -417,18 +418,14 @@ class LaudoService extends BaseService<LaudoRow> {
       partes.push(preambuloAtual);
     }
 
-    let indiceH2 = 0;
-    let indiceH3 = 0;
+    const blocosReconciliados = blocosBase.map(bloco => {
+      const atual = bloco.secaoId ? mapaAtualPorId.get(bloco.secaoId) : mapaAtualPorNome.get(bloco.nomeNormalizado);
+      return { ...bloco, ocultarTitulo: atual?.ocultarTitulo === true, contarNaNumeracao: atual?.contarNaNumeracao !== false };
+    });
+    const numeracoes = calcularNumeracaoSecoes(blocosReconciliados);
     const chavesBase = new Set<string>();
 
-    for (const blocoBase of blocosBase) {
-      if (blocoBase.nivel === 2) {
-        indiceH2 += 1;
-        indiceH3 = 0;
-      } else {
-        indiceH3 += 1;
-      }
-
+    for (const [indice, blocoBase] of blocosReconciliados.entries()) {
       const blocoAtual = blocoBase.secaoId
         ? mapaAtualPorId.get(blocoBase.secaoId)
         : mapaAtualPorNome.get(blocoBase.nomeNormalizado);
@@ -450,9 +447,10 @@ class LaudoService extends BaseService<LaudoRow> {
         parentId: blocoBase.parentId,
         nivel: blocoBase.nivel,
         tituloBase,
-        indiceH2,
-        indiceH3,
+        numeracao: numeracoes[indice],
         derivadaRep: blocoBase.derivadaRep,
+        ocultarTitulo: blocoBase.ocultarTitulo,
+        contarNaNumeracao: blocoBase.contarNaNumeracao,
         repeatSection: blocoBase.repeatSection,
       }));
 
@@ -509,6 +507,8 @@ class LaudoService extends BaseService<LaudoRow> {
       tituloBase: string;
       nomeNormalizado: string;
       derivadaRep: boolean;
+      ocultarTitulo: boolean;
+      contarNaNumeracao: boolean;
       repeatSection?: string;
     }> = [];
 
@@ -560,6 +560,8 @@ class LaudoService extends BaseService<LaudoRow> {
         tituloBase,
         nomeNormalizado,
         derivadaRep: /data-derivada-rep="true"/i.test(atual.attrs),
+        ocultarTitulo: /data-ocultar-titulo="true"/i.test(atual.attrs),
+        contarNaNumeracao: !/data-contar-na-numeracao="false"/i.test(atual.attrs),
         repeatSection,
       });
     }
@@ -573,24 +575,25 @@ class LaudoService extends BaseService<LaudoRow> {
     parentId?: string | null;
     nivel: 2 | 3;
     tituloBase: string;
-    indiceH2: number;
-    indiceH3: number;
+    numeracao: string;
     derivadaRep?: boolean;
+    ocultarTitulo?: boolean;
+    contarNaNumeracao?: boolean;
     repeatSection?: string;
   }): string {
-    const numero = params.nivel === 2
-      ? `${params.indiceH2}.`
-      : `${params.indiceH2}.${params.indiceH3}`;
+    const tituloVisivel = [params.numeracao, params.tituloBase].filter(Boolean).join(' ');
     const atributos = [
       params.secaoId ? `data-secao-id="${this._escaparHtml(params.secaoId)}"` : '',
       params.parentId ? `data-parent-id="${this._escaparHtml(params.parentId)}"` : '',
       `data-estrutura-nivel="${params.nivel}"`,
       `data-titulo-base="${this._escaparHtml(params.tituloBase)}"`,
+      params.ocultarTitulo ? 'data-ocultar-titulo="true"' : '',
+      params.contarNaNumeracao === false ? 'data-contar-na-numeracao="false"' : '',
       params.derivadaRep ? 'data-derivada-rep="true"' : '',
       params.repeatSection ? `data-repeat-section="${this._escaparHtml(params.repeatSection)}"` : '',
     ].filter(Boolean).join(' ');
 
-    return `<${params.tag}${atributos ? ` ${atributos}` : ''}>${numero} ${this._escaparHtml(params.tituloBase)}</${params.tag}>`;
+    return `<${params.tag}${atributos ? ` ${atributos}` : ''}>${this._escaparHtml(tituloVisivel)}</${params.tag}>`;
   }
 
   private _normalizarTituloBase(titulo: string): string {

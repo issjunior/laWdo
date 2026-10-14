@@ -8,6 +8,35 @@ import {
 import { laudoService } from '../../main/services/laudo.service';
 
 describe('secao-builder.service', () => {
+  it('recompõe a numeração usando as preferências do laudo salvo', () => {
+    const servico = laudoService as unknown as {
+      _reconciliarComBase: (atual: string, base: string, campos: Record<string, unknown>) => string;
+    };
+    const atual = '<h2 data-secao-id="inicio" data-ocultar-titulo="true" data-contar-na-numeracao="false">Introdução</h2><p>Texto editado</p><h3 data-secao-id="sub" data-parent-id="inicio">Subseção</h3><p>Texto filho</p><h2 data-secao-id="fim">1. Conclusão</h2><p>Texto final</p>';
+    const base = atual.replace(' data-contar-na-numeracao="false"', '');
+    const resultado = servico._reconciliarComBase(atual, base, {});
+    const documento = new DOMParser().parseFromString(resultado, 'text/html');
+    expect(Array.from(documento.querySelectorAll('h2, h3')).map(titulo => titulo.textContent)).toEqual(['Introdução', 'Subseção', '1. Conclusão']);
+    expect(resultado).toContain('data-contar-na-numeracao="false"');
+    expect(resultado).toContain('Texto editado');
+    const antigo = servico._reconciliarComBase(base, atual, {});
+    expect(antigo).not.toContain('data-contar-na-numeracao="false"');
+    expect(antigo).toContain('2. Conclusão');
+  });
+
+  it('preserva a visibilidade do laudo salvo quando o template muda', () => {
+    const servico = laudoService as unknown as {
+      _reconciliarComBase: (atual: string, base: string, campos: Record<string, unknown>) => string;
+    };
+    const visivel = '<h2 data-secao-id="inicio" data-titulo-base="Introdução">1. Introdução</h2><p>Texto editado</p>';
+    const oculto = visivel.replace('data-secao-id="inicio"', 'data-secao-id="inicio" data-ocultar-titulo="true"');
+    expect(servico._reconciliarComBase(visivel, oculto, {})).not.toContain('data-ocultar-titulo');
+    expect(servico._reconciliarComBase(oculto, visivel, {})).toContain('data-ocultar-titulo="true"');
+    expect(servico._reconciliarComBase(oculto, visivel, {})).toContain('Texto editado');
+    const derivada = visivel.replace('data-secao-id="inicio"', 'data-secao-id="inicio" data-derivada-rep="true"');
+    expect(servico._reconciliarComBase(oculto, derivada, {})).toContain('data-ocultar-titulo="true"');
+  });
+
   it('numera as subseções de DOS EXAMES conforme as peças canônicas', () => {
     const secoes = [
       { id: 'preambulo', template_id: 'tpl-1', nome: 'PREÂMBULO', ordem: 0, conteudo: '<p>Preâmbulo</p>', created_at: '', updated_at: '' },

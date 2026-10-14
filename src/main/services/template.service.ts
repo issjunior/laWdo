@@ -92,8 +92,8 @@ class TemplateService extends BaseService<TemplateRow> {
       await this.assegurarEditavel(data.template_id);
       const id = randomUUID();
       const sql = `
-        INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, ocultar_titulo, contar_na_numeracao, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
       await executeNonQuery(sql, [
         id,
@@ -105,6 +105,8 @@ class TemplateService extends BaseService<TemplateRow> {
         data.condicao || null,
         data.repetir_para || null,
         data.repetir_titulo || null,
+        data.ocultar_titulo === 1 ? 1 : 0,
+        data.contar_na_numeracao === 0 ? 0 : 1,
       ]);
       const rows = await executeQuery<SecaoTemplateRow>('SELECT * FROM secoes_template WHERE id = ?', [id]);
       return rows[0];
@@ -129,6 +131,8 @@ class TemplateService extends BaseService<TemplateRow> {
       if (data.condicao !== undefined) { sets.push('condicao = ?'); params.push(data.condicao); }
       if (data.repetir_para !== undefined) { sets.push('repetir_para = ?'); params.push(data.repetir_para); }
       if (data.repetir_titulo !== undefined) { sets.push('repetir_titulo = ?'); params.push(data.repetir_titulo); }
+      if (data.ocultar_titulo !== undefined) { sets.push('ocultar_titulo = ?'); params.push(data.ocultar_titulo === 1 ? 1 : 0); }
+      if (data.contar_na_numeracao !== undefined) { sets.push('contar_na_numeracao = ?'); params.push(data.contar_na_numeracao === 0 ? 0 : 1); }
 
       if (sets.length === 0) {
         const rows = await executeQuery<SecaoTemplateRow>('SELECT * FROM secoes_template WHERE id = ?', [id]);
@@ -197,9 +201,9 @@ class TemplateService extends BaseService<TemplateRow> {
       const ids = new Map(secoes.map(secao => [secao.id, randomUUID()]));
       for (const secao of secoes) {
         await executeNonQuery(
-          `INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [ids.get(secao.id), id, secao.nome, secao.ordem, secao.parent_id ? ids.get(secao.parent_id) : null, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null],
+          `INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, ocultar_titulo, contar_na_numeracao, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          [ids.get(secao.id), id, secao.nome, secao.ordem, secao.parent_id ? ids.get(secao.parent_id) : null, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null, secao.ocultar_titulo === 1 ? 1 : 0, secao.contar_na_numeracao === 0 ? 0 : 1],
         );
       }
       const copia = await this.findById(id);
@@ -238,9 +242,9 @@ class TemplateService extends BaseService<TemplateRow> {
         const id = ids.get(secao.chave_local)!;
         const pai = secao.parent_id ? ids.get(secao.parent_id) ?? null : null;
         if (secao.id) {
-          await executeNonQuery(`UPDATE secoes_template SET nome = ?, ordem = ?, parent_id = ?, conteudo = ?, condicao = ?, repetir_para = ?, repetir_titulo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND template_id = ?`, [secao.nome, ordem, pai, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null, id, templateId]);
+          await executeNonQuery(`UPDATE secoes_template SET nome = ?, ordem = ?, parent_id = ?, conteudo = ?, condicao = ?, repetir_para = ?, repetir_titulo = ?, ocultar_titulo = ?, contar_na_numeracao = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND template_id = ?`, [secao.nome, ordem, pai, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null, secao.ocultar_titulo === true ? 1 : 0, secao.contar_na_numeracao === false ? 0 : 1, id, templateId]);
         } else {
-          await executeNonQuery(`INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, [id, templateId, secao.nome, ordem, pai, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null]);
+          await executeNonQuery(`INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, ocultar_titulo, contar_na_numeracao, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, [id, templateId, secao.nome, ordem, pai, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null, secao.ocultar_titulo === true ? 1 : 0, secao.contar_na_numeracao === false ? 0 : 1]);
         }
       }
       const salvo = await this.findById(templateId);

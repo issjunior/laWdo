@@ -7,6 +7,8 @@ export interface SecaoCompletaTemplateInput {
   condicao?: string | null;
   repetir_para?: string | null;
   repetir_titulo?: string | null;
+  ocultar_titulo?: boolean;
+  contar_na_numeracao?: boolean;
 }
 
 export interface SalvarTemplateCompletoInput {
@@ -30,3 +32,10 @@ export interface RespostaSalvarTemplateCompleto {
   error?: string;
   message?: string;
 }
+
+export interface CriarSecaoTemplateInput extends Omit<SecaoCompletaTemplateInput, 'id' | 'chave_local'> {
+  template_id: string;
+  ordem: number;
+}
+
+export type AtualizarSecaoTemplateInput = Partial<Omit<CriarSecaoTemplateInput, 'template_id'>>;
