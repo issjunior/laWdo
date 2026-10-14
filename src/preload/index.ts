@@ -1,4 +1,5 @@
 import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
+import type { SalvarTemplateCompletoInput } from '../shared/types/template.types.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
@@ -20,6 +21,8 @@ import type {
 } from '../shared/types/ia.types.js';
 import type {
   DashboardResponse,
+  ImportarArquivoResponse,
+  SalvarTemplateCompletoResponse,
   UserFilters,
   PaginationOptions,
   UserCreateData,
@@ -124,7 +127,6 @@ interface LogEntry {
 type IpcPayload = unknown;
 type IpcParams = unknown[];
 type IpcResult = unknown;
-type ImportarArquivoResponse = { success: boolean; data?: IpcPayload; error?: string };
 type PacoteTemplateResponse = { success: boolean; data?: IpcPayload; nome?: string; error?: string };
 type BackupResponse = { success: boolean; path?: string; error?: string; canceled?: boolean };
 type TipoBackup = 'completo' | 'configuracao';
@@ -315,7 +317,7 @@ export interface IpcAPI {
     selecionarPacote: () => Promise<PacoteTemplateResponse>;
     importarPacote: (caminho: string, criarTipo: boolean) => Promise<PacoteTemplateResponse>;
     clonar: (templateId: string) => Promise<UserResponse>;
-    salvarCompleto: (data: IpcPayload) => Promise<UserResponse>;
+    salvarCompleto: (dados: SalvarTemplateCompletoInput) => Promise<SalvarTemplateCompletoResponse>;
   };
 
   // Laudos
@@ -1567,12 +1569,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     deleteSecao: (id: string) => invocarComDiagnostico('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => invocarComDiagnostico('template:reordenarSecoes', templateId, idsOrdenados),
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string, titulo?: string) => invocarComDiagnostico('template:previewPDF', { html, margins, headerTemplate, titulo }),
-    importarArquivo: () => invocarComDiagnostico('template:importarArquivo'),
+    importarArquivo: (): Promise<ImportarArquivoResponse> => invocarComDiagnostico('template:importarArquivo'),
     exportarPacote: (templateId: string) => invocarComDiagnostico('template:exportarPacote', templateId),
     selecionarPacote: () => invocarComDiagnostico('template:selecionarPacote'),
     importarPacote: (caminho: string, criarTipo: boolean) => invocarComDiagnostico('template:importarPacote', caminho, criarTipo),
     clonar: (templateId: string) => invocarComDiagnostico('template:clonar', templateId),
-    salvarCompleto: (data: IpcPayload) => invocarComDiagnostico('template:salvarCompleto', data),
+    salvarCompleto: (dados: SalvarTemplateCompletoInput): Promise<SalvarTemplateCompletoResponse> => invocarComDiagnostico('template:salvarCompleto', dados),
   },
 
   laudo: {

@@ -2,11 +2,13 @@ import { ipcMain, BrowserWindow, dialog } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { auditDelete, auditExport } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
-import { templateService, type SalvarTemplateCompletoInput } from '../../services/template.service.js';
+import { templateService } from '../../services/template.service.js';
+import type { SalvarTemplateCompletoInput, SecaoCompletaTemplateInput, RespostaSalvarTemplateCompleto } from '../../../shared/types/template.types.js';
 import { exportarPacoteTemplate, importarPacoteTemplate, lerPreviaPacoteTemplate } from '../../services/template-pacote.service.js';
 import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincronizar-templates-integrados.js';
 import { ErroGeracaoPdf, gerarPdfPreparado } from '../../services/pdf-prontidao.service.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from '../../services/pdf-tabelas.js';
+import { sanitizarHtmlImportacao } from '../../services/importacao/sanitizacao.js';
 
 const CM_TO_INCHES = 1 / 2.54;
 const MARGENS_PADRAO_PDF = { top: 2.5, right: 2, bottom: 2.5, left: 3 };
@@ -20,6 +22,29 @@ const nomeArquivoSeguro = (nome: string): string =>
 
 const escaparTextoHtml = (texto: string): string =>
   texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const ehRegistro = (valor: unknown): valor is Record<string, unknown> =>
+  valor !== null && typeof valor === 'object' && !Array.isArray(valor);
+
+const ehSecaoCompleta = (valor: unknown): valor is SecaoCompletaTemplateInput => {
+  if (!ehRegistro(valor)) return false;
+  return typeof valor.chave_local === 'string' && Boolean(valor.chave_local.trim())
+    && typeof valor.nome === 'string' && Boolean(valor.nome.trim())
+    && (valor.id === undefined || (typeof valor.id === 'string' && Boolean(valor.id.trim())))
+    && ['parent_id', 'conteudo', 'condicao', 'repetir_para', 'repetir_titulo'].every(campo =>
+      valor[campo] === undefined || valor[campo] === null || typeof valor[campo] === 'string');
+};
+
+const ehTemplateCompleto = (valor: unknown): valor is SalvarTemplateCompletoInput => {
+  if (!ehRegistro(valor)) return false;
+  return typeof valor.nome === 'string' && Boolean(valor.nome.trim())
+    && typeof valor.tipo_exame_id === 'string' && Boolean(valor.tipo_exame_id.trim())
+    && (valor.id === undefined || (typeof valor.id === 'string' && Boolean(valor.id.trim())))
+    && (valor.descricao === undefined || valor.descricao === null || typeof valor.descricao === 'string')
+    && (valor.importado_de_documento === undefined || typeof valor.importado_de_documento === 'boolean')
+    && (!valor.importado_de_documento || (valor.id === undefined && Array.isArray(valor.secoes) && valor.secoes.every((secao: unknown) => ehRegistro(secao) && secao.id === undefined)))
+    && Array.isArray(valor.secoes) && valor.secoes.length > 0 && valor.secoes.every(ehSecaoCompleta);
+};
 
 export const registerTemplateHandlers = (): void => {
   ipcMain.handle('template:statusIntegrados', async () => ({ success: true, data: obterEstadoTemplatesIntegrados() }));
@@ -81,9 +106,9 @@ export const registerTemplateHandlers = (): void => {
     }
   });
 
-  ipcMain.handle('template:salvarCompleto', async (_event, dados: SalvarTemplateCompletoInput) => {
+  ipcMain.handle('template:salvarCompleto', async (_event, dados: unknown): Promise<RespostaSalvarTemplateCompleto> => {
     try {
-      if (!dados || typeof dados.nome !== 'string' || typeof dados.tipo_exame_id !== 'string' || !Array.isArray(dados.secoes)) {
+      if (!ehTemplateCompleto(dados)) {
         return { success: false, error: 'Dados do template inválidos' };
       }
       const template = await templateService.salvarCompleto({
@@ -93,7 +118,7 @@ export const registerTemplateHandlers = (): void => {
         secoes: dados.secoes.map(secao => ({
           ...secao,
           nome: sanitizeInput(secao.nome.trim()),
-          conteudo: secao.conteudo ?? null,
+          conteudo: dados.importado_de_documento ? sanitizarHtmlImportacao(secao.conteudo ?? '', false) : secao.conteudo ?? null,
           condicao: secao.condicao ?? null,
           repetir_para: secao.repetir_para ?? null,
           repetir_titulo: secao.repetir_titulo ?? null,

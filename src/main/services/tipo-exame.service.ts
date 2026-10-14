@@ -2,6 +2,9 @@ import { BaseService } from './base.service.js'
 import { TipoExameRow } from '../types/database.js'
 import { getLogger } from '../utils/logger.js'
 const log = getLogger('tipo_exame')
+const comparadorTiposExame = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true })
+const compararTiposExame = (primeiro: TipoExameRow, segundo: TipoExameRow): number =>
+  comparadorTiposExame.compare(primeiro.codigo, segundo.codigo) || comparadorTiposExame.compare(primeiro.nome, segundo.nome)
 
 /**
  * Serviço para gerenciamento de tipos de exame
@@ -26,13 +29,13 @@ class TipoExameService extends BaseService<TipoExameRow> {
   }
 
   /**
-   * Buscar todos os tipos de exame ordenados por nome
+   * Buscar todos os tipos de exame ordenados por código e nome
    */
   async findAllOrdered(): Promise<TipoExameRow[]> {
     try {
-      const sql = 'SELECT * FROM tipos_exame WHERE ativo = 1 ORDER BY nome ASC'
+      const sql = 'SELECT * FROM tipos_exame WHERE ativo = 1'
       const rows = await this.executeCustomQuery<TipoExameRow>(sql)
-      return rows
+      return rows.sort(compararTiposExame)
     } catch (error) {
       log.error('Erro ao buscar tipos de exame ordenados', error)
       throw error
@@ -44,9 +47,9 @@ class TipoExameService extends BaseService<TipoExameRow> {
    */
   async findAllSemFiltroStatus(): Promise<TipoExameRow[]> {
     try {
-      const sql = 'SELECT * FROM tipos_exame ORDER BY nome ASC'
+      const sql = 'SELECT * FROM tipos_exame'
       const rows = await this.executeCustomQuery<TipoExameRow>(sql)
-      return rows
+      return rows.sort(compararTiposExame)
     } catch (error) {
       log.error('Erro ao buscar tipos de exame sem filtro de status', error)
       throw error

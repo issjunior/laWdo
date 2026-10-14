@@ -3,7 +3,7 @@
  * Fluxo em 2 etapas: upload → revisão de seções com TinyMCE
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -53,12 +53,13 @@ import {
   ClipboardPen,
 } from 'lucide-react';
 import type { PreviaPacoteTemplate } from '@shared/types/template-pacote.types';
+import type { ResultadoImportacaoTemplate, SecaoImportadaTemplate } from '@shared/types/importacao-template.types';
+import { ehResultadoImportacaoTemplate, type AvisoImportacaoTemplate } from '@shared/types/importacao-template.types';
+import { RevisaoImportacaoPanel } from './RevisaoImportacaoPanel';
+import { documentoSecao, localizarSecoes } from './importacao-revisao';
+import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 
-interface SecaoImportada {
-  nome: string;
-  conteudo: string;
-  incluir: boolean;
-}
+type SecaoImportada = SecaoImportadaTemplate;
 
 interface ImportTemplateDialogProps {
   open: boolean;
@@ -72,6 +73,11 @@ interface ImportTemplateDialogProps {
 const getMensagemErro = (erro: unknown, fallback: string): string =>
   erro instanceof Error ? erro.message : fallback;
 
+const normalizarImportacao = (dados: unknown): ResultadoImportacaoTemplate => {
+  if (!ehResultadoImportacaoTemplate(dados)) throw new Error('Resposta de importação inválida');
+  return dados;
+};
+
 // ─── Sortable Section Item ─────────────────────────────────
 
 interface SortableSecaoItemProps {
@@ -79,11 +85,13 @@ interface SortableSecaoItemProps {
   index: number;
   onToggleIncluir: (index: number) => void;
   onUpdateNome: (index: number, nome: string) => void;
-  onUpdateConteudo: (index: number, conteudo: string) => void;
+  onUpdateConteudo: (secaoId: string, conteudo: string) => void;
   onRemove: (index: number) => void;
   onMove: (index: number, direction: 'up' | 'down') => void;
   total: number;
-  editorIdPrefix: string;
+  onDividir: (index: number) => void;
+  onUnir: (index: number) => void;
+  salvando: boolean;
 }
 
 const SortableSecaoItem: React.FC<SortableSecaoItemProps> = ({
@@ -95,7 +103,9 @@ const SortableSecaoItem: React.FC<SortableSecaoItemProps> = ({
   onRemove,
   onMove,
   total,
-  editorIdPrefix,
+  onDividir,
+  onUnir,
+  salvando,
 }) => {
   const {
     attributes,
@@ -104,7 +114,7 @@ const SortableSecaoItem: React.FC<SortableSecaoItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `import-secao-${index}` });
+  } = useSortable({ id: secao.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -130,10 +140,10 @@ const SortableSecaoItem: React.FC<SortableSecaoItemProps> = ({
         <Checkbox
           checked={secao.incluir}
           onCheckedChange={() => onToggleIncluir(index)}
-          id={`incluir-${index}`}
+          id={`incluir-${secao.id}`}
         />
         <label
-          htmlFor={`incluir-${index}`}
+          htmlFor={`incluir-${secao.id}`}
           className="text-sm font-medium cursor-pointer select-none"
         >
           Incluir
@@ -172,10 +182,15 @@ const SortableSecaoItem: React.FC<SortableSecaoItemProps> = ({
           <X size={14} />
         </Button>
       </div>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" onClick={() => onDividir(index)}>Dividir seção</Button>
+        <Button size="sm" variant="outline" disabled={index === total - 1} onClick={() => onUnir(index)}>Unir com a próxima</Button>
+      </div>
       <TinyMceEditor
-        editorId={`${editorIdPrefix}-${index}`}
+        somenteLeitura={salvando}
+        editorId={`import-secao-${secao.id}`}
         value={secao.conteudo}
-        onChange={(html) => onUpdateConteudo(index, html)}
+        onChange={(html) => onUpdateConteudo(secao.id, html)}
         height={200}
         placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
       />
@@ -197,6 +212,11 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
   const [nomeTemplate, setNomeTemplate] = useState('');
   const [tipoExameId, setTipoExameId] = useState('');
   const [secoes, setSecoes] = useState<SecaoImportada[]>([]);
+  const [avisos, setAvisos] = useState<AvisoImportacaoTemplate[]>([]);
+  const [resumo, setResumo] = useState({ tabelas: 0, figuras: 0 });
+  const [alterado, setAlterado] = useState(false);
+  const [acaoDescarte, setAcaoDescarte] = useState<'fechar' | 'voltar' | null>(null);
+  const [divisao, setDivisao] = useState<{ secaoId: string; limite: string; nome: string } | null>(null);
   const [importando, setImportando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [pacote, setPacote] = useState<PreviaPacoteTemplate | null>(null);
@@ -205,6 +225,8 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
   const [tipoExameQCFormData, setTipoExameQCFormData] = useState<CreateTipoExameInput>({ codigo: '', nome: '', descricao: '' });
   const [tipoExameQCError, setTipoExameQCError] = useState<string | null>(null);
   const [tipoExameQCSubmitting, setTipoExameQCSubmitting] = useState(false);
+  const revisaoAtualRef = useRef({ secoes, salvando });
+  revisaoAtualRef.current = { secoes, salvando };
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -213,11 +235,32 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
     })
   );
 
+  useEffect(() => {
+    const existentes = secoes.map(secao => ({ ...secao, incluir: true }));
+    setAvisos(anteriores => {
+      const mantidos = anteriores.filter(item => localizarSecoes(existentes, item).length);
+      return mantidos.length === anteriores.length ? anteriores : mantidos;
+    });
+  }, [secoes]);
+
+  useRegistrarAlteracoesPendentes('importacao-template', {
+    pendente: open && alterado,
+    salvando: open && (salvando || importando),
+    verificar: () => open && alterado,
+    salvar: () => handleSalvar(),
+    erro: () => 'Confira o nome e o tipo de exame e tente novamente.',
+  });
+
   const resetarEstado = useCallback(() => {
     setEtapa('upload');
     setNomeTemplate('');
     setTipoExameId('');
     setSecoes([]);
+    setAvisos([]);
+    setResumo({ tabelas: 0, figuras: 0 });
+    setAlterado(false);
+    setAcaoDescarte(null);
+    setDivisao(null);
     setPacote(null);
     setConfirmarCriacaoTipo(false);
     setTipoExameQCOpen(false);
@@ -227,7 +270,9 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
     setSalvando(false);
   }, []);
 
-  const handleClose = (val: boolean) => {
+  const handleClose = (val: boolean, concluido = false) => {
+    if (!val && (salvando || importando) && !concluido) return;
+    if (!val && alterado && !concluido) { setAcaoDescarte('fechar'); return; }
     if (!val) {
       resetarEstado();
     }
@@ -240,13 +285,16 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
       const result = await window.ipcAPI.template.importarArquivo();
 
       if (!result.success || !result.data) {
-        toast.error(result.error || 'Erro ao importar arquivo');
+        if (!result.cancelado) toast.error(result.error || 'Erro ao importar arquivo');
         return;
       }
 
-      const { nomeArquivo, secoes: secoesImportadas } = result.data;
+      const { nomeArquivo, secoes: secoesImportadas, avisos: novosAvisos, resumo: novoResumo } = normalizarImportacao(result.data);
       setNomeTemplate(nomeArquivo);
       setSecoes(secoesImportadas || []);
+      setAvisos(novosAvisos);
+      setResumo(novoResumo);
+      setAlterado(true);
       setEtapa('revisao');
       toast.success(`${secoesImportadas?.length || 0} seções detectadas`);
     } catch (e: unknown) {
@@ -313,7 +361,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
         return;
       }
       toast.success(`Template "${pacote.template.nome}" importado com sucesso`);
-      handleClose(false);
+      handleClose(false, true);
       onImportSuccess();
     } catch (erro: unknown) {
       toast.error(getMensagemErro(erro, 'Erro ao importar template'));
@@ -323,39 +371,54 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (salvando) return;
     const { active, over } = event;
     if (over && active.id !== over.id) {
       setSecoes((prev) => {
-        const oldIndex = Number(String(active.id).replace('import-secao-', ''));
-        const newIndex = Number(String(over.id).replace('import-secao-', ''));
+        const oldIndex = prev.findIndex(secao => secao.id === active.id);
+        const newIndex = prev.findIndex(secao => secao.id === over.id);
+        if (oldIndex < 0 || newIndex < 0) return prev;
         return arrayMove(prev, oldIndex, newIndex);
       });
     }
   };
 
   const toggleIncluir = (index: number) => {
+    if (salvando) return;
+    setAlterado(true);
     setSecoes((prev) =>
       prev.map((s, i) => (i === index ? { ...s, incluir: !s.incluir } : s))
     );
   };
 
   const updateNome = (index: number, nome: string) => {
+    if (salvando) return;
+    setAlterado(true);
     setSecoes((prev) =>
       prev.map((s, i) => (i === index ? { ...s, nome } : s))
     );
   };
 
-  const updateConteudo = (index: number, conteudo: string) => {
+  const updateConteudo = (secaoId: string, conteudo: string) => {
+    const revisao = revisaoAtualRef.current;
+    if (revisao.salvando) return;
+    const anterior = revisao.secoes.find(secao => secao.id === secaoId);
+    if (!anterior || anterior.conteudo === conteudo) return;
+    setAlterado(true);
     setSecoes((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, conteudo } : s))
+      prev.map(s => (s.id === secaoId ? { ...s, conteudo } : s))
     );
   };
 
   const removeSecao = (index: number) => {
+    if (salvando) return;
+    setAlterado(true);
     setSecoes((prev) => prev.filter((_, i) => i !== index));
   };
 
   const moveSecao = (index: number, direction: 'up' | 'down') => {
+    if (salvando) return;
+    setAlterado(true);
     setSecoes((prev) => {
       const next = [...prev];
       const target = direction === 'up' ? index - 1 : index + 1;
@@ -365,55 +428,87 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
     });
   };
 
-  const handleSalvar = async () => {
+  const unirSecoes = (indice: number) => {
+    if (salvando) return;
+    const primeira = secoes[indice];
+    const segunda = secoes[indice + 1];
+    if (!primeira || !segunda) return;
+    const titulo = documentoSecao('<h2></h2>');
+    titulo.body.firstElementChild!.textContent = segunda.nome;
+    setSecoes(anteriores => anteriores.flatMap((secao, posicao) => posicao === indice
+      ? [{ ...secao, incluir: secao.incluir || segunda.incluir, conteudo: secao.conteudo + titulo.body.innerHTML + segunda.conteudo }]
+      : posicao === indice + 1 ? [] : [secao]));
+    setAvisos(anteriores => anteriores.map(item => item.secaoId === segunda.id ? { ...item, secaoId: primeira.id } : item));
+    setAlterado(true);
+  };
+
+  const dividirSecao = () => {
+    if (!divisao || salvando) return;
+    const indice = secoes.findIndex(secao => secao.id === divisao.secaoId);
+    if (indice < 0 || !divisao.nome.trim()) return;
+    const secao = secoes[indice];
+    const blocos = Array.from(documentoSecao(secao.conteudo).body.children);
+    const limite = Number(divisao.limite);
+    if (!Number.isInteger(limite) || limite < 1 || limite >= blocos.length) return;
+    const novaId = crypto.randomUUID();
+    setSecoes(anteriores => anteriores.flatMap(item => item.id !== secao.id ? [item] : [
+      { ...item, conteudo: blocos.slice(0, limite).map(bloco => bloco.outerHTML).join('') },
+      { id: novaId, nome: divisao.nome.trim(), incluir: item.incluir, conteudo: blocos.slice(limite).map(bloco => bloco.outerHTML).join('') },
+    ]));
+    setAvisos(anteriores => [...anteriores, ...anteriores.filter(item => item.secaoId === secao.id && !item.elementoId && !item.pagina)
+      .map(item => ({ ...item, id: crypto.randomUUID(), secaoId: novaId }))]);
+    setAlterado(true);
+    setDivisao(null);
+  };
+
+  const handleSalvar = async (): Promise<boolean> => {
+    if (salvando || importando) return false;
     if (!nomeTemplate.trim()) {
       toast.error('Nome do template é obrigatório');
-      return;
+      return false;
     }
     if (!tipoExameId) {
       toast.error('Tipo de exame é obrigatório');
-      return;
+      return false;
     }
 
-    const secoesFiltradas = secoes.filter((s) => s.incluir && s.nome.trim());
+    const secoesFiltradas = secoes.filter((s) => s.incluir);
+    if (secoesFiltradas.some(secao => !secao.nome.trim())) {
+      toast.error('Informe o nome de todas as seções incluídas');
+      return false;
+    }
     if (secoesFiltradas.length === 0) {
       toast.error('Selecione pelo menos uma seção com nome');
-      return;
+      return false;
     }
 
     try {
       setSalvando(true);
 
-      // Criar template
-      const createR = await window.ipcAPI.template.create({
+      const resposta = await window.ipcAPI.template.salvarCompleto({
         nome: nomeTemplate.trim(),
         tipo_exame_id: tipoExameId,
         descricao: null,
+        importado_de_documento: true,
+        secoes: secoesFiltradas.map(secao => ({
+          chave_local: secao.id,
+          nome: secao.nome.trim(),
+          conteudo: secao.conteudo,
+        })),
       });
 
-      if (!createR.success || !createR.data) {
-        toast.error(createR.error || 'Erro ao criar template');
-        return;
-      }
-
-      const templateId = createR.data.id;
-
-      // Criar seções
-      for (let i = 0; i < secoesFiltradas.length; i++) {
-        const s = secoesFiltradas[i];
-        await window.ipcAPI.template.createSecao({
-          template_id: templateId,
-          nome: s.nome.trim(),
-          ordem: i,
-          conteudo: s.conteudo,
-        });
+      if (!resposta.success || !resposta.data || typeof resposta.data.id !== 'string' || !resposta.data.id) {
+        toast.error(resposta.error || 'Erro ao salvar template');
+        return false;
       }
 
       toast.success('Template importado com sucesso!');
-      handleClose(false);
+      handleClose(false, true);
       onImportSuccess();
+      return true;
     } catch (e: unknown) {
       toast.error(getMensagemErro(e, 'Erro ao salvar template'));
+      return false;
     } finally {
       setSalvando(false);
     }
@@ -429,7 +524,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
           </DialogTitle>
           <DialogDescription>
             {etapa === 'upload'
-              ? 'Importe um documento PDF/DOCX ou um pacote ZIP de template.'
+              ? 'Importe um documento PDF, DOCX ou ODT, ou um pacote ZIP de template.'
               : etapa === 'pacote' ? 'Confira os dados do pacote antes de criar uma cópia no sistema.' : 'Revise, edite e reordene as seções detectadas antes de salvar.'}
           </DialogDescription>
         </DialogHeader>
@@ -447,13 +542,13 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                 ) : (
                   <Upload size={20} />
                 )}
-                {importando ? 'Processando...' : 'Selecionar Arquivo (PDF ou DOCX)'}
+                {importando ? 'Processando...' : 'Selecionar Arquivo (PDF, DOCX ou ODT)'}
               </Button>
               <Button variant="outline" onClick={handleSelecionarPacote} disabled={importando} className="flex items-center gap-2">
                 <FileText size={18} /> Selecionar Pacote de Template (ZIP)
               </Button>
               <p className="text-sm text-muted-foreground">
-                Limite máximo: 20 MB · Formatos aceitos: PDF, DOCX e ZIP
+                Limite máximo: 20 MB · Formatos aceitos: PDF, DOCX, ODT e ZIP
               </p>
             </div>
           ) : etapa === 'pacote' && pacote ? (
@@ -468,6 +563,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
+              <RevisaoImportacaoPanel secoes={secoes} avisos={avisos} resumo={resumo} />
               {/* Dados do template */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -475,6 +571,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                   <Input
                     id="imp-nome"
                     value={nomeTemplate}
+                    disabled={salvando}
                     onChange={(e) => setNomeTemplate(e.target.value)}
                     placeholder="Ex: Laudo de Local de Crime"
                   />
@@ -497,7 +594,7 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                       <ClipboardPen size={14} />
                     </Button>
                   </div>
-                  <Select value={tipoExameId} onValueChange={(value: string) => setTipoExameId(value)}>
+                  <Select value={tipoExameId} disabled={salvando} onValueChange={(value: string) => setTipoExameId(value)}>
                     <SelectTrigger id="imp-tipo">
                       <SelectValue placeholder="Selecione o tipo..." />
                     </SelectTrigger>
@@ -531,13 +628,13 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                     onDragEnd={handleDragEnd}
                   >
                     <SortableContext
-                      items={secoes.map((_, i) => `import-secao-${i}`)}
+                      items={secoes.map(secao => secao.id)}
                       strategy={verticalListSortingStrategy}
                     >
                       <div className="space-y-3">
                         {secoes.map((secao, index) => (
                           <SortableSecaoItem
-                            key={`import-secao-${index}`}
+                            key={secao.id}
                             secao={secao}
                             index={index}
                             onToggleIncluir={toggleIncluir}
@@ -546,7 +643,9 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
                             onRemove={removeSecao}
                             onMove={moveSecao}
                             total={secoes.length}
-                            editorIdPrefix="import-secao"
+                            salvando={salvando}
+                            onUnir={unirSecoes}
+                            onDividir={indice => { if (!salvando) setDivisao({ secaoId: secoes[indice].id, limite: '', nome: 'Nova seção' }); }}
                           />
                         ))}
                       </div>
@@ -560,16 +659,16 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
 
         <DialogFooter className="mt-4">
           {etapa === 'revisao' && (
-            <Button variant="outline" onClick={() => setEtapa('upload')} className="mr-auto">
+            <Button variant="outline" onClick={() => alterado ? setAcaoDescarte('voltar') : setEtapa('upload')} disabled={salvando} className="mr-auto">
               Voltar
             </Button>
           )}
-          <Button variant="outline" onClick={() => handleClose(false)}>
+          <Button variant="outline" onClick={() => handleClose(false)} disabled={salvando || importando}>
             Cancelar
           </Button>
           {etapa === 'revisao' && (
             <Button
-              onClick={handleSalvar}
+              onClick={() => { void handleSalvar(); }}
               disabled={salvando}
               className="flex items-center gap-2"
             >
@@ -587,6 +686,24 @@ export const ImportTemplateDialog: React.FC<ImportTemplateDialogProps> = ({
           )}
         </DialogFooter>
       </DialogContent>
+      <Dialog open={divisao !== null} onOpenChange={aberto => { if (!aberto) setDivisao(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Dividir seção</DialogTitle><DialogDescription>Escolha o bloco que iniciará a nova seção. Tabelas, listas e figuras são mantidas inteiras.</DialogDescription></DialogHeader>
+          <Input aria-label="Nome da nova seção" value={divisao?.nome || ''} onChange={evento => setDivisao(atual => atual ? { ...atual, nome: evento.target.value } : null)} />
+          <Select value={divisao?.limite || ''} onValueChange={limite => setDivisao(atual => atual ? { ...atual, limite } : null)}>
+            <SelectTrigger><SelectValue placeholder="Iniciar nova seção antes de..." /></SelectTrigger>
+            <SelectContent>{Array.from(documentoSecao(secoes.find(secao => secao.id === divisao?.secaoId)?.conteudo || '').body.children).slice(1).map((bloco, indice) =>
+              <SelectItem key={indice} value={String(indice + 1)}>Bloco {indice + 2}: {(bloco.textContent?.trim() || bloco.tagName).slice(0, 100)}</SelectItem>)}</SelectContent>
+          </Select>
+          <DialogFooter><Button variant="outline" onClick={() => setDivisao(null)}>Cancelar</Button><Button disabled={!divisao?.limite || !divisao.nome.trim()} onClick={dividirSecao}>Dividir</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={acaoDescarte !== null} onOpenChange={aberto => { if (!aberto) setAcaoDescarte(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Descartar revisão do template?</AlertDialogTitle><AlertDialogDescription>O conteúdo importado e as alterações da revisão ainda não foram salvos.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Continuar revisando</AlertDialogCancel><AlertDialogAction onClick={() => { const acao = acaoDescarte; resetarEstado(); if (acao === 'fechar') onOpenChange(false); }}>Descartar revisão</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={confirmarCriacaoTipo} onOpenChange={setConfirmarCriacaoTipo}>
         <AlertDialogContent>
           <AlertDialogHeader>

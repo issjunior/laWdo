@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/alert-dialog';
 
 interface DialogoSaidaLaudoProps {
+  titulo?: string;
+  descricao?: string;
   aberto: boolean;
   salvando: boolean;
   erro: string | null;
@@ -23,6 +25,8 @@ interface DialogoSaidaLaudoProps {
 }
 
 export function DialogoSaidaLaudo({
+  titulo = 'Salvar alterações do laudo?',
+  descricao = 'Há alterações não salvas. Deseja salvar antes de sair?',
   aberto,
   salvando,
   erro,
@@ -45,9 +49,9 @@ export function DialogoSaidaLaudo({
         }}
       >
         <AlertDialogHeader>
-          <AlertDialogTitle>Salvar alterações do laudo?</AlertDialogTitle>
+          <AlertDialogTitle>{titulo}</AlertDialogTitle>
           <AlertDialogDescription>
-            Há alterações não salvas. Deseja salvar antes de sair?
+            {descricao}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {erro && <Alert variant="destructive"><AlertDescription>{erro}</AlertDescription></Alert>}
