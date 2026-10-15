@@ -1,4 +1,9 @@
 import type { FalhaPdf } from '../shared/types/pdf.types.js'
+import type { RespostaImportacaoTemplate } from '../shared/types/importacao-template.types.js';
+import type { RespostaSalvarTemplateCompleto } from '../shared/types/template.types.js';
+
+export type ImportarArquivoResponse = RespostaImportacaoTemplate;
+export type SalvarTemplateCompletoResponse = RespostaSalvarTemplateCompleto;
 
 /**
  * Tipos para os handlers IPC específicos de usuário

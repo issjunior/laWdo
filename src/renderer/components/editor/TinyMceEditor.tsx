@@ -138,6 +138,7 @@ interface TinyMceEditorProps {
   /** Modo NÃO controlado: conteúdo inicial fixo, sem sincronização automática. Ideal para editores com HTML complexo (ex: seções). */
   initialValue?: string;
   onChange: (html: string, origem?: 'usuario' | 'normalizacao-inicial') => void;
+  somenteLeitura?: boolean;
   diagnosticoLaudo?: Pick<EventoEditorLaudo, 'sessao' | 'montagem' | 'modo'>;
   height?: number;
   /** Faz o editor crescer junto com o documento, deixando a rolagem a cargo da página. */
@@ -467,6 +468,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   value,
   initialValue,
   onChange,
+  somenteLeitura = false,
   diagnosticoLaudo,
   height = 300,
   alturaAutomatica = false,
@@ -659,6 +661,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
       {preparado && <Editor
         key={`${editorIdResolvido}-${tentativaInicializacao}`}
         id={editorIdResolvido}
+        disabled={somenteLeitura}
         licenseKey="gpl"
         tinymceScriptSrc="./tinymce/tinymce.min.js"
         onScriptsLoad={() => registrarInicializacao('editor_script_carregado', { tentativaInterna: tentativaInicializacao })}

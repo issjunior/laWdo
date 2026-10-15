@@ -1,8 +1,9 @@
 import { getLogger } from '../utils/logger.js';
+import { normalizarNomeTipoExame } from '../utils/nome-tipo-exame.js';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   executeQuery,
   executeNonQuery,
@@ -11,6 +12,8 @@ import {
 } from './sqlite.js';
 import { atualizarMarcadoresTemplateB602 } from './template-b602.migration.js';
 import { sincronizarTemplatesIntegrados } from '../templates/integrados/sincronizar-templates-integrados.js';
+import { NATUREZAS_EXAME_GDL } from '../../shared/catalogos/naturezas-exame-gdl.catalogo.js';
+import { codigoExameParaFormulario, normalizarCodigoExame } from '../../shared/gdl/natureza-exame.js';
 import {
   CABECALHO_PRIMEIRA_PAGINA_PADRAO,
   CABECALHO_TODAS_PAGINAS_PADRAO,
@@ -176,6 +179,33 @@ export const setupDatabase = async (): Promise<void> => {
         reparosAplicados,
       });
     }
+
+    await withTransaction(async () => {
+      const tiposExistentes = await executeQuery<{ id: string; codigo: string; nome: string }>('SELECT id, codigo, nome FROM tipos_exame');
+      const codigosExistentes = new Set(tiposExistentes.map(tipo => normalizarCodigoExame(tipo.codigo)));
+
+      for (const tipo of tiposExistentes) {
+        const nomePadronizado = normalizarNomeTipoExame(tipo.nome) || tipo.codigo;
+        if (tipo.nome === nomePadronizado) continue;
+        await executeNonQuery(
+          'UPDATE tipos_exame SET nome = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [nomePadronizado, tipo.id],
+        );
+      }
+
+      for (const natureza of NATUREZAS_EXAME_GDL) {
+        const codigoNormalizado = normalizarCodigoExame(natureza.codigo);
+        if (codigosExistentes.has(codigoNormalizado)) continue;
+
+        await executeNonQuery(
+          `INSERT INTO tipos_exame (id, codigo, nome, ativo, created_at, updated_at)
+           VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           ON CONFLICT(codigo) DO NOTHING`,
+          [randomUUID(), codigoExameParaFormulario(natureza.codigo), normalizarNomeTipoExame(natureza.descricao)],
+        );
+        codigosExistentes.add(codigoNormalizado);
+      }
+    });
 
     const resultadosTemplates = await sincronizarTemplatesIntegrados({ sobrescreverIntegrados: !app.isPackaged });
     const falhasTemplates = resultadosTemplates.filter(resultado => resultado.status === 'falha');

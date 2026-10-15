@@ -103,6 +103,7 @@ export function AlteracoesPendentesProvider({ children }: { children: ReactNode 
       .filter(([, registro]) => registro.verificar() || registro.salvando)
       .map(([chave]) => chave === 'editor-laudo'
         ? 'O Editor de Laudos possui alterações não salvas.'
+        : chave === 'importacao-template' ? 'A revisão de importação de template possui alterações não salvas.'
         : 'O Wizard de Laudos possui alterações não salvas.');
     return { autorizado: impedimentos.length === 0, impedimentos };
   }, []);
@@ -122,6 +123,8 @@ export function AlteracoesPendentesProvider({ children }: { children: ReactNode 
     <ContextoAlteracoesPendentes.Provider value={valor}>
       {children}
       <DialogoSaidaLaudo
+        titulo={registrosRef.current.get('importacao-template')?.verificar() ? 'Salvar revisão do template?' : undefined}
+        descricao={registrosRef.current.get('importacao-template')?.verificar() ? 'A revisão da importação ainda não foi salva. Deseja salvar antes de sair?' : undefined}
         aberto={aberto}
         salvando={salvando || Array.from(registrosRef.current.values()).some(registro => registro.salvando)}
         erro={erro}

@@ -3,6 +3,7 @@ import { logDebug, logError } from '../../utils/logger.js'
 import { auditDelete } from '../../services/audit-log.service.js'
 import { tipoExameService } from '../../services/tipo-exame.service.js'
 import { sanitizeInput } from '../../security/index.js'
+import { normalizarNomeTipoExame } from '../../utils/nome-tipo-exame.js'
 import type { TipoExameRow } from '../../types/database.js'
 
 type TipoExameUpdatePayload = Partial<Omit<TipoExameRow, 'id' | 'created_at'>>
@@ -77,9 +78,11 @@ export const registerTipoExameHandlers = (): void => {
       // Sanitizar dados de entrada
       const sanitizedData = {
         codigo: sanitizeInput(tipoExameData.codigo),
-        nome: sanitizeInput(tipoExameData.nome),
+        nome: normalizarNomeTipoExame(sanitizeInput(tipoExameData.nome)),
         descricao: tipoExameData.descricao ? sanitizeInput(tipoExameData.descricao) : null
       }
+
+      if (!sanitizedData.nome) return { success: false, error: 'Informe um nome além do termo EXAME.' }
 
       logDebug('Criando novo tipo de exame', { nome: sanitizedData.nome })
       const tipoExame = await tipoExameService.create(sanitizedData)
@@ -113,7 +116,10 @@ export const registerTipoExameHandlers = (): void => {
       // Sanitizar dados de entrada
       const sanitizedData: TipoExameUpdatePayload = {}
       if (updateData.codigo) sanitizedData.codigo = sanitizeInput(updateData.codigo)
-      if (updateData.nome) sanitizedData.nome = sanitizeInput(updateData.nome)
+      if (updateData.nome) {
+        sanitizedData.nome = normalizarNomeTipoExame(sanitizeInput(updateData.nome))
+        if (!sanitizedData.nome) return { success: false, error: 'Informe um nome além do termo EXAME.' }
+      }
       if (updateData.descricao !== undefined) sanitizedData.descricao = sanitizeInput(updateData.descricao)
 
       logDebug('Atualizando tipo de exame', { id })
