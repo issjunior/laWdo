@@ -1,4 +1,5 @@
-import { OPCOES_MARCA_ARMA_B602 } from './b602-marcas-armas.catalogo.js'
+import { MARCAS_ARMAS_POR_EXAME } from './marcas-armas.catalogo.js'
+import { opcoesFabricacao, opcoesArmaInstitucional, opcoesOrigemColeta, opcoesMarcaCartucho, opcoesCalibreNominalCartucho, opcoesStatusNumeroSerie, opcoesCalibreNominalPistola, opcoesCalibreNominalRevolver, opcoesCalibreNominalEspingarda, opcoesTipoAcabamento, opcoesEstadoGeralArma, opcoesFuncionamentoArma } from './balistica-opcoes.catalogo.js'
 
 export interface OpcaoCampoB602 {
   codigo: string
@@ -14,7 +15,7 @@ export interface CampoPersonalizadoB602 {
   obrigatorio: boolean
   maxLength?: number
   mapeamentoApiConfirmado?: boolean
-  opcoes?: OpcaoCampoB602[]
+  opcoes?: readonly OpcaoCampoB602[]
 }
 
 export interface TipoPecaB602 {
@@ -81,27 +82,8 @@ const camposArmaBasicos = (
   },
 ]
 
-const opcoesFabricacao: OpcaoCampoB602[] = [
-  ['103', 'Alemã'], ['61', 'argentina'], ['62', 'austríaca'], ['104', 'Belga'],
-  ['63', 'brasileira'], ['64', 'canadense'], ['105', 'Chinesa'], ['66', 'czechoslovakia'],
-  ['67', 'espanhola'], ['106', 'Estadunidense'], ['68', 'filipena'], ['69', 'finlandesa'],
-  ['107', 'Francesa'], ['108', 'Israelense'], ['70', 'italiana'], ['71', 'mexicana'],
-  ['10', 'Não Aparente'], ['109', 'Russa'], ['65', 'sul-coreana'], ['110', 'Turca'],
-].map(([codigo, label]) => ({ codigo, label }))
 
-const opcoesArmaInstitucional: OpcaoCampoB602[] = [
-  { codigo: '60', label: 'Indeterminado' },
-  { codigo: '98', label: 'Não' },
-  { codigo: '97', label: 'Sim' },
-]
 
-const opcoesOrigemColeta: OpcaoCampoB602[] = [
-  { codigo: '95', label: 'DELEGACIA' },
-  { codigo: '1471', label: 'HOSPITAL' },
-  { codigo: '93', label: 'LOCAL DE CRIME' },
-  { codigo: '94', label: 'NECRÓPSIA' },
-  { codigo: '11', label: 'Outro' },
-]
 
 const campoOrigemColeta = (
   codigo: string,
@@ -116,17 +98,7 @@ const campoOrigemColeta = (
   opcoes: opcoesOrigemColeta,
 })
 
-const opcoesMarcaCartucho: OpcaoCampoB602[] = [
-  ['12', 'Aguila'], ['1', 'CBC'], ['15', 'Federal'], ['18', 'FMFLB'], ['10', 'Não Aparente'],
-  ['17', 'PMC'], ['13', 'S&B'], ['14', 'SP'], ['16', 'Winchester'],
-].map(([codigo, label]) => ({ codigo, label }))
 
-const opcoesCalibreNominalCartucho: OpcaoCampoB602[] = [
-  ['24', '.22 Curto'], ['23', '.22LR'], ['42', '.25ACP'], ['37', '.32ACP'], ['25', '.32S&W'],
-  ['48', '.32S&WL'], ['28', '.357 Magnum'], ['38', '.380ACP'], ['26', '.38SPL'], ['40', '.40S&W'],
-  ['41', '.45ACP'], ['49', '.9mm Luger'], ['29', '12GA'], ['30', '16GA'], ['31', '20GA'],
-  ['32', '24GA'], ['33', '28GA'], ['34', '32GA'], ['35', '36GA'], ['27', '38 Curto'], ['36', '40GA'],
-].map(([codigo, label]) => ({ codigo, label }))
 
 const camposCartucho = (): CampoPersonalizadoB602[] => [
   {
@@ -143,7 +115,7 @@ const camposMetralhadora = (): CampoPersonalizadoB602[] => [
   ...camposArmaBasicos('480', true, [25, 50, 50]),
   {
     id: '480:marca_arma', chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
-    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: [...OPCOES_MARCA_ARMA_B602],
+    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: MARCAS_ARMAS_POR_EXAME['B-602'],
   },
   {
     id: '480:tipo_acabamento', chaveGdl: 'Tipo Acabamento', label: 'Tipo Acabamento',
@@ -188,7 +160,7 @@ const camposComInstitucional = (
   },
   {
     id: `${codigo}:marca_arma`, chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
-    obrigatorio: false, mapeamentoApiConfirmado, opcoes: [...OPCOES_MARCA_ARMA_B602],
+    obrigatorio: false, mapeamentoApiConfirmado, opcoes: MARCAS_ARMAS_POR_EXAME['B-602'],
   },
   {
     id: `${codigo}:status_numero_serie`, chaveGdl: 'Status do Número de Série',
@@ -214,63 +186,12 @@ const camposComInstitucional = (
   campoArmaInstitucional(codigo, mapeamentoApiConfirmado),
 ]
 
-const opcoesStatusNumeroSerie: OpcaoCampoB602[] = [
-  { codigo: '19', label: 'Ilegível' },
-  { codigo: '20', label: 'Legível' },
-  { codigo: '10', label: 'Não Aparente' },
-  { codigo: '22', label: 'Revelado' },
-  { codigo: '21', label: 'Suprimido intencionalmente' },
-]
 
-const opcoesCalibreNominalPistola: OpcaoCampoB602[] = [
-  { codigo: '23', label: '.22LR' },
-  { codigo: '42', label: '.25ACP' },
-  { codigo: '37', label: '.32ACP' },
-  { codigo: '38', label: '.380ACP' },
-  { codigo: '40', label: '.40S&W' },
-  { codigo: '41', label: '.45ACP' },
-  { codigo: '39', label: '9mm Luger' },
-]
 
-const opcoesCalibreNominalRevolver: OpcaoCampoB602[] = [
-  { codigo: '24', label: '.22 Curto' },
-  { codigo: '23', label: '.22LR' },
-  { codigo: '25', label: '.32S&W' },
-  { codigo: '28', label: '.357 Magnum' },
-  { codigo: '26', label: '.38SPL' },
-  { codigo: '27', label: '38 Curto' },
-]
 
-const opcoesCalibreNominalEspingarda: OpcaoCampoB602[] = [
-  { codigo: '29', label: '12GA' },
-  { codigo: '30', label: '16GA' },
-  { codigo: '31', label: '20GA' },
-  { codigo: '32', label: '24GA' },
-  { codigo: '33', label: '28GA' },
-  { codigo: '34', label: '32GA' },
-  { codigo: '35', label: '36GA' },
-  { codigo: '36', label: '40GA' },
-]
 
-const opcoesTipoAcabamento: OpcaoCampoB602[] = [
-  { codigo: '44', label: 'Cromado' },
-  { codigo: '43', label: 'Desprovido' },
-  { codigo: '45', label: 'Emborrachado' },
-  { codigo: '46', label: 'Niquelado' },
-  { codigo: '47', label: 'Oxidado' },
-]
 
-const opcoesEstadoGeralArma: OpcaoCampoB602[] = [
-  { codigo: '54', label: 'Bom' },
-  { codigo: '53', label: 'Regular' },
-  { codigo: '55', label: 'Ruim' },
-]
 
-const opcoesFuncionamentoArma: OpcaoCampoB602[] = [
-  { codigo: '57', label: 'Eficiente' },
-  { codigo: '56', label: 'Ineficiente' },
-  { codigo: '100', label: 'NÃO TESTADO' },
-]
 
 const camposPistola = (): CampoPersonalizadoB602[] => [
   {
@@ -291,7 +212,7 @@ const camposPistola = (): CampoPersonalizadoB602[] => [
   },
   {
     id: '104:marca_arma', chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
-    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: [...OPCOES_MARCA_ARMA_B602],
+    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: MARCAS_ARMAS_POR_EXAME['B-602'],
   },
   {
     id: '104:status_numero_serie', chaveGdl: 'Status do Número de Série',
@@ -330,7 +251,7 @@ const camposRevolver = (): CampoPersonalizadoB602[] => [
   ...camposArmaBasicos('106', true, [25, 50, 50]),
   {
     id: '106:marca_arma', chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
-    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: [...OPCOES_MARCA_ARMA_B602],
+    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: MARCAS_ARMAS_POR_EXAME['B-602'],
   },
   {
     id: '106:status_numero_serie', chaveGdl: 'Status do Número de Série',
@@ -380,7 +301,7 @@ const camposEspingarda = (): CampoPersonalizadoB602[] => [
   },
   {
     id: '472:marca_arma', chaveGdl: 'Marca da Arma', label: 'Marca da Arma', controle: 'combobox',
-    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: [...OPCOES_MARCA_ARMA_B602],
+    obrigatorio: false, mapeamentoApiConfirmado: true, opcoes: MARCAS_ARMAS_POR_EXAME['B-602'],
   },
   {
     id: '472:status_numero_serie', chaveGdl: 'Status do Número de Série',

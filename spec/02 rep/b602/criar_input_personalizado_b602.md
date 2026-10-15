@@ -15,7 +15,7 @@ O B-602 usa o mesmo formulário para criação manual e dados importados do GDL.
 
 ## Catálogo e formulário
 
-`src/shared/catalogos/b602-gdl.catalogo.ts` é a fonte de verdade dos 16 tipos, aliases, campos, obrigatoriedade e opções. `PEÇA TESTE` (`771`) é excluída deliberadamente: não é oferecida nem importada.
+`src/shared/catalogos/b602-gdl.catalogo.ts` é a fonte de verdade dos 19 tipos, aliases, campos, obrigatoriedade e opções. `PEÇA TESTE` (`771`) é excluída deliberadamente: não é oferecida nem importada.
 
 Os campos comuns incluem identificação, quantidade, medida, descrição da quantidade, exame in loco, datas, lacres, código do vestígio, consumo/liberação e observação. `Nº Análises` é descartado por decisão funcional. Datas entram no formulário como `AAAA-MM-DD`; o normalizador aceita formatos brasileiros e ISO.
 
@@ -37,6 +37,10 @@ Na revisão da consulta, BO, IP e Ofício são origens preferenciais. Caso o GDL
 
 ## Evidência, testes e limites
 
-Os 16 tipos disponíveis têm round-trip confirmado por normalização, handlers IPC, SQLite e reabertura. A suíte também verifica o catálogo, a exclusão de `771`, a completude manual de cada tipo, a reconciliação, o editor, os modais e a serialização.
+Os 19 tipos disponíveis têm round-trip confirmado por normalização, handlers IPC, SQLite e reabertura. A suíte também verifica o catálogo, a exclusão de `771`, a completude manual de cada tipo, a reconciliação, o editor, os modais e a serialização.
 
 A rede GDL real e a validação em produção não são automatizadas. Fixtures são anonimizados; credenciais e dados sensíveis não entram em fixtures ou logs.
+
+## Reaproveitamento com B-601
+
+O formulário de peças e os dados de investigação usam os componentes compartilhados pecas-balistica.tsx e dados-investigacao.tsx. Tipos e opções comuns ficam em pecas-balistica.types.ts e balistica-opcoes.catalogo.ts; a coleção de marcas usa marcas-armas.catalogo.ts com vinculação por exame. O catálogo B-602 preserva os códigos, aliases, opções e regras próprios; o reaproveitamento não altera o contrato persistido b602.pecas nem instala o catálogo de 48 tipos do B-601 no B-602.

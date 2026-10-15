@@ -1,32 +1,14 @@
+import type { CamposComunsPecaBalistica, PecaBalistica } from './pecas-balistica.types.js';
 import type { IdentificacaoNaturezaExameGdl } from '../gdl/natureza-exame.js';
 export type OrigemPecaB602 = 'manual' | 'gdl'
 
-export interface CamposComunsPecaB602 {
-  identificacao: string
-  quantidade: number
-  unidadeMedida: string
-  quantidadeDescricao: string
-  examinadoInLoco: boolean
+export interface CamposComunsPecaB602 extends CamposComunsPecaBalistica {
   materialIncinerado: 'S' | 'N'
-  dataEntrada: string
-  lacreEntrada: string
-  lacreSaida: string
-  dataLiberacao: string
-  codigoVestigio: string
-  consumida: 'S' | 'N' | 'P'
-  observacao: string
 }
 
-export interface PecaB602 {
-  idLocal: string
+export interface PecaB602 extends PecaBalistica {
   origem: OrigemPecaB602
-  alteradaLocalmente: boolean
-  codPecaGdl?: number
-  tipoCodigo: string
-  tipoPeca: string
   comuns: CamposComunsPecaB602
-  personalizados: Record<string, unknown>
-  extrasGdl: Record<string, unknown>
 }
 
 export interface AvisoImportacao {
