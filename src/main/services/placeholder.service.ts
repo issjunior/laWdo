@@ -1,3 +1,4 @@
+import { PLACEHOLDERS_B601 } from '../../shared/catalogos/b601-placeholders.catalogo.js';
 import { BaseService } from './base.service.js';
 import { getLogger } from '../utils/logger.js';
 import { executeNonQuery } from '../database/sqlite.js'
@@ -42,11 +43,13 @@ const RENOMEACOES: Record<string, string> = {
 };
 
 const EXAM_PLACEHOLDER_CATEGORIES = [
+  { id: 'cat-exam-B-601', codigo: 'B-601', label: 'B-601 - Constatação de Vestígios Balísticos', cor: 'red', icone: 'Crosshair', is_sistema: 1, ordem: 12 },
   { id: 'cat-exam-I-801', codigo: 'I-801', label: 'I-801 - Numerações Identificadoras', cor: 'amber', icone: 'Car', is_sistema: 1, ordem: 10 },
   { id: 'cat-exam-B-602', codigo: 'B-602', label: 'B-602 - Eficiência e Prestabilidade', cor: 'red', icone: 'Crosshair', is_sistema: 1, ordem: 11 },
 ];
 
 const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
+  ...PLACEHOLDERS_B601.map(campo => ({ chave: campo.chave, valor: '', descricao: campo.descricao, categoria_id: 'cat-exam-B-601' })),
   { chave: 'veiculo',                    valor: '', descricao: 'Marca, modelo ou tipo do veículo periciado',       categoria_id: 'cat-exam-I-801' },
   { chave: 'placa',                      valor: '', descricao: 'Placa de identificação do veículo',                 categoria_id: 'cat-exam-I-801' },
   { chave: 'fabricacao_modelo',          valor: '', descricao: 'Ano de fabricação e modelo do veículo',             categoria_id: 'cat-exam-I-801' },

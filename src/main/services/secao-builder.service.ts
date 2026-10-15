@@ -1,6 +1,8 @@
+import { ehRepeticaoB601, expandirSecaoB601 } from './b601-secoes.service.js';
 import { calcularNumeracaoSecoes } from '../../shared/utils/numeracao-secoes.js';
 import { SecaoTemplateRow } from '../types/database.js';
 import { projetarB602ParaLaudo } from '../../shared/utils/b602-pecas-projecao.js';
+import { validarDadosB601 } from '../../shared/types/b601.types.js';
 
 interface ContextoCondicionalArma {
   indiceArma?: number;
@@ -38,10 +40,11 @@ function temConteudoUtil(html?: string | null): boolean {
   );
 }
 
-function isSecaoDerivadaRep(secao: SecaoTemplateRow): boolean {
+function isSecaoDerivadaRep(secao: SecaoTemplateRow, camposEspecificos?: Record<string, unknown>): boolean {
+  if (camposEspecificos?.b601) return ehRepeticaoB601(secao.repetir_para);
   const nome = normalizarNomeSecao(secao.nome);
   return Boolean(
-    secao.repetir_para === 'armas'
+    ehRepeticaoB601(secao.repetir_para) || secao.repetir_para === 'armas'
     || /data-cond-bloco="b602_(?:cartuchos|estojos)_toggle"/i.test(secao.conteudo || '')
     || nome.includes('CARTUCHO')
     || nome.includes('ESTOJO')
@@ -50,6 +53,7 @@ function isSecaoDerivadaRep(secao: SecaoTemplateRow): boolean {
 }
 
 function possuiDadosDerivados(secao: SecaoTemplateRow, camposEspecificos: Record<string, unknown>): boolean {
+  if (ehRepeticaoB601(secao.repetir_para)) return Boolean(expandirSecaoB601(secao, [secao], camposEspecificos.b601));
   const b602 = camposEspecificos?.b602 as Record<string, unknown> | undefined;
   if (!b602) return false;
   const projecaoB602 = projetarB602ParaLaudo(b602);
@@ -106,6 +110,13 @@ function criarHeading(params: {
 }
 
 function avaliarToggleSecao(toggleId: string, camposEspecificos: Record<string, unknown>): boolean {
+  if (toggleId.startsWith('b601_')) {
+    if (!camposEspecificos.b601) return false;
+    const { pecas } = validarDadosB601(camposEspecificos.b601);
+    if (toggleId === 'b601_lacres_saida_toggle') return pecas.length > 0;
+    if (toggleId === 'b601_outros_materiais_toggle') return pecas.some(peca => !['105', '101'].includes(peca.tipoCodigo));
+    return false;
+  }
   const b602 = camposEspecificos?.b602 as Record<string, unknown> | undefined;
   if (!b602) return false;
 
@@ -163,6 +174,7 @@ function avaliarCondicaoBloco(
   camposEspecificos: Record<string, unknown>,
   contexto: ContextoCondicionalArma = {}
 ): boolean {
+  if (toggleId.startsWith('b601_')) return avaliarToggleSecao(toggleId, camposEspecificos);
   const b602 = camposEspecificos?.b602 as Record<string, unknown> | undefined;
   if (!b602) return false;
 
@@ -239,7 +251,7 @@ export function processarBlocosCondicionais(
 }
 
 function avaliarCondicaoSecao(secao: SecaoTemplateRow, camposEspecificos: Record<string, unknown>): boolean {
-  if (isSecaoDerivadaRep(secao) && !possuiDadosDerivados(secao, camposEspecificos)) {
+  if (isSecaoDerivadaRep(secao, camposEspecificos) && !possuiDadosDerivados(secao, camposEspecificos)) {
     return false;
   }
 
@@ -265,7 +277,8 @@ export function filtrarSecoesAtivas(
   const secoesOrdenadas = ordenarSecoes(secoes);
   const ativas = new Set(
     secoesOrdenadas
-      .filter(secao => avaliarCondicaoSecao(secao, camposEspecificos))
+      .filter(secao => avaliarCondicaoSecao(secao, camposEspecificos)
+        && (!ehRepeticaoB601(secao.repetir_para) || Boolean(expandirSecaoB601(secao, secoesOrdenadas, camposEspecificos.b601))))
       .map(secao => secao.id)
   );
 
@@ -305,6 +318,10 @@ export function expandirSecoesRepetiveis(
   const resultado = new Map<string, string>();
 
   for (const secao of secoes) {
+    if (ehRepeticaoB601(secao.repetir_para)) {
+      resultado.set(secao.id, expandirSecaoB601(secao, secoes, camposEspecificos.b601));
+      continue;
+    }
     if (secao.repetir_para !== 'armas') continue;
 
     const b602 = camposEspecificos?.b602 as Record<string, unknown> | undefined;
@@ -383,11 +400,11 @@ export function buildHtml(
   const estrutura: Array<{ secao: SecaoTemplateRow; nivel: 2 | 3; conteudo: string }> = [];
   for (const pai of secoesOrdenadas.filter(secao => !secao.parent_id)) {
     const filhos = filhosPorPai.get(pai.id) || [];
-    const conteudoPai = processarBlocosCondicionais(pai.conteudo || '', camposEspecificos);
+    const conteudoPai = ehRepeticaoB601(pai.repetir_para) ? (expansoes.get(pai.id) || '') : processarBlocosCondicionais(pai.conteudo || '', camposEspecificos);
     if (filhos.length === 0 && !temConteudoUtil(conteudoPai)) continue;
     estrutura.push({ secao: pai, nivel: 2, conteudo: temConteudoUtil(conteudoPai) ? conteudoPai : '' });
     for (const filho of filhos) {
-      const conteudoFilho = filho.repetir_para === 'armas'
+      const conteudoFilho = ehRepeticaoB601(filho.repetir_para) ? (expansoes.get(filho.id) || '') : filho.repetir_para === 'armas'
         ? (expansoes.get('armas') || '')
         : processarBlocosCondicionais(filho.conteudo || '', camposEspecificos);
       estrutura.push({
@@ -410,7 +427,7 @@ export function buildHtml(
       contarNaNumeracao: secao.contar_na_numeracao !== 0,
       tituloBase,
       tituloVisivel: [numeracoes[indice], tituloBase].filter(Boolean).join(' '),
-      derivadaRep: isSecaoDerivadaRep(secao),
+      derivadaRep: isSecaoDerivadaRep(secao, camposEspecificos),
       atributosExtras: nivel === 3 && secao.repetir_para ? [['data-repeat-section', secao.repetir_para]] : undefined,
     });
     return conteudo ? [heading, conteudo] : [heading];

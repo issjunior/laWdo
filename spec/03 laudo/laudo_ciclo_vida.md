@@ -41,3 +41,7 @@ No wizard, a pendência compara `JSON.stringify` das respostas atuais com o snap
 O provider seleciona o primeiro registro ativo para salvar: presume uma página de edição por vez, não um salvamento transacional de vários formulários. O fechamento nativo está em `spec/04 layout/janelas_desktop.md`; a autorização de reinício para atualização permanece separada, em `spec/12 atualizacao/fluxo_atualizacao.md`.
 
 `alteracoes-pendentes-saida.component.test.tsx`, `wizard-laudo-saida.component.test.tsx`, `conteudo-comparavel-laudo.test.ts` e `layout-editor-laudo.component.test.tsx` cobrem navegação, descarte, erro, respostas parciais, normalização e edição durante salvamento. O fechamento com janela Electron real permanece dependente de smoke manual.
+
+## Reconciliação específica B-601
+
+Seções B-601 usam preservação por grupo e identidade do item. Quadros preenchidos não são substituídos por uma mudança de origem: a assinatura sinaliza revisão e a recriação depende de confirmação. Conteúdo que perde a condição de visibilidade é mantido para revisão; o complemento de figuras pertence ao laudo e conserva alterações e exclusões. Ver spec/03 laudo/b601.md. O mesmo provider de saída também recebe o registro cadastro-rep-b601 para proteger o estado local de peças ainda não salvo.

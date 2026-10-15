@@ -1,3 +1,4 @@
+import { criarRevisaoSecaoB601, preservarComplementoB601, preservarDescricaoAgrupadaB601, preservarRevisoesB601, preservarTextoPecasB601, reterDescricoesPendentesB601, revisarPecasAusentesB601, sinalizarDescricaoDesatualizadaB601 } from './b601-secoes.service.js';
 import { calcularNumeracaoSecoes } from '../../shared/utils/numeracao-secoes.js';
 import { BaseService } from './base.service.js';
 import { LaudoRow } from '../types/database.js';
@@ -373,8 +374,9 @@ class LaudoService extends BaseService<LaudoRow> {
       );
       const especificos = rep?.campos_especificos ? JSON.parse(rep.campos_especificos) : {};
 
-      const secoesFiltradas = filtrarSecoesAtivas(secoes, especificos);
+      let secoesFiltradas = filtrarSecoesAtivas(secoes, especificos);
       const expansoes = expandirSecoesRepetiveis(secoesFiltradas, especificos);
+      if (especificos.b601) secoesFiltradas = reterDescricoesPendentesB601(secoes, secoesFiltradas, expansoes, laudo.conteudo);
       const conteudoBase = buildHtml(secoesFiltradas, expansoes, especificos);
 
       const novoConteudo = this._reconciliarComBase(laudo.conteudo, conteudoBase, especificos);
@@ -424,6 +426,24 @@ class LaudoService extends BaseService<LaudoRow> {
     });
     const numeracoes = calcularNumeracaoSecoes(blocosReconciliados);
     const chavesBase = new Set<string>();
+    const revisoesB601 = new Map<string, string[]>();
+    const secoesRevisadasB601 = new Set<string>();
+    const chaveBloco = (bloco: typeof blocosAtuais[number]) => bloco.secaoId || bloco.nomeNormalizado;
+    const chavesAtivas = new Set(blocosReconciliados.map(chaveBloco));
+    if (camposEspecificos.b601) {
+      for (const [indice, bloco] of blocosAtuais.entries()) {
+        if (chavesAtivas.has(chaveBloco(bloco)) || !(bloco.repeatSection?.startsWith('b601_') || /data-cond-bloco="b601_/.test(bloco.conteudo))) continue;
+        const revisao = criarRevisaoSecaoB601(chaveBloco(bloco), bloco.conteudo, htmlBase);
+        secoesRevisadasB601.add(chaveBloco(bloco));
+        if (!revisao) continue;
+        const destino = bloco.parentId
+          ? blocosReconciliados.filter(item => item.parentId === bloco.parentId || item.secaoId === bloco.parentId).at(-1)
+          : blocosAtuais.slice(0, indice).reverse().find(item => chavesAtivas.has(chaveBloco(item)));
+        const chave = destino ? chaveBloco(destino) : '__preambulo';
+        revisoesB601.set(chave, [...(revisoesB601.get(chave) || []), revisao]);
+      }
+      partes.push(...(revisoesB601.get('__preambulo') || []));
+    }
 
     for (const [indice, blocoBase] of blocosReconciliados.entries()) {
       const blocoAtual = blocoBase.secaoId
@@ -434,11 +454,26 @@ class LaudoService extends BaseService<LaudoRow> {
       const tituloBase = preservarAtual
         ? this._normalizarTituloBase(blocoAtual.tituloBase)
         : blocoBase.tituloBase;
-      const conteudoBaseEscolhido = preservarAtual
-        ? blocoAtual.conteudo
-        : blocoBase.derivadaRep
-          ? this._preservarBlocosPericiaisB602(blocoBase.conteudo, blocoAtual?.conteudo || '')
-          : blocoBase.conteudo;
+      let conteudoBaseEscolhido = blocoBase.conteudo;
+      if (preservarAtual) {
+        conteudoBaseEscolhido = blocoAtual.conteudo;
+      } else if (blocoBase.derivadaRep) {
+        if (blocoBase.conteudo.includes('data-b601-grupo=')) {
+          conteudoBaseEscolhido = blocoAtual && !blocoAtual.conteudo.includes('data-b601-grupo=')
+            ? blocoAtual.conteudo
+            : preservarTextoPecasB601(preservarDescricaoAgrupadaB601(blocoBase.conteudo, blocoAtual?.conteudo || ''), htmlAtual, camposEspecificos.b601);
+        } else if (blocoBase.conteudo.includes('data-repeat-group="b601_pecas"')) {
+          conteudoBaseEscolhido = blocoAtual && !blocoAtual.conteudo.includes('data-repeat-group="b601_pecas"')
+            ? blocoAtual.conteudo
+            : preservarTextoPecasB601(blocoBase.conteudo, htmlAtual, camposEspecificos.b601);
+        } else {
+          conteudoBaseEscolhido = this._preservarBlocosPericiaisB602(blocoBase.conteudo, blocoAtual?.conteudo || '');
+        }
+      }
+      if (camposEspecificos.b601) {
+        conteudoBaseEscolhido = preservarComplementoB601(conteudoBaseEscolhido, blocoAtual?.conteudo || '');
+        conteudoBaseEscolhido = preservarRevisoesB601(conteudoBaseEscolhido, blocoAtual?.conteudo || '');
+      }
       const conteudo = processarBlocosCondicionais(conteudoBaseEscolhido, camposEspecificos);
 
       partes.push(this._montarHeadingEstrutural({
@@ -457,6 +492,7 @@ class LaudoService extends BaseService<LaudoRow> {
       if (conteudo.trim()) {
         partes.push(conteudo);
       }
+      partes.push(...(revisoesB601.get(chaveBloco(blocoBase)) || []));
 
       if (blocoBase.secaoId) {
         chavesBase.add(blocoBase.secaoId);
@@ -467,11 +503,14 @@ class LaudoService extends BaseService<LaudoRow> {
 
     for (const blocoAtual of blocosAtuais) {
       const chave = blocoAtual.secaoId || blocoAtual.nomeNormalizado;
-      if (chavesBase.has(chave)) continue;
+      if (chavesBase.has(chave) || secoesRevisadasB601.has(chave)) continue;
       partes.push(`${blocoAtual.heading}\n${processarBlocosCondicionais(blocoAtual.conteudo, camposEspecificos)}`);
     }
 
-    return partes.join('\n');
+    const reconciliado = partes.join('\n');
+    return camposEspecificos.b601
+      ? sinalizarDescricaoDesatualizadaB601(revisarPecasAusentesB601(reconciliado, camposEspecificos.b601), camposEspecificos.b601)
+      : reconciliado;
   }
 
   /** Preserva texto e supressão dos blocos B-602 versionados ao recompor uma seção derivada. */

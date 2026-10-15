@@ -912,6 +912,24 @@
         "src/renderer/pages/REPsPage.tsx",
         "src/main/ipc/handlers/rep.handlers.ts"
       ]
+    },
+    {
+      "arquivo": "spec/03 laudo/b601.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Agrupamentos B-601, placeholders, lacres, complemento e preservacao do laudo.",
+      "globsCodigo": [
+        "src/main/services/b601-secoes.service.ts",
+        "src/shared/utils/b601-*.ts",
+        "src/shared/catalogos/b601-placeholders.catalogo.ts",
+        "src/renderer/components/template/b601-complemento.utils.ts",
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/main/services/secao-builder.service.ts",
+        "src/main/services/laudo.service.ts",
+        "src/renderer/lib/exportacao-parser.ts",
+        "src/renderer/lib/exportacao-placeholders.ts"
+      ]
     }
   ]
 }
