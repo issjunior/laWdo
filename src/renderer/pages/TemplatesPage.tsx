@@ -161,21 +161,13 @@ function hydrateSecaoForm(row: SecaoItem, placeholderChaves: string[]): SecaoFor
   };
 }
 
-function normalizarNomeSecao(nome?: string): string {
-  return (nome || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
-}
-
-function getSecaoVisual(secao: Pick<SecaoForm, 'nome' | 'parent_id' | 'repetir_para'>): string {
-  if (!secao.parent_id) return 'border bg-card/50 border-border';
-
-  const nome = normalizarNomeSecao(secao.nome);
-  if (nome.includes('CARTUCHO')) return 'border bg-sky-50/70 border-sky-300 dark:bg-sky-950/20 dark:border-sky-900';
-  if (nome.includes('ESTOJO')) return 'border bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-900';
-  if (nome.includes('ARMA') || secao.repetir_para === 'armas') return 'border bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900';
+function getSecaoVisual(secao: Pick<SecaoForm, 'repetir_para'>): string {
+  if (ehAgrupamentoB601(secao.repetir_para) || secao.repetir_para === 'armas') {
+    return 'border bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-900';
+  }
+  if (/^b601_pecas(?::\d+)?$/.test(secao.repetir_para || '')) {
+    return 'border bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900';
+  }
 
   return 'border bg-card/50 border-border';
 }
