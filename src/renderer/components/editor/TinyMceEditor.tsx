@@ -19,6 +19,13 @@ import { encontrarCampoReservado } from '@/lib/campos-reservados';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 import { criarHtmlFigura } from '@/lib/figura-html';
 import { atualizarNumeroFigura } from '@/lib/figuras';
+import {
+  aplicarRecuoPrimeiraLinha,
+  FORMATOS_LIMPEZA_EDITOR,
+  limparFormatacaoEditor,
+  obterRecuoSelecionado,
+  recuoCorresponde,
+} from './editor-formatacao';
 
 /* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
 
@@ -712,9 +719,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           line_height_formats: '1 1.1 1.2 1.3 1.4 1.5 2',
           pagebreak_separator: MARCADOR_QUEBRA_PAGINA,
           pagebreak_split_block: true,
-          formats: {
-            recuoPrimeiraLinha: { selector: 'p', styles: { 'text-indent': '%value' } },
-          },
+          formats: FORMATOS_LIMPEZA_EDITOR,
           image_advtab: true,
           image_title: true,
 
@@ -732,13 +737,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           toolbar: obterToolbarTinyMce(Boolean(condToggles?.length), Boolean(_laudoId && onSolicitarInsercaoFigura)),
           content_style: `
             body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              --cor-texto-editor: #000000;
+              font-family: Arial, Helvetica, sans-serif;
               font-size: 14px;
               line-height: 1.6;
               padding: 12px;
             }
             p:not(table p):not(figure p) { text-align: justify; }
             body.dark-content {
+              --cor-texto-editor: #ffffff;
               background-color: #222f3e;
               color: #fff;
             }
@@ -1067,15 +1074,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               }))),
             });
 
-            const aplicarRecuoPrimeiraLinha = (valor?: string) => {
-              editor.undoManager.transact(() => {
-                if (valor) {
-                  editor.formatter.apply('recuoPrimeiraLinha', { value: valor });
-                } else {
-                  editor.formatter.remove('recuoPrimeiraLinha');
-                }
-              });
-            };
+            editor.addCommand('RemoveFormat', () => limparFormatacaoEditor(editor));
 
             editor.ui.registry.addMenuButton('recuoprimeiralinha', {
               text: 'Parágrafo',
@@ -1083,13 +1082,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               fetch: callback => callback(MEDIDAS_RECUO_PRIMEIRA_LINHA.map(({ texto, valor }) => ({
                 type: 'togglemenuitem' as const,
                 text: texto,
-                onAction: () => aplicarRecuoPrimeiraLinha(valor),
+                onAction: () => aplicarRecuoPrimeiraLinha(editor, valor),
                 onSetup: (api: Ui.Menu.ToggleMenuItemInstanceApi) => {
-                  const sincronizar = () => api.setActive(valor
-                    ? editor.formatter.match('recuoPrimeiraLinha', { value: valor })
-                    : !editor.formatter.match('recuoPrimeiraLinha'));
+                  const sincronizar = () => api.setActive(recuoCorresponde(obterRecuoSelecionado(editor), valor));
                   sincronizar();
                   editor.on('NodeChange', sincronizar);
+                  return () => editor.off('NodeChange', sincronizar);
                 },
               }))),
             });
