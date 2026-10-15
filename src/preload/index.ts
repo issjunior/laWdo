@@ -1,4 +1,5 @@
 import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
+import type { SalvarTemplateCompletoInput, CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
@@ -20,6 +21,8 @@ import type {
 } from '../shared/types/ia.types.js';
 import type {
   DashboardResponse,
+  ImportarArquivoResponse,
+  SalvarTemplateCompletoResponse,
   UserFilters,
   PaginationOptions,
   UserCreateData,
@@ -124,7 +127,6 @@ interface LogEntry {
 type IpcPayload = unknown;
 type IpcParams = unknown[];
 type IpcResult = unknown;
-type ImportarArquivoResponse = { success: boolean; data?: IpcPayload; error?: string };
 type PacoteTemplateResponse = { success: boolean; data?: IpcPayload; nome?: string; error?: string };
 type BackupResponse = { success: boolean; path?: string; error?: string; canceled?: boolean };
 type TipoBackup = 'completo' | 'configuracao';
@@ -305,8 +307,8 @@ export interface IpcAPI {
     update: (id: string, data: IpcPayload) => Promise<UserResponse>;
     delete: (id: string) => Promise<UserResponse>;
     findSecoes: (templateId: string) => Promise<UserResponse>;
-    createSecao: (data: IpcPayload) => Promise<UserResponse>;
-    updateSecao: (id: string, data: IpcPayload) => Promise<UserResponse>;
+    createSecao: (data: CriarSecaoTemplateInput) => Promise<UserResponse>;
+    updateSecao: (id: string, data: AtualizarSecaoTemplateInput) => Promise<UserResponse>;
     deleteSecao: (id: string) => Promise<UserResponse>;
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => Promise<UserResponse>;
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string, titulo?: string) => Promise<UserResponse>;
@@ -315,7 +317,7 @@ export interface IpcAPI {
     selecionarPacote: () => Promise<PacoteTemplateResponse>;
     importarPacote: (caminho: string, criarTipo: boolean) => Promise<PacoteTemplateResponse>;
     clonar: (templateId: string) => Promise<UserResponse>;
-    salvarCompleto: (data: IpcPayload) => Promise<UserResponse>;
+    salvarCompleto: (dados: SalvarTemplateCompletoInput) => Promise<SalvarTemplateCompletoResponse>;
   };
 
   // Laudos
@@ -1562,17 +1564,17 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     update: (id: string, data: IpcPayload) => invocarComDiagnostico('template:update', id, data),
     delete: (id: string) => invocarComDiagnostico('template:delete', id),
     findSecoes: (templateId: string) => invocarComDiagnostico('template:findSecoes', templateId),
-    createSecao: (data: IpcPayload) => invocarComDiagnostico('template:createSecao', data),
-    updateSecao: (id: string, data: IpcPayload) => invocarComDiagnostico('template:updateSecao', id, data),
+    createSecao: (data: CriarSecaoTemplateInput) => invocarComDiagnostico('template:createSecao', data),
+    updateSecao: (id: string, data: AtualizarSecaoTemplateInput) => invocarComDiagnostico('template:updateSecao', id, data),
     deleteSecao: (id: string) => invocarComDiagnostico('template:deleteSecao', id),
     reordenarSecoes: (templateId: string, idsOrdenados: string[]) => invocarComDiagnostico('template:reordenarSecoes', templateId, idsOrdenados),
     previewPDF: (html: string, margins?: { top: number; right: number; bottom: number; left: number }, headerTemplate?: string, titulo?: string) => invocarComDiagnostico('template:previewPDF', { html, margins, headerTemplate, titulo }),
-    importarArquivo: () => invocarComDiagnostico('template:importarArquivo'),
+    importarArquivo: (): Promise<ImportarArquivoResponse> => invocarComDiagnostico('template:importarArquivo'),
     exportarPacote: (templateId: string) => invocarComDiagnostico('template:exportarPacote', templateId),
     selecionarPacote: () => invocarComDiagnostico('template:selecionarPacote'),
     importarPacote: (caminho: string, criarTipo: boolean) => invocarComDiagnostico('template:importarPacote', caminho, criarTipo),
     clonar: (templateId: string) => invocarComDiagnostico('template:clonar', templateId),
-    salvarCompleto: (data: IpcPayload) => invocarComDiagnostico('template:salvarCompleto', data),
+    salvarCompleto: (dados: SalvarTemplateCompletoInput): Promise<SalvarTemplateCompletoResponse> => invocarComDiagnostico('template:salvarCompleto', dados),
   },
 
   laudo: {

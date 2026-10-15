@@ -34,7 +34,7 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
   const resultado: BlocoExportacao[] = [];
   for (const elemento of Array.from(p.children)) {
     const tipo = elemento.tagName.toLowerCase();
-    if (elemento.matches('[data-placeholder-preview],[data-laudo-secao-header],.tox,button')) continue;
+    if (elemento.matches('h2[data-ocultar-titulo="true"],h3[data-ocultar-titulo="true"],[data-placeholder-preview],[data-laudo-secao-header],.tox,button')) continue;
     if (elementoEhQuebraPagina(elemento)) {
       resultado.push({ tipo: 'quebra-pagina' });
       continue;

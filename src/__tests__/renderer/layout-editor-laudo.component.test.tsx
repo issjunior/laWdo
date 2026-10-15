@@ -24,6 +24,18 @@ function HarnessAtalhoSalvar({
 }
 
 describe('layout do editor de laudo', () => {
+  it('bloqueia a troca de modos durante a preparação inicial', () => {
+    const aoTrocar = vi.fn();
+    render(<BarraEditorLaudo bloqueado modoConteudo="dados" modoOrganizacao="single"
+      onModoConteudoChange={aoTrocar} onModoOrganizacaoChange={aoTrocar} />);
+    for (const nome of ['Dados da REP', 'Opções de placeholders', 'Documento único', 'Por seções']) {
+      const botao = screen.getByRole('button', { name: nome });
+      expect(botao).toBeDisabled();
+      fireEvent.click(botao);
+    }
+    expect(aoTrocar).not.toHaveBeenCalled();
+  });
+
   it('estabelece a referência depois que o editor normaliza o carregamento', () => {
     const { result } = renderHook(() => useGerenciadorAlteracoesLaudo());
     act(() => result.current.iniciarSessao('<p style="color:red">Texto</p>', true));

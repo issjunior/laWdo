@@ -1,3 +1,5 @@
+import { calcularNumeracaoSecoes } from '@shared/utils/numeracao-secoes';
+
 export interface SecaoEstruturalLaudo {
   id?: string;
   parentId?: string | null;
@@ -5,6 +7,8 @@ export interface SecaoEstruturalLaudo {
   titulo: string;
   conteudo: string;
   derivadaRep?: boolean;
+  ocultarTitulo?: boolean;
+  contarNaNumeracao?: boolean;
 }
 
 function escaparHtml(texto: string): string {
@@ -38,12 +42,7 @@ function getNivelEstrutural(elemento: Element): 2 | 3 | null {
   return null;
 }
 
-function montarTituloVisivel(titulo: string, nivel: 2 | 3, indiceH2: number, indiceH3: number): string {
-  const base = normalizarTituloBase(titulo);
-  return nivel === 2 ? `${indiceH2}. ${base}` : `${indiceH2}.${indiceH3} ${base}`;
-}
-
-function montarHeading(secao: SecaoEstruturalLaudo, indiceH2: number, indiceH3: number): string {
+function montarHeading(secao: SecaoEstruturalLaudo, numeracao: string): string {
   const tag = secao.nivel === 2 ? 'h2' : 'h3';
   const tituloBase = normalizarTituloBase(secao.titulo || 'Seção');
   const atributos = [
@@ -51,10 +50,12 @@ function montarHeading(secao: SecaoEstruturalLaudo, indiceH2: number, indiceH3: 
     secao.parentId ? `data-parent-id="${escaparHtml(secao.parentId)}"` : '',
     `data-estrutura-nivel="${secao.nivel}"`,
     `data-titulo-base="${escaparHtml(tituloBase)}"`,
+    secao.ocultarTitulo ? 'data-ocultar-titulo="true"' : '',
+    secao.contarNaNumeracao === false ? 'data-contar-na-numeracao="false"' : '',
     secao.derivadaRep ? 'data-derivada-rep="true"' : '',
   ].filter(Boolean).join(' ');
 
-  return `<${tag}${atributos ? ` ${atributos}` : ''}>${escaparHtml(montarTituloVisivel(tituloBase, secao.nivel, indiceH2, indiceH3))}</${tag}>`;
+  return `<${tag}${atributos ? ` ${atributos}` : ''}>${escaparHtml([numeracao, tituloBase].filter(Boolean).join(' '))}</${tag}>`;
 }
 
 export function normalizarTituloSecao(titulo: string): string {
@@ -93,6 +94,8 @@ export function parsearSecoesEstruturais(html: string): SecaoEstruturalLaudo[] {
           ),
           conteudo: '',
           derivadaRep: elemento.getAttribute('data-derivada-rep') === 'true',
+          ...(elemento.getAttribute('data-ocultar-titulo') === 'true' ? { ocultarTitulo: true } : {}),
+          ...(elemento.getAttribute('data-contar-na-numeracao') === 'false' ? { contarNaNumeracao: false } : {}),
         };
         continue;
       }
@@ -119,18 +122,9 @@ export function parsearSecoesEstruturais(html: string): SecaoEstruturalLaudo[] {
 }
 
 export function reconstruirHtmlEstrutural(secoes: SecaoEstruturalLaudo[]): string {
-  let indiceH2 = 0;
-  let indiceH3 = 0;
-
-  return secoes.map((secao) => {
-    if (secao.nivel === 2) {
-      indiceH2 += 1;
-      indiceH3 = 0;
-    } else {
-      indiceH3 += 1;
-    }
-
-    const heading = montarHeading(secao, indiceH2, indiceH3);
+  const numeracoes = calcularNumeracaoSecoes(secoes);
+  return secoes.map((secao, indice) => {
+    const heading = montarHeading(secao, numeracoes[indice]);
     const conteudo = secao.conteudo?.trim() || '<p>&nbsp;</p>';
     return `${heading}\n${conteudo}`;
   }).join('\n');
@@ -141,20 +135,16 @@ export function reindexarHtmlEstrutural(html: string): string {
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
-  let indiceH2 = 0;
-  let indiceH3 = 0;
-
-  Array.from(doc.body.querySelectorAll('h2, h3')).forEach((heading) => {
+  const headings = Array.from(doc.body.querySelectorAll('h2, h3')).flatMap(heading => {
     const nivel = getNivelEstrutural(heading);
-    if (!nivel) return;
-
-    if (nivel === 2) {
-      indiceH2 += 1;
-      indiceH3 = 0;
-    } else {
-      indiceH3 += 1;
-    }
-
+    return nivel ? [{ heading, nivel }] : [];
+  });
+  const numeracoes = calcularNumeracaoSecoes(headings.map(({ heading, nivel }) => ({
+    nivel,
+    ocultarTitulo: heading.getAttribute('data-ocultar-titulo') === 'true',
+    contarNaNumeracao: heading.getAttribute('data-contar-na-numeracao') !== 'false',
+  })));
+  headings.forEach(({ heading, nivel }, indice) => {
     const tituloBase = normalizarTituloBase(
       heading.getAttribute('data-titulo-base')
       || heading.textContent
@@ -163,7 +153,7 @@ export function reindexarHtmlEstrutural(html: string): string {
 
     heading.setAttribute('data-estrutura-nivel', String(nivel));
     heading.setAttribute('data-titulo-base', tituloBase);
-    heading.textContent = montarTituloVisivel(tituloBase, nivel, indiceH2, indiceH3);
+    heading.textContent = [numeracoes[indice], tituloBase].filter(Boolean).join(' ');
   });
 
   return doc.body.innerHTML;

@@ -2,7 +2,7 @@
 
 ## Estado canônico
 
-O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; o B-602 ativo é `laudo-padrao-b602` v6; as versões anteriores permanecem registradas, mas indisponíveis para novos laudos. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
+O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; o B-602 ativo é `laudo-padrao-b602` v7; as versões anteriores permanecem registradas, mas indisponíveis para novos laudos. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
 
 A serialização canônica e o SHA-256 cobrem os campos funcionais do template. Elementos transitórios do editor — como `data-image-id` e artefatos dummy — são ignorados no checksum para permitir adoção segura de dados legados equivalentes. A validação do catálogo rejeita chave, versão, ordens, referências de pai ou seções duplicadas inválidas antes da persistência.
 
@@ -32,9 +32,17 @@ A edição comum usa `template:salvarCompleto`: o handler valida e sanitiza a fr
 
 ## Consumo pelos laudos
 
-O B-602 v6 herda a estrutura anterior e troca expressões fixas do perito no preâmbulo, na seção de armas e no encerramento por placeholders de cargo, artigo, título, designado/designada, pelo/pela e o qual/a qual. A resolução usa a forma de tratamento do perfil; prosa livre não é reescrita. A resolução de lacres de saída da v2 e as subseções posteriores continuam no modelo. Ausência de lacre permanece visível como `XXX`. A v6 é instalada para novos laudos; o HTML de laudos já criados não é reescrito. `templates-integrados.test.ts` valida a v6 e seus marcadores.
+O B-602 v7 herda a estrutura anterior e troca expressões fixas do perito no preâmbulo, na seção de armas e no encerramento por placeholders de cargo, artigo, título, designado/designada, pelo/pela e o qual/a qual. A resolução usa a forma de tratamento do perfil; prosa livre não é reescrita. A resolução de lacres de saída da v2 e as subseções posteriores continuam no modelo. Ausência de lacre permanece visível como `XXX`. A v7 é instalada para novos laudos; o HTML de laudos já criados não é reescrito. `templates-integrados.test.ts` valida a v7 e seus marcadores.
 
 Na criação, `laudoService` exige que o template exista. Para origem integrada, recusa tipos indisponíveis e catálogo sem seções; assim não aplica o fallback de documento vazio a uma falha de sincronização. Laudos existentes mantêm seu conteúdo próprio e não são modificados pela troca de versão do template.
+
+## Visibilidade e numeração das seções
+
+Cada seção mantém ocultar_titulo e contar_na_numeracao. As migrations 42 e 43 acrescentam esses campos com os padrões de título visível e participação na numeração. A estrutura conserva pai, ordem e conteúdo mesmo quando o cabeçalho fica oculto. O editor mostra os indicadores “Título oculto” e “Fora da numeração” sem inseri-los no documento exportado.
+
+calcularNumeracaoSecoes(), em src/shared/utils/numeracao-secoes.ts, é a fonte comum da sequência para edição, prévias, PDF, DOCX e ODT. Uma seção oculta pode consumir número; se também deixar de contar, a sequência principal avança somente na próxima seção participante. Filhos de um pai que não conta ficam sem prefixo numérico. Importação/exportação de pacotes, clonagem, persistência e reconciliação do laudo conservam as preferências.
+
+O B-602 v7 mantém o texto da v6 e oculta o preâmbulo sem consumir número. Versões anteriores continuam registradas; essa troca não reescreve laudos existentes. As verificações de títulos, numeração e template integrado cobrem a persistência e as exportações.
 
 ## Impacto e verificação
 

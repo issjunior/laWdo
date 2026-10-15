@@ -6,6 +6,8 @@ export interface SecaoTemplateEstrutural {
   condicao?: string;
   repetir_para?: string;
   repetir_titulo?: string;
+  ocultar_titulo?: boolean;
+  contar_na_numeracao?: boolean;
   conteudo?: string;
 }
 

@@ -12,6 +12,8 @@ export function validarTemplateIntegrado(template: DefinicaoTemplateIntegrado): 
   const chaves = new Set<string>();
   const ordens = new Set<number>();
   for (const secao of template.secoes) {
+    if (secao.ocultarTitulo !== undefined && typeof secao.ocultarTitulo !== 'boolean') throw new Error(`Ocultação de título inválida em ${template.chave}`);
+    if (secao.contarNaNumeracao !== undefined && typeof secao.contarNaNumeracao !== 'boolean') throw new Error(`Contagem de seção inválida em ${template.chave}`);
     if (!secao.chave.trim() || chaves.has(secao.chave)) throw new Error(`Chave de seção inválida em ${template.chave}`);
     if (!secao.nome.trim() || !secao.conteudo.trim()) throw new Error(`Seção incompleta em ${template.chave}`);
     if (!Number.isInteger(secao.ordem) || secao.ordem < 0 || ordens.has(secao.ordem)) throw new Error(`Ordem inválida em ${template.chave}`);

@@ -7,6 +7,15 @@
 @source inline("dark:border-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-800/40");
 @source inline("dark:ring-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-500/50");
 
+.indicador-secao {
+  @apply ml-[6px] inline-flex items-center align-middle rounded-[4px] border-[1px] border-solid border-[#e4e4e7] bg-[#f4f4f5] px-[6px] py-[1px] text-[11px] font-[400] leading-[1.5] text-[#52525b];
+}
+
+.dark .indicador-secao,
+body.dark-content .indicador-secao {
+  @apply border-[#3f3f46] bg-[#27272a] text-[#a1a1aa];
+}
+
 .laudo-identificacao-fullscreen {
   position: relative;
   z-index: 1;

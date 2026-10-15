@@ -1,7 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
+import { removerFormatacaoPlaceholders } from '@/lib/utils';
 
 describe('conteúdo comparável do laudo', () => {
+  it('ignora o ocultamento temporário da âncora e remove a prévia sem apagar outros estilos', () => {
+    const original = '<p><span data-placeholder="{{tabela}}" style="color: red;">{{tabela}}</span></p>';
+    const apresentado = '<p><span data-placeholder="{{tabela}}" data-placeholder-preview-id="p1" style="color: red; display: none;">{{tabela}}</span></p>'
+      + '<div data-placeholder-preview="true" data-placeholder-preview-id="p1"><table><tr><td>REP</td></tr></table></div>';
+    expect(normalizarConteudoComparavel(apresentado)).toBe(normalizarConteudoComparavel(original));
+    expect(removerFormatacaoPlaceholders(apresentado)).not.toContain('display: none');
+    expect(removerFormatacaoPlaceholders(apresentado)).toContain('color: red');
+    expect(normalizarConteudoComparavel('<p style="display: none;">Texto</p>'))
+      .not.toBe(normalizarConteudoComparavel('<p>Texto</p>'));
+  });
+
+  it('preserva tabela personalizada e seu conteúdo ao comparar dados e chaves', () => {
+    const ancora = '<span data-placeholder="{{tabela}}" data-placeholder-tabela-personalizada-id="t1">{{tabela}}</span>';
+    const tabela = '<div data-placeholder-tabela-personalizada="true" data-placeholder-tabela-personalizada-id="t1"><table><tr><td>Editado</td></tr></table></div>';
+    const dados = ancora.replace('data-placeholder=', 'style="display: none;" data-placeholder=') + tabela;
+    const chaves = ancora + tabela.replace('<div ', '<div style="display: none;" ');
+    expect(normalizarConteudoComparavel(chaves)).toBe(normalizarConteudoComparavel(dados));
+    expect(normalizarConteudoComparavel(chaves)).toContain('Editado');
+    expect(normalizarConteudoComparavel(chaves.replace('Editado', 'Outra edição')))
+      .not.toBe(normalizarConteudoComparavel(dados));
+  });
+
   it('ignora quantidades de espaços entre blocos estruturais sem apagar espaços inline', () => {
     const salvo = '<h2>Título</h2>\n<p>Texto</p>\n<h3>Detalhes</h3>';
     const editor = '<h2>Título</h2>\n\n<p>Texto</p>\n\n<h3>Detalhes</h3>';

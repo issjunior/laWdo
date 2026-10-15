@@ -1,3 +1,5 @@
+import { criarIndicadoresSecaoHtml } from '@/lib/indicadores-secao';
+import { calcularNumeracaoSecoes } from '@shared/utils/numeracao-secoes';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -102,6 +104,8 @@ interface SecaoItem {
   condicao?: string | null;
   repetir_para?: string | null;
   repetir_titulo?: string | null;
+  ocultar_titulo?: number;
+  contar_na_numeracao?: number;
 }
 
 interface TemplateForm {
@@ -119,9 +123,11 @@ interface SecaoForm {
   condicao?: string;
   repetir_para?: string;
   repetir_titulo?: string;
+  ocultar_titulo?: boolean;
+  contar_na_numeracao?: boolean;
 }
 
-type SecaoPreview = Pick<SecaoForm, 'id' | 'chave_local' | 'nome' | 'conteudo' | 'parent_id' | 'repetir_para' | 'repetir_titulo'>;
+type SecaoPreview = Pick<SecaoForm, 'id' | 'chave_local' | 'nome' | 'conteudo' | 'parent_id' | 'repetir_para' | 'repetir_titulo' | 'ocultar_titulo' | 'contar_na_numeracao'>;
 
 const emptyTemplateForm = (): TemplateForm => ({
   nome: '', tipo_exame_id: '', descricao: '',
@@ -146,6 +152,8 @@ function hydrateSecaoForm(row: SecaoItem, placeholderChaves: string[]): SecaoFor
     condicao: row.condicao || '',
     repetir_para: row.repetir_para || '',
     repetir_titulo: row.repetir_titulo || '',
+    ocultar_titulo: row.ocultar_titulo === 1,
+    contar_na_numeracao: row.contar_na_numeracao !== 0,
   };
 }
 
@@ -444,7 +452,7 @@ interface SortableSecaoTemplateItemProps {
   opcoesRepeticao: Array<{ value: string; label: string }>;
   diagnosticos: DiagnosticoSecaoTemplate[];
   inserirPlaceholder: (editorId: string, chave: string) => void;
-  updateSecao: (index: number, field: keyof SecaoForm, value: string) => void;
+  updateSecao: (index: number, field: keyof SecaoForm, value: string | boolean) => void;
   handleMoveSecao: (index: number, direction: 'up' | 'down') => void;
   handleRemoveSecao: (index: number) => void;
   podeSubir: boolean;
@@ -694,7 +702,7 @@ export const TemplatesPage: React.FC = () => {
         return `
           <section data-template-secao="true" data-secao-index="${index}" data-secao-id="${secId}" style="margin-bottom:16px;border:1px solid #d9d9d9;border-radius:8px;overflow:hidden;">
             <div contenteditable="false" data-template-secao-header="true" style="background:#f5f5f5;padding:8px 12px;border-bottom:1px solid #d9d9d9;font-weight:600;">
-              ${nome}
+              ${nome}${criarIndicadoresSecaoHtml({ ocultarTitulo: sec.ocultar_titulo, contarNaNumeracao: sec.contar_na_numeracao })}
             </div>
             <div data-template-secao-content="true" style="padding:8px 4px;">
               ${conteudo}
@@ -922,8 +930,12 @@ export const TemplatesPage: React.FC = () => {
     setSecoes(prev => moverSecaoHierarquica(prev, index, direction));
   };
 
-  const updateSecao = (index: number, field: keyof SecaoForm, value: string) => {
+  const updateSecao = (index: number, field: keyof SecaoForm, value: string | boolean) => {
     setSecoes(prev => {
+      if (field === 'ocultar_titulo' || field === 'contar_na_numeracao') {
+        return prev.map((secao, i) => i === index ? { ...secao, [field]: value === true } : secao);
+      }
+      if (typeof value !== 'string') return prev;
       const secoesNormalizadas = normalizarSecoesHierarquicas(prev);
       if (field === 'parent_id') {
         return reposicionarSecaoPorPai(secoesNormalizadas, index, value || '');
@@ -1036,6 +1048,8 @@ export const TemplatesPage: React.FC = () => {
           condicao: secao.condicao || null,
           repetir_para: secao.repetir_para || null,
           repetir_titulo: secao.repetir_titulo || null,
+          ocultar_titulo: secao.ocultar_titulo === true,
+          contar_na_numeracao: secao.contar_na_numeracao !== false,
         })),
       });
       if (!r.success || !r.data) {
@@ -1109,17 +1123,24 @@ export const TemplatesPage: React.FC = () => {
         filhosPorPai.set(secao.parent_id || '', filhos);
       });
 
+    const estruturaPreview = pais.flatMap(pai => [pai, ...(filhosPorPai.get(getSecaoRef(pai) || '') || [])]);
+    const numeracoes = calcularNumeracaoSecoes(estruturaPreview.map(secao => ({
+      nivel: secao.parent_id ? 3 as const : 2 as const,
+      ocultarTitulo: secao.ocultar_titulo,
+      contarNaNumeracao: secao.contar_na_numeracao,
+    })));
+    const numeracaoPorSecao = new Map(estruturaPreview.map((secao, indice) => [secao, numeracoes[indice]]));
     const secoesHtml = pais
-      .map((pai, indicePai) => {
+      .map(pai => {
         const partes = [
-          `<h2>${indicePai + 1}. ${pai.nome.trim()}</h2>`,
+          pai.ocultar_titulo ? '' : `<h2>${[numeracaoPorSecao.get(pai), pai.nome.trim()].filter(Boolean).join(' ')}</h2>`,
           pai.conteudo || '',
         ];
 
         const paiRef = getSecaoRef(pai);
         const filhos = filhosPorPai.get(paiRef || '') || [];
-        filhos.forEach((filho, indiceFilho) => {
-          partes.push(`<h3>${indicePai + 1}.${indiceFilho + 1} ${filho.nome.trim()}</h3>`);
+        filhos.forEach(filho => {
+          if (!filho.ocultar_titulo) partes.push(`<h3>${[numeracaoPorSecao.get(filho), filho.nome.trim()].filter(Boolean).join(' ')}</h3>`);
           partes.push(filho.conteudo || '<p style="color: #999; font-style: italic;">(subseção vazia)</p>');
         });
 
@@ -1208,6 +1229,8 @@ export const TemplatesPage: React.FC = () => {
           parent_id: s.parent_id || '',
           repetir_para: s.repetir_para || '',
           repetir_titulo: s.repetir_titulo || '',
+          ocultar_titulo: s.ocultar_titulo === 1,
+          contar_na_numeracao: s.contar_na_numeracao !== 0,
           conteudo: s.conteudo ? converterPlaceholdersTextuais(s.conteudo, placeholderChaves, true) : '',
         }));
 

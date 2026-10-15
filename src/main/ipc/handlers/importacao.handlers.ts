@@ -2,10 +2,11 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { importarDocumento } from '../../services/importacao.service.js';
 import path from 'path';
+import type { RespostaImportacaoTemplate } from '../../../shared/types/importacao-template.types.js';
 
 export const registerImportacaoHandlers = (): void => {
-  /** Abrir diálogo de arquivo, validar e importar PDF/DOCX */
-  ipcMain.handle('template:importarArquivo', async (event) => {
+  /** Abrir diálogo de arquivo, validar e importar PDF/DOCX/ODT */
+  ipcMain.handle('template:importarArquivo', async (event): Promise<RespostaImportacaoTemplate> => {
     try {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) {
@@ -15,22 +16,23 @@ export const registerImportacaoHandlers = (): void => {
       const result = await dialog.showOpenDialog(win, {
         title: 'Selecionar documento para importar',
         filters: [
-          { name: 'Documentos', extensions: ['pdf', 'docx'] },
+          { name: 'Documentos', extensions: ['pdf', 'docx', 'odt'] },
           { name: 'PDF', extensions: ['pdf'] },
           { name: 'DOCX', extensions: ['docx'] },
+          { name: 'ODT', extensions: ['odt'] },
         ],
         properties: ['openFile'],
       });
 
       if (result.canceled || result.filePaths.length === 0) {
-        return { success: false, error: 'Operação cancelada' };
+        return { success: false, cancelado: true };
       }
 
       const filePath = result.filePaths[0];
       const ext = path.extname(filePath).toLowerCase();
 
-      if (!['.pdf', '.docx'].includes(ext)) {
-        return { success: false, error: 'Tipo de arquivo não suportado. Use PDF ou DOCX.' };
+      if (!['.pdf', '.docx', '.odt'].includes(ext)) {
+        return { success: false, error: 'Tipo de arquivo não suportado. Use PDF, DOCX ou ODT.' };
       }
 
       logDebug(`Iniciando importação de arquivo: ${filePath}`);

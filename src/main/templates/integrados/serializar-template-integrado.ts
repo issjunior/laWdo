@@ -26,6 +26,8 @@ const serializarTemplateIntegrado = (template: DefinicaoTemplateIntegrado): stri
       condicao: secao.condicao ?? null,
       repetirPara: secao.repetirPara ?? null,
       repetirTitulo: secao.repetirTitulo ?? null,
+      ...(secao.ocultarTitulo === true ? { ocultarTitulo: true } : {}),
+      ...(secao.contarNaNumeracao === false ? { contarNaNumeracao: false } : {}),
     })),
 });
 

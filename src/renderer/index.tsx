@@ -20,6 +20,8 @@ import type {
 } from '@shared/desempenho/contratos';
 import type { EstadoCapturaLogs, ResumoCapturaLogs, SondaCapturaLogs } from '@shared/captura-logs/contratos';
 import type { MiniaturaArquivoRepGdl, ProgressoListaFotosGdl } from '@shared/types/gdl-arquivos.types';
+import type { RespostaImportacaoTemplate } from '@shared/types/importacao-template.types';
+import type { RespostaSalvarTemplateCompleto, SalvarTemplateCompletoInput } from '@shared/types/template.types';
 
 // Mantem a fronteira IPC legada solta ate a tipagem por canal ser tratada em tranche propria.
 type IpcDadoLegado = ReturnType<typeof JSON.parse>;
@@ -127,7 +129,10 @@ interface IpcAPIRendererLegada {
   };
   categoria: IpcGrupoLegado;
   placeholder: IpcGrupoLegado;
-  template: IpcGrupoLegado;
+  template: IpcGrupoLegado & {
+    importarArquivo: () => Promise<RespostaImportacaoTemplate>;
+    salvarCompleto: (dados: SalvarTemplateCompletoInput) => Promise<RespostaSalvarTemplateCompleto>;
+  };
   laudo: IpcGrupoLegado;
   wizard: IpcGrupoLegado;
   categoriaPeca: IpcGrupoLegado;

@@ -33,9 +33,11 @@ function validarPacote(valor: unknown): PacoteTemplate {
     const id = texto(secao.id_origem, `id da seção ${indice + 1}`, true)!;
     if (ids.has(id)) throw new Error('Pacote inválido: IDs de seções duplicados');
     ids.add(id);
+    if (secao.ocultar_titulo !== undefined && typeof secao.ocultar_titulo !== 'boolean') throw new Error(`Pacote inválido: ocultação do título da seção ${indice + 1}`);
+    if (secao.contar_na_numeracao !== undefined && typeof secao.contar_na_numeracao !== 'boolean') throw new Error(`Pacote inválido: participação na numeração da seção ${indice + 1}`);
     const ordem = secao.ordem;
     if (typeof ordem !== 'number' || !Number.isInteger(ordem) || ordem < 0) throw new Error(`Pacote inválido: ordem da seção ${indice + 1}`);
-    return { id_origem: id, parent_id_origem: texto(secao.parent_id_origem, `pai da seção ${indice + 1}`), nome: texto(secao.nome, `nome da seção ${indice + 1}`, true)!, ordem, conteudo: texto(secao.conteudo, `conteúdo da seção ${indice + 1}`), condicao: texto(secao.condicao, `condição da seção ${indice + 1}`), repetir_para: texto(secao.repetir_para, `repetição da seção ${indice + 1}`), repetir_titulo: texto(secao.repetir_titulo, `título de repetição da seção ${indice + 1}`) };
+    return { contar_na_numeracao: secao.contar_na_numeracao !== false, ocultar_titulo: secao.ocultar_titulo === true, id_origem: id, parent_id_origem: texto(secao.parent_id_origem, `pai da seção ${indice + 1}`), nome: texto(secao.nome, `nome da seção ${indice + 1}`, true)!, ordem, conteudo: texto(secao.conteudo, `conteúdo da seção ${indice + 1}`), condicao: texto(secao.condicao, `condição da seção ${indice + 1}`), repetir_para: texto(secao.repetir_para, `repetição da seção ${indice + 1}`), repetir_titulo: texto(secao.repetir_titulo, `título de repetição da seção ${indice + 1}`) };
   });
   if (secoes.some(s => s.parent_id_origem && !ids.has(s.parent_id_origem))) throw new Error('Pacote inválido: seção pai não encontrada');
   return { template: { nome, descricao: texto(valor.template.descricao, 'descrição') }, tipo_exame: { codigo, nome: nomeTipo, descricao: texto(valor.tipo_exame.descricao, 'descrição do tipo') }, secoes };
@@ -68,7 +70,7 @@ export async function exportarPacoteTemplate(templateId: string, destino: string
     const tipo = tipos[0];
     if (!tipo) throw new Error('Tipo de exame do template não encontrado');
     const secoes = await executeQuery<SecaoTemplateRow>('SELECT * FROM secoes_template WHERE template_id = ? ORDER BY ordem', [templateId]);
-    const pacote: PacoteTemplate = { template: { nome: template.nome, descricao: template.descricao ?? null }, tipo_exame: { codigo: tipo.codigo, nome: tipo.nome, descricao: tipo.descricao ?? null }, secoes: secoes.map(s => ({ id_origem: s.id, parent_id_origem: s.parent_id ?? null, nome: s.nome, ordem: s.ordem, conteudo: s.conteudo ?? null, condicao: s.condicao ?? null, repetir_para: s.repetir_para ?? null, repetir_titulo: s.repetir_titulo ?? null })) };
+    const pacote: PacoteTemplate = { template: { nome: template.nome, descricao: template.descricao ?? null }, tipo_exame: { codigo: tipo.codigo, nome: tipo.nome, descricao: tipo.descricao ?? null }, secoes: secoes.map(s => ({ contar_na_numeracao: s.contar_na_numeracao !== 0, ocultar_titulo: s.ocultar_titulo === 1, id_origem: s.id, parent_id_origem: s.parent_id ?? null, nome: s.nome, ordem: s.ordem, conteudo: s.conteudo ?? null, condicao: s.condicao ?? null, repetir_para: s.repetir_para ?? null, repetir_titulo: s.repetir_titulo ?? null })) };
     const dados = Buffer.from(JSON.stringify(pacote, null, 2), 'utf-8');
     const zip = new AdmZip();
     zip.addFile('manifest.json', Buffer.from(JSON.stringify({ tipo: 'template', versao: 1, criado_em: new Date().toISOString(), checksum: checksum(dados) } satisfies ManifestoPacote, null, 2), 'utf-8'));
@@ -109,7 +111,7 @@ export async function importarPacoteTemplate(caminho: string, criarTipo: boolean
       await executeNonQuery("INSERT INTO templates (id, tipo_exame_id, nome, descricao, origem, created_at, updated_at) VALUES (?, ?, ?, ?, 'importado', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", [templateId, tipo.id, nomeImportado, pacote.template.descricao ?? null]);
       const ids = new Map(pacote.secoes.map(secao => [secao.id_origem, randomUUID()]));
       for (const secao of pacote.secoes) {
-        await executeNonQuery('INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)', [ids.get(secao.id_origem), templateId, secao.nome, secao.ordem, secao.parent_id_origem ? ids.get(secao.parent_id_origem) : null, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null]);
+        await executeNonQuery('INSERT INTO secoes_template (id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, ocultar_titulo, contar_na_numeracao, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)', [ids.get(secao.id_origem), templateId, secao.nome, secao.ordem, secao.parent_id_origem ? ids.get(secao.parent_id_origem) : null, secao.conteudo ?? null, secao.condicao ?? null, secao.repetir_para ?? null, secao.repetir_titulo ?? null, secao.ocultar_titulo === true ? 1 : 0, secao.contar_na_numeracao === false ? 0 : 1]);
       }
     });
     return { success: true, nome: nomeImportado };
