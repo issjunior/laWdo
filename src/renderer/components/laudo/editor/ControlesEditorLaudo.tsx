@@ -64,6 +64,7 @@ interface ControleSegmentadoProps<T extends string> {
   valor: T;
   opcoes: Array<OpcaoSegmentada<T>>;
   onChange: (valor: T) => void;
+  bloqueado?: boolean;
 }
 
 function ControleSegmentado<T extends string>({
@@ -71,6 +72,7 @@ function ControleSegmentado<T extends string>({
   valor,
   opcoes,
   onChange,
+  bloqueado = false,
 }: ControleSegmentadoProps<T>) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
@@ -90,6 +92,7 @@ function ControleSegmentado<T extends string>({
               variant={selecionada ? 'default' : 'ghost'}
               size="sm"
               aria-pressed={selecionada}
+              disabled={bloqueado}
               onClick={() => onChange(opcao.valor)}
               className="h-8 min-w-0 gap-1.5 px-2.5 text-xs"
             >
@@ -292,6 +295,7 @@ export function CabecalhoEditorLaudo({
 }
 
 interface BarraEditorLaudoProps {
+  bloqueado?: boolean;
   modoConteudo: ModoConteudoLaudo;
   modoOrganizacao: ModoOrganizacaoLaudo;
   onModoConteudoChange: (modo: ModoConteudoLaudo) => void;
@@ -300,6 +304,7 @@ interface BarraEditorLaudoProps {
 }
 
 export function BarraEditorLaudo({
+  bloqueado = false,
   modoConteudo,
   modoOrganizacao,
   onModoConteudoChange,
@@ -316,6 +321,7 @@ export function BarraEditorLaudo({
             variant={modoConteudo === 'dados' ? 'default' : 'ghost'}
             size="sm"
             aria-pressed={modoConteudo === 'dados'}
+            disabled={bloqueado}
             onClick={() => onModoConteudoChange('dados')}
             className="h-8 min-w-0 gap-1.5 px-2.5 text-xs"
           >
@@ -330,6 +336,7 @@ export function BarraEditorLaudo({
                 size="sm"
                 aria-pressed={modoConteudo === 'chaves'}
                 aria-label="Opções de placeholders"
+                disabled={bloqueado}
                 className="h-8 min-w-0 gap-1.5 px-2.5 text-xs"
               >
                 <Braces className="size-3.5" />
@@ -352,6 +359,7 @@ export function BarraEditorLaudo({
         </div>
       </div>
       <ControleSegmentado
+        bloqueado={bloqueado}
         rotulo="Organização"
         valor={modoOrganizacao}
         onChange={onModoOrganizacaoChange}

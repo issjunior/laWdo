@@ -1,3 +1,4 @@
+import { criarIndicadoresSecaoHtml } from '@/lib/indicadores-secao';
 import { calcularNumeracaoSecoes } from '@shared/utils/numeracao-secoes';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
@@ -701,7 +702,7 @@ export const TemplatesPage: React.FC = () => {
         return `
           <section data-template-secao="true" data-secao-index="${index}" data-secao-id="${secId}" style="margin-bottom:16px;border:1px solid #d9d9d9;border-radius:8px;overflow:hidden;">
             <div contenteditable="false" data-template-secao-header="true" style="background:#f5f5f5;padding:8px 12px;border-bottom:1px solid #d9d9d9;font-weight:600;">
-              ${nome}${sec.ocultar_titulo ? ` (Título oculto no laudo${sec.contar_na_numeracao === false ? '; não conta na numeração' : ''})` : ''}
+              ${nome}${criarIndicadoresSecaoHtml({ ocultarTitulo: sec.ocultar_titulo, contarNaNumeracao: sec.contar_na_numeracao })}
             </div>
             <div data-template-secao-content="true" style="padding:8px 4px;">
               ${conteudo}

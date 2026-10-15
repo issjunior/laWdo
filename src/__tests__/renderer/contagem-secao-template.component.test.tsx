@@ -21,7 +21,8 @@ describe('escolha da contagem no template', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ocultar título no laudo' }));
     expect(screen.getByRole('checkbox', { name: 'Contar esta seção na numeração' })).toBeChecked();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Contar esta seção na numeração' }));
-    expect(screen.getByText(/Não conta na numeração/)).toBeInTheDocument();
+    expect(screen.getByText('Título oculto')).toBeInTheDocument();
+    expect(screen.getByText('Fora da numeração')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ocultar título no laudo' }));
     expect(screen.queryByRole('checkbox', { name: 'Contar esta seção na numeração' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ocultar título no laudo' }));

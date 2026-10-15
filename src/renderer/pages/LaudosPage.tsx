@@ -114,6 +114,7 @@ import { getMargens } from '@/lib/margens';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import {
   aplicarVisualizacaoPlaceholder,
+  aplicarVisualizacaoPlaceholders,
   agendarVisualizacaoPlaceholders,
   restaurarVisualizacaoAposSalvar,
   type ModoVisualizacaoPlaceholders,
@@ -127,6 +128,8 @@ import {
   resolverPlaceholdersExportacao,
   type MapaPlaceholdersResolvidos,
 } from '@/lib/exportacao-placeholders';
+import { IndicadoresSecao } from '@/components/ui/indicadores-secao';
+import { criarIndicadoresSecaoHtml } from '@/lib/indicadores-secao';
 import { calcularNumeracaoSecoes } from '@shared/utils/numeracao-secoes';
 import { ocultarTitulosSecoesNaSaida } from '@/lib/titulos-secoes-laudo';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
@@ -816,7 +819,7 @@ export const LaudosPage: React.FC = () => {
               data-titulo-base="${escaparHtml(titulo)}"
               style="${estiloCabecalho}"
             >
-              ${escaparHtml(titulo)}${sec.ocultarTitulo ? `<span data-indicador-titulo-oculto="true"> (Título oculto no laudo${sec.contarNaNumeracao === false ? '; não conta na numeração' : ''})</span>` : ''}
+              ${escaparHtml(titulo)}${criarIndicadoresSecaoHtml(sec)}
             </div>
             ${conteudo ? `<div data-laudo-secao-content="true" style="${estiloConteudo}">${conteudo}</div>` : ''}
             ${subsecoes}
@@ -926,7 +929,7 @@ export const LaudosPage: React.FC = () => {
 
     if (houveCorrecaoPersistente) {
       registrarEventoPagina('tabelas_corrigidas');
-      registrarAlteracao();
+      registrarAlteracao(inicializando ? 'normalizacao-inicial' : 'usuario');
     }
 
     if (editorMode === 'single') {
@@ -950,7 +953,7 @@ export const LaudosPage: React.FC = () => {
       conteudo: removerFormatacaoPlaceholders(secao.conteudo),
     })));
     return secoesAtuais;
-  }, [editorMode, parseSingleHtmlToSecoes, registrarAlteracao, registrarEventoPagina, secoes, singleEditorHtml]);
+  }, [editorMode, inicializando, parseSingleHtmlToSecoes, registrarAlteracao, registrarEventoPagina, secoes, singleEditorHtml]);
   const conferirTabelasEditoresRef = useRef(conferirTabelasEditores);
   conferirTabelasEditoresRef.current = conferirTabelasEditores;
 
@@ -2273,6 +2276,21 @@ export const LaudosPage: React.FC = () => {
       },
     });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders, registrarEventoPagina]);
+
+  const prepararConteudoEditor = async (editor: TinyMceEditorInstance, sessao: number): Promise<boolean> => {
+    const imagens = await editor.uploadImages();
+    if (!sessaoAtual(sessao) || editor.removed || editor.destroyed) return false;
+    if (imagens.some(imagem => !imagem.status)) throw new Error('Não foi possível preparar as imagens do laudo.');
+    const resultado = aplicarVisualizacaoPlaceholders(editor, {
+      modo: modoVisualizacaoPlaceholders,
+      valores: mapaPlaceholdersResolvidos,
+      placeholdersPersonalizados: placeholders,
+      descreverPendente: descreverPlaceholderPendente,
+    });
+    if (resultado.estado !== 'aplicado') throw new Error('Não foi possível preparar os campos do laudo.');
+    conferirTabelasEditoresRef.current();
+    return true;
+  };
 
   const inserirPlaceholder = useCallback((editorId: string, chave: string) => {
     const editor = obterEditorTinyMce(editorId);
@@ -3927,6 +3945,7 @@ export const LaudosPage: React.FC = () => {
               </Badge>
             </div>
             <BarraEditorLaudo
+              bloqueado={inicializando}
               modoConteudo={modoVisualizacaoPlaceholders}
               modoOrganizacao={editorMode}
               onModoConteudoChange={setModoVisualizacaoPlaceholders}
@@ -4019,11 +4038,11 @@ export const LaudosPage: React.FC = () => {
                         }}
                         placeholderChaves={placeholderChaves}
                         condToggles={exameToggles}
-                        onEditorInit={(editor) => {
+                        onEditorInit={async (editor) => {
+                          if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                           setSingleEditorHtml(editor.getContent());
                           concluirInicializacao(obterConteudoComparavelRef.current(), sessaoEditor);
                           registrarEventoPagina('editor_pronto', { atualTamanho: editor.getContent().length });
-                          aplicarModoNoEditor(editor);
                           registrarEditorIa(editor);
                         }}
                         onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
@@ -4086,7 +4105,7 @@ export const LaudosPage: React.FC = () => {
                                   <div className="min-w-0">
                                     <h3 className={cn('font-semibold', aninhada ? 'text-base' : 'text-lg')}>{secao.titulo}</h3>
                                     <p className="text-sm text-muted-foreground">{tituloVisual} · clique para expandir/recolher</p>
-                                    {secao.ocultarTitulo && <Badge variant="secondary">Título oculto no laudo{secao.contarNaNumeracao === false ? ' · Não conta na numeração' : ''}</Badge>}
+                                    <IndicadoresSecao ocultarTitulo={secao.ocultarTitulo} contarNaNumeracao={secao.contarNaNumeracao} />
                                   </div>
                                 </div>
                               </CollapsibleTrigger>
@@ -4136,8 +4155,8 @@ export const LaudosPage: React.FC = () => {
                                       setPanelCollapsed(false);
                                     }}
                                     placeholderChaves={placeholderChaves}
-                                    onEditorInit={(editor) => {
-                                      aplicarModoNoEditor(editor);
+                                    onEditorInit={async (editor) => {
+                                      if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                                       registrarEditorIa(editor);
                                       if (isIlustracoes) handleIlustracoesEditorInit(editor);
                                     }}

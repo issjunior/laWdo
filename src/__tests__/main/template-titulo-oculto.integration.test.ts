@@ -6,6 +6,8 @@ import AdmZip from 'adm-zip';
 import { app } from 'electron';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SecaoTemplateRow } from '../../main/types/database';
+import { buildHtml } from '../../main/services/secao-builder.service';
+import { ocultarTitulosSecoesNaSaida } from '../../renderer/lib/titulos-secoes-laudo';
 
 describe('persistência da ocultação de títulos', () => {
   let diretorio: string;
@@ -49,6 +51,32 @@ describe('persistência da ocultação de títulos', () => {
     expect(secoes[1].parent_id).toBe(secoes[0].id);
     expect(secoes[0].conteudo).toBe('<p>Texto inicial</p>');
   }
+
+  it('instala o B-602 v7 com preâmbulo oculto sem contar, preservando a versão anterior', async () => {
+    const [integrado] = await sqlite.executeQuery<{ id: string; tipo_exame_id: string }>(
+      "SELECT id, tipo_exame_id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 7",
+    );
+    expect(integrado).toBeDefined();
+    const secoes = await servico.findSecoesByTemplate(integrado.id);
+    expect(secoes[0]).toMatchObject({ chave_integrada: 'preambulo', ocultar_titulo: 1, contar_na_numeracao: 0 });
+    const html = buildHtml(secoes, new Map(), {});
+    const documento = new DOMParser().parseFromString(html, 'text/html');
+    expect(documento.querySelector('h2')?.textContent).toBe('PREÂMBULO');
+    expect(documento.querySelectorAll('h2')[1].textContent).toMatch(/^1\. /);
+    const saida = ocultarTitulosSecoesNaSaida(html);
+    expect(new DOMParser().parseFromString(saida, 'text/html').querySelector('h2')?.textContent).toMatch(/^1\. /);
+    expect(saida).toContain(secoes[0].conteudo);
+    const copia = await servico.clonar(integrado.id);
+    expect((await servico.findSecoesByTemplate(copia.id))[0]).toMatchObject({ ocultar_titulo: 1, contar_na_numeracao: 0 });
+
+    await sqlite.executeNonQuery("INSERT INTO templates (id, nome, tipo_exame_id, origem, chave_integrada, versao_integrada) VALUES ('b602-legado-teste', 'B-602 anterior', ?, 'integrado', 'laudo-padrao-b602', 6)", [integrado.tipo_exame_id]);
+    await sqlite.executeNonQuery("INSERT INTO secoes_template (id, template_id, nome, ordem, conteudo) VALUES ('preambulo-legado-teste', 'b602-legado-teste', 'PREÂMBULO', 0, '<p>Conteúdo anterior preservado</p>')");
+    const { sincronizarTemplatesIntegrados } = await import('../../main/templates/integrados/sincronizar-templates-integrados');
+    expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
+    expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
+    expect((await servico.findSecoesByTemplate('b602-legado-teste'))[0]).toMatchObject({ conteudo: '<p>Conteúdo anterior preservado</p>', ocultar_titulo: 0, contar_na_numeracao: 1 });
+    expect(await sqlite.executeQuery("SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 7")).toHaveLength(1);
+  });
 
   it('persiste, atualiza e duplica a escolha independentemente da hierarquia', async () => {
     const secoes = await servico.findSecoesByTemplate(templateId);

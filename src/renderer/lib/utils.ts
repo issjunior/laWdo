@@ -23,6 +23,7 @@ export function removerFormatacaoPlaceholders(html: string): string {
   doc.querySelectorAll('[data-acao-tabela-placeholder]').forEach(elemento => elemento.remove());
   doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
     tabela.removeAttribute('contenteditable');
+    if (tabela.style.display === 'none') tabela.style.removeProperty('display');
     tabela.querySelectorAll<HTMLElement>('[contenteditable]').forEach(celula => celula.removeAttribute('contenteditable'));
   });
   doc.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
@@ -35,12 +36,14 @@ export function removerFormatacaoPlaceholders(html: string): string {
     const chave = placeholder.getAttribute('data-placeholder');
     if (!chave) return;
     const tabelaPersonalizada = placeholder.hasAttribute('data-placeholder-tabela-personalizada-id');
+    const possuiPrevia = placeholder.hasAttribute('data-placeholder-preview-id');
     if (!placeholder.hasAttribute('data-placeholder-personalizado-html')) placeholder.textContent = chave;
     placeholder.removeAttribute('data-placeholder-apresentacao');
     if (!tabelaPersonalizada) placeholder.removeAttribute('data-placeholder-preview-id');
     placeholder.classList.remove('campo-reservado');
     placeholder.removeAttribute('data-reservado');
     if (tabelaPersonalizada) placeholder.style.display = 'none';
+    else if (possuiPrevia) placeholder.style.removeProperty('display');
   });
   return doc.body.innerHTML;
 }

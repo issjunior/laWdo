@@ -3,10 +3,34 @@ import { laudoPadraoB602V1 } from '../../main/templates/integrados/b602/laudo-pa
 import { laudoPadraoB602V4 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v4';
 import { laudoPadraoB602V5 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v5';
 import { laudoPadraoB602V6 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v6';
+import { laudoPadraoB602V7 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v7';
+import { catalogoTemplatesIntegrados } from '../../main/templates/integrados/catalogo';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 
 describe('catálogo de templates integrados', () => {
+  it('publica a versão 7 com o título do preâmbulo oculto e fora da contagem', () => {
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V7)).not.toThrow();
+    expect(catalogoTemplatesIntegrados).toContain(laudoPadraoB602V7);
+    expect(laudoPadraoB602V7.versao).toBe(7);
+    expect(laudoPadraoB602V7.secoes[0]).toMatchObject({ chave: 'preambulo', ocultarTitulo: true, contarNaNumeracao: false });
+    expect(laudoPadraoB602V7.secoes.map(secao => secao.conteudo)).toEqual(laudoPadraoB602V6.secoes.map(secao => secao.conteudo));
+    expect(laudoPadraoB602V7.secoes.slice(1)).toEqual(laudoPadraoB602V6.secoes.slice(1));
+    expect(laudoPadraoB602V6.secoes[0].ocultarTitulo).toBeUndefined();
+  });
+
+  it('considera as preferências no checksum sem mudar o hash das versões anteriores', () => {
+    const explicito = structuredClone(laudoPadraoB602V6);
+    explicito.secoes[0].ocultarTitulo = false;
+    explicito.secoes[0].contarNaNumeracao = true;
+    expect(calcularChecksumTemplateIntegrado(explicito)).toBe(calcularChecksumTemplateIntegrado(laudoPadraoB602V6));
+    explicito.secoes[0].ocultarTitulo = true;
+    expect(calcularChecksumTemplateIntegrado(explicito)).not.toBe(calcularChecksumTemplateIntegrado(laudoPadraoB602V6));
+    const contando = calcularChecksumTemplateIntegrado(explicito);
+    explicito.secoes[0].contarNaNumeracao = false;
+    expect(calcularChecksumTemplateIntegrado(explicito)).not.toBe(contando);
+  });
+
   it('mantém o B602 estruturado, com seção repetível por arma', () => {
     expect(() => validarTemplateIntegrado(laudoPadraoB602V1)).not.toThrow();
     expect(laudoPadraoB602V1.chave).toBe('laudo-padrao-b602');

@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
+import { IndicadoresSecao } from '@/components/ui/indicadores-secao';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -90,7 +91,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
               />
             </div>
             <p className="text-xs text-muted-foreground">{resumo}</p>
-            {secao.ocultar_titulo && <Badge variant="secondary">Título oculto no laudo{secao.contar_na_numeracao === false ? ' · Não conta na numeração' : ''}</Badge>}
+            <IndicadoresSecao ocultarTitulo={secao.ocultar_titulo} contarNaNumeracao={secao.contar_na_numeracao} />
           </div>
         </div>
         <div className="flex items-center justify-end gap-1">
