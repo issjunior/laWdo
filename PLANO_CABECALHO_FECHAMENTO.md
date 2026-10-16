@@ -2,9 +2,9 @@
 
 Data: 16/10/2026
 
-Status: planejamento aprovado conceitualmente; implementação pendente.
+Status: implementação local concluída e validada; aguardando homologação no aplicativo.
 
-Este arquivo registra a proposta de implementação. Não descreve uma funcionalidade já disponível.
+Este arquivo registra o escopo acordado e os critérios de aceite. A implementação está no diretório de trabalho e ainda não foi publicada.
 
 ## Objetivo
 
@@ -97,3 +97,23 @@ Conferir manualmente documentos curtos e longos, término próximo ao limite da 
 Antes de criar ou alterar testes automatizados, apresentar explicitamente a justificativa e o escopo, conforme as instruções do projeto. Os principais candidatos são migração, preservação da configuração por laudo e combinação dos controles na composição da saída.
 
 Este plano, isoladamente, não requer executar validações de código nem alterar testes.
+
+## Registro da implementação local
+
+- A página mantém a rota `/cabecalho` e passa a oferecer as duas abas, salvamento por aba e prévia conjunta.
+- Os padrões são armazenados em `cabecalho_documento` e `fechamento_laudo`; o cabeçalho anterior permanece como fallback para instalações que ainda não salvaram os novos padrões.
+- A migration 44 grava `apresentacao_json` nos laudos antigos com o cabeçalho legado e o perfil disponível no momento, sem fechamento. Novos laudos recebem a cópia na mesma inserção que grava seu conteúdo.
+- Prévias e exportações de laudos usam exclusivamente essa cópia; a prévia de templates usa os padrões atuais.
+- O fechamento acompanha o fluxo no PDF; no DOCX e no ODT fica em uma tabela sem bordas cuja linha não deve ser dividida. O conteúdo do editor continua livre e editável.
+- As configurações novas entram no backup de configuração. O backup completo preserva a cópia junto ao banco.
+- Não existe atualmente uma operação de duplicação de laudo no aplicativo. Nenhuma operação nova de duplicação foi acrescentada; a criação a partir de templates utiliza os padrões vigentes.
+- Não houve escrita em specs de estado atual. Recomenda-se revisar as specs de laudo, layout e backup após o aceite do usuário.
+
+### Validação concluída
+
+- Type-check, lint sem warnings, build e smoke do schema 44 aprovados.
+- Suíte completa: 885 testes em 160 arquivos aprovados; cobertura de 67,94% de linhas e 64,32% de funções, acima dos limites exigidos.
+- Ensaios com dados fictícios nos caminhos reais de PDF, DOCX e ODT confirmaram fechamento único após o corpo e transferência integral para a página seguinte quando faltou espaço. PDFs renderizados e inspecionados visualmente.
+- Testes da página confirmaram desativação, salvamento, reabertura e preservação do conteúdo.
+- Auditoria observacional de código morto executada; os apontamentos não motivaram remoções fora deste escopo.
+- O banco real do usuário não foi usado nos ensaios. A migration será aplicada quando o aplicativo atualizado for iniciado.
