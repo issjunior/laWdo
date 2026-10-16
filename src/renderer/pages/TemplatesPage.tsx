@@ -1140,7 +1140,7 @@ export const TemplatesPage: React.FC = () => {
     templateNome: string,
     tipoExameNome: string,
   ): Promise<{ fullHtml: string; headerTemplate: string }> => {
-    const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+    const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
       numeroRepFallback: '321.654-2026',
     });
 
@@ -1185,7 +1185,7 @@ export const TemplatesPage: React.FC = () => {
     let fullHtml = cabecalhoPrimeiraPagina
       ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
       : '';
-    fullHtml += secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>';
+    fullHtml += (secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>') + fechamentoHtml;
 
     let peritoNome = '';
     let peritoCargo = '';

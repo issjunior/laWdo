@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { parseHtmlParaEstrutura } from '../../renderer/lib/exportacao-parser';
 
 describe('parseHtmlParaEstrutura', () => {
+  it('preserva zero, converte pixels e expande abreviações das margens de parágrafo', () => {
+    const blocos = parseHtmlParaEstrutura('<p style="margin-top:0pt;margin-bottom:0pt;line-height:1.7">Zero</p><p style="margin:8px 0 16px">Pixels</p><p style="margin:0">Abreviação</p><p>Sem ajuste</p>').secoes[0].blocos;
+    expect(blocos[0]).toMatchObject({ espacamentoAntesPt: 0, espacamentoDepoisPt: 0, espacamentoLinha: 1.7 });
+    expect(blocos[1]).toMatchObject({ espacamentoAntesPt: 6, espacamentoDepoisPt: 12 });
+    expect(blocos[2]).toMatchObject({ espacamentoAntesPt: 0, espacamentoDepoisPt: 0 });
+    expect(blocos[3]).toMatchObject({ espacamentoAntesPt: undefined, espacamentoDepoisPt: undefined });
+  });
   it('justifica parágrafos comuns sem sobrescrever alinhamentos explícitos ou títulos', () => {
     const blocos = parseHtmlParaEstrutura('<h2>Título</h2><p>Texto</p><p style="text-align:center">Centralizado</p><table><tr><td><p>Célula</p></td></tr></table>').secoes[0].blocos;
     expect(blocos[0]).toMatchObject({ tipo: 'paragrafo', alinhamento: undefined });

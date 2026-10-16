@@ -396,6 +396,7 @@ const obterMascaramentoIa = async (): Promise<boolean> => {
 };
 
 interface LaudoItem {
+  apresentacao_json?: string | null;
   id: string;
   rep_id: string;
   perito_id: string;
@@ -1902,9 +1903,12 @@ export const LaudosPage: React.FC = () => {
         } catch { /* silencioso: placeholder fica vazio */ }
       }
 
-      // 2. Buscar cabeçalho das configurações
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      // Usar a apresentação preservada na criação do laudo.
+      const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        usarCopiaLaudo: true,
+        apresentacaoJson: editando.apresentacao_json,
+        contexto: { repData, solicitanteNome, tipoExameNome, tipoExameCodigo, placeholdersPersonalizados: placeholders },
         estrito: true,
       });
 
@@ -1912,7 +1916,7 @@ export const LaudosPage: React.FC = () => {
       let fullHtml = cabecalhoPrimeiraPagina
         ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
         : '';
-      fullHtml += ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais));
+      fullHtml += ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais)) + fechamentoHtml;
 
       // 4. Aplicar placeholders (incluindo relacionamentos)
       const htmlProcessado = aplicarPlaceholders(fullHtml, repData, {
@@ -1996,8 +2000,11 @@ export const LaudosPage: React.FC = () => {
         }
       }
 
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        usarCopiaLaudo: true,
+        apresentacaoJson: laudo.apresentacao_json,
+        contexto: { repData, solicitanteNome, tipoExameNome, tipoExameCodigo, placeholdersPersonalizados: placeholders },
         estrito: true,
       });
 
@@ -2005,6 +2012,7 @@ export const LaudosPage: React.FC = () => {
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
+      html += fechamentoHtml;
       html = reindexarFiguras(html);
       html = aplicarPlaceholders(html, repData, {
         solicitanteNome,
@@ -2095,8 +2103,11 @@ export const LaudosPage: React.FC = () => {
         }
       }
 
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        usarCopiaLaudo: true,
+        apresentacaoJson: editando.apresentacao_json,
+        contexto: { repData, solicitanteNome, tipoExameNome, tipoExameCodigo, placeholdersPersonalizados: placeholders },
         estrito: formato === 'pdf',
       });
 
@@ -2106,6 +2117,8 @@ export const LaudosPage: React.FC = () => {
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
+
+      html += fechamentoHtml;
 
       const htmlResolvido = renumerarTabelasHtml(resolverPlaceholdersExportacao(html, {
         repData,
@@ -2134,24 +2147,11 @@ export const LaudosPage: React.FC = () => {
       } else if (formato === 'docx') {
         const estrutura = parseHtmlParaEstrutura(htmlResolvido);
 
-        let logoBase64: string | undefined;
-        if (cabecalhoPrimeiraPagina) {
-          const match = cabecalhoPrimeiraPagina.match(/<img[^>]+src="(data:image\/[^"]+)"[^>]*>/i);
-          if (match) logoBase64 = match[1].replace(/^data:image\/\w+;base64,/, '');
-        }
-
         const result = await window.ipcAPI.laudo.exportar({
           laudoId: editando.id,
           formato: 'docx',
           html: htmlResolvido,
           estrutura,
-          cabecalho: cabecalhoPrimeiraPagina ? {
-            logoBase64,
-            texto: cabecalhoPrimeiraPagina.replace(/<[^>]*>/g, '').trim(),
-            alinhamento: /text-align:\s*(center|right|left)/i.test(cabecalhoPrimeiraPagina)
-              ? cabecalhoPrimeiraPagina.match(/text-align:\s*(center|right|left)/i)![1]
-              : 'left',
-          } : undefined,
           margens: await getMargens() || undefined,
         });
 

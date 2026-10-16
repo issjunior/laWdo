@@ -23,4 +23,4 @@ export type BlocoExportacao = ParagrafoExportacao | ListaExportacao | TabelaExpo
 export interface SecaoExportacao { titulo?: ParagrafoExportacao; blocos: BlocoExportacao[]; }
 export interface CabecalhoExportacao { logoBase64?: string; texto?: string; alinhamento?: AlinhamentoDocumento; }
 export interface MargensExportacao { top: number; right: number; bottom: number; left: number; }
-export interface DocumentoExportacao { versao: 1; fontePadrao: string; tamanhoPadraoPt: number; secoes: SecaoExportacao[]; cabecalho?: CabecalhoExportacao; margens?: MargensExportacao; }
+export interface DocumentoExportacao { versao: 1; fontePadrao: string; tamanhoPadraoPt: number; secoes: SecaoExportacao[]; fechamento?: { blocos: BlocoExportacao[]; espacamentoAntesPt: number }; cabecalho?: CabecalhoExportacao; margens?: MargensExportacao; }
