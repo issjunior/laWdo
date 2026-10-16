@@ -27,7 +27,7 @@ describe('configuração do TinyMceEditor', () => {
   it('mantém uma sequência responsiva de controles e inclui os comandos contextuais', () => {
     const toolbarSemContexto = obterToolbarTinyMce(false);
 
-    expect(toolbarSemContexto).toBe('undo redo formatacao | bold italic underline strikethrough subscript superscript | fonte fontsize forecolor backcolor removeformat | align bullist numlist | outdent indent lineheight recuoprimeiralinha | blockquote hr | searchreplace pastetext visualblocks | link image table charmap nonbreaking pagebreak fullscreen');
+    expect(toolbarSemContexto).toBe('undo redo formatacao | bold italic underline strikethrough subscript superscript | fonte fontsize forecolor backcolor removeformat | align bullist numlist | outdent indent lineheight espacamentoparagrafo recuoprimeiralinha | blockquote hr | searchreplace pastetext visualblocks | link image table charmap nonbreaking pagebreak fullscreen');
     expect(toolbarSemContexto.split(/\s+/)).not.toContain('blocks');
     expect(toolbarSemContexto).not.toContain('maisferramentas');
     expect(obterToolbarTinyMce(true)).toContain('condbloco suprimirblocopericial');

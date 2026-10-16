@@ -3,6 +3,8 @@ import type { Editor } from 'tinymce';
 import { webcrypto } from 'node:crypto';
 import {
   aplicarRecuoPrimeiraLinha,
+  aplicarEspacamentoParagrafo,
+  obterEspacamentoSelecionado,
   converterRecuoParaPt,
   FORMATOS_LIMPEZA_EDITOR,
   limparFormatacaoEditor,
@@ -58,6 +60,56 @@ describe('formatação do editor', () => {
     if (colapsar) editor.selection.collapse(true);
     return elemento as HTMLElement;
   }
+
+  it('ajusta vários parágrafos e títulos numa transação preservando seleção, texto e altura da linha', () => {
+    editor.setContent('<p style="line-height:1.7;margin-bottom:12pt">Primeiro texto</p><h2>Segundo título</h2>');
+    const blocos = editor.getBody().querySelectorAll('p,h2');
+    const intervalo = editor.getDoc().createRange();
+    intervalo.setStart(blocos[0].firstChild!, 3);
+    intervalo.setEnd(blocos[1].firstChild!, 5);
+    editor.selection.setRng(intervalo);
+    const selecionado = editor.selection.getRng().toString();
+    const anterior = editor.getContent();
+    editor.undoManager.clear();
+    editor.undoManager.add();
+    aplicarEspacamentoParagrafo(editor, 'depois', 0);
+    expect(Array.from(blocos).map(bloco => (bloco as HTMLElement).style.marginBottom)).toEqual(['0pt', '0pt']);
+    expect((blocos[0] as HTMLElement).style.lineHeight).toBe('1.7');
+    expect(editor.selection.getRng().toString()).toBe(selecionado);
+    expect(obterEspacamentoSelecionado(editor, 'depois')).toMatchObject({ valorPt: 0, padrao: false });
+    const alterado = editor.getContent();
+    editor.undoManager.undo();
+    expect(editor.getContent()).toBe(anterior);
+    editor.undoManager.redo();
+    expect(editor.getContent()).toBe(alterado);
+  });
+
+  it('detecta valores mistos e remove apenas a margem escolhida ao restaurar o padrão', () => {
+    editor.setContent('<p style="margin-top:6pt;margin-bottom:12pt">Um</p><p style="margin-top:6pt;margin-bottom:3pt">Dois</p>');
+    editor.selection.select(editor.getBody(), true);
+    expect(obterEspacamentoSelecionado(editor, 'depois').valorPt).toBeNull();
+    expect(obterEspacamentoSelecionado(editor, 'antes')).toMatchObject({ valorPt: 6, padrao: false });
+    aplicarEspacamentoParagrafo(editor, 'antes');
+    expect(obterEspacamentoSelecionado(editor, 'antes').padrao).toBe(true);
+    expect(Array.from(editor.getBody().querySelectorAll('p')).map(paragrafo => paragrafo.style.marginBottom)).toEqual(['12pt', '3pt']);
+  });
+
+  it('preserva o cursor colapsado e não modifica tabelas, células ou figuras', () => {
+    editor.setContent('<p>Texto normal</p><table style="margin:12pt"><tbody><tr><td style="margin:6pt">Célula</td></tr></tbody></table><figure class="laudo-figure"><p>Legenda protegida</p></figure>');
+    const paragrafo = editor.getBody().querySelector('p')!;
+    editor.selection.setCursorLocation(paragrafo.firstChild!, 3);
+    aplicarEspacamentoParagrafo(editor, 'antes', 8);
+    expect(editor.selection.isCollapsed()).toBe(true);
+    expect(editor.selection.getRng().startOffset).toBe(3);
+    expect(paragrafo.style.marginTop).toBe('8pt');
+    selecionar('td', true);
+    aplicarEspacamentoParagrafo(editor, 'depois', 0);
+    selecionar('figure p', true);
+    aplicarEspacamentoParagrafo(editor, 'depois', 0);
+    expect(editor.getBody().querySelector('td')?.getAttribute('style')).toContain('6pt');
+    expect(editor.getBody().querySelector('table')?.getAttribute('style')).toContain('12pt');
+    expect(editor.getBody().querySelector<HTMLElement>('figure p')?.style.marginBottom).toBe('');
+  });
 
   it('normaliza unidades equivalentes e indica somente um recuo', () => {
     for (const valor of ['35.43pt', '1.25cm', '12.5mm', '47.24px']) {

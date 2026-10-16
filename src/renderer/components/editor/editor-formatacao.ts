@@ -1,4 +1,6 @@
 import type { Editor, RawEditorOptions } from 'tinymce';
+import { converterMedidaTextoParaPt as converterRecuoParaPt } from '@/lib/medidas-texto';
+export { converterMedidaTextoParaPt as converterRecuoParaPt } from '@/lib/medidas-texto';
 
 const SELETOR_PROTEGIDO = '.laudo-figure, figcaption, [data-placeholder], .placeholder-tag, [data-reservado], .campo-reservado, [contenteditable="false"], [data-mce-bogus], [data-mce-type="bookmark"]';
 const ESTILOS_TEXTO = ['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line', 'color', 'background-color', 'vertical-align'];
@@ -29,12 +31,36 @@ function obterBlocosSelecionados(editor: Editor): HTMLElement[] {
   );
 }
 
-export function converterRecuoParaPt(valor: string): number | null {
-  if (!valor || valor === '0') return 0;
-  const medida = /^(-?\d+(?:\.\d+)?)\s*(pt|px|cm|mm|in)$/i.exec(valor.trim());
-  if (!medida) return null;
-  const fatores: Record<string, number> = { pt: 1, px: 0.75, cm: 72 / 2.54, mm: 72 / 25.4, in: 72 };
-  return Number(medida[1]) * fatores[medida[2].toLowerCase()];
+export const VALORES_ESPACAMENTO_PARAGRAFO = [0, 3, 6, 8, 12, 18, 24] as const;
+type LadoEspacamento = 'antes' | 'depois';
+
+function obterParagrafosEspacamento(editor: Editor): HTMLElement[] {
+  const blocos = obterBlocosSelecionados(editor).filter(bloco => bloco.matches('p,h1,h2,h3,h4,h5,h6,pre,blockquote'));
+  return blocos.filter(bloco => !blocos.some(outro => outro !== bloco && bloco.contains(outro)));
+}
+
+export function obterEspacamentoSelecionado(editor: Editor, lado: LadoEspacamento) {
+  const propriedade = lado === 'antes' ? 'margin-top' : 'margin-bottom';
+  const blocos = obterParagrafosEspacamento(editor);
+  const medidas = blocos.map(bloco => converterRecuoParaPt(editor.dom.getStyle(bloco, propriedade, true)));
+  const primeira = medidas[0];
+  return {
+    disponivel: blocos.length > 0,
+    padrao: blocos.length > 0 && blocos.every(bloco => !bloco.style.getPropertyValue(propriedade)),
+    valorPt: primeira != null && medidas.every(medida => medida !== null && Math.abs(medida - primeira) < 0.1) ? primeira : null,
+  };
+}
+
+export function aplicarEspacamentoParagrafo(editor: Editor, lado: LadoEspacamento, valorPt?: number): void {
+  const blocos = obterParagrafosEspacamento(editor);
+  if (!blocos.length || (valorPt !== undefined && !VALORES_ESPACAMENTO_PARAGRAFO.some(valor => valor === valorPt))) return;
+  const propriedade = lado === 'antes' ? 'margin-top' : 'margin-bottom';
+  const marcador = editor.selection.getBookmark(2, true);
+  editor.undoManager.transact(() => {
+    for (const bloco of blocos) editor.dom.setStyle(bloco, propriedade, valorPt === undefined ? '' : `${valorPt}pt`);
+    editor.selection.moveToBookmark(marcador);
+  });
+  editor.nodeChanged();
 }
 
 export function obterRecuoSelecionado(editor: Editor): number | null {
