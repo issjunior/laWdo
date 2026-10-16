@@ -394,7 +394,10 @@
         "src/renderer/styles/globals.css",
         "src/shared/utils/quebra-pagina.ts",
         "src/__tests__/renderer/tiny-mce-editor-*.test.ts",
-        "src/__tests__/renderer/tiny-mce-editor-*.test.tsx"
+        "src/__tests__/renderer/tiny-mce-editor-*.test.tsx",
+        "src/renderer/components/editor/editor-formatacao.ts",
+        "src/__tests__/renderer/editor-formatacao.test.ts",
+        "src/__tests__/renderer/tinymce-recursos.d.ts"
       ]
     },
     {

@@ -35,3 +35,9 @@ Timeouts registram tentativa, última fase, tamanho inicial e disponibilidade do
 Em laudos com callback de inserção, a toolbar troca o comando genérico de imagem por **Inserir figura**. A página captura editor e bookmark e abre o seletor no dock integrado; demais consumidores conservam o comando usual. `figura-html.ts` produz o markup compartilhado com escape de atributos e legenda. O fluxo está em `spec/03 laudo/fluxo_ilustracao.md`.
 
 `tiny-mce-editor-inicializacao.component.test.tsx` cobre a ordem entre carregamento inicial e liberação de alterações; `conteudo-comparavel-laudo.test.ts` cobre a comparação canônica. O ambiente simulado não substitui a abertura real do iframe no Electron.
+
+## Limpeza de formatação e recuo
+
+editor-formatacao.ts concentra os formatos e comandos comuns. O corpo usa Arial/Helvetica/sans-serif, 14 px, com cor padrão adaptada ao tema. RemoveFormat aplica texto padrão e limpa estilos de texto selecionado e espaçamento dos blocos, mantendo conteúdo protegido de figuras, legendas, placeholders, campos reservados e controles transitórios. A seleção parcial não deve limpar texto fora do intervalo; sem seleção, a limpeza atua no bloco atual e restaura a posição do cursor. A operação participa de uma única transação de undo.
+
+O recuo de primeira linha atua somente em parágrafos selecionados não protegidos. A indicação do menu compara medidas equivalentes em pt, px, cm, mm e in; valores mistos não selecionam uma opção uniforme. O listener NodeChange é removido no descarte do menu. editor-formatacao.test.ts exercita o TinyMCE real no ambiente DOM simulado, com declarações de módulos em tinymce-recursos.d.ts; seleção e aparência no Electron continuam exigindo smoke manual.
