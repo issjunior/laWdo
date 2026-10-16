@@ -1,3 +1,4 @@
+import { capturarApresentacaoLaudo } from './apresentacao-laudo.service.js';
 import { criarRevisaoSecaoB601, preservarComplementoB601, preservarDescricaoAgrupadaB601, preservarRevisoesB601, preservarTextoPecasB601, reterDescricoesPendentesB601, revisarPecasAusentesB601, sinalizarDescricaoDesatualizadaB601 } from './b601-secoes.service.js';
 import { calcularNumeracaoSecoes } from '../../shared/utils/numeracao-secoes.js';
 import { BaseService } from './base.service.js';
@@ -74,9 +75,10 @@ class LaudoService extends BaseService<LaudoRow> {
       const id = randomUUID();
       const now = new Date().toISOString();
 
+      const apresentacao = await capturarApresentacaoLaudo(params.perito_id);
       const sql = `
-        INSERT INTO laudos (id, rep_id, perito_id, template_id, conteudo, status, tipo_criacao, data_inicio, versao, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'Em andamento', 'template', ?, 1, ?, ?)
+        INSERT INTO laudos (id, rep_id, perito_id, template_id, conteudo, status, tipo_criacao, data_inicio, versao, created_at, updated_at, apresentacao_json)
+        VALUES (?, ?, ?, ?, ?, 'Em andamento', 'template', ?, 1, ?, ?, ?)
       `;
 
       await executeNonQuery(sql, [
@@ -88,6 +90,7 @@ class LaudoService extends BaseService<LaudoRow> {
         now,
         now,
         now,
+        JSON.stringify(apresentacao),
       ]);
 
       log.info('Laudo criado para REP', { laudoId: id, repId: params.rep_id });

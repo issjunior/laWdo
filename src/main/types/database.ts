@@ -76,6 +76,7 @@ export interface REPRow extends DatabaseRow {
 
 // Laudo
 export interface LaudoRow extends DatabaseRow {
+  apresentacao_json?: string | null
   id: string
   rep_id: string
   perito_id: string

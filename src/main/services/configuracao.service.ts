@@ -1,3 +1,4 @@
+import { CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO, esquemaCabecalhoLaudo, esquemaFechamentoLaudo } from '../../shared/configuracoes/apresentacao-laudo.js';
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { getLogger } from '../utils/logger.js';
 import { safeStorageService } from './safe-storage.service.js';
@@ -46,6 +47,10 @@ class ConfiguracaoService {
    */
   async salvar(chave: string, valor: string, tipo: string = 'html', descricao: string = ''): Promise<void> {
     try {
+      if (chave === CHAVE_CABECALHO_DOCUMENTO || chave === CHAVE_FECHAMENTO_LAUDO) {
+        const dados: unknown = JSON.parse(valor);
+        valor = JSON.stringify(chave === CHAVE_CABECALHO_DOCUMENTO ? esquemaCabecalhoLaudo.parse(dados) : esquemaFechamentoLaudo.parse(dados));
+      }
       let valorArmazenado = valor;
       if (TIPOS_CRIPTOGRAFADOS.has(tipo)) {
         valorArmazenado = safeStorageService.encrypt(valor);
