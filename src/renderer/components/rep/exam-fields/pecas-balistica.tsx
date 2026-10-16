@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MarcaArmaCombobox } from './marca-arma-combobox'
 import type { CampoPersonalizadoBalistica, OpcaoCampoBalistica, PecaBalistica } from '@shared/types/pecas-balistica.types'
+import { preencherOrigemColetaB601 } from '@shared/gdl/b601-campos-adicionais'
 
 interface TipoPecaEditor { codigo: string; label: string; campos: readonly CampoPersonalizadoBalistica[] }
 interface PecasBalisticaProps<T extends PecaBalistica> {
@@ -132,7 +133,7 @@ export function PecasBalisticaFields<T extends PecaBalistica>({
           <div className="space-y-2"><Label>Consumido/Liberado no Exame?</Label><Select value={editando.comuns.consumida} onValueChange={v => atualizarComum('consumida', v === 'S' ? 'S' : v === 'P' ? 'P' : 'N')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="S">Sim</SelectItem><SelectItem value="N">Não</SelectItem><SelectItem value="P">Parcialmente</SelectItem></SelectContent></Select></div>
         </div>
       </>}
-      {codigoExame === 'b601' && <DadosAdicionaisPecaGdl dados={editando.extrasGdl} />}
+      {codigoExame === 'b601' && <DadosAdicionaisPecaGdl dados={editando.extrasGdl} tipoCodigo={editando.tipoCodigo} personalizados={editando.personalizados} />}
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setEditando(null)}>Cancelar</Button><Button type="button" onClick={salvar}>Confirmar peça</Button></div>
     </div>
   }
@@ -154,7 +155,7 @@ export function PecasBalisticaFields<T extends PecaBalistica>({
             <Button type="button" variant="ghost" size="icon" disabled={indice === 0} onClick={() => mover(indice, -1)} title="Mover peça para cima"><ArrowUp size={16} /></Button>
             <Button type="button" variant="ghost" size="icon" disabled={indice === pecas.length - 1} onClick={() => mover(indice, 1)} title="Mover peça para baixo"><ArrowDown size={16} /></Button>
           </>}
-          <Button type="button" variant="ghost" size="icon" onClick={() => setEditando(structuredClone(peca))} title="Editar"><Edit size={16} /></Button><Button type="button" variant="ghost" size="icon" onClick={() => excluir(peca)} title="Excluir"><Trash2 size={16} /></Button>
+          <Button type="button" variant="ghost" size="icon" onClick={() => setEditando(structuredClone(codigoExame === 'b601' ? preencherOrigemColetaB601(peca) : peca))} title="Editar"><Edit size={16} /></Button><Button type="button" variant="ghost" size="icon" onClick={() => excluir(peca)} title="Excluir"><Trash2 size={16} /></Button>
         </div>
       </div>
     })}

@@ -40,7 +40,9 @@ export function assinaturaDescricaoB601(dados: unknown, tipo: TipoDescricaoB601)
 }
 
 const reservado = '<span class="campo-reservado" data-reservado="true">XXX</span>'
-const celula = (texto: string, cabecalho = false) => `<${cabecalho ? 'th' : 'td'}>${texto}</${cabecalho ? 'th' : 'td'}>`
+const celula = (texto: string, cabecalho = false) => `<${cabecalho ? 'th' : 'td'} style="text-align:center;vertical-align:middle${cabecalho ? ';background-color:#e8e8e8;color:#000' : ''}">${texto}</${cabecalho ? 'th' : 'td'}>`
+const estiloTabela = 'font-family:Arial,Helvetica,sans-serif;font-size:12px;border-collapse:collapse;width:100%'
+const estiloTitulo = 'background-color:#d9d9d9;color:#000;text-align:center;vertical-align:middle'
 
 export function gerarDescricaoAgrupadaB601(dados: unknown, tipo: TipoDescricaoB601, dono: string): string {
   const projecao = projetarB601ParaLaudo(dados)
@@ -68,14 +70,14 @@ function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDes
   if (projetil) {
     for (let inicio = 0; inicio < unidades.length; inicio += 5) {
       const lote = unidades.slice(inicio, inicio + 5)
-      const cabecalho = celula('Características', true) + lote.map((item, indice) => celula(`PQ${String(inicio + indice + 1).padStart(2, '0')} · Item ${item.item}`, true)).join('')
+      const cabecalho = celula('Características', true) + lote.map((_, indice) => celula(`PQ${String(inicio + indice + 1).padStart(2, '0')}`, true)).join('')
       const linhas = CARACTERISTICAS_PROJETEIS_B601.map(caracteristica => `<tr>${celula(caracteristica, true)}${lote.map(item => celula(caracteristica === 'Origem' ? escaparDescricaoB601(item.origem) || reservado : reservado)).join('')}</tr>`).join('')
-      tabelas.push(`<table border="1" cellpadding="4" width="100%"><thead><tr><th colspan="${lote.length + 1}">TABELA 1 – DESCRIÇÃO DOS PROJÉTEIS${inicio ? ' — continuação' : ''}</th></tr><tr>${cabecalho}</tr></thead><tbody>${linhas}</tbody></table>`)
+      tabelas.push(`<table border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="${lote.length + 1}" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS PROJÉTEIS${inicio ? ' — continuação' : ''}</th></tr><tr>${cabecalho}</tr></thead><tbody>${linhas}</tbody></table>`)
     }
   } else {
     const titulos = ['ID', 'Marca', 'Procedência', 'Calibre Nominal', 'Composição do Estojo', 'Espoleta', 'Observações']
-    const linhas = unidades.map((item, indice) => `<tr>${celula(`${String(indice + 1).padStart(2, '0')} · Item ${item.item}`)}${celula(reservado)}${celula(escaparDescricaoB601(item.origem) || reservado)}${Array.from({ length: 4 }, () => celula(reservado)).join('')}</tr>`).join('')
-    tabelas.push(`<table border="1" cellpadding="4" width="100%"><thead><tr><th colspan="7">TABELA 1 – DESCRIÇÃO DOS ESTOJOS</th></tr><tr>${titulos.map(titulo => celula(titulo, true)).join('')}</tr></thead><tbody>${linhas}</tbody></table>`)
+    const linhas = unidades.map((item, indice) => `<tr>${celula(String(indice + 1).padStart(2, '0'))}${celula(reservado)}${celula(escaparDescricaoB601(item.origem) || reservado)}${Array.from({ length: 4 }, () => celula(reservado)).join('')}</tr>`).join('')
+    tabelas.push(`<table border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="7" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS ESTOJOS</th></tr><tr>${titulos.map(titulo => celula(titulo, true)).join('')}</tr></thead><tbody>${linhas}</tbody></table>`)
   }
   const legenda = projetil
     ? 'LEGENDA: CHOG = Chumbo Ogival; ETOG = Encamisado Total Ogival; EXPO = Expansivo Ponta Oca.'

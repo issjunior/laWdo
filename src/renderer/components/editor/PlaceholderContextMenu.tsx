@@ -14,6 +14,7 @@ import {
 import type { MenuSection, MenuEntry, MenuGroup } from '@/components/rep/exam-fields/types';
 import { getGroupCount } from '@/components/rep/exam-fields/services/b602.service';
 import { obterIconeCategoria } from '@/lib/icones-categoria';
+import { CATEGORIAS_PLACEHOLDERS_COMUNS, PLACEHOLDERS_COMUNS } from '@shared/catalogos/placeholders-comuns.catalogo';
 
 export interface PlaceholderItem {
   id: string;
@@ -65,7 +66,16 @@ export const PlaceholderContextMenu: React.FC<{
   onInsertPlaceholder,
   children,
 }) => {
-  const categoriasFiltradas = categorias.filter(cat => {
+  const categoriasCompletas = [...categorias, ...CATEGORIAS_PLACEHOLDERS_COMUNS.filter(comum => !categorias.some(cat => cat.id === comum.id))];
+  const chavesComuns = new Set(PLACEHOLDERS_COMUNS.map(item => item.chave));
+  const placeholdersCompletos = [
+    ...PLACEHOLDERS_COMUNS.map(comum => {
+      const existente = placeholders.find(item => item.chave === comum.chave);
+      return { ...comum, ...existente, id: existente?.id ?? `sistema:${comum.chave}`, categoria_id: comum.categoria_id };
+    }),
+    ...placeholders.filter(item => !chavesComuns.has(item.chave)),
+  ];
+  const categoriasFiltradas = categoriasCompletas.filter(cat => {
     if (cat.id === categoriaExameId) return true;
     return !cat.id.startsWith('cat-exam-');
   });
@@ -112,7 +122,7 @@ export const PlaceholderContextMenu: React.FC<{
               );
             }
 
-            const items = placeholders.filter(p => p.categoria_id === cat.id);
+            const items = placeholdersCompletos.filter(p => p.categoria_id === cat.id);
             if (items.length === 0) return null;
             const IconComp = obterIconeCategoria(cat.icone, Tag);
             return (

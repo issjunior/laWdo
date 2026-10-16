@@ -1,5 +1,5 @@
 import { identificarNaturezaExame } from '@shared/gdl/natureza-exame'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal'
 import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '@shared/types/b602-gdl.types'
@@ -99,6 +99,7 @@ describe('GdlConsultaModal', () => {
       consultaId: '11111111-1111-4111-8111-111111111111',
       identificacao: identificarNaturezaExame('B602 - EXAME BALÍSTICO'),
       tiposLocais: [{ id: 'tipo-b602', codigo: 'B-602', nome: 'Balística' }],
+      codigosImportacaoDisponiveis: ['B-601', 'B-602'],
       avisos: [],
     } })
     consultarRep.mockResolvedValue({ success: true, data: resultadoConsulta })
@@ -122,7 +123,6 @@ describe('GdlConsultaModal', () => {
     fireEvent.change(screen.getByLabelText('Nº da REP'), { target: { value: '190' } })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
     expect(await screen.findAllByText('190-2026')).not.toHaveLength(0)
   }
 
@@ -507,6 +507,90 @@ describe('GdlConsultaModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }));
     await waitFor(() => expect(aplicar).toHaveBeenCalled());
     expect(aplicar.mock.calls[0][0].limpezasSelecionadas).toEqual(['observacoes']);
+  });
+
+  it.each(['B-601', 'B-602'])('avança direto para revisão de %s explícito sem preencher o formulário', async codigo => {
+    const tipoId = codigo === 'B-601' ? 'tipo-b601' : 'tipo-b602';
+    consultarRep.mockResolvedValueOnce({ success: true, data: {
+      ...resultadoConsulta, codigoExame: codigo, naturezaExameGdl: codigo + ' - EXAME',
+      avisos: [
+        { codigo: 'CAMPOS_B601_PARA_REVISAO', mensagem: 'Aviso de campos adicionais' },
+        { codigo: 'TIPO_PECA_NAO_CONFIRMADO', mensagem: 'Tipo de peça desconhecido' },
+      ],
+      camposGerais: Object.fromEntries(Object.entries(resultadoConsulta.camposGerais).map(([chave, valor]) => [chave.replace('b602_', codigo === 'B-601' ? 'b601_' : 'b602_'), valor])),
+    } });
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111', identificacao: identificarNaturezaExame(codigo + ' - EXAME'),
+      tiposLocais: [{ id: tipoId, codigo, nome: 'Exame local' }], codigosImportacaoDisponiveis: [codigo], avisos: [],
+    } });
+    const aplicar = vi.fn();
+    const definirTipo = vi.fn();
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={aplicar} temDadosExistentes={false}
+      pecasB602={[]} onDefinirTipo={definirTipo} onConfigurarCredenciais={vi.fn()} />);
+    await buscarRep();
+    expect(consultarRep).toHaveBeenCalledExactlyOnceWith('11111111-1111-4111-8111-111111111111', tipoId);
+    expect(screen.queryByRole('button', { name: 'Confirmar tipo e revisar dados' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preencher formulário' })).toBeEnabled();
+    expect(screen.getByText(codigo + ' - EXAME')).toBeInTheDocument();
+    expect(screen.queryByText('Aviso de campos adicionais') !== null).toBe(codigo !== 'B-601');
+    expect(screen.getByText('Tipo de peça desconhecido')).toBeInTheDocument();
+    expect(aplicar).not.toHaveBeenCalled();
+    expect(definirTipo).not.toHaveBeenCalled();
+  });
+
+  it.each(['ambigua', 'duplicada', 'ausente', 'divergente', 'detalhes_divergentes', 'sem_adaptador', 'sem_capacidades'])('mantém confirmação quando identificação é %s', async cenario => {
+    const codigo = 'B-602';
+    const tipo = { id: 'tipo-b602', codigo, nome: 'Balística' };
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame(cenario === 'ambigua' ? 'EXAME DE CONSTATAÇÃO' : 'B602 - EXAME BALÍSTICO'),
+      tiposLocais: cenario === 'ausente' ? [] : cenario === 'duplicada' ? [tipo, { ...tipo, id: 'outro-b602' }] : [tipo],
+      ...(cenario === 'sem_capacidades' ? {} : { codigosImportacaoDisponiveis: cenario === 'sem_adaptador' ? [] : [codigo] }),
+      ...(cenario === 'detalhes_divergentes' ? { detalhes: { estado: 'confirmados', statusAtual: null, divergencia: true } } : {}),
+      avisos: [],
+    } });
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={vi.fn()} temDadosExistentes={false}
+      tipoExameAtualId={cenario === 'divergente' ? 'tipo-b601' : undefined}
+      pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    expect(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' })).toBeInTheDocument();
+    expect(consultarRep).not.toHaveBeenCalled();
+  });
+
+  it('exibe falha da conversão automática na identificação e permite tentar novamente', async () => {
+    consultarRep.mockResolvedValueOnce({ success: false, error: 'Falha de conversão simulada' });
+    const aplicar = vi.fn();
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={aplicar} temDadosExistentes={false}
+      pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    expect(await screen.findByText('Falha de conversão simulada')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar tipo e revisar dados' }));
+    expect(await screen.findByRole('button', { name: 'Preencher formulário' })).toBeEnabled();
+    expect(identificarRep).toHaveBeenCalledTimes(1);
+    expect(consultarRep).toHaveBeenCalledTimes(2);
+    expect(aplicar).not.toHaveBeenCalled();
+  });
+
+  it('ignora conversão automática que termina depois do cancelamento', async () => {
+    let concluir: (resposta: unknown) => void = () => { throw new Error('Conversão não iniciada'); };
+    consultarRep.mockImplementationOnce(() => new Promise(resolve => { concluir = resolve; }));
+    const aplicar = vi.fn();
+    const fechar = vi.fn();
+    render(<GdlConsultaModal open onOpenChange={fechar} onAplicar={aplicar} temDadosExistentes={false}
+      pecasB602={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '190' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Buscar' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    await waitFor(() => expect(consultarRep).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await act(async () => { concluir({ success: true, data: resultadoConsulta }); });
+    expect(fechar).toHaveBeenCalledWith(false);
+    expect(screen.queryByRole('button', { name: 'Preencher formulário' })).not.toBeInTheDocument();
+    expect(aplicar).not.toHaveBeenCalled();
   });
 
 })

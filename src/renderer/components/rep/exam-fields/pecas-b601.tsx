@@ -17,12 +17,11 @@ function criarPeca(): PecaBalistica {
 export function PecasB601Fields({ dadosB601, onDadosB601Change, onEdicaoPecaB601Change, onRevisarPecasGdl }: ExamSectionProps) {
   if (!dadosB601 || !onDadosB601Change) return null
   return <div className="space-y-4">
-    <label className="flex items-center gap-2 text-sm">
-      <Checkbox checked={dadosB601.semPecas} disabled={dadosB601.pecas.length > 0}
+    {dadosB601.pecas.length === 0 && <label className="flex items-center gap-2 text-sm">
+      <Checkbox checked={dadosB601.semPecas}
         onCheckedChange={valor => onDadosB601Change({ ...dadosB601, semPecas: valor === true })} />
       Declaro que esta REP não possui peças para exame
-    </label>
-    {dadosB601.pecas.length > 0 && <p className="text-xs text-muted-foreground">Remova as peças antes de declarar ausência de itens.</p>}
+    </label>}
     {!dadosB601.semPecas && <PecasBalisticaFields pecas={dadosB601.pecas}
       onChange={pecas => onDadosB601Change({ ...dadosB601, pecas })}
       catalogo={CATALOGO_TIPOS_PECA_B601} opcoesMedida={OPCOES_UNIDADE_MEDIDA_B601}

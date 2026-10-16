@@ -525,8 +525,18 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       const atualCompativel = tipoAtual && (dados.identificacao.codigoExplicito
         ? codigoAtual === dados.identificacao.codigoExplicito
         : !dados.identificacao.candidatos.length || dados.identificacao.candidatos.some(item => item.codigo === codigoAtual));
-      setTipoIdentificadoId(atualCompativel ? tipoAtual.id : tipos.length === 1 ? tipos[0].id : '');
-      setPasso('identificacao');
+      const tipoSelecionadoId = atualCompativel ? tipoAtual.id : tipos.length === 1 ? tipos[0].id : '';
+      setTipoIdentificadoId(tipoSelecionadoId);
+      const codigoExplicito = dados.identificacao.codigoExplicito;
+      const correspondencias = dados.tiposLocais.filter(tipo => normalizarCodigoExame(tipo.codigo) === codigoExplicito);
+      const adaptadorDisponivel = dados.codigosImportacaoDisponiveis?.some(codigoDisponivel => normalizarCodigoExame(codigoDisponivel) === codigoExplicito);
+      const formularioCompativel = !tipoExameAtualId || codigoAtual === codigoExplicito;
+      if (codigoExplicito && correspondencias.length === 1 && adaptadorDisponivel
+        && formularioCompativel && !dados.detalhes?.divergencia) {
+        await prepararRevisao(dados, correspondencias[0].id, geracao);
+      } else {
+        setPasso('identificacao');
+      }
     } catch (erro: unknown) {
       if (geracao === geracaoConsulta.current) setErro(getMensagemErro(erro, 'Erro ao consultar REP'));
     } finally {
@@ -534,13 +544,11 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     }
   };
 
-  const handleConverter = async () => {
-    if (!identificacao || !tipoIdentificadoId) return;
-    const geracao = geracaoConsulta.current;
+  const prepararRevisao = async (consulta: ConsultaIdentificacaoRepGdl, tipoId: string, geracao: number) => {
     setErro(null);
     setConvertendo(true);
     try {
-      const r = await window.ipcAPI.gdl.converterConsultaRep(identificacao.consultaId, tipoIdentificadoId);
+      const r = await window.ipcAPI.gdl.converterConsultaRep(consulta.consultaId, tipoId);
       if (geracao !== geracaoConsulta.current) return;
       if (!r.success || !r.data) {
         setImportacaoIndisponivel(Boolean(r.error?.includes('não possui adaptador')));
@@ -567,10 +575,18 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
       setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados, resultado.codigoExame === 'B-601' ? 'b601' : 'b602'));
       setPasso('revisao');
     } catch (erro: unknown) {
-      if (geracao === geracaoConsulta.current) setErro(getMensagemErro(erro, 'Não foi possível preparar a importação.'));
+      if (geracao === geracaoConsulta.current) {
+        setPasso('identificacao');
+        setErro(getMensagemErro(erro, 'Não foi possível preparar a importação.'));
+      }
     } finally {
       if (geracao === geracaoConsulta.current) setConvertendo(false);
     }
+  };
+
+  const handleConverter = async () => {
+    if (!identificacao || !tipoIdentificadoId) return;
+    await prepararRevisao(identificacao, tipoIdentificadoId, geracaoConsulta.current);
   };
 
   const handleAplicar = async () => {
@@ -680,6 +696,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const avisosDestacados = resultadoConsulta?.avisos.filter(aviso => (
     aviso.codigo !== 'ENVOLVIDOS_NAO_RETORNADOS'
     && aviso.codigo !== 'FUNCIONAMENTO_NAO_TESTADO_PADRAO'
+    && !(resultadoConsulta.codigoExame === 'B-601' && aviso.codigo === 'CAMPOS_B601_PARA_REVISAO')
   )) ?? [];
   const origensDisponiveis = resultadoConsulta?.camposEspecificos.dadosSolicitacao.origensDisponiveis ?? [];
   const origensCandidatas = obterOrigensCandidatas(origensDisponiveis);
@@ -1165,7 +1182,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                             <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">Lacre Saída</dt><dd className="truncate" title={peca.comuns.lacreSaida || 'Não informado'}>{peca.comuns.lacreSaida || 'Não informado'}</dd></div>
                           </dl>
                         </div>
-                        {resultadoConsulta?.codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} />}
+                        {resultadoConsulta?.codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} tipoCodigo={peca.tipoCodigo} personalizados={peca.personalizados} />}
                       </label>
                     ))}
                   </CardContent>
@@ -1173,7 +1190,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
               )}
 
               <div className="space-y-1">
-                <Label className="text-sm font-medium">Preenchimento manual necessário</Label>
+                <Label className="text-sm font-medium">Dados não retornados pelo GDL</Label>
                 <div className="flex flex-wrap gap-1">
                   {camposNaoPreenchidos.map((c, i) => (
                     <Badge key={i} variant="secondary" className="text-xs">{c}</Badge>

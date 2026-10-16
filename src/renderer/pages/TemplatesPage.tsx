@@ -28,6 +28,7 @@ import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMe
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { criarHtmlFigura } from '@/lib/figura-html';
 import { converterPlaceholdersTextuais } from '@/lib/utils';
+import { CHAVES_PLACEHOLDERS_REP } from '@/lib/indice-placeholders';
 import { z } from 'zod';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
@@ -577,7 +578,7 @@ export const TemplatesPage: React.FC = () => {
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
   const [, setSecoesDb] = useState<SecaoItem[]>([]);
-  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
+  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('multi');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
@@ -593,6 +594,7 @@ export const TemplatesPage: React.FC = () => {
 
   const placeholderChaves = useMemo(
     () => Array.from(new Set([
+      ...CHAVES_PLACEHOLDERS_REP,
       ...placeholders.map(p => p.chave),
       ...CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave),
     ])),
@@ -837,7 +839,7 @@ export const TemplatesPage: React.FC = () => {
     setTemplateForm(emptyTemplateForm());
     setSecoes([emptySecaoForm()]);
     setSecoesDb([]);
-    setEditorMode('single');
+    setEditorMode('multi');
     setSingleEditorHtml('');
     setErrors({});
     setEditMode(true);
@@ -869,7 +871,7 @@ export const TemplatesPage: React.FC = () => {
       setSecoes([emptySecaoForm()]);
       setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
     }
-    setEditorMode('single');
+    setEditorMode('multi');
     setEditMode(true);
   }, [placeholderChaves, buildSingleHtmlFromSecoes]);
 
@@ -915,7 +917,7 @@ export const TemplatesPage: React.FC = () => {
         setSecoes([emptySecaoForm()]);
         setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
       }
-      setEditorMode('single');
+      setEditorMode('multi');
       setEditMode(true);
     } catch {
       toast.error('Erro ao clonar template');

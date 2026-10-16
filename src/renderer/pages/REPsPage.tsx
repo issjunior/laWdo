@@ -121,15 +121,12 @@ type CampoRep = Path<REPFormData>;
 const esquemaTiposExameResumo = z.array(z.object({ id: z.string(), nome: z.string(), codigo: z.string() }));
 const esquemaTemplatesResumo = z.array(z.object({ id: z.string(), nome: z.string(), chave_integrada: z.string().nullish() }));
 
-const CODIGO_EXAME_B602 = 'B-602';
-const CHAVE_TEMPLATE_PADRAO_B602 = 'laudo-padrao-b602';
-const NOME_TEMPLATE_PADRAO_B602 = 'Laudo Padrão B-602';
-
-function obterTemplatePadraoB602(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
-  if (!codigoExame || normalizarCodigoExame(codigoExame) !== normalizarCodigoExame(CODIGO_EXAME_B602)) return undefined;
-
-  return templates.find(template => template.chave_integrada === CHAVE_TEMPLATE_PADRAO_B602)
-    ?? templates.find(template => template.nome === NOME_TEMPLATE_PADRAO_B602);
+function obterTemplatePadraoBalistica(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
+  const codigo = normalizarCodigoExame(codigoExame ?? '');
+  if (codigo === 'B601') return templates.find(template => template.nome === 'Laudo Padrão B-601');
+  if (codigo !== 'B602') return undefined;
+  return templates.find(template => template.chave_integrada === 'laudo-padrao-b602')
+    ?? templates.find(template => template.nome === 'Laudo Padrão B-602');
 }
 
 function ehRegistro(valor: unknown): valor is Record<string, unknown> {
@@ -840,7 +837,7 @@ export const REPsPage: React.FC = () => {
           form.setValue('template_id', '', { shouldValidate: false });
         }
         const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-        const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+        const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
         if (templatePadrao && !form.getValues('template_id')) form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
       } else {
         setTemplatesVinculados([]);
@@ -1219,7 +1216,7 @@ export const REPsPage: React.FC = () => {
           const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           setCriarLaudoTemplates(ordenados);
           const codigoExame = tiposExame.find(tipo => tipo.id === rep.tipo_exame_id)?.codigo;
-          const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+          const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
           if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
         }
       })();
@@ -1270,7 +1267,7 @@ export const REPsPage: React.FC = () => {
       const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       setCriarLaudoTemplates(ordenados);
       const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-      const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+      const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
       if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
     } else {
       setCriarLaudoTemplates([]);
@@ -1528,12 +1525,13 @@ export const REPsPage: React.FC = () => {
       }
     }
 
-    if (resultado.codigoExame === 'B-602' && !form.getValues('template_id')) {
+    if (['B-601', 'B-602'].includes(resultado.codigoExame) && !form.getValues('template_id')) {
       const respostaTemplates = await window.ipcAPI.template.findByTipoExame(tipoExameGdl.id);
       if (respostaTemplates.success && respostaTemplates.data) {
-        const templates = [...(respostaTemplates.data as TemplateResumo[])]
+        const validacaoTemplates = esquemaTemplatesResumo.safeParse(respostaTemplates.data);
+        const templates = [...(validacaoTemplates.success ? validacaoTemplates.data : [])]
           .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-        const templatePadrao = obterTemplatePadraoB602(codigoExameGdl, templates);
+        const templatePadrao = obterTemplatePadraoBalistica(codigoExameGdl, templates);
         if (templatePadrao) {
           setTemplatesVinculados(templates);
           form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
@@ -1562,6 +1560,7 @@ export const REPsPage: React.FC = () => {
     }
     const avisosImportacao = resultado.avisos
       .filter(aviso => aviso.codigo !== 'FUNCIONAMENTO_NAO_TESTADO_PADRAO')
+      .filter(aviso => !(resultado.codigoExame === 'B-601' && aviso.codigo === 'CAMPOS_B601_PARA_REVISAO'))
       .map(aviso => aviso.mensagem);
     if (avisosImportacao.length > 0) {
       setSuccess(avisosImportacao.join(' '));
@@ -2277,7 +2276,7 @@ export const REPsPage: React.FC = () => {
                                 <Select
                                   disabled={!tipoExameId || templatesVinculados.length === 0}
                                   value={field.value || undefined}
-                                  onValueChange={field.onChange}
+                                  onValueChange={valor => { if (valor) field.onChange(valor); }}
                                 >
                                   <FormControl>
                                     <SelectTrigger>

@@ -1,3 +1,4 @@
+import { CATEGORIAS_PLACEHOLDERS_COMUNS, PLACEHOLDERS_COMUNS as PLACEHOLDERS_SISTEMA } from '../../shared/catalogos/placeholders-comuns.catalogo.js';
 import { PLACEHOLDERS_B601 } from '../../shared/catalogos/b601-placeholders.catalogo.js';
 import { BaseService } from './base.service.js';
 import { getLogger } from '../utils/logger.js';
@@ -89,40 +90,6 @@ const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
   { chave: 'b602_arma_N_numero_lacre',  valor: '', descricao: 'Número do lacre da arma (B-602)', categoria_id: 'cat-exam-B-602' },
 ];
 
-const PLACEHOLDERS_SISTEMA: PlaceholderCreateData[] = [
-  // Tabela reps (18)
-  { chave: 'numero_rep', valor: '', descricao: 'Nº da REP', categoria_id: 'cat-rep' },
-  { chave: 'data_recebimento_rep', valor: '', descricao: 'Data de recebimento da REP', categoria_id: 'cat-rep' },
-  { chave: 'tipo_solicitacao_rep', valor: '', descricao: 'Tipo de solicitação (Ofício, BOU, BO PM, etc.)', categoria_id: 'cat-rep' },
-  { chave: 'numero_solicitacao_rep', valor: '', descricao: 'Nº da Solicitação (Ofício/Requisição)', categoria_id: 'cat-rep' },
-  { chave: 'data_solicitacao_rep', valor: '', descricao: 'Data do documento de solicitação', categoria_id: 'cat-rep' },
-  { chave: 'autoridade_solicitante_rep', valor: '', descricao: 'Autoridade solicitante', categoria_id: 'cat-rep' },
-  { chave: 'local_fato', valor: '', descricao: 'Local do fato (exames de local)', categoria_id: 'cat-rep' },
-  { chave: 'latitude', valor: '', descricao: 'Latitude do local (exames de local)', categoria_id: 'cat-rep' },
-  { chave: 'longitude', valor: '', descricao: 'Longitude do local (exames de local)', categoria_id: 'cat-rep' },
-  { chave: 'data_acionamento_local', valor: '', descricao: 'Data/Hora do acionamento (exames de local)', categoria_id: 'cat-rep' },
-  { chave: 'data_chegada_local', valor: '', descricao: 'Data/Hora de chegada ao local (exames de local)', categoria_id: 'cat-rep' },
-  { chave: 'data_saida_local', valor: '', descricao: 'Data/Hora de saída do local (exames de local)', categoria_id: 'cat-rep' },
-  { chave: 'observacoes_rep', valor: '', descricao: 'Quesito aberto da REP', categoria_id: 'cat-rep' },
-  // Relacionamentos (3)
-  { chave: 'solicitante_nome', valor: '', descricao: 'Nome do órgão solicitante', categoria_id: 'cat-rep' },
-  { chave: 'tipo_exame_nome', valor: '', descricao: 'Nome do tipo de exame', categoria_id: 'cat-rep' },
-  { chave: 'tipo_exame_codigo', valor: '', descricao: 'Código do exame no GDL', categoria_id: 'cat-rep' },
-  // Perito (4)
-  { chave: 'perito_nome', valor: '', descricao: 'Nome completo do perito', categoria_id: 'cat-perito' },
-  { chave: 'perito_cargo', valor: '', descricao: 'Cargo do perito', categoria_id: 'cat-perito' },
-  { chave: 'perito_artigo', valor: '', descricao: 'Artigo do perito (o/a)', categoria_id: 'cat-perito' },
-  { chave: 'perito_titulo', valor: '', descricao: 'Título do perito (Perito/Perita)', categoria_id: 'cat-perito' },
-  { chave: 'perito_designado', valor: '', descricao: 'Forma designado/designada', categoria_id: 'cat-perito' },
-  { chave: 'perito_pelo', valor: '', descricao: 'Contração pelo/pela', categoria_id: 'cat-perito' },
-  { chave: 'perito_qual', valor: '', descricao: 'Pronome o qual/a qual', categoria_id: 'cat-perito' },
-  { chave: 'perito_lotacao', valor: '', descricao: 'Lotação/unidade do perito', categoria_id: 'cat-perito' },
-  { chave: 'perito_matricula', valor: '', descricao: 'Matrícula funcional do perito', categoria_id: 'cat-perito' },
-  // Datas (2)
-  { chave: 'data_atual', valor: '', descricao: 'Data atual do sistema', categoria_id: 'cat-datas' },
-  { chave: 'data_extenso_recebimento_rep', valor: '', descricao: 'Data de recebimento da REP por extenso (ex: 23 de maio de 2026)', categoria_id: 'cat-datas' },
-];
-
 class PlaceholderService extends BaseService<PlaceholderRow> {
   constructor() {
     super('placeholders', 'id');
@@ -187,12 +154,10 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
     try {
       // Safety net: garantir categorias de sistema antes do seed, resolvendo conflitos de label
       const categoriasSistema = [
-        { id: 'cat-rep', chave: 'REP', label: 'REP/Laudo', descricao: 'Dados da Requisição de Exame Pericial e do Laudo', cor: 'blue', icone: 'FileText', is_sistema: 1, ordem: 1 },
-        { id: 'cat-perito', chave: 'Perito', label: 'Perito', descricao: 'Informações do perito responsável', cor: 'violet', icone: 'UserCheck', is_sistema: 1, ordem: 2 },
+        ...CATEGORIAS_PLACEHOLDERS_COMUNS,
         { id: 'cat-lacres', chave: 'Lacres', label: 'Lacres', descricao: 'Lacres de entrada e saída', cor: 'emerald', icone: 'ShieldCheck', is_sistema: 1, ordem: 3 },
         { id: 'cat-solicitante', chave: 'Solicitante', label: 'Solicitante', descricao: 'Dados do órgão solicitante', cor: 'orange', icone: 'Building2', is_sistema: 1, ordem: 4 },
         { id: 'cat-local', chave: 'Local', label: 'Local', descricao: 'Dados do local do fato', cor: 'teal', icone: 'MapPin', is_sistema: 1, ordem: 5 },
-        { id: 'cat-datas', chave: 'Datas', label: 'Datas', descricao: 'Datas e informações temporais', cor: 'amber', icone: 'Calendar', is_sistema: 1, ordem: 6 },
         { id: 'cat-personalizados', chave: 'Personalizados', label: 'Personalizados', descricao: 'Placeholders personalizados pelo usuário', cor: 'pink', icone: 'Edit', is_sistema: 0, ordem: 7 },
         { id: 'cat-sem-categoria', chave: 'sem_categoria', label: 'Sem Categoria', descricao: 'Placeholders sem categoria definida', cor: 'slate', icone: 'Puzzle', is_sistema: 1, ordem: 999 },
       ];

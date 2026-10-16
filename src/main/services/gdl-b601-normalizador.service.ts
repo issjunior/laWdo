@@ -1,20 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { CATALOGO_TIPOS_PECA_B601, OPCOES_UNIDADE_MEDIDA_B601 } from '../../shared/catalogos/b601.catalogo.js'
-import type { PecaBalistica, CampoPersonalizadoBalistica } from '../../shared/types/pecas-balistica.types.js'
+import type { PecaBalistica } from '../../shared/types/pecas-balistica.types.js'
+import { converterValorPersonalizadoB601, separarCamposAdicionaisB601 } from '../../shared/gdl/b601-campos-adicionais.js'
 import type { AvisoImportacao, MetadadosIntegracaoGdl } from '../../shared/types/b602-gdl.types.js'
 import type { ResultadoImportacaoB601 } from '../../shared/types/gdl-importacao.types.js'
 import type { GdlRepValidada } from './gdl.schema.js'
 import { CHAVES_COMUNS, criarCamposComuns, montarImportacaoBalistica, normalizarChave, normalizarNomeCampo } from './gdl-balistica-normalizador.service.js'
-
-function converterPersonalizado(campo: CampoPersonalizadoBalistica, valor: unknown): string | undefined {
-  if (typeof valor !== 'string' && typeof valor !== 'number') return undefined
-  const texto = String(valor).trim()
-  if (!texto) return ''
-  if (!campo.opcoes) return texto
-  const opcao = campo.opcoes.find(item => item.codigo === texto || normalizarChave(item.label) === normalizarChave(texto))
-  if (campo.controle === 'combobox') return opcao?.label ?? texto
-  return opcao?.codigo
-}
 
 export function converterRepB601(rep: GdlRepValidada, metadados?: MetadadosIntegracaoGdl): ResultadoImportacaoB601 {
   const avisos: AvisoImportacao[] = []
@@ -51,7 +42,7 @@ export function converterRepB601(rep: GdlRepValidada, metadados?: MetadadosInteg
         item.mapeamentoApiConfirmado
         && [item.chaveGdl, ...(item.aliasesGdl ?? [])].some(alias => normalizarNomeCampo(alias) === nomeCampo)
       ))
-      const convertido = campo ? converterPersonalizado(campo, valor) : undefined
+      const convertido = campo ? converterValorPersonalizadoB601(campo, valor) : undefined
       if (campo && convertido !== undefined) personalizados[campo.id] = convertido
       else extrasGdl[chave] = valor
     }
@@ -62,10 +53,11 @@ export function converterRepB601(rep: GdlRepValidada, metadados?: MetadadosInteg
       codigo: 'TIPO_PECA_NAO_CONFIRMADO',
       mensagem: `O tipo ${entrada.tipoPeca} não pertence ao catálogo B-601. A peça foi preservada e exige revisão manual.`,
     })
-    if (Object.keys(extrasGdl).length) avisos.push({
+    const { revisao } = separarCamposAdicionaisB601(extrasGdl, tipo?.codigo, personalizados)
+    if (revisao.length) avisos.push({
       codigo: 'CAMPOS_B601_PARA_REVISAO',
-      mensagem: `A peça ${indice + 1} contém dados preservados em campos adicionais; confira os personalizados antes de salvar.`,
-      contexto: { campos: Object.keys(extrasGdl) },
+      mensagem: `Peça ${indice + 1} (${entrada.tipoPeca}): confira ${revisao.map(campo => campo.rotulo).join(', ')}. Os valores recebidos estão em “Informações adicionais recebidas do GDL”.`,
+      contexto: { campos: revisao.map(campo => campo.chave) },
     })
     return {
       idLocal: randomUUID(), origem: 'gdl', alteradaLocalmente: false, codPecaGdl: entrada.codPeca,

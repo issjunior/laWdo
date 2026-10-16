@@ -11,6 +11,10 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), info: toastInfo, success: vi.fn(), warning: vi.fn() },
 }))
 
+vi.mock('@/contexts/AlteracoesPendentesContext', () => ({
+  useRegistrarAlteracoesPendentes: () => undefined,
+}))
+
 vi.mock('@/components/data-table/data-table', () => ({
   DataTable: () => <div data-testid="tabela-reps" />,
 }))
@@ -180,6 +184,35 @@ describe('integração da consulta geral GDL com REPsPage', () => {
   afterAll(() => {
     Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true })
   })
+
+  it.each(['B-601', 'B-602'])('seleciona o template padrão de %s após importar e oculta somente o aviso informativo B601', async codigo => {
+    const tipoId = codigo === 'B-601' ? 'tipo-b601' : 'tipo-b602';
+    vi.mocked(window.ipcAPI.tipoExame.findAll).mockResolvedValue({ success: true, error: '', data: [{ id: tipoId, codigo, nome: 'Balística' }] });
+    vi.mocked(window.ipcAPI.template.findByTipoExame).mockResolvedValue({ success: true, error: '', data: [
+      { id: 'template-outro', nome: 'Outro modelo' },
+      { id: 'template-padrao', nome: `Laudo Padrão ${codigo}` },
+    ] });
+    identificarRep.mockResolvedValue({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111', identificacao: identificarNaturezaExame(codigo + ' - EXAME'),
+      tiposLocais: [{ id: tipoId, codigo, nome: 'Balística' }], avisos: [],
+    } });
+    consultarRep.mockResolvedValue({ success: true, data: {
+      ...resultadoConsulta, codigoExame: codigo,
+      camposGerais: Object.fromEntries(Object.entries(resultadoConsulta.camposGerais).map(([chave, valor]) => [chave.replace('b602_', codigo === 'B-601' ? 'b601_' : 'b602_'), valor])),
+      avisos: [{ codigo: 'CAMPOS_B601_PARA_REVISAO', mensagem: 'Peça 3: confira incinerado.' }],
+    } });
+    render(<MemoryRouter><REPsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova REP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GDL' }));
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Preencher formulário' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /template/i })).toHaveTextContent(`Laudo Padrão ${codigo}`));
+    expect(screen.queryByText('Peça 3: confira incinerado.') !== null).toBe(codigo !== 'B-601');
+    expect(criarRep).not.toHaveBeenCalled();
+  });
 
   it('preenche o mesmo formulário, importa as peças e não salva automaticamente', async () => {
     render(

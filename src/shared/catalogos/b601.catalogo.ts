@@ -20,7 +20,7 @@ export const OPCOES_UNIDADE_MEDIDA_B601 = [
   { codigo: '10', label: 'PORÇÃO' }, { codigo: '11', label: 'AMOSTRA' },
 ]
 
-// Nomes da API confirmados para PISTOLA(S) na consulta de leitura de 15/10/2026.
+// Nomes recebidos do GDL; ORIGEM/COLETA conferido para estojos e projéteis.
 const CHAVES_API_PISTOLA = new Set([
   'Nº Série', 'Marca', 'Modelo', 'Marca da Arma', 'Status do Número de Série',
   'Calibre Nominal Pistola', 'Tipo Acabamento', 'Estado Geral da Arma',
@@ -130,7 +130,8 @@ const TIPOS_B601: Array<[string, string]> = [
 
 export const CATALOGO_TIPOS_PECA_B601: TipoPecaB601[] = TIPOS_B601.map(([codigo, label]) => ({
   codigo, label, campos: camposDoTipo(codigo).map(campo => ({
-    ...campo, mapeamentoApiConfirmado: codigo === '104' && CHAVES_API_PISTOLA.has(campo.chaveGdl),
+    ...campo, mapeamentoApiConfirmado: (codigo === '104' && CHAVES_API_PISTOLA.has(campo.chaveGdl))
+      || (['101', '105'].includes(codigo) && campo.chaveGdl === 'ORIGEM/COLETA'),
   })),
 }))
 export const TIPOS_PECA_B601_POR_CODIGO = new Map(CATALOGO_TIPOS_PECA_B601.map(tipo => [tipo.codigo, tipo]))

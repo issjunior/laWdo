@@ -8,8 +8,6 @@ import {
   type OrigemAlteracaoLaudo,
 } from '@/hooks/useGerenciadorAlteracoesLaudo';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
-import { gerarDescricaoAgrupadaB601, type TipoDescricaoB601 } from '@shared/utils/b601-descricao-agrupada';
-import { lerDadosB601 } from '@shared/types/b601.types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,7 +61,7 @@ import {
   RodapeEditorLaudo,
 } from '@/components/laudo/editor/ControlesEditorLaudo';
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
-import { extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
+import { CHAVES_PLACEHOLDERS_REP, extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
@@ -635,8 +633,6 @@ export const LaudosPage: React.FC = () => {
 
   const [exameMenuStructure, setExameMenuStructure] = useState<MenuSection[] | undefined>(undefined);
   const [exameCamposEspecificos, setExameCamposEspecificos] = useState<Record<string, unknown> | undefined>(undefined);
-  const [recriandoTabelaB601, setRecriandoTabelaB601] = useState(false);
-  const [tabelaB601ParaRecriar, setTabelaB601ParaRecriar] = useState<TipoDescricaoB601 | null>(null);
   const [categoriaExameId, setCategoriaExameId] = useState<string>('');
   const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
   const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
@@ -767,6 +763,7 @@ export const LaudosPage: React.FC = () => {
 
   const placeholderChaves = useMemo(
     () => Array.from(new Set([
+      ...CHAVES_PLACEHOLDERS_REP,
       ...placeholders.map(p => p.chave),
       ...CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave),
     ])),
@@ -2369,55 +2366,6 @@ export const LaudosPage: React.FC = () => {
     if (indice >= 0) atualizarConteudoSecao(indice, conteudo);
   }, [atualizarConteudoSecao, editorMode, secoes]);
 
-  const recriarTabelaB601 = async (tipo: TipoDescricaoB601) => {
-    if (!editando || recriandoTabelaB601) return;
-    const nome = tipo === '105' ? 'projéteis' : 'estojos';
-    const editores = (editorMode === 'single'
-      ? [obterEditorTinyMce('laudo-single-editor')]
-      : secoes.map((_, indice) => obterEditorTinyMce(`secao-${indice}`))).filter(isTinyMceEditor);
-    const alvos = editores.flatMap(editor => Array.from(editor.getBody().querySelectorAll<HTMLElement>(`[data-b601-grupo="${tipo}"]`))
-      .map(grupo => ({ editor, grupo })));
-    if (alvos.length !== 1) {
-      toast.error(alvos.length ? 'Há mais de uma tabela deste tipo. Revise a organização do laudo antes de recriar.' : `A tabela de ${nome} não está disponível neste laudo.`);
-      return;
-    }
-    const sessao = sessaoEditor;
-    try {
-      setRecriandoTabelaB601(true);
-      const resposta = await window.ipcAPI.rep.findById(editando.rep_id);
-      if (!sessaoAtual(sessao)) return;
-      if (!resposta.success || !resposta.data) throw new Error('Não foi possível consultar os dados locais da REP.');
-      const { dados } = lerDadosB601(resposta.data.campos_especificos);
-      const { editor, grupo } = alvos[0];
-      if (editor.removed || !editor.getBody().contains(grupo)) throw new Error('O editor mudou. Tente novamente.');
-      const gerado = gerarDescricaoAgrupadaB601(dados, tipo, grupo.getAttribute('data-repeat-owner') || '');
-      const html = new DOMParser().parseFromString(gerado, 'text/html').querySelector('[data-b601-grupo]')?.outerHTML || '';
-      editor.undoManager.transact(() => {
-        if (html) {
-          editor.dom.setOuterHTML(grupo, html);
-        } else {
-          const secao = grupo.closest<HTMLElement>('section[data-laudo-secao="true"]');
-          grupo.remove();
-          const conteudo = secao?.querySelector<HTMLElement>(':scope > [data-laudo-secao-content="true"]');
-          if (secao && conteudo && conteudoHtmlEhVazio(conteudo.innerHTML)) secao.remove();
-        }
-      });
-      registrarAlteracao('usuario');
-      if (!html && editorMode !== 'single' && conteudoHtmlEhVazio(editor.getContent())) {
-        const indice = secoes.findIndex((_, indiceSecao) => `secao-${indiceSecao}` === editor.id);
-        setSecoes(atuais => atuais.filter((_, indiceSecao) => indiceSecao !== indice));
-      } else {
-        atualizarConteudoDoEditor(editor);
-      }
-      aplicarModoNoEditor(editor);
-      toast.success(`Tabela de ${nome} recriada. Salve o laudo para aplicar.`);
-    } catch (erro) {
-      toast.error(obterMensagemErro(erro, 'Não foi possível recriar a tabela.'));
-    } finally {
-      setRecriandoTabelaB601(false);
-    }
-  };
-
   const solicitarPreenchimentoCampoReservado = useCallback((campo: CampoReservadoSelecionado) => {
     campoReservadoSelecionadoRef.current = campo;
     const valorInicial = obterHtmlCampo(campo.elemento);
@@ -4011,12 +3959,7 @@ export const LaudosPage: React.FC = () => {
               onModoOrganizacaoChange={handleEditorModeChange}
               onAbrirIndicePlaceholders={abrirIndicePlaceholders}
             />
-            {['B-601', 'B601'].includes(editando.tipo_exame_codigo || '') && (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" disabled={inicializando || operacaoEmAndamento || recriandoTabelaB601} onClick={() => setTabelaB601ParaRecriar('105')}>Recriar tabela de projéteis</Button>
-                <Button variant="outline" size="sm" disabled={inicializando || operacaoEmAndamento || recriandoTabelaB601} onClick={() => setTabelaB601ParaRecriar('101')}>Recriar tabela de estojos</Button>
-              </div>
-            )}
+
           </CardHeader>
           <CardContent className="overflow-visible p-0 px-6 pb-6">
             <PainelLateralRedimensionavel
@@ -4396,18 +4339,6 @@ export const LaudosPage: React.FC = () => {
           }}
         />
 
-        <AlertDialog open={tabelaB601ParaRecriar !== null} onOpenChange={aberto => { if (!aberto) setTabelaB601ParaRecriar(null); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Recriar tabela de {tabelaB601ParaRecriar === '105' ? 'projéteis' : 'estojos'}</AlertDialogTitle>
-              <AlertDialogDescription>A tabela será recriada com os dados atuais da REP. Todo o preenchimento manual desta tabela será descartado. As demais tabelas serão preservadas.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { if (tabelaB601ParaRecriar) void recriarTabelaB601(tabelaB601ParaRecriar); }}>Recriar tabela</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
         <AlertDialog open={fallbackModeloIaPendente !== null} onOpenChange={aberto => {
           if (!aberto) setFallbackModeloIaPendente(null);
         }}>

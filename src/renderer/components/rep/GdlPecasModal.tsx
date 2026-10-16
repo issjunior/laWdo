@@ -225,7 +225,7 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
                             })}
                           </dl>
                         )}
-                        {codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} />}
+                        {codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} tipoCodigo={peca.tipoCodigo} personalizados={peca.personalizados} />}
                       </div>
                     </div>
                   </label>

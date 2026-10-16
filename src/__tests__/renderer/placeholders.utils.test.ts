@@ -6,8 +6,30 @@ import {
   removerFormatacaoPlaceholders,
   segmentarTextoComPlaceholders,
 } from '../../renderer/lib/utils'
+import { CHAVES_PLACEHOLDERS_REP } from '../../renderer/lib/indice-placeholders'
 
 describe('utilitários gerais de placeholders', () => {
+  it('normaliza placeholder comum colado como código mantendo a formatação do parágrafo', () => {
+    const html = '<p style="font-family: Arial; font-size: 12pt"><strong>Origem:</strong> <code>{{solicitante_nome}}</code>.</p>'
+    const primeira = converterPlaceholdersTextuais(html, CHAVES_PLACEHOLDERS_REP)
+    const segunda = converterPlaceholdersTextuais(primeira, CHAVES_PLACEHOLDERS_REP)
+    const doc = new DOMParser().parseFromString(segunda, 'text/html')
+    expect(doc.querySelector('code')).toBeNull()
+    expect(doc.querySelector('p')?.style.fontFamily).toBe('Arial')
+    expect(doc.querySelector('p')?.style.fontSize).toBe('12pt')
+    expect(doc.querySelector('strong')?.textContent).toBe('Origem:')
+    expect(doc.querySelectorAll('.placeholder-tag[data-placeholder="{{solicitante_nome}}"]')).toHaveLength(1)
+    expect(removerFormatacaoPlaceholders(segunda)).toContain('{{solicitante_nome}}')
+  })
+
+  it('preserva código real, placeholders desconhecidos e blocos pré-formatados', () => {
+    const html = '<p><code>const nome = 1</code> <code>{{desconhecido}}</code></p><pre><code>{{solicitante_nome}}</code></pre>'
+    const resultado = converterPlaceholdersTextuais(html, CHAVES_PLACEHOLDERS_REP)
+    const doc = new DOMParser().parseFromString(resultado, 'text/html')
+    expect(doc.querySelectorAll('code')).toHaveLength(3)
+    expect(doc.querySelector('pre code')?.textContent).toBe('{{solicitante_nome}}')
+  })
+
   it('aceita chaves exatas e instâncias numéricas de chaves indexadas', () => {
     const chaves = new Set(['numero_rep', 'envolvido_N_nome'])
 

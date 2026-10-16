@@ -5,6 +5,8 @@ import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
+import { normalizarCodigoPlaceholders } from '@/lib/utils';
+import { normalizarApresentacaoTabelas } from '@/lib/tabelas-apresentacao';
 
 function numToLetra(n: number): string {
   if (n < 26) return String.fromCharCode(65 + n);
@@ -262,7 +264,11 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
         mapping.b601_local = [dados.local.bairro, dados.local.cidade, dados.local.uf].filter(Boolean).join(' / ');
         mapping.b601_numero_bo = dados.numero_bo;
         mapping.b601_numero_ip = dados.numero_ip;
-        mapping.b601_solicitante_nome = ctx.solicitanteNome || dados.solicitante_nome;
+        const integracaoGdl = isRecord(especificos.integracaoGdl) ? especificos.integracaoGdl : undefined;
+        const dadosSolicitacao = isRecord(integracaoGdl?.dadosSolicitacao) ? integracaoGdl.dadosSolicitacao : undefined;
+        const orgaoGdl = typeof dadosSolicitacao?.orgao === 'string' ? dadosSolicitacao.orgao.trim() : '';
+        mapping.b601_solicitante_nome = ctx.solicitanteNome || dados.solicitante_nome.trim() || orgaoGdl;
+        if (!mapping.solicitante_nome) mapping.solicitante_nome = mapping.b601_solicitante_nome;
         mapping.b601_tabela_dados_investigacao = buildDadosInvestigacaoTable({
           envolvidos: dados.envolvidos.length ? dados.envolvidos.map(escapar) : ['XXX'],
           data_ocorrencia: ausente(dados.data_ocorrencia),
@@ -540,6 +546,8 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
+    normalizarCodigoPlaceholders(doc.body, Object.keys(mapping));
+    normalizarApresentacaoTabelas(doc.body);
     doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
     doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
       bloco.removeAttribute('data-cond-em-edicao');
