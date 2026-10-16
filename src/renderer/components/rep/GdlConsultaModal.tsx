@@ -1,3 +1,6 @@
+import { DadosAdicionaisPecaGdl } from './DadosAdicionaisPecaGdl';
+import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types';
+import type { PecaBalistica } from '@shared/types/pecas-balistica.types';
 import { esquemaConsultaIdentificacaoRepGdl, normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import type { ConsultaIdentificacaoRepGdl } from '@shared/gdl/natureza-exame';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -45,13 +48,11 @@ import {
 import { z } from 'zod';
 import { toast } from 'sonner';
 import type {
-  DadosImportacaoB602,
   PecaB602,
   ReferenciaOrigemGdl,
-  ResultadoImportacaoExame,
 } from '@shared/types/b602-gdl.types';
 import { combinarEnvolvido, separarEnvolvido } from '@shared/utils/envolvido';
-import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils';
+import { montarItensReconciliacaoPecasBalistica } from '@/components/rep/exam-fields/pecas-balistica-gdl.utils';
 import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente';
 
 const ANO_SCHEMA = z.string().regex(/^\d{4}$/, 'Ano deve ter 4 dígitos');
@@ -102,12 +103,13 @@ interface GdlConsultaModalProps {
   tipoExameAtualId?: string;
   onOpenChange: (open: boolean) => void;
   onAplicar: (
-    resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
+    resultado: ResultadoImportacaoGdl,
     modo: 'substituir' | 'mesclar',
-    pecasImportadasSelecionadas: PecaB602[],
+    pecasImportadasSelecionadas: PecaBalistica[],
   ) => void | Promise<void>;
   temDadosExistentes: boolean;
   pecasB602: PecaB602[];
+  pecasB601?: PecaBalistica[];
   onConfigurarCredenciais: () => void;
 }
 
@@ -169,7 +171,7 @@ function obterOrigensCandidatas(origens: ReferenciaOrigemGdl[]): OrigemCandidata
   return origemBase.map(origem => ({ indice: origens.indexOf(origem), origem }))
 }
 
-function obterIndiceOrigemSelecionada(resultado: ResultadoImportacaoExame<DadosImportacaoB602>): number | null {
+function obterIndiceOrigemSelecionada(resultado: ResultadoImportacaoGdl): number | null {
   const { tipo_solicitacao: tipo, numero_documento: numero, data_documento: dataDocumento } = resultado.camposGerais
   const indice = resultado.camposEspecificos.dadosSolicitacao.origensDisponiveis.findIndex(origem => (
     origem.tipo === tipo
@@ -186,9 +188,10 @@ function formatarOpcaoOrigem(origem: ReferenciaOrigemGdl): string {
 }
 
 function montarCamposMapeados(
-  resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
+  resultado: ResultadoImportacaoGdl,
   origemSelecionada?: ReferenciaOrigemGdl,
 ): CampoMapeado[] {
+  const prefixo = resultado.codigoExame === 'B-601' ? 'b601' : 'b602'
   const camposGerais: Record<string, string> = {
     ...resultado.camposGerais,
     ...(origemSelecionada ? {
@@ -206,17 +209,17 @@ function montarCamposMapeados(
     data_documento: 'Data do Documento',
     data_requisicao: 'Data de Recebimento',
     observacoes: 'Quesito Aberto',
-    b602_local_cidade: 'Cidade',
-    b602_solicitante_nome: 'Unidade Policial',
+    [`${prefixo}_local_cidade`]: 'Cidade',
+    [`${prefixo}_solicitante_nome`]: 'Unidade Policial',
     autoridade_solicitante: 'Autoridade Solicitante',
     local_fato: 'Local do Fato',
     latitude: 'Latitude',
     longitude: 'Longitude',
-    b602_numero_bo: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',
-    b602_numero_ip: tiposIp.length ? `Nº IP (${tiposIp.join(', ')})` : 'Nº IP',
+    [`${prefixo}_numero_bo`]: tiposBo.length ? `Nº BO (${tiposBo.join(', ')})` : 'Nº BO',
+    [`${prefixo}_numero_ip`]: tiposIp.length ? `Nº IP (${tiposIp.join(', ')})` : 'Nº IP',
   }
   const campos = Object.entries(camposGerais)
-    .filter(([campo, valor]) => !campo.startsWith('b602_envolvidos_') && Boolean(valor))
+    .filter(([campo, valor]) => !campo.startsWith(`${prefixo}_envolvidos_`) && Boolean(valor))
     .map(([campo, valor]) => ({
       campo,
       label: labelsCampos[campo] ?? campo,
@@ -226,8 +229,8 @@ function montarCamposMapeados(
     }))
 
   const envolvidos = Array.from({ length: 10 }, (_, indice) => combinarEnvolvido(
-    camposGerais[`b602_envolvidos_qualificacao_${indice}`] || '',
-    camposGerais[`b602_envolvidos_${indice}`] || '',
+    camposGerais[`${prefixo}_envolvidos_qualificacao_${indice}`] || '',
+    camposGerais[`${prefixo}_envolvidos_${indice}`] || '',
   ))
     .filter(Boolean)
     .join('\n')
@@ -236,15 +239,15 @@ function montarCamposMapeados(
   return campos
 }
 
-function montarCamposNaoPreenchidos(camposMapeados: CampoMapeado[]): string[] {
+function montarCamposNaoPreenchidos(camposMapeados: CampoMapeado[], prefixo = 'b602'): string[] {
   const todosCampos = [
     { campo: 'autoridade_solicitante', label: 'Autoridade Solicitante' },
     { campo: 'local_fato', label: 'Local do Fato' },
     { campo: 'latitude', label: 'Latitude' },
     { campo: 'longitude', label: 'Longitude' },
     { campo: 'envolvidos', label: 'Envolvidos' },
-    { campo: 'b602_numero_bo', label: 'Nº BO' },
-    { campo: 'b602_numero_ip', label: 'Nº IP' },
+    { campo: `${prefixo}_numero_bo`, label: 'Nº BO' },
+    { campo: `${prefixo}_numero_ip`, label: 'Nº IP' },
     { campo: 'veiculo', label: 'Veículo' },
     { campo: 'placa', label: 'Placa' },
     { campo: 'chassi', label: 'Chassi' },
@@ -257,17 +260,18 @@ function montarCamposNaoPreenchidos(camposMapeados: CampoMapeado[]): string[] {
 }
 
 function montarEnvolvidosRevisao(
-  resultado: ResultadoImportacaoExame<DadosImportacaoB602> | null,
+  resultado: ResultadoImportacaoGdl | null,
 ): EnvolvidoRevisao[] {
   if (!resultado) return []
 
+  const prefixo = resultado.codigoExame === 'B-601' ? 'b601' : 'b602'
   const envolvidosGdl = resultado.camposEspecificos.dadosInvestigacao.envolvidos
   const quantidade = Math.max(envolvidosGdl.length, 10)
   return Array.from({ length: quantidade }, (_, indice) => {
     const valorOriginal = envolvidosGdl[indice] ?? ''
     const partesOriginais = separarEnvolvido(valorOriginal)
-    const nomePreenchido = resultado.camposGerais[`b602_envolvidos_${indice}`]?.trim() ?? ''
-    const qualificacaoPreenchida = resultado.camposGerais[`b602_envolvidos_qualificacao_${indice}`]?.trim() ?? ''
+    const nomePreenchido = resultado.camposGerais[`${prefixo}_envolvidos_${indice}`]?.trim() ?? ''
+    const qualificacaoPreenchida = resultado.camposGerais[`${prefixo}_envolvidos_qualificacao_${indice}`]?.trim() ?? ''
     const nome = nomePreenchido || partesOriginais.nome
     const qualificacao = qualificacaoPreenchida || partesOriginais.qualificacao
     return {
@@ -308,6 +312,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   onAplicar,
   temDadosExistentes,
   pecasB602,
+  pecasB601 = [],
   onConfigurarCredenciais,
 }) => {
   const geracaoConsulta = useRef(0);
@@ -332,7 +337,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [ambiente, setAmbiente] = useState<string>('producao');
   const [ambienteCarregado, setAmbienteCarregado] = useState(false);
 
-  const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoExame<DadosImportacaoB602> | null>(null);
+  const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoGdl | null>(null);
+  const prefixo = resultadoConsulta?.codigoExame === 'B-601' ? 'b601' : 'b602';
+  const pecasAtuais = resultadoConsulta?.codigoExame === 'B-601' ? pecasB601 : pecasB602;
   const [idsPecasSelecionadas, setIdsPecasSelecionadas] = useState<Set<string>>(new Set());
   const [indicesEnvolvidosSelecionados, setIndicesEnvolvidosSelecionados] = useState<Set<number>>(new Set());
   const [indiceOrigemSelecionada, setIndiceOrigemSelecionada] = useState<number | null>(null);
@@ -539,7 +546,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
         setImportacaoIndisponivel(Boolean(r.error?.includes('não possui adaptador')));
         throw new Error(r.error || 'Não foi possível preparar a importação.');
       }
-      const resultado: ResultadoImportacaoExame<DadosImportacaoB602> = r.data;
+      const resultado: ResultadoImportacaoGdl = r.data;
       const indiceOrigemInicial = obterIndiceOrigemSelecionada(resultado);
       const origemInicial = indiceOrigemInicial === null
         ? undefined
@@ -557,7 +564,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           .map(envolvido => envolvido.indice),
       ));
       setCamposMapeados(mapeados);
-      setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados));
+      setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados, resultado.codigoExame === 'B-601' ? 'b601' : 'b602'));
       setPasso('revisao');
     } catch (erro: unknown) {
       if (geracao === geracaoConsulta.current) setErro(getMensagemErro(erro, 'Não foi possível preparar a importação.'));
@@ -588,8 +595,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           },
         } : {}),
       } : resultadoConsulta;
-      const itensReconciliacao = montarItensReconciliacaoPecasB602(
-        pecasB602,
+      const itensReconciliacao = montarItensReconciliacaoPecasBalistica(
+        pecasAtuais,
         resultadoComOrigem.camposEspecificos.pecas,
       );
       const pecasImportadasSelecionadas = itensReconciliacao
@@ -597,26 +604,24 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
         .map(item => item.peca);
       const camposGeraisComEnvolvidos = Object.fromEntries(
         Object.entries(resultadoComOrigem.camposGerais)
-          .filter(([campo]) => !campo.startsWith('b602_envolvidos_')),
+          .filter(([campo]) => !campo.startsWith(`${prefixo}_envolvidos_`)),
       );
       montarEnvolvidosRevisao(resultadoComOrigem)
         .filter(envolvido => envolvido.indice < 10 && indicesEnvolvidosSelecionados.has(envolvido.indice))
         .forEach((envolvido, indice) => {
-          camposGeraisComEnvolvidos[`b602_envolvidos_qualificacao_${indice}`] = envolvido.qualificacao;
-          camposGeraisComEnvolvidos[`b602_envolvidos_${indice}`] = envolvido.nome;
+          camposGeraisComEnvolvidos[`${prefixo}_envolvidos_qualificacao_${indice}`] = envolvido.qualificacao;
+          camposGeraisComEnvolvidos[`${prefixo}_envolvidos_${indice}`] = envolvido.nome;
         });
 
-      if (tipoIdentificadoId) onDefinirTipo(tipoIdentificadoId, numeroRep, anoRep);
-      await onAplicar({
-        ...resultadoComOrigem,
-        ...(limpezasSelecionadas.length ? { limpezasSelecionadas } : {}),
-        camposGerais: camposGeraisComEnvolvidos,
-        camposEspecificos: {
-          ...resultadoComOrigem.camposEspecificos,
-          pecas: resultadoComOrigem.camposEspecificos.pecas.filter(peca => idsPecasSelecionadas.has(`gdl-${peca.codPecaGdl ?? peca.idLocal}`)),
-        },
-      }, modo, pecasImportadasSelecionadas);
+      const adicionais = { camposGerais: camposGeraisComEnvolvidos, ...(limpezasSelecionadas.length ? { limpezasSelecionadas } : {}) };
+      const selecionada = (peca: PecaBalistica) => idsPecasSelecionadas.has(`gdl-${peca.codPecaGdl ?? peca.idLocal}`);
+      const resultadoSelecionado: ResultadoImportacaoGdl = resultadoComOrigem.codigoExame === 'B-601'
+        ? { ...resultadoComOrigem, ...adicionais, camposEspecificos: { ...resultadoComOrigem.camposEspecificos, pecas: resultadoComOrigem.camposEspecificos.pecas.filter(selecionada) } }
+        : { ...resultadoComOrigem, ...adicionais, camposEspecificos: { ...resultadoComOrigem.camposEspecificos, pecas: resultadoComOrigem.camposEspecificos.pecas.filter(selecionada) } };
+      await onAplicar(resultadoSelecionado, modo, pecasImportadasSelecionadas);
       onOpenChange(false);
+    } catch (falha: unknown) {
+      setErro(getMensagemErro(falha, 'Não foi possível aplicar a importação.'));
     } finally {
       setAplicando(false);
     }
@@ -648,7 +653,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     const campos = montarCamposMapeados(resultadoConsulta, origem)
     setIndiceOrigemSelecionada(indice)
     setCamposMapeados(campos)
-    setCamposNaoPreenchidos(montarCamposNaoPreenchidos(campos))
+    setCamposNaoPreenchidos(montarCamposNaoPreenchidos(campos, prefixo))
   }
 
   const alternarSelecaoEnvolvido = (indice: number) => {
@@ -662,7 +667,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
   const ambienteLabel = ambiente === 'producao' ? 'Produção' : 'Homologação';
   const itensReconciliacao = resultadoConsulta
-    ? montarItensReconciliacaoPecasB602(pecasB602, resultadoConsulta.camposEspecificos.pecas)
+    ? montarItensReconciliacaoPecasBalistica(pecasAtuais, resultadoConsulta.camposEspecificos.pecas)
     : [];
   const todasPecasSelecionadas = itensReconciliacao.length > 0
     && itensReconciliacao.every(item => idsPecasSelecionadas.has(item.chave));
@@ -687,9 +692,9 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const camposIdentificacao = obterCamposDoGrupo(['numero', 'data_requisicao']);
   const camposSolicitacao = obterCamposDoGrupo(['tipo_solicitacao', 'numero_documento', 'data_documento']);
   const camposSolicitanteLocal = obterCamposDoGrupo([
-    'b602_solicitante_nome', 'autoridade_solicitante', 'b602_local_cidade', 'local_fato', 'latitude', 'longitude',
+    `${prefixo}_solicitante_nome`, 'autoridade_solicitante', `${prefixo}_local_cidade`, 'local_fato', 'latitude', 'longitude',
   ]);
-  const camposInvestigacao = obterCamposDoGrupo(['b602_numero_bo', 'b602_numero_ip']);
+  const camposInvestigacao = obterCamposDoGrupo([`${prefixo}_numero_bo`, `${prefixo}_numero_ip`]);
   const camposJaAgrupados = new Set([
     ...camposIdentificacao,
     ...camposSolicitacao,
@@ -1160,6 +1165,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                             <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">Lacre Saída</dt><dd className="truncate" title={peca.comuns.lacreSaida || 'Não informado'}>{peca.comuns.lacreSaida || 'Não informado'}</dd></div>
                           </dl>
                         </div>
+                        {resultadoConsulta?.codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} />}
                       </label>
                     ))}
                   </CardContent>

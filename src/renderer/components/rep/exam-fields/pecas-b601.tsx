@@ -14,7 +14,7 @@ function criarPeca(): PecaBalistica {
   }
 }
 
-export function PecasB601Fields({ dadosB601, onDadosB601Change, onEdicaoPecaB601Change }: ExamSectionProps) {
+export function PecasB601Fields({ dadosB601, onDadosB601Change, onEdicaoPecaB601Change, onRevisarPecasGdl }: ExamSectionProps) {
   if (!dadosB601 || !onDadosB601Change) return null
   return <div className="space-y-4">
     <label className="flex items-center gap-2 text-sm">
@@ -27,6 +27,6 @@ export function PecasB601Fields({ dadosB601, onDadosB601Change, onEdicaoPecaB601
       onChange={pecas => onDadosB601Change({ ...dadosB601, pecas })}
       catalogo={CATALOGO_TIPOS_PECA_B601} opcoesMedida={OPCOES_UNIDADE_MEDIDA_B601}
       codigoExame="b601" criarPeca={criarPeca} validarPeca={obterPendenciaPecaB601} preservarPersonalizados permitirReordenacao
-      onEdicaoChange={onEdicaoPecaB601Change} />}
+      onEdicaoChange={onEdicaoPecaB601Change} onRevisarPecasGdl={onRevisarPecasGdl} />}
   </div>
 }

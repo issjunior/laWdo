@@ -20,7 +20,12 @@ export const OPCOES_UNIDADE_MEDIDA_B601 = [
   { codigo: '10', label: 'PORÇÃO' }, { codigo: '11', label: 'AMOSTRA' },
 ]
 
-// Conferência visual do B601 em 15/10/2026; os nomes da API ainda não foram homologados.
+// Nomes da API confirmados para PISTOLA(S) na consulta de leitura de 15/10/2026.
+const CHAVES_API_PISTOLA = new Set([
+  'Nº Série', 'Marca', 'Modelo', 'Marca da Arma', 'Status do Número de Série',
+  'Calibre Nominal Pistola', 'Tipo Acabamento', 'Estado Geral da Arma',
+  'Funcionamento', 'Fabricação da Arma', 'Arma é Institucional?',
+])
 function camposDoTipo(codigo: string): CampoPersonalizadoBalistica[] {
   const texto = (chave: string, label: string, maxLength: number): CampoPersonalizadoBalistica => ({
     id: `${codigo}:${chave}`, chaveGdl: label, label, controle: 'texto', obrigatorio: false, maxLength,
@@ -124,7 +129,9 @@ const TIPOS_B601: Array<[string, string]> = [
 ]
 
 export const CATALOGO_TIPOS_PECA_B601: TipoPecaB601[] = TIPOS_B601.map(([codigo, label]) => ({
-  codigo, label, campos: camposDoTipo(codigo),
+  codigo, label, campos: camposDoTipo(codigo).map(campo => ({
+    ...campo, mapeamentoApiConfirmado: codigo === '104' && CHAVES_API_PISTOLA.has(campo.chaveGdl),
+  })),
 }))
 export const TIPOS_PECA_B601_POR_CODIGO = new Map(CATALOGO_TIPOS_PECA_B601.map(tipo => [tipo.codigo, tipo]))
 

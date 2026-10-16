@@ -10,7 +10,7 @@ import { obterMinhasRepsEmCache, atualizarMinhasRepsEmCache } from '../../servic
 import { definirListagemRepsGdlHabilitada, obterListagemRepsGdlHabilitada } from '../../services/gdl-listagem-preferencia.service.js';
 import { classificarFalhaListaRepsGdl } from '../../services/gdl-minhas-reps-erro.service.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
-import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
+import { converterRepGdl, listarCodigosImportacaoGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
 import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
@@ -293,7 +293,7 @@ export const registerGdlHandlers = (): void => {
       if (!codigoExame) {
         return { success: false, error: resultado.erroNaturezaExame || 'O GDL não retornou uma natureza de exame identificável para esta REP.' };
       }
-      if (codigoExame !== 'B-602') {
+      if (!listarCodigosImportacaoGdl().includes(codigoExame)) {
         return {
           success: false,
           error: `O formulário para a natureza de exame ${naturezaExameGdl} ainda está em desenvolvimento no laWdo. Os dados não foram importados.`,

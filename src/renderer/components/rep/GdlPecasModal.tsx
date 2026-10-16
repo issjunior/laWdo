@@ -1,3 +1,4 @@
+import { DadosAdicionaisPecaGdl } from './DadosAdicionaisPecaGdl'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Loader2, PackageSearch, RefreshCw } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -6,25 +7,28 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
-import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '@shared/types/b602-gdl.types'
+import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types'
+import type { PecaBalistica } from '@shared/types/pecas-balistica.types'
+import { TIPOS_PECA_B601_POR_CODIGO } from '@shared/catalogos/b601.catalogo'
 import { TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo'
-import { montarItensReconciliacaoPecasB602 } from '@/components/rep/exam-fields/pecas-b602.utils'
+import { montarItensReconciliacaoPecasBalistica } from '@/components/rep/exam-fields/pecas-balistica-gdl.utils'
 import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente'
 
 interface GdlPecasModalProps {
+  codigoExame?: 'B-601' | 'B-602'
   open: boolean
   onOpenChange: (open: boolean) => void
   numeroRepCompleto: string
-  pecasAtuais: PecaB602[]
+  pecasAtuais: PecaBalistica[]
   onAplicar: (
-    resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
-    pecasRetornadasSelecionadas: PecaB602[],
-    pecasImportadasSelecionadas: PecaB602[],
+    resultado: ResultadoImportacaoGdl,
+    pecasRetornadasSelecionadas: PecaBalistica[],
+    pecasImportadasSelecionadas: PecaBalistica[],
   ) => void
 }
 
 function separarNumeroRep(numeroCompleto: string): { numero: string; ano: string } | null {
-  const correspondencia = numeroCompleto.trim().match(/^([\d.]+)-(\d{4})$/)
+  const correspondencia = numeroCompleto.trim().match(/^([\d.]+)[-/](\d{4})$/)
   if (!correspondencia) return null
   return { numero: correspondencia[1].replace(/\D/g, ''), ano: correspondencia[2] }
 }
@@ -37,17 +41,19 @@ function formatarValor(valor: unknown): string {
 
 export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
   open,
+  codigoExame = 'B-602',
   onOpenChange,
   numeroRepCompleto,
   pecasAtuais,
   onAplicar,
 }) => {
-  const [resultado, setResultado] = useState<ResultadoImportacaoExame<DadosImportacaoB602> | null>(null)
+  const [resultado, setResultado] = useState<ResultadoImportacaoGdl | null>(null)
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [ambiente, setAmbiente] = useState<'homologacao' | 'producao'>('producao')
   const [ambienteCarregado, setAmbienteCarregado] = useState(false)
+  const geracaoConsulta = useRef(0)
   const consultaExecutadaRef = useRef<string | null>(null)
 
   const consultarPecas = useCallback(async (): Promise<void> => {
@@ -57,32 +63,34 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
       return
     }
 
+    const geracao = ++geracaoConsulta.current
     setCarregando(true)
     setErro(null)
     try {
       const resposta = await window.ipcAPI.gdl.consultarRep(referencia.numero, referencia.ano)
+      if (geracao !== geracaoConsulta.current) return
       if (!resposta.success || !resposta.data) {
         setErro(resposta.error || 'Não foi possível consultar as peças da REP no GDL.')
         return
       }
 
-      const consulta: ResultadoImportacaoExame<DadosImportacaoB602> = resposta.data
-      if (consulta.codigoExame !== 'B-602') {
-        setErro(`A REP consultada pertence ao exame ${consulta.codigoExame}, não ao B-602.`)
+      const consulta: ResultadoImportacaoGdl = resposta.data
+      if (consulta.codigoExame !== codigoExame) {
+        setErro(`A REP consultada pertence ao exame ${consulta.codigoExame}, não ao ${codigoExame}.`)
         return
       }
 
-      const itens = montarItensReconciliacaoPecasB602(pecasAtuais, consulta.camposEspecificos.pecas)
+      const itens = montarItensReconciliacaoPecasBalistica(pecasAtuais, consulta.camposEspecificos.pecas)
       setResultado(consulta)
       setSelecionadas(new Set(
         itens.filter(item => item.jaImportada).map(item => item.chave),
       ))
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro inesperado ao consultar as peças no GDL.')
+      if (geracao === geracaoConsulta.current) setErro(e instanceof Error ? e.message : 'Erro inesperado ao consultar as peças no GDL.')
     } finally {
-      setCarregando(false)
+      if (geracao === geracaoConsulta.current) setCarregando(false)
     }
-  }, [numeroRepCompleto, pecasAtuais])
+  }, [codigoExame, numeroRepCompleto, pecasAtuais])
 
   useEffect(() => {
     if (!open) {
@@ -90,29 +98,31 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
       return
     }
 
+    let ativa = true
     setAmbienteCarregado(false)
     void obterPreferenciasAmbienteGdl().then(preferencias => {
-      setAmbiente(preferencias.ambiente)
+      if (ativa) setAmbiente(preferencias.ambiente)
     }).catch(() => {
-      setAmbiente('producao')
+      if (ativa) setAmbiente('producao')
     }).finally(() => {
-      setAmbienteCarregado(true)
+      if (ativa) setAmbienteCarregado(true)
     })
+    return () => { ativa = false; geracaoConsulta.current += 1 }
   }, [open])
 
   useEffect(() => {
     if (!open || !ambienteCarregado) return
 
-    const chaveConsulta = numeroRepCompleto.trim()
+    const chaveConsulta = `${codigoExame}:${numeroRepCompleto.trim()}`
     if (consultaExecutadaRef.current === chaveConsulta) return
     consultaExecutadaRef.current = chaveConsulta
     setResultado(null)
     setSelecionadas(new Set())
     void consultarPecas()
-  }, [ambienteCarregado, consultarPecas, numeroRepCompleto, open])
+  }, [ambienteCarregado, codigoExame, consultarPecas, numeroRepCompleto, open])
 
   const itens = resultado
-    ? montarItensReconciliacaoPecasB602(pecasAtuais, resultado.camposEspecificos.pecas)
+    ? montarItensReconciliacaoPecasBalistica(pecasAtuais, resultado.camposEspecificos.pecas)
     : []
 
   const alternarSelecao = (chave: string): void => {
@@ -132,8 +142,12 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
     const pecasRetornadasSelecionadas = resultado.camposEspecificos.pecas.filter(
       peca => selecionadas.has(`gdl-${peca.codPecaGdl ?? peca.idLocal}`),
     )
-    onAplicar(resultado, pecasRetornadasSelecionadas, pecasImportadasSelecionadas)
-    onOpenChange(false)
+    try {
+      onAplicar(resultado, pecasRetornadasSelecionadas, pecasImportadasSelecionadas)
+      onOpenChange(false)
+    } catch (falha: unknown) {
+      setErro(falha instanceof Error ? falha.message : 'Não foi possível aplicar a seleção.')
+    }
   }
 
   return (
@@ -206,11 +220,12 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
                         {!!Object.keys(peca.personalizados).length && (
                           <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-2">
                             {Object.entries(peca.personalizados).map(([id, valor]) => {
-                              const label = TIPOS_PECA_B602_POR_CODIGO.get(peca.tipoCodigo)?.campos.find(campo => campo.id === id)?.label ?? id
+                              const label = (codigoExame === 'B-601' ? TIPOS_PECA_B601_POR_CODIGO : TIPOS_PECA_B602_POR_CODIGO).get(peca.tipoCodigo)?.campos.find(campo => campo.id === id)?.label ?? id
                               return <div key={id} className="flex gap-1"><dt className="font-medium">{label}:</dt><dd>{formatarValor(valor)}</dd></div>
                             })}
                           </dl>
                         )}
+                        {codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} />}
                       </div>
                     </div>
                   </label>

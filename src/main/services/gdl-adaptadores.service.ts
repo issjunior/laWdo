@@ -1,18 +1,16 @@
-import type {
-  DadosImportacaoB602,
-  MetadadosIntegracaoGdl,
-  ResultadoImportacaoExame,
-} from '../../shared/types/b602-gdl.types.js'
+import type { MetadadosIntegracaoGdl } from '../../shared/types/b602-gdl.types.js'
+import type { ResultadoImportacaoGdl } from '../../shared/types/gdl-importacao.types.js'
 import type { GdlRepValidada } from './gdl.schema.js'
+import { converterRepB601 } from './gdl-b601-normalizador.service.js'
 import { converterRepB602 } from './gdl-b602-normalizador.service.js'
 
-type ResultadoImportacaoGdl = ResultadoImportacaoExame<DadosImportacaoB602>
 type AdaptadorImportacaoGdl = (
   rep: GdlRepValidada,
   metadados?: MetadadosIntegracaoGdl,
 ) => ResultadoImportacaoGdl
 
 const adaptadoresPorExame = new Map<string, AdaptadorImportacaoGdl>([
+  ['B-601', converterRepB601],
   ['B-602', converterRepB602],
 ])
 

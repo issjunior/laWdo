@@ -45,7 +45,7 @@ import type {
   DashboardCronologiaLaudo,
   DashboardResumo,
 } from '../types/dashboard.js';
-import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
+import type { ResultadoImportacaoGdl } from '../shared/types/gdl-importacao.types.js';
 import type { FalhaListaRepsGdl, SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
 import type { ListaImagensRepGdl, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
@@ -264,8 +264,8 @@ export interface IpcAPI {
     identificarRep: (numero: string, ano: string, naturezaLista?: string) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
     completarConsultaRep: (consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
     descartarConsultaRep: () => Promise<UserResponse>;
-    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
-    consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
+    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<UserResponse<ResultadoImportacaoGdl>>;
+    consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoGdl>>;
     completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     prepararAtualizacaoRep: (repId: string) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<UserResponse<ResultadoAtualizacaoRepGdl>>;
@@ -1470,7 +1470,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       invocarComDiagnostico('gdl:identificar-rep', numero.replace(/\D/g, ''), ano.trim(), naturezaLista),
     completarConsultaRep: (consultaId: string, abrirDetalhes: boolean): Promise<UserResponse<ConsultaIdentificacaoRepGdl>> => invocarComDiagnostico('gdl:completar-consulta-rep', consultaId, abrirDetalhes),
     descartarConsultaRep: (): Promise<UserResponse> => invocarComDiagnostico('gdl:descartar-consulta-rep'),
-    converterConsultaRep: (consultaId: string, tipoExameId: string): Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>> =>
+    converterConsultaRep: (consultaId: string, tipoExameId: string): Promise<UserResponse<ResultadoImportacaoGdl>> =>
       invocarComDiagnostico('gdl:converter-consulta-rep', consultaId, tipoExameId),
     consultarRep: (numero: string, ano: string) => {
       if (typeof numero !== 'string' || !numero.trim()) {

@@ -1,3 +1,4 @@
+import { DadosAdicionaisPecaGdl } from '../DadosAdicionaisPecaGdl'
 import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Edit, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -131,6 +132,7 @@ export function PecasBalisticaFields<T extends PecaBalistica>({
           <div className="space-y-2"><Label>Consumido/Liberado no Exame?</Label><Select value={editando.comuns.consumida} onValueChange={v => atualizarComum('consumida', v === 'S' ? 'S' : v === 'P' ? 'P' : 'N')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="S">Sim</SelectItem><SelectItem value="N">Não</SelectItem><SelectItem value="P">Parcialmente</SelectItem></SelectContent></Select></div>
         </div>
       </>}
+      {codigoExame === 'b601' && <DadosAdicionaisPecaGdl dados={editando.extrasGdl} />}
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setEditando(null)}>Cancelar</Button><Button type="button" onClick={salvar}>Confirmar peça</Button></div>
     </div>
   }
