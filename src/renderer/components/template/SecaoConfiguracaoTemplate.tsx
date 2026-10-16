@@ -1,5 +1,7 @@
 import React from 'react';
 import { AlertTriangle, ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
+import { IndicadoresSecao } from '@/components/ui/indicadores-secao';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +33,7 @@ interface SecaoConfiguracaoTemplateProps {
     attributes: React.ButtonHTMLAttributes<HTMLButtonElement>;
     listeners: React.ButtonHTMLAttributes<HTMLButtonElement>;
   };
-  onUpdateSecao: (field: 'nome' | 'condicao' | 'parent_id' | 'repetir_para' | 'repetir_titulo', value: string) => void;
+  onUpdateSecao: (field: 'nome' | 'condicao' | 'parent_id' | 'repetir_para' | 'repetir_titulo' | 'ocultar_titulo' | 'contar_na_numeracao', value: string | boolean) => void;
   onMoveSecao: (direction: 'up' | 'down') => void;
   onRemoveSecao: () => void;
 }
@@ -89,6 +91,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
               />
             </div>
             <p className="text-xs text-muted-foreground">{resumo}</p>
+            <IndicadoresSecao ocultarTitulo={secao.ocultar_titulo} contarNaNumeracao={secao.contar_na_numeracao} />
           </div>
         </div>
         <div className="flex items-center justify-end gap-1">
@@ -103,6 +106,24 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
           </Button>
         </div>
       </div>
+
+      <div className="space-y-1.5">
+        <Label className="flex items-center gap-2">
+          <Checkbox checked={secao.ocultar_titulo === true} onCheckedChange={valor => onUpdateSecao('ocultar_titulo', valor === true)} />
+          Ocultar título no laudo
+        </Label>
+        <p className="text-xs text-muted-foreground">Oculta nome, número e linha do título na visualização e exportação. A seção permanece identificada no editor.</p>
+      </div>
+
+      {secao.ocultar_titulo && (
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-2">
+            <Checkbox checked={secao.contar_na_numeracao !== false} onCheckedChange={valor => onUpdateSecao('contar_na_numeracao', valor === true)} />
+            Contar esta seção na numeração
+          </Label>
+          <p className="text-xs text-muted-foreground">Desmarque para continuar a sequência sem contar esta seção. Se ela for principal, suas subseções serão exibidas sem número.</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {exameToggles.length > 0 && (

@@ -26,7 +26,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 41;
+export const CURRENT_SCHEMA_VERSION = 43;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -479,6 +479,8 @@ const createDatabaseSchema = async (): Promise<void> => {
         condicao TEXT,
         repetir_para TEXT,
         repetir_titulo TEXT,
+        ocultar_titulo INTEGER NOT NULL DEFAULT 0 CHECK (ocultar_titulo IN (0, 1)),
+        contar_na_numeracao INTEGER NOT NULL DEFAULT 1 CHECK (contar_na_numeracao IN (0, 1)),
         chave_integrada TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -2444,6 +2446,16 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
   if (fromVersion < 41) {
     await garantirColuna('users', 'forma_tratamento', "TEXT NOT NULL DEFAULT 'masculino' CHECK (forma_tratamento IN ('masculino', 'feminino'))");
     log.info('Migration v41: forma de tratamento do perito');
+  }
+
+  if (fromVersion < 42) {
+    await garantirColuna('secoes_template', 'ocultar_titulo', 'INTEGER NOT NULL DEFAULT 0 CHECK (ocultar_titulo IN (0, 1))');
+    log.info('Migration v42: ocultação dos títulos de seções de template');
+  }
+
+  if (fromVersion < 43) {
+    await garantirColuna('secoes_template', 'contar_na_numeracao', 'INTEGER NOT NULL DEFAULT 1 CHECK (contar_na_numeracao IN (0, 1))');
+    log.info('Migration v43: participação das seções ocultas na numeração');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);

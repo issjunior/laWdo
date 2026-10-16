@@ -54,7 +54,7 @@ describe('integridade do schema', () => {
     const nomes = new Set(tabelas.map(tabela => tabela.name))
 
     expect(tabelasEsperadas.every(tabela => nomes.has(tabela))).toBe(true)
-    expect(versao[0]?.version).toBe(41)
+    expect(versao[0]?.version).toBe(43)
     const colunasUsuarios = await consultar<{ name: string }>('PRAGMA table_info(users)')
     expect(colunasUsuarios.map(coluna => coluna.name)).toContain('forma_tratamento')
     const colunasImagens = await consultar<{ name: string }>('PRAGMA table_info(imagens_laudo)')
@@ -136,7 +136,7 @@ describe('integridade do schema', () => {
     await fecharBanco?.()
     const bancoFuturo = new sqlite3.Database(path.join(diretorioBanco, 'laudopericial.db'))
     await executar(bancoFuturo, 'DELETE FROM schema_version')
-    await executar(bancoFuturo, 'INSERT INTO schema_version (version) VALUES (42)')
+    await executar(bancoFuturo, 'INSERT INTO schema_version (version) VALUES (44)')
     await new Promise<void>((resolve, reject) => bancoFuturo.close(erro => erro ? reject(erro) : resolve()))
 
     vi.resetModules()
@@ -147,6 +147,6 @@ describe('integridade do schema', () => {
     await expect(database.setupDatabase()).rejects.toThrow('SCHEMA_FUTURO_INCOMPATIVEL')
     await fecharBanco()
     const versaoPersistida = await consultarBanco<{ version: number }>(path.join(diretorioBanco, 'laudopericial.db'), 'SELECT version FROM schema_version')
-    expect(versaoPersistida).toEqual([{ version: 42 }])
+    expect(versaoPersistida).toEqual([{ version: 44 }])
   })
 })

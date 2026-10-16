@@ -7,6 +7,8 @@ interface DefinicaoSecaoTemplateIntegrado {
   condicao?: string;
   repetirPara?: string;
   repetirTitulo?: string;
+  ocultarTitulo?: boolean;
+  contarNaNumeracao?: boolean;
 }
 
 export interface DefinicaoTemplateIntegrado {

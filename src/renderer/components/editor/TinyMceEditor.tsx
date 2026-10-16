@@ -131,6 +131,23 @@ function aplicarTemaEditor(editor: TinyMceEditorInstance, dark: boolean) {
   }
 }
 
+function obterEstilosIndicadoresSecao(): string {
+  const estilos: string[] = [];
+  const visitar = (regras: CSSRuleList) => {
+    for (const regra of Array.from(regras)) {
+      if (regra instanceof CSSStyleRule && regra.selectorText.includes('.indicador-secao')) {
+        estilos.push(regra.cssText);
+      } else if ('cssRules' in regra) {
+        visitar((regra as CSSGroupingRule).cssRules);
+      }
+    }
+  };
+  for (const folha of Array.from(document.styleSheets)) {
+    try { visitar(folha.cssRules); } catch { continue; }
+  }
+  return estilos.join('\n');
+}
+
 export interface BlocoCondicionalSelecionado {
   editorId: string;
   instanciaId: string;
@@ -163,7 +180,7 @@ interface TinyMceEditorProps {
   /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
-  onEditorInit?: (editor: TinyMceEditorInstance) => void;
+  onEditorInit?: (editor: TinyMceEditorInstance) => void | Promise<void>;
   /** Solicita a substituição de uma figura dummy pelo fluxo de ilustrações do laudo. */
   onDummyFigureClick?: (imageId: string) => void;
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
@@ -474,7 +491,7 @@ function normalizarBlocosCondicionais(raiz: HTMLElement | null, condToggles?: Ti
 export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>> = ({
   value,
   initialValue,
-  onChange,
+  onChange: aoAlterarConteudo,
   somenteLeitura = false,
   diagnosticoLaudo,
   height = 300,
@@ -507,6 +524,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const onEstruturaTabelasAlteradaRef = useRef(onEstruturaTabelasAlterada);
   const onCampoReservadoDuploCliqueRef = useRef(onCampoReservadoDuploClique);
   const editorProntoParaAlteracoesRef = useRef(false);
+  const onChange = useCallback((html: string, origem?: 'usuario' | 'normalizacao-inicial') => {
+    aoAlterarConteudo(html, origem ?? (editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial'));
+  }, [aoAlterarConteudo]);
   const faseInicializacaoRef = useRef('aguardando_montagem');
   const [preparado, setPreparado] = useState(false);
   const [ready, setReady] = useState(false);
@@ -525,6 +545,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   useLayoutEffect(() => {
     if (removerInstanciaTinyMceAnterior(editorIdResolvido)) registrarInicializacao('editor_anterior_removido');
     setPreparado(true);
+    return () => {
+      editorRef.current = null;
+      editorProntoParaAlteracoesRef.current = false;
+    };
   }, [editorIdResolvido, registrarInicializacao]);
 
   const reiniciarEditor = useCallback(() => {
@@ -692,16 +716,34 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
         )}
         init={{
           init_instance_callback: editor => {
-            editor.getContainer()?.querySelector('iframe.tox-edit-area__iframe')?.setAttribute('data-diagnostico-pronto', 'true');
-            registrarInicializacao('editor_pronto', { tentativaInterna: tentativaInicializacao });
-            faseInicializacaoRef.current = 'pronto';
             editorRef.current = editor;
-            normalizarBlocosCondicionais(editor.getBody(), condToggles);
-            sincronizarAcoesBlocosCondicionais(editor.getBody());
-            onEditorInit?.(editor);
-            editorProntoParaAlteracoesRef.current = true;
-            setFalhaInicializacao(null);
-            setReady(true);
+            faseInicializacaoRef.current = 'preparando_conteudo';
+            const instanciaAtual = () => editorRef.current === editor && !editor.removed && !editor.destroyed;
+            const concluirPreparacao = () => {
+              if (!instanciaAtual()) return;
+              editor.getContainer()?.querySelector('iframe.tox-edit-area__iframe')?.setAttribute('data-diagnostico-pronto', 'true');
+              registrarInicializacao('editor_pronto', { tentativaInterna: tentativaInicializacao });
+              faseInicializacaoRef.current = 'pronto';
+              editorProntoParaAlteracoesRef.current = true;
+              setFalhaInicializacao(null);
+              setReady(true);
+            };
+            const falharPreparacao = (erro: unknown) => {
+              if (!instanciaAtual()) return;
+              window.ipcAPI?.logError('laudo', 'Falha ao preparar conteúdo do editor', {
+                erro: erro instanceof Error ? erro.message : 'Erro inesperado',
+              });
+              setFalhaInicializacao('Não foi possível preparar o conteúdo do editor. Tente novamente.');
+            };
+            try {
+              normalizarBlocosCondicionais(editor.getBody(), condToggles);
+              sincronizarAcoesBlocosCondicionais(editor.getBody());
+              const preparacao = onEditorInit?.(editor);
+              if (preparacao) void preparacao.then(concluirPreparacao).catch(falharPreparacao);
+              else concluirPreparacao();
+            } catch (erro: unknown) {
+              falharPreparacao(erro);
+            }
           },
           ...obterOpcoesAlturaEditor(height, alturaAutomatica),
           menubar: false,
@@ -1549,6 +1591,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               }
 
               // ─── Observador de tema global (Header toggle) ─────
+              const estilosIndicadores = obterEstilosIndicadoresSecao();
+              if (estilosIndicadores) editor.dom.addStyle(estilosIndicadores);
               const isDark = document.body.classList.contains('dark');
               aplicarTemaEditor(editor, isDark);
 

@@ -114,6 +114,7 @@ import { getMargens } from '@/lib/margens';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import {
   aplicarVisualizacaoPlaceholder,
+  aplicarVisualizacaoPlaceholders,
   agendarVisualizacaoPlaceholders,
   restaurarVisualizacaoAposSalvar,
   type ModoVisualizacaoPlaceholders,
@@ -127,6 +128,10 @@ import {
   resolverPlaceholdersExportacao,
   type MapaPlaceholdersResolvidos,
 } from '@/lib/exportacao-placeholders';
+import { IndicadoresSecao } from '@/components/ui/indicadores-secao';
+import { criarIndicadoresSecaoHtml } from '@/lib/indicadores-secao';
+import { calcularNumeracaoSecoes } from '@shared/utils/numeracao-secoes';
+import { ocultarTitulosSecoesNaSaida } from '@/lib/titulos-secoes-laudo';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { protegerFragmentosIa, restaurarFragmentosIa } from '@/lib/ia-fragmentos';
 import { resolverHtmlContextoIa, resolverTextoContextoIa } from '@/lib/ia-contexto';
@@ -316,14 +321,14 @@ const converterHtmlEmTexto = (html: string): string => {
   }
 };
 
-const converterTextoEmHtmlSeguro = (texto: string): string => {
-  const escaparHtml = (valor: string) => valor
+const escaparHtml = (valor: string) => valor
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const converterTextoEmHtmlSeguro = (texto: string): string => {
   return texto
     .split(/\r?\n/)
     .map(linha => linha.trim() ? `<p>${escaparHtml(linha)}</p>` : '<p>&nbsp;</p>')
@@ -764,8 +769,7 @@ export const LaudosPage: React.FC = () => {
 
   const buildSingleHtmlFromSecoes = useCallback((secoesFonte: SecaoEditor[]) => {
     if (secoesFonte.length === 0) return '';
-    let indiceH2 = 0;
-    let indiceH3 = 0;
+    const numeracoes = calcularNumeracaoSecoes(secoesFonte);
     const ids = new Set(secoesFonte.flatMap(secao => secao.id ? [secao.id] : []));
     const filhosPorPai = new Map<string, Array<{ secao: SecaoEditor; indice: number }>>();
 
@@ -777,17 +781,8 @@ export const LaudosPage: React.FC = () => {
     });
 
     const montarSecao = (sec: SecaoEditor, index: number): string => {
-        if (sec.nivel === 2) {
-          indiceH2 += 1;
-          indiceH3 = 0;
-        } else {
-          indiceH3 += 1;
-        }
-
         const tituloBase = normalizarTituloSecao(sec.titulo || `Seção ${index + 1}`);
-        const titulo = sec.nivel === 2
-          ? `${indiceH2}. ${tituloBase}`
-          : `${indiceH2}.${indiceH3} ${tituloBase}`;
+        const titulo = [numeracoes[index], tituloBase].filter(Boolean).join(' ');
         const conteudoOriginal = sec.conteudo?.trim() || '';
         const filhas = sec.id ? filhosPorPai.get(sec.id) || [] : [];
         const aninhada = Boolean(sec.parentId && ids.has(sec.parentId));
@@ -813,15 +808,18 @@ export const LaudosPage: React.FC = () => {
             data-secao-id="${sec.id || ''}"
             data-parent-id="${sec.parentId || ''}"
             data-estrutura-nivel="${sec.nivel}"
+            data-ocultar-titulo="${sec.ocultarTitulo ? 'true' : 'false'}"
+            data-contar-na-numeracao="${sec.contarNaNumeracao === false ? 'false' : 'true'}"
             data-derivada-rep="${sec.derivadaRep ? 'true' : 'false'}"
             style="${estiloSecao}"
           >
             <div
               contenteditable="false"
               data-laudo-secao-header="true"
+              data-titulo-base="${escaparHtml(titulo)}"
               style="${estiloCabecalho}"
             >
-              ${titulo}
+              ${escaparHtml(titulo)}${criarIndicadoresSecaoHtml(sec)}
             </div>
             ${conteudo ? `<div data-laudo-secao-content="true" style="${estiloConteudo}">${conteudo}</div>` : ''}
             ${subsecoes}
@@ -851,7 +849,9 @@ export const LaudosPage: React.FC = () => {
         const base = (id ? secoesBase.find(secao => secao.id === id) : undefined)
           || (Number.isInteger(idx) ? secoesBase[idx] : undefined);
         const contentNode = node.querySelector(':scope > [data-laudo-secao-content="true"]') as HTMLElement | null;
-        const titulo = node.querySelector<HTMLElement>(':scope > [data-laudo-secao-header="true"]')?.textContent || base?.titulo || 'Seção';
+        const cabecalho = node.querySelector<HTMLElement>(':scope > [data-laudo-secao-header="true"]')?.cloneNode(true) as HTMLElement | undefined;
+        cabecalho?.querySelector('[data-indicador-titulo-oculto]')?.remove();
+        const titulo = cabecalho?.textContent || base?.titulo || 'Seção';
         return {
           id: id || base?.id,
           parentId: node.getAttribute('data-parent-id') || base?.parentId || null,
@@ -859,6 +859,10 @@ export const LaudosPage: React.FC = () => {
           titulo: normalizarTituloSecao(titulo),
           conteudo: (contentNode?.innerHTML || '').trim() || '<p>&nbsp;</p>',
           derivadaRep: node.getAttribute('data-derivada-rep') === 'true',
+          ocultarTitulo: node.getAttribute('data-ocultar-titulo') === 'true' || base?.ocultarTitulo === true,
+          contarNaNumeracao: node.hasAttribute('data-contar-na-numeracao')
+            ? node.getAttribute('data-contar-na-numeracao') !== 'false'
+            : base?.contarNaNumeracao !== false,
         } satisfies SecaoEditor;
       });
     } catch {
@@ -925,7 +929,7 @@ export const LaudosPage: React.FC = () => {
 
     if (houveCorrecaoPersistente) {
       registrarEventoPagina('tabelas_corrigidas');
-      registrarAlteracao();
+      registrarAlteracao(inicializando ? 'normalizacao-inicial' : 'usuario');
     }
 
     if (editorMode === 'single') {
@@ -949,7 +953,7 @@ export const LaudosPage: React.FC = () => {
       conteudo: removerFormatacaoPlaceholders(secao.conteudo),
     })));
     return secoesAtuais;
-  }, [editorMode, parseSingleHtmlToSecoes, registrarAlteracao, registrarEventoPagina, secoes, singleEditorHtml]);
+  }, [editorMode, inicializando, parseSingleHtmlToSecoes, registrarAlteracao, registrarEventoPagina, secoes, singleEditorHtml]);
   const conferirTabelasEditoresRef = useRef(conferirTabelasEditores);
   conferirTabelasEditoresRef.current = conferirTabelasEditores;
 
@@ -1424,7 +1428,7 @@ export const LaudosPage: React.FC = () => {
             .find(elemento => elemento.getAttribute('data-image-id') === imageId);
           const secao = figura?.closest<HTMLElement>('section[data-laudo-secao="true"]');
           editor.execCommand('removeLaudoImage', false, { id: imageId });
-          if (secao?.querySelector('[data-laudo-secao-header="true"]')?.textContent?.replace(/^\s*\d+(?:\.\d+)?\.?\s*/, '').trim().toUpperCase() === 'ILUSTRAÇÕES') {
+          if (secao?.querySelector('[data-laudo-secao-header="true"]')?.getAttribute('data-titulo-base')?.replace(/^\s*\d+(?:\.\d+)?\.?\s*/, '').trim().toUpperCase() === 'ILUSTRAÇÕES') {
             const conteudo = secao.querySelector<HTMLElement>('[data-laudo-secao-content="true"]');
             if (conteudo && conteudoHtmlEhVazio(conteudo.innerHTML) && !secao.querySelector('[data-laudo-subsecoes="true"]')) secao.remove();
           }
@@ -1901,7 +1905,7 @@ export const LaudosPage: React.FC = () => {
       let fullHtml = cabecalhoPrimeiraPagina
         ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
         : '';
-      fullHtml += montarHtmlEstruturalAtual(secoesAtuais);
+      fullHtml += ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais));
 
       // 4. Aplicar placeholders (incluindo relacionamentos)
       const htmlProcessado = aplicarPlaceholders(fullHtml, repData, {
@@ -1990,7 +1994,7 @@ export const LaudosPage: React.FC = () => {
         estrito: true,
       });
 
-      let html = reindexarHtmlEstrutural(laudo.conteudo || '<p>&nbsp;</p>');
+      let html = ocultarTitulosSecoesNaSaida(reindexarHtmlEstrutural(laudo.conteudo || '<p>&nbsp;</p>'));
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
@@ -2090,7 +2094,7 @@ export const LaudosPage: React.FC = () => {
       });
 
       const secoesAtuais = conferirTabelasEditores(true);
-      let html = montarHtmlEstruturalAtual(secoesAtuais);
+      let html = ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais));
 
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
@@ -2272,6 +2276,21 @@ export const LaudosPage: React.FC = () => {
       },
     });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders, registrarEventoPagina]);
+
+  const prepararConteudoEditor = async (editor: TinyMceEditorInstance, sessao: number): Promise<boolean> => {
+    const imagens = await editor.uploadImages();
+    if (!sessaoAtual(sessao) || editor.removed || editor.destroyed) return false;
+    if (imagens.some(imagem => !imagem.status)) throw new Error('Não foi possível preparar as imagens do laudo.');
+    const resultado = aplicarVisualizacaoPlaceholders(editor, {
+      modo: modoVisualizacaoPlaceholders,
+      valores: mapaPlaceholdersResolvidos,
+      placeholdersPersonalizados: placeholders,
+      descreverPendente: descreverPlaceholderPendente,
+    });
+    if (resultado.estado !== 'aplicado') throw new Error('Não foi possível preparar os campos do laudo.');
+    conferirTabelasEditoresRef.current();
+    return true;
+  };
 
   const inserirPlaceholder = useCallback((editorId: string, chave: string) => {
     const editor = obterEditorTinyMce(editorId);
@@ -3926,6 +3945,7 @@ export const LaudosPage: React.FC = () => {
               </Badge>
             </div>
             <BarraEditorLaudo
+              bloqueado={inicializando}
               modoConteudo={modoVisualizacaoPlaceholders}
               modoOrganizacao={editorMode}
               onModoConteudoChange={setModoVisualizacaoPlaceholders}
@@ -4018,11 +4038,11 @@ export const LaudosPage: React.FC = () => {
                         }}
                         placeholderChaves={placeholderChaves}
                         condToggles={exameToggles}
-                        onEditorInit={(editor) => {
+                        onEditorInit={async (editor) => {
+                          if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                           setSingleEditorHtml(editor.getContent());
                           concluirInicializacao(obterConteudoComparavelRef.current(), sessaoEditor);
                           registrarEventoPagina('editor_pronto', { atualTamanho: editor.getContent().length });
-                          aplicarModoNoEditor(editor);
                           registrarEditorIa(editor);
                         }}
                         onTabelaPlaceholderRestaurada={aplicarModoNoEditor}
@@ -4085,6 +4105,7 @@ export const LaudosPage: React.FC = () => {
                                   <div className="min-w-0">
                                     <h3 className={cn('font-semibold', aninhada ? 'text-base' : 'text-lg')}>{secao.titulo}</h3>
                                     <p className="text-sm text-muted-foreground">{tituloVisual} · clique para expandir/recolher</p>
+                                    <IndicadoresSecao ocultarTitulo={secao.ocultarTitulo} contarNaNumeracao={secao.contarNaNumeracao} />
                                   </div>
                                 </div>
                               </CollapsibleTrigger>
@@ -4134,8 +4155,8 @@ export const LaudosPage: React.FC = () => {
                                       setPanelCollapsed(false);
                                     }}
                                     placeholderChaves={placeholderChaves}
-                                    onEditorInit={(editor) => {
-                                      aplicarModoNoEditor(editor);
+                                    onEditorInit={async (editor) => {
+                                      if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                                       registrarEditorIa(editor);
                                       if (isIlustracoes) handleIlustracoesEditorInit(editor);
                                     }}

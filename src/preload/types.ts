@@ -3,6 +3,8 @@ import type { RespostaImportacaoTemplate } from '../shared/types/importacao-temp
 import type { RespostaSalvarTemplateCompleto } from '../shared/types/template.types.js';
 
 export type ImportarArquivoResponse = RespostaImportacaoTemplate;
+export type { CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
+
 export type SalvarTemplateCompletoResponse = RespostaSalvarTemplateCompleto;
 
 /**

@@ -876,6 +876,26 @@
         "src/main/ipc/handlers/tipo-exame.handlers.ts",
         "src/__tests__/renderer/tipos-exame-page.component.test.tsx"
       ]
+    },
+    {
+      "arquivo": "spec/problemas diversos/aviso_salvar_sem_edicao.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Falsa pendência ao sair do laudo: preparação assíncrona, comparação canônica e diagnóstico.",
+      "globsCodigo": [
+        "src/renderer/components/editor/TinyMceEditor.tsx",
+        "src/renderer/components/laudo/editor/ControlesEditorLaudo.tsx",
+        "src/renderer/hooks/useGerenciadorAlteracoesLaudo.ts",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/lib/utils.ts",
+        "src/renderer/lib/conteudo-comparavel-laudo.ts",
+        "src/renderer/lib/apresentacao-placeholders.ts",
+        "src/__tests__/renderer/tiny-mce-editor-inicializacao.component.test.tsx",
+        "src/__tests__/renderer/conteudo-comparavel-laudo.test.ts",
+        "src/__tests__/renderer/apresentacao-placeholders.test.ts",
+        "src/__tests__/renderer/layout-editor-laudo.component.test.tsx",
+        "src/__tests__/renderer/alteracoes-pendentes-saida.component.test.tsx"
+      ]
     }
   ]
 }

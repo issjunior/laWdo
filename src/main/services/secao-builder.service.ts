@@ -1,3 +1,4 @@
+import { calcularNumeracaoSecoes } from '../../shared/utils/numeracao-secoes.js';
 import { SecaoTemplateRow } from '../types/database.js';
 import { projetarB602ParaLaudo } from '../../shared/utils/b602-pecas-projecao.js';
 
@@ -82,6 +83,8 @@ function criarHeading(params: {
   tituloVisivel: string;
   incluirTituloBase?: boolean;
   derivadaRep?: boolean;
+  ocultarTitulo?: boolean;
+  contarNaNumeracao?: boolean;
   atributosExtras?: Array<[string, string]>;
 }): string {
   const atributos: string[] = [];
@@ -92,6 +95,8 @@ function criarHeading(params: {
   if (params.incluirTituloBase !== false) {
     atributos.push(`data-titulo-base="${escaparHtml(params.tituloBase)}"`);
   }
+  if (params.ocultarTitulo) atributos.push('data-ocultar-titulo="true"');
+  if (params.contarNaNumeracao === false) atributos.push('data-contar-na-numeracao="false"');
   if (params.derivadaRep) atributos.push('data-derivada-rep="true"');
   for (const [chave, valor] of params.atributosExtras || []) {
     atributos.push(`${chave}="${escaparHtml(valor)}"`);
@@ -375,55 +380,39 @@ export function buildHtml(
     filhosPorPai.set(secao.parent_id, ordenarSecoes(filhos));
   }
 
-  let indiceH2 = 0;
-  const partes: string[] = [];
-
+  const estrutura: Array<{ secao: SecaoTemplateRow; nivel: 2 | 3; conteudo: string }> = [];
   for (const pai of secoesOrdenadas.filter(secao => !secao.parent_id)) {
     const filhos = filhosPorPai.get(pai.id) || [];
     const conteudoPai = processarBlocosCondicionais(pai.conteudo || '', camposEspecificos);
-    const mostrarPai = filhos.length > 0 || temConteudoUtil(conteudoPai);
-
-    if (!mostrarPai) continue;
-
-    indiceH2 += 1;
-    const tituloPai = removerPrefixoNumerico(pai.nome);
-    partes.push(criarHeading({
-      tag: 'h2',
-      secaoId: pai.id,
-      nivel: 2,
-      tituloBase: tituloPai,
-      tituloVisivel: `${indiceH2}. ${tituloPai}`,
-      derivadaRep: isSecaoDerivadaRep(pai),
-    }));
-
-    if (temConteudoUtil(conteudoPai)) {
-      partes.push(conteudoPai);
-    }
-
-    let indiceH3 = 0;
+    if (filhos.length === 0 && !temConteudoUtil(conteudoPai)) continue;
+    estrutura.push({ secao: pai, nivel: 2, conteudo: temConteudoUtil(conteudoPai) ? conteudoPai : '' });
     for (const filho of filhos) {
-      indiceH3 += 1;
-      const tituloFilho = removerPrefixoNumerico(filho.nome);
-      partes.push(criarHeading({
-        tag: 'h3',
-        secaoId: filho.id,
-        parentId: pai.id,
-        nivel: 3,
-        tituloBase: tituloFilho,
-        tituloVisivel: `${indiceH2}.${indiceH3} ${tituloFilho}`,
-        derivadaRep: isSecaoDerivadaRep(filho),
-        atributosExtras: filho.repetir_para ? [['data-repeat-section', filho.repetir_para]] : undefined,
-      }));
-
       const conteudoFilho = filho.repetir_para === 'armas'
         ? (expansoes.get('armas') || '')
         : processarBlocosCondicionais(filho.conteudo || '', camposEspecificos);
-
-      if (temConteudoUtil(conteudoFilho) || /data-repeat-group=/.test(conteudoFilho)) {
-        partes.push(conteudoFilho);
-      }
+      estrutura.push({
+        secao: filho, nivel: 3,
+        conteudo: temConteudoUtil(conteudoFilho) || /data-repeat-group=/.test(conteudoFilho) ? conteudoFilho : '',
+      });
     }
   }
-
-  return partes.join('\n');
+  const numeracoes = calcularNumeracaoSecoes(estrutura.map(({ secao, nivel }) => ({
+    nivel, ocultarTitulo: secao.ocultar_titulo === 1, contarNaNumeracao: secao.contar_na_numeracao !== 0,
+  })));
+  return estrutura.flatMap(({ secao, nivel, conteudo }, indice) => {
+    const tituloBase = removerPrefixoNumerico(secao.nome);
+    const heading = criarHeading({
+      tag: nivel === 2 ? 'h2' : 'h3',
+      secaoId: secao.id,
+      parentId: nivel === 3 ? secao.parent_id : undefined,
+      nivel,
+      ocultarTitulo: secao.ocultar_titulo === 1,
+      contarNaNumeracao: secao.contar_na_numeracao !== 0,
+      tituloBase,
+      tituloVisivel: [numeracoes[indice], tituloBase].filter(Boolean).join(' '),
+      derivadaRep: isSecaoDerivadaRep(secao),
+      atributosExtras: nivel === 3 && secao.repetir_para ? [['data-repeat-section', secao.repetir_para]] : undefined,
+    });
+    return conteudo ? [heading, conteudo] : [heading];
+  }).join('\n');
 }

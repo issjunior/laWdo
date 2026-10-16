@@ -3,7 +3,7 @@ import { logDebug, logError } from '../../utils/logger.js';
 import { auditDelete, auditExport } from '../../services/audit-log.service.js';
 import { sanitizeInput } from '../../security/index.js';
 import { templateService } from '../../services/template.service.js';
-import type { SalvarTemplateCompletoInput, SecaoCompletaTemplateInput, RespostaSalvarTemplateCompleto } from '../../../shared/types/template.types.js';
+import type { SalvarTemplateCompletoInput, SecaoCompletaTemplateInput, RespostaSalvarTemplateCompleto, CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../../../shared/types/template.types.js';
 import { exportarPacoteTemplate, importarPacoteTemplate, lerPreviaPacoteTemplate } from '../../services/template-pacote.service.js';
 import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincronizar-templates-integrados.js';
 import { ErroGeracaoPdf, gerarPdfPreparado } from '../../services/pdf-prontidao.service.js';
@@ -31,6 +31,8 @@ const ehSecaoCompleta = (valor: unknown): valor is SecaoCompletaTemplateInput =>
   return typeof valor.chave_local === 'string' && Boolean(valor.chave_local.trim())
     && typeof valor.nome === 'string' && Boolean(valor.nome.trim())
     && (valor.id === undefined || (typeof valor.id === 'string' && Boolean(valor.id.trim())))
+    && (valor.ocultar_titulo === undefined || typeof valor.ocultar_titulo === 'boolean')
+    && (valor.contar_na_numeracao === undefined || typeof valor.contar_na_numeracao === 'boolean')
     && ['parent_id', 'conteudo', 'condicao', 'repetir_para', 'repetir_titulo'].every(campo =>
       valor[campo] === undefined || valor[campo] === null || typeof valor[campo] === 'string');
 };
@@ -231,11 +233,13 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Criar seção */
-  ipcMain.handle('template:createSecao', async (_event, data: { template_id: string; nome: string; ordem: number; parent_id?: string | null; conteudo?: string; condicao?: string | null; repetir_para?: string | null; repetir_titulo?: string | null }) => {
+  ipcMain.handle('template:createSecao', async (_event, data: CriarSecaoTemplateInput) => {
     try {
       if (!data.nome || !data.nome.trim()) {
         return { success: false, error: 'Nome da seção é obrigatório' };
       }
+      if (data.ocultar_titulo !== undefined && typeof data.ocultar_titulo !== 'boolean') throw new Error('Ocultação do título inválida');
+      if (data.contar_na_numeracao !== undefined && typeof data.contar_na_numeracao !== 'boolean') throw new Error('Participação na numeração inválida');
       const secao = await templateService.createSecao({
         template_id: data.template_id,
         nome: sanitizeInput(data.nome.trim()),
@@ -245,6 +249,8 @@ export const registerTemplateHandlers = (): void => {
         condicao: data.condicao || undefined,
         repetir_para: data.repetir_para || undefined,
         repetir_titulo: data.repetir_titulo || undefined,
+        ocultar_titulo: data.ocultar_titulo === true ? 1 : 0,
+        contar_na_numeracao: data.contar_na_numeracao === false ? 0 : 1,
       });
       return { success: true, data: secao, message: 'Seção criada com sucesso' };
     } catch (error: unknown) {
@@ -254,7 +260,7 @@ export const registerTemplateHandlers = (): void => {
   });
 
   /** Atualizar seção */
-  ipcMain.handle('template:updateSecao', async (_event, id: string, data: { nome?: string; ordem?: number; parent_id?: string | null; conteudo?: string; condicao?: string | null; repetir_para?: string | null; repetir_titulo?: string | null }) => {
+  ipcMain.handle('template:updateSecao', async (_event, id: string, data: AtualizarSecaoTemplateInput) => {
     try {
       const updateData: Record<string, unknown> = {};
       if (data.nome !== undefined) updateData.nome = sanitizeInput(data.nome);
@@ -263,7 +269,11 @@ export const registerTemplateHandlers = (): void => {
       if (data.conteudo !== undefined) updateData.conteudo = data.conteudo;
       if (data.condicao !== undefined) updateData.condicao = data.condicao;
       if (data.repetir_para !== undefined) updateData.repetir_para = data.repetir_para;
+      if (data.ocultar_titulo !== undefined && typeof data.ocultar_titulo !== 'boolean') throw new Error('Ocultação do título inválida');
+      if (data.contar_na_numeracao !== undefined && typeof data.contar_na_numeracao !== 'boolean') throw new Error('Participação na numeração inválida');
       if (data.repetir_titulo !== undefined) updateData.repetir_titulo = data.repetir_titulo;
+      if (data.ocultar_titulo !== undefined) updateData.ocultar_titulo = data.ocultar_titulo ? 1 : 0;
+      if (data.contar_na_numeracao !== undefined) updateData.contar_na_numeracao = data.contar_na_numeracao ? 1 : 0;
 
       const secao = await templateService.updateSecao(id, updateData);
       return { success: true, data: secao, message: 'Seção atualizada com sucesso' };

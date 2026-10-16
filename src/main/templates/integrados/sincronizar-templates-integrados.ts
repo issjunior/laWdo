@@ -33,6 +33,8 @@ interface SecaoPersistida {
   condicao: string | null;
   repetir_para: string | null;
   repetir_titulo: string | null;
+  ocultar_titulo: number;
+  contar_na_numeracao: number;
 }
 
 const criarDefinicaoPersistida = (
@@ -58,6 +60,8 @@ const criarDefinicaoPersistida = (
       condicao: secao.condicao ?? undefined,
       repetirPara: secao.repetir_para ?? undefined,
       repetirTitulo: secao.repetir_titulo ?? undefined,
+      ocultarTitulo: secao.ocultar_titulo === 1,
+      contarNaNumeracao: secao.contar_na_numeracao !== 0,
     };
   });
   if (secoesNormalizadas.some(secao => secao === null)) return null;
@@ -102,12 +106,13 @@ async function inserirSecoesTemplateIntegrado(template: DefinicaoTemplateIntegra
     await executeNonQuery(
       `INSERT INTO secoes_template (
         id, template_id, nome, ordem, parent_id, conteudo, condicao, repetir_para,
-        repetir_titulo, chave_integrada, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        repetir_titulo, chave_integrada, ocultar_titulo, contar_na_numeracao, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [
         ids.get(secao.chave), templateId, secao.nome, secao.ordem,
         secao.chavePai ? ids.get(secao.chavePai) : null, secao.conteudo,
         secao.condicao ?? null, secao.repetirPara ?? null, secao.repetirTitulo ?? null, secao.chave,
+        secao.ocultarTitulo === true ? 1 : 0, secao.contarNaNumeracao === false ? 0 : 1,
       ],
     );
   }
@@ -133,7 +138,7 @@ async function adotarLegado(template: DefinicaoTemplateIntegrado, tipo: TipoExam
   const compativeis: TemplatePersistido[] = [];
   for (const candidato of candidatos) {
     const secoes = await executeQuery<SecaoPersistida>(
-      'SELECT id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo FROM secoes_template WHERE template_id = ? ORDER BY ordem',
+      'SELECT id, nome, ordem, parent_id, conteudo, condicao, repetir_para, repetir_titulo, ocultar_titulo, contar_na_numeracao FROM secoes_template WHERE template_id = ? ORDER BY ordem',
       [candidato.id],
     );
     const definicao = criarDefinicaoPersistida(candidato, template.tipoExame, secoes, template);

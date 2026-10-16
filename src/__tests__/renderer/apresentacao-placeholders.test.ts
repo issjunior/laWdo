@@ -7,6 +7,7 @@ import {
   restaurarVisualizacaoAposSalvar,
 } from '../../renderer/lib/apresentacao-placeholders';
 import { removerFormatacaoPlaceholders } from '../../renderer/lib/utils';
+import { normalizarConteudoComparavel } from '../../renderer/lib/conteudo-comparavel-laudo';
 
 function criarEditor(body: HTMLBodyElement, pronto = true): TinyMceEditorInstance {
   return {
@@ -37,6 +38,19 @@ function criarOpcoes() {
 }
 
 describe('apresentacao-placeholders', () => {
+  it('não produz pendência ao reaplicar dados ou alternar para chaves com prévias HTML', () => {
+    const body = document.createElement('body');
+    body.innerHTML = '<p><span data-placeholder="{{tabela}}">{{tabela}}</span></p>';
+    document.body.append(body);
+    const original = normalizarConteudoComparavel(body.innerHTML);
+    const editor = criarEditor(body);
+    const opcoes = criarOpcoes();
+    for (const modo of ['dados', 'dados', 'chaves', 'dados'] as const) {
+      expect(aplicarVisualizacaoPlaceholders(editor, { ...opcoes, modo }).estado).toBe('aplicado');
+      expect(normalizarConteudoComparavel(body.innerHTML)).toBe(original);
+    }
+  });
+
   afterEach(() => {
     document.body.replaceChildren();
     vi.useRealTimers();
