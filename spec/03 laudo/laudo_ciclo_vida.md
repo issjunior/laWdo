@@ -6,6 +6,20 @@
 
 O HTML vira `SecaoEditor`, cuja relação `parentId` é a fonte de hierarquia. O editor único agrupa filhas em `data-laudo-subsecoes`; no modo por seções, pais usam `Collapsible`. Trocar de modo encerra edição transitória de bloco condicional.
 
+## Apresentação preservada por laudo
+
+A fonte canônica da apresentação de um laudo existente é a coluna TEXT `laudos.apresentacao_json`, separada do HTML de `conteudo`. O contrato em `src/shared/configuracoes/apresentacao-laudo.ts` exige `versao: 1`, `cabecalho: { habilitado, primeiraPagina, todasPaginas }`, `fechamento: { habilitado, conteudo, espacamentoAntesPt }` e `perito` como mapa de strings. O espaçamento deve ser finito, entre 0 e 300 pontos.
+
+`criarLaudoInicial()` chama `capturarApresentacaoLaudo(perito_id)` no main e insere a cópia junto com o conteúdo no mesmo INSERT. O serviço valida as configurações JSON e a linha do perito; falha nessa captura impede a criação. O mapa preserva nome, cargo e formas de tratamento, lotação e matrícula; especialidade fica vazia nesse caminho. Alterações posteriores de configuração, perfil, corpo, status ou geração pelo wizard não recapturam a apresentação. Não há operação específica de duplicação de laudo.
+
+As configurações ativas são `cabecalho_documento` e `fechamento_laudo`, usadas para novos laudos e prévias de templates. Se ausentes, a leitura aceita `cabecalho_laudo`/`cabecalho_paginas` como cabeçalho habilitado e fechamento desativado. JSON presente e inválido não ativa esse fallback. A gravação normal em `configuracao.service.ts` valida os dois contratos antes de persistir.
+
+O schema corrente é 45. A migration 44 garante a coluna e preenche somente cópias nulas, em transação, usando cabeçalho legado e perfil disponível na migração, com fechamento desativado. Não reconstrói dados históricos nunca armazenados. Percorre os laudos sequencialmente, com consultas de configuração/perito por registro; o custo cresce com o número de laudos. A migration 45, em outra transação e obrigatoriamente depois da captura legada, substitui os dois padrões ativos pelos constantes compartilhados. Reaberturas em schema 45 preservam personalizações posteriores; não reaplicam os padrões.
+
+Prévia no editor, prévia pela lista e exportação recebem a cópia persistida e a validam com `lerApresentacaoLaudo()`; cópia ausente ou inválida interrompe a saída, sem usar os padrões atuais. Essa preservação abrange cabeçalhos e fechamento: placeholders do corpo continuam usando o resolvedor atual da REP e sessão, descrito em `spec/03 laudo/exportar_laudo.md`.
+
+`src/__tests__/main/apresentacao-laudo.integration.test.ts` cobre padrões, preservação após mudança de perfil/configuração/corpo, rejeição de configuração inválida e migração/reabertura com SQLite temporário. `src/__tests__/renderer/apresentacao-laudo.test.ts` cobre consumo da cópia, combinações de ativação e recusa de apresentação inválida.
+
 ## Atualização e reconciliação
 
 `updateConteudo()` substitui conteúdo e `updated_at`. `sincronizarSecoesCondicionais()` recompõe a base do template e a reconcilia com o HTML salvo. Blocos B-602 versionados por `data-arma-chave` e `data-bloco-pericial` preservam o wrapper atual da peça ainda projetada, inclusive `data-cond-suprimido="true"`; headings legados são removidos e blocos de peça removida não são carregados.
