@@ -55,11 +55,15 @@ export function DataTableColumnHeader<TData extends RowData, TValue extends Cell
             <ArrowDown className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
             Decrescente
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
-            <EyeOff className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
-            Ocultar
-          </DropdownMenuItem>
+          {column.getCanHide() && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
+                <EyeOff className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
+                Ocultar
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
