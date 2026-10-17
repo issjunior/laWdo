@@ -34,3 +34,11 @@ Testes de layout cobrem limites, persistência de largura, trilho, montagem est�
 ## Controle de colunas da tabela compartilhada
 
 `src/renderer/components/data-table/data-table.tsx` mantém filtro e controle de colunas no cabeçalho por padrão. Com `destinoControleColunas`, envia o controle por portal ao elemento fornecido pela página, preservando o estado da mesma tabela; quando a busca está oculta, não monta uma barra vazia. O Dashboard do GDL usa esse posicionamento para manter o controle de colunas ao lado de Atualizar.
+
+## Preferências e rolagem das tabelas
+
+Com `chavePreferencias`, a DataTable persiste ordenação e visibilidade em `localStorage`, no formato `{ ordenacao, visibilidade }`. A leitura inicial valida JSON com Zod, limita a ordenação à quantidade de colunas e descarta IDs inexistentes e tentativas de ocultar colunas com `enableHiding: false`. Se todas as entradas de uma ordenação salva não vazia forem desconhecidas, usa `defaultSorting`. Storage inválido ou indisponível mantém padrões; falha de gravação não impede a sessão. A leitura ocorre na montagem: mudar a chave não recarrega preferências automaticamente. Sem chave, o estado fica apenas em memória.
+
+`densidade="compacta"` reduz altura/espaçamento; `preencherAltura` distribui o espaço restante em flex, mantém controles e paginação fora da rolagem e fixa o cabeçalho. `fixarPrimeiraColuna` mantém a primeira coluna física visível na rolagem horizontal e impõe largura mínima; com pinning habilitado, essa primeira coluna é a de pinning. `Table.containerClassName` dimensiona o contêiner rolável. A cadeia de layout em `App.tsx` usa `min-w-0` para permitir encolhimento; a paginação aceita quebra de linha.
+
+O menu oferece Ocultar somente quando `column.getCanHide()` permite. O Dashboard GDL usa `dashboard_gdl_disposicao`, designação decrescente como ordem inicial e Nº REP não ocultável. A preferência é local à instalação, sem chave por usuário. Testes de tabela/cabeçalho e `gdl-minhas-reps-dashboard.test.tsx` verificam operações e recuperação da disposição.
