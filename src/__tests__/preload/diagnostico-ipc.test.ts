@@ -13,7 +13,7 @@ const electronSimulado = ({
 });
 
 interface ApiTeste {
-  gdl: { copiarEmailSuporte(): Promise<unknown> };
+  gdl: { copiarEmailSuporte(): Promise<unknown>; atualizarMinhasRepsCache(forcar: boolean): Promise<unknown> };
   configuracao: { obter(chave: string): Promise<unknown> };
 }
 
@@ -116,4 +116,23 @@ describe('classificação do resultado IPC no preload', () => {
       evento: 'falhou', metadados: expect.objectContaining({ sucesso: false, falhou: true }),
     }));
   });
+  it('registra somente metadados seguros de falha GDL junto ao desfecho correlacionado', async () => {
+    const referencia = '12e30e43-780b-4891-bef6-f149baeb5d4b';
+    electronSimulado.invocar.mockResolvedValue({ success: false, error: 'senha=segredo', falha: {
+      codigo: 'rede', etapa: 'carregar_formulario', codigoSistema: 'ECONNREFUSED', referencia,
+      bloqueioTemporario: true, tentarNovamenteEmSegundos: 42,
+      detalhes: 'https://usuario:segredo@servidor', token: 'segredo',
+    } });
+    await ipcAPI.gdl.atualizarMinhasRepsCache(true);
+    const eventos = eventosDiagnosticos();
+    expect(eventos[1]).toMatchObject({ fase: 'falha_funcional', falha: { codigo: 'rede', etapa: 'carregar_formulario', codigoSistema: 'ECONNREFUSED', referencia, bloqueioTemporario: true, tentarNovamenteEmSegundos: 42 }, correlacaoId: eventos[0]?.correlacaoId });
+    expect(JSON.stringify(eventos)).not.toMatch(/segredo|https:/);
+  });
+
+  it('descarta classificações e campos técnicos externos não reconhecidos', async () => {
+    electronSimulado.invocar.mockResolvedValue({ success: false, falha: { codigo: 'externo', etapa: 'segredo', codigoSistema: 'segredo' } });
+    await ipcAPI.gdl.atualizarMinhasRepsCache(true);
+    expect(eventosDiagnosticos()[1]).not.toHaveProperty('falha');
+  });
+
 });

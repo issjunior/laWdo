@@ -2,6 +2,7 @@ import { CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO, esquemaCabecalhoLaud
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { getLogger } from '../utils/logger.js';
 import { safeStorageService } from './safe-storage.service.js';
+import { notificarAvisosGdlAlterados } from './gdl-avisos-eventos.service.js';
 
 const log = getLogger('configuracao');
 
@@ -74,6 +75,7 @@ class ConfiguracaoService {
         );
         log.info('Configuração criada', { chave });
       }
+      if (chave.startsWith('gdl_')) notificarAvisosGdlAlterados(true);
     } catch (error) {
       log.error('Erro ao salvar configuração', { chave, error });
       throw error;

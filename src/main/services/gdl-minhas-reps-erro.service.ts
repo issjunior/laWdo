@@ -1,10 +1,14 @@
-import type { CodigoFalhaListaRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import { codigosSistemaFalhaGdl, etapasFalhaListaRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import type { CodigoFalhaListaRepsGdl, CodigoSistemaFalhaGdl, EtapaFalhaListaRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 
 interface ClassificacaoFalhaListaRepsGdl {
   codigo: CodigoFalhaListaRepsGdl;
-  etapa: string;
+  etapa: EtapaFalhaListaRepsGdl;
   detalhes: string;
-  codigoSistema?: string;
+  codigoSistema?: CodigoSistemaFalhaGdl;
+  statusHttp?: number;
+  bloqueioTemporario?: boolean;
+  tentarNovamenteEmSegundos?: number;
   tipoErro: string;
 }
 
@@ -23,33 +27,64 @@ function limparDetalhes(mensagem: string): string {
 }
 
 export function classificarFalhaListaRepsGdl(erro: unknown): ClassificacaoFalhaListaRepsGdl {
-  const mensagem = erro instanceof Error ? erro.message : '';
-  const tipoErro = erro instanceof Error ? erro.name : 'Erro desconhecido';
-  const codigoSistema = obterPropriedadeTexto(erro, 'code');
+  const causas: unknown[] = [];
+  const visitados = new Set<unknown>();
+  let causa: unknown = erro;
+  while (causa && typeof causa === 'object' && !visitados.has(causa) && causas.length < 8) {
+    causas.push(causa);
+    visitados.add(causa);
+    causa = 'cause' in causa ? causa.cause : undefined;
+  }
+  const mensagens = causas.map(item => obterPropriedadeTexto(item, 'message') ?? '');
+  const mensagem = mensagens.join(' ');
+  const tipoErro = erro instanceof Error && ['Error', 'TypeError', 'TimeoutError', 'AbortError'].includes(erro.name) ? erro.name : 'Erro desconhecido';
+  const codigoSistema = codigosSistemaFalhaGdl.find(codigo => causas.some(item => obterPropriedadeTexto(item, 'code') === codigo)
+    || mensagens.some(texto => new RegExp(`\\b${codigo}\\b`).test(texto)));
+  const obterNumero = (propriedade: string): number | undefined => {
+    for (const item of causas) {
+      if (item && typeof item === 'object' && propriedade in item) {
+        const valor: unknown = Reflect.get(item, propriedade);
+        if (typeof valor === 'number' && Number.isSafeInteger(valor)) return valor;
+      }
+    }
+    return undefined;
+  };
+  const http = obterNumero('statusHttp') ?? Number(mensagem.match(/HTTP[ _](\d{3})\b/i)?.[1]);
+  const statusHttp = http >= 100 && http <= 599 ? http : undefined;
+  const segundos = obterNumero('tentarNovamenteEmSegundos');
+  const tentarNovamenteEmSegundos = segundos !== undefined && segundos > 0 && segundos <= 60 ? segundos : undefined;
+  const etapaOriginal = etapasFalhaListaRepsGdl.find(etapa => causas.some(item => obterPropriedadeTexto(item, 'etapa') === etapa));
+  const falhaTransporte = /fetch failed|Failed to fetch|network|ERR_/i.test(mensagem) || causas.some(item => /^(?:connect|getaddrinfo)$/.test(obterPropriedadeTexto(item, 'syscall') ?? ''));
   let codigo: CodigoFalhaListaRepsGdl = 'inesperado';
-  let etapa = 'consulta_lista';
+  let etapa: EtapaFalhaListaRepsGdl = 'consulta_lista';
 
   if (/listagem de REPs do GDL está desativada/i.test(mensagem)) {
     codigo = 'desativada';
     etapa = 'preferencia';
-  } else if (/^(?:EACCES|EPERM|ENOSPC|EROFS|EMFILE)$/.test(codigoSistema ?? '')) {
+  } else if (!falhaTransporte && /^(?:EACCES|EPERM|ENOSPC|EROFS|EMFILE)$/.test(codigoSistema ?? '')) {
     codigo = 'cache_local';
     etapa = 'salvar_cache';
-  } else if (mensagem === 'Credenciais não configuradas.') {
+  } else if (/Credenciais(?: do GDL)? não configuradas\./i.test(mensagem)) {
     codigo = 'credenciais';
     etapa = 'configuracao';
-  } else if (/Timeout|timed?\s*out|AbortError|tempo.*esgot|HTTP (?:408|504)\b/i.test(`${tipoErro} ${mensagem}`)) {
+  } else if ((codigoSistema && /TIME(?:D_?)?OUT/.test(codigoSistema)) || causas.some(item => /^(?:TimeoutError|AbortError)$/.test(obterPropriedadeTexto(item, 'name') ?? '')) || statusHttp === 408 || statusHttp === 504 || /Timeout|timed?\s*out|AbortError|tempo.*esgot|HTTP (?:408|504)\b/i.test(`${tipoErro} ${mensagem}`)) {
     codigo = 'tempo_esgotado';
     etapa = 'rede_gdl';
-  } else if (/HTTP 429\b/.test(mensagem)) {
+  } else if (statusHttp === 429) {
     codigo = 'limite_gdl';
     etapa = 'rede_gdl';
-  } else if (/ERR_|fetch failed|Failed to fetch|ENOTFOUND|ECONN|EAI_AGAIN|network/i.test(`${codigoSistema ?? ''} ${mensagem}`)) {
+  } else if (codigoSistema || /ERR_|fetch failed|Failed to fetch|ENOTFOUND|ECONN|EAI_AGAIN|network/i.test(`${codigoSistema ?? ''} ${mensagem}`)) {
     codigo = 'rede';
+    etapa = 'rede_gdl';
+  } else if (statusHttp !== undefined && statusHttp !== 200 && statusHttp !== 401 && statusHttp !== 403) {
+    codigo = 'servidor';
     etapa = 'rede_gdl';
   } else if (/validar_formulario|Formulário de autenticação web.*não reconhecido|Campos de autenticação web.*não reconhecidos/i.test(mensagem)) {
     codigo = 'estrutura';
     etapa = 'formulario_login';
+  } else if (/nova autenticação|sessão.*expir/i.test(mensagem) && statusHttp !== 401 && statusHttp !== 403) {
+    codigo = 'sessao';
+    etapa = 'sessao_web';
   } else if (/autentica|login web|página de autenticação|campos de autenticação|HTTP (?:401|403)\b/i.test(mensagem)) {
     codigo = 'autenticacao';
     etapa = 'login_web';
@@ -70,9 +105,10 @@ export function classificarFalhaListaRepsGdl(erro: unknown): ClassificacaoFalhaL
     etapa = 'interpretar_lista';
   }
 
+  etapa = etapaOriginal ?? etapa;
   const detalhes = codigo === 'inesperado'
     ? `Falha inesperada (${tipoErro}${codigoSistema ? `, ${codigoSistema}` : ''}).`
     : codigo === 'cache_local' ? `Falha ao salvar a lista neste computador (${codigoSistema}).`
       : limparDetalhes(mensagem || `Falha em ${etapa}${codigoSistema ? ` (${codigoSistema})` : ''}.`);
-  return { codigo, etapa, detalhes, codigoSistema, tipoErro };
+  return { codigo, etapa, detalhes, codigoSistema, tipoErro, statusHttp, bloqueioTemporario: tentarNovamenteEmSegundos ? true : undefined, tentarNovamenteEmSegundos };
 }

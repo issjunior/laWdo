@@ -2,6 +2,8 @@ import { interpretarDetalhesRepGdl } from './gdl-detalhes.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { session, type Session } from 'electron';
 import { interpretarMinhasRepsGdl, montarFormularioMinhasRepsGdl, obterEventoNavegacaoMinhasReps } from './gdl-minhas-reps.service.js';
+import { classificarFalhaListaRepsGdl } from './gdl-minhas-reps-erro.service.js';
+import type { EtapaFalhaListaRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import type { PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import { getLogger } from '../utils/logger.js';
 
@@ -19,10 +21,18 @@ interface SessaoPaginaGdl {
   rede: Session;
   autenticada: boolean;
   tentarApos: number;
+  ultimaFalha?: ErroAutenticacaoWebGdl;
   autenticando?: Promise<void>;
   paginaMinhasReps?: { numero: number; html: string };
   listagemId?: string;
   detalhesPermitidos: Set<string>;
+}
+
+class ErroAutenticacaoWebGdl extends Error {
+  constructor(mensagem: string, readonly etapa: EtapaFalhaListaRepsGdl, causa?: unknown,
+    readonly statusHttp?: number, readonly tentarNovamenteEmSegundos?: number) {
+    super(mensagem, { cause: causa });
+  }
 }
 
 const sessoes = new Map<string, SessaoPaginaGdl>();
@@ -109,30 +119,39 @@ async function obterSessaoAutenticadaGdl(credenciais: CredenciaisPaginaGdl, prep
     sessoes.set(chaveSessao, estado);
   }
   const atual = estado;
-  if (Date.now() < atual.tentarApos) throw new Error('Autenticação web indisponível; aguarde um minuto antes de tentar novamente.');
+  if (Date.now() < atual.tentarApos) throw new ErroAutenticacaoWebGdl('Nova tentativa temporariamente bloqueada após a falha anterior.', atual.ultimaFalha?.etapa ?? 'login_web', atual.ultimaFalha, atual.ultimaFalha?.statusHttp, Math.ceil((atual.tentarApos - Date.now()) / 1000));
   if (!atual.autenticada) {
     if (!atual.autenticando) {
       atual.autenticando = (async () => {
-        let etapa = 'carregar_formulario';
+        let etapa: EtapaFalhaListaRepsGdl = 'carregar_formulario';
+        let statusHttp: number | undefined;
         const inicio = performance.now();
         try {
           const urlLogin = `${base}/Account/Login.aspx`;
           const formulario = await lerPagina(atual.rede, urlLogin);
+          statusHttp = formulario.statusCode;
           if (formulario.statusCode !== 200) throw new Error('Página de autenticação indisponível.');
           etapa = 'validar_formulario';
           const corpo = montarFormularioLoginGdl(formulario.data, urlLogin, credenciais.login, credenciais.senha);
           etapa = 'submeter_login';
+          statusHttp = undefined;
           const resultado = await lerPagina(atual.rede, urlLogin, corpo);
-          etapa = `validar_login_http_${resultado.statusCode}`;
+          etapa = 'validar_login';
+          statusHttp = resultado.statusCode;
           if (resultado.statusCode !== 200 || resultado.paginaAutenticacao) throw new Error('Login web não concluído; verifique credenciais ou exigências adicionais no GDL.');
           atual.autenticada = true;
+          atual.ultimaFalha = undefined;
+          atual.tentarApos = 0;
         } catch (erro: unknown) {
+          const falhaOriginal = new ErroAutenticacaoWebGdl(`Não foi possível autenticar a sessão web do GDL (${etapa}). A consulta pela API foi preservada.`, etapa, erro, statusHttp);
+          const falha = classificarFalhaListaRepsGdl(falhaOriginal);
           log.warn('Falha na autenticação web de leitura do GDL.', {
-            etapa, duracaoMs: Math.round(performance.now() - inicio),
-            erro: erro instanceof Error ? erro.message : 'Erro inesperado',
+            etapa, duracaoMs: Math.round(performance.now() - inicio), codigo: falha.codigo,
+            codigoSistema: falha.codigoSistema, statusHttp: falha.statusHttp,
           });
           atual.tentarApos = Date.now() + 60000;
-          throw new Error(`Não foi possível autenticar a sessão web do GDL (${etapa}). A consulta pela API foi preservada.`);
+          atual.ultimaFalha = falhaOriginal;
+          throw falhaOriginal;
         } finally {
           atual.autenticando = undefined;
         }

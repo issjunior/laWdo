@@ -7,7 +7,7 @@ const simulacao = vi.hoisted(() => ({
   identidade: vi.fn(), listar: vi.fn(), naturezas: vi.fn(), exigir: vi.fn(),
 }));
 
-vi.mock('electron', () => ({ app: { getPath: () => simulacao.diretorio } }));
+vi.mock('electron', () => ({ app: { getPath: () => simulacao.diretorio }, BrowserWindow: { getAllWindows: () => [] } }));
 vi.mock('../../main/services/gdl-listagem-preferencia.service.js', () => ({
   exigirListagemRepsGdlHabilitada: simulacao.exigir,
   obterVersaoPreferenciaListagem: () => 0,

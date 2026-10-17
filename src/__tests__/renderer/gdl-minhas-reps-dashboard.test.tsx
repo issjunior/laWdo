@@ -1,6 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AvisosReiteracaoProvider } from '@/contexts/AvisosReiteracaoContext';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { GdlMinhasRepsDashboard } from '@/components/rep/GdlMinhasRepsDashboard';
 
 const ipcApiOriginal = window.ipcAPI;
@@ -17,6 +19,9 @@ function RotaAtual() {
 }
 
 beforeEach(() => {
+  vi.mocked(window.localStorage.getItem).mockReset().mockReturnValue(null);
+  vi.mocked(window.localStorage.setItem).mockReset();
+  HTMLElement.prototype.scrollIntoView = () => undefined;
   HTMLElement.prototype.hasPointerCapture = () => false;
   HTMLElement.prototype.setPointerCapture = () => undefined;
   HTMLElement.prototype.releasePointerCapture = () => undefined;
@@ -25,9 +30,86 @@ beforeEach(() => {
   atualizarMinhasRepsCache.mockReset().mockResolvedValue({ success: true, data: snapshot });
   Object.defineProperty(window, 'ipcAPI', { value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, obterPreferenciaListagem, obterMinhasRepsCache, atualizarMinhasRepsCache } }, writable: true });
 });
-afterEach(() => { Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true }); });
+afterEach(() => { vi.useRealTimers(); Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true }); });
 
 describe('REPs do GDL no dashboard', () => {
+
+  it('atualiza ao vencer o cache de dez minutos e reinicia o prazo após atualização manual', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
+    const instante = Date.now();
+    atualizarMinhasRepsCache.mockImplementation(async () => ({ success: true, data: {
+      ...snapshot, atualizadoEm: new Date(atualizarMinhasRepsCache.mock.calls.length === 1 ? instante - 5 * 60_000 : Date.now()).toISOString(),
+    } }));
+    await act(async () => { render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledWith(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000 - 1); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(atualizarMinhasRepsCache).toHaveBeenLastCalledWith(true);
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Atualizar' })); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(3);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000 - 1); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(3);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(4);
+  });
+
+  it('preserva a lista após falha automática e aguarda dez minutos para tentar novamente', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
+    atualizarMinhasRepsCache.mockResolvedValueOnce({ success: true, data: snapshot }).mockResolvedValue({
+      success: false, falha: { codigo: 'rede', detalhes: 'fetch failed', referencia: '85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e' },
+    });
+    await act(async () => { render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: '123/2026' })).toBeEnabled();
+    expect(screen.getByText(/Não foi possível alcançar o GDL/)).toHaveTextContent('Exibindo a última lista salva.');
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000 - 1); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(3);
+  });
+
+  it('não sobrepõe consultas enquanto aguarda a resposta do GDL', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
+    const { unmount } = render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await act(async () => undefined);
+    atualizarMinhasRepsCache.mockReturnValue(new Promise(() => undefined));
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Atualizar' })).toBeDisabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(20 * 60_000); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
+    unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancela a atualização automática ao sair do dashboard', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
+    const { unmount } = render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await act(async () => undefined);
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
+    unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(20 * 60_000); });
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('não agenda atualização automática com a listagem desativada', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
+    obterPreferenciaListagem.mockResolvedValue({ success: true, data: { habilitada: false } });
+    await act(async () => { render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30 * 60_000); });
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+  });
+
   it('mostra o andamento da consulta sem esconder a lista salva', async () => {
     atualizarMinhasRepsCache.mockReturnValue(new Promise(() => undefined));
     render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
@@ -40,7 +122,7 @@ describe('REPs do GDL no dashboard', () => {
     expect(screen.queryByText(/O GDL pode levar alguns minutos/)).not.toBeInTheDocument();
     expect(screen.getByText(/Atualizado em/).textContent).toMatch(/\d{2}:\d{2}$/);
     expect(screen.getByText('Aberta e Distribuída')).toHaveClass('bg-blue-100');
-    expect(screen.getByRole('button', { name: /REP 123\/2026/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /123\/2026/ })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Colunas' }).parentElement).toBe(
       screen.getByRole('button', { name: 'Atualizar' }).parentElement
     );
@@ -54,7 +136,7 @@ describe('REPs do GDL no dashboard', () => {
     await waitFor(() => expect(atualizarMinhasRepsCache).toHaveBeenCalledWith(false));
     fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
     await waitFor(() => expect(atualizarMinhasRepsCache).toHaveBeenCalledWith(true));
-    fireEvent.click(screen.getByRole('button', { name: /REP 123\/2026/ }));
+    fireEvent.click(screen.getByRole('button', { name: /123\/2026/ }));
     expect(screen.getByTestId('rota-atual')).toHaveTextContent('"pathname":"/reps"');
     expect(screen.getByTestId('rota-atual')).toHaveTextContent('"numero":"123"');
   });
@@ -68,9 +150,10 @@ describe('REPs do GDL no dashboard', () => {
     expect(await screen.findByText(/Não foi possível alcançar o GDL/)).toHaveTextContent('Exibindo a última lista salva.');
     expect(screen.queryByText(/ERR_CONNECTION_REFUSED/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detalhes' }));
-    expect(screen.getByText(/ERR_CONNECTION_REFUSED/)).toBeInTheDocument();
-    expect(screen.getByText(/85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /REP 123\/2026/ })).toBeEnabled();
+    expect(screen.getByText('Verifique a conexão e conecte a VPN, se necessária, antes de tentar novamente.')).toBeInTheDocument();
+    expect(screen.queryByText(/ERR_CONNECTION_REFUSED/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /123\/2026/ })).toBeEnabled();
   });
 
   it('mostra só cache recente quando a listagem está desativada e bloqueia atualizar', async () => {
@@ -91,7 +174,7 @@ describe('REPs do GDL no dashboard', () => {
     obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, atualizadoEm: new Date(Date.now() - 30 * 60_000).toISOString() } });
     render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
     expect(await screen.findByText('Nenhuma lista recente')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /REP 123\/2026/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /123\/2026/ })).not.toBeInTheDocument();
     expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
   });
 
@@ -105,20 +188,129 @@ describe('REPs do GDL no dashboard', () => {
     atualizarMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
     render(<MemoryRouter><GdlMinhasRepsDashboard /><RotaAtual /></MemoryRouter>);
     expect(await screen.findByText('3 REPs')).toHaveClass('bg-secondary');
-    expect(screen.getAllByRole('button', { name: /^REP \d+\/2026$/ }).map(botao => botao.textContent)).toEqual([
-      'REP 20/2026', 'REP 11/2026', 'REP 3/2026',
+    expect(screen.getAllByRole('button', { name: /^\d[\d.]*\/2026$/ }).map(botao => botao.textContent)).toEqual([
+      '20/2026', '11/2026', '3/2026',
     ]);
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Nº REP' }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Crescente' }));
-    expect(screen.getAllByRole('button', { name: /^REP \d+\/2026$/ }).map(botao => botao.textContent)).toEqual([
-      'REP 3/2026', 'REP 11/2026', 'REP 20/2026',
+    expect(screen.getAllByRole('button', { name: /^\d[\d.]*\/2026$/ }).map(botao => botao.textContent)).toEqual([
+      '3/2026', '11/2026', '20/2026',
     ]);
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Nº REP' }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Decrescente' }));
-    expect(screen.getAllByRole('button', { name: /^REP \d+\/2026$/ }).map(botao => botao.textContent)).toEqual([
-      'REP 20/2026', 'REP 11/2026', 'REP 3/2026',
+    expect(screen.getAllByRole('button', { name: /^\d[\d.]*\/2026$/ }).map(botao => botao.textContent)).toEqual([
+      '20/2026', '11/2026', '3/2026',
     ]);
-    fireEvent.click(screen.getByRole('button', { name: 'REP 20/2026' }));
+    fireEvent.click(screen.getByRole('button', { name: '20/2026' }));
     expect(screen.getByTestId('rota-atual')).toHaveTextContent('"numero":"20"');
   });
+  it('mostra REITERANDO junto à REP e ordena inicialmente pela designação mais recente', async () => {
+    const reps = [
+      { ...snapshot.reps[0], idGdl: 1, numero: '20', dataDesignacao: '2026-10-03T10:00', oficioReiterando: false },
+      { ...snapshot.reps[0], idGdl: 2, numero: '3', dataDesignacao: '2026-10-01T10:00', oficioReiterando: true },
+      { ...snapshot.reps[0], idGdl: 3, numero: '11', dataDesignacao: '2026-10-02T10:00', oficioReiterando: true },
+    ];
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    atualizarMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    render(<MemoryRouter><TooltipProvider><GdlMinhasRepsDashboard /></TooltipProvider></MemoryRouter>);
+    await screen.findByText('3 REPs');
+    expect(screen.getAllByRole('button', { name: /^\d[\d.]*\/2026$/ }).map(botao => botao.textContent)).toEqual([
+      '20/2026', '11/2026', '3/2026',
+    ]);
+    const celula = screen.getByRole('button', { name: '11/2026' }).closest('td');
+    if (!celula) throw new Error('Célula da REP não encontrada');
+    expect(within(celula).getByText('REITERANDO')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '20/2026' }).closest('td')).not.toHaveTextContent('REITERANDO');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(5);
+    expect(screen.queryByRole('columnheader', { name: /Avisos/ })).not.toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Nº REP' }), { button: 0, ctrlKey: false });
+    expect(screen.queryByRole('menuitem', { name: 'Ocultar' })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Decrescente' }));
+    expect(screen.getAllByRole('button', { name: /^\d[\d.]*\/2026$/ }).map(botao => botao.textContent)).toEqual([
+      '20/2026', '11/2026', '3/2026',
+    ]);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Colunas' }), { button: 0, ctrlKey: false });
+    await screen.findByRole('menuitemcheckbox', { name: 'fotos' });
+    expect(screen.queryByRole('menuitemcheckbox', { name: /numeroRep|prioridadeReiterando/ })).not.toBeInTheDocument();
+  });
+
+  it('memoriza ordenação e colunas visíveis ao reabrir o dashboard', async () => {
+    const armazenamento = new Map<string, string>();
+    vi.mocked(window.localStorage.getItem).mockImplementation(chave => armazenamento.get(chave) ?? null);
+    vi.mocked(window.localStorage.setItem).mockImplementation((chave, valor) => { armazenamento.set(chave, valor); });
+    const reps = [
+      { ...snapshot.reps[0], idGdl: 1, numero: '20', dataDesignacao: '2026-10-03T10:00' },
+      { ...snapshot.reps[0], idGdl: 2, numero: '3', dataDesignacao: '2026-10-01T10:00' },
+    ];
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    atualizarMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    const { unmount } = render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('2 REPs');
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Nº REP' }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Crescente' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Colunas' }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'fotos' }));
+    unmount();
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('2 REPs');
+    expect(screen.getAllByRole('button', { name: /^\d[\d.]*\/2026$/ }).map(botao => botao.textContent)).toEqual(['3/2026', '20/2026']);
+    expect(screen.queryByRole('columnheader', { name: 'Fotos' })).not.toBeInTheDocument();
+  });
+
+  it('ignora colunas removidas e impede ocultar o número ao restaurar preferências', async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue(JSON.stringify({
+      ordenacao: [{ id: 'prioridadeReiterando', desc: true }],
+      visibilidade: { numeroRep: false, fotos: false, removida: true },
+    }));
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('1 REP');
+    expect(screen.getByRole('columnheader', { name: 'Nº REP' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Data de designação' })).toHaveTextContent('Data de designação');
+    expect(screen.queryByRole('columnheader', { name: 'Fotos' })).not.toBeInTheDocument();
+  });
+
+  it('mantém somente a visualização compacta e ignora a preferência antiga', async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue('confortavel');
+    const { container } = render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('1 REP');
+    expect(container.querySelector('[data-densidade]')).toHaveAttribute('data-densidade', 'compacta');
+    expect(screen.queryByRole('combobox', { name: 'Densidade da lista' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem).not.toHaveBeenCalledWith('dashboard_gdl_densidade');
+  });
+
+  it('formata os números, os títulos e a data sem alterar os dados enviados ao importador', async () => {
+    const reps = [{ ...snapshot.reps[0], numero: '109026' }, { ...snapshot.reps[0], idGdl: 9, numero: '93462' }];
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    atualizarMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    render(<MemoryRouter><GdlMinhasRepsDashboard /><RotaAtual /></MemoryRouter>);
+    await screen.findByRole('button', { name: '109.026/2026' });
+    expect(screen.getByRole('button', { name: '93.462/2026' })).toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map(cabecalho => cabecalho.textContent)).toEqual([
+      'Nº REP', 'Natureza do Exame', 'Data de designação', 'Fotos', 'Status',
+    ]);
+    expect(screen.getAllByText('01/10/2026 • 10:00')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: '109.026/2026' }));
+    expect(screen.getByTestId('rota-atual')).toHaveTextContent('"numero":"109026"');
+  });
+
+  it('mostra os avisos locais em snapshots antigos preservando a ordenação por data', async () => {
+    const reps = [
+      { ...snapshot.reps[0], idGdl: 1, numero: '20', dataDesignacao: '2026-10-03T10:00' },
+      { ...snapshot.reps[0], idGdl: 2, numero: '3', dataDesignacao: '2026-10-01T10:00' },
+    ];
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    atualizarMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    Object.assign(window.ipcAPI.gdl, {
+      obterAvisosReiteracao: vi.fn().mockResolvedValue({ success: true, data: [
+        { numero: '3', ano: '2026', reiterando: true, fonte: 'api', consultadoEm: '2026-10-16T12:00:00.000Z' },
+      ] }),
+      onAvisosAlterados: () => () => undefined,
+    });
+    render(<MemoryRouter><AvisosReiteracaoProvider><GdlMinhasRepsDashboard /></AvisosReiteracaoProvider></MemoryRouter>);
+    await screen.findByText('REITERANDO');
+    expect(screen.getAllByRole('button', { name: /^\d[\d.]*\/2026$/ }).map(botao => botao.textContent)).toEqual([
+      '20/2026', '3/2026',
+    ]);
+  });
+
 });

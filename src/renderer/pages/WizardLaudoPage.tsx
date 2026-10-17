@@ -1,3 +1,4 @@
+import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
@@ -384,6 +385,7 @@ const WizardLaudoPage: React.FC = () => {
               {arvore.wizard?.nome || 'Wizard'} &middot; {laudo?.rep_numero}
               {' '}
               <Badge variant="default">{laudo?.status}</Badge>
+              <ReiterandoBadge numeroRep={laudo?.rep_numero ?? ''} />
             </p>
           </div>
         </div>

@@ -1,5 +1,7 @@
+import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
+import { useConsultarRepReiterando } from '@/contexts/AvisosReiteracaoContext';
 import { apresentarNaturezaExame } from '@shared/gdl/natureza-exame';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
 import { RefreshCw } from 'lucide-react';
@@ -14,7 +16,7 @@ import { GdlFalhaListaAlert, normalizarFalhaListaGdl } from '@/components/rep/Gd
 import type { FalhaListaGdlApresentavel } from '@/components/rep/GdlFalhaListaAlert';
 import { GdlStatusBadge } from '@/components/rep/GdlStatusBadge';
 import type { MinhaRepGdl, SnapshotMinhasRepsGdl, StatusMinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
-import { cacheListagemDesativadaDisponivel, VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS } from '@shared/gdl/listagem';
+import { cacheListagemDesativadaDisponivel, VALIDADE_CACHE_LISTAGEM_MS, VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS } from '@shared/gdl/listagem';
 
 const statusDisponiveis: StatusMinhaRepGdl[] = ['Aberta e Distribuída', 'Laudo em Execução', 'Concluída e Não Remetida'];
 const esquemaSnapshot = z.object({
@@ -24,6 +26,7 @@ const esquemaSnapshot = z.object({
     naturezaExame: z.string().min(1), naturezaExameComCodigo: z.string().min(1).nullable(),
     status: z.enum(statusDisponiveis), dataDesignacao: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).nullable(),
     quantidadeFotos: z.number().int().nonnegative().nullable(),
+      oficioReiterando: z.boolean().optional(),
       naturezaConfirmada: z.boolean().optional(), naturezaDivergente: z.boolean().optional(),
       naturezaConsultadaEm: z.string().optional(), statusNecessitaAtualizacao: z.boolean().optional(),
   })),
@@ -31,16 +34,19 @@ const esquemaSnapshot = z.object({
 
 function formatarData(valor: string | null): string {
   if (!valor) return 'Não informada';
-  return `${valor.slice(8, 10)}/${valor.slice(5, 7)}/${valor.slice(0, 4)} ${valor.slice(11, 16)}`;
+  return `${valor.slice(8, 10)}/${valor.slice(5, 7)}/${valor.slice(0, 4)} • ${valor.slice(11, 16)}`;
 }
 
 export function GdlMinhasRepsDashboard() {
   const navegar = useNavigate();
+  const consultarReiterando = useConsultarRepReiterando();
   const [snapshot, setSnapshot] = useState<SnapshotMinhasRepsGdl | null>(null);
   const [listagemHabilitada, setListagemHabilitada] = useState<boolean | null>(null);
   const [agora, setAgora] = useState(Date.now());
   const [tentativaBloqueada, setTentativaBloqueada] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  const [proximaAtualizacaoAutomatica, setProximaAtualizacaoAutomatica] = useState<number | null>(null);
+  const consultaEmAndamento = useRef(false);
   const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
   const [destinoControleColunas, setDestinoControleColunas] = useState<HTMLDivElement | null>(null);
 
@@ -49,12 +55,17 @@ export function GdlMinhasRepsDashboard() {
       setTentativaBloqueada(true);
       return;
     }
+    if (consultaEmAndamento.current) return;
+    consultaEmAndamento.current = true;
     setCarregando(true);
     setErro(null);
+    let atualizadoEm: number | null = null;
     try {
       const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(forcar);
       if (!resposta.success) {
-        setErro(normalizarFalhaListaGdl(resposta));
+        const falha = normalizarFalhaListaGdl(resposta);
+        setErro(falha);
+        if (falha.codigo === 'desativada') setListagemHabilitada(false);
         return;
       }
       const validacao = esquemaSnapshot.safeParse(resposta.data);
@@ -65,6 +76,7 @@ export function GdlMinhasRepsDashboard() {
         setErro({ codigo: 'estrutura', detalhes: 'A resposta da lista não corresponde ao formato esperado pelo laWdo.' });
         return;
       }
+      atualizadoEm = Date.parse(validacao.data.atualizadoEm);
       setSnapshot(validacao.data);
     } catch (falha: unknown) {
       window.ipcAPI.logError('gdl', 'Falha inesperada ao atualizar a lista no Dashboard', {
@@ -75,9 +87,19 @@ export function GdlMinhasRepsDashboard() {
         detalhes: 'A interface não conseguiu concluir a atualização da lista. Consulte o log do aplicativo.',
       });
     } finally {
+      consultaEmAndamento.current = false;
+      const instanteAtual = Date.now();
+      const vencimento = atualizadoEm === null ? 0 : atualizadoEm + VALIDADE_CACHE_LISTAGEM_MS;
+      setProximaAtualizacaoAutomatica(vencimento > instanteAtual ? Math.min(vencimento, instanteAtual + VALIDADE_CACHE_LISTAGEM_MS) : instanteAtual + VALIDADE_CACHE_LISTAGEM_MS);
       setCarregando(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (listagemHabilitada !== true || carregando || proximaAtualizacaoAutomatica === null) return;
+    const temporizador = setTimeout(() => void atualizar(true, true), Math.max(0, proximaAtualizacaoAutomatica - Date.now()));
+    return () => clearTimeout(temporizador);
+  }, [listagemHabilitada, carregando, proximaAtualizacaoAutomatica, atualizar]);
 
   useEffect(() => {
     const atualizarLocal = () => {
@@ -112,6 +134,10 @@ export function GdlMinhasRepsDashboard() {
   }, [listagemHabilitada, snapshot]);
 
   const snapshotExibido = snapshot && (listagemHabilitada || cacheListagemDesativadaDisponivel(snapshot.atualizadoEm, Math.max(agora, Date.now()))) ? snapshot : null;
+  const repsExibidas = useMemo(() => snapshotExibido?.reps.map(rep => ({
+    ...rep,
+    oficioReiterando: rep.oficioReiterando ?? consultarReiterando(`${rep.numero}/${rep.ano}`),
+  })) ?? [], [snapshotExibido, consultarReiterando]);
 
   const selecionar = useCallback((rep: MinhaRepGdl) => {
     navegar('/reps', { state: { importarGdl: { numero: rep.numero, ano: rep.ano, naturezaExame: rep.naturezaExame } } });
@@ -120,27 +146,26 @@ export function GdlMinhasRepsDashboard() {
   const colunas = useMemo<DefinicaoColunaTabela<MinhaRepGdl>[]>(() => [
     {
       id: 'numeroRep',
+      enableHiding: false,
       accessorFn: rep => `${rep.ano}/${rep.numero.padStart(12, '0')}`,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nº REP" />,
-      cell: ({ row }) => <Button variant="link" className="h-auto p-0 font-semibold" onClick={() => selecionar(row.original)}>
-        REP {row.original.numero}/{row.original.ano}
-      </Button>,
-    },
-    {
-      accessorKey: 'dataDesignacao',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Designação" />,
-      cell: ({ row }) => formatarData(row.original.dataDesignacao),
-    },
-    {
-      accessorKey: 'status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-      cell: ({ row }) => <div><GdlStatusBadge status={row.original.status} />{row.original.statusNecessitaAtualizacao && <p className="mt-1 text-xs text-muted-foreground">Atualize a lista para conferir o status.</p>}</div>,
+      cell: ({ row }) => <div className="flex min-w-36 max-w-64 flex-wrap items-center gap-x-2 gap-y-1">
+        <Button variant="link" className="h-auto p-0 font-semibold" onClick={() => selecionar(row.original)}>
+          {row.original.numero.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}/{row.original.ano}
+        </Button>
+        <ReiterandoBadge juntoNumero numeroRep={`${row.original.numero}/${row.original.ano}`} reiterando={row.original.oficioReiterando} />
+      </div>,
     },
     {
       id: 'natureza',
       accessorFn: rep => rep.naturezaExameComCodigo ?? apresentarNaturezaExame(rep.naturezaExame),
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Natureza" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Natureza do Exame" />,
       cell: ({ row }) => <div>{row.original.naturezaExameComCodigo ?? apresentarNaturezaExame(row.original.naturezaExame)}{row.original.naturezaDivergente && <p className="mt-1 text-xs text-muted-foreground">Natureza divergente; confirme na consulta individual.</p>}</div>,
+    },
+    {
+      accessorKey: 'dataDesignacao',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Data de designação" />,
+      cell: ({ row }) => formatarData(row.original.dataDesignacao),
     },
     {
       id: 'fotos',
@@ -148,11 +173,16 @@ export function GdlMinhasRepsDashboard() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fotos" />,
       cell: ({ row }) => `${row.original.quantidadeFotos ?? '—'} fotos`,
     },
+    {
+      accessorKey: 'status',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      cell: ({ row }) => <div><GdlStatusBadge status={row.original.status} />{row.original.statusNecessitaAtualizacao && <p className="mt-1 text-xs text-muted-foreground">Atualize a lista para conferir o status.</p>}</div>,
+    },
   ], [selecionar]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <div className="flex flex-wrap items-center gap-2">
           {snapshotExibido ? <>
             <Badge variant="secondary" className="text-sm">
@@ -162,15 +192,17 @@ export function GdlMinhasRepsDashboard() {
           </> : <span>Nenhuma lista recente</span>}
           {carregando && <GdlConsultaEmAndamento />}
         </div>
-        <div ref={setDestinoControleColunas} className="ml-auto flex items-center gap-2">
+        <div ref={setDestinoControleColunas} className="ml-auto flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" disabled={carregando || listagemHabilitada === null} onClick={() => void atualizar(true, listagemHabilitada === true)}><RefreshCw className="mr-2 h-4 w-4" />Atualizar</Button>
         </div>
       </div>
-      {listagemHabilitada !== null && <GdlListagemPreferenciaAlert habilitada={listagemHabilitada} cacheVisivel={Boolean(snapshotExibido)}
+      {listagemHabilitada === false && <GdlListagemPreferenciaAlert habilitada={false} cacheVisivel={Boolean(snapshotExibido)}
         tentativaBloqueada={tentativaBloqueada} onAbrirConfiguracao={() => navegar('/gdl-config', { state: { focarListagemGdl: true } })} />}
       {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(snapshotExibido)}
         onTentarNovamente={() => void atualizar(true, listagemHabilitada === true)} onConfigurarCredenciais={() => navegar('/gdl-config')} />}
-      {snapshotExibido ? <DataTable columns={colunas} data={snapshotExibido.reps} hideSearch destinoControleColunas={destinoControleColunas}
+      {snapshotExibido ? <DataTable columns={colunas} data={repsExibidas} hideSearch destinoControleColunas={destinoControleColunas}
+        chavePreferencias="dashboard_gdl_disposicao"
+        densidade="compacta" preencherAltura fixarPrimeiraColuna
         defaultSorting={[{ id: 'dataDesignacao', desc: true }]} />
         : !carregando && listagemHabilitada && <p className="rounded-md border p-5 text-center text-sm text-muted-foreground">Nenhuma lista disponível. Use Atualizar para tentar novamente.</p>}
     </div>

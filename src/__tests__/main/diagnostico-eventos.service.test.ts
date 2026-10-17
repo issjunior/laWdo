@@ -2,7 +2,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DiagnosticoEventosService, sanitizarDadosDiagnostico } from '@main/services/diagnostico-eventos.service.js';
+import { DiagnosticoEventosService, sanitizarDadosDiagnostico, normalizarFalhaDiagnosticoGdl } from '@main/services/diagnostico-eventos.service.js';
 
 const diretorios: string[] = [];
 
@@ -41,4 +41,10 @@ describe('DiagnosticoEventosService', () => {
   it('redige dados sensíveis e limita estruturas externas', () => {
     expect(sanitizarDadosDiagnostico({ senha: 'x', value: 'conteúdo do laudo', textContent: 'conteúdo', ausente: 'undefined', indefinido: undefined, dados: ['ok'] })).toEqual({ senha: '[redigido]', value: '[redigido]', textContent: '[redigido]', ausente: null, dados: ['ok'] });
   });
+  it('normaliza metadados GDL sem mensagens externas nem campos arbitrários', () => {
+    expect(normalizarFalhaDiagnosticoGdl({ codigo: 'rede', codigoSistema: 'ECONNREFUSED', etapa: 'carregar_formulario', detalhes: 'segredo', url: 'https://segredo', statusHttp: 503, bloqueioTemporario: true, tentarNovamenteEmSegundos: 5 })).toMatchObject({ codigo: 'rede', codigoSistema: 'ECONNREFUSED', etapa: 'carregar_formulario', statusHttp: 503, bloqueioTemporario: true, tentarNovamenteEmSegundos: 5 });
+    expect(JSON.stringify(normalizarFalhaDiagnosticoGdl({ codigo: 'rede', etapa: 'segredo', codigoSistema: 'segredo', referencia: 'segredo', statusHttp: -1, tentarNovamenteEmSegundos: 999 }))).not.toContain('segredo');
+    expect(normalizarFalhaDiagnosticoGdl({ codigo: 'segredo' })).toBeUndefined();
+  });
+
 });

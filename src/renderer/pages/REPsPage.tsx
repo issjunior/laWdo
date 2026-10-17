@@ -1,3 +1,4 @@
+import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types';
 import type { PecaBalistica } from '@shared/types/pecas-balistica.types';
 import { mesclarPecasBalisticaDoGdl } from '@/components/rep/exam-fields/pecas-balistica-gdl.utils';
@@ -745,6 +746,7 @@ export const REPsPage: React.FC = () => {
 
   // Estados para Preview PDF da REP
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [numeroRepPreview, setNumeroRepPreview] = useState('');
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -1140,6 +1142,7 @@ export const REPsPage: React.FC = () => {
   };
 
   const handlePreviewRep = useCallback(async (rep: REP) => {
+    setNumeroRepPreview(rep.numero);
     try {
       setPreviewLoading(true);
       setError(null);
@@ -1606,7 +1609,7 @@ export const REPsPage: React.FC = () => {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Nº REP" />
       ),
-      cell: ({ row }) => <span className="font-medium">{row.getValue('numero')}</span>,
+      cell: ({ row }) => <div className="font-medium">{row.getValue('numero')}<ReiterandoBadge centralizado numeroRep={row.original.numero} /></div>,
     },
     {
       accessorKey: 'tipo_solicitacao',
@@ -1957,6 +1960,7 @@ export const REPsPage: React.FC = () => {
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
               Pré-visualização da REP (PDF)
+              <ReiterandoBadge numeroRep={numeroRepPreview} />
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 bg-slate-100 dark:bg-slate-800">
@@ -2044,6 +2048,7 @@ export const REPsPage: React.FC = () => {
                     {editingRep
                       ? `Editar REP ${editingRep.numero}`
                       : 'Nova Requisição de Exame Pericial'}
+                    <ReiterandoBadge numeroRep={form.watch('numero')} />
                   </CardTitle>
                   <CardDescription>
                     Campos marcados com <span className="font-semibold">*</span> são obrigatórios.

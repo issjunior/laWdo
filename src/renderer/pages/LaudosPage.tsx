@@ -1,3 +1,4 @@
+import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes, useSolicitarSaida } from '@/contexts/AlteracoesPendentesContext';
@@ -567,6 +568,7 @@ export const LaudosPage: React.FC = () => {
   const [exportando, setExportando] = useState(false);
   const [libreOfficeDisponivel, setLibreOfficeDisponivel] = useState<boolean | null>(null);
   const [listaPreviewOpen, setListaPreviewOpen] = useState(false);
+  const [numeroRepListaPreview, setNumeroRepListaPreview] = useState('');
   const [listaPreviewBlobUrl, setListaPreviewBlobUrl] = useState('');
   const [nomeArquivoListaPreview, setNomeArquivoListaPreview] = useState('laudo.pdf');
   const [listaPreviewLoading, setListaPreviewLoading] = useState(false);
@@ -1962,6 +1964,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleListaPreview = useCallback(async (laudo: LaudoItem) => {
+    setNumeroRepListaPreview(laudo.rep_numero);
     try {
       setListaPreviewLoading(true);
       setError(null);
@@ -3619,7 +3622,7 @@ export const LaudosPage: React.FC = () => {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Nº REP" />
       ),
-      cell: ({ row }) => <span className="font-medium">{row.getValue('rep_numero')}</span>,
+      cell: ({ row }) => <div className="font-medium">{row.getValue('rep_numero')}<ReiterandoBadge centralizado numeroRep={row.original.rep_numero} /></div>,
     },
     {
       accessorKey: 'tipo_solicitacao',
@@ -3937,7 +3940,7 @@ export const LaudosPage: React.FC = () => {
         <Card className="flex flex-col overflow-visible">
           <CardHeader className="flex-shrink-0 pb-4">
             <div className="flex min-w-0 items-center gap-2.5 whitespace-nowrap">
-              <CardTitle className="shrink-0 text-lg font-bold leading-tight tracking-tight text-primary">Laudo pericial</CardTitle>
+              <CardTitle className="shrink-0 text-lg font-bold leading-tight tracking-tight text-primary">Laudo pericial<ReiterandoBadge numeroRep={editando.rep_numero} /></CardTitle>
               <span aria-hidden="true" className="text-muted-foreground">|</span>
               <CardDescription className="shrink-0 leading-tight">
                 {[editando.tipo_exame_codigo, editando.tipo_exame_nome].filter(Boolean).join(' · ') || 'Tipo de exame não definido'}
@@ -4268,6 +4271,7 @@ export const LaudosPage: React.FC = () => {
               <DialogTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
                 Pré-visualização do Laudo (PDF)
+                <ReiterandoBadge numeroRep={editando.rep_numero} />
               </DialogTitle>
             </DialogHeader>
             <div className="flex-1 bg-slate-100 dark:bg-slate-800">
@@ -4616,6 +4620,7 @@ export const LaudosPage: React.FC = () => {
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
               Pré-visualização do Laudo (PDF)
+              <ReiterandoBadge numeroRep={numeroRepListaPreview} />
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 bg-slate-100 dark:bg-slate-800">
