@@ -1,7 +1,7 @@
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 
 const TABLE_STYLES = {
-  table:  { borderCollapse: 'collapse', width: '100%', margin: '8px 0' },
+  table:  { borderCollapse: 'collapse', width: '100%', margin: '8px 0', fontFamily: 'Arial, Helvetica, sans-serif' },
   title:  { background: '#d9d9d9', color: '#000', fontWeight: 'bold', textAlign: 'center' as const },
   th:     { border: '1px solid #000', padding: '6px 10px', textAlign: 'center' as const, fontWeight: '600', background: '#e8e8e8', color: '#000', fontSize: '12px' },
   td:     { border: '1px solid #000', padding: '6px 10px', textAlign: 'center' as const, fontSize: '12px', color: '#000' },

@@ -1,3 +1,10 @@
+import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
+import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types';
+import type { PecaBalistica } from '@shared/types/pecas-balistica.types';
+import { mesclarPecasBalisticaDoGdl } from '@/components/rep/exam-fields/pecas-balistica-gdl.utils';
+import { criarDadosB601, lerDadosB601, type DadosB601 } from '@shared/types/b601.types';
+import { obterPendenciaPecaB601 } from '@shared/catalogos/b601.catalogo';
+import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 import { codigoExameParaFormulario, normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -66,11 +73,9 @@ import { getMargens } from '@/lib/margens';
 import { obterNomeArquivoRep } from '@shared/utils/nomes-documentos-rep';
 import { toast } from 'sonner';
 import type {
-  DadosImportacaoB602,
   MetadadosIntegracaoGdl,
   PecaB602,
   ReferenciaOrigemGdl,
-  ResultadoImportacaoExame,
 } from '@shared/types/b602-gdl.types';
 import { pecaB602EstaCompleta } from '@shared/catalogos/b602-gdl.catalogo';
 import {
@@ -117,15 +122,12 @@ type CampoRep = Path<REPFormData>;
 const esquemaTiposExameResumo = z.array(z.object({ id: z.string(), nome: z.string(), codigo: z.string() }));
 const esquemaTemplatesResumo = z.array(z.object({ id: z.string(), nome: z.string(), chave_integrada: z.string().nullish() }));
 
-const CODIGO_EXAME_B602 = 'B-602';
-const CHAVE_TEMPLATE_PADRAO_B602 = 'laudo-padrao-b602';
-const NOME_TEMPLATE_PADRAO_B602 = 'Laudo Padrão B-602';
-
-function obterTemplatePadraoB602(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
-  if (!codigoExame || normalizarCodigoExame(codigoExame) !== normalizarCodigoExame(CODIGO_EXAME_B602)) return undefined;
-
-  return templates.find(template => template.chave_integrada === CHAVE_TEMPLATE_PADRAO_B602)
-    ?? templates.find(template => template.nome === NOME_TEMPLATE_PADRAO_B602);
+function obterTemplatePadraoBalistica(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
+  const codigo = normalizarCodigoExame(codigoExame ?? '');
+  if (codigo === 'B601') return templates.find(template => template.nome === 'Laudo Padrão B-601');
+  if (codigo !== 'B602') return undefined;
+  return templates.find(template => template.chave_integrada === 'laudo-padrao-b602')
+    ?? templates.find(template => template.nome === 'Laudo Padrão B-602');
 }
 
 function ehRegistro(valor: unknown): valor is Record<string, unknown> {
@@ -316,6 +318,11 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
 }
 
 const emptyForm = (): REPFormData => ({
+  ...Object.fromEntries(Array.from({ length: 10 }, (_, indice) => [
+    ['b601_envolvidos_' + indice, ''], ['b601_envolvidos_qualificacao_' + indice, ''],
+  ]).flat()),
+  b601_data_ocorrencia: '', b601_local_bairro: '', b601_local_cidade: '', b601_local_uf: '',
+  b601_numero_bo: '', b601_numero_ip: '', b601_solicitante_nome: '', b601_estado_pecas: '',
   numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0],
   tipo_solicitacao: 'Ofício', numero_documento: '', data_documento: '',
   autoridade_solicitante: '', data_acionamento: '',
@@ -340,7 +347,7 @@ const emptyForm = (): REPFormData => ({
   b602_armas_toggle: 'off',
 });
 
-function formularioTemDadosRelevantesParaGdl(data: REPFormData, pecas: PecaB602[]): boolean {
+function formularioTemDadosRelevantesParaGdl(data: REPFormData, pecas: PecaBalistica[]): boolean {
   if (pecas.length > 0) return true
 
   const padrao = emptyForm() as Record<string, string>
@@ -414,6 +421,7 @@ function prepareForApi(
   codigo: string | undefined,
   pecasB602: PecaB602[],
   metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null,
+  contextoB601?: { dados: DadosB601; raiz: Record<string, unknown> },
 ) {
   const payload: Record<string, unknown> = {
     numero: data.numero,
@@ -445,7 +453,7 @@ function prepareForApi(
       data,
       codigo === 'B-602'
         ? { b602: { pecas: pecasB602, metadadosIntegracaoGdl } }
-        : undefined,
+        : codigo === 'B-601' ? { b601: contextoB601 } : undefined,
     );
     payload.campos_especificos = serializado || null;
   }
@@ -587,6 +595,11 @@ export const REPsPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingRep, setEditingRep] = useState<REP | null>(null);
   const [pecasB602, setPecasB602] = useState<PecaB602[]>([]);
+  const [dadosB601, setDadosB601] = useState<DadosB601>(criarDadosB601);
+  const raizB601Ref = useRef<Record<string, unknown>>({});
+  const [erroB601, setErroB601] = useState<string | null>(null);
+  const [editandoPecaB601, setEditandoPecaB601] = useState(false);
+  const salvamentoConcluidoRef = useRef(false);
   const [metadadosIntegracaoGdl, setMetadadosIntegracaoGdl] = useState<MetadadosIntegracaoGdl | null>(null);
 
   const [error, setError] = useState<string | null>(null);
@@ -733,6 +746,7 @@ export const REPsPage: React.FC = () => {
 
   // Estados para Preview PDF da REP
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [numeroRepPreview, setNumeroRepPreview] = useState('');
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -825,7 +839,7 @@ export const REPsPage: React.FC = () => {
           form.setValue('template_id', '', { shouldValidate: false });
         }
         const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-        const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+        const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
         if (templatePadrao && !form.getValues('template_id')) form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
       } else {
         setTemplatesVinculados([]);
@@ -839,11 +853,29 @@ export const REPsPage: React.FC = () => {
   const tipoExameSelecionado = tipoExameId
     ? tiposExame.find(t => t.id === tipoExameId) || null
     : null;
+  const solicitanteB601Id = form.watch('solicitante_id');
+  useEffect(() => {
+    if (tipoExameSelecionado?.codigo !== 'B-601') return;
+    const solicitante = solicitantes.find(item => item.id === form.getValues('solicitante_id'));
+    form.setValue('b601_solicitante_nome', solicitante?.nome || '', { shouldValidate: false });
+  }, [form, solicitantes, tipoExameSelecionado?.codigo, solicitanteB601Id]);
   const valoresFormulario = form.watch();
   const camposObrigatoriosPendentes = useMemo(
-    () => listarCamposObrigatoriosPendentes(valoresFormulario, tipoExameSelecionado?.codigo, pecasB602),
-    [pecasB602, tipoExameSelecionado?.codigo, valoresFormulario]
+    () => {
+      const pendencias = listarCamposObrigatoriosPendentes(valoresFormulario, tipoExameSelecionado?.codigo, pecasB602);
+      if (tipoExameSelecionado?.codigo === 'B-601' && (erroB601 || editandoPecaB601
+        || (!dadosB601.semPecas && (dadosB601.pecas.length === 0 || dadosB601.pecas.some(peca => obterPendenciaPecaB601(peca)))))) {
+        pendencias.push({ campo: 'b601_pecas_validas', label: erroB601 ? 'Revisar dados B-601' : editandoPecaB601 ? 'Confirmar edição da peça' : 'Peças válidas ou declaração sem peças', stepId: 'section-pecas_b601' });
+      }
+      return pendencias;
+    },
+    [dadosB601, erroB601, editandoPecaB601, pecasB602, tipoExameSelecionado?.codigo, valoresFormulario]
   );
+  const alterarDadosB601 = useCallback((dados: DadosB601) => {
+    setDadosB601(dados);
+    form.setValue('b601_estado_pecas', JSON.stringify(dados), { shouldDirty: true });
+  }, [form]);
+  const alterarEdicaoPecaB601 = useCallback((pendente: boolean) => setEditandoPecaB601(pendente), []);
   const resumoPendencias = camposObrigatoriosPendentes.slice(0, 4);
   const totalPendencias = camposObrigatoriosPendentes.length;
   const formularioPodeSalvar = totalPendencias === 0 && form.formState.isValid;
@@ -855,6 +887,13 @@ export const REPsPage: React.FC = () => {
     }
 
     window.setTimeout(() => {
+      if (pendencia.campo === 'b601_pecas_validas') {
+        const incompleta = dadosB601.pecas.find(peca => obterPendenciaPecaB601(peca));
+        const alvo = document.getElementById(incompleta ? `peca-b601-${incompleta.idLocal}` : 'adicionar-peca-b601');
+        alvo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alvo?.focus({ preventScroll: true });
+        return;
+      }
       if (pendencia.campo === 'b602_pecas_validas') {
         const primeiraPecaIncompleta = pecasB602.find(peca => !pecaB602EstaCompleta(peca));
         const idAlvo = primeiraPecaIncompleta
@@ -868,7 +907,7 @@ export const REPsPage: React.FC = () => {
 
       form.setFocus(pendencia.campo);
     }, 250);
-  }, [form, pecasB602]);
+  }, [dadosB601.pecas, form, pecasB602]);
 
   // Seções dinâmicas baseadas no tipo de exame
   const examSections = useMemo(() => {
@@ -913,6 +952,10 @@ export const REPsPage: React.FC = () => {
     setCamposPreenchidosGdl(new Set());
     setOrigensSolicitacaoGdl([]);
     setPecasB602([]);
+    setDadosB601(criarDadosB601());
+    raizB601Ref.current = {};
+    setErroB601(null);
+    setEditandoPecaB601(false);
     setMetadadosIntegracaoGdl(null);
     form.reset(emptyForm());
     setSubmitting(false);
@@ -961,6 +1004,10 @@ export const REPsPage: React.FC = () => {
     setCamposPreenchidosGdl(new Set());
     setOrigensSolicitacaoGdl([]);
     setPecasB602([]);
+    setDadosB601(criarDadosB601());
+    raizB601Ref.current = {};
+    setErroB601(null);
+    setEditandoPecaB601(false);
     setMetadadosIntegracaoGdl(null);
     setError(null);
     setSuccess(null);
@@ -968,6 +1015,12 @@ export const REPsPage: React.FC = () => {
     document.body.style.pointerEvents = '';
   };
 
+
+  const handleSolicitarCancelamento = () => {
+    if (tipoExameSelecionado?.codigo === 'B-601' && (form.formState.isDirty || editandoPecaB601)
+      && !window.confirm('Descartar as alterações não salvas da REP?')) return;
+    handleCancelar();
+  };
   const handleEditar = useCallback(async (rep: REP) => {
     setEditingRep(rep);
     setError(null);
@@ -1002,9 +1055,23 @@ export const REPsPage: React.FC = () => {
     // Parse campos_especificos via service registry
 
     const tipo = tiposExame.find(t => t.id === rep.tipo_exame_id);
-    const especificos = deserializeCamposEspecificos(tipo?.codigo ?? '', rep.campos_especificos);
+    let especificos = deserializeCamposEspecificos(tipo?.codigo ?? '', rep.campos_especificos);
+    setErroB601(null);
+    setEditandoPecaB601(false);
+    setDadosB601(criarDadosB601());
+    raizB601Ref.current = {};
+    if (tipo?.codigo === 'B-601') {
+      try {
+        const carregado = lerDadosB601(rep.campos_especificos);
+        setDadosB601(carregado.dados);
+        raizB601Ref.current = carregado.raiz;
+        especificos = { ...especificos, b601_estado_pecas: JSON.stringify(carregado.dados) };
+      } catch (falha: unknown) {
+        setErroB601(mensagemErro(falha, 'Não foi possível ler os dados B-601.'));
+      }
+    }
     setPecasB602(tipo?.codigo === 'B-602' ? extrairPecasB602(rep.campos_especificos) : []);
-    const metadadosGdl = tipo?.codigo === 'B-602' ? extrairMetadadosIntegracaoGdl(rep.campos_especificos) : null;
+    const metadadosGdl = ['B-601', 'B-602'].includes(tipo?.codigo ?? '') ? extrairMetadadosIntegracaoGdl(rep.campos_especificos) : null;
     setMetadadosIntegracaoGdl(metadadosGdl);
     setOrigensSolicitacaoGdl(metadadosGdl?.dadosSolicitacao?.origensDisponiveis ?? []);
 
@@ -1075,6 +1142,7 @@ export const REPsPage: React.FC = () => {
   };
 
   const handlePreviewRep = useCallback(async (rep: REP) => {
+    setNumeroRepPreview(rep.numero);
     try {
       setPreviewLoading(true);
       setError(null);
@@ -1151,7 +1219,7 @@ export const REPsPage: React.FC = () => {
           const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           setCriarLaudoTemplates(ordenados);
           const codigoExame = tiposExame.find(tipo => tipo.id === rep.tipo_exame_id)?.codigo;
-          const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+          const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
           if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
         }
       })();
@@ -1202,7 +1270,7 @@ export const REPsPage: React.FC = () => {
       const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       setCriarLaudoTemplates(ordenados);
       const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-      const templatePadrao = obterTemplatePadraoB602(codigoExame, ordenados);
+      const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
       if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
     } else {
       setCriarLaudoTemplates([]);
@@ -1210,6 +1278,12 @@ export const REPsPage: React.FC = () => {
   };
 
   const handleSalvar = form.handleSubmit(async (data) => {
+    salvamentoConcluidoRef.current = false;
+    if (editingRep?.campos_especificos && editingRep.tipo_exame_id !== data.tipo_exame_id) {
+      const codigoAnterior = tiposExame.find(tipo => tipo.id === editingRep.tipo_exame_id)?.codigo;
+      if ((codigoAnterior === 'B-601' || tipoExameSelecionado?.codigo === 'B-601')
+        && !window.confirm('A troca do tipo de exame substituirá os dados específicos anteriores ao salvar. Continuar?')) return;
+    }
     // Verificar toggles desmarcados
     if (editingRep) {
       const toggleKeys = ['b602_cartuchos_toggle', 'b602_estojos_toggle', 'b602_armas_toggle'];
@@ -1269,14 +1343,20 @@ export const REPsPage: React.FC = () => {
       setSubmitting(true);
 
       const codigo = tipoExameSelecionado?.codigo;
-      const apiData = prepareForApi(data, codigo, pecasB602, metadadosIntegracaoGdl);
+      if (erroB601) throw new Error(erroB601);
+      if (codigo === 'B-601' && (editandoPecaB601 || (!dadosB601.semPecas && (dadosB601.pecas.length === 0 || dadosB601.pecas.some(peca => obterPendenciaPecaB601(peca)))))) {
+        throw new Error('Confirme as peças válidas ou declare ausência de itens antes de salvar.');
+      }
+      const apiData = prepareForApi(data, codigo, pecasB602, metadadosIntegracaoGdl, { dados: dadosB601, raiz: raizB601Ref.current });
 
       if (editingRep) {
         const r = await window.ipcAPI.rep.update(editingRep.id, apiData);
         if (r.success) {
           await carregarREPs();
           toast.success('REP atualizada com sucesso!');
-          setTimeout(() => handleCancelar(), 1200);
+          salvamentoConcluidoRef.current = true;
+          if (codigo === 'B-601') handleCancelar();
+          else setTimeout(() => handleCancelar(), 1200);
         } else {
           setError(r.error || 'Erro ao atualizar REP');
         }
@@ -1285,7 +1365,9 @@ export const REPsPage: React.FC = () => {
         if (r.success) {
           await carregarREPs();
           toast.success('REP criada com sucesso!');
-          setTimeout(() => handleCancelar(), 1200);
+          salvamentoConcluidoRef.current = true;
+          if (codigo === 'B-601') handleCancelar();
+          else setTimeout(() => handleCancelar(), 1200);
         } else {
           const erro = r.error || 'Erro ao criar REP';
           if (/^Já existe outra REP com o número /u.test(erro)) {
@@ -1399,17 +1481,16 @@ export const REPsPage: React.FC = () => {
   };
 
   const handleAplicarGdl = async (
-    resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
+    resultado: ResultadoImportacaoGdl,
     modo: 'substituir' | 'mesclar',
-    pecasImportadasSelecionadas: PecaB602[],
+    pecasImportadasSelecionadas: PecaBalistica[],
   ) => {
     const novosPreenchidos = new Set<string>();
     const substituirDadosGdl = modo === 'substituir'
-      || !formularioTemDadosRelevantesParaGdl(form.getValues(), pecasB602);
+      || !(formularioTemDadosRelevantesParaGdl(form.getValues(), resultado.codigoExame === 'B-601' ? dadosB601.pecas : pecasB602) || (resultado.codigoExame === 'B-601' && dadosB601.semPecas));
     const codigoExameGdl = resultado.codigoExame.trim().toUpperCase();
-    if (codigoExameGdl !== 'B-602') {
-      setError(`O exame ${resultado.codigoExame} ainda não possui adaptador de formulário.`);
-      return;
+    if (resultado.codigoExame === 'B-601' && (erroB601 || editandoPecaB601)) {
+      throw new Error(erroB601 || 'Confirme ou cancele a edição da peça antes de importar.');
     }
 
     const tipoExameGdl = tiposExame.find(
@@ -1447,12 +1528,13 @@ export const REPsPage: React.FC = () => {
       }
     }
 
-    if (!form.getValues('template_id')) {
+    if (['B-601', 'B-602'].includes(resultado.codigoExame) && !form.getValues('template_id')) {
       const respostaTemplates = await window.ipcAPI.template.findByTipoExame(tipoExameGdl.id);
       if (respostaTemplates.success && respostaTemplates.data) {
-        const templates = [...(respostaTemplates.data as TemplateResumo[])]
+        const validacaoTemplates = esquemaTemplatesResumo.safeParse(respostaTemplates.data);
+        const templates = [...(validacaoTemplates.success ? validacaoTemplates.data : [])]
           .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-        const templatePadrao = obterTemplatePadraoB602(codigoExameGdl, templates);
+        const templatePadrao = obterTemplatePadraoBalistica(codigoExameGdl, templates);
         if (templatePadrao) {
           setTemplatesVinculados(templates);
           form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
@@ -1460,15 +1542,16 @@ export const REPsPage: React.FC = () => {
       }
     }
 
-    await form.trigger(['tipo_solicitacao', 'b602_numero_bo', 'b602_numero_ip']);
+    const prefixo = resultado.codigoExame === 'B-601' ? 'b601' : 'b602';
+    await form.trigger(['tipo_solicitacao', `${prefixo}_numero_bo`, `${prefixo}_numero_ip`]);
 
-    setPecasB602(atuais => mesclarPecasB602DoGdl(
-      atuais,
-      resultado.camposEspecificos.pecas,
-      substituirDadosGdl,
-      modo === 'substituir',
-      pecasImportadasSelecionadas,
-    ));
+    if (resultado.codigoExame === 'B-601') {
+      const pecas = mesclarPecasBalisticaDoGdl(dadosB601.pecas, resultado.camposEspecificos.pecas, substituirDadosGdl, modo === 'substituir', pecasImportadasSelecionadas, true);
+      raizB601Ref.current = { ...raizB601Ref.current, integracaoGdl: resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl };
+      alterarDadosB601({ ...dadosB601, pecas, semPecas: pecas.length === 0 && dadosB601.semPecas });
+    } else {
+      setPecasB602(atuais => mesclarPecasB602DoGdl(atuais, resultado.camposEspecificos.pecas, substituirDadosGdl, modo === 'substituir', pecasImportadasSelecionadas));
+    }
     setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
 
     setCamposPreenchidosGdl(novosPreenchidos);
@@ -1480,6 +1563,7 @@ export const REPsPage: React.FC = () => {
     }
     const avisosImportacao = resultado.avisos
       .filter(aviso => aviso.codigo !== 'FUNCIONAMENTO_NAO_TESTADO_PADRAO')
+      .filter(aviso => !(resultado.codigoExame === 'B-601' && aviso.codigo === 'CAMPOS_B601_PARA_REVISAO'))
       .map(aviso => aviso.mensagem);
     if (avisosImportacao.length > 0) {
       setSuccess(avisosImportacao.join(' '));
@@ -1490,17 +1574,23 @@ export const REPsPage: React.FC = () => {
   };
 
   const handleAplicarPecasGdl = (
-    resultado: ResultadoImportacaoExame<DadosImportacaoB602>,
-    pecasRetornadasSelecionadas: PecaB602[],
-    pecasImportadasSelecionadas: PecaB602[],
+    resultado: ResultadoImportacaoGdl,
+    pecasRetornadasSelecionadas: PecaBalistica[],
+    pecasImportadasSelecionadas: PecaBalistica[],
   ): void => {
-    setPecasB602(atuais => mesclarPecasB602DoGdl(
-      atuais,
-      pecasRetornadasSelecionadas,
-      true,
-      true,
-      pecasImportadasSelecionadas,
-    ));
+    if (resultado.codigoExame !== tipoExameSelecionado?.codigo) {
+      throw new Error('O exame consultado difere do formulário atual.');
+    }
+    if (resultado.codigoExame === 'B-601') {
+      if (erroB601 || editandoPecaB601) throw new Error(erroB601 || 'Confirme ou cancele a edição da peça antes de importar.');
+      const pecas = mesclarPecasBalisticaDoGdl(dadosB601.pecas, pecasRetornadasSelecionadas, true, true, pecasImportadasSelecionadas, true);
+      raizB601Ref.current = { ...raizB601Ref.current, integracaoGdl: resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl };
+      alterarDadosB601({ ...dadosB601, pecas, semPecas: pecas.length === 0 && dadosB601.semPecas });
+    } else {
+      const ids = new Set(pecasRetornadasSelecionadas.map(peca => peca.idLocal));
+      const recebidas = resultado.camposEspecificos.pecas.filter(peca => ids.has(peca.idLocal));
+      setPecasB602(atuais => mesclarPecasB602DoGdl(atuais, recebidas, true, true, pecasImportadasSelecionadas));
+    }
     setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
     setSuccess('Seleção de peças do GDL aplicada ao formulário.');
     setTimeout(() => setSuccess(null), 5000);
@@ -1519,7 +1609,7 @@ export const REPsPage: React.FC = () => {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Nº REP" />
       ),
-      cell: ({ row }) => <span className="font-medium">{row.getValue('numero')}</span>,
+      cell: ({ row }) => <div className="font-medium">{row.getValue('numero')}<ReiterandoBadge centralizado numeroRep={row.original.numero} /></div>,
     },
     {
       accessorKey: 'tipo_solicitacao',
@@ -1622,6 +1712,7 @@ export const REPsPage: React.FC = () => {
   if (!showForm) {
     return (
       <TooltipProvider>
+
         <div className="container mx-auto p-4 md:p-6 space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
           <div>
@@ -1869,6 +1960,7 @@ export const REPsPage: React.FC = () => {
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
               Pré-visualização da REP (PDF)
+              <ReiterandoBadge numeroRep={numeroRepPreview} />
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 bg-slate-100 dark:bg-slate-800">
@@ -1917,13 +2009,17 @@ export const REPsPage: React.FC = () => {
   // Modo formulário
   return (
     <TooltipProvider>
+      {showForm && tipoExameSelecionado?.codigo === 'B-601' && <ProtecaoCadastroB601
+        pendente={form.formState.isDirty || editandoPecaB601} salvando={submitting}
+        salvar={async () => { salvamentoConcluidoRef.current = false; await handleSalvar(); return salvamentoConcluidoRef.current; }}
+        erro={() => error || (editandoPecaB601 ? 'Confirme ou cancele a edição da peça antes de salvar.' : null)} />}
       <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Requisições (REPs)</h1>
           <p className="text-muted-foreground mt-1">Gerencie as requisições de exame pericial</p>
         </div>
-        <Button variant="outline" onClick={handleCancelar} className="flex items-center gap-2 w-full sm:w-auto">
+        <Button variant="outline" onClick={handleSolicitarCancelamento} className="flex items-center gap-2 w-full sm:w-auto">
           <ArrowLeft size={16} /> Voltar à lista
         </Button>
       </div>
@@ -1942,6 +2038,7 @@ export const REPsPage: React.FC = () => {
           }
           showForm={showForm}
           pecasB602={pecasB602}
+          dadosB601={dadosB601}
         >
           <Card className="flex-1 min-w-0">
             <CardHeader>
@@ -1951,6 +2048,7 @@ export const REPsPage: React.FC = () => {
                     {editingRep
                       ? `Editar REP ${editingRep.numero}`
                       : 'Nova Requisição de Exame Pericial'}
+                    <ReiterandoBadge numeroRep={form.watch('numero')} />
                   </CardTitle>
                   <CardDescription>
                     Campos marcados com <span className="font-semibold">*</span> são obrigatórios.
@@ -1976,7 +2074,7 @@ export const REPsPage: React.FC = () => {
                     <Eye size={14} />
                     Placeholders
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={handleCancelar} aria-label="Fechar formulário">
+                  <Button variant="ghost" size="sm" onClick={handleSolicitarCancelamento} aria-label="Fechar formulário">
                     <X size={18} />
                   </Button>
                 </div>
@@ -2183,7 +2281,7 @@ export const REPsPage: React.FC = () => {
                                 <Select
                                   disabled={!tipoExameId || templatesVinculados.length === 0}
                                   value={field.value || undefined}
-                                  onValueChange={field.onChange}
+                                  onValueChange={valor => { if (valor) field.onChange(valor); }}
                                 >
                                   <FormControl>
                                     <SelectTrigger>
@@ -2227,6 +2325,15 @@ export const REPsPage: React.FC = () => {
                     {/* ============================================ */}
                     {/* SEÇÕES DINÂMICAS: Campos Específicos */}
                     {/* ============================================ */}
+                    {erroB601 && <Alert variant="destructive"><AlertDescription className="space-y-2">
+                      <p>{erroB601} O salvamento está bloqueado para preservar o original.</p>
+                      <Button type="button" variant="outline" onClick={() => {
+                        if (!window.confirm('Descartar os dados específicos inválidos desta REP e iniciar o cadastro B-601 vazio? O descarte só será gravado ao salvar a REP.')) return;
+                        raizB601Ref.current = {};
+                        setErroB601(null);
+                        alterarDadosB601(criarDadosB601());
+                      }}>Descartar dados inválidos e refazer cadastro</Button>
+                    </AlertDescription></Alert>}
                     {examSections.map(s => (
                       <RepStepSection key={s.id} stepId={`section-${s.id}`}>
                         <div className="flex items-center gap-2 mb-2">
@@ -2237,7 +2344,10 @@ export const REPsPage: React.FC = () => {
                           form={form}
                           mostrarPlaceholders={mostrarPlaceholders}
                           pecasB602={pecasB602}
+                          dadosB601={dadosB601}
                           onPecasB602Change={setPecasB602}
+                          onDadosB601Change={alterarDadosB601}
+                          onEdicaoPecaB601Change={alterarEdicaoPecaB601}
                           onRevisarPecasGdl={() => setGdlPecasModalOpen(true)}
                           camposPreenchidosGdl={camposPreenchidosGdl}
                         />
@@ -2291,7 +2401,7 @@ export const REPsPage: React.FC = () => {
                         Faltam {totalPendencias} campo(s) obrigatório(s) para continuar.
                       </p>
                     )}
-                    <Button variant="outline" type="button" onClick={handleCancelar}>Cancelar</Button>
+                    <Button variant="outline" type="button" onClick={handleSolicitarCancelamento}>Cancelar</Button>
                     <Button type="submit" disabled={submitting || !formularioPodeSalvar} className="flex items-center gap-2">
                       <Plus size={16} /> {submitting ? 'Salvando...' : editingRep ? 'Atualizar' : 'Criar'} REP
                     </Button>
@@ -2386,8 +2496,9 @@ export const REPsPage: React.FC = () => {
           if (!aberto) setRepInicialGdl(null);
         }}
         onAplicar={handleAplicarGdl}
-        temDadosExistentes={formularioTemDadosRelevantesParaGdl(valoresFormulario, pecasB602)}
+        temDadosExistentes={formularioTemDadosRelevantesParaGdl(valoresFormulario, tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : pecasB602) || (tipoExameSelecionado?.codigo === 'B-601' && dadosB601.semPecas)}
         pecasB602={pecasB602}
+        pecasB601={dadosB601.pecas}
         onConfigurarCredenciais={() => {
           setGdlModalOpen(false);
           navigate('/gdl-config');
@@ -2408,7 +2519,8 @@ export const REPsPage: React.FC = () => {
         open={gdlPecasModalOpen}
         onOpenChange={setGdlPecasModalOpen}
         numeroRepCompleto={valoresFormulario.numero}
-        pecasAtuais={pecasB602}
+        codigoExame={tipoExameSelecionado?.codigo === 'B-601' ? 'B-601' : 'B-602'}
+        pecasAtuais={tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : pecasB602}
         onAplicar={handleAplicarPecasGdl}
       />
       <AlertDialog open={repDuplicadaNumero !== null} onOpenChange={(open) => {
@@ -2432,3 +2544,8 @@ export const REPsPage: React.FC = () => {
       </TooltipProvider>
   );
 };
+
+function ProtecaoCadastroB601({ pendente, salvando, salvar, erro }: { pendente: boolean; salvando: boolean; salvar: () => Promise<boolean>; erro: () => string | null }) {
+  useRegistrarAlteracoesPendentes('cadastro-rep-b601', { pendente, salvando, verificar: () => pendente, salvar, erro });
+  return null;
+}

@@ -1,7 +1,9 @@
 import type { REPFormData } from '../types';
 import type { MetadadosIntegracaoGdl, PecaB602 } from '@shared/types/b602-gdl.types';
+import type { DadosB601 } from '@shared/types/b601.types';
 
 export interface ContextoSerializacaoCamposEspecificos {
+  b601?: { dados: DadosB601; raiz: Record<string, unknown> };
   b602?: {
     pecas: PecaB602[];
     metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null;

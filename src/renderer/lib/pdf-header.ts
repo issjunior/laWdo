@@ -1,3 +1,6 @@
+import { lerApresentacaoLaudo } from '@shared/configuracoes/apresentacao-laudo';
+import { carregarApresentacaoPadrao, montarFechamentoHtml, resolverDadosPerito } from './apresentacao-laudo';
+import { buildPlaceholderMapping, resolverPlaceholdersExportacao, type ExportacaoContext } from './exportacao-placeholders';
 import type { FalhaPdf } from '@shared/types/pdf.types';
 
 export class ErroCabecalhoPdf extends Error {
@@ -42,7 +45,7 @@ export function buildHeaderTemplate(templateHtml: string, replacements: Record<s
 
   for (const [key, value] of Object.entries(replacements)) {
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    html = html.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value || '');
+    html = html.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), () => value || '');
   }
 
   const align = detectAlignment(html);
@@ -53,12 +56,16 @@ export function buildHeaderTemplate(templateHtml: string, replacements: Record<s
 export interface PdfHeaderConfig {
   headerTemplate: string;
   cabecalhoPrimeiraPagina: string;
+  fechamentoHtml: string;
 }
 
 export interface PdfHeaderOptions {
   numeroRepFallback?: string;
   extraReplacements?: Record<string, string>;
   estrito?: boolean;
+  apresentacaoJson?: unknown;
+  usarCopiaLaudo?: boolean;
+  contexto?: ExportacaoContext;
 }
 
 /**
@@ -66,40 +73,21 @@ export interface PdfHeaderOptions {
  * Centralizes the DB loading + template building logic that was duplicated across pages.
  */
 export async function buildPdfHeaderConfig(opts: PdfHeaderOptions = {}): Promise<PdfHeaderConfig> {
-  let headerLaudoResult: Awaited<ReturnType<typeof window.ipcAPI.configuracao.obter>>;
-  let headerPaginasResult: Awaited<ReturnType<typeof window.ipcAPI.configuracao.obter>>;
   try {
-    [headerLaudoResult, headerPaginasResult] = await Promise.all([
-      window.ipcAPI.configuracao.obter('cabecalho_laudo'),
-      window.ipcAPI.configuracao.obter('cabecalho_paginas'),
-    ]);
+    const apresentacao = opts.usarCopiaLaudo ? lerApresentacaoLaudo(opts.apresentacaoJson) : await carregarApresentacaoPadrao();
+    const contexto: ExportacaoContext = opts.contexto ?? { repData: { numero: opts.numeroRepFallback ?? '' } };
+    const replacements = { ...buildPlaceholderMapping(contexto), ...opts.extraReplacements, ...apresentacao.perito };
+    if (opts.numeroRepFallback) replacements.numero_rep = opts.numeroRepFallback;
+    const escapar = (valor: string) => valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const primeiraPagina = apresentacao.cabecalho.habilitado ? resolverDadosPerito(apresentacao.cabecalho.primeiraPagina, apresentacao.perito) : '';
+    const todasPaginas = apresentacao.cabecalho.habilitado ? resolverDadosPerito(apresentacao.cabecalho.todasPaginas, apresentacao.perito) : '';
+    return {
+      headerTemplate: buildHeaderTemplate(todasPaginas, Object.fromEntries(Object.entries(replacements).map(([chave, valor]) => [chave, escapar(valor)]))).html,
+      cabecalhoPrimeiraPagina: resolverPlaceholdersExportacao(primeiraPagina, contexto),
+      fechamentoHtml: resolverPlaceholdersExportacao(montarFechamentoHtml(apresentacao.fechamento, apresentacao.perito), contexto),
+    };
   } catch (erro: unknown) {
     if (opts.estrito) throw new ErroCabecalhoPdf();
     throw erro;
   }
-
-  if (opts.estrito && (
-    !headerLaudoResult.success || !headerPaginasResult.success
-    || (headerLaudoResult.data != null && typeof headerLaudoResult.data !== 'string')
-    || (headerPaginasResult.data != null && typeof headerPaginasResult.data !== 'string')
-  )) {
-    throw new ErroCabecalhoPdf();
-  }
-
-  const cabecalhoPrimeiraPagina = (headerLaudoResult.success && headerLaudoResult.data) ? headerLaudoResult.data : '';
-  const cabecalhoPaginasHtml = (headerPaginasResult.success && headerPaginasResult.data) ? headerPaginasResult.data : '';
-
-  const replacements: Record<string, string> = {};
-  if (opts.numeroRepFallback) {
-    replacements.numero_rep = opts.numeroRepFallback;
-  }
-  if (opts.extraReplacements) {
-    Object.assign(replacements, opts.extraReplacements);
-  }
-
-  const result = cabecalhoPaginasHtml
-    ? buildHeaderTemplate(cabecalhoPaginasHtml, replacements)
-    : { html: '', align: 'flex-start' };
-
-  return { headerTemplate: result.html, cabecalhoPrimeiraPagina };
 }

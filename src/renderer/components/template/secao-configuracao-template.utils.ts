@@ -1,3 +1,5 @@
+import { CATALOGO_TIPOS_PECA_B601 } from '@shared/catalogos/b601.catalogo';
+import { ehAgrupamentoB601 } from '@shared/utils/b601-descricao-agrupada';
 export interface SecaoTemplateEstrutural {
   id?: string;
   chave_local: string;
@@ -40,6 +42,15 @@ const CONFIGURACAO_PADRAO: ConfiguracaoTemplateExame = {
 };
 
 const CONFIGURACOES_POR_EXAME: Record<string, ConfiguracaoTemplateExame> = {
+  'B-601': {
+    opcoesRepeticao: [
+      { value: 'b601_agrupados:105', label: 'Tabela conjunta de projéteis' },
+      { value: 'b601_agrupados:101', label: 'Tabela conjunta de estojos' },
+      { value: 'b601_pecas', label: 'Peças sem modelo específico' },
+      ...CATALOGO_TIPOS_PECA_B601.map(tipo => ({ value: 'b601_pecas:' + tipo.codigo, label: 'Uma seção por peça: ' + tipo.label })),
+    ],
+    ajudaRepeticao: 'As tabelas conjuntas descrevem as quantidades em UNIDADES. Projéteis e estojos em outras medidas recebem blocos manuais nas respectivas subseções. O modelo genérico atende os demais materiais.',
+  },
   'B-602': {
     opcoesRepeticao: [{ value: 'armas', label: 'Uma seção por arma' }],
     tituloPadraoArmas: TITULO_PADRAO_REPETICAO_ARMAS,
@@ -74,6 +85,7 @@ function suportaRepeticaoPorArma(tipoExameCodigo?: string): boolean {
 }
 
 export function getTituloPadraoRepeticao(secao: Pick<SecaoTemplateEstrutural, 'repetir_para'>, tipoExameCodigo?: string): string {
+  if (/^b601_pecas(?::\d+)?$/.test(secao.repetir_para || '')) return 'PEÇA {{b601_peca_1_letra}} — {{b601_peca_1_tipo}}';
   if (secao.repetir_para !== 'armas') return '';
   return getConfiguracaoTemplateExame(tipoExameCodigo).tituloPadraoArmas || '';
 }
@@ -98,6 +110,8 @@ function getLabelEstrutura(secao: Pick<SecaoTemplateEstrutural, 'parent_id'>, op
 }
 
 function getLabelRepeticao(secao: Pick<SecaoTemplateEstrutural, 'repetir_para'>): string {
+  if (ehAgrupamentoB601(secao.repetir_para)) return 'Tabela conjunta por quantidade';
+  if ((secao.repetir_para || '').startsWith('b601_pecas')) return 'Uma seção por peça';
   if (secao.repetir_para === 'armas') return 'Uma seção por arma';
   return 'Conteúdo único';
 }
@@ -134,6 +148,16 @@ export function validarConfiguracaoSecaoTemplate(
   tipoExameCodigo?: string,
 ): DiagnosticoSecaoTemplate[] {
   const diagnosticos: DiagnosticoSecaoTemplate[] = [];
+  if (ehAgrupamentoB601(secao.repetir_para)) {
+    if (tipoExameCodigo !== 'B-601' || !secao.parent_id) diagnosticos.push({ tipo: 'erro', mensagem: 'A tabela conjunta deve ser uma subseção do exame B-601.' });
+    return diagnosticos;
+  }
+  if ((secao.repetir_para || '').startsWith('b601_pecas')) {
+    if (tipoExameCodigo !== 'B-601' || !getOpcoesRepeticaoTemplate(tipoExameCodigo).some(opcao => opcao.value === secao.repetir_para)) diagnosticos.push({ tipo: 'erro', mensagem: 'Selecione uma repetição válida do B-601.' });
+    if (!secao.parent_id) diagnosticos.push({ tipo: 'erro', mensagem: 'A repetição por peça precisa ficar dentro de uma seção principal.' });
+    if (!secao.repetir_titulo?.trim()) diagnosticos.push({ tipo: 'erro', mensagem: 'Informe o título de cada peça.' });
+    return diagnosticos;
+  }
 
   if (secao.repetir_para !== 'armas') {
     return diagnosticos;

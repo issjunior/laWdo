@@ -21,6 +21,9 @@ import { criarHtmlFigura } from '@/lib/figura-html';
 import { atualizarNumeroFigura } from '@/lib/figuras';
 import {
   aplicarRecuoPrimeiraLinha,
+  aplicarEspacamentoParagrafo,
+  obterEspacamentoSelecionado,
+  VALORES_ESPACAMENTO_PARAGRAFO,
   FORMATOS_LIMPEZA_EDITOR,
   limparFormatacaoEditor,
   obterRecuoSelecionado,
@@ -361,7 +364,7 @@ export function obterToolbarTinyMce(exibirControlesCondicionais: boolean, modoLa
     'bold italic underline strikethrough subscript superscript',
     'fonte fontsize forecolor backcolor removeformat',
     'align bullist numlist',
-    'outdent indent lineheight recuoprimeiralinha',
+    'outdent indent lineheight espacamentoparagrafo recuoprimeiralinha',
     'blockquote hr',
     'searchreplace pastetext visualblocks',
     `link ${modoLaudo ? 'inserirfiguralaudo' : 'image'} table charmap nonbreaking pagebreak fullscreen`,
@@ -885,6 +888,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             }
             [data-placeholder-preview-tabela="true"],
             [data-placeholder-tabela-personalizada="true"] {
+              font-family: Arial, Helvetica, sans-serif;
               position: relative;
               display: block;
               box-sizing: border-box;
@@ -920,6 +924,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               max-width: 100% !important;
             }
             .acao-tabela-placeholder {
+              font-family: Arial, Helvetica, sans-serif;
               display: inline-flex;
               align-items: center;
               justify-content: center;
@@ -967,6 +972,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             body.dark-content .cond-bloco {
               border-left-color: #d97706;
               background-color: rgba(245, 158, 11, 0.12);
+            }
+            body.dark-content [data-b601-grupo] th {
+              background-color: #374151 !important;
+            }
+            body.dark-content [data-b601-grupo] thead tr:first-child th[colspan] {
+              background-color: #4b5563 !important;
             }
             .cond-bloco[data-cond-suprimido="true"] {
               display: none !important;
@@ -1131,6 +1142,30 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   editor.on('NodeChange', sincronizar);
                   return () => editor.off('NodeChange', sincronizar);
                 },
+              }))),
+            });
+
+            editor.ui.registry.addMenuButton('espacamentoparagrafo', {
+              text: 'Espaçamento',
+              tooltip: 'Espaço antes e depois dos parágrafos',
+              fetch: callback => callback((['antes', 'depois'] as const).map(lado => ({
+                type: 'nestedmenuitem' as const,
+                text: lado === 'antes' ? 'Antes do parágrafo' : 'Depois do parágrafo',
+                getSubmenuItems: () => [undefined, ...VALORES_ESPACAMENTO_PARAGRAFO].map(valor => ({
+                  type: 'togglemenuitem' as const,
+                  text: valor === undefined ? 'Padrão do documento' : `${valor} pt`,
+                  onAction: () => aplicarEspacamentoParagrafo(editor, lado, valor),
+                  onSetup: (api: Ui.Menu.ToggleMenuItemInstanceApi) => {
+                    const sincronizar = () => {
+                      const estado = obterEspacamentoSelecionado(editor, lado);
+                      api.setEnabled(estado.disponivel);
+                      api.setActive(valor === undefined ? estado.padrao : !estado.padrao && estado.valorPt !== null && Math.abs(estado.valorPt - valor) < 0.1);
+                    };
+                    sincronizar();
+                    editor.on('NodeChange', sincronizar);
+                    return () => editor.off('NodeChange', sincronizar);
+                  },
+                })),
               }))),
             });
 

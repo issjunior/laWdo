@@ -1,4 +1,5 @@
 import * as React from "react"
+import { z } from "zod"
 import { createPortal } from "react-dom"
 import {
   ColumnFiltersState,
@@ -50,6 +51,10 @@ interface DataTableProps<TData extends RowData> {
   defaultSorting?: SortingState
   /** Habilita row pinning (fixar linhas no topo/base) com botão Pin/PinOff por linha */
   enableRowPinning?: boolean
+  chavePreferencias?: string
+  densidade?: "compacta" | "confortavel"
+  preencherAltura?: boolean
+  fixarPrimeiraColuna?: boolean
   /** Elemento externo onde o controle de colunas deve aparecer */
   destinoControleColunas?: HTMLElement | null
 }
@@ -63,13 +68,50 @@ export function DataTable<TData extends RowData>({
   hideSearch = false,
   defaultSorting = [],
   enableRowPinning = false,
+  chavePreferencias,
+  densidade = "confortavel",
+  preencherAltura = false,
+  fixarPrimeiraColuna = false,
   destinoControleColunas = null,
 }: DataTableProps<TData>) {
-  const [sorting, setSorting] = React.useState<SortingState>(defaultSorting)
+  const [preferencias] = React.useState(() => {
+    if (!chavePreferencias) return null
+    try {
+      const salvo: unknown = JSON.parse(localStorage.getItem(chavePreferencias) ?? "null")
+      const validacao = z.object({
+        ordenacao: z.array(z.object({ id: z.string(), desc: z.boolean() })).max(columns.length),
+        visibilidade: z.record(z.string(), z.boolean()),
+      }).safeParse(salvo)
+      if (!validacao.success) return null
+      const colunasPermitidas = new Map(columns.map(coluna => [
+        coluna.id ?? ("accessorKey" in coluna ? String(coluna.accessorKey) : ""), coluna,
+      ]))
+      const ordenacao = validacao.data.ordenacao.filter(item => colunasPermitidas.has(item.id))
+      const visibilidade = Object.fromEntries(Object.entries(validacao.data.visibilidade).filter(([id]) =>
+        colunasPermitidas.has(id) && colunasPermitidas.get(id)?.enableHiding !== false
+      ))
+      return {
+        ordenacao: validacao.data.ordenacao.length > 0 && ordenacao.length === 0 ? defaultSorting : ordenacao,
+        visibilidade: { ...initialColumnVisibility, ...visibilidade },
+      }
+    } catch {
+      return null
+    }
+  })
+  const [sorting, setSorting] = React.useState<SortingState>(preferencias?.ordenacao ?? defaultSorting)
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>(initialColumnVisibility)
+  const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>(preferencias?.visibilidade ?? initialColumnVisibility)
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [rowPinning, setRowPinning] = React.useState<RowPinningState>({ top: [], bottom: [] })
+
+  React.useEffect(() => {
+    if (!chavePreferencias) return
+    try {
+      localStorage.setItem(chavePreferencias, JSON.stringify({ ordenacao: sorting, visibilidade: columnVisibility }))
+    } catch {
+      // O armazenamento indisponível não impede o uso da tabela na sessão atual.
+    }
+  }, [chavePreferencias, sorting, columnVisibility])
 
   const table = useTable({
     features: recursosTabela,
@@ -132,9 +174,9 @@ export function DataTable<TData extends RowData>({
   )
 
   return (
-    <div className="space-y-4">
+    <div data-densidade={densidade} className={preencherAltura ? "flex min-h-0 min-w-0 flex-1 flex-col gap-2" : "space-y-4"}>
       {(!hideSearch || !destinoControleColunas) && (
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           {!hideSearch && (
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -152,9 +194,13 @@ export function DataTable<TData extends RowData>({
       {destinoControleColunas && createPortal(controleColunas, destinoControleColunas)}
 
       {/* Tabela */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
+      <div className={preencherAltura ? "min-h-0 flex-1 overflow-hidden rounded-md border" : "rounded-md border"}>
+        <Table containerClassName={preencherAltura ? "h-full overscroll-contain" : undefined}
+          className={[
+            densidade === "compacta" ? "[&_td]:px-3 [&_td]:py-2 [&_th]:h-9 [&_th]:px-3" : "",
+            fixarPrimeiraColuna ? "min-w-[54rem] [&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:z-10 [&_td:first-child]:bg-card [&_td:first-child]:transition-colors [&_tr:hover_td:first-child]:bg-[color-mix(in_srgb,hsl(var(--muted))_50%,hsl(var(--card)))] [&_tr[data-state=selected]_td:first-child]:bg-muted [&_th:first-child]:left-0 [&_th:first-child]:z-30" : "",
+          ].join(" ")}>
+          <TableHeader className={preencherAltura ? "[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card" : undefined}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {enableRowPinning && <TableHead className="w-10" />}

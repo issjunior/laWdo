@@ -1,3 +1,4 @@
+import { codigosFalhaListaRepsGdl, etapasFalhaListaRepsGdl, codigosSistemaFalhaGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import { appendFile, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -36,6 +37,20 @@ export function sanitizarDadosDiagnostico(valor: unknown, profundidade = 0): unk
       ]));
   }
   return String(valor);
+}
+
+
+export function normalizarFalhaDiagnosticoGdl(valor: unknown) {
+  if (!valor || typeof valor !== 'object' || !('codigo' in valor)) return undefined;
+  const codigo = codigosFalhaListaRepsGdl.find(item => item === valor.codigo);
+  if (!codigo) return undefined;
+  const etapa = 'etapa' in valor ? etapasFalhaListaRepsGdl.find(item => item === valor.etapa) : undefined;
+  const codigoSistema = 'codigoSistema' in valor ? codigosSistemaFalhaGdl.find(item => item === valor.codigoSistema) : undefined;
+  const statusHttp = 'statusHttp' in valor && typeof valor.statusHttp === 'number' && Number.isInteger(valor.statusHttp) && valor.statusHttp >= 100 && valor.statusHttp <= 599 ? valor.statusHttp : undefined;
+  const referencia = 'referencia' in valor && typeof valor.referencia === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(valor.referencia) ? valor.referencia : undefined;
+  const tentarNovamenteEmSegundos = 'tentarNovamenteEmSegundos' in valor && typeof valor.tentarNovamenteEmSegundos === 'number' && Number.isInteger(valor.tentarNovamenteEmSegundos) && valor.tentarNovamenteEmSegundos >= 1 && valor.tentarNovamenteEmSegundos <= 60 ? valor.tentarNovamenteEmSegundos : undefined;
+  const bloqueioTemporario = 'bloqueioTemporario' in valor && valor.bloqueioTemporario === true && tentarNovamenteEmSegundos !== undefined ? true : undefined;
+  return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos };
 }
 
 export class DiagnosticoEventosService {

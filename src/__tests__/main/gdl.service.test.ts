@@ -1,3 +1,4 @@
+import { classificarFalhaListaRepsGdl } from '../../main/services/gdl-minhas-reps-erro.service';
 import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
@@ -649,4 +650,32 @@ it('não confirma outra REP do mesmo caso e pagina a busca por identidade exata'
   expect(resultado.statusRep).toBeUndefined();
   expect(resultado.naturezaExame).toBeUndefined();
   expect(corposInvestigacao.some(corpo => JSON.parse(corpo).numPagina === 2)).toBe(true);
+});
+
+describe('causa original na autenticação web', () => {
+  it.each([
+    ['ECONNREFUSED', 'rede'], ['ENOTFOUND', 'rede'], ['ETIMEDOUT', 'tempo_esgotado'],
+  ])('preserva %s e o bloqueio posterior sem outra chamada de rede', async (code, codigo) => {
+    const original = Object.assign(new Error('Falha no transporte'), { code });
+    const requisicao = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed', { cause: original }));
+    const credenciais = { baseUrl, login: `falha-${code}`, senha: `teste-${sequenciaTeste}` };
+    try {
+      let capturado: unknown;
+      try { await listarPaginaMinhasRepsGdl(credenciais, 1, () => undefined); } catch (erro) { capturado = erro; }
+      expect(classificarFalhaListaRepsGdl(capturado)).toMatchObject({ codigo, codigoSistema: code, etapa: 'carregar_formulario' });
+      const chamadas = requisicao.mock.calls.length;
+      try { await listarPaginaMinhasRepsGdl(credenciais, 1, () => undefined); } catch (erro) { capturado = erro; }
+      expect(classificarFalhaListaRepsGdl(capturado)).toMatchObject({ codigo, codigoSistema: code, bloqueioTemporario: true, tentarNovamenteEmSegundos: expect.any(Number) });
+      expect(requisicao.mock.calls).toHaveLength(chamadas);
+    } finally { requisicao.mockRestore(); }
+  });
+
+  it.each([[401, 'autenticacao'], [503, 'servidor'], [504, 'tempo_esgotado']])('classifica HTTP %i recebido ao abrir o formulário', async (status, codigo) => {
+    const requisicao = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('indisponível', { status }));
+    try {
+      let capturado: unknown;
+      try { await listarPaginaMinhasRepsGdl({ baseUrl, login: `http-${status}`, senha: `teste-${sequenciaTeste}` }, 1, () => undefined); } catch (erro) { capturado = erro; }
+      expect(classificarFalhaListaRepsGdl(capturado)).toMatchObject({ codigo, statusHttp: status, etapa: 'carregar_formulario' });
+    } finally { requisicao.mockRestore(); }
+  });
 });

@@ -10,6 +10,8 @@
 
 `users.forma_tratamento` é `masculino` ou `feminino`, com padrão masculino na migration v41 e no cadastro. O login transporta a escolha pela sessão local validada; `obterFormasPerito()` deriva `perito_cargo`, `perito_artigo`, `perito_titulo`, `perito_designado`, `perito_pelo` e `perito_qual`. O cargo conhecido alterna Perito/Perita ou Técnico/Técnica; cargo desconhecido permanece literal. O mapa de exportação e as prévias de templates e cabeçalhos usam essas formas. O texto livre não recebe flexão automática; a concordância depende de placeholders escritos no modelo. `perito-tratamento.test.ts` e `exportacao-placeholders.test.ts` cobrem os dois valores.
 
+`obterFormasPerito()` vive em `src/shared/utils/perito-tratamento.ts`; o módulo do renderer reexporta o contrato. Cabeçalhos e fechamento de laudos resolvem primeiro os valores de `apresentacao_json.perito`, capturados pelo main na criação, usando nós de texto para preservar escape HTML. Os demais placeholders dessas regiões usam o contexto atual da REP. Essa cópia não congela a identidade nos placeholders do corpo: `buildPlaceholderMapping()` continua lendo o perito da sessão. Prévias de templates e da configuração usam o perfil atual.
+
 ### Placeholders personalizados
 
 O contexto de resolução recebe os placeholders personalizados cadastrados, com chave e valor padrão. Eles entram primeiro no mapa para estarem disponíveis em editor, IA, preview e exportação; chaves conhecidas da REP, do perito ou calculadas pelo B-602 são preenchidas depois e têm precedência. Chave vazia é ignorada e valor padrão ausente torna-se texto vazio, preservando o comportamento de `XXX` para placeholder não preenchido.
@@ -27,11 +29,21 @@ A escrita canônica no editor é `<div data-quebra-pagina="true" style="break-af
 
 Parágrafos `<p>` sem `text-align` explícito recebem `justify` no documento canônico, exceto dentro de tabelas e figuras; títulos e alinhamentos manuais mantêm seu valor. As folhas de impressão de PDF e preview aplicam o mesmo padrão, sem alterar o HTML salvo. DOCX consome o alinhamento canônico e ODT deriva dele. `exportacao-parser.test.ts` protege essa precedência.
 
-A validação no processo principal rejeita documentos fora desse contrato antes da geração. Não é uma fronteira IPC permissiva: dados inválidos não seguem para os conversores.
+A validação `documentoValido()` no processo principal confere versão, fonte, tamanho e a estrutura básica dos blocos de `secoes` antes de gerar DOCX/ODT. Ela não valida profundamente todos os estilos/conteúdos aninhados e atualmente não verifica o campo opcional `fechamento`; o tipo TypeScript não substitui essa validação em runtime. O fechamento produzido pelo renderer é separado pelo parser, mas não deve ser considerado validado contra payload IPC arbitrário pelo main.
 
 ### Tabelas no documento canônico
 
 `exportacao-parser.ts` transforma texto direto e formatação inline de `<td>`/`<th>` em parágrafos da célula, preserva blocos mistos na ordem e representa `<caption>` como parágrafo antes da tabela. DOCX consome esse documento canônico; ODT converte o DOCX gerado pelo mesmo caminho. Por isso, texto de células não pode depender de um `<p>` explícito no HTML.
+
+## Cabeçalho, fechamento e margens de parágrafo
+
+`LaudosPage.tsx` monta cabeçalho da primeira página, corpo resolvido e fechamento nessa ordem, usando a apresentação preservada. DOCX/ODT recebem o cabeçalho inicial no próprio corpo canônico, sem a antiga duplicação por `params.cabecalho` nesse fluxo. O parser expande o wrapper `.cabecalho` e separa imagens dentro de parágrafos, preservando texto formatado antes/depois e a ordem. O cabeçalho repetido `headerTemplate`, com contador Chromium, pertence ao caminho PDF; não é enviado como cabeçalho repetido nativo nesse fluxo de DOCX/ODT.
+
+`DocumentoExportacao` mantém versão 1 e aceita `fechamento?: { blocos, espacamentoAntesPt }`. O parser extrai o primeiro wrapper `data-laudo-fechamento="true"`, retira-o das seções comuns e limita o espaçamento lido a 0–300 pt, usando zero para valor não finito. `gerarDOCXCanonico()` acrescenta esses blocos depois das seções em uma única célula de tabela sem bordas, com `cantSplit` na linha e margem superior da célula em twips. Isso pede que o conversor mantenha o fechamento junto quando couber em uma página; não constitui garantia para conteúdo maior que a área imprimível. ODT deriva desse DOCX via LibreOffice. No PDF o wrapper permanece no fluxo com quebra interna evitada.
+
+O fechamento desativado ou vazio não é acrescentado nem reserva espaço. Ele é externo ao HTML editado do laudo e aparece uma única vez na composição automática; texto de fechamento já existente no template/corpo continua presente, podendo duplicar o resultado. A menção de assinatura digital no modelo é somente visual.
+
+`parseHtmlParaEstrutura()` lê `marginTop`/`marginBottom` pelo estilo do DOM, inclusive a expansão de `margin`, e converte pt, px, cm, mm e in com `medidas-texto.ts`. Margem ausente permanece `undefined`; zero explícito permanece zero. A geração DOCX testa presença em vez de truthiness e grava `w:before`/`w:after` em twips, sem modificar a altura da linha. Essas regras também afetam os parágrafos do fechamento.
 
 ## Regras de saída
 
@@ -59,3 +71,5 @@ Na exportação, o buffer completo é gravado em arquivo temporário no diretór
 ## Verificação
 
 `exportacao-parser.test.ts` cobre `text-indent`, quebra de página, caption, texto direto e blocos mistos em células. `exportacao-docx-canonica.test.ts` inspeciona o XML de DOCX e ODT para garantir texto de tabela, além de `w:firstLine` e `w:type="page"`; a conversão ODT depende de LibreOffice disponível. `exportacao-placeholders.test.ts` cobre o fallback/precedência de `data_extenso_recebimento_rep` e o valor padrão de placeholder personalizado. Os demais testes de exportação cobrem placeholders B-602, tabelas, valores ausentes, blocos suprimidos e preenchimento de blocos periciais vazios.
+
+`apresentacao-laudo.test.ts` cobre ordem, ativação, dados preservados, fechamento vazio e imagens/texto de cabeçalho. `exportacao-parser.test.ts` cobre margens abreviadas, pixels, zero e ausência; `exportacao-docx-canonica.test.ts` confere margens explícitas, entrelinha e a linha indivisível sem bordas do fechamento no XML. A paginação final e a conversão ODT dependem dos motores de impressão/conversão e de validação visual.

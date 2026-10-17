@@ -1,10 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor,
-  useSensor, useSensors, type DragEndEvent,
-} from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   Bar,
   BarChart,
@@ -21,15 +16,20 @@ import {
   AlertTriangle,
   BarChart3,
   CalendarSearch,
-  ChevronDown,
+  ArrowLeft,
   Clock3,
   ExternalLink,
-  GripVertical,
   RefreshCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -40,7 +40,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import logo from '@/assets/logo.png';
 import { GdlMinhasRepsDashboard } from '@/components/rep/GdlMinhasRepsDashboard';
 import type {
   DashboardConsultaLaudosEntrada,
@@ -53,20 +52,21 @@ import type {
   DashboardResumo,
   DashboardTipoDataConsulta,
 } from '../../types/dashboard.js';
-
 type Resposta<T> = { success: boolean; data?: T; error?: string };
 type TipoGrafico = 'barras' | 'rosca' | 'empilhado';
-type SecaoDashboard = 'situacao' | 'cronologia' | 'producao' | 'repsGdl';
-type SecoesExpandidas = Record<SecaoDashboard, boolean>;
+type ModalDashboard = 'situacao' | 'cronologia' | 'producao';
+const VALIDADE_PRODUCAO_MS = 10 * 60 * 1000;
 const CHAVE_GRAFICO = 'dashboard_tipo_grafico';
-const CHAVE_SECOES = 'dashboard_secoes_expandidas';
-const CHAVE_ORDEM_SECOES = 'dashboard_ordem_secoes';
-const ordemPadrao: SecaoDashboard[] = ['situacao', 'repsGdl', 'cronologia', 'producao'];
-const titulosSecoes: Record<SecaoDashboard, string> = {
-  situacao: 'Situação atual', repsGdl: 'REPs disponíveis no GDL',
-  cronologia: 'Consulta cronológica', producao: 'Produção de laudos',
+const titulosModais: Record<ModalDashboard, string> = {
+  situacao: 'Situação atual',
+  cronologia: 'Consulta cronológica',
+  producao: 'Produção de laudos',
 };
-const secoesPadrao: SecoesExpandidas = { situacao: false, cronologia: false, producao: false, repsGdl: false };
+const descricoesModais: Record<ModalDashboard, string> = {
+  situacao: 'Distribuição das REPs e laudos por status.',
+  cronologia: 'Consulte laudos por período ou acompanhe a cronologia de um laudo.',
+  producao: 'Tempos de conclusão por natureza de exame, em dias corridos.',
+};
 const cores = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -78,52 +78,6 @@ const numero = (valor: unknown) =>
   Number.isFinite(Number(valor)) ? Math.max(0, Math.round(Number(valor))) : 0;
 const registro = (valor: unknown): valor is Record<string, unknown> =>
   typeof valor === 'object' && valor !== null;
-const obterSecoesExpandidas = (): SecoesExpandidas => {
-  try {
-    const valor: unknown = JSON.parse(window.localStorage.getItem(CHAVE_SECOES) ?? '');
-    if (!registro(valor)) return secoesPadrao;
-    return {
-      situacao: typeof valor.situacao === 'boolean' ? valor.situacao : secoesPadrao.situacao,
-      cronologia:
-        typeof valor.cronologia === 'boolean' ? valor.cronologia : secoesPadrao.cronologia,
-      producao: typeof valor.producao === 'boolean' ? valor.producao : secoesPadrao.producao,
-      repsGdl: typeof valor.repsGdl === 'boolean' ? valor.repsGdl : secoesPadrao.repsGdl,
-    };
-  } catch {
-    return secoesPadrao;
-  }
-};
-const obterOrdemSecoes = (): SecaoDashboard[] => {
-  try {
-    const valor: unknown = JSON.parse(window.localStorage.getItem(CHAVE_ORDEM_SECOES) ?? '');
-    if (!Array.isArray(valor)) return ordemPadrao;
-    const validas = valor.filter((secao): secao is SecaoDashboard =>
-      typeof secao === 'string' && ordemPadrao.some(item => item === secao));
-    return [...new Set(validas), ...ordemPadrao.filter(secao => !validas.includes(secao))];
-  } catch {
-    return ordemPadrao;
-  }
-};
-
-function SecaoOrdenavel({ id, children }: { id: SecaoDashboard; children: (alca: ReactNode) => ReactNode }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({ id });
-  return (
-    <div ref={setNodeRef} className={isDragging ? 'opacity-50' : ''} data-secao-dashboard={id}>
-      {children(<Button
-        ref={setActivatorNodeRef}
-        variant="ghost"
-        size="icon"
-        className="shrink-0 cursor-grab touch-none"
-        aria-label={`Reordenar ${titulosSecoes[id]}`}
-        title={`Arraste para reordenar ${titulosSecoes[id]}`}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </Button>)}
-    </div>
-  );
-}
 const dataOpcional = (valor: unknown) => (typeof valor === 'string' && valor ? valor : null);
 const normalizarResumo = (valor: unknown): DashboardResumo => {
   const dados = registro(valor) ? valor : {};
@@ -259,7 +213,6 @@ const descreverPeriodo = (dataInicial?: string, dataFinal?: string) => {
   if (dataFinal) return `até ${formatarDia(dataFinal)}`;
   return 'todo o período';
 };
-
 function GraficoStatus({
   titulo,
   dados,
@@ -367,7 +320,6 @@ function GraficoStatus({
     </Card>
   );
 }
-
 export function DashboardPage() {
   const navegar = useNavigate();
   const [resumo, setResumo] = useState<DashboardResumo | null>(null);
@@ -398,15 +350,12 @@ export function DashboardPage() {
     DashboardProducaoLaudosResultado['natureza'][]
   >([]);
   const [filtrosProducao, setFiltrosProducao] = useState<DashboardProducaoLaudosEntrada>({});
-  const [secoesExpandidas, setSecoesExpandidas] = useState<SecoesExpandidas>(() =>
-    obterSecoesExpandidas()
-  );
-  const [ordemSecoes, setOrdemSecoes] = useState<SecaoDashboard[]>(() => obterOrdemSecoes());
-  const [secaoArrastada, setSecaoArrastada] = useState<SecaoDashboard | null>(null);
-  const sensores = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const [filtrosProducaoAplicados, setFiltrosProducaoAplicados] = useState<DashboardProducaoLaudosEntrada>({});
+  const [ultimaAtualizacaoProducao, setUltimaAtualizacaoProducao] = useState<number | null>(null);
+  const [proximaAtualizacaoProducao, setProximaAtualizacaoProducao] = useState<number | null>(null);
+  const producaoEmConsulta = useRef(false);
+  const [modalAberto, setModalAberto] = useState<ModalDashboard | null>(null);
+  const [abaConsulta, setAbaConsulta] = useState('periodo');
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
@@ -421,6 +370,8 @@ export function DashboardPage() {
     }
   }, []);
   const carregarProducao = useCallback(async (entrada: DashboardProducaoLaudosEntrada = {}) => {
+    if (producaoEmConsulta.current) return;
+    producaoEmConsulta.current = true;
     setCarregandoProducao(true);
     setErroProducao(null);
     try {
@@ -429,6 +380,8 @@ export function DashboardPage() {
         throw new Error(resposta.error || 'Erro ao consultar produção de laudos');
       const dados = normalizarProducao(resposta.data);
       setProducao(dados);
+      setFiltrosProducaoAplicados(entrada);
+      setUltimaAtualizacaoProducao(Date.now());
       if (!entrada.tipoExameId && !entrada.dataInicial && !entrada.dataFinal) {
         setNaturezasProducao(dados.map(item => item.natureza));
       }
@@ -437,13 +390,22 @@ export function DashboardPage() {
         error instanceof Error ? error.message : 'Erro ao consultar produção de laudos'
       );
     } finally {
+      producaoEmConsulta.current = false;
+      setProximaAtualizacaoProducao(Date.now() + VALIDADE_PRODUCAO_MS);
       setCarregandoProducao(false);
     }
   }, []);
+  useEffect(() => { void carregar(); }, [carregar]);
   useEffect(() => {
-    void carregar();
-    void carregarProducao();
-  }, [carregar, carregarProducao]);
+    if (modalAberto !== 'producao' || carregandoProducao) return;
+    const restante = (proximaAtualizacaoProducao ?? Date.now()) - Date.now();
+    if (restante <= 0) {
+      void carregarProducao(filtrosProducaoAplicados);
+      return;
+    }
+    const temporizador = setTimeout(() => void carregarProducao(filtrosProducaoAplicados), restante);
+    return () => clearTimeout(temporizador);
+  }, [modalAberto, carregandoProducao, proximaAtualizacaoProducao, filtrosProducaoAplicados, carregarProducao]);
   const consultar = async (pagina = 1) => {
     setConsultando(true);
     setErroConsulta(null);
@@ -482,10 +444,18 @@ export function DashboardPage() {
   };
   const abrirCronologia = async (laudoId: string) => {
     setErroCronologia(null);
-    const resposta = (await window.ipcAPI.dashboard.cronologiaLaudo(laudoId)) as Resposta<unknown>;
-    const dados = resposta.success ? normalizarCronologia(resposta.data) : null;
-    if (dados) setCronologia(dados);
-    else setErroCronologia(resposta.error || 'Não foi possível carregar a cronologia do laudo');
+    try {
+      const resposta = (await window.ipcAPI.dashboard.cronologiaLaudo(
+        laudoId
+      )) as Resposta<unknown>;
+      const dados = resposta.success ? normalizarCronologia(resposta.data) : null;
+      if (dados) setCronologia(dados);
+      else setErroCronologia(resposta.error || 'Não foi possível carregar a cronologia do laudo');
+    } catch (falha: unknown) {
+      setErroCronologia(
+        falha instanceof Error ? falha.message : 'Não foi possível carregar a cronologia do laudo'
+      );
+    }
   };
   const selecionarGrafico = (status: string, rota: '/reps' | '/laudos') =>
     navegar(`${rota}?status=${encodeURIComponent(status)}`);
@@ -521,563 +491,485 @@ export function DashboardPage() {
     setTipoGrafico(valor);
     window.localStorage.setItem(CHAVE_GRAFICO, valor);
   };
-  const alternarSecao = (secao: SecaoDashboard) => {
-    const proximas = { ...secoesExpandidas, [secao]: !secoesExpandidas[secao] };
-    window.localStorage.setItem(CHAVE_SECOES, JSON.stringify(proximas));
-    setSecoesExpandidas(proximas);
+  const voltarConsulta = () => {
+    setCronologia(null);
+    setGraficoConsultaAberto(false);
   };
-  const concluirReordenacao = (evento: DragEndEvent) => {
-    setSecaoArrastada(null);
-    if (!evento.over || evento.active.id === evento.over.id) return;
-    const origem = ordemSecoes.indexOf(evento.active.id as SecaoDashboard);
-    const destino = ordemSecoes.indexOf(evento.over.id as SecaoDashboard);
-    if (origem < 0 || destino < 0) return;
-    const proxima = arrayMove(ordemSecoes, origem, destino);
-    setOrdemSecoes(proxima);
-    window.localStorage.setItem(CHAVE_ORDEM_SECOES, JSON.stringify(proxima));
-  };
-  if (carregando) return <div className="p-6 text-muted-foreground">Carregando dashboard...</div>;
-  if (erro)
-    return (
-      <Card className="m-6 border-destructive">
-        <CardContent className="flex items-center gap-3 p-6">
-          <AlertTriangle />
-          <span>{erro}</span>
-          <Button variant="outline" onClick={() => void carregar()}>
-            <RefreshCcw />
-            Tentar novamente
+  const tituloModal =
+    modalAberto === 'cronologia' && cronologia
+      ? `Cronologia — REP ${cronologia.laudo.repNumero}`
+      : modalAberto === 'cronologia' && graficoConsultaAberto
+        ? 'Distribuição por status'
+        : modalAberto
+          ? titulosModais[modalAberto]
+          : '';
+  return (
+    <div className="@container flex h-full min-h-[34rem] min-w-0 flex-col gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setModalAberto('situacao')}>
+            <BarChart3 />
+            Situação atual
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setModalAberto('cronologia')}>
+            <CalendarSearch />
+            Consulta cronológica
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setModalAberto('producao')}>
+            <Clock3 />
+            Produção de laudos
+          </Button>
+        </div>
+      </div>
+      <section aria-label="Prioridades operacionais" aria-busy={carregando} className="shrink-0">
+        {carregando ? (
+          <p role="status" className="py-3 text-sm text-muted-foreground">
+            Carregando indicadores...
+          </p>
+        ) : erro ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 p-3 text-sm"
+          >
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <span>{erro}</span>
+            <Button variant="outline" size="sm" onClick={() => void carregar()}>
+              <RefreshCcw />
+              Tentar novamente
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 @min-[56rem]:grid-cols-4">
+            {prioridades.map(item => (
+              <Button
+                key={item.rota}
+                variant="outline"
+                onClick={() => navegar(item.rota)}
+                className="h-auto min-w-0 justify-start gap-3 whitespace-normal px-3 py-2.5 text-left"
+              >
+                <span className="shrink-0 text-2xl font-semibold tabular-nums">{item.total}</span>{' '}
+                <span className="text-xs font-normal text-muted-foreground">{item.titulo}</span>
+              </Button>
+            ))}
+          </div>
+        )}
+      </section>
+      <Card className="flex min-h-96 min-w-0 flex-1 flex-col has-[[role=alert]]:min-h-[32rem]">
+        <CardHeader className="shrink-0 px-4 pb-2 pt-4">
+          <CardTitle>REPs disponíveis no GDL</CardTitle>
+        </CardHeader>
+        <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col px-4 pb-3">
+          <GdlMinhasRepsDashboard />
         </CardContent>
       </Card>
-    );
-  return (
-    <div className="relative isolate min-h-full overflow-hidden">
-      <img
-        src={logo}
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 z-0 w-[min(42rem,72vw)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.035] grayscale dark:opacity-[0.06]"
-      />
-      <div className="container relative z-10 mx-auto space-y-3 p-3 md:p-4">
-        <DndContext
-          sensors={sensores}
-          collisionDetection={closestCenter}
-          onDragStart={evento => setSecaoArrastada(evento.active.id as SecaoDashboard)}
-          onDragCancel={() => setSecaoArrastada(null)}
-          onDragEnd={concluirReordenacao}
-        >
-          <SortableContext items={ordemSecoes} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3">
-              {ordemSecoes.map(secao => (
-                <SecaoOrdenavel key={secao} id={secao}>
-                  {alca => (<>
-                  {secao === 'situacao' && (
-        <Card>
-          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
-            <div className="space-y-0.5">
-              <CardTitle className="flex gap-2">
-                <BarChart3 />
-                Situação atual
-              </CardTitle>
-              <CardDescription>
-                Status das REPs e laudos, com prioridades operacionais.
-              </CardDescription>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {alca}
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={secoesExpandidas.situacao}
-              onClick={() => alternarSecao('situacao')}
-            >
-              {secoesExpandidas.situacao ? 'Recolher' : 'Expandir'}
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${secoesExpandidas.situacao ? 'rotate-180' : ''}`}
-              />
-            </Button>
-            </div>
-          </CardHeader>
-          {secoesExpandidas.situacao && (
-            <CardContent className="space-y-3 p-4 pt-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="tipo-grafico">Visualização</Label>
-                <Select
-                  value={tipoGrafico}
-                  onValueChange={valor => mudarGrafico(valor as TipoGrafico)}
-                >
-                  <SelectTrigger id="tipo-grafico" className="h-9 w-52">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="barras">Barras horizontais</SelectItem>
-                    <SelectItem value="rosca">Rosca</SelectItem>
-                    <SelectItem value="empilhado">Barras empilhadas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <GraficoStatus
-                  titulo="Status das REPs"
-                  dados={resumo?.repsPorStatus ?? []}
-                  tipo={tipoGrafico}
-                  aoSelecionar={status => selecionarGrafico(status, '/reps')}
-                />
-                <GraficoStatus
-                  titulo="Status dos laudos"
-                  dados={resumo?.laudosPorStatus ?? []}
-                  tipo={tipoGrafico}
-                  aoSelecionar={status => selecionarGrafico(status, '/laudos')}
-                />
-              </div>
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                {prioridades.map(item => (
-                  <button
-                    key={item.titulo}
-                    type="button"
-                    onClick={() => navegar(item.rota)}
-                    className="rounded-lg border bg-card p-3 text-left transition-colors hover:bg-accent"
-                  >
-                    <p className="text-2xl font-bold">{item.total}</p>
-                    <p className="text-sm text-muted-foreground">{item.titulo}</p>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          )}
-        </Card>
-                  )}
-                  {secao === 'repsGdl' && (
-        <Card>
-          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
-            <div className="space-y-0.5">
-              <CardTitle>REPs disponíveis no GDL</CardTitle>
-              <CardDescription>Consulte e importe REPs designadas para você.</CardDescription>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {alca}
-            <Button variant="ghost" size="sm" aria-expanded={secoesExpandidas.repsGdl} onClick={() => alternarSecao('repsGdl')}>
-              {secoesExpandidas.repsGdl ? 'Recolher' : 'Expandir'}
-              <ChevronDown className={`h-4 w-4 transition-transform ${secoesExpandidas.repsGdl ? 'rotate-180' : ''}`} />
-            </Button>
-            </div>
-          </CardHeader>
-          {secoesExpandidas.repsGdl && <CardContent className="p-4 pt-0"><GdlMinhasRepsDashboard /></CardContent>}
-        </Card>
-                  )}
-                  {secao === 'cronologia' && (
-        <Card>
-          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
-            <div className="space-y-0.5">
-              <CardTitle className="flex gap-2">
-                <CalendarSearch />
-                Consulta cronológica
-              </CardTitle>
-              <CardDescription>
-                Por período, com a distribuição de todos os resultados filtrados.
-              </CardDescription>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {alca}
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={secoesExpandidas.cronologia}
-              onClick={() => alternarSecao('cronologia')}
-            >
-              {secoesExpandidas.cronologia ? 'Recolher' : 'Expandir'}
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${secoesExpandidas.cronologia ? 'rotate-180' : ''}`}
-              />
-            </Button>
-            </div>
-          </CardHeader>
-          {secoesExpandidas.cronologia && (
-            <CardContent className="p-4 pt-0">
-              <Tabs defaultValue="periodo">
-                <TabsList>
-                  <TabsTrigger value="periodo">Por período</TabsTrigger>
-                  <TabsTrigger value="laudo">Por laudo</TabsTrigger>
-                </TabsList>
-                <TabsContent value="periodo" className="space-y-4">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(14rem,0.7fr)_minmax(28rem,1.3fr)]">
-                    <Card className="border-border/80 bg-muted/20 shadow-none">
-                      <CardContent className="space-y-2 p-4">
-                        <Label htmlFor="busca-cronologica">Busca</Label>
-                        <Input
-                          id="busca-cronologica"
-                          placeholder="REP, código ou natureza"
-                          value={filtros.busca ?? ''}
-                          onChange={evento =>
-                            setFiltros({ ...filtros, busca: evento.target.value })
-                          }
-                        />
-                      </CardContent>
-                    </Card>
-                    <Card className="border-primary/20 bg-accent/30 shadow-none">
-                      <CardContent className="grid gap-3 p-4 md:grid-cols-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="marco-cronologico">Marco consultado</Label>
-                          <Select
-                            value={filtros.tipoData}
-                            onValueChange={valor =>
-                              setFiltros({
-                                ...filtros,
-                                tipoData: valor as DashboardTipoDataConsulta,
-                              })
-                            }
-                          >
-                            <SelectTrigger id="marco-cronologico">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="criacao">Criação</SelectItem>
-                              <SelectItem value="alteracao">Alteração</SelectItem>
-                              <SelectItem value="conclusao">Conclusão</SelectItem>
-                              <SelectItem value="entrega">Entrega/envio</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="inicio-cronologico">Data inicial</Label>
-                          <Input
-                            id="inicio-cronologico"
-                            type="date"
-                            value={filtros.dataInicial ?? ''}
-                            onChange={evento =>
-                              setFiltros({
-                                ...filtros,
-                                dataInicial: evento.target.value || undefined,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="fim-cronologico">Data final</Label>
-                          <Input
-                            id="fim-cronologico"
-                            type="date"
-                            value={filtros.dataFinal ?? ''}
-                            onChange={evento =>
-                              setFiltros({
-                                ...filtros,
-                                dataFinal: evento.target.value || undefined,
-                              })
-                            }
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                  <Button onClick={() => void consultar()} disabled={consultando}>
-                    {consultando ? 'Consultando...' : 'Consultar'}
-                  </Button>
-                  {erroConsulta && <p className="text-sm text-destructive">{erroConsulta}</p>}
-                  {consulta && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground">
-                          {consulta.total} resultado(s)
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={consulta.total === 0}
-                          onClick={() => setGraficoConsultaAberto(true)}
-                        >
-                          Gerar gráfico
-                        </Button>
-                      </div>
-                      {consulta.itens.length ? (
-                        consulta.itens.map(item => (
-                          <button
-                            type="button"
-                            key={item.id}
-                            onClick={() => void abrirCronologia(item.id)}
-                            className="flex w-full justify-between rounded border p-3 text-left hover:bg-accent"
-                          >
-                            <span>
-                              REP {item.repNumero} · {item.tipoExameNome}
-                            </span>
-                            <span>
-                              {item.status} · {formatarData(item.dataOrdenacao)}
-                            </span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="rounded border border-dashed p-4 text-sm text-muted-foreground">
-                          Nenhum laudo encontrado para os filtros informados.
-                        </p>
-                      )}
-                      {consulta.total > consulta.tamanhoPagina && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            disabled={consulta.pagina === 1}
-                            onClick={() => void consultar(consulta.pagina - 1)}
-                          >
-                            Anterior
-                          </Button>
-                          <Button
-                            variant="outline"
-                            disabled={consulta.pagina * consulta.tamanhoPagina >= consulta.total}
-                            onClick={() => void consultar(consulta.pagina + 1)}
-                          >
-                            Próxima
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </TabsContent>
-                <TabsContent value="laudo" className="space-y-4">
-                  <div className="flex gap-3 rounded-lg border border-primary/20 bg-accent/30 p-4">
-                    <Input
-                      placeholder="Número da REP, código ou natureza"
-                      value={buscaLaudo}
-                      onChange={evento => setBuscaLaudo(evento.target.value)}
-                    />
-                    <Button
-                      disabled={!buscaLaudo.trim() || consultando}
-                      onClick={() => void consultarPorLaudo()}
-                    >
-                      {consultando ? 'Buscando...' : 'Buscar laudo'}
-                    </Button>
-                    {erroConsulta && <p className="text-sm text-destructive">{erroConsulta}</p>}
-                  </div>
-                  {resultadoBuscaLaudo && (
-                    <div className="space-y-2">
-                      {resultadoBuscaLaudo.itens.length ? (
-                        resultadoBuscaLaudo.itens.map(item => (
-                          <button
-                            type="button"
-                            key={item.id}
-                            onClick={() => void abrirCronologia(item.id)}
-                            className="flex w-full justify-between rounded border p-3 text-left transition-colors hover:bg-accent"
-                          >
-                            <span>
-                              REP {item.repNumero} · {item.tipoExameNome}
-                            </span>
-                            <span className="text-sm text-muted-foreground">{item.status}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="rounded border border-dashed p-4 text-sm text-muted-foreground">
-                          Nenhum laudo encontrado para esta busca.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-              {erroCronologia && <p className="mt-3 text-sm text-destructive">{erroCronologia}</p>}
-            </CardContent>
-          )}
-        </Card>
-                  )}
-                  {secao === 'producao' && (
-        <Card>
-          <CardHeader className="flex min-h-[72px] flex-row items-center justify-between space-y-0 p-4 pb-2">
-            <div className="space-y-0.5">
-              <CardTitle className="flex gap-2">
-                <Clock3 />
-                Produção de laudos
-              </CardTitle>
-              <CardDescription>
-                Ciclos em dias corridos para todo o histórico concluído.
-              </CardDescription>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {alca}
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={secoesExpandidas.producao}
-              onClick={() => alternarSecao('producao')}
-            >
-              {secoesExpandidas.producao ? 'Recolher' : 'Expandir'}
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${secoesExpandidas.producao ? 'rotate-180' : ''}`}
-              />
-            </Button>
-            </div>
-          </CardHeader>
-          {secoesExpandidas.producao && (
-            <CardContent className="space-y-3 p-4 pt-0">
-              <div className="grid gap-3 rounded-lg border border-primary/20 bg-accent/30 p-4 md:grid-cols-4">
-                <div className="space-y-2">
-                  <Label htmlFor="natureza-producao">Natureza</Label>
+      <Dialog
+        open={modalAberto !== null}
+        onOpenChange={aberto => {
+          if (!aberto) {
+            setModalAberto(null);
+            voltarConsulta();
+          }
+        }}
+      >
+        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-6xl flex-col gap-3 overflow-hidden p-4 sm:p-6">
+          <DialogHeader className="shrink-0 pr-6">
+            <DialogTitle>{tituloModal}</DialogTitle>
+            <DialogDescription>{modalAberto && descricoesModais[modalAberto]}</DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto overscroll-contain">
+            {modalAberto === 'situacao' && (
+              <div className="space-y-3">
+                {carregando && <p role="status">Carregando indicadores...</p>}
+                {erro && (
+                  <p role="alert" className="text-destructive">
+                    {erro}
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="tipo-grafico">Visualização</Label>
                   <Select
-                    value={filtrosProducao.tipoExameId ?? 'todos'}
-                    onValueChange={valor =>
-                      setFiltrosProducao({
-                        ...filtrosProducao,
-                        tipoExameId: valor === 'todos' ? undefined : valor,
-                      })
-                    }
+                    value={tipoGrafico}
+                    onValueChange={valor => mudarGrafico(valor as TipoGrafico)}
                   >
-                    <SelectTrigger id="natureza-producao">
+                    <SelectTrigger id="tipo-grafico" className="h-9 w-52">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todas as naturezas</SelectItem>
-                      {naturezasProducao.map(natureza => (
-                        <SelectItem key={natureza.id} value={natureza.id}>
-                          {natureza.codigo ? `${natureza.codigo} — ` : ''}
-                          {natureza.nome}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="barras">Barras horizontais</SelectItem>
+                      <SelectItem value="rosca">Rosca</SelectItem>
+                      <SelectItem value="empilhado">Barras empilhadas</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="inicio-producao">Conclusão inicial</Label>
-                  <Input
-                    id="inicio-producao"
-                    type="date"
-                    value={filtrosProducao.dataInicial ?? ''}
-                    onChange={evento =>
-                      setFiltrosProducao({
-                        ...filtrosProducao,
-                        dataInicial: evento.target.value || undefined,
-                      })
-                    }
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <GraficoStatus
+                    titulo="Status das REPs"
+                    dados={resumo?.repsPorStatus ?? []}
+                    tipo={tipoGrafico}
+                    aoSelecionar={status => selecionarGrafico(status, '/reps')}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fim-producao">Conclusão final</Label>
-                  <Input
-                    id="fim-producao"
-                    type="date"
-                    value={filtrosProducao.dataFinal ?? ''}
-                    onChange={evento =>
-                      setFiltrosProducao({
-                        ...filtrosProducao,
-                        dataFinal: evento.target.value || undefined,
-                      })
-                    }
+                  <GraficoStatus
+                    titulo="Status dos laudos"
+                    dados={resumo?.laudosPorStatus ?? []}
+                    tipo={tipoGrafico}
+                    aoSelecionar={status => selecionarGrafico(status, '/laudos')}
                   />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    className="w-full"
-                    disabled={carregandoProducao}
-                    onClick={() => void carregarProducao(filtrosProducao)}
-                  >
-                    {carregandoProducao ? 'Consultando...' : 'Aplicar filtros'}
-                  </Button>
                 </div>
               </div>
-              {erroProducao && <p className="text-sm text-destructive">{erroProducao}</p>}
-              <div className="grid gap-3 md:grid-cols-2">
-                {producao.length ? (
-                  producao.map(item => (
-                    <div key={item.natureza.id} className="rounded border p-4">
-                      <p className="font-medium">
-                        {item.natureza.codigo ? `${item.natureza.codigo} — ` : ''}
-                        {item.natureza.nome}
-                      </p>
-                      <p className="mt-2 text-sm">
-                        REP até conclusão: média {item.repAteConclusao.mediaDias.toFixed(1)} ·
-                        mediana {item.repAteConclusao.medianaDias.toFixed(1)} (
-                        {item.repAteConclusao.quantidade})
-                      </p>
-                      <p className="text-sm">
-                        Laudo até conclusão: média {item.laudoAteConclusao.mediaDias.toFixed(1)} ·
-                        mediana {item.laudoAteConclusao.medianaDias.toFixed(1)} (
-                        {item.laudoAteConclusao.quantidade})
-                      </p>
-                      {item.repAteConclusao.quantidade === 1 && (
-                        <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                          A amostra possui apenas um laudo.
+            )}
+            {modalAberto === 'cronologia' && (
+              <>
+                {(cronologia || graficoConsultaAberto) && (
+                  <Button variant="ghost" size="sm" className="mb-3" onClick={voltarConsulta}>
+                    <ArrowLeft />
+                    Voltar à consulta
+                  </Button>
+                )}
+                <div hidden={Boolean(cronologia) || graficoConsultaAberto}>
+                  <Tabs value={abaConsulta} onValueChange={setAbaConsulta}>
+                    <TabsList>
+                      <TabsTrigger value="periodo">Por período</TabsTrigger>
+                      <TabsTrigger value="laudo">Por laudo</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="periodo" className="space-y-4">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(14rem,0.7fr)_minmax(28rem,1.3fr)]">
+                        <Card className="border-border/80 bg-muted/20 shadow-none">
+                          <CardContent className="space-y-2 p-4">
+                            <Label htmlFor="busca-cronologica">Busca</Label>
+                            <Input
+                              id="busca-cronologica"
+                              placeholder="REP, código ou natureza"
+                              value={filtros.busca ?? ''}
+                              onChange={evento =>
+                                setFiltros({ ...filtros, busca: evento.target.value })
+                              }
+                            />
+                          </CardContent>
+                        </Card>
+                        <Card className="border-primary/20 bg-accent/30 shadow-none">
+                          <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+                            <div className="space-y-2">
+                              <Label htmlFor="marco-cronologico">Marco consultado</Label>
+                              <Select
+                                value={filtros.tipoData}
+                                onValueChange={valor =>
+                                  setFiltros({
+                                    ...filtros,
+                                    tipoData: valor as DashboardTipoDataConsulta,
+                                  })
+                                }
+                              >
+                                <SelectTrigger id="marco-cronologico">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="criacao">Criação</SelectItem>
+                                  <SelectItem value="alteracao">Alteração</SelectItem>
+                                  <SelectItem value="conclusao">Conclusão</SelectItem>
+                                  <SelectItem value="entrega">Entrega/envio</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="inicio-cronologico">Data inicial</Label>
+                              <Input
+                                id="inicio-cronologico"
+                                type="date"
+                                value={filtros.dataInicial ?? ''}
+                                onChange={evento =>
+                                  setFiltros({
+                                    ...filtros,
+                                    dataInicial: evento.target.value || undefined,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="fim-cronologico">Data final</Label>
+                              <Input
+                                id="fim-cronologico"
+                                type="date"
+                                value={filtros.dataFinal ?? ''}
+                                onChange={evento =>
+                                  setFiltros({
+                                    ...filtros,
+                                    dataFinal: evento.target.value || undefined,
+                                  })
+                                }
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      <Button onClick={() => void consultar()} disabled={consultando}>
+                        {consultando ? 'Consultando...' : 'Consultar'}
+                      </Button>
+                      {erroConsulta && <p className="text-sm text-destructive">{erroConsulta}</p>}
+                      {consulta && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                              {consulta.total} resultado(s)
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={consulta.total === 0}
+                              onClick={() => setGraficoConsultaAberto(true)}
+                            >
+                              Gerar gráfico
+                            </Button>
+                          </div>
+                          {consulta.itens.length ? (
+                            consulta.itens.map(item => (
+                              <button
+                                type="button"
+                                key={item.id}
+                                onClick={() => void abrirCronologia(item.id)}
+                                className="flex w-full justify-between rounded border p-3 text-left hover:bg-accent"
+                              >
+                                <span>
+                                  REP {item.repNumero} · {item.tipoExameNome}
+                                </span>
+                                <span>
+                                  {item.status} · {formatarData(item.dataOrdenacao)}
+                                </span>
+                              </button>
+                            ))
+                          ) : (
+                            <p className="rounded border border-dashed p-4 text-sm text-muted-foreground">
+                              Nenhum laudo encontrado para os filtros informados.
+                            </p>
+                          )}
+                          {consulta.total > consulta.tamanhoPagina && (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                disabled={consulta.pagina === 1}
+                                onClick={() => void consultar(consulta.pagina - 1)}
+                              >
+                                Anterior
+                              </Button>
+                              <Button
+                                variant="outline"
+                                disabled={
+                                  consulta.pagina * consulta.tamanhoPagina >= consulta.total
+                                }
+                                onClick={() => void consultar(consulta.pagina + 1)}
+                              >
+                                Próxima
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </TabsContent>
+                    <TabsContent value="laudo" className="space-y-4">
+                      <div className="flex gap-3 rounded-lg border border-primary/20 bg-accent/30 p-4">
+                        <Input
+                          placeholder="Número da REP, código ou natureza"
+                          value={buscaLaudo}
+                          onChange={evento => setBuscaLaudo(evento.target.value)}
+                        />
+                        <Button
+                          disabled={!buscaLaudo.trim() || consultando}
+                          onClick={() => void consultarPorLaudo()}
+                        >
+                          {consultando ? 'Buscando...' : 'Buscar laudo'}
+                        </Button>
+                        {erroConsulta && <p className="text-sm text-destructive">{erroConsulta}</p>}
+                      </div>
+                      {resultadoBuscaLaudo && (
+                        <div className="space-y-2">
+                          {resultadoBuscaLaudo.itens.length ? (
+                            resultadoBuscaLaudo.itens.map(item => (
+                              <button
+                                type="button"
+                                key={item.id}
+                                onClick={() => void abrirCronologia(item.id)}
+                                className="flex w-full justify-between rounded border p-3 text-left transition-colors hover:bg-accent"
+                              >
+                                <span>
+                                  REP {item.repNumero} · {item.tipoExameNome}
+                                </span>
+                                <span className="text-sm text-muted-foreground">{item.status}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <p className="rounded border border-dashed p-4 text-sm text-muted-foreground">
+                              Nenhum laudo encontrado para esta busca.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                  {erroCronologia && (
+                    <p className="mt-3 text-sm text-destructive">{erroCronologia}</p>
+                  )}
+                </div>
+                {graficoConsultaAberto && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      {rotuloTipoData[filtros.tipoData]} ·{' '}
+                      {descreverPeriodo(filtros.dataInicial, filtros.dataFinal)} (
+                      {consulta?.total ?? 0} laudos)
+                    </p>
+                    <GraficoStatus
+                      titulo="Resultado da consulta"
+                      dados={consulta?.porStatus ?? []}
+                      tipo={tipoGrafico}
+                      aoSelecionar={() => undefined}
+                    />
+                  </div>
+                )}
+                {cronologia && (
+                  <div className="space-y-3">
+                    {cronologia && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navegar(`/laudos/${cronologia.laudo.id}/wizard`)}
+                      >
+                        <ExternalLink />
+                        Abrir laudo
+                      </Button>
+                    )}
+                    {cronologia?.marcos.map(marco => (
+                      <div key={marco.nome}>
+                        <p className="font-medium">{marco.nome}</p>
+                        <p className="text-sm text-muted-foreground">{formatarData(marco.data)}</p>
+                      </div>
+                    ))}
+                    <div>
+                      <p className="font-medium">Transições auditadas</p>
+                      {cronologia?.transicoes.length ? (
+                        cronologia.transicoes.map(evento => (
+                          <p
+                            key={`${evento.data}-${evento.statusNovo}`}
+                            className="text-sm text-muted-foreground"
+                          >
+                            {formatarData(evento.data)}: {evento.statusAnterior ?? '?'} →{' '}
+                            {evento.statusNovo ?? '?'}
+                          </p>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Nenhuma transição auditada utilizável.
                         </p>
                       )}
                     </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma amostra válida encontrada.
-                  </p>
+                  </div>
                 )}
-              </div>
-            </CardContent>
-          )}
-        </Card>
-                  )}
-                  </>) }
-                </SecaoOrdenavel>
-              ))}
-            </div>
-          </SortableContext>
-          <DragOverlay>
-            {secaoArrastada && (
-              <div className="rounded-lg border bg-card p-5 text-sm font-medium shadow-lg">
-                {titulosSecoes[secaoArrastada]}
+              </>
+            )}
+            {modalAberto === 'producao' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">{ultimaAtualizacaoProducao === null ? 'Nenhuma atualização concluída.' : `Atualizado em ${new Date(ultimaAtualizacaoProducao).toLocaleString('pt-BR')}`}</p>
+                  <Button variant="outline" size="sm" disabled={carregandoProducao} onClick={() => void carregarProducao(filtrosProducaoAplicados)}><RefreshCcw />Atualizar</Button>
+                </div>
+                {carregandoProducao && <p role="status" className="text-sm text-muted-foreground">Atualizando produção...</p>}
+                <div className="grid gap-3 rounded-lg border border-primary/20 bg-accent/30 p-4 md:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="natureza-producao">Natureza</Label>
+                    <Select
+                      value={filtrosProducao.tipoExameId ?? 'todos'}
+                      onValueChange={valor =>
+                        setFiltrosProducao({
+                          ...filtrosProducao,
+                          tipoExameId: valor === 'todos' ? undefined : valor,
+                        })
+                      }
+                    >
+                      <SelectTrigger id="natureza-producao">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas as naturezas</SelectItem>
+                        {naturezasProducao.map(natureza => (
+                          <SelectItem key={natureza.id} value={natureza.id}>
+                            {natureza.codigo ? `${natureza.codigo} — ` : ''}
+                            {natureza.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="inicio-producao">Conclusão inicial</Label>
+                    <Input
+                      id="inicio-producao"
+                      type="date"
+                      value={filtrosProducao.dataInicial ?? ''}
+                      onChange={evento =>
+                        setFiltrosProducao({
+                          ...filtrosProducao,
+                          dataInicial: evento.target.value || undefined,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fim-producao">Conclusão final</Label>
+                    <Input
+                      id="fim-producao"
+                      type="date"
+                      value={filtrosProducao.dataFinal ?? ''}
+                      onChange={evento =>
+                        setFiltrosProducao({
+                          ...filtrosProducao,
+                          dataFinal: evento.target.value || undefined,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      className="w-full"
+                      disabled={carregandoProducao}
+                      onClick={() => void carregarProducao(filtrosProducao)}
+                    >
+                      {carregandoProducao ? 'Consultando...' : 'Aplicar filtros'}
+                    </Button>
+                  </div>
+                </div>
+                {erroProducao && <p className="text-sm text-destructive">{erroProducao}</p>}
+                <div className="grid gap-3 md:grid-cols-2">
+                  {producao.length ? (
+                    producao.map(item => (
+                      <div key={item.natureza.id} className="rounded border p-4">
+                        <p className="font-medium">
+                          {item.natureza.codigo ? `${item.natureza.codigo} — ` : ''}
+                          {item.natureza.nome}
+                        </p>
+                        <p className="mt-2 text-sm">
+                          REP até conclusão: média {item.repAteConclusao.mediaDias.toFixed(1)} ·
+                          mediana {item.repAteConclusao.medianaDias.toFixed(1)} (
+                          {item.repAteConclusao.quantidade})
+                        </p>
+                        <p className="text-sm">
+                          Laudo até conclusão: média {item.laudoAteConclusao.mediaDias.toFixed(1)} ·
+                          mediana {item.laudoAteConclusao.medianaDias.toFixed(1)} (
+                          {item.laudoAteConclusao.quantidade})
+                        </p>
+                        {item.repAteConclusao.quantidade === 1 && (
+                          <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                            A amostra possui apenas um laudo.
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  ) : ultimaAtualizacaoProducao !== null ? (
+                    <p className="text-sm text-muted-foreground">Nenhuma amostra válida encontrada.</p>
+                  ) : null}
+                </div>
               </div>
             )}
-          </DragOverlay>
-        </DndContext>
-        <Dialog open={graficoConsultaAberto} onOpenChange={setGraficoConsultaAberto}>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>
-                Distribuição por status — {rotuloTipoData[filtros.tipoData]} ·{' '}
-                {descreverPeriodo(filtros.dataInicial, filtros.dataFinal)} ({consulta?.total ?? 0}{' '}
-                laudos)
-              </DialogTitle>
-            </DialogHeader>
-            <GraficoStatus
-              titulo="Resultado da consulta"
-              dados={consulta?.porStatus ?? []}
-              tipo={tipoGrafico}
-              aoSelecionar={() => undefined}
-            />
-          </DialogContent>
-        </Dialog>
-        <Dialog open={Boolean(cronologia)} onOpenChange={aberto => !aberto && setCronologia(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Cronologia — REP {cronologia?.laudo.repNumero}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              {cronologia && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navegar(`/laudos/${cronologia.laudo.id}/wizard`)}
-                >
-                  <ExternalLink />
-                  Abrir laudo
-                </Button>
-              )}
-              {cronologia?.marcos.map(marco => (
-                <div key={marco.nome}>
-                  <p className="font-medium">{marco.nome}</p>
-                  <p className="text-sm text-muted-foreground">{formatarData(marco.data)}</p>
-                </div>
-              ))}
-              <div>
-                <p className="font-medium">Transições auditadas</p>
-                {cronologia?.transicoes.length ? (
-                  cronologia.transicoes.map(evento => (
-                    <p
-                      key={`${evento.data}-${evento.statusNovo}`}
-                      className="text-sm text-muted-foreground"
-                    >
-                      {formatarData(evento.data)}: {evento.statusAnterior ?? '?'} →{' '}
-                      {evento.statusNovo ?? '?'}
-                    </p>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma transição auditada utilizável.
-                  </p>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

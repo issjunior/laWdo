@@ -2,13 +2,9 @@
 
 ## Papel e composição
 
-`src/renderer/pages/DashboardPage.tsx` é a home operacional da aplicação. A página é organizada em três seções recolhíveis, cuja abertura é persistida em `localStorage` na chave `dashboard_secoes_expandidas`:
+`src/renderer/pages/DashboardPage.tsx` é a home operacional. Quatro prioridades ficam no topo e a tabela **REPs disponíveis no GDL** ocupa o espaço restante. **Situação atual**, **Consulta cronológica** e **Produção de laudos** abrem conteúdos alternativos no mesmo diálogo. Não há seções recolhíveis nem reordenação por arraste; as antigas chaves `dashboard_secoes_expandidas` e `dashboard_ordem_secoes` não são consumidas.
 
-1. **Situação atual:** distribuição por status de REPs e laudos, seguida de quatro prioridades operacionais.
-2. **Consulta cronológica:** consulta por período ou busca de um laudo e respectiva cronologia.
-3. **Produção de laudos:** ciclos de conclusão agrupados por natureza de exame.
-
-O resumo e a produção inicial são buscados no mount. Falhas no resumo substituem a tela por uma mensagem com nova tentativa; as consultas cronológica e de produção mantêm seus próprios estados de carregamento, erro e vazio.
+O resumo é buscado na montagem; sua falha mostra nova tentativa na área de prioridades sem impedir o GDL. Produção é carregada na primeira abertura do modal. Consultas cronológicas e produção têm estados próprios de carregamento, erro e vazio. Cronologia e distribuição por status substituem a consulta dentro do mesmo diálogo, com **Voltar à consulta**; fechar limpa essas subvisões e preserva aba/filtros em memória enquanto a página permanece montada.
 
 ## Contratos e fronteira IPC
 
@@ -59,9 +55,9 @@ As cores são tokens `--chart-1` a `--chart-4` em `src/renderer/styles/globals.c
 
 ## Consulta cronológica
 
-A aba **Por período** aplica o marco escolhido (`created_at`, `updated_at`, `data_conclusao` ou `data_entrega`), ordena do mais recente para o mais antigo e pagina os itens. A resposta inclui `porStatus` calculado sobre **todo** o resultado filtrado, não apenas a página atual; por isso o botão **Gerar gráfico** só habilita quando `total > 0` e abre um diálogo com a distribuição integral e o intervalo contextual.
+A aba **Por período** aplica o marco escolhido (`created_at`, `updated_at`, `data_conclusao` ou `data_entrega`), ordena do mais recente para o mais antigo e pagina os itens. A resposta inclui `porStatus` calculado sobre **todo** o resultado filtrado, não apenas a página atual; por isso o botão **Gerar gráfico** só habilita quando `total > 0` e abre a subvisão de distribuição integral e intervalo contextual no mesmo diálogo.
 
-A aba **Por laudo** faz a mesma busca textual usando o marco de criação e lista os candidatos. Selecionar um item busca a cronologia pelo ID e abre um diálogo com:
+A aba **Por laudo** faz a mesma busca textual usando o marco de criação e lista os candidatos. Selecionar um item busca a cronologia pelo ID e abre a subvisão no mesmo diálogo com:
 
 - criação (`laudos.created_at`);
 - última alteração registrada (`laudos.updated_at`);
@@ -82,6 +78,12 @@ Para cada natureza com histórico concluído, inclusive inativa, a resposta traz
 
 As naturezas vêm de uma consulta distinta das durações: uma natureza concluída ainda aparece com quantidade zero se todas as suas linhas forem inválidas para o ciclo. A interface mostra estado vazio para nenhuma amostra válida e alerta quando a amostra contém um único laudo.
 
+### Atualização e concorrência da produção
+
+A validade em memória é de dez minutos. O modal de produção agenda consulta ao vencer o prazo; fechado, não mantém temporizador. Reabrir antes do vencimento reutiliza dados; reabrir depois consulta imediatamente. Uma guarda por referência impede duplicar consulta pendente ao fechar/reabrir. Atualização manual e automática usam os filtros da última consulta bem-sucedida, separados dos filtros ainda em edição; Aplicar consulta os filtros editados.
+
+Sucesso atualiza dados, filtros aplicados e horário. Falha preserva resultados e horário anteriores e agenda nova tentativa para dez minutos depois, evitando ciclo imediato. A lista de naturezas é renovada apenas por consulta sem filtros. Esse cache é estado do renderer e não sobrevive à desmontagem da página.
+
 ## Fontes de verdade e manutenção coordenada
 
 | Responsabilidade | Fonte |
@@ -96,6 +98,6 @@ Não há migration do banco para o dashboard: ele consulta campos existentes. Qu
 
 ## Testes e limites atuais
 
-`src/__tests__/main/dashboard.service.test.ts` cobre preenchimento dos status, quatro prioridades, paginação com agregação integral, fim inclusivo do período, vínculo da auditoria ao laudo e média/mediana de produção. `src/__tests__/pages/dashboard-page.test.tsx` cobre a composição da visão operacional, consulta vazia e persistência/recuperação do recolhimento de seções.
+`src/__tests__/main/dashboard.service.test.ts` cobre preenchimento dos status, quatro prioridades, paginação com agregação integral, fim inclusivo do período, vínculo da auditoria ao laudo e média/mediana de produção. `src/__tests__/pages/dashboard-page.test.tsx` cobre prioridades, modais, retorno da cronologia, isolamento de falhas e produção: primeira abertura, reutilização, atualização manual/automática com filtros aplicados, preservação após falha e ausência de duplicação ao reabrir.
 
-O dashboard não faz polling nem recarrega por retorno de foco: os dados automáticos são os do mount; o resumo pode ser recarregado manualmente. A consulta cronológica executa três consultas independentes em paralelo (itens, total e agregação); uma mudança concorrente entre elas pode gerar uma página e total de instantes próximos, mas não há transação de leitura que congele a amostra.
+O resumo não faz polling nem recarrega no retorno de foco. Produção segue o temporizador condicionado ao modal descrito acima. A lista GDL atualiza pelo vencimento do cache enquanto montada e habilitada; no foco relê somente o cache local. Densidade compacta, cabeçalho/primeira coluna fixos e disposição persistida seguem `spec/04 layout/componentes_ui_base.md`; guardas e avisos de reiteração estão em `spec/08 gdl/api_gdl.md`. A consulta cronológica executa três consultas independentes em paralelo (itens, total e agregação); uma mudança concorrente entre elas pode gerar uma página e total de instantes próximos, mas não há transação de leitura que congele a amostra.

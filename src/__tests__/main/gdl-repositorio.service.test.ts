@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const ambiente = vi.hoisted(() => ({ diretorio: '' }));
-vi.mock('electron', () => ({ app: { getPath: () => ambiente.diretorio } }));
+vi.mock('electron', () => ({ app: { getPath: () => ambiente.diretorio }, BrowserWindow: { getAllWindows: () => [] } }));
 import { obterListaRepositorioGdl, obterRepRepositorioGdl, registrarConsultaRepositorioGdl, registrarGradeGdl } from '../../main/services/gdl-repositorio.service';
 const rep = { idGdl: 123, numero: '123', ano: '2026', naturezaExame: 'EXAME DE CONSTATAÇÃO', naturezaExameComCodigo: null, status: 'Aberta e Distribuída' as const, dataDesignacao: null, quantidadeFotos: null };
 beforeEach(async () => { ambiente.diretorio = await mkdtemp(path.join(os.tmpdir(), 'lawdo-repositorio-')); });

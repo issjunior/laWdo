@@ -55,3 +55,7 @@ Para diagnosticar gargalo da TABELA 2, o procedimento manual fica na aba **Logs 
 ## Reaplicação após salvar
 
 Depois que o salvamento do laudo conclui, `LaudosPage` compara o conteúdo atual com o enviado. Somente se não houver edição concorrente repõe o HTML canônico nos editores montados, reaplica a visualização escolhida e confere a numeração das tabelas sem registrar uma alteração no undo. Havendo diferença, preserva o DOM mais recente e mantém a pendência; a referência salva passa a ser o conteúdo efetivamente persistido. Isso vale para editor único e por seções. Se a reaplicação visual falhar, o salvamento permanece concluído: a página registra aviso e informa que a atualização visual falhou, preservando o conteúdo original. `apresentacao-placeholders.test.ts` cobre a restauração; conteúdo persistido e prévia continuam contratos distintos.
+
+## B-601: projeção e descrições próprias
+
+O B-601 usa projetarB601ParaLaudo() sobre o JSON local validado, com chaves b601_peca_N_*, tabelas de investigação/material e b601_resumo_lacres_saida. Este último é HTML inline e cita cada item uma vez, com XXX quando não há lacre. O menu usa a quantidade de peças, sem reutilizar os índices de armas do B-602. As descrições conjuntas de projéteis e estojos são HTML persistido do laudo, não prévias transitórias de placeholder: suas edições são preservadas até recriação confirmada. O contrato de agrupamentos, condições e figuras está em spec/03 laudo/b601.md.

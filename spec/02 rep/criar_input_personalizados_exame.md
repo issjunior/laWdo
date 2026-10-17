@@ -23,6 +23,7 @@ O mecanismo permite variar o formulário de REP sem levar detalhes de cada exame
 | `LOC` | `local_fato`, `acionamento` | colunas nativas de `reps` |
 | `I-801` | `numeracao` | JSON por `numeracaoService` |
 | `B-602` | `dados_investigacao`, `pecas_b602` | JSON canônico por `b602Service`, com peças e metadados recebidos por contexto |
+| `B-601` | `dados_investigacao_b601`, `pecas_b601` | JSON de versão 1 por `b601Service`, com estado estruturado recebido por contexto |
 
 As seções `material_enc`, `cartuchos`, `estojos` e `armas` permanecem registradas e legíveis por compatibilidade, mas não são editadas pelo fluxo ativo do B-602.
 
@@ -93,3 +94,7 @@ JSON inválido é tolerado na leitura, mas pode resultar em formulário vazio. U
 | nova coleção estruturada | tipo shared, contexto, editor, completude, persistência, restauração e merge |
 | mudança no JSON | leitores legados, laudo, exportação, testes e compatibilidade |
 | dado vindo do GDL | schema do main, normalizador, contrato shared, modal, aplicação e reabertura |
+
+## Particularidades do B-601
+
+O contexto b601 é obrigatório para serializar a coleção; não há fallback para arrays de B-602. Dados e propriedades da raiz são conservados, enquanto campos textuais do formulário atualizam os escalares de investigação. Leitura inválida impede sobrescrita e mantém erro visível na página. DadosInvestigacaoFields usa codigoExame para compartilhar a apresentação sem herdar a obrigatoriedade do B-602. O contrato e os limites estão em spec/02 rep/b601.md.

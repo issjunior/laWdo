@@ -92,17 +92,30 @@ describe('consulta e conversão separadas do GDL', () => {
 
 
 describe('consulta individual detalhada autorizada', () => {
+  it.each(['ABERTA E DISTRIBUÍDA', 'LAUDO EM EXECUÇÃO', undefined])('mantém B601 somente na API com status %s', async statusRep => {
+    simulacao.consultar.mockResolvedValue({ sucesso: true, statusRep, naturezaExame: 'B601 - EXAME DE CONSTATAÇÃO', dados: { codRep: 123, numero: 123, ano: 2026, quesitoAberto: 'Da API', dataEntradaSolicitacao: '2026-08-22' } });
+    const consulta = await identificarRepGdl(1, '123', '2026');
+    expect(consulta.detalhes?.estado).toBe('somente_api');
+    expect(consulta.identificacao.codigoExplicito).toBe('B601');
+    await converterConsultaRepGdl(1, consulta.consultaId, 'b601');
+    expect(simulacao.converter).toHaveBeenCalledWith('B-601', expect.objectContaining({ quesitoAberto: 'Da API', dataEntradaSolicitacao: '2026-08-22' }), expect.any(Object));
+    expect(simulacao.detalhes).not.toHaveBeenCalled();
+    expect(simulacao.registrar).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), expect.anything(), expect.anything(), expect.objectContaining({ fonte: 'acesso_detalhes' }), expect.anything());
+    await expect(completarConsultaRepGdl(1, consulta.consultaId, true)).rejects.toThrow('já foi concluída');
+    expect(simulacao.detalhes).not.toHaveBeenCalled();
+  });
+
   it('exige decisão para aberta e não abre detalhes ao usar somente API', async () => {
-    simulacao.consultar.mockResolvedValue({ sucesso: true, statusRep: 'ABERTA E DISTRIBUÍDA', naturezaExame: 'B601 - EXAME DE CONSTATAÇÃO', dados: { codRep: 123, numero: 123, ano: 2026 } });
+    simulacao.consultar.mockResolvedValue({ sucesso: true, statusRep: 'ABERTA E DISTRIBUÍDA', naturezaExame: 'B602 - EXAME BALÍSTICO', dados: { codRep: 123, numero: 123, ano: 2026 } });
     const consulta = await identificarRepGdl(1, '123', '2026');
     expect(consulta.detalhes?.motivoConfirmacao).toContain('Laudo em Execução');
     expect(simulacao.detalhes).not.toHaveBeenCalled();
-    await expect(converterConsultaRepGdl(1, consulta.consultaId, 'b601')).rejects.toThrow('Escolha');
+    await expect(converterConsultaRepGdl(1, consulta.consultaId, 'b602')).rejects.toThrow('Escolha');
     expect((await completarConsultaRepGdl(1, consulta.consultaId, false)).detalhes?.estado).toBe('somente_api');
     expect(simulacao.detalhes).not.toHaveBeenCalled();
   });
   it('a página corrige o código explícito da API depois de confirmação e é lida só uma vez', async () => {
-    simulacao.consultar.mockResolvedValue({ sucesso: true, naturezaExame: 'B601 - EXAME DE CONSTATAÇÃO', dados: { codRep: 123, numero: 123, ano: 2026 } });
+    simulacao.consultar.mockResolvedValue({ sucesso: true, naturezaExame: 'B602 - EXAME BALÍSTICO', dados: { codRep: 123, numero: 123, ano: 2026 } });
     const inicial = await identificarRepGdl(1, '123', '2026');
     const detalhada = await completarConsultaRepGdl(1, inicial.consultaId, true);
     expect(detalhada).toMatchObject({ identificacao: { codigoExplicito: 'I806' }, detalhes: { estado: 'confirmados', origemNatureza: 'detalhes', divergencia: true } });

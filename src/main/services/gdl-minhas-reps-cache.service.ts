@@ -8,9 +8,10 @@ import { z } from 'zod';
 import * as gdlService from './gdl.service.js';
 import { exigirListagemRepsGdlHabilitada, obterVersaoPreferenciaListagem } from './gdl-listagem-preferencia.service.js';
 import type { MinhaRepGdl, SnapshotMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import { VALIDADE_CACHE_LISTAGEM_MS } from '../../shared/gdl/listagem.js';
 
-const VALIDADE_MS = 10 * 60 * 1000;
 const esquemaRep = z.object({
+  oficioReiterando: z.boolean().optional(),
   idGdl: z.number().int().positive(),
   numero: z.string().regex(/^\d+$/),
   ano: z.string().regex(/^\d{4}$/),
@@ -91,7 +92,7 @@ export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: bool
   if (ativa) return ativa;
   const consulta = (async () => {
     const anterior = await obterMinhasRepsEmCache(usuarioId);
-    if (!forcar && anterior && Date.now() - Date.parse(anterior.atualizadoEm) < VALIDADE_MS) {
+    if (!forcar && anterior && Date.now() - Date.parse(anterior.atualizadoEm) < VALIDADE_CACHE_LISTAGEM_MS) {
       await exigirListagemRepsGdlHabilitada(versao);
       return anterior;
     }

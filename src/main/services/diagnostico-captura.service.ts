@@ -1,3 +1,4 @@
+import { normalizarFalhaDiagnosticoGdl } from './diagnostico-eventos.service.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -231,12 +232,22 @@ export class DiagnosticoCapturaService {
     const sinais = captura.finalidade === 'problema' ? classificarSinais(eventos) : [];
     const resumo = sumarizar(eventos, sinais);
     const ipcs = todosEventos.flatMap(evento => evento.categoria === 'ipc' && typeof evento.dados.canal === 'string' && typeof evento.dados.duracaoMs === 'number'
-      ? [{ canal: evento.dados.canal, duracaoMs: evento.dados.duracaoMs }]
+      ? [{ canal: evento.dados.canal, duracaoMs: evento.dados.duracaoMs, falha: normalizarFalhaDiagnosticoGdl(evento.dados.falha) }]
       : []);
     const metricas = resumirDesempenho(captura.amostras, captura.degradacao, ipcs);
+    const falhasGdl = ipcs.flatMap(ipc => ipc.canal.startsWith('gdl:') && ipc.falha ? [{ canal: ipc.canal, duracaoMs: ipc.duracaoMs, ...ipc.falha }] : []);
+    const ipcsSemCausaConhecida = resumirDesempenho([], captura.degradacao, ipcs.filter(ipc => !ipc.falha)).ipcsLentos;
+    const classesCausa = new Set<string>();
+    if (sinais.length) { classesCausa.add('rolagem_programatica'); classesCausa.add('mudanca_layout'); }
+    for (const falha of falhasGdl) {
+      classesCausa.add(falha.codigo === 'rede' || falha.codigo === 'tempo_esgotado' ? 'conectividade'
+        : ['autenticacao', 'credenciais', 'sessao'].includes(falha.codigo) ? 'autenticacao' : 'integracao_gdl');
+    }
+    if (metricas.gargalos.length || ipcsSemCausaConhecida.length) classesCausa.add('desempenho');
+    if (!classesCausa.size) classesCausa.add('inconclusiva');
     const qualidade = erros.length === 0 && (captura.finalidade === 'desempenho' || eventos.length > 0) ? 'suficiente' : 'parcial';
     const marcadores = this.dependencias.obterMarcadores?.() ?? {};
-    const dossieAgente = { qualidade, classificacao, observacaoUsuario: observacao ?? null, linhaTempoEssencial: eventos.slice(-30), anomalias: [...sinais, ...metricas.gargalos, ...metricas.ipcsLentos], classesCausa: sinais.length ? ['rolagem_programatica', 'mudanca_layout'] : metricas.gargalos.length || metricas.ipcsLentos.length ? ['desempenho'] : ['inconclusiva'], alvosInvestigacao: [...Object.entries(marcadores).map(([marcador, arquivo]) => ({ marcador, arquivo })), ...metricas.gargalos.map(gargalo => ({ processo: gargalo.processo, pid: gargalo.pid })), ...metricas.ipcsLentos.map(ipc => ({ canal: ipc.canal }))], lacunas: erros.map(erro => erro.componente), proximosPassos: sinais.length ? ['Inspecione os marcadores e arquivos associados ao contêiner rolável.'] : metricas.gargalos.length || metricas.ipcsLentos.length ? ['Repita a mesma captura após uma alteração limitada e compare os resultados.'] : ['Repita a captura com o sintoma ativo.'], componentesDisponiveis: ['manifesto', 'dossie', 'metricas_resumo', 'amostras_processos', 'timeline', 'eventos', 'interface_inicial', 'interface_final', 'tela_inicial', 'tela_final', 'erro'] };
+    const dossieAgente = { qualidade, classificacao, observacaoUsuario: observacao ?? null, linhaTempoEssencial: eventos.slice(-30), anomalias: [...sinais, ...falhasGdl, ...metricas.gargalos, ...metricas.ipcsLentos], classesCausa: [...classesCausa], alvosInvestigacao: [...Object.entries(marcadores).map(([marcador, arquivo]) => ({ marcador, arquivo })), ...metricas.gargalos.map(gargalo => ({ processo: gargalo.processo, pid: gargalo.pid })), ...metricas.ipcsLentos.map(ipc => ({ canal: ipc.canal }))], lacunas: erros.map(erro => erro.componente), proximosPassos: falhasGdl.length ? ['Investigue a classificação e a etapa das falhas GDL; para rede, confira conexão e VPN sem presumir seu estado.'] : sinais.length ? ['Inspecione os marcadores e arquivos associados ao contêiner rolável.'] : metricas.gargalos.length || metricas.ipcsLentos.length ? ['Repita a mesma captura após uma alteração limitada e compare os resultados.'] : ['Repita a captura com o sintoma ativo.'], componentesDisponiveis: ['manifesto', 'dossie', 'metricas_resumo', 'amostras_processos', 'timeline', 'eventos', 'interface_inicial', 'interface_final', 'tela_inicial', 'tela_final', 'erro'] };
     const diretorioSessao = this.dependencias.diretorioSessao();
     if (!diretorioSessao) throw new Error('SESSAO_INDISPONIVEL');
     const diretorioFinal = path.join(diretorioSessao, 'capturas', `${new Date().toISOString().replace(/[:.]/g, '-')}-${captura.capturaId}`);

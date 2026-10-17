@@ -16,7 +16,7 @@ const TABELAS = [
   'wizards', 'etapas_wizard', 'opcoes_etapa', 'regras_wizard',
 ] as const;
 const CHAVES_PORTATEIS = new Set([
-  'cabecalho_laudo', 'cabecalho_paginas', 'pdf_margins', 'margens_pdf',
+  'cabecalho_laudo', 'cabecalho_paginas', 'cabecalho_documento', 'fechamento_laudo', 'pdf_margins', 'margens_pdf',
   'provedor_ia', 'api_key_groq', 'api_key_gemini', 'modelo_ia_padrao', 'modelo_gemini_padrao',
   'privacidade_ia', 'qualidade_imagem_ia', 'perfil_resposta_ia',
   'gdl_ambiente', 'gdl_homologacao_habilitada', 'gdl_url_producao', 'gdl_url_homologacao',

@@ -1,3 +1,4 @@
+import type { DadosB601 } from '@shared/types/b601.types';
 import React, { createContext, useContext, useEffect, useRef, useCallback } from 'react';
 import { Stepper } from '@/components/ui/stepper';
 import { useRepStepper } from './useRepStepper';
@@ -28,6 +29,7 @@ interface RepStepperProps {
   showForm: boolean;
   children: React.ReactNode;
   pecasB602: PecaB602[];
+  dadosB601?: DadosB601;
 }
 
 /* ─── Componente ─── */
@@ -47,9 +49,10 @@ export const RepStepper: React.FC<RepStepperProps> = ({
   showForm,
   children,
   pecasB602,
+  dadosB601,
 }) => {
   const { steps, activeStep, setActiveStep, completedSteps, collapsed, setCollapsed, onStepClick } =
-    useRepStepper({ form, tipoExameId, tipoExameSelecionado, pecasB602 });
+    useRepStepper({ form, tipoExameId, tipoExameSelecionado, pecasB602, dadosB601 });
 
   /* ── Scroll spy via IntersectionObserver ── */
   const observerPausedRef = useRef(false);

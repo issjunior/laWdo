@@ -1,9 +1,12 @@
+import { projetarB601ParaLaudo } from '@shared/utils/b601-pecas-projecao';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
+import { normalizarCodigoPlaceholders } from '@/lib/utils';
+import { normalizarApresentacaoTabelas } from '@/lib/tabelas-apresentacao';
 
 function numToLetra(n: number): string {
   if (n < 26) return String.fromCharCode(65 + n);
@@ -250,6 +253,40 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
         if (valor !== undefined && valor !== null && valor !== '') {
           mapping[placeholder.chave] = String(valor);
         }
+      }
+
+      if (especificos.b601) {
+        const { dados, pecas } = projetarB601ParaLaudo(especificos.b601);
+        const escapar = (texto: string): string => texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const ausente = (texto: string): string => escapar(texto || 'XXX');
+        mapping.b601_envolvidos = dados.envolvidos.join(', ');
+        mapping.b601_data_ocorrencia = dados.data_ocorrencia;
+        mapping.b601_local = [dados.local.bairro, dados.local.cidade, dados.local.uf].filter(Boolean).join(' / ');
+        mapping.b601_numero_bo = dados.numero_bo;
+        mapping.b601_numero_ip = dados.numero_ip;
+        const integracaoGdl = isRecord(especificos.integracaoGdl) ? especificos.integracaoGdl : undefined;
+        const dadosSolicitacao = isRecord(integracaoGdl?.dadosSolicitacao) ? integracaoGdl.dadosSolicitacao : undefined;
+        const orgaoGdl = typeof dadosSolicitacao?.orgao === 'string' ? dadosSolicitacao.orgao.trim() : '';
+        mapping.b601_solicitante_nome = ctx.solicitanteNome || dados.solicitante_nome.trim() || orgaoGdl;
+        if (!mapping.solicitante_nome) mapping.solicitante_nome = mapping.b601_solicitante_nome;
+        mapping.b601_tabela_dados_investigacao = buildDadosInvestigacaoTable({
+          envolvidos: dados.envolvidos.length ? dados.envolvidos.map(escapar) : ['XXX'],
+          data_ocorrencia: ausente(dados.data_ocorrencia),
+          local: { bairro: escapar(mapping.b601_local || 'XXX'), cidade: '', uf: '' },
+          numero_bo: ausente(dados.numero_bo), numero_ip: ausente(dados.numero_ip),
+          solicitante_nome: ausente(mapping.b601_solicitante_nome),
+        });
+        mapping.b601_tabela_material_enc = dados.semPecas
+          ? '<p>REP declarada sem peças para exame.</p>'
+          : buildNumberedTable('TABELA 2 – MATERIAL ENCAMINHADO', ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
+            pecas.map(peca => [ausente(peca.campos.natureza), ausente(peca.campos.quantidade + ' ' + peca.campos.medida),
+              ausente(peca.campos.tipo), ausente(peca.campos.identificacao), ausente(peca.campos.lacre_entrada)]));
+        for (const peca of pecas) {
+          for (const [campo, valor] of Object.entries(peca.campos)) mapping['b601_peca_' + peca.indice + '_' + campo] = valor;
+        }
+        const lacresSaidaB601 = pecas.map(peca => `nº ${formatarNumeroLacre(peca.campos.lacre_saida)}, referente ao Item ${peca.indice}`);
+        mapping.b601_resumo_lacres_saida = lacresSaidaB601.length
+          ? `${lacresSaidaB601.length === 1 ? 'o lacre' : 'os lacres'} ${juntarComE(lacresSaidaB601)}` : '';
       }
 
       // Fallback: se local for string (formato antigo), extrair sub-campos
@@ -509,6 +546,8 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
+    normalizarCodigoPlaceholders(doc.body, Object.keys(mapping));
+    normalizarApresentacaoTabelas(doc.body);
     doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
     doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
       bloco.removeAttribute('data-cond-em-edicao');

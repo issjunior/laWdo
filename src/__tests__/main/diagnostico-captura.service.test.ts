@@ -114,3 +114,17 @@ it('coleta GDL somente na janela optante e encerra antes de finalizar', async ()
   expect(servico.obterCapturaGdl(1)).toBeNull();
   await servico.finalizar({ capturaId: String(segunda.capturaId) });
 });
+
+it.each([['rede', 'conectividade'], ['tempo_esgotado', 'conectividade'], ['autenticacao', 'autenticacao'], ['servidor', 'integracao_gdl']])('distingue falha %s de gargalo de desempenho', async (codigo, classe) => {
+  const { servico, eventos } = await criarServico();
+  const inicio = await servico.iniciar({ finalidade: 'desempenho', duracaoSegundos: 30, cenarioDesempenho: 'geral' });
+  await eventos.registrar({ origem: 'preload', categoria: 'ipc', nivel: 'error', dados: {
+    canal: 'gdl:atualizar-minhas-reps-cache', duracaoMs: 2000, resultadoFuncional: 'falha',
+    falha: { codigo, etapa: 'carregar_formulario' },
+  } });
+  await servico.finalizar({ capturaId: String(inicio.capturaId) });
+  const dossie = await servico.consultar({ capturaId: String(inicio.capturaId), componente: 'dossie', depoisDe: 0, limite: 50 });
+  expect(dossie).toMatchObject({ classesCausa: [classe], anomalias: expect.arrayContaining([expect.objectContaining({ codigo, duracaoMs: 2000 })]) });
+  const metricas = await servico.consultar({ capturaId: String(inicio.capturaId), componente: 'metricas_resumo', depoisDe: 0, limite: 50 });
+  expect(metricas).toMatchObject({ ipcsLentos: [{ canal: 'gdl:atualizar-minhas-reps-cache', ocorrencias: 1, duracaoP95Ms: 2000 }] });
+});

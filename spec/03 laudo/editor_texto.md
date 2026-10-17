@@ -16,6 +16,14 @@ A toolbar usa `wrap` e agrupa histórico, formatação, fonte/cores, alinhamento
 
 Parágrafos narrativos sem alinhamento explícito aparecem justificados por padrão no iframe do TinyMCE. O seletor exclui parágrafos de tabelas e figuras; estilos inline escolhidos pelo usuário prevalecem. O editor compacto de personalização (`EditorCampoLaudo.tsx`) também inicia justificado e mantém HTML multilinha com negrito, itálico, sublinhado, sobrescrito e subscrito. Ele captura `initialValue` em referência por abertura; o rascunho fica em referência na página e é normalizado somente ao aplicar, evitando reposicionar o cursor a cada tecla.
 
+## Espaçamento entre parágrafos
+
+O menu **Espaçamento** oferece ajustes independentes antes e depois: 0, 3, 6, 8, 12, 18 e 24 pt, além de **Padrão do documento**, que remove a margem inline daquele lado. `aplicarEspacamentoParagrafo()`, em `editor-formatacao.ts`, atua nos blocos selecionados `p`, títulos, `pre` e `blockquote`, excluindo os protegidos e contêineres que já tenham um bloco descendente selecionado. Itens de lista e células não são alvos diretos; parágrafos internos não protegidos continuam elegíveis.
+
+A operação altera somente `margin-top` ou `margin-bottom`, preserva texto, seleção e entrelinha, e participa de uma única transação de undo. O menu acompanha `NodeChange`, distingue margem ausente de zero explícito e não indica valor uniforme para seleção mista; remove o listener ao descartar. A conversão de medidas está em `src/renderer/lib/medidas-texto.ts`, compartilhada com o parser de exportação, e aceita pt, px, cm, mm e in.
+
+`editor-formatacao.test.ts` cobre seleção múltipla, títulos, conteúdo protegido, valores mistos, retorno ao padrão e undo/redo. `tiny-mce-editor-config.test.ts` confere a presença do comando na toolbar. A preservação de zero e conversão das margens até DOCX/ODT fica em `spec/03 laudo/exportar_laudo.md`.
+
 ## Extensões e composição
 
 O editor preserva comandos de placeholders, figuras, tabelas resolvidas e blocos condicionais. Imagens soltas são convertidas em `figure.laudo-figure`, exceto indicadores de quebra e clones temporários de redimensionamento (`data-mce-bogus="all"` e `.mce-clonedresizable`). O observador revalida a presença da imagem no documento e a ausência de wrapper antes da conversão, evitando duplicação durante resize. Controles visuais de blocos e tabelas vivem somente no iframe.

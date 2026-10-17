@@ -1,3 +1,4 @@
+import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import { apresentarNaturezaExame } from '@shared/gdl/natureza-exame';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
@@ -48,6 +49,7 @@ const esquemaSnapshot = z.object({
         .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
         .nullable(),
       quantidadeFotos: z.number().int().nonnegative().nullable(),
+      oficioReiterando: z.boolean().optional(),
       naturezaConfirmada: z.boolean().optional(), naturezaDivergente: z.boolean().optional(),
       naturezaConsultadaEm: z.string().optional(), statusNecessitaAtualizacao: z.boolean().optional(),
     })
@@ -415,6 +417,7 @@ export const GdlMinhasRepsModal: React.FC<GdlMinhasRepsModalProps> = ({
                         {rep.statusNecessitaAtualizacao && <span className="text-xs text-muted-foreground">Atualize a lista para conferir o status.</span>}
                         {rep.naturezaDivergente && <span className="text-xs text-muted-foreground">Natureza divergente; confirme na consulta individual.</span>}
                       </span>
+                      <ReiterandoBadge centralizado numeroRep={`${rep.numero}/${rep.ano}`} reiterando={rep.oficioReiterando} />
                       <span
                         className="mt-1 block truncate text-muted-foreground"
                         title={naturezaExibida(rep)}
