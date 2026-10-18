@@ -96,6 +96,7 @@ export async function identificarRepGdl(remetenteId: number, numero: string, ano
   consultas.set(remetenteId, consulta);
   const tipos = await tiposAtivos();
   await validarConsulta(remetenteId, consulta);
+  if (consulta.identificacao.codigoExplicito === 'B601') return completarConsultaRepGdl(remetenteId, consultaId, false);
   if (status === 'LAUDO EM EXECUCAO') return completarConsultaRepGdl(remetenteId, consultaId, true);
   return montarIdentificacao(consulta, tipos);
 }
@@ -105,6 +106,7 @@ export async function completarConsultaRepGdl(remetenteId: number, consultaId: s
   if (!consulta || consulta.consultaId !== consultaId) throw new Error('A consulta expirou ou foi substituída.');
   await validarConsulta(remetenteId, consulta);
   if (consulta.detalhes.estado !== 'aguardando_confirmacao') throw new Error('Esta consulta já foi concluída. Inicie uma nova consulta para tentar novamente.');
+  if (consulta.identificacao.codigoExplicito === 'B601') abrirDetalhes = false;
   // Consumir a decisão antes da rede impede repetição involuntária após timeout.
   consulta.detalhes.estado = abrirDetalhes ? 'parciais' : 'somente_api';
   if (abrirDetalhes && consulta.resultado.dados) {

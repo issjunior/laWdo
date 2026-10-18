@@ -1,3 +1,4 @@
+import { PLACEHOLDERS_B601 } from '@shared/catalogos/b601-placeholders.catalogo';
 interface CampoEspecificoPlaceholder {
   chave: string;
   label: string;
@@ -8,6 +9,7 @@ interface CampoEspecificoPlaceholder {
 }
 
 export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
+  ...PLACEHOLDERS_B601,
   { chave: 'veiculo',                    label: 'Veículo',            descricao: 'Marca, modelo ou tipo do veículo periciado',       jsonPath: 'numeracao.veiculo',          categoria_exam_codigo: 'I-801' },
   { chave: 'placa',                      label: 'Placa',              descricao: 'Placa de identificação do veículo',                 jsonPath: 'numeracao.placa',            categoria_exam_codigo: 'I-801' },
   { chave: 'fabricacao_modelo',          label: 'Fabricação/Modelo',  descricao: 'Ano de fabricação e modelo do veículo',             jsonPath: 'numeracao.fabricacao',       categoria_exam_codigo: 'I-801' },

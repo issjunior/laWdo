@@ -134,7 +134,7 @@ describe('persistência da ocultação de títulos', () => {
     await sqlite.executeNonQuery('INSERT INTO schema_version (version) VALUES (41)');
     await sqlite.closeDatabase();
     await banco.setupDatabase();
-    expect(await banco.getSchemaVersion()).toBe(43);
+    expect(await banco.getSchemaVersion()).toBe(45);
     const secoes = await servico.findSecoesByTemplate(templateId);
     expect(secoes.map(secao => secao.ocultar_titulo)).toEqual([0, 0]);
     expect(secoes.map(secao => secao.contar_na_numeracao)).toEqual([1, 1]);
@@ -150,7 +150,7 @@ describe('persistência da ocultação de títulos', () => {
     await sqlite.executeNonQuery('INSERT INTO schema_version (version) VALUES (42)');
     await sqlite.closeDatabase();
     await banco.setupDatabase();
-    expect(await banco.getSchemaVersion()).toBe(43);
+    expect(await banco.getSchemaVersion()).toBe(45);
     const secoes = await servico.findSecoesByTemplate(templateId);
     expect(secoes.map(secao => secao.contar_na_numeracao)).toEqual([1, 1]);
     expect(secoes[0].ocultar_titulo).toBe(1);

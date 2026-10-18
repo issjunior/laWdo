@@ -6,7 +6,6 @@ import type { DocumentoExportacao, MargensExportacao } from '../../shared/types/
 import { normalizarQuebrasPaginaHtml } from '../../shared/utils/quebra-pagina.js';
 import { obterNomeArquivoLaudo } from '../../shared/utils/nomes-documentos-rep.js';
 import type {
-  FileChild,
   ParagraphChild,
 } from 'docx';
 import { getLogger } from '../utils/logger.js';
@@ -231,11 +230,14 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
   });
   const para = (p: import('../../shared/types/exportacao.types.js').ParagrafoExportacao, extra: object = {}) => new Paragraph({
     children: runs(p.trechos), alignment: alinhar(p.alinhamento), heading: p.nivelTitulo ? [undefined, HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5, HeadingLevel.HEADING_6][p.nivelTitulo] : undefined,
-    indent: { left: p.recuoEsquerdoPt ? Math.round(p.recuoEsquerdoPt * 20) : undefined, right: p.recuoDireitoPt ? Math.round(p.recuoDireitoPt * 20) : undefined, firstLine: p.recuoPrimeiraLinhaPt ? Math.round(p.recuoPrimeiraLinhaPt * 20) : undefined }, spacing: { before: p.espacamentoAntesPt ? Math.round(p.espacamentoAntesPt * 20) : undefined, after: p.espacamentoDepoisPt ? Math.round(p.espacamentoDepoisPt * 20) : undefined, line: p.espacamentoLinha ? Math.round(p.espacamentoLinha * 240) : undefined },
+    indent: { left: p.recuoEsquerdoPt ? Math.round(p.recuoEsquerdoPt * 20) : undefined, right: p.recuoDireitoPt ? Math.round(p.recuoDireitoPt * 20) : undefined, firstLine: p.recuoPrimeiraLinhaPt ? Math.round(p.recuoPrimeiraLinhaPt * 20) : undefined }, spacing: { before: p.espacamentoAntesPt !== undefined ? Math.round(p.espacamentoAntesPt * 20) : undefined, after: p.espacamentoDepoisPt !== undefined ? Math.round(p.espacamentoDepoisPt * 20) : undefined, line: p.espacamentoLinha ? Math.round(p.espacamentoLinha * 240) : undefined },
     border: p.citacao ? { left: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } : undefined, ...extra,
   });
-  const filhos: FileChild[] = [];
-  for (const secao of documento.secoes) {
+  const filhos: Array<InstanceType<typeof Paragraph> | InstanceType<typeof Table>> = [];
+  const secoes = documento.secoes.map(secao => ({ ...secao, fechamento: false }));
+  if (documento.fechamento) secoes.push({ blocos: documento.fechamento.blocos, fechamento: true });
+  for (const secao of secoes) {
+    const inicioFilhos = filhos.length;
     if (secao.titulo) filhos.push(para(secao.titulo));
     for (const bloco of secao.blocos) {
       if (bloco.tipo === 'paragrafo') filhos.push(para(bloco));
@@ -257,6 +259,18 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
         filhos.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
       }
       else { const tipo = normalizarTipoImagemDocx(bloco.formato); if (tipo) filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 500, height: bloco.alturaPx || 375 } })] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
+    }
+    if (secao.fechamento) {
+      const conteudo = filhos.splice(inicioFilhos);
+      const semBorda = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+      filhos.push(new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: { top: semBorda, bottom: semBorda, left: semBorda, right: semBorda, insideHorizontal: semBorda, insideVertical: semBorda },
+        rows: [new TableRow({ cantSplit: true, children: [new TableCell({
+          children: conteudo,
+          margins: { top: Math.round((documento.fechamento?.espacamentoAntesPt ?? 0) * 20), bottom: 0, left: 0, right: 0 },
+        })] })],
+      }));
     }
   }
   const cab = cabecalho || documento.cabecalho;

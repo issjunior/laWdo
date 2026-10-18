@@ -1,5 +1,8 @@
+import { renumerarTabelasHtml } from '@/lib/numeracao-tabelas';
 import { criarIndicadoresSecaoHtml } from '@/lib/indicadores-secao';
 import { calcularNumeracaoSecoes } from '@shared/utils/numeracao-secoes';
+import { ehAgrupamentoB601, gerarPreviaDescricaoB601, possuiComplementoB601 } from '@shared/utils/b601-descricao-agrupada';
+import { juntarComplementoB601, lerEdicaoComplementoB601, montarEdicaoComplementoB601, separarComplementoB601 } from '@/components/template/b601-complemento.utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +28,7 @@ import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMe
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 import { criarHtmlFigura } from '@/lib/figura-html';
 import { converterPlaceholdersTextuais } from '@/lib/utils';
+import { CHAVES_PLACEHOLDERS_REP } from '@/lib/indice-placeholders';
 import { z } from 'zod';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
@@ -114,6 +118,7 @@ interface TemplateForm {
   descricao: string;
 }
 
+
 interface SecaoForm {
   id?: string;
   chave_local: string;
@@ -157,21 +162,13 @@ function hydrateSecaoForm(row: SecaoItem, placeholderChaves: string[]): SecaoFor
   };
 }
 
-function normalizarNomeSecao(nome?: string): string {
-  return (nome || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
-}
-
-function getSecaoVisual(secao: Pick<SecaoForm, 'nome' | 'parent_id' | 'repetir_para'>): string {
-  if (!secao.parent_id) return 'border bg-card/50 border-border';
-
-  const nome = normalizarNomeSecao(secao.nome);
-  if (nome.includes('CARTUCHO')) return 'border bg-sky-50/70 border-sky-300 dark:bg-sky-950/20 dark:border-sky-900';
-  if (nome.includes('ESTOJO')) return 'border bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-900';
-  if (nome.includes('ARMA') || secao.repetir_para === 'armas') return 'border bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900';
+function getSecaoVisual(secao: Pick<SecaoForm, 'repetir_para'>): string {
+  if (ehAgrupamentoB601(secao.repetir_para) || secao.repetir_para === 'armas') {
+    return 'border bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-900';
+  }
+  if (/^b601_pecas(?::\d+)?$/.test(secao.repetir_para || '')) {
+    return 'border bg-amber-50/70 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900';
+  }
 
   return 'border bg-card/50 border-border';
 }
@@ -494,6 +491,8 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
     transition,
     opacity: isDragging ? 0.55 : 1,
   };
+  const temComplemento = possuiComplementoB601(secao.repetir_para);
+  const partes = temComplemento ? separarComplementoB601(secao.conteudo) : { descricao: secao.conteudo, complemento: '' };
 
   return (
     <div
@@ -521,7 +520,15 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
         onMoveSecao={direction => handleMoveSecao(index, direction)}
         onRemoveSecao={() => handleRemoveSecao(index)}
       />
-      <PlaceholderContextMenu
+      {ehAgrupamentoB601(secao.repetir_para) ? (
+        <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">{secao.repetir_para === 'b601_agrupados:105'
+          ? 'Uma coluna por projétil, em quadros de até cinco. As características são preenchidas no laudo.'
+          : 'Uma linha por estojo, reunindo todos os itens. As características são preenchidas no laudo.'}</p>
+        <p className="text-xs text-muted-foreground">Prévia com cinco unidades. No laudo, a quantidade e a origem vêm da REP.</p>
+        <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: gerarPreviaDescricaoB601(secao.repetir_para === 'b601_agrupados:105' ? '105' : '101') }} />
+        </div>
+      ) : <PlaceholderContextMenu
         editorId={`template-secao-${getSecaoRef(secao)}`}
         categorias={categorias}
         placeholders={placeholders}
@@ -532,15 +539,28 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
       >
         <TinyMceEditor
           editorId={`template-secao-${getSecaoRef(secao)}`}
-          value={secao.conteudo}
-          onChange={html => updateSecao(index, 'conteudo', html)}
+          value={partes.descricao}
+          onChange={html => updateSecao(index, 'conteudo', temComplemento ? juntarComplementoB601(html, partes.complemento) : html)}
           height={250}
           placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
           placeholderChaves={placeholderChaves}
           autoConverterReservados={true}
           condToggles={exameToggles}
         />
-      </PlaceholderContextMenu>
+      </PlaceholderContextMenu>}
+      {temComplemento && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label>Conteúdo após a descrição</Label>
+          </div>
+          <p className="text-xs text-muted-foreground">Este conteúdo aparece uma vez, ao final da subseção. Use o botão de inserir figura para adicionar espaços para imagens.</p>
+          <PlaceholderContextMenu editorId={`template-secao-${getSecaoRef(secao)}-complemento`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} categoriaExameId={categoriaExameId}>
+            <TinyMceEditor editorId={`template-secao-${getSecaoRef(secao)}-complemento`} value={partes.complemento}
+              onChange={html => updateSecao(index, 'conteudo', juntarComplementoB601(partes.descricao, html))}
+              height={300} placeholder="Figuras, legendas e observações após a descrição..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
+          </PlaceholderContextMenu>
+        </div>
+      )}
     </div>
   );
 };
@@ -558,7 +578,7 @@ export const TemplatesPage: React.FC = () => {
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplateForm);
   const [secoes, setSecoes] = useState<SecaoForm[]>([]);
   const [, setSecoesDb] = useState<SecaoItem[]>([]);
-  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
+  const [editorMode, setEditorMode] = useState<'multi' | 'single'>('multi');
   const [singleEditorHtml, setSingleEditorHtml] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof TemplateForm, string>>>({});
@@ -574,6 +594,7 @@ export const TemplatesPage: React.FC = () => {
 
   const placeholderChaves = useMemo(
     () => Array.from(new Set([
+      ...CHAVES_PLACEHOLDERS_REP,
       ...placeholders.map(p => p.chave),
       ...CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave),
     ])),
@@ -635,7 +656,8 @@ export const TemplatesPage: React.FC = () => {
 
   const tipoExameCodigo = useMemo(() => {
     if (!templateForm.tipo_exame_id) return '';
-    return tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.codigo || '';
+    const codigo = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.codigo || '';
+    return codigo === 'B601' ? 'B-601' : codigo;
   }, [templateForm.tipo_exame_id, tiposExame]);
 
   const categoriaExameId = useMemo(() => (
@@ -696,7 +718,9 @@ export const TemplatesPage: React.FC = () => {
             ? nomeRaw
             : `Seção ${index + 1}: ${nomeRaw}`)
           : `Seção ${index + 1}`;
-        const conteudo = sec.conteudo?.trim() || '<p>&nbsp;</p>';
+        const conteudo = possuiComplementoB601(sec.repetir_para)
+          ? montarEdicaoComplementoB601(sec.conteudo, sec.repetir_para || '')
+          : sec.conteudo?.trim() || '<p>&nbsp;</p>';
         const secId = sec.id || `tmp-${index}`;
 
         return `
@@ -727,7 +751,10 @@ export const TemplatesPage: React.FC = () => {
         const idx = idxRaw != null ? Number(idxRaw) : NaN;
         const contentNode = node.querySelector('[data-template-secao-content="true"]') as HTMLElement | null;
         if (!Number.isNaN(idx) && contentNode) {
-          contentByIndex.set(idx, (contentNode.innerHTML || '').trim() || '<p>&nbsp;</p>');
+          const secao = secoesBase[idx];
+          contentByIndex.set(idx, secao && possuiComplementoB601(secao.repetir_para)
+            ? lerEdicaoComplementoB601(contentNode, secao.conteudo, secao.repetir_para || '')
+            : (contentNode.innerHTML || '').trim() || '<p>&nbsp;</p>');
         }
       });
 
@@ -771,6 +798,11 @@ export const TemplatesPage: React.FC = () => {
       return;
     }
     if (editorMode === 'single') {
+      const selecionado = activeEditor.selection.getNode();
+      if (selecionado.closest('[data-b601-descricao-template][contenteditable="false"]')) {
+        toast.info('Selecione a área Conteúdo após a descrição para inserir a figura.');
+        return;
+      }
       activeEditor.insertContent(buildDummyFigureHtml());
     } else {
       activeEditor.execCommand('insertLaudoImageDummy', false, {});
@@ -807,7 +839,7 @@ export const TemplatesPage: React.FC = () => {
     setTemplateForm(emptyTemplateForm());
     setSecoes([emptySecaoForm()]);
     setSecoesDb([]);
-    setEditorMode('single');
+    setEditorMode('multi');
     setSingleEditorHtml('');
     setErrors({});
     setEditMode(true);
@@ -839,7 +871,7 @@ export const TemplatesPage: React.FC = () => {
       setSecoes([emptySecaoForm()]);
       setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
     }
-    setEditorMode('single');
+    setEditorMode('multi');
     setEditMode(true);
   }, [placeholderChaves, buildSingleHtmlFromSecoes]);
 
@@ -885,7 +917,7 @@ export const TemplatesPage: React.FC = () => {
         setSecoes([emptySecaoForm()]);
         setSingleEditorHtml(buildSingleHtmlFromSecoes([emptySecaoForm()]));
       }
-      setEditorMode('single');
+      setEditorMode('multi');
       setEditMode(true);
     } catch {
       toast.error('Erro ao clonar template');
@@ -946,8 +978,8 @@ export const TemplatesPage: React.FC = () => {
           ? {
             ...secao,
             [field]: value,
-            ...(field === 'repetir_para' && value === 'armas' && !secao.repetir_titulo?.trim()
-              ? { repetir_titulo: getTituloPadraoRepeticao({ repetir_para: 'armas' }, tipoExameCodigo) }
+            ...(field === 'repetir_para' && (value === 'armas' || String(value).startsWith('b601_pecas')) && !secao.repetir_titulo?.trim()
+              ? { repetir_titulo: getTituloPadraoRepeticao({ repetir_para: String(value) }, tipoExameCodigo) }
               : {}),
           }
           : secao
@@ -1086,7 +1118,7 @@ export const TemplatesPage: React.FC = () => {
 
   /** Converte HTML em PDF e exibe no dialog */
   const gerarEExibirPdf = useCallback(async (fullHtml: string, headerTemplate?: string) => {
-    const result = await window.ipcAPI.template.previewPDF(fullHtml, await getMargens(), headerTemplate);
+    const result = await window.ipcAPI.template.previewPDF(renumerarTabelasHtml(fullHtml), await getMargens(), headerTemplate);
     if (result.success && result.data) {
       const byteChars = atob(result.data);
       const byteNums = new Array(byteChars.length);
@@ -1108,7 +1140,7 @@ export const TemplatesPage: React.FC = () => {
     templateNome: string,
     tipoExameNome: string,
   ): Promise<{ fullHtml: string; headerTemplate: string }> => {
-    const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+    const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
       numeroRepFallback: '321.654-2026',
     });
 
@@ -1141,7 +1173,9 @@ export const TemplatesPage: React.FC = () => {
         const filhos = filhosPorPai.get(paiRef || '') || [];
         filhos.forEach(filho => {
           if (!filho.ocultar_titulo) partes.push(`<h3>${[numeracaoPorSecao.get(filho), filho.nome.trim()].filter(Boolean).join(' ')}</h3>`);
-          partes.push(filho.conteudo || '<p style="color: #999; font-style: italic;">(subseção vazia)</p>');
+          partes.push(ehAgrupamentoB601(filho.repetir_para)
+            ? gerarPreviaDescricaoB601(filho.repetir_para === 'b601_agrupados:105' ? '105' : '101') + separarComplementoB601(filho.conteudo || '').complemento
+            : filho.conteudo || '<p style="color: #999; font-style: italic;">(subseção vazia)</p>');
         });
 
         return partes.join('\n');
@@ -1151,7 +1185,7 @@ export const TemplatesPage: React.FC = () => {
     let fullHtml = cabecalhoPrimeiraPagina
       ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
       : '';
-    fullHtml += secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>';
+    fullHtml += (secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>') + fechamentoHtml;
 
     let peritoNome = '';
     let peritoCargo = '';

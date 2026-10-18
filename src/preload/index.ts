@@ -1,4 +1,5 @@
 import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
+import type { AvisoReiteracaoGdl } from '../shared/gdl/reiteracao.js';
 import type { SalvarTemplateCompletoInput, CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
@@ -45,7 +46,7 @@ import type {
   DashboardCronologiaLaudo,
   DashboardResumo,
 } from '../types/dashboard.js';
-import type { DadosImportacaoB602, ResultadoImportacaoExame } from '../shared/types/b602-gdl.types.js';
+import type { ResultadoImportacaoGdl } from '../shared/types/gdl-importacao.types.js';
 import type { FalhaListaRepsGdl, SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
 import type { ListaImagensRepGdl, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
@@ -255,6 +256,8 @@ export interface IpcAPI {
     copiarEmailSuporte: () => Promise<UserResponse<{ email: string }>>;
     obterPreferenciaListagem: () => Promise<UserResponse<{ habilitada: boolean }>>;
     definirPreferenciaListagem: (habilitada: boolean) => Promise<UserResponse<{ habilitada: boolean }>>;
+    obterAvisosReiteracao: () => Promise<UserResponse<AvisoReiteracaoGdl[]>>;
+    onAvisosAlterados: (callback: (reiniciar: boolean) => void) => () => void;
     obterMinhasRepsCache: () => Promise<UserResponse<SnapshotMinhasRepsGdl | null>>;
     atualizarMinhasRepsCache: (forcar: boolean) => Promise<UserResponse<SnapshotMinhasRepsGdl> & { falha?: FalhaListaRepsGdl }>;
     testarConexao: (ambiente?: string) => Promise<UserResponse>;
@@ -264,8 +267,8 @@ export interface IpcAPI {
     identificarRep: (numero: string, ano: string, naturezaLista?: string) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
     completarConsultaRep: (consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
     descartarConsultaRep: () => Promise<UserResponse>;
-    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
-    consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>>;
+    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<UserResponse<ResultadoImportacaoGdl>>;
+    consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoGdl>>;
     completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     prepararAtualizacaoRep: (repId: string) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
     aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<UserResponse<ResultadoAtualizacaoRepGdl>>;
@@ -575,6 +578,7 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:descartar-consulta-rep',
   'gdl:converter-consulta-rep',
   'gdl:obter-minhas-reps-cache',
+  'gdl:obter-avisos-reiteracao',
   'gdl:atualizar-minhas-reps-cache',
   'gdl:preparar-atualizacao-rep',
   'gdl:completar-atualizacao-rep',
@@ -831,6 +835,43 @@ function descarregarResumoIpc(): void {
 type ResultadoFuncionalIpc = 'sucesso' | 'falha' | 'indeterminado';
 type DesfechoIpc = ResultadoFuncionalIpc | 'rejeicao_transporte';
 
+// O preload sandboxed mantém as listas locais: imports de execução além de Electron não estão disponíveis.
+const codigosFalhaListaRepsGdl = [
+  'desativada',
+  'credenciais', 'autenticacao', 'rede', 'tempo_esgotado', 'limite_gdl', 'servidor',
+  'sessao', 'estrutura', 'detalhes_reps', 'lista_inconsistente',
+  'cache_local', 'inesperado',
+] as const;
+const etapasFalhaListaRepsGdl = [
+  'consulta_lista', 'preferencia', 'salvar_cache', 'configuracao', 'rede_gdl',
+  'formulario_login', 'login_web', 'abrir_lista', 'detalhes_reps', 'conferir_lista',
+  'sessao_web', 'interpretar_lista', 'carregar_formulario', 'validar_formulario',
+  'submeter_login', 'validar_login',
+] as const;
+const codigosSistemaFalhaGdl = [
+  'EACCES', 'EPERM', 'ENOSPC', 'EROFS', 'EMFILE', 'ENOTFOUND', 'ECONNREFUSED',
+  'ECONNRESET', 'ECONNABORTED', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'EPIPE',
+  'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET',
+  'ERR_CONNECTION_REFUSED', 'ERR_CONNECTION_RESET', 'ERR_CONNECTION_CLOSED',
+  'ERR_CONNECTION_ABORTED', 'ERR_CONNECTION_TIMED_OUT', 'ERR_NAME_NOT_RESOLVED',
+  'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED', 'ERR_ADDRESS_UNREACHABLE',
+  'ERR_PROXY_CONNECTION_FAILED', 'ERR_TUNNEL_CONNECTION_FAILED', 'ERR_TIMED_OUT',
+  'ERR_CERT_AUTHORITY_INVALID', 'ERR_CERT_DATE_INVALID', 'ERR_SSL_PROTOCOL_ERROR',
+] as const;
+
+function normalizarFalhaDiagnosticoGdl(valor: unknown) {
+  if (!valor || typeof valor !== 'object' || !('codigo' in valor)) return undefined;
+  const codigo = codigosFalhaListaRepsGdl.find(item => item === valor.codigo);
+  if (!codigo) return undefined;
+  const etapa = 'etapa' in valor ? etapasFalhaListaRepsGdl.find(item => item === valor.etapa) : undefined;
+  const codigoSistema = 'codigoSistema' in valor ? codigosSistemaFalhaGdl.find(item => item === valor.codigoSistema) : undefined;
+  const statusHttp = 'statusHttp' in valor && typeof valor.statusHttp === 'number' && Number.isInteger(valor.statusHttp) && valor.statusHttp >= 100 && valor.statusHttp <= 599 ? valor.statusHttp : undefined;
+  const referencia = 'referencia' in valor && typeof valor.referencia === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(valor.referencia) ? valor.referencia : undefined;
+  const tentarNovamenteEmSegundos = 'tentarNovamenteEmSegundos' in valor && typeof valor.tentarNovamenteEmSegundos === 'number' && Number.isInteger(valor.tentarNovamenteEmSegundos) && valor.tentarNovamenteEmSegundos >= 1 && valor.tentarNovamenteEmSegundos <= 60 ? valor.tentarNovamenteEmSegundos : undefined;
+  const bloqueioTemporario = 'bloqueioTemporario' in valor && valor.bloqueioTemporario === true && tentarNovamenteEmSegundos !== undefined ? true : undefined;
+  return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos };
+}
+
 function classificarResultadoFuncionalIpc(resposta: unknown): ResultadoFuncionalIpc {
   if (resposta === null || typeof resposta !== 'object' || Array.isArray(resposta) || !Object.prototype.hasOwnProperty.call(resposta, 'success')) return 'indeterminado';
   if (!('success' in resposta) || typeof resposta.success !== 'boolean') return 'indeterminado';
@@ -1084,7 +1125,9 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
         const resultadoFuncional = classificarResultadoFuncionalIpc(resposta);
         const duracaoMs = performance.now() - inicio;
         const fase = resultadoFuncional === 'sucesso' ? 'sucesso' : resultadoFuncional === 'falha' ? 'falha_funcional' : 'resposta_indeterminada';
-        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs });
+        const falha = resultadoFuncional === 'falha' && channel.startsWith('gdl:') && resposta && typeof resposta === 'object' && 'falha' in resposta
+          ? normalizarFalhaDiagnosticoGdl(resposta.falha) : undefined;
+        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs, ...(falha ? { falha } : {}) });
         registrarIpcDesempenho(channel, duracaoMs, resultadoFuncional, args, resposta);
       }
       return resposta;
@@ -1446,6 +1489,12 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       if (typeof habilitada !== 'boolean') throw new Error('Preferência de listagem inválida');
       return invocarComDiagnostico('gdl:definir-preferencia-listagem', habilitada);
     },
+    obterAvisosReiteracao: (): Promise<UserResponse<AvisoReiteracaoGdl[]>> => invocarComDiagnostico('gdl:obter-avisos-reiteracao'),
+    onAvisosAlterados: (callback: (reiniciar: boolean) => void) => {
+      const listener = (_evento: Electron.IpcRendererEvent, reiniciar: unknown) => callback(reiniciar === true);
+      ipcRenderer.on('gdl:avisos-alterados', listener);
+      return () => ipcRenderer.removeListener('gdl:avisos-alterados', listener);
+    },
     obterMinhasRepsCache: (): Promise<UserResponse<SnapshotMinhasRepsGdl | null>> => invocarComDiagnostico('gdl:obter-minhas-reps-cache'),
     atualizarMinhasRepsCache: (forcar: boolean): Promise<UserResponse<SnapshotMinhasRepsGdl>> => {
       if (typeof forcar !== 'boolean') throw new Error('Opção de atualização inválida');
@@ -1470,7 +1519,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       invocarComDiagnostico('gdl:identificar-rep', numero.replace(/\D/g, ''), ano.trim(), naturezaLista),
     completarConsultaRep: (consultaId: string, abrirDetalhes: boolean): Promise<UserResponse<ConsultaIdentificacaoRepGdl>> => invocarComDiagnostico('gdl:completar-consulta-rep', consultaId, abrirDetalhes),
     descartarConsultaRep: (): Promise<UserResponse> => invocarComDiagnostico('gdl:descartar-consulta-rep'),
-    converterConsultaRep: (consultaId: string, tipoExameId: string): Promise<UserResponse<ResultadoImportacaoExame<DadosImportacaoB602>>> =>
+    converterConsultaRep: (consultaId: string, tipoExameId: string): Promise<UserResponse<ResultadoImportacaoGdl>> =>
       invocarComDiagnostico('gdl:converter-consulta-rep', consultaId, tipoExameId),
     consultarRep: (numero: string, ano: string) => {
       if (typeof numero !== 'string' || !numero.trim()) {

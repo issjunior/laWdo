@@ -253,6 +253,7 @@ class AtualizacaoRepGdlService {
     const codigo = gdlService.extrairCodigoNaturezaExame(consulta.naturezaExame?.trim() || '')
     if (codigo !== 'B-602') throw new Error(`O exame ${consulta.naturezaExame || 'retornado'} ainda não possui adaptador de atualização.`)
     const importacao = converterRepGdl(codigo, consulta.dados, { origemInicial: 'gdl', ultimaConsulta: { ambiente: consulta.ambiente ?? 'producao', numeroRep: identificacao.numero, anoRep: identificacao.ano, consultadoEm: new Date().toISOString() } })
+    if (importacao.codigoExame !== 'B-602') throw new Error('Adaptador de atualização incompatível.');
     importacao.camposVaziosConfirmados = camposVaziosConfirmados;
     for (const campo of camposVaziosConfirmados) importacao.camposGerais[campo] = '';
     if (consultaExistente) {

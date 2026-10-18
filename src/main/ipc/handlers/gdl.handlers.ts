@@ -1,4 +1,5 @@
 import { observarConsultaGdl } from '../../services/gdl-diagnostico.service.js';
+import { obterAvisosRepositorioGdl, registrarConsultaRepositorioGdl } from '../../services/gdl-repositorio.service.js';
 import { identificarRepGdl, completarConsultaRepGdl, obterConsultaRepConcluida, converterConsultaRepGdl, descartarConsultaRepGdl } from '../../services/gdl-consulta-local.service.js';
 import { clipboard, ipcMain, type WebContents } from 'electron';
 import { EMAIL_SUPORTE_LAWDO } from '../../../shared/gdl/suporte.js';
@@ -10,7 +11,7 @@ import { obterMinhasRepsEmCache, atualizarMinhasRepsEmCache } from '../../servic
 import { definirListagemRepsGdlHabilitada, obterListagemRepsGdlHabilitada } from '../../services/gdl-listagem-preferencia.service.js';
 import { classificarFalhaListaRepsGdl } from '../../services/gdl-minhas-reps-erro.service.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
-import { converterRepGdl } from '../../services/gdl-adaptadores.service.js';
+import { converterRepGdl, listarCodigosImportacaoGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
 import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
@@ -56,6 +57,19 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:obter-avisos-reiteracao', async event => {
+    try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
+      const identidade = await gdlService.obterIdentidadeMinhasReps();
+      const avisos = await obterAvisosRepositorioGdl(usuarioId, identidade);
+      if (usuarioId !== authSessaoService.exigir(event.sender.id) || identidade !== await gdlService.obterIdentidadeMinhasReps()) {
+        throw new Error('A sessão ou configuração GDL mudou.');
+      }
+      return { success: true, data: avisos };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível ler os avisos locais.' };
+    }
+  });
   ipcMain.handle('gdl:copiar-email-suporte', async event => {
     try {
       authSessaoService.exigir(event.sender.id);
@@ -108,13 +122,16 @@ export const registerGdlHandlers = (): void => {
         detalhes: falha.detalhes,
         tipoErro: falha.tipoErro,
         codigoSistema: falha.codigoSistema,
+        statusHttp: falha.statusHttp,
+        bloqueioTemporario: falha.bloqueioTemporario,
+        tentarNovamenteEmSegundos: falha.tentarNovamenteEmSegundos,
         duracaoMs: Date.now() - inicio,
         pilha: erro instanceof Error ? erro.stack?.split('\n').slice(1, 5).join('\n') : undefined,
       });
       return {
         success: false,
         error: falha.detalhes,
-        falha: { codigo: falha.codigo, detalhes: falha.detalhes, referencia },
+        falha: { codigo: falha.codigo, detalhes: falha.detalhes, referencia, etapa: falha.etapa, codigoSistema: falha.codigoSistema, statusHttp: falha.statusHttp, bloqueioTemporario: falha.bloqueioTemporario, tentarNovamenteEmSegundos: falha.tentarNovamenteEmSegundos },
       };
     }
   });
@@ -280,6 +297,8 @@ export const registerGdlHandlers = (): void => {
 
   ipcMain.handle('gdl:consultar-rep', async (event, numero: string, ano: string) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
+      const identidade = await gdlService.obterIdentidadeMinhasReps();
       if (!numero || typeof numero !== 'string' || !ano || typeof ano !== 'string') {
         return { success: false, error: 'Número e ano da REP são obrigatórios.' };
       }
@@ -288,12 +307,29 @@ export const registerGdlHandlers = (): void => {
       if (!resultado.sucesso || !resultado.dados) {
         return { success: false, error: resultado.erro || 'Erro ao consultar REP no GDL' };
       }
+      if (String(resultado.dados.numero) !== numero.replace(/\D/g, '').replace(/^0+/, '') || String(resultado.dados.ano) !== ano.trim()) {
+        throw new Error('A API retornou uma REP diferente da consultada.');
+      }
+      const validarContexto = async () => {
+        if (usuarioId !== authSessaoService.exigir(event.sender.id) || identidade !== await gdlService.obterIdentidadeMinhasReps()) {
+          throw new Error('A sessão ou configuração GDL mudou.');
+        }
+      };
+      await validarContexto();
+      try {
+        await registrarConsultaRepositorioGdl(usuarioId, identidade, resultado.dados.codRep, String(resultado.dados.numero), String(resultado.dados.ano), {
+          fonte: 'api', natureza: resultado.naturezaExame ?? null, status: resultado.statusRep ?? null, dados: resultado.dados,
+        }, validarContexto);
+      } catch {
+        logError('Não foi possível persistir a observação local da consulta GDL.');
+      }
+      await validarContexto();
       const naturezaExameGdl = resultado.naturezaExame?.trim() || '';
       const codigoExame = gdlService.extrairCodigoNaturezaExame(naturezaExameGdl);
       if (!codigoExame) {
         return { success: false, error: resultado.erroNaturezaExame || 'O GDL não retornou uma natureza de exame identificável para esta REP.' };
       }
-      if (codigoExame !== 'B-602') {
+      if (!listarCodigosImportacaoGdl().includes(codigoExame)) {
         return {
           success: false,
           error: `O formulário para a natureza de exame ${naturezaExameGdl} ainda está em desenvolvimento no laWdo. Os dados não foram importados.`,

@@ -1,3 +1,4 @@
+import type { DadosB601 } from '@shared/types/b601.types';
 import { useState, useMemo, useCallback } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { SECTION_REGISTRY } from '@/components/rep/exam-fields/index';
@@ -14,6 +15,7 @@ interface UseRepStepperOptions {
   tipoExameId: string;
   tipoExameSelecionado: { id: string; codigo: string; nome: string } | null;
   pecasB602: PecaB602[];
+  dadosB601?: DadosB601;
 }
 
 interface UseRepStepperReturn {
@@ -31,6 +33,7 @@ export function useRepStepper({
   tipoExameId: _tipoExameId,
   tipoExameSelecionado,
   pecasB602,
+  dadosB601,
 }: UseRepStepperOptions): UseRepStepperReturn {
   const [activeStep, setActiveStep] = useState('dados-solicitacao');
   const [collapsed, setCollapsed] = useState(false);
@@ -76,7 +79,7 @@ export function useRepStepper({
         const section = SECTION_REGISTRY[sectionId];
         if (!section) continue;
         if (section.isComplete) {
-          if (section.isComplete(formValues, { pecasB602 })) completed.add(step.id);
+          if (section.isComplete(formValues, { pecasB602, dadosB601 })) completed.add(step.id);
         } else {
           checkStep(section.requiredFields ?? [], step.id);
         }
@@ -84,7 +87,7 @@ export function useRepStepper({
     }
 
     return completed;
-  }, [formValues, pecasB602, tipoExameSelecionado?.codigo]);
+  }, [dadosB601, formValues, pecasB602, tipoExameSelecionado?.codigo]);
 
   const onStepClick = useCallback(
     (id: string) => {

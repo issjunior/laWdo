@@ -19,11 +19,11 @@ export function DataTablePagination<TData extends RowData>({
   table,
 }: DataTablePaginationProps<TData>) {
   return (
-    <div className="flex items-center justify-between px-2 py-1">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-2 py-1">
       <div className="flex-1 text-sm text-muted-foreground">
         {table.getFilteredRowModel().rows.length} registro(s)
       </div>
-      <div className="flex items-center space-x-6 lg:space-x-8">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <div className="flex items-center space-x-2">
           <p className="text-sm font-medium">Itens/pág</p>
           <Select

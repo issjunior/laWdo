@@ -1,3 +1,4 @@
+import { converterMedidaTextoParaPt } from './medidas-texto';
 import type { AlinhamentoDocumento, BlocoExportacao, DocumentoExportacao, EstiloTextoExportacao, ListaExportacao, ParagrafoExportacao, TrechoExportacao } from '@shared/types/exportacao.types';
 import { elementoEhQuebraPagina, normalizarQuebrasPaginaHtml } from '@shared/utils/quebra-pagina';
 const numero = (v: string | null): number | undefined => { const n = Number.parseFloat(v || ''); return Number.isFinite(n) ? n : undefined; };
@@ -6,7 +7,7 @@ const corDeFundoExportavel = (v: string): string | undefined => { const valor = 
 const alinhamento = (e: Element): AlinhamentoDocumento | undefined => (e.getAttribute('style') || '').match(/text-align:\s*(left|center|right|justify)/i)?.[1]?.toLowerCase() as AlinhamentoDocumento | undefined;
 function estilo(e: Element, p: EstiloTextoExportacao = {}): EstiloTextoExportacao { const t = e.tagName.toLowerCase(), c = e.getAttribute('style') || ''; return { ...p, negrito: p.negrito || /^(b|strong)$/.test(t) || /font-weight:\s*(bold|[6-9]00)/i.test(c), italico: p.italico || /^(i|em)$/.test(t) || /font-style:\s*italic/i.test(c), sublinhado: p.sublinhado || t === 'u' || /text-decoration[^;]*underline/i.test(c), tachado: p.tachado || /^(s|strike)$/.test(t) || /text-decoration[^;]*line-through/i.test(c), subscrito: p.subscrito || t === 'sub', sobrescrito: p.sobrescrito || t === 'sup', fonte: c.match(/font-family:\s*([^;,]+)/i)?.[1]?.replace(/["']/g, '').trim() || p.fonte, tamanhoPt: numero(c.match(/font-size:\s*([\d.]+)pt/i)?.[1] || null) || p.tamanhoPt, cor: cor(c.match(/(?:^|;)\s*color:\s*([^;]+)/i)?.[1] || '') || p.cor, realce: cor(c.match(/background-color:\s*([^;]+)/i)?.[1] || '') || p.realce, link: t === 'a' ? e.getAttribute('href') || undefined : p.link }; }
 function trechos(n: Node, p: EstiloTextoExportacao = {}): TrechoExportacao[] { if (n.nodeType === Node.TEXT_NODE) return n.textContent ? [{ texto: n.textContent, estilo: p }] : []; if (n.nodeType !== Node.ELEMENT_NODE) return []; const e = n as Element; if (e.tagName.toLowerCase() === 'br') return [{ texto: '', estilo: p, quebraLinha: true }]; return Array.from(e.childNodes).flatMap(f => trechos(f, estilo(e, p))); }
-function paragrafo(e: Element, emTabela = false): ParagrafoExportacao { const c = e.getAttribute('style') || '', h = /^h([1-6])$/i.exec(e.tagName)?.[1]; const justificar = e.tagName.toLowerCase() === 'p' && !emTabela && !e.closest('td,th,figure'); return { tipo: 'paragrafo', trechos: trechos(e), alinhamento: alinhamento(e) || (justificar ? 'justify' : undefined), nivelTitulo: h ? Number(h) : undefined, citacao: e.tagName.toLowerCase() === 'blockquote', preFormatado: e.tagName.toLowerCase() === 'pre', recuoEsquerdoPt: numero(c.match(/margin-left:\s*([\d.]+)pt/i)?.[1] || null), recuoDireitoPt: numero(c.match(/margin-right:\s*([\d.]+)pt/i)?.[1] || null), recuoPrimeiraLinhaPt: numero(c.match(/text-indent:\s*([\d.]+)pt/i)?.[1] || null), espacamentoAntesPt: numero(c.match(/margin-top:\s*([\d.]+)pt/i)?.[1] || null), espacamentoDepoisPt: numero(c.match(/margin-bottom:\s*([\d.]+)pt/i)?.[1] || null), espacamentoLinha: numero(c.match(/line-height:\s*([\d.]+)/i)?.[1] || null) }; }
+function paragrafo(e: Element, emTabela = false): ParagrafoExportacao { const c = e.getAttribute('style') || '', h = /^h([1-6])$/i.exec(e.tagName)?.[1]; const justificar = e.tagName.toLowerCase() === 'p' && !emTabela && !e.closest('td,th,figure'); return { tipo: 'paragrafo', trechos: trechos(e), alinhamento: alinhamento(e) || (justificar ? 'justify' : undefined), nivelTitulo: h ? Number(h) : undefined, citacao: e.tagName.toLowerCase() === 'blockquote', preFormatado: e.tagName.toLowerCase() === 'pre', recuoEsquerdoPt: numero(c.match(/margin-left:\s*([\d.]+)pt/i)?.[1] || null), recuoDireitoPt: numero(c.match(/margin-right:\s*([\d.]+)pt/i)?.[1] || null), recuoPrimeiraLinhaPt: numero(c.match(/text-indent:\s*([\d.]+)pt/i)?.[1] || null), espacamentoAntesPt: e instanceof HTMLElement && e.style.marginTop ? converterMedidaTextoParaPt(e.style.marginTop) ?? undefined : undefined, espacamentoDepoisPt: e instanceof HTMLElement && e.style.marginBottom ? converterMedidaTextoParaPt(e.style.marginBottom) ?? undefined : undefined, espacamentoLinha: numero(c.match(/line-height:\s*([\d.]+)/i)?.[1] || null) }; }
 function lista(e: Element, nivel = 0): ListaExportacao[] { const itens: ParagrafoExportacao[] = [], sub: ListaExportacao[] = []; for (const li of Array.from(e.querySelectorAll(':scope > li'))) { const c = li.cloneNode(true) as Element; c.querySelectorAll(':scope > ul,:scope > ol').forEach(x => x.remove()); itens.push(paragrafo(c)); li.querySelectorAll(':scope > ul,:scope > ol').forEach(x => sub.push(...lista(x, nivel + 1))); } return [{ tipo: 'lista', ordenada: e.tagName.toLowerCase() === 'ol', nivel, itens }, ...sub]; }
 function blocosCelula(celula: Element): BlocoExportacao[] {
   const resultado: BlocoExportacao[] = [];
@@ -37,6 +38,37 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
     if (elemento.matches('h2[data-ocultar-titulo="true"],h3[data-ocultar-titulo="true"],[data-placeholder-preview],[data-laudo-secao-header],.tox,button')) continue;
     if (elementoEhQuebraPagina(elemento)) {
       resultado.push({ tipo: 'quebra-pagina' });
+      continue;
+    }
+    if (elemento.matches('.cabecalho,[data-b601-grupo],[data-b601-complemento],[data-repeat-group="b601_pecas"],[data-b601-peca],[data-b601-revisao-secao]')) {
+      resultado.push(...blocos(elemento, emTabela));
+      continue;
+    }
+    if (tipo === 'p' && elemento.querySelector('img')) {
+      const documento = elemento.ownerDocument;
+      const imagens = Array.from(elemento.querySelectorAll('img'));
+      let anterior: HTMLImageElement | undefined;
+      const acrescentarTexto = (proxima?: HTMLImageElement) => {
+        const intervalo = documento.createRange();
+        if (anterior) intervalo.setStartAfter(anterior);
+        else intervalo.setStart(elemento, 0);
+        if (proxima) intervalo.setEndBefore(proxima);
+        else intervalo.setEnd(elemento, elemento.childNodes.length);
+        const parte = elemento.cloneNode(false) as Element;
+        parte.appendChild(intervalo.cloneContents());
+        if (parte.textContent?.trim()) resultado.push(paragrafo(parte, emTabela));
+      };
+      for (const imagem of imagens) {
+        acrescentarTexto(imagem);
+        const grupo = documento.createElement('div');
+        const figura = documento.createElement('figure');
+        figura.setAttribute('style', elemento.getAttribute('style') || '');
+        figura.appendChild(imagem.cloneNode(true));
+        grupo.appendChild(figura);
+        resultado.push(...blocos(grupo, emTabela));
+        anterior = imagem;
+      }
+      acrescentarTexto();
       continue;
     }
     if (tipo === 'ul' || tipo === 'ol') {
@@ -85,4 +117,18 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
   }
   return resultado;
 }
-export function parseHtmlParaEstrutura(html: string): DocumentoExportacao { const d = new DOMParser().parseFromString(normalizarQuebrasPaginaHtml(html), 'text/html'); const c = d.body.getAttribute('style') || ''; return { versao: 1, fontePadrao: c.match(/font-family:\s*([^;,]+)/i)?.[1]?.replace(/["']/g, '').trim() || 'Calibri', tamanhoPadraoPt: numero(c.match(/font-size:\s*([\d.]+)pt/i)?.[1] || null) || 12, secoes: [{ blocos: blocos(d.body) }] }; }
+export function parseHtmlParaEstrutura(html: string): DocumentoExportacao {
+  const documento = new DOMParser().parseFromString(normalizarQuebrasPaginaHtml(html), 'text/html');
+  const css = documento.body.getAttribute('style') || '';
+  const fechamento = documento.querySelector('[data-laudo-fechamento="true"]');
+  const blocosFechamento = fechamento ? blocos(fechamento) : [];
+  const espacamento = Number(fechamento?.getAttribute('data-espacamento-antes-pt') ?? 0);
+  fechamento?.remove();
+  return {
+    versao: 1,
+    fontePadrao: css.match(/font-family:\s*([^;,]+)/i)?.[1]?.replace(/["']/g, '').trim() || 'Calibri',
+    tamanhoPadraoPt: numero(css.match(/font-size:\s*([\d.]+)pt/i)?.[1] || null) || 12,
+    secoes: [{ blocos: blocos(documento.body) }],
+    ...(blocosFechamento.length ? { fechamento: { blocos: blocosFechamento, espacamentoAntesPt: Number.isFinite(espacamento) ? Math.min(300, Math.max(0, espacamento)) : 0 } } : {}),
+  };
+}

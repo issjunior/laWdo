@@ -2,6 +2,7 @@ import React, { useState, lazy, Suspense, useMemo } from 'react';
 import { createHashRouter, createRoutesFromElements, RouterProvider, Route, Link, Outlet } from 'react-router';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
+import { AvisosReiteracaoProvider } from '@/contexts/AvisosReiteracaoContext';
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const SolicitantesPage = lazy(() => import('@/pages/SolicitantesPage').then(m => ({ default: m.SolicitantesPage })));
 const TiposExamePage = lazy(() => import('@/pages/TiposExamePage').then(m => ({ default: m.TiposExamePage })));
@@ -45,10 +46,10 @@ const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; curren
       <Header onLogout={onLogout} currentUser={currentUser} />
       <div className="flex min-h-0 flex-1">
         <AppSidebar currentUser={currentUser} onLogout={onLogout} />
-        <SidebarInset>
+        <SidebarInset className="min-w-0">
           <div className="flex h-full flex-col overflow-hidden bg-background">
-            <main id="conteudo-principal" data-diagnostico-id="layout.conteudo-principal" className="min-h-0 flex-1 overflow-y-auto p-6">
-              <div className="mx-auto h-full min-h-0 max-w-[1600px]">
+            <main id="conteudo-principal" data-diagnostico-id="layout.conteudo-principal" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
+              <div className="mx-auto h-full min-h-0 min-w-0 max-w-[1600px]">
                 {children}
               </div>
             </main>
@@ -82,7 +83,7 @@ const EstruturaRoteada = ({ onLogout, currentUser }: {
   const solicitarSaida = useSolicitarSaida();
   return (
     <Layout onLogout={() => solicitarSaida(onLogout)} currentUser={currentUser}>
-      <Outlet />
+      <AvisosReiteracaoProvider key={currentUser?.id}><Outlet /></AvisosReiteracaoProvider>
     </Layout>
   );
 };

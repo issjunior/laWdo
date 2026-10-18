@@ -6,10 +6,25 @@ import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js
 import { repService } from '../../services/rep.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import type { REPRow } from '../../types/database.js';
+import { ehRegistroB601, lerDadosB601 } from '../../../shared/types/b601.types.js';
+import { obterPendenciaPecaB601 } from '../../../shared/catalogos/b601.catalogo.js';
 
 type RepCreatePayload = Omit<REPRow, 'id' | 'created_at' | 'updated_at'> & { template_id?: string; perito_id?: string };
 type RepUpdatePayload = Partial<REPRow> & { template_id?: string; perito_id?: string };
 type RepSanitizada = Partial<REPRow> & { id?: string };
+
+function validarCamposB601(json?: string | null): void {
+  if (!json) return;
+  let raiz: unknown;
+  try { raiz = JSON.parse(json); } catch { return; }
+  if (!ehRegistroB601(raiz) || !Object.hasOwn(raiz, 'b601')) return;
+  const { dados } = lerDadosB601(json);
+  if (!dados.semPecas && dados.pecas.length === 0) throw new Error('Adicione peças ou declare ausência de itens no B-601.');
+  for (const peca of dados.pecas) {
+    const pendencia = obterPendenciaPecaB601(peca);
+    if (pendencia) throw new Error(pendencia);
+  }
+}
 
 /**
  * Registra handlers IPC para operações de REP
@@ -21,6 +36,7 @@ export const registerRepHandlers = (): void => {
    */
   ipcMain.handle('rep:create', async (_event, data: RepCreatePayload) => {
     try {
+      validarCamposB601(data.campos_especificos);
       if (!data.numero || !data.numero.trim()) {
         return { success: false, error: 'Número da REP é obrigatório.' };
       }
@@ -147,6 +163,7 @@ export const registerRepHandlers = (): void => {
   ipcMain.handle('rep:update', async (_event, id: string, data: RepUpdatePayload) => {
     let repAntes: REPRow | null = null;
     try {
+      validarCamposB601(data.campos_especificos);
       if (!id) return { success: false, error: 'ID inválido' };
 
       const sanitizedData: Partial<Omit<REPRow, 'id' | 'created_at'>> = {};

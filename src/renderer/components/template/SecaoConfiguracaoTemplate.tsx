@@ -194,15 +194,15 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
         </div>
       </div>
 
-      {secao.repetir_para === 'armas' && (
+      {(secao.repetir_para === 'armas' || secao.repetir_para?.startsWith('b601_pecas')) && (
         <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-800 dark:bg-amber-950/20">
           <Label className="text-xs font-medium text-amber-950 dark:text-amber-100">
-            Título de cada arma
+            Título de cada {tipoExameCodigo === 'B-601' ? 'peça' : 'arma'}
           </Label>
           <Input
             value={secao.repetir_titulo || ''}
             onChange={e => onUpdateSecao('repetir_titulo', e.target.value)}
-            placeholder="Ex: ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}}"
+            placeholder={tipoExameCodigo === 'B-601' ? 'PEÇA {{b601_peca_1_letra}} — {{b601_peca_1_tipo}}' : 'Ex: ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}}'}
             className="h-9 font-mono text-xs"
           />
           {(secao.repetir_titulo || '').trim() && (

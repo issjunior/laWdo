@@ -7,6 +7,7 @@ describe('DataTableColumnHeader', () => {
   it('encaminha ordenação crescente, decrescente e ocultação da coluna', async () => {
     const coluna = {
       getCanSort: vi.fn().mockReturnValue(true),
+      getCanHide: vi.fn().mockReturnValue(true),
       getIsSorted: vi.fn().mockReturnValue(false),
       toggleSorting: vi.fn(),
       toggleVisibility: vi.fn(),

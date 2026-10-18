@@ -1,3 +1,4 @@
+import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes, useSolicitarSaida } from '@/contexts/AlteracoesPendentesContext';
@@ -61,7 +62,7 @@ import {
   RodapeEditorLaudo,
 } from '@/components/laudo/editor/ControlesEditorLaudo';
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
-import { extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
+import { CHAVES_PLACEHOLDERS_REP, extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
@@ -396,6 +397,7 @@ const obterMascaramentoIa = async (): Promise<boolean> => {
 };
 
 interface LaudoItem {
+  apresentacao_json?: string | null;
   id: string;
   rep_id: string;
   perito_id: string;
@@ -566,6 +568,7 @@ export const LaudosPage: React.FC = () => {
   const [exportando, setExportando] = useState(false);
   const [libreOfficeDisponivel, setLibreOfficeDisponivel] = useState<boolean | null>(null);
   const [listaPreviewOpen, setListaPreviewOpen] = useState(false);
+  const [numeroRepListaPreview, setNumeroRepListaPreview] = useState('');
   const [listaPreviewBlobUrl, setListaPreviewBlobUrl] = useState('');
   const [nomeArquivoListaPreview, setNomeArquivoListaPreview] = useState('laudo.pdf');
   const [listaPreviewLoading, setListaPreviewLoading] = useState(false);
@@ -641,8 +644,10 @@ export const LaudosPage: React.FC = () => {
   const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
   const exameToggles = useMemo<ExamToggle[] | undefined>(() => {
     if (!editando?.tipo_exame_codigo) return undefined;
-    const allToggles = EXAM_TOGGLES[editando.tipo_exame_codigo];
+    const codigo = editando.tipo_exame_codigo === 'B601' ? 'B-601' : editando.tipo_exame_codigo;
+    const allToggles = EXAM_TOGGLES[codigo];
     if (!allToggles) return undefined;
+    if (codigo === 'B-601') return allToggles;
 
     // Sem dados da REP ainda, mostra todos (evita flicker enquanto carrega)
     if (!exameCamposEspecificos) return allToggles;
@@ -761,6 +766,7 @@ export const LaudosPage: React.FC = () => {
 
   const placeholderChaves = useMemo(
     () => Array.from(new Set([
+      ...CHAVES_PLACEHOLDERS_REP,
       ...placeholders.map(p => p.chave),
       ...CAMPOS_ESPECIFICOS_PLACEHOLDERS.map(p => p.chave),
     ])),
@@ -921,6 +927,10 @@ export const LaudosPage: React.FC = () => {
       const body = editor?.getBody();
       if (!editor || !body) return;
       editor.undoManager.ignore(() => {
+        body.querySelectorAll<HTMLElement>('[data-b601-grupo]').forEach(grupo => {
+          grupo.querySelectorAll<HTMLElement>('td').forEach(celula => celula.setAttribute('contenteditable', 'true'));
+          grupo.querySelectorAll<HTMLElement>('th').forEach(celula => celula.setAttribute('contenteditable', 'false'));
+        });
         const resultado = renumerarTabelas(body, { incluirPrevias: true, numeroInicial: proximoNumero });
         proximoNumero = resultado.proximoNumero;
         houveCorrecaoPersistente = resultado.alteradoPersistente || houveCorrecaoPersistente;
@@ -1895,9 +1905,12 @@ export const LaudosPage: React.FC = () => {
         } catch { /* silencioso: placeholder fica vazio */ }
       }
 
-      // 2. Buscar cabeçalho das configurações
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      // Usar a apresentação preservada na criação do laudo.
+      const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        usarCopiaLaudo: true,
+        apresentacaoJson: editando.apresentacao_json,
+        contexto: { repData, solicitanteNome, tipoExameNome, tipoExameCodigo, placeholdersPersonalizados: placeholders },
         estrito: true,
       });
 
@@ -1905,7 +1918,7 @@ export const LaudosPage: React.FC = () => {
       let fullHtml = cabecalhoPrimeiraPagina
         ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
         : '';
-      fullHtml += ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais));
+      fullHtml += ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais)) + fechamentoHtml;
 
       // 4. Aplicar placeholders (incluindo relacionamentos)
       const htmlProcessado = aplicarPlaceholders(fullHtml, repData, {
@@ -1951,6 +1964,7 @@ export const LaudosPage: React.FC = () => {
   };
 
   const handleListaPreview = useCallback(async (laudo: LaudoItem) => {
+    setNumeroRepListaPreview(laudo.rep_numero);
     try {
       setListaPreviewLoading(true);
       setError(null);
@@ -1989,8 +2003,11 @@ export const LaudosPage: React.FC = () => {
         }
       }
 
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        usarCopiaLaudo: true,
+        apresentacaoJson: laudo.apresentacao_json,
+        contexto: { repData, solicitanteNome, tipoExameNome, tipoExameCodigo, placeholdersPersonalizados: placeholders },
         estrito: true,
       });
 
@@ -1998,6 +2015,7 @@ export const LaudosPage: React.FC = () => {
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
+      html += fechamentoHtml;
       html = reindexarFiguras(html);
       html = aplicarPlaceholders(html, repData, {
         solicitanteNome,
@@ -2088,8 +2106,11 @@ export const LaudosPage: React.FC = () => {
         }
       }
 
-      const { headerTemplate, cabecalhoPrimeiraPagina } = await buildPdfHeaderConfig({
+      const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
         numeroRepFallback: repData.numero || '',
+        usarCopiaLaudo: true,
+        apresentacaoJson: editando.apresentacao_json,
+        contexto: { repData, solicitanteNome, tipoExameNome, tipoExameCodigo, placeholdersPersonalizados: placeholders },
         estrito: formato === 'pdf',
       });
 
@@ -2099,6 +2120,8 @@ export const LaudosPage: React.FC = () => {
       if (cabecalhoPrimeiraPagina) {
         html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
       }
+
+      html += fechamentoHtml;
 
       const htmlResolvido = renumerarTabelasHtml(resolverPlaceholdersExportacao(html, {
         repData,
@@ -2127,24 +2150,11 @@ export const LaudosPage: React.FC = () => {
       } else if (formato === 'docx') {
         const estrutura = parseHtmlParaEstrutura(htmlResolvido);
 
-        let logoBase64: string | undefined;
-        if (cabecalhoPrimeiraPagina) {
-          const match = cabecalhoPrimeiraPagina.match(/<img[^>]+src="(data:image\/[^"]+)"[^>]*>/i);
-          if (match) logoBase64 = match[1].replace(/^data:image\/\w+;base64,/, '');
-        }
-
         const result = await window.ipcAPI.laudo.exportar({
           laudoId: editando.id,
           formato: 'docx',
           html: htmlResolvido,
           estrutura,
-          cabecalho: cabecalhoPrimeiraPagina ? {
-            logoBase64,
-            texto: cabecalhoPrimeiraPagina.replace(/<[^>]*>/g, '').trim(),
-            alinhamento: /text-align:\s*(center|right|left)/i.test(cabecalhoPrimeiraPagina)
-              ? cabecalhoPrimeiraPagina.match(/text-align:\s*(center|right|left)/i)![1]
-              : 'left',
-          } : undefined,
           margens: await getMargens() || undefined,
         });
 
@@ -2199,7 +2209,7 @@ export const LaudosPage: React.FC = () => {
       ...secao,
       titulo: normalizarTituloSecao(secao.titulo),
     })));
-    const codigo = laudo.tipo_exame_codigo;
+    const codigo = laudo.tipo_exame_codigo === 'B601' ? 'B-601' : laudo.tipo_exame_codigo;
     if (codigo) {
       setCategoriaExameId(`cat-exam-${codigo}`);
       setExameMenuStructure(EXAM_MENU_REGISTRY[codigo]);
@@ -2233,7 +2243,7 @@ export const LaudosPage: React.FC = () => {
       if (rRep.data.campos_especificos) {
         const parsed: unknown = JSON.parse(rRep.data.campos_especificos);
         setExameCamposEspecificos(isRecord(parsed)
-          ? (isRecord(parsed.b602) ? parsed.b602 : parsed)
+          ? (['B-601', 'B601'].includes(laudo.tipo_exame_codigo || '') && isRecord(parsed.b601) ? parsed.b601 : isRecord(parsed.b602) ? parsed.b602 : parsed)
           : undefined);
       } else {
         setExameCamposEspecificos(undefined);
@@ -3612,7 +3622,7 @@ export const LaudosPage: React.FC = () => {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Nº REP" />
       ),
-      cell: ({ row }) => <span className="font-medium">{row.getValue('rep_numero')}</span>,
+      cell: ({ row }) => <div className="font-medium">{row.getValue('rep_numero')}<ReiterandoBadge centralizado numeroRep={row.original.rep_numero} /></div>,
     },
     {
       accessorKey: 'tipo_solicitacao',
@@ -3930,7 +3940,7 @@ export const LaudosPage: React.FC = () => {
         <Card className="flex flex-col overflow-visible">
           <CardHeader className="flex-shrink-0 pb-4">
             <div className="flex min-w-0 items-center gap-2.5 whitespace-nowrap">
-              <CardTitle className="shrink-0 text-lg font-bold leading-tight tracking-tight text-primary">Laudo pericial</CardTitle>
+              <CardTitle className="shrink-0 text-lg font-bold leading-tight tracking-tight text-primary">Laudo pericial<ReiterandoBadge numeroRep={editando.rep_numero} /></CardTitle>
               <span aria-hidden="true" className="text-muted-foreground">|</span>
               <CardDescription className="shrink-0 leading-tight">
                 {[editando.tipo_exame_codigo, editando.tipo_exame_nome].filter(Boolean).join(' · ') || 'Tipo de exame não definido'}
@@ -3952,6 +3962,7 @@ export const LaudosPage: React.FC = () => {
               onModoOrganizacaoChange={handleEditorModeChange}
               onAbrirIndicePlaceholders={abrirIndicePlaceholders}
             />
+
           </CardHeader>
           <CardContent className="overflow-visible p-0 px-6 pb-6">
             <PainelLateralRedimensionavel
@@ -4260,6 +4271,7 @@ export const LaudosPage: React.FC = () => {
               <DialogTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
                 Pré-visualização do Laudo (PDF)
+                <ReiterandoBadge numeroRep={editando.rep_numero} />
               </DialogTitle>
             </DialogHeader>
             <div className="flex-1 bg-slate-100 dark:bg-slate-800">
@@ -4608,6 +4620,7 @@ export const LaudosPage: React.FC = () => {
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
               Pré-visualização do Laudo (PDF)
+              <ReiterandoBadge numeroRep={numeroRepListaPreview} />
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 bg-slate-100 dark:bg-slate-800">

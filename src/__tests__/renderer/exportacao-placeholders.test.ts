@@ -1,7 +1,52 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildPlaceholderMapping } from '../../renderer/lib/exportacao-placeholders'
+import { buildPlaceholderMapping, resolverPlaceholdersExportacao } from '../../renderer/lib/exportacao-placeholders'
+import { criarDadosB601 } from '../../shared/types/b601.types'
 
 describe('placeholders de exportação', () => {
+  it.each([
+    '<code>{{solicitante_nome}}</code>',
+    '<code><span class="placeholder-tag" data-placeholder="{{solicitante_nome}}">VALOR ANTERIOR</span></code>',
+  ])('exporta o solicitante com a fonte do parágrafo sem marcação de código: %s', campo => {
+    const html = `<p style="font-family: Arial; font-size: 12pt">oriundo da ${campo}.</p>`
+    const resultado = resolverPlaceholdersExportacao(html, { repData: {}, solicitanteNome: 'UNIDADE POLICIAL' })
+    const doc = new DOMParser().parseFromString(resultado, 'text/html')
+    expect(doc.querySelector('code')).toBeNull()
+    expect(doc.querySelector('p')?.style.fontFamily).toBe('Arial')
+    expect(doc.querySelector('p')?.style.fontSize).toBe('12pt')
+    expect(doc.body.textContent).toBe('oriundo da UNIDADE POLICIAL.')
+    expect(doc.querySelector('.placeholder-tag')).toBeNull()
+  })
+
+  it.each([
+    { vinculado: '', local: 'UNIDADE LOCAL', orgao: 'ÓRGÃO GDL', esperado: 'UNIDADE LOCAL' },
+    { vinculado: '', local: '', orgao: 'ÓRGÃO GDL', esperado: 'ÓRGÃO GDL' },
+    { vinculado: 'SOLICITANTE VINCULADO', local: 'UNIDADE LOCAL', orgao: 'ÓRGÃO GDL', esperado: 'SOLICITANTE VINCULADO' },
+  ])('resolve os solicitantes B601 pela prioridade $esperado', ({ vinculado, local, orgao, esperado }) => {
+    const ctx = {
+      solicitanteNome: vinculado,
+      repData: { campos_especificos: JSON.stringify({
+        b601: { ...criarDadosB601(), solicitante_nome: local },
+        integracaoGdl: { dadosSolicitacao: { orgao } },
+      }) },
+    }
+    const mapa = buildPlaceholderMapping(ctx)
+    expect(mapa.solicitante_nome).toBe(esperado)
+    expect(mapa.b601_solicitante_nome).toBe(esperado)
+    expect(mapa.b601_tabela_dados_investigacao).toContain(esperado)
+    expect(resolverPlaceholdersExportacao('oriundo da <span data-placeholder="{{solicitante_nome}}">XXX</span>.', ctx)).toBe(`oriundo da ${esperado}.`)
+    expect(resolverPlaceholdersExportacao('{{b601_solicitante_nome}}', ctx)).toBe(esperado)
+  })
+
+  it('mantém ausência do solicitante B601 visível e não converte objetos externos em nomes', () => {
+    const ctx = { repData: { campos_especificos: JSON.stringify({
+      b601: criarDadosB601(), integracaoGdl: { dadosSolicitacao: { orgao: { nome: 'Não confirmado' } } },
+    }) } }
+    const mapa = buildPlaceholderMapping(ctx)
+    expect(mapa.solicitante_nome).toBe('')
+    expect(mapa.b601_solicitante_nome).toBe('')
+    expect(resolverPlaceholdersExportacao('{{solicitante_nome}}', ctx)).toContain('XXX')
+  })
+
   it('usa a data da última execução GDL somente no placeholder por extenso', () => {
     const placeholders = buildPlaceholderMapping({
       repData: {

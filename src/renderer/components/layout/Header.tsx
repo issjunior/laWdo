@@ -378,13 +378,13 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                     <p className="text-xs font-semibold uppercase tracking-wider text-primary">Nova versão disponível</p>
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs text-muted-foreground">Versão atual</p>
-                        <p className="font-semibold">v{appInfo?.version ?? atualizacao?.versaoInstalada}</p>
+                        <p className="text-sm text-muted-foreground">Versão atual</p>
+                        <p className="text-2xl font-bold tabular-nums">v{appInfo?.version ?? atualizacao?.versaoInstalada}</p>
                       </div>
                       <span className="text-lg font-semibold text-primary" aria-hidden="true">→</span>
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Nova versão</p>
-                        <p className="text-lg font-bold text-primary">v{dadosAtualizacao.versao}</p>
+                        <p className="text-sm text-muted-foreground">Nova versão</p>
+                        <p className="text-2xl font-bold tabular-nums text-primary">v{dadosAtualizacao.versao}</p>
                       </div>
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground">O laWdo criará um backup, fechará com segurança e abrirá o instalador. O processo costuma levar alguns minutos.</p>
@@ -393,7 +393,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-medium text-muted-foreground">Versão atual do laWdo</span>
-                    <Badge variant="default" className="bg-green-500 hover:bg-green-600">{appInfo ? `v${appInfo.version}` : 'Carregando...'}</Badge>
+                    <Badge variant="default" className="bg-green-500 px-3 py-1 text-base tabular-nums hover:bg-green-600">{appInfo ? `v${appInfo.version}` : 'Carregando...'}</Badge>
                   </div>
                   {atualizacao?.verificadoEm && (
                     <div className="flex items-center justify-between gap-3">
@@ -418,7 +418,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                   <div className="space-y-2 pt-2 border-t border-border">
                     <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Detalhes da atualização</h4>
                     <div className="space-y-2 text-xs text-muted-foreground">
-                    <p><span className="font-medium text-foreground">Versão que será instalada:</span> v{dadosAtualizacao.versao}</p>
+                    <p className="text-sm"><span className="font-medium text-foreground">Versão que será instalada:</span> <span className="text-base font-bold tabular-nums text-primary">v{dadosAtualizacao.versao}</span></p>
                     <p><span className="font-medium text-foreground">Publicada:</span> {new Intl.DateTimeFormat('pt-BR').format(new Date(dadosAtualizacao.dataPublicacao))}</p>
                     <p><span className="font-medium text-foreground">Sistema:</span> {formatarPacote()}</p>
                     <Collapsible>

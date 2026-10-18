@@ -4,7 +4,17 @@
 
 A prévia aberta no editor parte do conteúdo atual dos editores, inclusive alterações ainda não salvas; a prévia pela lista parte de `laudos.conteudo`, sem editor aberto. Ambas resolvem placeholders com os dados atuais da REP e renumeram `TABELA N` no HTML final antes do PDF. No editor, a página também confere os títulos visíveis antes de montar o HTML e interrompe a geração se essa conferência falhar. A prévia transitória de placeholder não é a fonte canônica da saída.
 
-`cabecalho_laudo` é inserido no corpo da primeira página e `cabecalho_paginas` torna-se `headerTemplate` do Chromium. `buildPdfHeaderConfig()` lê ambos; `buildHeaderTemplate()` remove wrappers de placeholder, converte `{{pagina}}`/`{{totalPaginas}}` nas classes nativas e substitui valores como o número da REP. Os padrões ficam em `src/shared/configuracoes/cabecalhos-padrao.ts`; migrations v35 e v36 os inserem com `INSERT OR IGNORE`.
+`buildPdfHeaderConfig({ usarCopiaLaudo: true, apresentacaoJson, contexto })` usa a apresentação preservada no laudo, validada pelo contrato compartilhado. `cabecalho.primeiraPagina` entra no corpo antes das seções; `cabecalho.todasPaginas` vira `headerTemplate` do Chromium. A ativação do cabeçalho controla os dois conteúdos. Os dados preservados do perito são resolvidos como texto antes dos demais placeholders, que recebem o contexto atual da REP. `buildHeaderTemplate()` remove wrappers, converte `{{pagina}}`/`{{totalPaginas}}` nas classes nativas e substitui valores escapados, preservando caracteres literais de substituição.
+
+O fechamento habilitado e não vazio entra uma única vez após todas as seções. `montarFechamentoHtml()` aplica `data-laudo-fechamento="true"`, espaçamento superior em pontos e `break-inside: avoid`/`page-break-inside: avoid`. Ele acompanha o fluxo do documento; não é rodapé fixo. Conteúdo sem texto, imagem ou tabela não reserva espaço. Fechamentos já escritos no corpo de templates não são removidos automaticamente.
+
+## Configuração e prévias dos padrões
+
+`CabecalhoPage.tsx`, na rota `/cabecalho`, oferece abas Cabeçalho e Fechamento com salvamento independente via IPC de configuração existente. As chaves JSON são `cabecalho_documento` e `fechamento_laudo`. Desativar preserva o HTML editável para reativação; o campo de espaçamento aceita de 0 a 300 pontos. As abas usam `forceMount` e ocultação visual, mantendo as três instâncias de editor montadas. A normalização dos placeholders ocorre no carregamento/inserção do modelo e ao salvar, não a cada tecla.
+
+A prévia conjunta usa o rascunho das duas abas, inclusive conteúdo ainda não salvo, dados do perito carregados da sessão e REP demonstrativa. Falha de carregamento bloqueia edição, salvamento e prévia; falha na prévia mostra erro e fecha o diálogo. O botão de inserir modelo só atua em fechamento vazio. A indicação de assinatura digital é texto visual, sem assinatura criptográfica.
+
+Prévia de template carrega os padrões ativos, não a cópia de um laudo. `carregarApresentacaoPadrao()` valida respostas IPC e JSON; ausência das novas chaves permite fallback ao cabeçalho legado e fechamento desativado, enquanto valor inválido gera erro. Os padrões de instalação ficam em `src/shared/configuracoes/apresentacao-laudo.ts` e `cabecalhos-padrao.ts`: cabeçalho e fechamento habilitados, com 34 pontos acima do fechamento. A ordem e o efeito das migrations 44/45 estão em `spec/03 laudo/laudo_ciclo_vida.md`.
 
 ## Margens e paginação
 
@@ -16,7 +26,7 @@ O HTML de impressão não introduz padding lateral alternativo: as margens de im
 
 `gerarPdfPreparado()` é compartilhado pela prévia e exportação. Após carregar o HTML em uma janela oculta com sandbox, verifica fontes e decodificação de imagens do corpo, inclusive URLs de imagem em estilos; verifica os recursos do cabeçalho em documento auxiliar isolado antes de imprimir. A preparação tem limite de 15 segundos e a impressão, de 30 segundos. Timeout, encerramento do renderer ou falha de recurso encerram a operação e limpam janelas e arquivos temporários; não há espera fixa nem PDF parcial. Os logs registram tempos, contagens e códigos, sem HTML ou conteúdo pericial.
 
-A página lê as duas configurações do cabeçalho em modo estrito: falha ou valor inválido impede gerar silenciosamente uma prévia sem cabeçalho. O IPC devolve falha tipada com código, etapa e possibilidade de nova tentativa; a interface mostra orientação persistente, **Tentar novamente** e **Fechar**. Uma nova tentativa usa o conteúdo atual do editor, e uma falha não reapresenta a prévia anterior como se fosse a atual.
+As prévias de laudo validam a cópia completa da apresentação em modo estrito: ausência ou valor inválido resulta em `CABECALHO_INDISPONIVEL`, inclusive quando a falha está no fechamento, sem substituí-la pelos padrões ativos. O IPC devolve falha tipada com código, etapa e possibilidade de nova tentativa; a interface mostra orientação persistente, **Tentar novamente** e **Fechar**. Uma nova tentativa usa o conteúdo atual do editor, e uma falha não reapresenta a prévia anterior como se fosse a atual.
 
 ## Saída e verificação
 
@@ -27,3 +37,5 @@ O CSS de preview e PDF justifica parágrafos narrativos sem alinhamento próprio
 Seções condicionais inativas ou suprimidas não aparecem na saída. Placeholders pendentes podem aparecer como `XXX`; isso informa dado ausente. Tabelas resolvidas recebem largura máxima de 100% no HTML e nas folhas de estilo do PDF/ODT.
 
 `src/__tests__/renderer/margens.test.ts` cobre a normalização/fallback das margens. O smoke de PDF deve usar tabela suficiente para cruzar uma página e confirmar, visualmente, a margem superior e a repetição de cabeçalho na página seguinte.
+
+`src/__tests__/pages/cabecalho-page.test.tsx` cobre carregamento, montagem estável, edição, salvamento por aba, desativação/reabertura e inserção do modelo. `src/__tests__/renderer/apresentacao-laudo.test.ts` cobre as quatro combinações de ativação e resolução do perito preservado. A paginação visual com fechamento próximo ao fim da página depende de smoke no Electron.

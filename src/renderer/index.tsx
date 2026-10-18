@@ -125,6 +125,8 @@ interface IpcAPIRendererLegada {
   configuracao: IpcGrupoLegado;
   gdl: IpcGrupoLegado & {
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
+    obterAvisosReiteracao: () => Promise<{ success: boolean; data?: import('../shared/gdl/reiteracao').AvisoReiteracaoGdl[]; error?: string }>;
+    onAvisosAlterados: (callback: (reiniciar: boolean) => void) => () => void;
     onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
   };
   categoria: IpcGrupoLegado;

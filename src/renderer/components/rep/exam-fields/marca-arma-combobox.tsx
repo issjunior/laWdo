@@ -11,10 +11,10 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import type { OpcaoCampoB602 } from '@shared/catalogos/b602-gdl.catalogo'
+import type { OpcaoCampoBalistica } from '@shared/types/pecas-balistica.types'
 
 interface MarcaArmaComboboxProps {
-  opcoes: OpcaoCampoB602[]
+  opcoes: readonly OpcaoCampoBalistica[]
   value: string
   onChange: (valor: string) => void
 }

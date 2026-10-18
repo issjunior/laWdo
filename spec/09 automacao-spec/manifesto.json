@@ -896,6 +896,43 @@
         "src/__tests__/renderer/layout-editor-laudo.component.test.tsx",
         "src/__tests__/renderer/alteracoes-pendentes-saida.component.test.tsx"
       ]
+    },
+    {
+      "arquivo": "spec/02 rep/b601.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Cadastro local B-601, catalogos de balistica, validacao e persistencia.",
+      "globsCodigo": [
+        "src/shared/types/b601.types.ts",
+        "src/shared/types/pecas-balistica.types.ts",
+        "src/shared/catalogos/b601.catalogo.ts",
+        "src/shared/catalogos/balistica-opcoes.catalogo.ts",
+        "src/shared/catalogos/marcas-armas.catalogo.ts",
+        "src/renderer/components/rep/exam-fields/*b601*",
+        "src/renderer/components/rep/exam-fields/pecas-balistica.tsx",
+        "src/renderer/components/rep/exam-fields/dados-investigacao.tsx",
+        "src/renderer/components/rep/exam-fields/services/b601.service.ts",
+        "src/renderer/pages/REPsPage.tsx",
+        "src/main/ipc/handlers/rep.handlers.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/b601.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Agrupamentos B-601, placeholders, lacres, complemento e preservacao do laudo.",
+      "globsCodigo": [
+        "src/main/services/b601-secoes.service.ts",
+        "src/shared/utils/b601-*.ts",
+        "src/shared/catalogos/b601-placeholders.catalogo.ts",
+        "src/renderer/components/template/b601-complemento.utils.ts",
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/main/services/secao-builder.service.ts",
+        "src/main/services/laudo.service.ts",
+        "src/renderer/lib/exportacao-parser.ts",
+        "src/renderer/lib/exportacao-placeholders.ts"
+      ]
     }
   ]
 }

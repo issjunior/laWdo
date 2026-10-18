@@ -1,3 +1,4 @@
+import { normalizarFalhaDiagnosticoGdl } from './services/diagnostico-eventos.service.js';
 import { configurarObservadorGdl } from './services/gdl-diagnostico.service.js';
 import { app, BrowserWindow, dialog, shell, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
@@ -412,6 +413,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const duracaoMs = typeof entrada.duracaoMs === 'number' ? entrada.duracaoMs : undefined;
     const resultadoFuncional = entrada.resultadoFuncional === 'sucesso' || entrada.resultadoFuncional === 'falha' || entrada.resultadoFuncional === 'indeterminado'
       ? entrada.resultadoFuncional : undefined;
+    const falha = canal.startsWith('gdl:') && resultadoFuncional === 'falha' ? normalizarFalhaDiagnosticoGdl(entrada.falha) : undefined;
     const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
@@ -424,7 +426,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, ...(falha ? { falha } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {

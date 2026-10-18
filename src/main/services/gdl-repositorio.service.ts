@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from 'electron';
+import { apiContemOficioReiterando, type AvisoReiteracaoGdl } from '../../shared/gdl/reiteracao.js';
+import { notificarAvisosGdlAlterados } from './gdl-avisos-eventos.service.js';
 import { z } from 'zod';
 import { identificarNaturezaExame } from '../../shared/gdl/natureza-exame.js';
 import type { DetalhesRepGdl } from '../../shared/gdl/natureza-exame.js';
@@ -9,10 +11,11 @@ import type { MinhaRepGdl, SnapshotMinhasRepsGdl } from '../../shared/types/gdl-
 
 const campo = z.object({ estado: z.enum(['ausente', 'vazio', 'presente']), valor: z.string() });
 const detalhe = z.object({ natureza: z.string().nullable(), quesito: campo, dataSolicitacao: campo });
-const grade = z.object({ idGdl: z.number().int().positive(), numero: z.string(), ano: z.string(), naturezaExame: z.string(),
+const grade = z.object({ oficioReiterando: z.boolean().optional(), idGdl: z.number().int().positive(), numero: z.string(), ano: z.string(), naturezaExame: z.string(),
   naturezaExameComCodigo: z.string().nullable(), status: z.enum(['Aberta e Distribuída', 'Laudo em Execução', 'Concluída e Não Remetida']),
   dataDesignacao: z.string().nullable(), quantidadeFotos: z.number().nullable() });
 const registro = z.object({ idGdl: z.number().int().positive(), numero: z.string(), ano: z.string(),
+  reiteracaoApiEm: z.string().datetime().optional(),
   acessoDetalhesEm: z.string().datetime().optional(),
   ultimosDetalhesReconhecidos: z.object({
     natureza: z.object({ consultadoEm: z.string().datetime(), valor: z.string() }).optional(),
@@ -48,7 +51,7 @@ async function alterar(usuarioId: string, identidade: string, operacao: (reposit
     const validado = esquema.parse(repositorio);
     await mkdir(path.dirname(arquivo), { recursive: true });
     const temporario = `${arquivo}.${randomUUID()}.tmp`;
-    try { await writeFile(temporario, JSON.stringify(validado), 'utf8'); await validarAntesDeSalvar?.(); await rename(temporario, arquivo); }
+    try { await writeFile(temporario, JSON.stringify(validado), 'utf8'); await validarAntesDeSalvar?.(); await rename(temporario, arquivo); notificarAvisosGdlAlterados(); }
     finally { await rm(temporario, { force: true }); }
   });
   filas.set(arquivo, proxima);
@@ -64,7 +67,12 @@ function obterRegistro(repositorio: Repositorio, idGdl: number, numero: string, 
 }
 export async function registrarGradeGdl(usuarioId: string, identidade: string, snapshot: SnapshotMinhasRepsGdl, validarAntesDeSalvar?: () => Promise<void>): Promise<void> {
   await alterar(usuarioId, identidade, repositorio => {
-    for (const rep of snapshot.reps) obterRegistro(repositorio, rep.idGdl, rep.numero, rep.ano).grade = { consultadoEm: snapshot.atualizadoEm, dados: rep };
+    for (const rep of snapshot.reps) {
+      const item = obterRegistro(repositorio, rep.idGdl, rep.numero, rep.ano);
+      item.grade = { consultadoEm: snapshot.atualizadoEm, dados: {
+        ...rep, oficioReiterando: rep.oficioReiterando ?? item.grade?.dados.oficioReiterando,
+      } };
+    }
     repositorio.listagem = { ids: snapshot.reps.map(rep => rep.idGdl), atualizadoEm: snapshot.atualizadoEm };
   }, validarAntesDeSalvar);
 }
@@ -73,7 +81,10 @@ export async function registrarConsultaRepositorioGdl(usuarioId: string, identid
   await alterar(usuarioId, identidade, repositorio => {
     const rep = obterRegistro(repositorio, idGdl, numero, ano);
     const consultadoEm = new Date().toISOString();
-    if (observacao.fonte === 'api') rep.api = { consultadoEm, natureza: observacao.natureza, status: observacao.status, dados: observacao.dados };
+    if (observacao.fonte === 'api') {
+      rep.api = { consultadoEm, natureza: observacao.natureza, status: observacao.status, dados: observacao.dados };
+      if (apiContemOficioReiterando(observacao.dados)) rep.reiteracaoApiEm = consultadoEm;
+    }
     else if (observacao.fonte === 'detalhes') {
       const anterior = rep.detalhes;
       const ultimos = rep.ultimosDetalhesReconhecidos ?? {};
@@ -95,6 +106,23 @@ export async function obterRepRepositorioGdl(usuarioId: string, identidade: stri
   const rep = (await ler(arquivo)).registros.find(item => item.idGdl === idGdl && item.numero === numero && item.ano === ano);
   return rep ?? null;
 }
+function resolverAvisoReiteracao(rep: z.infer<typeof registro>): AvisoReiteracaoGdl | null {
+  if (typeof rep.grade?.dados.oficioReiterando === 'boolean') {
+    return { numero: rep.numero, ano: rep.ano, reiterando: rep.grade.dados.oficioReiterando, fonte: 'html', consultadoEm: rep.grade.consultadoEm };
+  }
+  const consultadoEm = rep.reiteracaoApiEm ?? (rep.api && apiContemOficioReiterando(rep.api.dados) ? rep.api.consultadoEm : undefined);
+  return consultadoEm ? { numero: rep.numero, ano: rep.ano, reiterando: true, fonte: 'api', consultadoEm } : null;
+}
+
+export async function obterAvisosRepositorioGdl(usuarioId: string, identidade: string): Promise<AvisoReiteracaoGdl[]> {
+  const arquivo = arquivoRepositorio(usuarioId, identidade);
+  await filas.get(arquivo)?.catch(() => undefined);
+  return (await ler(arquivo, true)).registros.flatMap(rep => {
+    const aviso = resolverAvisoReiteracao(rep);
+    return aviso ? [aviso] : [];
+  });
+}
+
 export async function obterListaRepositorioGdl(usuarioId: string, identidade: string): Promise<SnapshotMinhasRepsGdl | null> {
   const arquivo = arquivoRepositorio(usuarioId, identidade);
   await filas.get(arquivo)?.catch(() => undefined);
@@ -116,7 +144,7 @@ export async function obterListaRepositorioGdl(usuarioId: string, identidade: st
     const divergente = Boolean(observacaoExplicita && posterior && !compativel);
     const natureza = divergente ? naturezaGrade : identificacao;
     const candidata = natureza.candidatos.find(item => item.codigo === natureza.codigoSugerido);
-    return [{ ...rep.grade.dados, naturezaExameComCodigo: divergente ? null : observacaoExplicita ?? (candidata ? `${candidata.codigo} - ${candidata.descricao}` : null),
+    return [{ ...rep.grade.dados, oficioReiterando: resolverAvisoReiteracao(rep)?.reiterando, naturezaExameComCodigo: divergente ? null : observacaoExplicita ?? (candidata ? `${candidata.codigo} - ${candidata.descricao}` : null),
       naturezaConfirmada: Boolean(observacaoExplicita && !divergente), naturezaDivergente: divergente,
       naturezaConsultadaEm: horarioNatureza ?? rep.api?.consultadoEm,
       statusNecessitaAtualizacao: Boolean((rep.acessoDetalhesEm && rep.acessoDetalhesEm > rep.grade.consultadoEm) || (rep.detalhes && rep.detalhes.consultadoEm > rep.grade.consultadoEm)) }];

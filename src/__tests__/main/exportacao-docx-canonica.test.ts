@@ -26,6 +26,26 @@ const documento: DocumentoExportacao = {
 };
 
 describe('gerarDOCXCanonico', () => {
+  it('grava margens explícitas de zero sem alterar a altura da linha no DOCX', async () => {
+    const estrutura = parseHtmlParaEstrutura('<p style="margin-top:0pt;margin-bottom:0pt;line-height:1.7">Sem espaço adicional</p>');
+    const arquivo = await JSZip.loadAsync(await gerarDOCXCanonico(estrutura));
+    const xml = await arquivo.file('word/document.xml')?.async('text');
+    const documentoXml = new DOMParser().parseFromString(xml ?? '', 'application/xml');
+    const espacamento = documentoXml.getElementsByTagName('w:spacing')[0];
+    expect(espacamento.getAttribute('w:before')).toBe('0');
+    expect(espacamento.getAttribute('w:after')).toBe('0');
+    expect(espacamento.getAttribute('w:line')).toBe('408');
+  });
+  it('mantém o fechamento após o corpo em uma única linha de tabela sem bordas e sem divisão', async () => {
+    const estrutura = parseHtmlParaEstrutura('<p>Corpo do laudo</p><div data-laudo-fechamento="true" data-espacamento-antes-pt="36"><p style="text-align:center;"><strong>Perito preservado</strong></p><p>Unidade preservada</p></div>');
+    const arquivo = await JSZip.loadAsync(await gerarDOCXCanonico(estrutura));
+    const xml = await arquivo.file('word/document.xml')?.async('text');
+    expect(xml).toContain('<w:cantSplit');
+    expect(xml).toContain('w:w="720"');
+    expect(xml).toContain('w:val="none"');
+    expect(xml?.indexOf('Corpo do laudo')).toBeLessThan(xml?.indexOf('Perito preservado') ?? 0);
+    expect(xml?.match(/Perito preservado/g)).toHaveLength(1);
+  });
   it('usa a sequência sem contar o pai oculto e preserva a subseção sem número no DOCX', async () => {
     const arquivo = await JSZip.loadAsync(await gerarDOCXCanonico(documentoSemContarOculta()));
     const xml = await arquivo.file('word/document.xml')?.async('text');

@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { normalizarApresentacaoTabelas } from './tabelas-apresentacao';
 
 /**
  * Utilitário para combinar classes Tailwind CSS
@@ -95,12 +96,26 @@ export function segmentarTextoComPlaceholders(texto: string, chavesValidas: Iter
   return segmentos;
 }
 
+export function normalizarCodigoPlaceholders(raiz: ParentNode, chavesValidas: Iterable<string>): void {
+  const chaves = new Set(chavesValidas);
+  raiz.querySelectorAll('code').forEach(codigo => {
+    if (codigo.closest('pre') || codigo.hasAttribute('data-placeholder')) return;
+    const ancora = codigo.querySelector('[data-placeholder]');
+    if (ancora && codigo.textContent?.trim() !== ancora.textContent?.trim()) return;
+    const texto = ancora?.getAttribute('data-placeholder') || codigo.textContent?.trim() || '';
+    const chave = texto.match(/^\{\{([^{}]+)\}\}$/)?.[1];
+    if (chave && placeholderChaveEhValida(chave, chaves)) codigo.replaceWith(...codigo.childNodes);
+  });
+}
+
 export function converterPlaceholdersTextuais(html: string, chavesValidas: string[], converterReservados = false): string {
   if (!html) return html;
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
+  normalizarCodigoPlaceholders(doc.body, chavesValidas);
+  normalizarApresentacaoTabelas(doc.body);
   if (chavesValidas.length > 0) {
     const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
     const textNodes: Text[] = [];

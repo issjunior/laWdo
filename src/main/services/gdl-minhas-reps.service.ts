@@ -1,4 +1,5 @@
 import { DomUtils, parseDocument } from 'htmlparser2';
+import { normalizarTipoReiteracao } from '../../shared/gdl/reiteracao.js';
 import type { MinhaRepGdl, PaginaMinhasRepsGdl, StatusMinhaRepGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 
 type ElementoHtml = NonNullable<ReturnType<typeof DomUtils.findOne>>;
@@ -121,6 +122,9 @@ export function interpretarMinhasRepsGdl(html: string, paginaAtual: number): Omi
       throw new Error('REP da grade GDL sem identificação ou natureza de exame.');
     }
     reps.push({
+      oficioReiterando: DomUtils.findAll(elemento => elemento.name === 'img', celulas[indiceNumero]).some(imagem =>
+        [imagem.attribs.alt, imagem.attribs.title].some(rotulo => typeof rotulo === 'string'
+          && normalizarTipoReiteracao(rotulo) === 'OFICIO REITERANDO')),
       idGdl,
       numero: identificacao[1].replace(/\D/g, ''),
       ano: identificacao[2],

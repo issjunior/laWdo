@@ -177,3 +177,13 @@ Os eventos correlacionam sessão, montagem, modo single/multi, origem e tentativ
 Sondas de iframe esperam `data-diagnostico-pronto="true"`, definido no callback final de inicialização. Ao iniciar a captura, o preload detecta editores já prontos; durante inicialização/encerramento, desconecta o observador de iframes. Logs usuais de timeout continuam disponíveis fora da captura, com metadados de fase e recursos, sem HTML.
 
 `diagnostico-editor-laudo.test.ts` verifica finalidade, resumo estrutural, limite de diferenças e rejeição de campos extras; `tiny-mce-editor-inicializacao.component.test.tsx` verifica a liberação das alterações após o callback inicial. Ambos são simulados e não comprovam todas as sondas em iframe Electron real.
+
+## Falhas funcionais do GDL
+
+Durante instrumentação IPC, uma resposta `success: false` de canal `gdl:*` pode acrescentar `falha` estruturada ao evento. O preload normaliza e o main repete a validação: código, etapa e código de sistema pertencem a listas fechadas; HTTP é inteiro de 100–599, referência tem formato UUID e bloqueio temporário exige prazo inteiro entre 1–60 segundos. O evento não recebe detalhes textuais, payload da consulta, credenciais ou campos extras da resposta.
+
+As listas canônicas estão em `src/shared/types/gdl-minhas-reps.types.ts`. Como o preload sandboxed não pode depender desses imports em execução, mantém cópias locais das listas e do normalizador em `src/preload/index.ts`; mantê-las alinhadas ao normalizador de `diagnostico-eventos.service.ts` é obrigatório ao estender classificações. Esse metadado não amplia as ferramentas MCP nem habilita diagnóstico fora do modo explícito de desenvolvimento.
+
+`diagnostico-captura.service.ts` incorpora falhas GDL de eventos IPC com duração às anomalias e classifica rede/timeout como `conectividade`, credenciais/autenticação/sessão como `autenticacao` e demais falhas como `integracao_gdl`. Classes são cumulativas com sinais de layout/rolagem e gargalos de processo. Para inferir `desempenho` por IPC lento, exclui eventos com falha GDL conhecida; as métricas gerais e seus alvos continuam presentes. Lentidão de uma falha de rede, sozinha, não comprova regressão do aplicativo.
+
+Com falhas GDL, os próximos passos orientam investigar categoria/etapa e verificar conexão/VPN sem presumir o estado da VPN. `diagnostico-ipc.test.ts`, `diagnostico-eventos.service.test.ts` e `diagnostico-captura.service.test.ts` verificam normalização, metadados e classificação com respostas simuladas. Mensagens da interface e bloqueio web estão em `spec/08 gdl/api_gdl.md`.

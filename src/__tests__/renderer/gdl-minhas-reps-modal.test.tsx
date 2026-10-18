@@ -89,7 +89,7 @@ describe('modal Minhas REPs do GDL com cache compartilhado', () => {
     expect(await screen.findByText(/O GDL não concluiu a autenticação/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Configurar GDL' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detalhes' }));
-    expect(screen.getByText('Login web não concluído.')).toBeInTheDocument();
+    expect(screen.getByText('Confira o usuário e a senha cadastrados na página API GDL.')).toBeInTheDocument();
     expect(screen.getByText(/2 de 2 REPs/)).toBeInTheDocument();
     expect(screen.getByText(/Atualizado em/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));

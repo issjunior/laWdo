@@ -1,6 +1,8 @@
+import { CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO, esquemaCabecalhoLaudo, esquemaFechamentoLaudo } from '../../shared/configuracoes/apresentacao-laudo.js';
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { getLogger } from '../utils/logger.js';
 import { safeStorageService } from './safe-storage.service.js';
+import { notificarAvisosGdlAlterados } from './gdl-avisos-eventos.service.js';
 
 const log = getLogger('configuracao');
 
@@ -46,6 +48,10 @@ class ConfiguracaoService {
    */
   async salvar(chave: string, valor: string, tipo: string = 'html', descricao: string = ''): Promise<void> {
     try {
+      if (chave === CHAVE_CABECALHO_DOCUMENTO || chave === CHAVE_FECHAMENTO_LAUDO) {
+        const dados: unknown = JSON.parse(valor);
+        valor = JSON.stringify(chave === CHAVE_CABECALHO_DOCUMENTO ? esquemaCabecalhoLaudo.parse(dados) : esquemaFechamentoLaudo.parse(dados));
+      }
       let valorArmazenado = valor;
       if (TIPOS_CRIPTOGRAFADOS.has(tipo)) {
         valorArmazenado = safeStorageService.encrypt(valor);
@@ -69,6 +75,7 @@ class ConfiguracaoService {
         );
         log.info('Configuração criada', { chave });
       }
+      if (chave.startsWith('gdl_')) notificarAvisosGdlAlterados(true);
     } catch (error) {
       log.error('Erro ao salvar configuração', { chave, error });
       throw error;

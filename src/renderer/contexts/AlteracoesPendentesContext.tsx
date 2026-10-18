@@ -104,6 +104,7 @@ export function AlteracoesPendentesProvider({ children }: { children: ReactNode 
       .map(([chave]) => chave === 'editor-laudo'
         ? 'O Editor de Laudos possui alterações não salvas.'
         : chave === 'importacao-template' ? 'A revisão de importação de template possui alterações não salvas.'
+        : chave === 'cadastro-rep-b601' ? 'O cadastro da REP B-601 possui alterações não salvas.'
         : 'O Wizard de Laudos possui alterações não salvas.');
     return { autorizado: impedimentos.length === 0, impedimentos };
   }, []);
@@ -123,8 +124,8 @@ export function AlteracoesPendentesProvider({ children }: { children: ReactNode 
     <ContextoAlteracoesPendentes.Provider value={valor}>
       {children}
       <DialogoSaidaLaudo
-        titulo={registrosRef.current.get('importacao-template')?.verificar() ? 'Salvar revisão do template?' : undefined}
-        descricao={registrosRef.current.get('importacao-template')?.verificar() ? 'A revisão da importação ainda não foi salva. Deseja salvar antes de sair?' : undefined}
+        titulo={registrosRef.current.get('importacao-template')?.verificar() ? 'Salvar revisão do template?' : registrosRef.current.get('cadastro-rep-b601')?.verificar() ? 'Salvar alterações da REP?' : undefined}
+        descricao={registrosRef.current.get('importacao-template')?.verificar() ? 'A revisão da importação ainda não foi salva. Deseja salvar antes de sair?' : registrosRef.current.get('cadastro-rep-b601')?.verificar() ? 'O cadastro da REP possui alterações não salvas. Deseja salvar antes de sair?' : undefined}
         aberto={aberto}
         salvando={salvando || Array.from(registrosRef.current.values()).some(registro => registro.salvando)}
         erro={erro}

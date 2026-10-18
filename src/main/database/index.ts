@@ -1,3 +1,5 @@
+import { capturarApresentacaoLaudo } from '../services/apresentacao-laudo.service.js';
+import { CABECALHO_LAUDO_PADRAO, FECHAMENTO_LAUDO_PADRAO, CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO } from '../../shared/configuracoes/apresentacao-laudo.js';
 import { getLogger } from '../utils/logger.js';
 import { normalizarNomeTipoExame } from '../utils/nome-tipo-exame.js';
 import path from 'path';
@@ -26,7 +28,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 43;
+export const CURRENT_SCHEMA_VERSION = 45;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -55,6 +57,7 @@ const COLUNAS_REPARAVEIS = [
   ['laudos', 'tipo_criacao', "TEXT NOT NULL DEFAULT 'template'"],
   ['laudos', 'wizard_id', 'TEXT'],
   ['laudos', 'respostas_wizard', 'TEXT'],
+  ['laudos', 'apresentacao_json', 'TEXT'],
 ] as const;
 
 const COLUNAS_ESSENCIAIS = [
@@ -342,6 +345,7 @@ const createDatabaseSchema = async (): Promise<void> => {
         tipo_criacao TEXT NOT NULL DEFAULT 'template',
         wizard_id TEXT,
         respostas_wizard TEXT,
+        apresentacao_json TEXT,
         FOREIGN KEY (rep_id) REFERENCES reps(id),
         FOREIGN KEY (perito_id) REFERENCES users(id),
         FOREIGN KEY (template_id) REFERENCES templates(id),
@@ -2456,6 +2460,36 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
   if (fromVersion < 43) {
     await garantirColuna('secoes_template', 'contar_na_numeracao', 'INTEGER NOT NULL DEFAULT 1 CHECK (contar_na_numeracao IN (0, 1))');
     log.info('Migration v43: participação das seções ocultas na numeração');
+  }
+
+  if (fromVersion < 44) {
+    await garantirColuna('laudos', 'apresentacao_json', 'TEXT');
+    await withTransaction(async () => {
+      const laudos = await executeQuery<{ id: string; perito_id: string }>('SELECT id, perito_id FROM laudos WHERE apresentacao_json IS NULL');
+      for (const laudo of laudos) {
+        const apresentacao = await capturarApresentacaoLaudo(laudo.perito_id, true);
+        await executeNonQuery('UPDATE laudos SET apresentacao_json = ? WHERE id = ? AND apresentacao_json IS NULL', [JSON.stringify(apresentacao), laudo.id]);
+      }
+    });
+    log.info('Migration v44: cabeçalho e dados atuais do perito preservados por laudo; fechamento legado desativado. Dados históricos não armazenados não podem ser reconstruídos.');
+  }
+
+  if (fromVersion < 45) {
+    // A v44 deve preservar os laudos legados antes da substituição dos padrões.
+    await withTransaction(async () => {
+      for (const [chave, valor, descricao] of [
+        [CHAVE_CABECALHO_DOCUMENTO, JSON.stringify(CABECALHO_LAUDO_PADRAO), 'Cabeçalhos e ativação dos novos laudos'],
+        [CHAVE_FECHAMENTO_LAUDO, JSON.stringify(FECHAMENTO_LAUDO_PADRAO), 'Fechamento dos novos laudos'],
+      ]) {
+        await executeNonQuery(
+          `INSERT INTO configuracoes (chave, valor, tipo, descricao) VALUES (?, ?, 'json', ?)
+           ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, tipo = excluded.tipo,
+             descricao = excluded.descricao, updated_at = CURRENT_TIMESTAMP`,
+          [chave, valor, descricao],
+        );
+      }
+    });
+    log.info('Migration v45: padrões de cabeçalho e fechamento aplicados; apresentações dos laudos preservadas.');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);
