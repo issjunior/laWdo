@@ -2,6 +2,12 @@ export type SituacaoProjetil = 'estimada' | 'personalizada';
 export type EstadoProjetil = 'integro' | 'deformado' | 'perda_massa';
 export type MedidaProjetil = 'calibreRealMm' | 'alturaMaximaMm' | 'massaGramas';
 
+export interface OrigemProjetil {
+  fonte: string;
+  localizacao: string;
+  valoresOriginais?: Record<string, string | number | null>;
+}
+
 export interface ProjetilReferencia {
   id: string;
   calibre: string;
@@ -16,6 +22,8 @@ export interface ProjetilReferencia {
   fonte: string;
   localizacao: string;
   observacao?: string;
+  origens?: OrigemProjetil[];
+  motivoExclusaoClassificacao?: string;
   liga?: string;
   linha?: string;
   comprimentoEstojoMm?: number;
