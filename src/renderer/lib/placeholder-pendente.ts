@@ -37,7 +37,8 @@ export function descreverPlaceholderPendente(
   const rotulo = campoEspecifico?.label || personalizado?.descricao || chave;
   const rotuloSemSufixoExame = rotulo.replace(/\s*\([A-Z]-?\d+\)$/u, '');
   const arma = chave.match(/^b602_arma_(\d+)_/);
-  const contexto = arma ? ` — Arma ${obterLetraArma(Number(arma[1]), valores)}` : '';
+  const peca = chave.match(/^b601_peca_(\d+)_/);
+  const contexto = arma ? ` — Arma ${obterLetraArma(Number(arma[1]), valores)}` : peca ? ` — Item ${peca[1]}` : '';
 
   return `Campo pendente na REP: ${rotuloSemSufixoExame}${contexto}`;
 }
