@@ -16,12 +16,14 @@ interface DataTableColumnHeaderProps<TData extends RowData, TValue extends CellD
   extends React.HTMLAttributes<HTMLDivElement> {
   column: ColunaTabela<TData, TValue>
   title: string
+  quebrarTitulo?: boolean
 }
 
 export function DataTableColumnHeader<TData extends RowData, TValue extends CellData>({
   column,
   title,
   className,
+  quebrarTitulo = false,
 }: DataTableColumnHeaderProps<TData, TValue>) {
   if (!column.getCanSort()) {
     return <div className={cn(className)}>{title}</div>
@@ -34,9 +36,9 @@ export function DataTableColumnHeader<TData extends RowData, TValue extends Cell
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-3 h-8 data-[state=open]:bg-accent"
+            className={cn("-ml-3 h-8 data-[state=open]:bg-accent", quebrarTitulo && "h-auto min-h-8 whitespace-normal py-1 text-left")}
           >
-            <span>{title}</span>
+            <span className={quebrarTitulo ? "max-w-24 leading-tight" : undefined}>{title}</span>
             {column.getIsSorted() === "desc" ? (
               <ArrowDown className="ml-1 h-4 w-4" />
             ) : column.getIsSorted() === "asc" ? (

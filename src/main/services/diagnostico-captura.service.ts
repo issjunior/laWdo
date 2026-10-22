@@ -34,6 +34,7 @@ export interface DependenciasCapturaDiagnostico {
   capturarLinhaBase: (janelaId: number | undefined, finalidade: FinalidadeCaptura) => Promise<EvidenciaInicial>;
   capturarEstadoFinal: (janelaId: number, finalidade: FinalidadeCaptura) => Promise<Omit<EvidenciaInicial, 'janelaId' | 'rota'>>;
   obterMetricas?: () => unknown[];
+  obterGpu?: () => Record<string, unknown>;
   obterAtrasoEventLoop?: () => number | null;
   obterPendenciasPersistencia?: () => number;
   obterMarcadores?: () => Record<string, string>;
@@ -198,7 +199,7 @@ export class DiagnosticoCapturaService {
       return compararResumosDesempenho(outra.metricas, resultado.metricas, outra.contextoComparacao, resultado.contextoComparacao);
     }
     const arquivo: Record<EntradaConsultarCaptura['componente'], string> = {
-      manifesto: 'manifesto.json', dossie: 'dossie-agente.json', metricas_resumo: 'metricas-resumo.json', amostras_processos: 'amostras-processos.ndjson', timeline: 'linha-do-tempo.json', eventos: 'eventos.ndjson', interface_inicial: 'interface-inicial.json', interface_final: 'interface-final.json', tela_inicial: 'tela-inicial.png', tela_final: 'tela-final.png', erro: 'erros-captura.json',
+      manifesto: 'manifesto.json', dossie: 'dossie-agente.json', metricas_resumo: 'metricas-resumo.json', amostras_processos: 'amostras-processos.ndjson', timeline: 'linha-do-tempo.json', eventos: 'eventos.ndjson', interface_inicial: 'interface-inicial.json', interface_final: 'interface-final.json', tela_inicial: 'tela-inicial.png', tela_final: 'tela-final.png', erro: 'erros-captura.json', gpu: 'gpu.json',
     };
     const arquivoSelecionado = arquivo[entrada.componente];
     if (entrada.componente === 'tela_inicial' || entrada.componente === 'tela_final') return { imagemBase64: (await readFile(path.join(resultado.caminho, arquivoSelecionado))).toString('base64') };
@@ -238,6 +239,8 @@ export class DiagnosticoCapturaService {
     const falhasGdl = ipcs.flatMap(ipc => ipc.canal.startsWith('gdl:') && ipc.falha ? [{ canal: ipc.canal, duracaoMs: ipc.duracaoMs, ...ipc.falha }] : []);
     const ipcsSemCausaConhecida = resumirDesempenho([], captura.degradacao, ipcs.filter(ipc => !ipc.falha)).ipcsLentos;
     const classesCausa = new Set<string>();
+    const falhasGpu = todosEventos.filter(evento => evento.dados.evento === 'gpu_encerrada');
+    if (falhasGpu.length) classesCausa.add('falha_grafica');
     if (sinais.length) { classesCausa.add('rolagem_programatica'); classesCausa.add('mudanca_layout'); }
     for (const falha of falhasGdl) {
       classesCausa.add(falha.codigo === 'rede' || falha.codigo === 'tempo_esgotado' ? 'conectividade'
@@ -247,13 +250,13 @@ export class DiagnosticoCapturaService {
     if (!classesCausa.size) classesCausa.add('inconclusiva');
     const qualidade = erros.length === 0 && (captura.finalidade === 'desempenho' || eventos.length > 0) ? 'suficiente' : 'parcial';
     const marcadores = this.dependencias.obterMarcadores?.() ?? {};
-    const dossieAgente = { qualidade, classificacao, observacaoUsuario: observacao ?? null, linhaTempoEssencial: eventos.slice(-30), anomalias: [...sinais, ...falhasGdl, ...metricas.gargalos, ...metricas.ipcsLentos], classesCausa: [...classesCausa], alvosInvestigacao: [...Object.entries(marcadores).map(([marcador, arquivo]) => ({ marcador, arquivo })), ...metricas.gargalos.map(gargalo => ({ processo: gargalo.processo, pid: gargalo.pid })), ...metricas.ipcsLentos.map(ipc => ({ canal: ipc.canal }))], lacunas: erros.map(erro => erro.componente), proximosPassos: falhasGdl.length ? ['Investigue a classificação e a etapa das falhas GDL; para rede, confira conexão e VPN sem presumir seu estado.'] : sinais.length ? ['Inspecione os marcadores e arquivos associados ao contêiner rolável.'] : metricas.gargalos.length || metricas.ipcsLentos.length ? ['Repita a mesma captura após uma alteração limitada e compare os resultados.'] : ['Repita a captura com o sintoma ativo.'], componentesDisponiveis: ['manifesto', 'dossie', 'metricas_resumo', 'amostras_processos', 'timeline', 'eventos', 'interface_inicial', 'interface_final', 'tela_inicial', 'tela_final', 'erro'] };
+    const dossieAgente = { qualidade, classificacao, observacaoUsuario: observacao ?? null, linhaTempoEssencial: eventos.slice(-30), anomalias: [...sinais, ...falhasGpu.map(evento => ({ tipo: 'falha_grafica', sequencia: evento.sequencia, ...evento.dados })), ...falhasGdl, ...metricas.gargalos, ...metricas.ipcsLentos], classesCausa: [...classesCausa], alvosInvestigacao: [...Object.entries(marcadores).map(([marcador, arquivo]) => ({ marcador, arquivo })), ...metricas.gargalos.map(gargalo => ({ processo: gargalo.processo, pid: gargalo.pid })), ...metricas.ipcsLentos.map(ipc => ({ canal: ipc.canal }))], lacunas: erros.map(erro => erro.componente), proximosPassos: falhasGpu.length ? ['Consulte o componente gpu e os incidentes gráficos; correlacione os logs nativos com os eventos do Windows.'] : falhasGdl.length ? ['Investigue a classificação e a etapa das falhas GDL; para rede, confira conexão e VPN sem presumir seu estado.'] : sinais.length ? ['Inspecione os marcadores e arquivos associados ao contêiner rolável.'] : metricas.gargalos.length || metricas.ipcsLentos.length ? ['Repita a mesma captura após uma alteração limitada e compare os resultados.'] : ['Repita a captura com o sintoma ativo.'], componentesDisponiveis: ['manifesto', 'dossie', 'metricas_resumo', 'amostras_processos', 'timeline', 'eventos', 'interface_inicial', 'interface_final', 'tela_inicial', 'tela_final', 'erro', 'gpu'] };
     const diretorioSessao = this.dependencias.diretorioSessao();
     if (!diretorioSessao) throw new Error('SESSAO_INDISPONIVEL');
     const diretorioFinal = path.join(diretorioSessao, 'capturas', `${new Date().toISOString().replace(/[:.]/g, '-')}-${captura.capturaId}`);
     const temporario = `${diretorioFinal}.tmp`;
     await mkdir(temporario, { recursive: true });
-    const componentes = { telaInicial: Boolean(captura.base.tela), telaFinal: Boolean(final.tela), interfaceInicial: Boolean(captura.base.interface), interfaceFinal: Boolean(final.interface), eventos: true };
+    const componentes = { telaInicial: Boolean(captura.base.tela), telaFinal: Boolean(final.tela), interfaceInicial: Boolean(captura.base.interface), interfaceFinal: Boolean(final.interface), eventos: true, gpu: Boolean(this.dependencias.obterGpu) };
     const estadoFinal = automatico && captura.finalidade === 'problema' ? 'expirada' : classificacao === 'interrompido' ? 'interrompida' : 'finalizada';
     const contextoExecucao = { versaoProtocolo: VERSAO_PROTOCOLO_DIAGNOSTICO, modo: 'diagnostico', plataforma: process.platform, arquitetura: process.arch, node: process.versions.node, electron: process.versions.electron, chromium: process.versions.chrome, rota: captura.rota, janelaId: captura.janelaId, ...captura.base.contexto };
     const marcadoresInterface = { marcadores };
@@ -271,6 +274,7 @@ export class DiagnosticoCapturaService {
       writeFile(path.join(temporario, 'eventos.ndjson'), eventosNdjson),
       writeFile(path.join(temporario, 'erros-captura.json'), JSON.stringify(erros, null, 2)),
       writeFile(path.join(temporario, 'metricas-resumo.json'), JSON.stringify(metricas, null, 2)),
+      writeFile(path.join(temporario, 'gpu.json'), JSON.stringify(this.dependencias.obterGpu?.() ?? { ativo: false }, null, 2)),
       writeFile(path.join(temporario, 'amostras-processos.ndjson'), amostrasNdjson),
     ]);
     if (captura.base.interface) await writeFile(path.join(temporario, 'interface-inicial.json'), JSON.stringify(captura.base.interface, null, 2));

@@ -15,4 +15,7 @@ export const siglasProjeteis: Record<string, string> = {
   SEPP: 'Semiencamisado ponta plana',
   CHPO: 'Chumbo ponta oca',
   ETP: 'Encamisado total pontiagudo',
+  ETPT: 'Encamisado total pontiagudo',
+  EXPT: 'Expansivo pontiagudo',
+  ESCV: 'Encamisado semi canto vivo',
 };

@@ -42,3 +42,15 @@ Com `chavePreferencias`, a DataTable persiste ordenação e visibilidade em `loc
 `densidade="compacta"` reduz altura/espaçamento; `preencherAltura` distribui o espaço restante em flex, mantém controles e paginação fora da rolagem e fixa o cabeçalho. `fixarPrimeiraColuna` mantém a primeira coluna física visível na rolagem horizontal e impõe largura mínima; com pinning habilitado, essa primeira coluna é a de pinning. `Table.containerClassName` dimensiona o contêiner rolável. A cadeia de layout em `App.tsx` usa `min-w-0` para permitir encolhimento; a paginação aceita quebra de linha.
 
 O menu oferece Ocultar somente quando `column.getCanHide()` permite. O Dashboard GDL usa `dashboard_gdl_disposicao`, designação decrescente como ordem inicial e Nº REP não ocultável. A preferência é local à instalação, sem chave por usuário. Testes de tabela/cabeçalho e `gdl-minhas-reps-dashboard.test.tsx` verificam operações e recuperação da disposição.
+
+## Classes dinâmicas e controles compactos
+
+As combinações montadas em execução por categorias, peças e placeholders são declaradas por `@source inline` em `src/renderer/styles/globals.css`. A cobertura atual inclui fundos 100/500 e dark 900/30, textos 600/700 e dark 300/400 e bordas 200 nas famílias de cores declaradas. `tailwind.config.js` não mantém safelist. Ao acrescentar uma combinação dinâmica, atualizar a declaração CSS correspondente; não presumir geração de toda tonalidade ou variante.
+
+`DataTableColumnHeader` aceita `quebrarTitulo` para quebra do rótulo alinhada à esquerda; o padrão continua em uma linha. O slider compartilhado encaminha aria-label e aria-labelledby ao Thumb, mantendo identificação acessível em controles como Proximidade na ferramenta de projéteis.
+
+## Primeiro acesso, versões e navegação
+
+`FirstUserSetupForm.tsx` usa card de até `max-w-3xl`, cabeçalho com logo e título Primeiro acesso, e seções Dados de cadastro e Senha de acesso com campos responsivos. A orientação de restauração permanece: criar a conta local e entrar no laWdo. Persistência do último usuário e login automático estão em `spec/15 seguranca/seguranca_electron.md`.
+
+O diálogo do Header dá destaque à versão atual, disponível e que será instalada, com algarismos tabulares; o fluxo de instalação continua descrito em `spec/12 atualizacao/fluxo_atualizacao.md`. Na sidebar, a identificação Beta pertence ao item Projéteis, sem classificar todo o grupo Ferramentas como beta.

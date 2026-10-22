@@ -70,9 +70,8 @@ export const itensMenu: ItemMenu[] = [
     title: 'Ferramentas',
     icon: Wrench,
     abertoPorPadrao: false,
-    beta: true,
     items: [
-      { title: 'Projéteis', path: '/projeteis', icon: Target },
+      { title: 'Projéteis', path: '/projeteis', icon: Target, beta: true },
     ],
   },
   {

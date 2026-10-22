@@ -7,7 +7,7 @@ import { DiagnosticoEventosService } from '@main/services/diagnostico-eventos.se
 
 const diretorios: string[] = [];
 
-async function criarServico() {
+async function criarServico(obterGpu?: () => Record<string, unknown>) {
   const diretorio = await mkdtemp(path.join(os.tmpdir(), 'lawdo-captura-'));
   diretorios.push(diretorio);
   const eventos = new DiagnosticoEventosService(path.join(diretorio, 'eventos.ndjson'));
@@ -16,6 +16,7 @@ async function criarServico() {
     diretorioSessao: () => diretorio,
     sessionId: () => 'f0d43c3b-5ff8-4e40-bef2-09444f6693ca',
     eventos: () => eventos,
+    obterGpu,
     capturarLinhaBase: async () => ({ janelaId: 1, rota: '#/laudos', interface: { elementos: [] }, erros: [] }),
     capturarEstadoFinal: async () => ({ interface: { elementos: [] }, erros: [] }),
     alterarSonda: ativa => { sonda.push(ativa); },
@@ -28,6 +29,16 @@ afterEach(async () => {
 });
 
 describe('DiagnosticoCapturaService', () => {
+  it('preserva a captura durante falha gráfica e inclui contexto próprio no dossiê', async () => {
+    const { servico, eventos } = await criarServico(() => ({ ativo: true, ultimoIncidenteId: 'gpu-simulada' }));
+    const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'Reproduzir encerramento da GPU.', capturarConsultasGdl: false });
+    const capturaId = String(inicio.capturaId);
+    await eventos.registrar({ origem: 'main', categoria: 'erro', nivel: 'error', dados: { evento: 'gpu_encerrada', codigo: 34 } });
+    expect(servico.status(capturaId)).toMatchObject({ estado: 'coletando' });
+    await servico.finalizar({ capturaId, resultadoUsuario: 'reproduzido' });
+    await expect(servico.consultar({ capturaId, componente: 'gpu', depoisDe: 0, limite: 50 })).resolves.toMatchObject({ ativo: true, ultimoIncidenteId: 'gpu-simulada' });
+    await expect(servico.consultar({ capturaId, componente: 'dossie', depoisDe: 0, limite: 50 })).resolves.toMatchObject({ classesCausa: ['falha_grafica'] });
+  });
   it('fecha o intervalo da reprodução, preserva artefato e é idempotente', async () => {
     const { servico, eventos, sonda, diretorio } = await criarServico();
     await eventos.registrar({ origem: 'preload', categoria: 'acao', nivel: 'info', dados: { tipo: 'clique_usuario' } });

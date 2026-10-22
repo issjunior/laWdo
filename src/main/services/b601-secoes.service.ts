@@ -2,6 +2,7 @@ import { DomUtils, parseDocument } from 'htmlparser2'
 import type { SecaoTemplateRow } from '../types/database.js'
 import { projetarB601ParaLaudo } from '../../shared/utils/b601-pecas-projecao.js'
 import { assinaturaDescricaoB601, ehAgrupamentoB601, gerarDescricaoAgrupadaB601 } from '../../shared/utils/b601-descricao-agrupada.js'
+import { criarHtmlCampoReservado } from '../../shared/utils/campo-reservado.js'
 
 const escapar = (valor: string): string => valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
@@ -93,7 +94,7 @@ export function criarRevisaoSecaoB601(id: string, htmlAnterior: string, htmlBase
     delete bloco.attribs['data-cond-bloco']
   }
   if (!DomUtils.textContent(anterior).replace(/\u00a0/g, ' ').trim() && !DomUtils.findOne(item => ['table', 'figure', 'img'].includes(item.name), anterior.children)) return ''
-  return `<div data-b601-revisao-secao="${escapar(id)}"><p><strong>Conteúdo preservado para revisão: a seção deixou de atender à condição dos materiais da REP.</strong> <span class="campo-reservado" data-reservado="true">XXX</span></p>${DomUtils.getOuterHTML(anterior)}</div>`
+  return `<div data-b601-revisao-secao="${escapar(id)}"><p><strong>Conteúdo preservado para revisão: a seção deixou de atender à condição dos materiais da REP.</strong> ${criarHtmlCampoReservado('Campo de preenchimento manual no laudo: revisão da seção preservada')}</p>${DomUtils.getOuterHTML(anterior)}</div>`
 }
 
 export function preservarRevisoesB601(htmlBase: string, htmlAtual: string): string {
@@ -137,7 +138,7 @@ export function sinalizarDescricaoDesatualizadaB601(html: string, dados: unknown
       continue
     }
     if (!aviso) {
-      const mensagem = parseDocument('<p data-b601-aviso-tabela="true"><strong>Dados da REP alterados. Revise e recrie esta tabela para atualizar sua descrição.</strong> <span class="campo-reservado" data-reservado="true">XXX</span></p>').children[0]
+      const mensagem = parseDocument(`<p data-b601-aviso-tabela="true"><strong>Dados da REP alterados. Revise e recrie esta tabela para atualizar sua descrição.</strong> ${criarHtmlCampoReservado('Campo de preenchimento manual no laudo: revisão da descrição após alteração da REP')}</p>`).children[0]
       if (mensagem) DomUtils.prependChild(grupo, mensagem)
     }
   }
@@ -206,17 +207,24 @@ export function revisarPecasAusentesB601(html: string, dados: unknown): string {
       const mensagem = duplicada
         ? 'Bloco adicional da mesma peça: texto preservado para revisão da organização do laudo.'
         : 'Peça removida da REP: revise este texto antes de excluir o bloco.'
-      const aviso = parseDocument(`<p data-b601-aviso="true">${mensagem} <span class="campo-reservado" data-reservado="true">XXX</span></p>`).children[0]
+      const aviso = parseDocument(`<p data-b601-aviso="true">${mensagem} ${criarHtmlCampoReservado('Campo de preenchimento manual no laudo: revisão de peça removida ou duplicada')}</p>`).children[0]
       if (aviso) DomUtils.prependChild(peca, aviso)
     }
     for (const marcador of DomUtils.findAll(item => (item.attribs['data-placeholder'] || '').includes('b601_peca_'), peca.children)) {
-      const reservado = parseDocument('<span class="campo-reservado" data-reservado="true">XXX</span>').children[0]
+      const reservado = parseDocument(criarHtmlCampoReservado('Campo de preenchimento manual no laudo: revisão de peça removida ou duplicada')).children[0]
       if (reservado) DomUtils.replaceElement(marcador, reservado)
     }
-    const htmlInterno = DomUtils.getInnerHTML(peca).replace(/\{\{b601_peca_\d+_[^}]+\}\}/g, 'XXX')
-    const conteudo = parseDocument(htmlInterno)
-    for (const filho of [...peca.children]) DomUtils.removeElement(filho)
-    for (const filho of [...conteudo.children]) DomUtils.appendChild(peca, filho)
+    const pendentes = [...peca.children]
+    while (pendentes.length) {
+      const no = pendentes.pop()
+      if (!no) continue
+      if ('children' in no) pendentes.push(...no.children)
+      if (no.type !== 'text' || !/\{\{b601_peca_\d+_[^}]+\}\}/.test(no.data)) continue
+      const conteudo = parseDocument(escapar(no.data).replace(/\{\{b601_peca_\d+_[^}]+\}\}/g,
+        criarHtmlCampoReservado('Campo de preenchimento manual no laudo: revisão de peça removida ou duplicada')))
+      for (const filho of [...conteudo.children]) DomUtils.prepend(no, filho)
+      DomUtils.removeElement(no)
+    }
   }
   return DomUtils.getOuterHTML(documento)
 }

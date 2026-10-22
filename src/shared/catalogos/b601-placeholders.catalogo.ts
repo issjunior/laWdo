@@ -2,6 +2,7 @@ import { CATALOGO_TIPOS_PECA_B601 } from './b601.catalogo.js'
 
 const CAMPOS_COMUNS = [
   ['numero', 'Número do item'],
+  ['natureza', 'Natureza'],
   ['letra', 'Letra da peça'], ['tipo', 'Tipo da peça'], ['identificacao', 'Identificação'],
   ['quantidade', 'Quantidade'], ['medida', 'Medida'], ['quantidade_descricao', 'Descrição da quantidade'],
   ['lacre_entrada', 'Lacre de entrada'], ['lacre_saida', 'Lacre de saída'],

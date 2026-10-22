@@ -1,6 +1,11 @@
 export type SituacaoProjetil = 'estimada' | 'personalizada';
-export type EstadoProjetil = 'integro' | 'deformado' | 'perda_massa';
 export type MedidaProjetil = 'calibreRealMm' | 'alturaMaximaMm' | 'massaGramas';
+
+export interface OrigemProjetil {
+  fonte: string;
+  localizacao: string;
+  valoresOriginais?: Record<string, string | number | null>;
+}
 
 export interface ProjetilReferencia {
   id: string;
@@ -16,6 +21,8 @@ export interface ProjetilReferencia {
   fonte: string;
   localizacao: string;
   observacao?: string;
+  origens?: OrigemProjetil[];
+  motivoExclusaoClassificacao?: string;
   liga?: string;
   linha?: string;
   comprimentoEstojoMm?: number;
@@ -35,8 +42,9 @@ export interface ConsultaProjetil {
   calibreRealMm: number | null;
   alturaMaximaMm: number | null;
   massaGramas: number | null;
-  estado: EstadoProjetil;
-  medidasConfiaveis: Record<MedidaProjetil, boolean>;
+  medidaPrioritaria: MedidaProjetil;
+  perdaMaterial: boolean;
+  limiteProximidadePercentual?: number;
   sigla: string | null;
 }
 
@@ -45,7 +53,7 @@ export interface ComparacaoMedida {
   referenciaMin: number | null;
   referenciaMax: number | null;
   diferenca: number | null;
-  confiavel: boolean;
+  utilizada: boolean;
 }
 
 export interface ResultadoProjetil {
@@ -53,7 +61,11 @@ export interface ResultadoProjetil {
   calibreReal: ComparacaoMedida;
   altura: ComparacaoMedida;
   massa: ComparacaoMedida;
-  dadosAusentes: number;
+  medidasAusentes: MedidaProjetil[];
+  medidasComparadas: MedidaProjetil[];
+  medidasProximas: MedidaProjetil[];
+  pontuacao: number | null;
+  prioridadeAusente: boolean;
   grupoMassa: number;
 }
 

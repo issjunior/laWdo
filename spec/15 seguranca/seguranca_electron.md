@@ -68,3 +68,9 @@ Os comportamentos são protegidos por:
 - `src/__tests__/renderer/error-boundary.component.test.tsx`.
 
 Mudanças nessas fronteiras exigem `type-check`, lint e testes. Alterações de Electron, preload ou empacotamento também exigem build, `pack`, smoke de schema e smoke do executável no Windows.
+
+## Primeiro cadastro e usuário lembrado
+
+Depois de `user.create` retornar sucesso, `AuthPage.tsx` grava somente o nome de usuário em `localStorage.lastUsername`, antes de tentar o login automático. `LoginForm.tsx` lê essa chave para preencher o campo no próximo acesso; a senha não é persistida por esse mecanismo. A chave é preferência da instalação, separada de `sessionStorage.lawdo_auth_user` e sem valor de autenticação.
+
+Se o login automático responder sem sucesso ou sem usuário, a tela passa ao login normal com aviso de cadastro concluído. A gravação de lastUsername e o login ficam no mesmo try: exceção de storage ou IPC pode produzir mensagem de falha mesmo após a conta ter sido criada; não há rollback do cadastro. A alteração visual do primeiro acesso está em `spec/04 layout/componentes_ui_base.md`.

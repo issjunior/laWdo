@@ -140,6 +140,15 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
                                 <Link to={subItem.path} className="flex items-center gap-2 cursor-pointer">
                                   <subItem.icon className="h-4 w-4" />
                                   <span>{subItem.title}</span>
+                                  {subItem.beta && (
+                                    <Badge
+                                      variant="outline"
+                                      title="Em desenvolvimento"
+                                      className="ml-auto shrink-0 border-amber-300 bg-amber-100 px-1.5 py-0 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                                    >
+                                      Beta
+                                    </Badge>
+                                  )}
                                 </Link>
                               </DropdownMenuItem>
                             ))}
@@ -171,6 +180,15 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
                                     <Link to={subItem.path}>
                                       <subItem.icon className="h-4 w-4" />
                                       <span>{subItem.title}</span>
+                                      {subItem.beta && (
+                                        <Badge
+                                          variant="outline"
+                                          title="Em desenvolvimento"
+                                          className="ml-auto shrink-0 border-amber-300 bg-amber-100 px-1.5 py-0 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                                        >
+                                          Beta
+                                        </Badge>
+                                      )}
                                     </Link>
                                   </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>

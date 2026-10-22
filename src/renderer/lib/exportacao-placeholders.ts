@@ -7,6 +7,9 @@ import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-trata
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 import { normalizarCodigoPlaceholders } from '@/lib/utils';
 import { normalizarApresentacaoTabelas } from '@/lib/tabelas-apresentacao';
+import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
+import { limparInteracaoCamposB601 } from '@/lib/b601-campos-projetil';
+import { criarHtmlCampoReservado } from '@shared/utils/campo-reservado';
 
 function numToLetra(n: number): string {
   if (n < 26) return String.fromCharCode(65 + n);
@@ -145,9 +148,9 @@ function juntarComE(itens: string[]): string {
   return `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`;
 }
 
-function formatarNumeroLacre(valor: unknown): string {
+function formatarNumeroLacre(valor: unknown, chaveRep?: string): string {
   const lacre = typeof valor === 'string' ? valor.trim() : '';
-  return lacre ? escaparHtml(lacre) : criarCampoReservado();
+  return lacre ? escaparHtml(lacre) : criarCampoReservado(chaveRep);
 }
 
 function criarResumoLacresSaidaB602(
@@ -258,7 +261,7 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
       if (especificos.b601) {
         const { dados, pecas } = projetarB601ParaLaudo(especificos.b601);
         const escapar = (texto: string): string => texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        const ausente = (texto: string): string => escapar(texto || 'XXX');
+        const ausente = (texto: string, chave: string): string => texto.trim() ? escapar(texto) : criarCampoReservado(chave);
         mapping.b601_envolvidos = dados.envolvidos.join(', ');
         mapping.b601_data_ocorrencia = dados.data_ocorrencia;
         mapping.b601_local = [dados.local.bairro, dados.local.cidade, dados.local.uf].filter(Boolean).join(' / ');
@@ -269,22 +272,30 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
         const orgaoGdl = typeof dadosSolicitacao?.orgao === 'string' ? dadosSolicitacao.orgao.trim() : '';
         mapping.b601_solicitante_nome = ctx.solicitanteNome || dados.solicitante_nome.trim() || orgaoGdl;
         if (!mapping.solicitante_nome) mapping.solicitante_nome = mapping.b601_solicitante_nome;
+        const valorInvestigacao = (chave: string): string => mapping[chave]?.trim()
+          ? escapar(mapping[chave])
+          : criarCampoReservado(chave);
         mapping.b601_tabela_dados_investigacao = buildDadosInvestigacaoTable({
-          envolvidos: dados.envolvidos.length ? dados.envolvidos.map(escapar) : ['XXX'],
-          data_ocorrencia: ausente(dados.data_ocorrencia),
-          local: { bairro: escapar(mapping.b601_local || 'XXX'), cidade: '', uf: '' },
-          numero_bo: ausente(dados.numero_bo), numero_ip: ausente(dados.numero_ip),
-          solicitante_nome: ausente(mapping.b601_solicitante_nome),
+          envolvidos: [valorInvestigacao('b601_envolvidos')],
+          data_ocorrencia: valorInvestigacao('b601_data_ocorrencia'),
+          local: { bairro: valorInvestigacao('b601_local'), cidade: '', uf: '' },
+          numero_bo: valorInvestigacao('b601_numero_bo'), numero_ip: valorInvestigacao('b601_numero_ip'),
+          solicitante_nome: valorInvestigacao('b601_solicitante_nome'),
         });
         mapping.b601_tabela_material_enc = dados.semPecas
           ? '<p>REP declarada sem peças para exame.</p>'
           : buildNumberedTable('TABELA 2 – MATERIAL ENCAMINHADO', ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
-            pecas.map(peca => [ausente(peca.campos.natureza), ausente(peca.campos.quantidade + ' ' + peca.campos.medida),
-              ausente(peca.campos.tipo), ausente(peca.campos.identificacao), ausente(peca.campos.lacre_entrada)]));
+            pecas.map(peca => {
+              const prefixo = `b601_peca_${peca.indice}_`;
+              const quantidade = escapar(peca.campos.quantidade) + ' ' + ausente(peca.campos.medida, prefixo + 'medida');
+              return [ausente(peca.campos.natureza, prefixo + 'natureza'), quantidade,
+                ausente(peca.campos.tipo, prefixo + 'tipo'), ausente(peca.campos.identificacao, prefixo + 'identificacao'),
+                ausente(peca.campos.lacre_entrada, prefixo + 'lacre_entrada')];
+            }));
         for (const peca of pecas) {
           for (const [campo, valor] of Object.entries(peca.campos)) mapping['b601_peca_' + peca.indice + '_' + campo] = valor;
         }
-        const lacresSaidaB601 = pecas.map(peca => `nº ${formatarNumeroLacre(peca.campos.lacre_saida)}, referente ao Item ${peca.indice}`);
+        const lacresSaidaB601 = pecas.map(peca => `nº ${formatarNumeroLacre(peca.campos.lacre_saida, `b601_peca_${peca.indice}_lacre_saida`)}, referente ao Item ${peca.indice}`);
         mapping.b601_resumo_lacres_saida = lacresSaidaB601.length
           ? `${lacresSaidaB601.length === 1 ? 'o lacre' : 'os lacres'} ${juntarComE(lacresSaidaB601)}` : '';
       }
@@ -466,7 +477,10 @@ export function construirMapaPlaceholdersResolvidos(ctx: ExportacaoContext): Map
   }));
 }
 
-function criarCampoReservado(): string {
+function criarCampoReservado(chaveRep?: string): string {
+  if (chaveRep) {
+    return criarHtmlCampoReservado(descreverPlaceholderPendente(chaveRep, [], {}), chaveRep);
+  }
   return '<span class="campo-reservado" data-reservado="true">XXX</span>';
 }
 
@@ -519,6 +533,7 @@ function removerAncorasTabelasPersonalizadas(doc: Document): void {
 
 export function limparIndicadoresCondicionais(html: string): string {
   const documento = new DOMParser().parseFromString(html, 'text/html');
+  limparInteracaoCamposB601(documento.body);
   documento.querySelectorAll('[data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
   documento.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
     bloco.removeAttribute('data-cond-em-edicao');

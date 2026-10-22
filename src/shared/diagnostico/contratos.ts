@@ -18,6 +18,7 @@ export const codigosErroDiagnostico = [
   'CAPTURA_NAO_ENCONTRADA',
   'CAPTURA_EXPIRADA',
   'CAPTURA_INCOMPATIVEL',
+  'INCIDENTE_GPU_NAO_ENCONTRADO',
   'ERRO_INTERNO',
 ] as const;
 
@@ -32,6 +33,14 @@ const schemaJanelaId = z.number().int().positive();
 const schemaUuid = z.string().uuid();
 
 export const schemaDiagnosticoStatusEntrada = z.strictObject({});
+
+export const schemaConsultarGpuEntrada = z.strictObject({
+  incidenteId: z.string().uuid().optional(),
+  componente: z.enum(['resumo', 'ambiente', 'incidente', 'logs_nativos', 'eventos_windows']).default('resumo'),
+  depoisDe: z.number().int().nonnegative().default(0),
+  limite: z.number().int().min(1).max(200).default(50),
+});
+export type EntradaConsultarGpu = z.infer<typeof schemaConsultarGpuEntrada>;
 
 export const schemaCapturarTelaEntrada = z.strictObject({
   janelaId: schemaJanelaId.optional(),
@@ -125,7 +134,7 @@ export const schemaFinalizarCapturaEntrada = z.strictObject({
 
 export const schemaConsultarCapturaEntrada = z.strictObject({
   capturaId: schemaUuid,
-  componente: z.enum(['manifesto', 'dossie', 'metricas_resumo', 'amostras_processos', 'timeline', 'eventos', 'interface_inicial', 'interface_final', 'tela_inicial', 'tela_final', 'erro']),
+  componente: z.enum(['manifesto', 'dossie', 'metricas_resumo', 'amostras_processos', 'timeline', 'eventos', 'interface_inicial', 'interface_final', 'tela_inicial', 'tela_final', 'erro', 'gpu']),
   depoisDe: z.number().int().nonnegative().default(0),
   limite: z.number().int().min(1).max(200).default(50),
   compararComCapturaId: schemaUuid.optional(),
@@ -133,6 +142,7 @@ export const schemaConsultarCapturaEntrada = z.strictObject({
 
 export const schemasEntradaFerramentasDiagnostico = {
   diagnostico_status: schemaDiagnosticoStatusEntrada,
+  consultar_gpu: schemaConsultarGpuEntrada,
   capturar_tela: schemaCapturarTelaEntrada,
   inspecionar_interface: schemaInspecionarInterfaceEntrada,
   executar_acao: schemaExecutarAcaoEntrada,

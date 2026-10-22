@@ -1,0 +1,1210 @@
+[
+  {
+    "id": "baruch-1-01",
+    "calibre": ".25 Auto",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 3.2,
+    "calibreRealMinMm": 6.3,
+    "calibreRealMaxMm": 6.3,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 1",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 1",
+        "valoresOriginais": {
+          "calibre": ".25 Auto",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".251",
+          "diametroMm": 6.3,
+          "massaGrains": 50,
+          "massaGramas": 3.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-02",
+    "calibre": ".32 Auto",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 4.6,
+    "calibreRealMinMm": 7.8,
+    "calibreRealMaxMm": 7.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 2",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 2",
+        "valoresOriginais": {
+          "calibre": ".32 Auto",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".311",
+          "diametroMm": 7.8,
+          "massaGrains": 71,
+          "massaGramas": 4.6
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-03",
+    "calibre": ".32 Auto",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 4.6,
+    "calibreRealMinMm": 7.8,
+    "calibreRealMaxMm": 7.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 3",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 3",
+        "valoresOriginais": {
+          "calibre": ".32 Auto",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".311",
+          "diametroMm": 7.8,
+          "massaGrains": 71,
+          "massaGramas": 4.6
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-04",
+    "calibre": ".32 S&W",
+    "tipo": "CHOG",
+    "sigla": "CHOG",
+    "massaGramas": 6.3,
+    "calibreRealMinMm": 7.9,
+    "calibreRealMaxMm": 7.9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 4",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 4",
+        "valoresOriginais": {
+          "calibre": ".32 S&W",
+          "tipo": "CHOG",
+          "diametroPolegadas": ".314",
+          "diametroMm": 7.9,
+          "massaGrains": 98,
+          "massaGramas": 6.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-05",
+    "calibre": ".32 S&W",
+    "tipo": "CHCV",
+    "sigla": "CHCV",
+    "massaGramas": 6.3,
+    "calibreRealMinMm": 7.9,
+    "calibreRealMaxMm": 7.9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 5",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 5",
+        "valoresOriginais": {
+          "calibre": ".32 S&W",
+          "tipo": "CHCV",
+          "diametroPolegadas": ".314",
+          "diametroMm": 7.9,
+          "massaGrains": 98,
+          "massaGramas": 6.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-06",
+    "calibre": ".32 S&W",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 6.3,
+    "calibreRealMinMm": 7.9,
+    "calibreRealMaxMm": 7.9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 6",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 6",
+        "valoresOriginais": {
+          "calibre": ".32 S&W",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".314",
+          "diametroMm": 7.9,
+          "massaGrains": 98,
+          "massaGramas": 6.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-07",
+    "calibre": ".380 Auto",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 6.1,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 7",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 7",
+        "valoresOriginais": {
+          "calibre": ".380 Auto",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".355",
+          "diametroMm": 9,
+          "massaGrains": 95,
+          "massaGramas": 6.1
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-08",
+    "calibre": ".380 Auto",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 6.1,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 8",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 8",
+        "valoresOriginais": {
+          "calibre": ".380 Auto",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".355",
+          "diametroMm": 9,
+          "massaGrains": 95,
+          "massaGramas": 6.1
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-09",
+    "calibre": "9mm Luger",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 7.4,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 9",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 9",
+        "valoresOriginais": {
+          "calibre": "9mm Luger",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".355",
+          "diametroMm": 9,
+          "massaGrains": 115,
+          "massaGramas": 7.4
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-10",
+    "calibre": "9mm Luger",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 8,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 10",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 10",
+        "valoresOriginais": {
+          "calibre": "9mm Luger",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".355",
+          "diametroMm": 9,
+          "massaGrains": 124,
+          "massaGramas": 8
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-11",
+    "calibre": "9mm Luger",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 7.4,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 11",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 11",
+        "valoresOriginais": {
+          "calibre": "9mm Luger",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".355",
+          "diametroMm": 9,
+          "massaGrains": 115,
+          "massaGramas": 7.4
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-12",
+    "calibre": "9mm Luger",
+    "tipo": "EXPP Flat",
+    "sigla": "EXPP",
+    "massaGramas": 6.1,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 12",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 12",
+        "valoresOriginais": {
+          "calibre": "9mm Luger",
+          "tipo": "EXPP Flat",
+          "diametroPolegadas": ".355",
+          "diametroMm": 9,
+          "massaGrains": 95,
+          "massaGramas": 6.1
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-1-13",
+    "calibre": "9mm Luger",
+    "tipo": "CHOG",
+    "sigla": "CHOG",
+    "massaGramas": 8,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 1, linha 13",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 1, linha 13",
+        "valoresOriginais": {
+          "calibre": "9mm Luger",
+          "tipo": "CHOG",
+          "diametroPolegadas": ".356",
+          "diametroMm": 9,
+          "massaGrains": 124,
+          "massaGramas": 8
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-01",
+    "calibre": ".38 SPL",
+    "tipo": "CHOG - modelo 1",
+    "sigla": "CHOG",
+    "massaGramas": 10.2,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 1",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 1",
+        "valoresOriginais": {
+          "calibre": ".38 SPL",
+          "tipo": "CHOG",
+          "diametroPolegadas": ".358",
+          "diametroMm": 9,
+          "massaGrains": 158,
+          "massaGramas": 10.2
+        }
+      }
+    ],
+    "observacao": "Modelos ilustrados distintos, sem código individual na fonte; identificação pela posição na página."
+  },
+  {
+    "id": "baruch-2-02",
+    "calibre": ".38 SPL",
+    "tipo": "CHOG - modelo 2",
+    "sigla": "CHOG",
+    "massaGramas": 10.2,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 2",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 2",
+        "valoresOriginais": {
+          "calibre": ".38 SPL",
+          "tipo": "CHOG",
+          "diametroPolegadas": ".358",
+          "diametroMm": 9,
+          "massaGrains": 158,
+          "massaGramas": 10.2
+        }
+      }
+    ],
+    "observacao": "Modelos ilustrados distintos, sem código individual na fonte; identificação pela posição na página."
+  },
+  {
+    "id": "baruch-2-03",
+    "calibre": ".38 SPL",
+    "tipo": "CHOG-TP",
+    "sigla": "CHOG",
+    "massaGramas": 10.2,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 3",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 3",
+        "valoresOriginais": {
+          "calibre": ".38 SPL",
+          "tipo": "CHOG-TP",
+          "diametroPolegadas": ".358",
+          "diametroMm": 9,
+          "massaGrains": 158,
+          "massaGramas": 10.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-04",
+    "calibre": ".38 SPL",
+    "tipo": "CHCV",
+    "sigla": "CHCV",
+    "massaGramas": 9.5,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 4",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 4",
+        "valoresOriginais": {
+          "calibre": ".38 SPL",
+          "tipo": "CHCV",
+          "diametroPolegadas": ".358",
+          "diametroMm": 9,
+          "massaGrains": 148,
+          "massaGramas": 9.5
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-05",
+    "calibre": ".38 SPL",
+    "tipo": "CSCV",
+    "sigla": "CSCV",
+    "massaGramas": 10.2,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 5",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 5",
+        "valoresOriginais": {
+          "calibre": ".38 SPL",
+          "tipo": "CSCV",
+          "diametroPolegadas": ".358",
+          "diametroMm": 9,
+          "massaGrains": 158,
+          "massaGramas": 10.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-06",
+    "calibre": ".38 SPL",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 8.1,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 6",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 6",
+        "valoresOriginais": {
+          "calibre": ".38 SPL",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".357",
+          "diametroMm": 9,
+          "massaGrains": 125,
+          "massaGramas": 8.1
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-07",
+    "calibre": ".38 SPL",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 10.2,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 7",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 7",
+        "valoresOriginais": {
+          "calibre": ".38 SPL",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".357",
+          "diametroMm": 9,
+          "massaGrains": 158,
+          "massaGramas": 10.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-08",
+    "calibre": ".357 Magnum",
+    "tipo": "EXPP",
+    "sigla": "EXPP",
+    "massaGramas": 10.2,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 8",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 8",
+        "valoresOriginais": {
+          "calibre": ".357 Magnum",
+          "tipo": "EXPP",
+          "diametroPolegadas": ".357",
+          "diametroMm": 9,
+          "massaGrains": 158,
+          "massaGramas": 10.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-09",
+    "calibre": ".357 Magnum",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 10.2,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 9",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 9",
+        "valoresOriginais": {
+          "calibre": ".357 Magnum",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".357",
+          "diametroMm": 9,
+          "massaGrains": 158,
+          "massaGramas": 10.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-10",
+    "calibre": ".38 Super Auto",
+    "tipo": "CHOG",
+    "sigla": "CHOG",
+    "massaGramas": 10.3,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 10",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 10",
+        "valoresOriginais": {
+          "calibre": ".38 Super Auto",
+          "tipo": "CHOG",
+          "diametroPolegadas": ".356",
+          "diametroMm": 9,
+          "massaGrains": 160,
+          "massaGramas": 10.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-2-11",
+    "calibre": ".38 Super Auto",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 8.1,
+    "calibreRealMinMm": 9,
+    "calibreRealMaxMm": 9,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 2, linha 11",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 2, linha 11",
+        "valoresOriginais": {
+          "calibre": ".38 Super Auto",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".356",
+          "diametroMm": 9,
+          "massaGrains": 125,
+          "massaGramas": 8.1
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-01",
+    "calibre": ".40 S&W",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 10,
+    "calibreRealMinMm": 10.1,
+    "calibreRealMaxMm": 10.1,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 1",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 1",
+        "valoresOriginais": {
+          "calibre": ".40 S&W",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".400",
+          "diametroMm": 10.1,
+          "massaGrains": 155,
+          "massaGramas": 10
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-02",
+    "calibre": ".40 S&W",
+    "tipo": "ETPP",
+    "sigla": "ETPP",
+    "massaGramas": 10,
+    "calibreRealMinMm": 10.1,
+    "calibreRealMaxMm": 10.1,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 2",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 2",
+        "valoresOriginais": {
+          "calibre": ".40 S&W",
+          "tipo": "ETPP",
+          "diametroPolegadas": ".400",
+          "diametroMm": 10.1,
+          "massaGrains": 155,
+          "massaGramas": 10
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-03",
+    "calibre": ".40 S&W",
+    "tipo": "CSCV",
+    "sigla": "CSCV",
+    "massaGramas": 10.3,
+    "calibreRealMinMm": 10.1,
+    "calibreRealMaxMm": 10.1,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 3",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 3",
+        "valoresOriginais": {
+          "calibre": ".40 S&W",
+          "tipo": "CSCV",
+          "diametroPolegadas": ".400",
+          "diametroMm": 10.1,
+          "massaGrains": 160,
+          "massaGramas": 10.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-04",
+    "calibre": ".45 Auto",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 14.9,
+    "calibreRealMinMm": 11.4,
+    "calibreRealMaxMm": 11.4,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 4",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 4",
+        "valoresOriginais": {
+          "calibre": ".45 Auto",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".451",
+          "diametroMm": 11.4,
+          "massaGrains": 230,
+          "massaGramas": 14.9
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-05",
+    "calibre": ".45 Auto",
+    "tipo": "CSCV",
+    "sigla": "CSCV",
+    "massaGramas": 12.9,
+    "calibreRealMinMm": 11.4,
+    "calibreRealMaxMm": 11.4,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 5",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 5",
+        "valoresOriginais": {
+          "calibre": ".45 Auto",
+          "tipo": "CSCV",
+          "diametroPolegadas": ".452",
+          "diametroMm": 11.4,
+          "massaGrains": 200,
+          "massaGramas": 12.9
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-06",
+    "calibre": ".45 Auto",
+    "tipo": "ESCV",
+    "sigla": "ESCV",
+    "massaGramas": 14.9,
+    "calibreRealMinMm": 11.4,
+    "calibreRealMaxMm": 11.4,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 6",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 6",
+        "valoresOriginais": {
+          "calibre": ".45 Auto",
+          "tipo": "ESCV",
+          "diametroPolegadas": ".451",
+          "diametroMm": 11.4,
+          "massaGrains": 230,
+          "massaGramas": 14.9
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-07",
+    "calibre": ".45 Auto",
+    "tipo": "EXPO",
+    "sigla": "EXPO",
+    "massaGramas": 11.9,
+    "calibreRealMinMm": 11.4,
+    "calibreRealMaxMm": 11.4,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 7",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 7",
+        "valoresOriginais": {
+          "calibre": ".45 Auto",
+          "tipo": "EXPO",
+          "diametroPolegadas": ".451",
+          "diametroMm": 11.4,
+          "massaGrains": 185,
+          "massaGramas": 11.9
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-08",
+    "calibre": ".223",
+    "tipo": "ETPT",
+    "sigla": "ETPT",
+    "massaGramas": 3.6,
+    "calibreRealMinMm": 5.6,
+    "calibreRealMaxMm": 5.6,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 8",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 8",
+        "valoresOriginais": {
+          "calibre": ".223",
+          "tipo": "ETPT",
+          "diametroPolegadas": ".224",
+          "diametroMm": 5.6,
+          "massaGrains": 55,
+          "massaGramas": 3.6
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-09",
+    "calibre": ".223",
+    "tipo": "EXPT",
+    "sigla": "EXPT",
+    "massaGramas": 3.6,
+    "calibreRealMinMm": 5.6,
+    "calibreRealMaxMm": 5.6,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 9",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 9",
+        "valoresOriginais": {
+          "calibre": ".223",
+          "tipo": "EXPT",
+          "diametroPolegadas": ".224",
+          "diametroMm": 5.6,
+          "massaGrains": 55,
+          "massaGramas": 3.6
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-3-10",
+    "calibre": ".264 (6,5 mm)",
+    "tipo": "ETPT Boat Tail",
+    "sigla": "ETPT",
+    "massaGramas": 9.2,
+    "calibreRealMinMm": 6.7,
+    "calibreRealMaxMm": 6.7,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 3, linha 10",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 3, linha 10",
+        "valoresOriginais": {
+          "calibre": ".264 (6,5 mm)",
+          "tipo": "ETPT Boat Tail",
+          "diametroPolegadas": ".264",
+          "diametroMm": 6.7,
+          "massaGrains": 143,
+          "massaGramas": 9.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-01",
+    "calibre": ".308",
+    "tipo": "ETOG",
+    "sigla": "ETOG",
+    "massaGramas": 7.1,
+    "calibreRealMinMm": 7.8,
+    "calibreRealMaxMm": 7.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 1",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 1",
+        "valoresOriginais": {
+          "calibre": ".308",
+          "tipo": "ETOG",
+          "diametroPolegadas": ".308",
+          "diametroMm": 7.8,
+          "massaGrains": 110,
+          "massaGramas": 7.1
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-02",
+    "calibre": ".308",
+    "tipo": "ETPT",
+    "sigla": "ETPT",
+    "massaGramas": 9.7,
+    "calibreRealMinMm": 7.8,
+    "calibreRealMaxMm": 7.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 2",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 2",
+        "valoresOriginais": {
+          "calibre": ".308",
+          "tipo": "ETPT",
+          "diametroPolegadas": ".308",
+          "diametroMm": 7.8,
+          "massaGrains": 150,
+          "massaGramas": 9.7
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-03",
+    "calibre": ".308",
+    "tipo": "ETPT Boat Tail",
+    "sigla": "ETPT",
+    "massaGramas": 9.7,
+    "calibreRealMinMm": 7.8,
+    "calibreRealMaxMm": 7.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 3",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 3",
+        "valoresOriginais": {
+          "calibre": ".308",
+          "tipo": "ETPT Boat Tail",
+          "diametroPolegadas": ".308",
+          "diametroMm": 7.8,
+          "massaGrains": 150,
+          "massaGramas": 9.7
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-04",
+    "calibre": ".308",
+    "tipo": "ETPT Boat Tail",
+    "sigla": "ETPT",
+    "massaGramas": 10.5,
+    "calibreRealMinMm": 7.8,
+    "calibreRealMaxMm": 7.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 4",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 4",
+        "valoresOriginais": {
+          "calibre": ".308",
+          "tipo": "ETPT Boat Tail",
+          "diametroPolegadas": ".308",
+          "diametroMm": 7.8,
+          "massaGrains": 162,
+          "massaGramas": 10.5
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-05",
+    "calibre": ".308",
+    "tipo": "EXPT",
+    "sigla": "EXPT",
+    "massaGramas": 9.7,
+    "calibreRealMinMm": 7.8,
+    "calibreRealMaxMm": 7.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 5",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 5",
+        "valoresOriginais": {
+          "calibre": ".308",
+          "tipo": "EXPT",
+          "diametroPolegadas": ".308",
+          "diametroMm": 7.8,
+          "massaGrains": 150,
+          "massaGramas": 9.7
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-06",
+    "calibre": ".44-40",
+    "tipo": "CHPP",
+    "sigla": "CHPP",
+    "massaGramas": 12.9,
+    "calibreRealMinMm": 10.8,
+    "calibreRealMaxMm": 10.8,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 6",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 6",
+        "valoresOriginais": {
+          "calibre": ".44-40",
+          "tipo": "CHPP",
+          "diametroPolegadas": ".427",
+          "diametroMm": 10.8,
+          "massaGrains": 200,
+          "massaGramas": 12.9
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-07",
+    "calibre": ".44 Magnum",
+    "tipo": "EXPP",
+    "sigla": "EXPP",
+    "massaGramas": 15.5,
+    "calibreRealMinMm": 11.4,
+    "calibreRealMaxMm": 11.4,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 7",
+    "observacao": "Diâmetro de 11,4 mm mantido conforme publicado. Há divergência em relação aos 10,97 mm indicados para o projétil na ficha C.I.P. de .44 Rem. Mag.; a origem da divergência permanece sem confirmação.",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 7",
+        "valoresOriginais": {
+          "calibre": ".44 Magnum",
+          "tipo": "EXPP",
+          "diametroPolegadas": ".451",
+          "diametroMm": 11.4,
+          "massaGrains": 240,
+          "massaGramas": 15.5
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-08",
+    "calibre": ".454 Casull",
+    "tipo": "EXPP",
+    "sigla": "EXPP",
+    "massaGramas": 16.8,
+    "calibreRealMinMm": 11.4,
+    "calibreRealMaxMm": 11.4,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 8",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 8",
+        "valoresOriginais": {
+          "calibre": ".454 Casull",
+          "tipo": "EXPP",
+          "diametroPolegadas": ".451",
+          "diametroMm": 11.4,
+          "massaGrains": 260,
+          "massaGramas": 16.8
+        }
+      }
+    ]
+  },
+  {
+    "id": "baruch-4-09",
+    "calibre": "12 (balote)",
+    "tipo": "Chumbo",
+    "sigla": null,
+    "massaGramas": 24.8,
+    "calibreRealMinMm": 17.5,
+    "calibreRealMaxMm": 17.5,
+    "alturaMinMm": null,
+    "alturaMaxMm": null,
+    "situacao": "estimada",
+    "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+    "localizacao": "Página 4, linha 9",
+    "observacao": "A fonte publica 390 grains e 24,8 g, valores com equivalência divergente. A classificação usa os 24,8 g publicados, sem substituí-los pela conversão de grains.",
+    "origens": [
+      {
+        "fonte": "Perfis de Projéteis - Eliane Baruch.pdf",
+        "localizacao": "Página 4, linha 9",
+        "valoresOriginais": {
+          "calibre": "12 (balote)",
+          "tipo": "Chumbo",
+          "diametroPolegadas": ".691",
+          "diametroMm": 17.5,
+          "massaGrains": 390,
+          "massaGramas": 24.8
+        }
+      }
+    ]
+  }
+]

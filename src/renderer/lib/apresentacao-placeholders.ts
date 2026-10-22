@@ -447,9 +447,12 @@ export function aplicarVisualizacaoPlaceholders(
       body.querySelectorAll<HTMLElement>('[data-reservado="true"]:not([data-placeholder])').forEach(campo => {
         try {
           if (campo.textContent?.trim().toUpperCase() !== 'XXX') return;
-          const aviso = 'Campo de preenchimento manual no template';
+          const chaveRep = campo.getAttribute('data-campo-rep-pendente');
+          const aviso = chaveRep
+            ? opcoes.descreverPendente(chaveRep, opcoes.placeholdersPersonalizados, opcoes.valores)
+            : campo.getAttribute('data-aviso-reservado') || 'Campo de preenchimento manual no template';
           campo.setAttribute('data-tooltip-xxx', 'true');
-          campo.setAttribute('data-origem-xxx', 'template');
+          campo.setAttribute('data-origem-xxx', chaveRep ? 'rep' : 'template');
           campo.setAttribute('title', aviso);
           campo.setAttribute('aria-label', aviso);
         } catch (erro) {

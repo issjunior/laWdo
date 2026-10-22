@@ -2,24 +2,6 @@
 export default {
   darkMode: ['class'],
   content: ['./src/renderer/**/*.{ts,tsx,js,jsx}', './src/renderer/index.html'],
-  safelist: [
-    {
-      pattern: /^(bg|text|border|ring)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900)$/,
-      variants: ['hover', 'dark'],
-    },
-    {
-      pattern: /^(bg)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|900)\/(10|15|20|30|40|50)$/,
-      variants: ['dark'],
-    },
-    {
-      pattern: /^(border)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(800)\/(40)$/,
-      variants: ['dark'],
-    },
-    {
-      pattern: /^(ring)-(slate|gray|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(500)\/(50)$/,
-      variants: ['dark'],
-    },
-  ],
   theme: {
   	container: {
   		center: true,
