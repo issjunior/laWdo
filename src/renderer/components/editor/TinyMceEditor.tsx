@@ -16,6 +16,7 @@ import {
   restaurarTabelaPlaceholder,
 } from '@/lib/apresentacao-placeholders';
 import { encontrarCampoReservado } from '@/lib/campos-reservados';
+import { registrarSeletoresCamposB601 } from '@/lib/b601-campos-projetil';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 import { criarHtmlFigura } from '@/lib/figura-html';
 import { atualizarNumeroFigura } from '@/lib/figuras';
@@ -844,8 +845,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               color: #8ab4f8;
             }
             .placeholder-personalizado { background-color: rgba(139,92,246,0.16); color: #6d28d9; border-bottom: 2px dotted #8b5cf6; cursor: pointer; }
+            [data-b601-campo-editavel="true"] > [data-b601-campo-texto="true"] { display: none; }
+            select[data-b601-campo-select="true"] { display: block; field-sizing: content; width: auto; max-width: 100%; min-width: 0; margin: 0 auto; box-sizing: border-box; font: inherit; text-align: center; color: var(--cor-texto-editor); background-color: #fff; border: 1px solid #a1a1aa; border-radius: 4px; padding: 2px; cursor: pointer; }
+            body.dark-content select[data-b601-campo-select="true"] { background-color: #222f3e; color-scheme: dark; }
+            @media print {
+              select[data-b601-campo-select="true"] { display: none !important; }
+              [data-b601-campo-editavel="true"] > [data-b601-campo-texto="true"] { display: inline !important; }
+            }
             body.dark-content .placeholder-personalizado { color: #c4b5fd; }
-            .campo-reservado {
+            .campo-reservado, select[data-b601-campo-select="true"].campo-reservado {
               background-color: rgba(255,193,7,0.2);
               color: #b45309;
               border-radius: 4px;
@@ -856,7 +864,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             .campo-reservado[data-tooltip-xxx="true"] {
               cursor: help;
             }
-            body.dark-content .campo-reservado {
+            body.dark-content .campo-reservado, body.dark-content select[data-b601-campo-select="true"].campo-reservado {
               background-color: rgba(255,193,7,0.15);
               color: #fbbf24;
               border-bottom-color: #f59e0b;
@@ -1354,6 +1362,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const doc = editor.getDoc();
               if (!doc) return;
               const body = editor.getBody();
+              registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'));
 
               const sincronizarAcoesBlocos = () => {
                 editor.undoManager.ignore(() => {

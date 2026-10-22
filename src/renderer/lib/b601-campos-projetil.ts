@@ -1,0 +1,259 @@
+import type { Editor } from 'tinymce';
+import { opcoesOrigemColeta } from '@shared/catalogos/balistica-opcoes.catalogo';
+import { catalogoProjeteis } from '@shared/catalogos/projeteis.catalogo';
+import { criarOpcoesFormatoProjetil, normalizarFormatoProjetil } from '@shared/utils/formato-projetil';
+import { OPCOES_TIPO_PROJETIL_B601 } from '@shared/catalogos/b601.catalogo';
+
+const seletorCampo = '[data-b601-grupo="105"] [data-b601-origem-projetil="true"], [data-b601-grupo="105"] [data-b601-campo-projetil]';
+const seletorControle = 'select[data-b601-campo-select="true"]';
+const seletorTexto = '[data-b601-campo-texto="true"]';
+const seletorLegenda = '[data-b601-legenda-formatos="automatica"], [data-b601-legenda-tipos="automatica"]';
+const siglasPadrao = [...new Set(catalogoProjeteis.flatMap(item => item.sigla ? [item.sigla] : []))];
+type FormatoPersonalizado = { tipo: string; sigla: string | null };
+let carregamentoPersonalizados: Promise<FormatoPersonalizado[]> | undefined;
+
+function carregarFormatosPersonalizados(): Promise<FormatoPersonalizado[]> {
+  if (!carregamentoPersonalizados) {
+    carregamentoPersonalizados = (async () => {
+      const resposta = await window.ipcAPI.projetil.listarPersonalizados();
+      if (!resposta.success || !Array.isArray(resposta.data)) throw new Error(resposta.error || 'Resposta inválida ao carregar formatos de projéteis.');
+      const registros: unknown[] = resposta.data;
+      return registros.flatMap(item => {
+        if (!item || typeof item !== 'object' || !('tipo' in item) || typeof item.tipo !== 'string') return [];
+        const sigla = 'sigla' in item && typeof item.sigla === 'string' ? item.sigla : null;
+        return [{ tipo: item.tipo, sigla }];
+      });
+    })().finally(() => { carregamentoPersonalizados = undefined; });
+  }
+  return carregamentoPersonalizados;
+}
+
+function obterOpcoes(campo: HTMLElement, personalizados: readonly FormatoPersonalizado[], atual: string): { texto: string; valor: string }[] {
+  const tipo = campo.getAttribute('data-b601-campo-projetil');
+  if (tipo === 'tipo') return OPCOES_TIPO_PROJETIL_B601.map(opcao => ({ texto: opcao.valor, valor: opcao.valor }));
+  return tipo === 'constituicao_formato'
+    ? criarOpcoesFormatoProjetil([...siglasPadrao, ...personalizados.flatMap(item => item.sigla ? [item.sigla] : [])], personalizados.map(item => item.tipo), atual)
+      .map(opcao => ({ texto: opcao.rotulo, valor: opcao.valor }))
+    : opcoesOrigemColeta.map(opcao => ({ texto: opcao.label, valor: opcao.label }));
+}
+
+function atualizarLegendaFormatos(grupo: HTMLElement, personalizados: readonly FormatoPersonalizado[]): void {
+  const siglas = [...siglasPadrao, ...personalizados.flatMap(item => item.sigla ? [item.sigla] : [])];
+  const opcoes = criarOpcoesFormatoProjetil(siglas, personalizados.map(item => item.tipo));
+  const entradas = new Map<string, string>();
+  grupo.querySelectorAll<HTMLElement>('[data-b601-campo-projetil="constituicao_formato"]').forEach(campo => {
+    const valor = (campo.querySelector(seletorTexto) || campo).textContent?.trim() || '';
+    const opcao = opcoes.find(item => normalizarFormatoProjetil(item.valor) === normalizarFormatoProjetil(valor));
+    if (opcao && siglas.includes(opcao.valor)) entradas.set(opcao.valor, opcao.descricao);
+  });
+  const legendaAntiga = 'LEGENDA: CHOG = Chumbo Ogival; ETOG = Encamisado Total Ogival; EXPO = Expansivo Ponta Oca.';
+  Array.from(grupo.children).filter(elemento => elemento.tagName === 'P' && elemento.textContent?.trim() === legendaAntiga)
+    .forEach(elemento => elemento.remove());
+  let legenda = grupo.querySelector<HTMLElement>(':scope > [data-b601-legenda-formatos="automatica"], :scope > [data-b601-legenda-tipos="automatica"]');
+  if (!entradas.size) {
+    legenda?.remove();
+    return;
+  }
+  if (!legenda) {
+    legenda = grupo.ownerDocument.createElement('p');
+    grupo.append(legenda);
+  }
+  legenda.removeAttribute('data-b601-legenda-tipos');
+  legenda.setAttribute('data-b601-legenda-formatos', 'automatica');
+  legenda.textContent = `LEGENDA: ${Array.from(entradas, ([sigla, descricao]) => `${sigla} = ${descricao}`).join('; ')}.`;
+  legenda.setAttribute('contenteditable', 'false');
+}
+
+function lerUnidades(grupo: HTMLElement): { pecaId: string; unidade: number }[] {
+  try {
+    const assinatura: unknown = JSON.parse(grupo.getAttribute('data-b601-assinatura') || '');
+    if (!Array.isArray(assinatura)) return [];
+    const itens: unknown[] = assinatura;
+    const unidades: { pecaId: string; unidade: number }[] = [];
+    const limite = grupo.querySelectorAll('thead tr:last-child th').length;
+    for (const item of itens) {
+      if (!item || typeof item !== 'object' || !('id' in item) || typeof item.id !== 'string'
+        || !('quantidade' in item) || typeof item.quantidade !== 'number'
+        || !Number.isSafeInteger(item.quantidade) || item.quantidade <= 0) return [];
+      for (let indice = 1; indice <= item.quantidade && unidades.length < limite; indice++) {
+        unidades.push({ pecaId: item.id, unidade: indice });
+      }
+      if (unidades.length >= limite) break;
+    }
+    return unidades;
+  } catch {
+    return [];
+  }
+}
+
+export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = false, personalizados: readonly FormatoPersonalizado[] = []): void {
+  raiz.querySelectorAll<HTMLElement>('[data-b601-grupo="105"]').forEach(grupo => {
+    const unidades = lerUnidades(grupo);
+    grupo.querySelectorAll<HTMLTableElement>('table').forEach(tabela => {
+      const cabecalhos = Array.from(tabela.querySelectorAll<HTMLElement>('thead tr:last-child th')).slice(1);
+      const linhas = Array.from(tabela.querySelectorAll<HTMLTableRowElement>('tbody tr'))
+        .filter(candidata => ['Origem', 'Tipo', 'Constituição e formato'].includes(candidata.firstElementChild?.textContent?.trim() || ''));
+      linhas.forEach(linha => {
+        if (linha.children.length !== cabecalhos.length + 1) return;
+        const rotulo = linha.firstElementChild?.textContent?.trim();
+        const tipo = rotulo === 'Tipo' ? 'tipo' : rotulo === 'Constituição e formato' ? 'constituicao_formato' : 'origem';
+        Array.from(linha.children).slice(1).forEach((celula, indice) => {
+          if (celula.querySelector('[data-b601-origem-projetil], [data-b601-campo-projetil]')) return;
+          const pq = cabecalhos[indice]?.textContent?.trim().match(/^(PQ(\d+))(?:\s*·\s*Item\s+\d+)?$/);
+          const unidade = pq ? unidades[Number(pq[2]) - 1] : undefined;
+          if (!pq || !unidade) return;
+          const campo = raiz.ownerDocument.createElement('span');
+          campo.setAttribute('data-b601-campo-projetil', tipo);
+          campo.setAttribute('data-b601-peca-id', unidade.pecaId);
+          campo.setAttribute('data-b601-unidade', String(unidade.unidade));
+          campo.setAttribute('data-b601-pq', pq[1]);
+          campo.append(...Array.from(celula.childNodes));
+          celula.append(campo);
+        });
+      });
+    });
+  });
+  if (somenteLeitura) {
+    limparInteracaoCamposB601(raiz);
+    return;
+  }
+  raiz.querySelectorAll<HTMLElement>(seletorLegenda).forEach(legenda => legenda.setAttribute('contenteditable', 'false'));
+  raiz.querySelectorAll<HTMLElement>(seletorCampo).forEach(campo => {
+    let texto = campo.querySelector<HTMLElement>(seletorTexto);
+    if (!texto) {
+      texto = raiz.ownerDocument.createElement('span');
+      texto.setAttribute('data-b601-campo-texto', 'true');
+      texto.append(...Array.from(campo.childNodes));
+      campo.append(texto);
+    }
+    const textoAtual = texto.textContent?.trim() || '';
+    const atual = textoAtual === 'XXX' ? '' : textoAtual;
+    const identificador = campo.getAttribute('data-b601-pq') || 'projétil';
+    const tipo = campo.getAttribute('data-b601-campo-projetil');
+    const ehFormato = tipo === 'constituicao_formato';
+    const rotulo = ehFormato ? 'Constituição e formato' : tipo === 'tipo' ? 'Tipo' : 'Origem/coleta';
+    const aviso = atual ? `${rotulo} de ${identificador}`
+      : texto.querySelector('[data-aviso-reservado]')?.getAttribute('data-aviso-reservado')
+        || (tipo === 'tipo' || ehFormato ? `Campo de preenchimento manual no laudo: ${rotulo} — ${identificador}` : `Campo pendente na REP: ORIGEM/COLETA — ${identificador}`);
+    let controle = campo.querySelector<HTMLSelectElement>(seletorControle);
+    if (!controle) {
+      controle = raiz.ownerDocument.createElement('select');
+      controle.setAttribute('data-b601-campo-select', 'true');
+      controle.setAttribute('data-mce-bogus', 'all');
+      campo.append(controle);
+    }
+    const opcoes = obterOpcoes(campo, personalizados, atual);
+    if (atual && !opcoes.some(opcao => opcao.valor === atual)) opcoes.unshift({ texto: atual, valor: atual });
+    if (!atual) opcoes.unshift({ texto: 'XXX — Selecione...', valor: '' });
+    controle.replaceChildren(...opcoes.map(opcao => {
+      const elemento = raiz.ownerDocument.createElement('option');
+      elemento.value = opcao.valor;
+      elemento.textContent = opcao.texto;
+      elemento.disabled = !opcao.valor;
+      return elemento;
+    }));
+    if (ehFormato && atual) {
+      const apresentacao = raiz.ownerDocument.createElement('option');
+      apresentacao.value = atual;
+      apresentacao.textContent = atual;
+      apresentacao.hidden = true;
+      controle.prepend(apresentacao);
+    }
+    controle.value = atual;
+    controle.classList.toggle('campo-reservado', !atual);
+    controle.setAttribute('aria-label', `${rotulo} de ${identificador}`);
+    controle.setAttribute('title', aviso);
+    campo.setAttribute('data-b601-campo-editavel', 'true');
+    campo.setAttribute('contenteditable', 'false');
+    for (const atributo of ['tabindex', 'role', 'title', 'aria-label']) campo.removeAttribute(atributo);
+  });
+}
+
+export function limparInteracaoCamposB601(raiz: ParentNode): void {
+  raiz.querySelectorAll(seletorLegenda).forEach(legenda => legenda.removeAttribute('contenteditable'));
+  raiz.querySelectorAll<HTMLElement>(seletorCampo).forEach(campo => {
+    campo.querySelectorAll(seletorControle).forEach(controle => controle.remove());
+    campo.querySelectorAll(seletorTexto).forEach(texto => texto.replaceWith(...Array.from(texto.childNodes)));
+    for (const atributo of ['contenteditable', 'tabindex', 'role', 'title', 'aria-label', 'data-b601-campo-editavel']) campo.removeAttribute(atributo);
+  });
+}
+
+export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: string) => void): void {
+  const documento = editor.getDoc();
+  const janela = documento.defaultView;
+  if (!janela) return;
+  let personalizados: FormatoPersonalizado[] = [];
+  let carregouFormatos = false;
+  let encerrado = false;
+  const sincronizar = () => {
+    editor.undoManager.ignore(() => prepararCamposProjeteisB601(editor.getBody(), editor.mode.isReadOnly(), personalizados));
+    if (!carregouFormatos && editor.getBody().querySelector('[data-b601-grupo="105"]')) {
+      carregouFormatos = true;
+      void carregarFormatosPersonalizados().then(formatos => {
+        if (encerrado) return;
+        personalizados = formatos;
+        sincronizar();
+      }).catch((erro: unknown) => {
+        console.warn('Não foi possível carregar os formatos personalizados de projéteis.', erro instanceof Error ? erro.message : 'Erro inesperado');
+      });
+    }
+  };
+  const alterar = (evento: Event) => {
+    const alvo = evento.target;
+    if (!(alvo instanceof janela.HTMLSelectElement) || !alvo.matches(seletorControle)) return;
+    const campo = alvo.closest<HTMLElement>(seletorCampo);
+    if (!campo || editor.mode.isReadOnly()) return;
+    evento.stopImmediatePropagation();
+    const texto = campo.querySelector<HTMLElement>(seletorTexto);
+    const valor = alvo.value;
+    if (!texto || !valor || !obterOpcoes(campo, personalizados, texto.textContent?.trim() || '').some(opcao => opcao.valor === valor)) return;
+    if (valor === texto.textContent?.trim()) {
+      sincronizar();
+      return;
+    }
+    editor.undoManager.transact(() => {
+      texto.textContent = valor;
+      const grupo = campo.closest<HTMLElement>('[data-b601-grupo="105"]');
+      if (grupo && campo.getAttribute('data-b601-campo-projetil') === 'constituicao_formato') atualizarLegendaFormatos(grupo, personalizados);
+    });
+    sincronizar();
+    editor.nodeChanged();
+    aoAlterar(editor.getContent());
+  };
+  const preservarInteracao = (evento: MouseEvent | KeyboardEvent) => {
+    const alvo = evento.target;
+    if (!(alvo instanceof janela.HTMLSelectElement) || !alvo.matches(seletorControle)) return;
+    if (evento instanceof janela.KeyboardEvent && (evento.ctrlKey || evento.metaKey)) return;
+    if (evento instanceof janela.KeyboardEvent && !evento.altKey
+      && alvo.closest('[data-b601-campo-projetil="constituicao_formato"]')
+      && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(evento.key)) {
+      evento.preventDefault();
+      // A opção oculta de apresentação não participa da navegação entre formatos.
+      const opcoes = Array.from(alvo.options).filter(opcao => !opcao.hidden && !opcao.disabled);
+      const atual = opcoes.findIndex(opcao => opcao.value === alvo.value);
+      const indice = evento.key === 'Home' ? 0 : evento.key === 'End' ? opcoes.length - 1
+        : evento.key === 'ArrowUp' ? Math.max(0, atual - 1) : Math.min(opcoes.length - 1, atual + 1);
+      const opcao = opcoes[indice];
+      if (opcao && opcao.value !== alvo.value) {
+        alvo.value = opcao.value;
+        alvo.dispatchEvent(new janela.Event('change', { bubbles: true }));
+      }
+    }
+    evento.stopImmediatePropagation();
+  };
+  sincronizar();
+  documento.addEventListener('change', alterar, true);
+  documento.addEventListener('mousedown', preservarInteracao, true);
+  documento.addEventListener('click', preservarInteracao, true);
+  documento.addEventListener('keydown', preservarInteracao, true);
+  editor.on('SetContent LoadContent Undo Redo SwitchMode', sincronizar);
+  editor.on('PreProcess', evento => limparInteracaoCamposB601(evento.node));
+  editor.on('remove', () => {
+    encerrado = true;
+    documento.removeEventListener('change', alterar, true);
+    documento.removeEventListener('mousedown', preservarInteracao, true);
+    documento.removeEventListener('click', preservarInteracao, true);
+    documento.removeEventListener('keydown', preservarInteracao, true);
+    editor.off('SetContent LoadContent Undo Redo SwitchMode', sincronizar);
+  });
+}

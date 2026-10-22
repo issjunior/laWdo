@@ -8,6 +8,7 @@ import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 import { normalizarCodigoPlaceholders } from '@/lib/utils';
 import { normalizarApresentacaoTabelas } from '@/lib/tabelas-apresentacao';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
+import { limparInteracaoCamposB601 } from '@/lib/b601-campos-projetil';
 import { criarHtmlCampoReservado } from '@shared/utils/campo-reservado';
 
 function numToLetra(n: number): string {
@@ -532,6 +533,7 @@ function removerAncorasTabelasPersonalizadas(doc: Document): void {
 
 export function limparIndicadoresCondicionais(html: string): string {
   const documento = new DOMParser().parseFromString(html, 'text/html');
+  limparInteracaoCamposB601(documento.body);
   documento.querySelectorAll('[data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
   documento.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
     bloco.removeAttribute('data-cond-em-edicao');

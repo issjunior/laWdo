@@ -7,6 +7,9 @@ export function normalizarConteudoComparavel(html: string): string {
   const documento = new DOMParser().parseFromString(
     renumerarTabelasHtml(removerFormatacaoPlaceholders(html)), 'text/html',
   );
+  documento.body.querySelectorAll('[data-b601-origem-projetil="true"], [data-b601-campo-projetil]').forEach(campo => {
+    campo.replaceWith(...Array.from(campo.childNodes));
+  });
   Array.from(documento.body.childNodes).forEach(no => {
     if (no.nodeType !== Node.TEXT_NODE || no.textContent?.trim()) return;
     const anterior = no.previousSibling;

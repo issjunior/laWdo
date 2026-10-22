@@ -13,6 +13,17 @@ export interface TipoPecaB601 {
   campos: CampoPersonalizadoBalistica[]
 }
 
+export const OPCOES_TIPO_PROJETIL_B601 = [
+  { valor: 'Projétil', nomesGdl: ['projetil', 'projeteis'] },
+  { valor: 'Fragmento', nomesGdl: ['fragmento', 'fragmentos'] },
+  { valor: 'Camisa', nomesGdl: ['camisa', 'camisas'] },
+] as const
+
+export function obterTipoProjetilB601(tipoPeca: string): string {
+  const nome = tipoPeca.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
+  return OPCOES_TIPO_PROJETIL_B601.find(opcao => opcao.nomesGdl.some(alias => alias === nome))?.valor ?? ''
+}
+
 export const OPCOES_UNIDADE_MEDIDA_B601 = [
   { codigo: '1', label: 'HECTARE' }, { codigo: '2', label: 'm2' },
   { codigo: '3', label: 'GRAMAS(g)' }, { codigo: '5', label: 'MILILITROS(ml)' },
