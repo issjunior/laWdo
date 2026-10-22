@@ -12,6 +12,7 @@ import {
   schemaCapturarTelaEntrada,
   schemaCriarSnapshotEntrada,
   schemaDiagnosticoStatusEntrada,
+  schemaConsultarGpuEntrada,
   schemaExecutarAcaoEntrada,
   schemaInspecionarInterfaceEntrada,
   schemaIniciarCapturaEntrada,
@@ -75,7 +76,7 @@ function registrarFerramenta(nome: string, schema: z.ZodType, descricao: string,
       return { content: [], structuredContent: envelope as unknown as Record<string, unknown> };
     }
     const codigoErro = resultado.resposta.erro?.codigo;
-    const codigosConhecidos = new Set(['ENTRADA_INVALIDA', 'SESSAO_INDISPONIVEL', 'AUTENTICACAO_FALHOU', 'VERSAO_INCOMPATIVEL', 'JANELA_NAO_ENCONTRADA', 'JANELA_INDISPONIVEL', 'SNAPSHOT_EXPIRADO', 'ELEMENTO_NAO_ENCONTRADO', 'ACAO_NAO_SUPORTADA', 'TIMEOUT', 'CAPTURA_PARCIAL', 'CAPTURA_EM_ANDAMENTO', 'CAPTURA_NAO_ENCONTRADA', 'CAPTURA_EXPIRADA', 'CAPTURA_INCOMPATIVEL', 'ERRO_INTERNO']);
+    const codigosConhecidos = new Set(['ENTRADA_INVALIDA', 'SESSAO_INDISPONIVEL', 'AUTENTICACAO_FALHOU', 'VERSAO_INCOMPATIVEL', 'JANELA_NAO_ENCONTRADA', 'JANELA_INDISPONIVEL', 'SNAPSHOT_EXPIRADO', 'ELEMENTO_NAO_ENCONTRADO', 'ACAO_NAO_SUPORTADA', 'TIMEOUT', 'CAPTURA_PARCIAL', 'CAPTURA_EM_ANDAMENTO', 'CAPTURA_NAO_ENCONTRADA', 'CAPTURA_EXPIRADA', 'CAPTURA_INCOMPATIVEL', 'INCIDENTE_GPU_NAO_ENCONTRADO', 'ERRO_INTERNO']);
     const deveRetornarImagem = imagem || (nome === 'consultar_captura' && typeof (entrada as Record<string, unknown>).componente === 'string' && String((entrada as Record<string, unknown>).componente).startsWith('tela_'));
     const dadosEstruturados = deveRetornarImagem && resultado.resposta.dados && typeof resultado.resposta.dados === 'object'
       ? Object.fromEntries(Object.entries(resultado.resposta.dados as Record<string, unknown>).filter(([chave]) => chave !== 'imagemBase64'))
@@ -99,6 +100,7 @@ function registrarFerramenta(nome: string, schema: z.ZodType, descricao: string,
 
 const servidor = new McpServer({ name: 'lawdo-diagnostico', version: '0.1.0' });
 registrarFerramenta('diagnostico_status', schemaDiagnosticoStatusEntrada, 'Informa o estado da sessão diagnóstica local.');
+registrarFerramenta('consultar_gpu', schemaConsultarGpuEntrada, 'Consulta o resumo gráfico ou um incidente de GPU por ID, com logs técnicos sanitizados e correlação com o Windows.');
 registrarFerramenta('capturar_tela', schemaCapturarTelaEntrada, 'Captura uma janela ou região da interface real.', true);
 registrarFerramenta('inspecionar_interface', schemaInspecionarInterfaceEntrada, 'Obtém a estrutura acessível e revisionada da interface.');
 registrarFerramenta('executar_acao', schemaExecutarAcaoEntrada, 'Clica ou digita sobre um elemento da última revisão.');

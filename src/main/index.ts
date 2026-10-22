@@ -1,4 +1,6 @@
 import { normalizarFalhaDiagnosticoGdl } from './services/diagnostico-eventos.service.js';
+import { conectarDiagnosticoGpu, diagnosticoGpu, encerrarDiagnosticoGpu, preparacaoGpu } from './diagnostico-gpu.js';
+import { schemaConsultarGpuEntrada } from '../shared/diagnostico/contratos.js';
 import { configurarObservadorGdl } from './services/gdl-diagnostico.service.js';
 import { app, BrowserWindow, dialog, shell, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
@@ -144,9 +146,16 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     ambiente: process.env,
     plataforma: process.platform,
     pid: process.pid,
+    preparacao: preparacaoGpu,
   });
   const ativa = await sessao.iniciar();
   if (!ativa) return;
+  if (sessao.servicoEventos) await conectarDiagnosticoGpu(sessao.servicoEventos, () => ({
+    janelas: BrowserWindow.getAllWindows().filter(janela => !janela.isDestroyed()).slice(0, 10).map(janela => ({
+      janelaId: janela.id, rota: janela.webContents.getURL().split('#')[1]?.split('?')[0] ?? '',
+      focada: janela.isFocused(), visivel: janela.isVisible(), dimensoes: janela.getContentBounds(), zoom: janela.webContents.getZoomFactor(),
+    })),
+  }));
   iniciarMedicaoAtrasoEventLoop();
   const interfaceServico = new DiagnosticoInterfaceService();
   sourceMapsDiagnostico = new DiagnosticoSourceMapService(path.join(app.getAppPath(), 'out'));
@@ -181,6 +190,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
       return { tela: estado.tela, interface: estado.interface, contexto: estado.contexto, erros: estado.erros };
     },
     obterMetricas: () => app.getAppMetrics().map(metrica => ({ pid: metrica.pid, tipo: metrica.type, cpu: metrica.cpu.percentCPUUsage, memoriaKb: metrica.memory?.workingSetSize ?? null })),
+    obterGpu: () => diagnosticoGpu?.snapshot() ?? { ativo: false, lacunas: ['COLETA_GPU_INDISPONIVEL'] },
     obterAtrasoEventLoop: () => atrasoEventLoopDiagnostico,
     obterPendenciasPersistencia: () => sessao.servicoEventos?.pendenciasPersistencia ?? 0,
     obterMarcadores: () => marcadoresDiagnostico,
@@ -216,6 +226,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
             iniciadoEm: ativa.iniciadoEm,
             pid: ativa.pid,
             ultimoCursor: sessao.servicoEventos?.ultimoCursor ?? 0,
+            gpu: diagnosticoGpu?.resumo() ?? { ativo: false },
             janelas: BrowserWindow.getAllWindows().map(janela => ({
               janelaId: janela.id,
               titulo: janela.getTitle(),
@@ -226,6 +237,13 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
             orientacao: 'Use capturar_tela ou inspecionar_interface para observar a janela.',
           },
         };
+      }
+      if (operacao === 'consultar_gpu') {
+        const entrada = schemaConsultarGpuEntrada.safeParse(payload);
+        if (!entrada.success || (entrada.data.componente !== 'resumo' && !entrada.data.incidenteId)) return { requestId, ok: false, erro: { codigo: 'ENTRADA_INVALIDA', mensagem: 'Informe um incidente válido para consultar o componente gráfico.' } };
+        if (!diagnosticoGpu) return { requestId, ok: false, erro: { codigo: 'SESSAO_INDISPONIVEL', mensagem: 'A coleta gráfica não está disponível.' } };
+        try { return { requestId, ok: true, dados: diagnosticoGpu.consultar(entrada.data) }; }
+        catch { return { requestId, ok: false, erro: { codigo: 'INCIDENTE_GPU_NAO_ENCONTRADO', mensagem: 'O incidente não existe ou expirou pela retenção.' } }; }
       }
       if (operacao === 'obter_eventos') {
         const entrada = schemaObterEventosEntrada.safeParse(payload);
@@ -354,6 +372,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
             limite: entrada.data.quantidadeEventos,
           }).eventos ?? [];
           await writeFile(path.join(diretorioTemporario, 'eventos.json'), JSON.stringify(eventos, null, 2), 'utf8');
+          await writeFile(path.join(diretorioTemporario, 'gpu.json'), JSON.stringify(diagnosticoGpu?.snapshot() ?? { ativo: false }), 'utf8');
           await writeFile(path.join(diretorioTemporario, 'metadados.json'), JSON.stringify({ snapshotId, sessionId: ativa.sessionId, criadoEm: new Date().toISOString(), janelaId: janela.id }, null, 2), 'utf8');
           let tela = false;
           let interfaceEstrutural = false;
@@ -378,7 +397,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
               snapshotId, sessionId: ativa.sessionId, criadoEm: new Date().toISOString(), janelaId: janela.id,
               cursorInicial: eventos.at(0)?.sequencia ?? 0, cursorFinal: eventos.at(-1)?.sequencia ?? 0,
               caminho: diretorioFinal,
-              componentes: { metadados: true, eventos: true, tela, interface: interfaceEstrutural }, errosCaptura,
+              componentes: { metadados: true, eventos: true, tela, interface: interfaceEstrutural, gpu: Boolean(diagnosticoGpu) }, errosCaptura,
             },
           };
         } catch {
@@ -454,6 +473,7 @@ async function encerrarDiagnosticoAssistido(): Promise<void> {
   if (temporizadorAtrasoEventLoopDiagnostico) clearInterval(temporizadorAtrasoEventLoopDiagnostico);
   temporizadorAtrasoEventLoopDiagnostico = null;
   atrasoEventLoopDiagnostico = null;
+  await encerrarDiagnosticoGpu();
   await pipeDiagnostico?.encerrar().catch(() => undefined);
   await sessaoDiagnostico?.encerrar().catch(() => undefined);
   pipeDiagnostico = null;

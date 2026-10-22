@@ -2,6 +2,9 @@ import { app, dialog } from 'electron';
 import { access, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { iniciarInstanciaUnica } from './utils/instancia-unica.js';
+import { prepararDiagnosticoGpu } from './diagnostico-gpu.js';
+
+prepararDiagnosticoGpu();
 
 const diretorioTemporarioSmoke = process.env.LAWDO_SMOKE_USER_DATA;
 const modoSmokeJanela = process.env.LAWDO_SMOKE_JANELA === '1';

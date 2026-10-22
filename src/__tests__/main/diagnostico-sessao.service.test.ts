@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -28,6 +28,23 @@ afterEach(async () => {
 });
 
 describe('DiagnosticoSessaoService', () => {
+  it('reutiliza o diretório preparado no bootstrap sem apagar o log nativo', async () => {
+    const workspace = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lawdo-preparado-')));
+    diretorios.push(workspace);
+    const sessionId = 'a5782e87-cb07-41ed-b2ee-967a35d62d42';
+    const iniciadoEm = new Date().toISOString();
+    const caminhoSessao = path.join(workspace, 'tmp', 'diagnostico-agente', 'sessoes', `${iniciadoEm.replace(/[:.]/g, '-')}-${sessionId}`);
+    await mkdir(caminhoSessao, { recursive: true });
+    await writeFile(path.join(caminhoSessao, 'chromium-gpu.log'), 'gpu bootstrap');
+    const servico = new DiagnosticoSessaoService({ obterCaminhoWorkspace: () => workspace, empacotado: () => false,
+      ambiente: { LAWDO_MODO_DIAGNOSTICO: '1' }, plataforma: 'linux', pid: 999_999_999,
+      preparacao: { workspace, sessionId, iniciadoEm, caminhoSessao } });
+    try {
+      expect(await servico.iniciar()).toMatchObject({ sessionId, iniciadoEm });
+      expect(servico.diretorioSessao).toBe(caminhoSessao);
+      expect(await readFile(path.join(caminhoSessao, 'chromium-gpu.log'), 'utf8')).toBe('gpu bootstrap');
+    } finally { await servico.encerrar(); }
+  });
   it('só habilita o modo por variável explícita fora do pacote', () => {
     expect(modoDiagnosticoHabilitado(false, { LAWDO_MODO_DIAGNOSTICO: '1' })).toBe(true);
     expect(modoDiagnosticoHabilitado(true, { LAWDO_MODO_DIAGNOSTICO: '1' })).toBe(false);

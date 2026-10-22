@@ -10,6 +10,7 @@ import {
   schemaIniciarCapturaEntrada,
   schemaFinalizarCapturaEntrada,
   schemaObterEventosEntrada,
+  schemaConsultarGpuEntrada,
 } from '@shared/diagnostico/contratos.js';
 
 describe('contratos de diagnóstico assistido', () => {
@@ -63,11 +64,19 @@ describe('contratos de diagnóstico assistido', () => {
     }).success).toBe(false);
   });
 
-  it('gera schemas JSON fechados para as dez ferramentas', () => {
+  it('gera schemas JSON fechados para as onze ferramentas', () => {
     const schemas = gerarSchemasJsonFerramentasDiagnostico();
-    expect(Object.keys(schemas)).toHaveLength(10);
+    expect(Object.keys(schemas)).toHaveLength(11);
+    expect(schemas.consultar_gpu).toMatchObject({ type: 'object', additionalProperties: false });
     expect(schemas.executar_acao).toMatchObject({ type: 'object', additionalProperties: false });
     expect(schemas.iniciar_captura).toMatchObject({ oneOf: expect.any(Array) });
+  });
+
+  it('restringe consultas gráficas a IDs e componentes conhecidos', () => {
+    expect(schemaConsultarGpuEntrada.parse({})).toEqual({ componente: 'resumo', depoisDe: 0, limite: 50 });
+    expect(schemaConsultarGpuEntrada.safeParse({ incidenteId: '../../segredo' }).success).toBe(false);
+    expect(schemaConsultarGpuEntrada.safeParse({ componente: 'arquivo', caminho: 'segredo' }).success).toBe(false);
+    expect(schemaConsultarGpuEntrada.safeParse({ limite: 201 }).success).toBe(false);
   });
 
   it('mantém o envelope estruturado estável para sucesso e erro', () => {

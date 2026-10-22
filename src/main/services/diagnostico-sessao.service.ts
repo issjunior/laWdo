@@ -21,12 +21,15 @@ const schemaSessaoAtiva = z.strictObject({
 
 export type SessaoDiagnosticoAtiva = z.infer<typeof schemaSessaoAtiva>;
 
+export interface PreparacaoSessaoDiagnostico { workspace: string; sessionId: string; iniciadoEm: string; caminhoSessao: string }
+
 interface DependenciasSessaoDiagnostico {
   obterCaminhoWorkspace: () => string;
   empacotado: () => boolean;
   ambiente: NodeJS.ProcessEnv;
   plataforma: NodeJS.Platform;
   pid: number;
+  preparacao?: PreparacaoSessaoDiagnostico;
   protegerArquivoWindows?: (caminho: string) => Promise<void>;
 }
 
@@ -90,9 +93,11 @@ export class DiagnosticoSessaoService {
     await this.removerSessaoAbandonada();
     await limparSessoesDiagnostico(caminhoSessoes, null);
 
-    const sessionId = randomUUID();
-    const iniciadoEm = new Date().toISOString();
-    const caminhoSessao = path.join(caminhoSessoes, `${iniciadoEm.replace(/[:.]/g, '-')}-${sessionId}`);
+    const preparacao = this.dependencias.preparacao;
+    if (preparacao && preparacao.workspace !== workspace) throw new Error('Preparação diagnóstica pertence a outro workspace.');
+    const sessionId = preparacao?.sessionId ?? randomUUID();
+    const iniciadoEm = preparacao?.iniciadoEm ?? new Date().toISOString();
+    const caminhoSessao = preparacao?.caminhoSessao ?? path.join(caminhoSessoes, `${iniciadoEm.replace(/[:.]/g, '-')}-${sessionId}`);
     await mkdir(path.join(caminhoSessao, 'snapshots'), { recursive: true });
     const sessao = schemaSessaoAtiva.parse({
       versaoProtocolo: 1,
