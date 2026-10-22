@@ -2,10 +2,12 @@
 @config "../../../tailwind.config.js";
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
-@source inline("{hover:,dark:}{bg,text,border,ring}-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{50,{100..900..100}}");
-@source inline("dark:bg-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{50,900}/{10,15,20,30,40,50}");
-@source inline("dark:border-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-800/40");
-@source inline("dark:ring-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-500/50");
+/* Combinações de cores montadas dinamicamente nas categorias, peças e placeholders. */
+@source inline("bg-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{100,500}");
+@source inline("dark:bg-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-900/30");
+@source inline("text-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{600,700}");
+@source inline("dark:text-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-{300,400}");
+@source inline("border-{slate,gray,red,orange,amber,yellow,lime,green,emerald,teal,cyan,sky,blue,indigo,violet,purple,fuchsia,pink,rose}-200");
 
 .indicador-secao {
   @apply ml-[6px] inline-flex items-center align-middle rounded-[4px] border-[1px] border-solid border-[#e4e4e7] bg-[#f4f4f5] px-[6px] py-[1px] text-[11px] font-[400] leading-[1.5] text-[#52525b];
