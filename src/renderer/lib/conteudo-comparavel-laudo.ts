@@ -1,12 +1,12 @@
-import { removerFormatacaoPlaceholders } from './utils';
-import { renumerarTabelasHtml } from './numeracao-tabelas';
+import { removerFormatacaoPlaceholdersDoDom } from './utils';
+import { renumerarTabelas } from './numeracao-tabelas';
 
 const elementosDeBloco = new Set(['ADDRESS', 'ARTICLE', 'BLOCKQUOTE', 'DIV', 'FIGURE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HR', 'LI', 'OL', 'P', 'PRE', 'SECTION', 'TABLE', 'UL']);
 
 export function normalizarConteudoComparavel(html: string): string {
-  const documento = new DOMParser().parseFromString(
-    renumerarTabelasHtml(removerFormatacaoPlaceholders(html)), 'text/html',
-  );
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  removerFormatacaoPlaceholdersDoDom(documento.body);
+  renumerarTabelas(documento.body);
   documento.body.querySelectorAll('[data-b601-origem-projetil="true"], [data-b601-campo-projetil]').forEach(campo => {
     campo.replaceWith(...Array.from(campo.childNodes));
   });
@@ -26,9 +26,12 @@ export function normalizarConteudoComparavel(html: string): string {
     }
     if (!elemento.getAttribute('class')?.trim()) elemento.removeAttribute('class');
     if (!elemento.getAttribute('style')?.trim()) elemento.removeAttribute('style');
-    const atributos = Array.from(elemento.attributes).sort((a, b) => a.name.localeCompare(b.name));
-    atributos.forEach(atributo => elemento.removeAttribute(atributo.name));
-    atributos.forEach(atributo => elemento.setAttribute(atributo.name, atributo.value));
+    const atuais = Array.from(elemento.attributes);
+    const ordenados = [...atuais].sort((a, b) => a.name.localeCompare(b.name));
+    if (atuais.some((atributo, indice) => atributo.name !== ordenados[indice].name)) {
+      ordenados.forEach(atributo => elemento.removeAttribute(atributo.name));
+      ordenados.forEach(atributo => elemento.setAttribute(atributo.name, atributo.value));
+    }
   });
   return documento.body.innerHTML;
 }

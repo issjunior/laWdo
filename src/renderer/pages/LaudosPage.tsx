@@ -66,9 +66,10 @@ import { CHAVES_PLACEHOLDERS_REP, extrairIndicePlaceholders, type ItemIndicePlac
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
+import { medirOperacaoEditorLaudo } from '@/lib/desempenho-editor-laudo';
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { capturaProblemaLaudoAtiva, registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
-import { atualizarNumeroFigura, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
+import { atualizarNumeroFigura, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
 import type { ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
 import {
   Dialog,
@@ -488,6 +489,37 @@ interface FallbackModeloIaPendente {
   modeloRecomendado: string | null;
 }
 
+/** Extrai figuras do HTML de um editor (modo multi ou single) */
+const extrairFigurasDoHtml = (html: string): ImagemLaudo[] => {
+  if (!html) return [];
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  return extrairFigurasDaRaiz(doc);
+};
+
+const extrairFigurasDaRaiz = (raiz: ParentNode): ImagemLaudo[] => {
+  const figures = raiz.querySelectorAll('.laudo-figure');
+  return Array.from(figures)
+    .map((fig, idx) => {
+      const id = fig.getAttribute('data-image-id') || '';
+      const dummy = fig.getAttribute('data-dummy') === 'true';
+      const img = fig.querySelector('img');
+      const figcaption = fig.querySelector('figcaption');
+      return {
+        id,
+        url: img?.getAttribute('src') || '',
+        thumbnailUrl: img?.getAttribute('src') || '',
+        legenda: figcaption?.textContent?.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '').trim() || '',
+        numero_figura: idx + 1,
+        sequencia: idx + 1,
+        created_at: '',
+        dummy,
+        imagemOrigemId: fig.getAttribute('data-image-original-id') || undefined,
+      };
+    })
+    .filter(f => f.id && f.url);
+};
+
 export const LaudosPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -840,7 +872,8 @@ export const LaudosPage: React.FC = () => {
       .join('\n');
   }, []);
 
-  const parseSingleHtmlToSecoes = useCallback((singleHtml: string, secoesBase: SecaoEditor[]) => {
+  const cacheSecoesEditorUnicoRef = useRef<{ html: string; base: SecaoEditor[]; secoes: SecaoEditor[] } | null>(null);
+  const parseSingleHtmlToSecoesSemCache = useCallback((singleHtml: string, secoesBase: SecaoEditor[]) => {
     if (!singleHtml || secoesBase.length === 0) return secoesBase;
     try {
       const parser = new DOMParser();
@@ -875,6 +908,16 @@ export const LaudosPage: React.FC = () => {
       return secoesBase;
     }
   }, []);
+
+  const parseSingleHtmlToSecoes = useCallback((html: string, base: SecaoEditor[]) => {
+    const cache = cacheSecoesEditorUnicoRef.current;
+    if (cache?.html === html && cache.base === base) return cache.secoes;
+    const resultado = medirOperacaoEditorLaudo('dividir_editor_secoes', () => parseSingleHtmlToSecoesSemCache(html, base), {
+      bytesEntrada: html.length, quantidade: base.length, modoUnico: true, incremental: false,
+    });
+    cacheSecoesEditorUnicoRef.current = { html, base, secoes: resultado };
+    return resultado;
+  }, [parseSingleHtmlToSecoesSemCache]);
 
   const reindexarSecoesEditadas = useCallback((secoesFonte: SecaoEditor[]) => (
     secoesFonte.map(secao => ({
@@ -977,37 +1020,66 @@ export const LaudosPage: React.FC = () => {
     setIndicePlaceholdersOpen(true);
   }, [mapaPlaceholdersResolvidos, obterSecoesAtuaisDoEditor, placeholders]);
 
-  const montarHtmlEstruturalAtual = useCallback((secoesFonte: SecaoEditor[]) => {
-    const htmlEstrutural = reconstruirHtmlEstrutural(reindexarSecoesEditadas(secoesFonte));
-    return reindexarFiguras(reindexarHtmlEstrutural(htmlEstrutural));
-  }, [reindexarSecoesEditadas]);
+  const montarHtmlEstruturalAtual = useCallback((secoesFonte: SecaoEditor[]) => medirOperacaoEditorLaudo(
+    'reconstruir_laudo', () => {
+      const htmlEstrutural = reconstruirHtmlEstrutural(reindexarSecoesEditadas(secoesFonte));
+      return reindexarFiguras(reindexarHtmlEstrutural(htmlEstrutural));
+    }, { modoUnico: editorMode === 'single', quantidade: secoesFonte.length, bytesEntrada: secoesFonte.reduce((total, secao) => total + secao.conteudo.length, 0) },
+  ), [editorMode, reindexarSecoesEditadas]);
 
-  const obterConteudoComparavel = useCallback(() => {
-    const secoesAtuais = editorMode === 'single'
-      ? parseSingleHtmlToSecoes(obterEditorTinyMce('laudo-single-editor')?.getContent() ?? singleEditorHtml, secoes)
-      : secoes.map((secao, indice) => ({
+  const cacheComparacaoRef = useRef<{ secoes: SecaoEditor[]; resultado: string } | null>(null);
+  const obterConteudoComparavel = useCallback((lerEditores = true) => {
+    const secoesAtuais = medirOperacaoEditorLaudo('ler_conteudo_editores', () => editorMode === 'single'
+      ? parseSingleHtmlToSecoes(lerEditores
+        ? obterEditorTinyMce('laudo-single-editor')?.getContent() ?? singleEditorHtml
+        : singleEditorHtml, secoes)
+      : lerEditores ? secoes.map((secao, indice) => ({
         ...secao,
         conteudo: obterEditorTinyMce(`secao-${indice}`)?.getContent() ?? secao.conteudo,
-      }));
-    return normalizarConteudoComparavel(montarHtmlEstruturalAtual(removerIlustracoesVazias(secoesAtuais)));
+      })) : secoes, { modoUnico: editorMode === 'single', incremental: !lerEditores, quantidade: editorMode === 'single' ? 1 : secoes.length });
+    const cache = cacheComparacaoRef.current;
+    if (cache && cache.secoes.length === secoesAtuais.length && secoesAtuais.every((secao, indice) => {
+      const anterior = cache.secoes[indice];
+      return Object.keys(secao).length === Object.keys(anterior).length
+        && (Object.keys(secao) as Array<keyof SecaoEditor>).every(chave => secao[chave] === anterior[chave]);
+    })) return cache.resultado;
+    const html = montarHtmlEstruturalAtual(removerIlustracoesVazias(secoesAtuais));
+    const resultado = medirOperacaoEditorLaudo('normalizar_comparacao_laudo', () => normalizarConteudoComparavel(html), {
+      bytesEntrada: html.length, quantidade: secoesAtuais.length, modoUnico: editorMode === 'single',
+    });
+    cacheComparacaoRef.current = { secoes: secoesAtuais, resultado };
+    return resultado;
   }, [editorMode, montarHtmlEstruturalAtual, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
   const obterConteudoComparavelRef = useRef(obterConteudoComparavel);
   obterConteudoComparavelRef.current = obterConteudoComparavel;
 
   useEffect(() => {
-    if (editando) atualizarConteudo(obterConteudoComparavel());
-  }, [editando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes]);
+    if (!editando) return;
+    const sessao = obterSessao();
+    const temporizador = window.setTimeout(() => {
+      if (!sessaoAtual(sessao)) return;
+      const conteudo = obterConteudoComparavel(false);
+      medirOperacaoEditorLaudo('atualizar_estado_laudo', () => atualizarConteudo(conteudo), { bytesEntrada: conteudo.length, modoUnico: editorMode === 'single' });
+    }, 400);
+    return () => window.clearTimeout(temporizador);
+  }, [editando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes, obterSessao, sessaoAtual, editorMode]);
+
+  useEffect(() => {
+    cacheComparacaoRef.current = null;
+    cacheSecoesEditorUnicoRef.current = null;
+  }, [sessaoEditor]);
 
   const handleEditorModeChange = useCallback((nextMode: 'multi' | 'single') => {
     if (nextMode === editorMode) return;
+    const atuais = obterSecoesAtuaisDoEditor().map(secao => ({
+      ...secao, conteudo: encerrarEdicaoBlocosCondicionais(secao.conteudo),
+    }));
+    setSecoes(atuais);
     if (nextMode === 'single') {
-      setSingleEditorHtml(encerrarEdicaoBlocosCondicionais(buildSingleHtmlFromSecoes(secoes)));
-      setEditorMode('single');
-      return;
+      setSingleEditorHtml(encerrarEdicaoBlocosCondicionais(buildSingleHtmlFromSecoes(atuais)));
     }
-    setSecoes(prev => parseSingleHtmlToSecoes(encerrarEdicaoBlocosCondicionais(singleEditorHtml), prev));
-    setEditorMode('multi');
-  }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+    setEditorMode(nextMode);
+  }, [buildSingleHtmlFromSecoes, editorMode, obterSecoesAtuaisDoEditor]);
 
   const carregarPlaceholders = useCallback(async () => {
     const rCat = await window.ipcAPI.categoria.findAll();
@@ -1152,46 +1224,38 @@ export const LaudosPage: React.FC = () => {
     return { idx, secoes: novas };
   }, [secoes]);
 
-  /** Extrai figuras do HTML de um editor (modo multi ou single) */
-  const extrairFigurasDoHtml = (html: string): ImagemLaudo[] => {
-    if (!html) return [];
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const figures = doc.querySelectorAll('.laudo-figure');
-    return Array.from(figures)
-      .map((fig, idx) => {
-        const id = fig.getAttribute('data-image-id') || '';
-        const dummy = fig.getAttribute('data-dummy') === 'true';
-        const img = fig.querySelector('img');
-        const figcaption = fig.querySelector('figcaption');
-        return {
-          id,
-          url: img?.getAttribute('src') || '',
-          thumbnailUrl: img?.getAttribute('src') || '',
-          legenda: figcaption?.textContent?.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '').trim() || '',
-          numero_figura: idx + 1,
-          sequencia: idx + 1,
-          created_at: '',
-          dummy,
-          imagemOrigemId: fig.getAttribute('data-image-original-id') || undefined,
-        };
-      })
-      .filter(f => f.id && f.url);
-  };
-
+  const [revisaoFiguras, setRevisaoFiguras] = useState(0);
+  const editoresFigurasAlteradosRef = useRef(new Set<string>());
+  const cacheFigurasRef = useRef<Array<{ html: string; raiz: HTMLElement | null; figuras: ImagemLaudo[] }>>([]);
   const extrairFigurasDoEditor = useCallback((): ImagemLaudo[] => {
-    const figuras = editorMode === 'single'
-      ? extrairFigurasDoHtml(singleEditorHtml)
-      : secoes.flatMap(s => extrairFigurasDoHtml(s.conteudo));
-    return figuras.map((figura, indice) => ({ ...figura, numero_figura: indice + 1, sequencia: indice + 1 }));
+    const fontes = editorMode === 'single' ? [singleEditorHtml] : secoes.map(secao => secao.conteudo);
+    const anteriores = cacheFigurasRef.current;
+    cacheFigurasRef.current = fontes.map((html, indice) => {
+      const id = editorMode === 'single' ? 'laudo-single-editor' : `secao-${indice}`;
+      const raiz = obterEditorTinyMce(id)?.getBody() ?? null;
+      const anterior = anteriores[indice];
+      const alterado = editoresFigurasAlteradosRef.current.delete(id);
+      if (anterior && anterior.raiz === raiz && !alterado && (raiz || anterior.html === html)) return anterior;
+      const figuras = raiz ? extrairFigurasDaRaiz(raiz) : html.includes('laudo-figure') ? extrairFigurasDoHtml(html) : [];
+      return { html: raiz ? '' : html, raiz, figuras };
+    });
+    return cacheFigurasRef.current.flatMap(item => item.figuras)
+      .map((figura, indice) => ({ ...figura, numero_figura: indice + 1, sequencia: indice + 1 }));
   }, [editorMode, singleEditorHtml, secoes]);
+
+  useEffect(() => {
+    cacheFigurasRef.current = [];
+    editoresFigurasAlteradosRef.current.clear();
+  }, [sessaoEditor]);
 
   const sincronizarNumeracaoFigurasEditores = () => {
     const ids = editorMode === 'single'
       ? ['laudo-single-editor']
       : secoes.map((_, indice) => `secao-${indice}`);
     const editores = ids.map(obterEditorTinyMce).filter((editor): editor is TinyMceEditorInstance => Boolean(editor));
-    if (!renumerarFigurasNosEditores(editores)) return;
+    if (!medirOperacaoEditorLaudo('numerar_figuras_editores', () => renumerarFigurasNosEditores(editores), {
+      quantidade: editores.length, incremental: false, modoUnico: editorMode === 'single',
+    })) return;
     if (editorMode === 'single') {
       const editor = obterEditorTinyMce('laudo-single-editor');
       if (editor) setSingleEditorHtml(editor.getContent());
@@ -1202,6 +1266,48 @@ export const LaudosPage: React.FC = () => {
       }));
     }
   };
+
+  const sincronizarFigurasRef = useRef(sincronizarNumeracaoFigurasEditores);
+  sincronizarFigurasRef.current = sincronizarNumeracaoFigurasEditores;
+  const temporizadorFigurasRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const observarFigurasEditor = useCallback((editor: TinyMceEditorInstance) => {
+    editoresFigurasAlteradosRef.current.add(editor.id);
+    setRevisaoFiguras(revisao => revisao + 1);
+    observarEstruturaFiguras(editor, () => {
+      editoresFigurasAlteradosRef.current.add(editor.id);
+      if (temporizadorFigurasRef.current !== null) clearTimeout(temporizadorFigurasRef.current);
+      temporizadorFigurasRef.current = setTimeout(() => {
+        temporizadorFigurasRef.current = null;
+        sincronizarFigurasRef.current();
+        setRevisaoFiguras(revisao => revisao + 1);
+      }, 100);
+    });
+  }, []);
+  useEffect(() => () => {
+    if (temporizadorFigurasRef.current !== null) clearTimeout(temporizadorFigurasRef.current);
+    temporizadorFigurasRef.current = null;
+  }, [sessaoEditor, editorMode]);
+
+  useEffect(() => {
+    if (editorMode !== 'single' || inicializando || !editando) return;
+    const temporizador = setTimeout(() => {
+      const anterior = secoes.find(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+      if (!anterior?.conteudo.includes('laudo-figure')) return;
+      const editor = obterEditorTinyMce('laudo-single-editor');
+      if (!editor) return;
+      const atual = parseSingleHtmlToSecoes(singleEditorHtml, secoes)
+        .find(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+      if (!atual || !conteudoHtmlEhVazio(atual.conteudo)) return;
+      const elemento = Array.from(editor.getBody().querySelectorAll<HTMLElement>('section[data-laudo-secao="true"]'))
+        .find(secao => secao.querySelector('[data-laudo-secao-header="true"]')?.textContent?.includes('ILUSTRAÇÕES'));
+      if (!elemento || elemento.querySelector('[data-laudo-subsecoes="true"]')) return;
+      editor.undoManager.transact(() => elemento.remove());
+      const html = editor.getContent();
+      setSingleEditorHtml(html);
+      setSecoes(parseSingleHtmlToSecoes(html, secoes));
+    }, 400);
+    return () => clearTimeout(temporizador);
+  }, [editando, editorMode, inicializando, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
 
   const reconciliarImagensDoEditor = useCallback(async (): Promise<void> => {
     if (!editando?.id) return;
@@ -1765,7 +1871,7 @@ export const LaudosPage: React.FC = () => {
       });
     }, 100);
     return () => clearTimeout(timer);
-  }, [panelPoppedOut, extrairFigurasDoEditor, syncEnabled, figuraAtivaId]);
+  }, [panelPoppedOut, extrairFigurasDoEditor, syncEnabled, figuraAtivaId, revisaoFiguras]);
 
   useEffect(() => {
     if (!panelPoppedOut) return;
@@ -4015,22 +4121,6 @@ export const LaudosPage: React.FC = () => {
                         onChange={(html: string, origem) => {
                           registrarAlteracao(origem);
                           setSingleEditorHtml(html);
-                          if (origem === 'usuario') {
-                            const editor = obterEditorTinyMce('laudo-single-editor');
-                            const anterior = secoes.find(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-                            const atual = parseSingleHtmlToSecoes(html, secoes).find(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-                            if (editor && anterior?.conteudo.includes('laudo-figure') && atual && conteudoHtmlEhVazio(atual.conteudo)) {
-                              const elemento = Array.from(editor.getBody().querySelectorAll<HTMLElement>('section[data-laudo-secao="true"]'))
-                                .find(secao => secao.querySelector('[data-laudo-secao-header="true"]')?.textContent?.includes('ILUSTRAÇÕES'));
-                              if (elemento && !elemento.querySelector('[data-laudo-subsecoes="true"]')) {
-                                editor.undoManager.transact(() => elemento.remove());
-                                const atualizado = editor.getContent();
-                                setSingleEditorHtml(atualizado);
-                                setSecoes(parseSingleHtmlToSecoes(atualizado, secoes));
-                              }
-                            }
-                          }
-                          queueMicrotask(sincronizarNumeracaoFigurasEditores);
                         }}
                         height={560}
                         alturaAutomatica
@@ -4054,6 +4144,7 @@ export const LaudosPage: React.FC = () => {
                         condToggles={exameToggles}
                         onEditorInit={async (editor) => {
                           if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
+                          observarFigurasEditor(editor);
                           setSingleEditorHtml(editor.getContent());
                           concluirInicializacao(obterConteudoComparavelRef.current(), sessaoEditor);
                           registrarEventoPagina('editor_pronto', { atualTamanho: editor.getContent().length });
@@ -4149,7 +4240,6 @@ export const LaudosPage: React.FC = () => {
                                       } else {
                                         atualizarConteudoSecao(idx, txt, origem);
                                       }
-                                      queueMicrotask(sincronizarNumeracaoFigurasEditores);
                                     }}
                                     height={400}
                                     alturaAutomatica
@@ -4171,6 +4261,7 @@ export const LaudosPage: React.FC = () => {
                                     placeholderChaves={placeholderChaves}
                                     onEditorInit={async (editor) => {
                                       if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
+                                      observarFigurasEditor(editor);
                                       registrarEditorIa(editor);
                                       if (isIlustracoes) handleIlustracoesEditorInit(editor);
                                     }}

@@ -72,6 +72,9 @@ export function useGerenciadorAlteracoesLaudo(obterContexto?: () => Pick<EventoE
     if (sessaoAtivaRef.current && origem !== 'normalizacao-inicial') {
       aguardandoInicializacaoRef.current = false;
       setInicializando(false);
+      pendenteRef.current = true;
+      setAlteracoesPendentes(true);
+      if (!salvamentoEmAndamentoRef.current) setEstadoSalvamento('pendente');
       setRevisaoAlteracoes(revisao => revisao + 1);
     }
   }, [registrar]);
