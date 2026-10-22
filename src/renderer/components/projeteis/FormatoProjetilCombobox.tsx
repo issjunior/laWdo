@@ -4,29 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { siglasProjeteis } from '@shared/catalogos/siglas-projeteis';
-
-function normalizar(valor: string): string {
-  return valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ');
-}
+import { criarOpcoesFormatoProjetil, normalizarFormatoProjetil as normalizar } from '@shared/utils/formato-projetil';
 
 export function FormatoProjetilCombobox({ valor, siglas, personalizados, aoSelecionar }: {
   valor: string; siglas: string[]; personalizados: string[]; aoSelecionar: (valor: string) => void;
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState('');
-  const opcoes = useMemo(() => {
-    const opcoesPorNome = new Map<string, { valor: string; rotulo: string; descricao: string }>();
-    for (const sigla of siglas) {
-      const descricao = siglasProjeteis[sigla] ?? 'Nome não documentado';
-      opcoesPorNome.set(normalizar(sigla), { valor: sigla, rotulo: `${sigla} — ${descricao}`, descricao });
-    }
-    for (const tipo of [...personalizados, valor]) {
-      const nome = tipo.trim();
-      if (nome && !opcoesPorNome.has(normalizar(nome))) opcoesPorNome.set(normalizar(nome), { valor: nome, rotulo: nome, descricao: nome });
-    }
-    return [...opcoesPorNome.values()].sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
-  }, [siglas, personalizados, valor]);
+  const opcoes = useMemo(() => criarOpcoesFormatoProjetil(siglas, personalizados, valor), [siglas, personalizados, valor]);
   const termo = normalizar(busca);
   const filtradas = opcoes.filter(opcao => normalizar(opcao.rotulo).includes(termo));
   const textoNovo = busca.trim();
