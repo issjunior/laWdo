@@ -3613,31 +3613,28 @@ export const LaudosPage: React.FC = () => {
     {
       accessorKey: 'data_requisicao',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Data de recebimento" />
+        <DataTableColumnHeader column={column} title="Data de recebimento" quebrarTitulo />
       ),
-      cell: ({ row }) => formatarData(row.getValue('data_requisicao')),
+      cell: ({ row }) => <span className="whitespace-nowrap">{formatarData(row.getValue('data_requisicao'))}</span>,
     },
     {
       accessorKey: 'rep_numero',
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Nº REP" />
       ),
-      cell: ({ row }) => <div className="font-medium">{row.getValue('rep_numero')}<ReiterandoBadge centralizado numeroRep={row.original.rep_numero} /></div>,
+      cell: ({ row }) => <div className="flex w-fit flex-col items-center whitespace-nowrap font-medium">{row.getValue('rep_numero')}<ReiterandoBadge centralizado numeroRep={row.original.rep_numero} /></div>,
     },
     {
-      accessorKey: 'tipo_solicitacao',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Tipo de Solicitação" />
-      ),
-      cell: ({ row }) => row.getValue('tipo_solicitacao') || '-',
-    },
-    {
+      id: 'solicitacao',
       accessorKey: 'numero_documento',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Nº da Solicitação" />
+        <DataTableColumnHeader column={column} title="Solicitação" />
       ),
       cell: ({ row }) => (
-        <span className="max-w-[200px] truncate block">{row.getValue('numero_documento') || '-'}</span>
+        <div className="max-w-36 whitespace-normal break-words">
+          <div className="font-medium">{row.original.tipo_solicitacao || '-'}</div>
+          <div className="text-muted-foreground">{row.original.numero_documento || '-'}</div>
+        </div>
       ),
     },
     {
@@ -3645,14 +3642,20 @@ export const LaudosPage: React.FC = () => {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Template" />
       ),
-      cell: ({ row }) => row.getValue('template_nome') || 'Não definido',
+      cell: ({ row }) => <span className="block max-w-48 whitespace-normal break-words">{row.getValue('template_nome') || 'Não definido'}</span>,
     },
     {
-      accessorKey: 'tipo_exame_nome',
+      id: 'exame',
+      accessorKey: 'tipo_exame_codigo',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Tipo de Exame" />
+        <DataTableColumnHeader column={column} title="Exame" />
       ),
-      cell: ({ row }) => row.getValue('tipo_exame_nome') || '-',
+      cell: ({ row }) => (
+        <div className="max-w-48 whitespace-normal break-words">
+          <div className="whitespace-nowrap font-medium">{row.original.tipo_exame_codigo || '-'}</div>
+          <div className="text-muted-foreground">{row.original.tipo_exame_nome || '-'}</div>
+        </div>
+      ),
     },
     {
       accessorKey: 'nome_envolvido',
@@ -3660,7 +3663,7 @@ export const LaudosPage: React.FC = () => {
         <DataTableColumnHeader column={column} title="Envolvido" />
       ),
       cell: ({ row }) => (
-        <span className="max-w-[150px] truncate block">{row.getValue('nome_envolvido') || '-'}</span>
+        <span className="block max-w-36 whitespace-normal break-words">{row.getValue('nome_envolvido') || '-'}</span>
       ),
     },
     {
@@ -3682,7 +3685,7 @@ export const LaudosPage: React.FC = () => {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Início" />
       ),
-      cell: ({ row }) => formatarData(row.getValue('data_inicio')),
+      cell: ({ row }) => <span className="whitespace-nowrap">{formatarData(row.getValue('data_inicio'))}</span>,
     },
     {
       id: 'actions',
@@ -3693,7 +3696,7 @@ export const LaudosPage: React.FC = () => {
         const isReadonly = laudo.status === 'Concluído' || laudo.status === 'Entregue';
         const statusBtn = getProximoStatus(laudo.status);
         return (
-          <div className="flex justify-end gap-1">
+          <div className="flex justify-end gap-1 [&_button]:h-7 [&_button]:w-7 [&_button]:shrink-0 [&_button]:px-0">
             {/* Abrir editor */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -4463,12 +4466,12 @@ export const LaudosPage: React.FC = () => {
             <DataTable
               columns={laudoColumns}
               data={laudosFiltrados}
+              densidade="compacta"
               enableRowPinning
               hideSearch
               defaultSorting={[{ id: "data_requisicao", desc: true }]}
               initialColumnVisibility={{
                 template_nome: false,
-                tipo_exame_nome: false,
                 nome_envolvido: false,
                 data_inicio: false,
               }}
