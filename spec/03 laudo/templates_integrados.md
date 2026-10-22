@@ -2,7 +2,7 @@
 
 ## Estado canônico
 
-O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; o B-602 ativo é `laudo-padrao-b602` v7; as versões anteriores permanecem registradas, mas indisponíveis para novos laudos. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
+O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; os modelos ativos são `laudo-padrao-b602` v7 e `laudo-padrao-b601` v1; as versões anteriores permanecem registradas, mas indisponíveis para novos laudos. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
 
 A serialização canônica e o SHA-256 cobrem os campos funcionais do template. Elementos transitórios do editor — como `data-image-id` e artefatos dummy — são ignorados no checksum para permitir adoção segura de dados legados equivalentes. A validação do catálogo rejeita chave, versão, ordens, referências de pai ou seções duplicadas inválidas antes da persistência.
 
@@ -49,3 +49,9 @@ O B-602 v7 mantém o texto da v6 e oculta o preâmbulo sem consumir número. Ver
 Uma alteração de contrato deve manter alinhados catálogo, serialização/validação, sincronizador, `TemplateService`, handlers IPC, allowlist e tipos do preload, além da tela de templates. A alteração de uma versão publicada também exige a estratégia de migração correspondente.
 
 `src/__tests__/main/templates-integrados.test.ts` cobre estrutura B-602, repetição por armas, estabilidade do checksum e rejeição de chaves duplicadas. A verificação manual confirma a presença única do modelo, bloqueio de edição/exclusão, clonagem editável, criação de laudo e persistência após reinicializar o aplicativo.
+
+## Modelo B-601
+
+`b601/laudo-padrao-b601.v1.ts`, registrado em `catalogo.ts`, distribui nove seções: preâmbulo, objetivo, material apresentado, exame com subseções de projéteis, estojos e demais materiais, considerações finais e encerramento. O preâmbulo fica oculto e não conta na numeração. Os grupos usam `b601_agrupados:105`, `b601_agrupados:101` e `b601_pecas`; o modo genérico exclui tipos já atendidos pelos agrupamentos. O modelo contém placeholders de investigação, material encaminhado, tratamento do perito e lacres, além de figuras substituíveis e complementos após as descrições.
+
+Aplicam-se ao B-601 as mesmas regras de sincronização, disponibilidade e clonagem dos demais integrados. A instalação do catálogo não reescreve HTML de laudos existentes nem templates personalizados. Expansão, seletores por unidade, preservação de complementos e limites da assinatura estão em `spec/03 laudo/b601.md`.

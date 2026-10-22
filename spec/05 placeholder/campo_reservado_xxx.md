@@ -38,3 +38,9 @@ A diferença entre `XXX` autoral e `XXX` derivado precisa ser preservada para qu
 ## Verificação
 
 `campos-reservados.test.ts` cobre personalização, restauração e rejeição de valor vazio; `editor-campo-laudo.component.test.tsx` cobre a estabilidade do valor inicial ao digitar e reabrir. A interação real de duplo clique e foco do diálogo permanece sujeita a smoke manual no TinyMCE.
+
+## Pendências estruturadas do B-601
+
+`src/shared/utils/campo-reservado.ts` fornece `criarHtmlCampoReservado(aviso, chaveRep?)`, que escapa texto e atributos e acrescenta `data-aviso-reservado`. Quando há chave da REP, mantém `data-campo-rep-pendente`; essa chave identifica a origem da pendência, sem equivaler a um `data-placeholder` resolvido automaticamente. Tooltip, title, aria-label e `data-origem-xxx` distinguem dado ausente na REP de preenchimento manual.
+
+Os quadros de investigação/material, lacres, origem/coleta e revisões B-601 usam esse formato em vez de texto XXX solto. Campos técnicos manuais indicam característica e unidade PQ/estojo. `apresentacao-placeholders.ts` recupera a descrição pela chave da REP ou pelo aviso persistido. A limpeza de apresentação deve preservar esses metadados de domínio. Nos seletores de Origem, Tipo e Constituição e formato, a interação específica do B-601 substitui o preenchimento por texto livre; seus controles transitórios não entram no HTML salvo ou exportado, conforme `spec/03 laudo/b601.md`.

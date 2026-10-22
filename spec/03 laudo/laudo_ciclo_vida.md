@@ -59,3 +59,9 @@ O provider seleciona o primeiro registro ativo para salvar: presume uma página 
 ## Reconciliação específica B-601
 
 Seções B-601 usam preservação por grupo e identidade do item. Quadros preenchidos não são substituídos por uma mudança de origem: a assinatura sinaliza revisão e a recriação depende de confirmação. Conteúdo que perde a condição de visibilidade é mantido para revisão; o complemento de figuras pertence ao laudo e conserva alterações e exclusões. Ver spec/03 laudo/b601.md. O mesmo provider de saída também recebe o registro cadastro-rep-b601 para proteger o estado local de peças ainda não salvo.
+
+## Listagem compacta
+
+A lista em `LaudosPage.tsx` usa DataTable com `densidade="compacta"`, pinning e recebimento decrescente como ordenação inicial. A coluna Solicitação reúne tipo e número do documento, mas ordena pelo número (`numero_documento`, ID `solicitacao`). Exame reúne código e nome, ordenando pelo código (`tipo_exame_codigo`, ID `exame`). Template, Envolvido e Início começam ocultos; Exame começa visível.
+
+Textos de solicitação, exame, template e envolvido quebram linha em larguras limitadas; datas e número da REP não quebram. Ações usam botões compactos e preservam as restrições de status. `DataTableColumnHeader.quebrarTitulo` permite duas linhas em Data de recebimento sem alterar o comportamento padrão dos outros cabeçalhos. Essas composições são apresentação da lista, sem alteração nos campos persistidos da REP ou do laudo.

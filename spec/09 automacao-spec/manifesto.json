@@ -533,7 +533,13 @@
       "descricao": "Campo reservado XXX em templates.",
       "globsCodigo": [
         "src/renderer/components/editor/**",
-        "src/renderer/pages/TemplatesPage.tsx"
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/shared/utils/campo-reservado.ts",
+        "src/renderer/lib/apresentacao-placeholders.ts",
+        "src/renderer/lib/placeholder-pendente.ts",
+        "src/renderer/lib/exportacao-placeholders.ts",
+        "src/shared/utils/b601-descricao-agrupada.ts",
+        "src/renderer/lib/b601-campos-projetil.ts"
       ]
     },
     {
@@ -790,7 +796,10 @@
         "src/renderer/hooks/useGerenciadorAlteracoesLaudo.ts",
         "src/renderer/components/editor/TinyMceEditor.tsx",
         "src/__tests__/renderer/diagnostico-editor-laudo.test.ts",
-        "src/__tests__/renderer/tiny-mce-editor-inicializacao.component.test.tsx"
+        "src/__tests__/renderer/tiny-mce-editor-inicializacao.component.test.tsx",
+        "src/main/bootstrap.ts",
+        "src/main/diagnostico-gpu.ts",
+        "src/main/services/diagnostico-gpu-*.ts"
       ]
     },
     {
@@ -828,7 +837,10 @@
         "src/renderer/components/ErrorBoundary.tsx",
         "src/__tests__/main/*security*.test.ts",
         "src/__tests__/renderer/usuario-sessao.test.ts",
-        "src/__tests__/renderer/error-boundary.component.test.tsx"
+        "src/__tests__/renderer/error-boundary.component.test.tsx",
+        "src/renderer/pages/AuthPage.tsx",
+        "src/renderer/components/auth/FirstUserSetupForm.tsx",
+        "src/renderer/components/auth/LoginForm.tsx"
       ]
     },
     {
@@ -845,7 +857,13 @@
         "src/main/ipc/handlers/projetil.handlers.ts",
         "src/renderer/pages/ProjeteisPage.tsx",
         "src/renderer/components/projeteis/**",
-        "src/__tests__/**/*projetil*"
+        "src/__tests__/**/*projetil*",
+        "src/shared/utils/formato-projetil.ts",
+        "src/shared/utils/proximidade-medida.ts",
+        "src/__tests__/shared/consulta-projeteis.test.ts",
+        "src/__tests__/shared/projeteis-catalogo.test.ts",
+        "src/__tests__/renderer/*projeteis*.test.tsx",
+        "src/__tests__/renderer/proximidade-medida.test.ts"
       ]
     },
     {
@@ -913,7 +931,10 @@
         "src/renderer/components/rep/exam-fields/dados-investigacao.tsx",
         "src/renderer/components/rep/exam-fields/services/b601.service.ts",
         "src/renderer/pages/REPsPage.tsx",
-        "src/main/ipc/handlers/rep.handlers.ts"
+        "src/main/ipc/handlers/rep.handlers.ts",
+        "src/main/services/gdl-b601-normalizador.service.ts",
+        "src/shared/gdl/b601-campos-adicionais.ts",
+        "src/__tests__/main/gdl-b601-normalizador.service.test.ts"
       ]
     },
     {
@@ -931,7 +952,47 @@
         "src/main/services/secao-builder.service.ts",
         "src/main/services/laudo.service.ts",
         "src/renderer/lib/exportacao-parser.ts",
-        "src/renderer/lib/exportacao-placeholders.ts"
+        "src/renderer/lib/exportacao-placeholders.ts",
+        "src/main/templates/integrados/b601/**",
+        "src/renderer/lib/b601-campos-projetil.ts",
+        "src/shared/catalogos/b601.catalogo.ts",
+        "src/shared/utils/formato-projetil.ts",
+        "src/shared/utils/campo-reservado.ts",
+        "src/renderer/lib/conteudo-comparavel-laudo.ts",
+        "src/renderer/lib/utils.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/04 layout/componentes_ui_base.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Componentes compartilhados, cores dinâmicas, tabelas e apresentação da interface.",
+      "globsCodigo": [
+        "src/renderer/components/auth/FirstUserSetupForm.tsx",
+        "src/renderer/components/layout/AppSidebar.tsx",
+        "src/renderer/lib/menu-config.ts",
+        "src/renderer/components/ui/slider.tsx",
+        "src/renderer/components/data-table/**",
+        "src/renderer/components/ui/table.tsx",
+        "src/renderer/components/ui/resizable.tsx",
+        "src/renderer/styles/globals.css",
+        "src/renderer/components/layout/Header.tsx",
+        "tailwind.config.js"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/templates_integrados.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Catálogo embarcado de templates, sincronização, disponibilidade, clonagem e consumo nos laudos.",
+      "globsCodigo": [
+        "src/main/templates/integrados/**",
+        "src/main/services/template.service.ts",
+        "src/main/services/template-pacote.service.ts",
+        "src/main/ipc/handlers/template.handlers.ts",
+        "src/main/database/index.ts",
+        "src/renderer/pages/TemplatesPage.tsx",
+        "src/__tests__/main/templates-integrados.test.ts"
       ]
     }
   ]
