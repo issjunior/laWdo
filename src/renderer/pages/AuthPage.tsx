@@ -112,6 +112,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
         throw new Error(result?.error || 'Erro ao cadastrar usuário')
       }
 
+      localStorage.setItem('lastUsername', data.username)
+
       const loginResult = await window.ipcAPI.login(data.username, data.senha)
       if (!loginResult?.success || !loginResult?.user) {
         setRegisterSuccess('Usuário cadastrado com sucesso. Faça login para continuar.')
