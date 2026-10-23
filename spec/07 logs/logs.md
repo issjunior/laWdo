@@ -87,3 +87,9 @@ A limpeza geral e um fluxo protegido por senha com duas confirmacoes. O dialogo 
 ## Manutencao e verificacao
 
 Alteracoes na captura devem manter alinhados o contrato em `shared`, o servico, handler, allowlist e tipos do preload, a exposicao no renderer e os controles visuais. O teste `src/__tests__/main/captura-logs.service.test.ts` cobre exclusividade, limite de cinco minutos, parada e recuperacao, anonimização, retencao, resumo, qualidade e deteccao de pico lento diluido no mesmo codigo. Os testes de renderer cobrem os resumos de Logs, a distincao entre auditoria encontrada e carregada, os tres resultados da Linha do Tempo e os indicadores calculados pelas amostras carregadas de desempenho.
+
+## Métricas do editor
+
+`desempenho.service.ts` e `captura-logs.service.ts` aceitam o metadado booleano `modoUnico` para distinguir editor único e seções. Manter ambas as allowlists alinhadas ao alterar esse metadado. As operações do renderer medem leitura/serialização de HTML, reconstrução, comparação, atualização de estado e níveis de undo, preservando somente identificadores técnicos, duração e metadados numéricos/booleanos; não registram HTML nem texto pericial.
+
+A suíte manual de carga lê performance.log e suas duas rotações e separa agregados por origem, categoria e operação. Não somar tempo do main com ida e volta de IPC no renderer como se fossem a mesma medição. Seus relatórios ficam no diretório fictício isolado, conforme `spec/13 diagnostico/testes_carga_editor.md`.

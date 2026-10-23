@@ -28,3 +28,7 @@ A referência inicial é estabelecida após a normalização de prontidão do ed
 - Manter apresentação transitória fora da comparação canônica e do HTML persistido.
 
 `tiny-mce-editor-config.test.ts` cobre configuração e chave de montagem; `tiny-mce-editor-inicializacao.component.test.tsx` cobre prontidão; `conteudo-comparavel-laudo.test.ts` e `layout-editor-laudo.component.test.tsx` cobrem comparação e salvamento concorrente; `editor-campo-laudo.component.test.tsx` cobre estabilidade do valor inicial do modal. Seleção e cursor no iframe Electron real exigem verificação visual.
+
+## Agrupamento sem realimentação do editor
+
+Os laudos publicam HTML no estado após 400 ms sem edição, mantendo a pendência imediata e o DOM como conteúdo atual. Salvar ou trocar de modo força a leitura pelo sincronizador antes do prazo. Isso não troca a chave de montagem nem realimenta initialValue. Composição de texto e descarte da instância cancelam temporizadores; `sincronizacao-editor-laudo.test.ts` verifica esses contratos. Ver `editor_texto.md` para as fontes de verdade e a suíte manual de carga para seleção e digitação no iframe real.

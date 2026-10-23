@@ -67,9 +67,12 @@ A CI aceita despacho manual por `workflow_dispatch`, além de `pull_request` par
 2. `npm run lint`;
 3. `npm run test:coverage`;
 4. `npm run test:release`;
-5. `node scripts/release/validar-schema-release.mjs`;
-6. `npm run build`;
-7. `npm run smoke:schema`.
+5. `npm run test:carga:unitarios`;
+6. `node scripts/release/validar-schema-release.mjs`;
+7. `npm run build`;
+8. `npm run smoke:schema`.
+
+Os unitários da ferramenta de carga executam apenas testes Node de configuração, geração, entrada e relatório, sem iniciar Electron nem baixar navegadores. Carga gráfica, estresse e resistência são exclusivamente manuais via `npm run test:carga`; não fazem parte de dev, build, npm test ou da aprovação automática de releases. Ver `spec/13 diagnostico/testes_carga_editor.md`.
 
 O grupo de concorrência combina workflow e PR ou referência. `cancel-in-progress: true` descarta a execução anterior da mesma origem quando chega uma revisão nova.
 
