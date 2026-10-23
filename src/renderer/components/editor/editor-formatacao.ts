@@ -2,7 +2,8 @@ import type { Editor, RawEditorOptions } from 'tinymce';
 import { converterMedidaTextoParaPt as converterRecuoParaPt } from '@/lib/medidas-texto';
 export { converterMedidaTextoParaPt as converterRecuoParaPt } from '@/lib/medidas-texto';
 
-const SELETOR_PROTEGIDO = '.laudo-figure, figcaption, [data-placeholder], .placeholder-tag, [data-reservado], .campo-reservado, [contenteditable="false"], [data-mce-bogus], [data-mce-type="bookmark"]';
+const SELETOR_CONTEUDO_PROTEGIDO = '.laudo-figure, figcaption, [data-placeholder], .placeholder-tag, [data-reservado], .campo-reservado, [data-mce-bogus], [data-mce-type="bookmark"], .controles-bloco-condicional';
+const SELETOR_PROTEGIDO = `${SELETOR_CONTEUDO_PROTEGIDO}, [contenteditable="false"]`;
 const ESTILOS_TEXTO = ['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line', 'color', 'background-color', 'vertical-align'];
 const ESTILOS_PARAGRAFO = ['margin-left', 'margin-right', 'margin-top', 'margin-bottom', 'padding-left', 'padding-right', 'padding-top', 'padding-bottom', 'line-height'];
 
@@ -63,8 +64,34 @@ export function aplicarEspacamentoParagrafo(editor: Editor, lado: LadoEspacament
   editor.nodeChanged();
 }
 
+function obterParagrafosRecuo(editor: Editor): HTMLElement[] {
+  const paragrafos = new Set<HTMLElement>();
+  const selecionados = editor.selection.getSelectedBlocks().filter((bloco): bloco is HTMLElement =>
+    bloco.namespaceURI === 'http://www.w3.org/1999/xhtml',
+  );
+  for (const bloco of selecionados) {
+    const candidatos = bloco.matches('p') ? [bloco]
+      : bloco.matches('.cond-bloco[data-cond-bloco]') ? Array.from(bloco.querySelectorAll('p')) : [];
+    for (const paragrafo of candidatos) {
+      if (paragrafo.closest(SELETOR_CONTEUDO_PROTEGIDO) || paragrafo.closest('[data-cond-suprimido="true"]')) continue;
+      let ancestral: HTMLElement | null = paragrafo;
+      let protegido = false;
+      while (ancestral && ancestral !== editor.getBody()) {
+        // O bloqueio do condicional protege o texto, mas permite o recuo solicitado pela barra de ferramentas.
+        if (ancestral.getAttribute('contenteditable') === 'false' && !ancestral.matches('.cond-bloco[data-cond-bloco]')) {
+          protegido = true;
+          break;
+        }
+        ancestral = ancestral.parentElement;
+      }
+      if (!protegido) paragrafos.add(paragrafo);
+    }
+  }
+  return [...paragrafos];
+}
+
 export function obterRecuoSelecionado(editor: Editor): number | null {
-  const paragrafos = obterBlocosSelecionados(editor).filter(bloco => bloco.matches('p'));
+  const paragrafos = obterParagrafosRecuo(editor);
   if (!paragrafos.length) return null;
   const medidas = paragrafos.map(bloco => converterRecuoParaPt(editor.dom.getStyle(bloco, 'text-indent', true)));
   const primeira = medidas[0];
@@ -78,10 +105,10 @@ export function recuoCorresponde(medida: number | null, valor?: string): boolean
 }
 
 export function aplicarRecuoPrimeiraLinha(editor: Editor, valor?: string): void {
+  const paragrafos = obterParagrafosRecuo(editor);
+  if (!paragrafos.length) return;
   editor.undoManager.transact(() => {
-    for (const bloco of obterBlocosSelecionados(editor)) {
-      if (bloco.matches('p')) editor.dom.setStyle(bloco, 'text-indent', valor || '0pt');
-    }
+    for (const paragrafo of paragrafos) editor.dom.setStyle(paragrafo, 'text-indent', valor || '0pt');
   });
   editor.nodeChanged();
 }

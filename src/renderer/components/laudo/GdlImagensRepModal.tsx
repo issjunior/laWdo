@@ -176,6 +176,9 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
         anoRep: resultado.data.anoRep,
       })
       setArquivos(resultado.data.arquivos)
+      setSelecionadas(new Set(resultado.data.arquivos
+        .filter(arquivo => arquivo.provavelImagem && !arquivo.status)
+        .map(arquivo => arquivo.idSelecao)))
     }).catch(error => {
       if (ativo) setErro(error instanceof Error ? error.message : 'Não foi possível carregar a Lista de Fotos da REP.')
     }).finally(() => {

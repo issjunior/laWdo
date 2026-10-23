@@ -137,6 +137,55 @@ describe('formatação do editor', () => {
     expect(obterRecuoSelecionado(editor)).toBe(0);
   });
 
+  it('aplica e remove recuo no condicional bloqueado sem desbloqueá-lo ou alterar controles e campos', () => {
+    editor.setContent('<p>Fora do bloco</p><div class="cond-bloco" data-cond-bloco="teste" data-cond-instancia="bloco-1" contenteditable="false"><span class="controles-bloco-condicional" contenteditable="false">Editar</span><p>Primeiro <span data-placeholder="{{campo}}" contenteditable="false">Valor</span></p><p>Segundo</p><figure class="laudo-figure"><p>Legenda</p></figure></div>');
+    const bloco = selecionar('.cond-bloco');
+    const campo = bloco.querySelector('[data-placeholder]')!.outerHTML;
+    const figura = bloco.querySelector('figure')!.outerHTML;
+    const controles = bloco.querySelector('.controles-bloco-condicional')!.outerHTML;
+    const original = editor.getContent();
+    editor.undoManager.clear();
+    editor.undoManager.add();
+    aplicarRecuoPrimeiraLinha(editor, '35.43pt');
+    expect(Array.from(bloco.querySelectorAll(':scope > p')).map(p => converterRecuoParaPt((p as HTMLElement).style.textIndent)))
+      .toEqual([35.43, 35.43]);
+    expect(obterRecuoSelecionado(editor)).toBeCloseTo(35.43);
+    expect(bloco.getAttribute('contenteditable')).toBe('false');
+    expect(bloco.getAttribute('data-cond-instancia')).toBe('bloco-1');
+    expect(bloco.querySelector('[data-placeholder]')!.outerHTML).toBe(campo);
+    expect(bloco.querySelector('figure')!.outerHTML).toBe(figura);
+    expect(bloco.querySelector('.controles-bloco-condicional')!.outerHTML).toBe(controles);
+    expect(editor.getBody().querySelector('p')!.style.textIndent).toBe('');
+    const alterado = editor.getContent();
+    editor.undoManager.undo();
+    expect(editor.getContent()).toBe(original);
+    editor.undoManager.redo();
+    expect(editor.getContent()).toBe(alterado);
+    selecionar('.cond-bloco');
+    aplicarRecuoPrimeiraLinha(editor);
+    expect(obterRecuoSelecionado(editor)).toBe(0);
+  });
+
+  it('no condicional em edição aplica recuo apenas ao parágrafo do cursor', () => {
+    editor.setContent('<div class="cond-bloco" data-cond-bloco="teste" contenteditable="true"><p>Primeiro</p><p>Segundo</p></div>');
+    const primeiro = selecionar('.cond-bloco p', true);
+    aplicarRecuoPrimeiraLinha(editor, '28.35pt');
+    expect(converterRecuoParaPt(primeiro.style.textIndent)).toBeCloseTo(28.35);
+    expect(editor.getBody().querySelector<HTMLElement>('p + p')!.style.textIndent).toBe('');
+    expect(editor.getBody().querySelector('.cond-bloco')!.getAttribute('contenteditable')).toBe('true');
+  });
+
+  it('preserva outras regiões bloqueadas e condicionais suprimidos', () => {
+    editor.setContent('<div contenteditable="false"><p>Protegido</p></div><div class="cond-bloco" data-cond-bloco="teste" data-cond-suprimido="true" contenteditable="false"><p>Suprimido</p></div>');
+    const original = editor.getContent();
+    selecionar('div p', true);
+    aplicarRecuoPrimeiraLinha(editor, '35.43pt');
+    selecionar('.cond-bloco');
+    aplicarRecuoPrimeiraLinha(editor, '35.43pt');
+    expect(editor.getContent()).toBe(original);
+    expect(obterRecuoSelecionado(editor)).toBeNull();
+  });
+
   it('limpa o parágrafo do cursor e permite desfazer/refazer a operação inteira', () => {
     editor.setContent('<p style="text-indent:35.43pt;margin-left:20pt;line-height:2"><strong><em><a href="https://example.com">Texto</a></em></strong></p>');
     selecionar('a', true);

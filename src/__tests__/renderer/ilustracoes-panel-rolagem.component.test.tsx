@@ -1,10 +1,25 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel'
 
 const ipcApiOriginal = window.ipcAPI
 const listarImagens = vi.fn()
+const obterImagem = vi.fn()
+const arquivarImagem = vi.fn()
+const atualizarLegenda = vi.fn()
+const obterMiniaturas = vi.fn()
+
+vi.mock('@/components/laudo/GdlImagensRepModal', () => ({
+  GdlImagensRepModal: ({ aberto, onAbertoChange, onCapturadas }: {
+    aberto: boolean;
+    onAbertoChange: (aberto: boolean) => void;
+    onCapturadas: (imagens: Array<{ imagemId: string; nomeArquivo: string; sha256: string; sequencia: number }>, permitirDuplicadas: boolean) => void;
+  }) => aberto ? <div role="dialog" aria-label="Lista de Fotos da REP">
+    <button onClick={() => onAbertoChange(false)}>Cancelar busca</button>
+    <button onClick={() => { onCapturadas([{ imagemId: 'foto-gdl', nomeArquivo: 'foto.png', sha256: 'hash-teste', sequencia: 1 }], false); onAbertoChange(false); }}>Capturar foto de teste</button>
+  </div> : null,
+}))
 
 const figura: ImagemLaudo = {
   id: 'figura-1',
@@ -19,10 +34,15 @@ const figura: ImagemLaudo = {
 describe('rolagem do painel de ilustrações', () => {
   beforeEach(() => {
     listarImagens.mockResolvedValue({ success: true, data: [] })
+    obterImagem.mockResolvedValue({ success: true, data: { dataUri: figura.url } })
+    arquivarImagem.mockResolvedValue({ success: true })
+    atualizarLegenda.mockResolvedValue({ success: true })
+    obterMiniaturas.mockResolvedValue({ success: true, data: [] })
     Object.defineProperty(window, 'ipcAPI', {
       value: {
         ...ipcApiOriginal,
-        ilustracoes: { listarImagens },
+        desempenho: { registrar: vi.fn() },
+        ilustracoes: { listarImagens, obterImagem, arquivarImagem, atualizarLegenda, obterMiniaturas },
       },
       writable: true,
     })
@@ -30,6 +50,34 @@ describe('rolagem do painel de ilustrações', () => {
 
   afterAll(() => {
     Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true })
+  })
+
+  it('preserva a dummy durante a busca e substitui somente após confirmação', async () => {
+    const aoSubstituir = vi.fn()
+    render(<IlustracoesPanel laudoId="laudo-1" onInsertImage={vi.fn()} onRefreshHtml={vi.fn()}
+      figurasNoEditor={[{ ...figura, dummy: true }]} figuraSubstituicaoSolicitada={figura.id}
+      onReplaceImage={aoSubstituir} />)
+    await act(async () => { await Promise.resolve() })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Buscar REP' }))
+    expect(screen.getByRole('dialog', { name: 'Lista de Fotos da REP' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Capturar foto de teste' }))
+    const seletor = await screen.findByRole('dialog', { name: 'Substituir figura' })
+    expect(aoSubstituir).not.toHaveBeenCalled()
+    fireEvent.click(within(seletor).getByRole('button', { name: 'Substituir figura' }))
+    await waitFor(() => expect(aoSubstituir).toHaveBeenCalledWith(figura.id,
+      expect.objectContaining({ id: 'foto-gdl' }), undefined))
+  })
+
+  it('cancelar a busca não substitui nem insere figuras', () => {
+    const aoSubstituir = vi.fn()
+    const aoInserir = vi.fn()
+    render(<IlustracoesPanel laudoId="laudo-1" onInsertImage={aoInserir} onRefreshHtml={vi.fn()}
+      figurasNoEditor={[{ ...figura, dummy: true }]} figuraSubstituicaoSolicitada={figura.id}
+      onReplaceImage={aoSubstituir} />)
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Buscar REP' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar busca' }))
+    expect(aoSubstituir).not.toHaveBeenCalled()
+    expect(aoInserir).not.toHaveBeenCalled()
   })
 
   it('mantém o acompanhamento da figura restrito à lista interna', () => {

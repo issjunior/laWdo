@@ -17,3 +17,7 @@ A exclusão local não altera a REP nem o GDL. A recomposição não é uniforme
 ## Verificação
 
 `secao-builder.service.test.ts` cobre elegibilidade, projeções e reparo de estrutura derivada; `atualizacao-rep-gdl.service.test.ts` protege a reconciliação sem regravação da REP; `atualizar-rep-gdl-dialog.component.test.tsx` cobre o disparo com seleção vazia. O smoke manual deve confirmar que excluir cartuchos/estojos, salvar e executar **Atualizar REP → Reconciliar laudo** restaura ambos sem duplicação.
+
+## Recuo sem desbloquear o conteúdo
+
+O comando **Parágrafo** do editor principal permite ajustar `text-indent` de parágrafos elegíveis de um `.cond-bloco[data-cond-bloco]` selecionado, mesmo quando o próprio wrapper está `contenteditable="false"`. Essa exceção pertence somente à seleção de alvos do recuo; não ativa o modo Editar nem libera texto protegido. Outros ancestrais não editáveis, placeholders, campos reservados, figuras, legendas, controles e blocos suprimidos são excluídos. A alteração usa uma transação de undo e segue até os exportadores pelo estilo do parágrafo. `editor-formatacao.test.ts` cobre essa exceção e as proteções; os demais comandos mantêm seus próprios critérios de elegibilidade.
