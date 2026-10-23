@@ -18,8 +18,8 @@ interface Operacao {
 const MODALIDADES = {
   completo: {
     titulo: 'Backup completo',
-    resumo: 'Salva REPs, laudos, imagens, perfil, avatar e configurações, incluindo credenciais GDL e IA.',
-    exclusao: 'Não inclui login, e-mail de acesso nem senha do laWdo.',
+    resumo: 'Salva REPs, laudos, imagens utilizadas e suas originais vinculadas, perfil, avatar e configurações, incluindo credenciais GDL e IA.',
+    exclusao: 'Não inclui fotos não utilizadas nos laudos, login, e-mail de acesso nem senha do laWdo. As fotos permanecem nesta instalação.',
     restauracao: 'Substitui banco, imagens e perfil. Preserva o acesso local e reinicia o aplicativo.',
   },
   configuracao: {
