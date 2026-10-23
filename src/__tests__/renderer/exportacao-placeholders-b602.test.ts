@@ -1,7 +1,45 @@
 import { describe, expect, it } from 'vitest'
-import { resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders'
+import { buildPlaceholderMapping, construirMapaPlaceholdersResolvidos, resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders'
+import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders'
+import { laudoPadraoB602V9 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v9'
 
 describe('placeholders B602 canônicos', () => {
+  it.each([
+    { quantidades: ['1'], total: '1', inicio: 'Trata-se de um estojo proveniente', descricao: 'integralmente descrito no quadro a seguir:', conclusao: 'O estojo percutido e deflagrado foi retornado', embalagem: 'devidamente embalado,', final: 'encontra-se ineficiente ao fim a que se destina.' },
+    { quantidades: ['1', '1'], total: '2', inicio: 'Trata-se de dois estojos provenientes', descricao: 'integralmente descritos no quadro a seguir:', conclusao: 'Os estojos percutidos e deflagrados foram retornados', embalagem: 'devidamente embalados,', final: 'encontram-se ineficientes ao fim a que se destinam.' },
+    { quantidades: [], total: '0', inicio: 'Trata-se de zero estojos provenientes', descricao: 'integralmente descritos no quadro a seguir:', conclusao: 'Os estojos percutidos e deflagrados foram retornados', embalagem: 'devidamente embalados,', final: 'encontram-se ineficientes ao fim a que se destinam.' },
+  ])('ajusta os dois parágrafos do template para o total $total', ({ quantidades, total, inicio, descricao, conclusao, embalagem, final }) => {
+    const contexto = { repData: { campos_especificos: JSON.stringify({ b602: {
+      estojos: quantidades.map(quantidade => ({ quantidade })),
+    } }) } }
+    const conteudo = laudoPadraoB602V9.secoes.find(secao => secao.chave === 'dos-estojos')!.conteudo
+    const html = resolverPlaceholdersExportacao(conteudo, contexto)
+    const documento = new DOMParser().parseFromString(html, 'text/html')
+    expect(documento.querySelector('p')?.textContent).toBe(`${inicio} de munição própria para uso em armas de fogo, ${descricao}`)
+    expect(documento.body.lastElementChild?.textContent).toBe(`${conclusao} à Central de Custódia, ${embalagem} garantindo a integridade das marcas de percussão para futuros exames de comparação microbalística, prestando ainda como prova material de disparo de arma de fogo. Diante da sua deflagração, ${final}`)
+    expect(buildPlaceholderMapping(contexto).b602_total_estojos).toBe(total)
+    const visualizacao = construirMapaPlaceholdersResolvidos(contexto)
+    expect(visualizacao.b602_estojos_descricao.valor).toContain(descricao)
+    expect(visualizacao.b602_estojos_conclusao.valor).toContain(final)
+  })
+
+  it.each([
+    { quantidades: [], numero: '0', extenso: 'zero' },
+    { quantidades: ['2'], numero: '2', extenso: 'dois' },
+    { quantidades: ['10', '11'], numero: '21', extenso: 'vinte e um' },
+  ])('resolve o total $numero sem alterar o placeholder numérico', ({ quantidades, numero, extenso }) => {
+    const contexto = { repData: { campos_especificos: JSON.stringify({ b602: {
+      estojos: quantidades.map(quantidade => ({ quantidade })),
+    } }) } }
+    const mapa = buildPlaceholderMapping(contexto)
+    expect(mapa.b602_total_estojos).toBe(numero)
+    expect(mapa.b602_total_estojos_extenso).toBe(extenso)
+    expect(construirMapaPlaceholdersResolvidos(contexto).b602_total_estojos_extenso).toMatchObject({ valor: extenso, preenchido: true })
+    expect(resolverPlaceholdersExportacao('Trata-se de {{b602_total_estojos_extenso}} estojos. Total: {{b602_total_estojos}}.', contexto))
+      .toBe(`Trata-se de ${extenso} estojos. Total: ${numero}.`)
+    expect(CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(campo => campo.chave === 'b602_total_estojos_extenso')).toMatchObject({ computed: true })
+  })
+
   it('formata a data da ocorrência da tabela de investigação no padrão brasileiro', () => {
     const resultado = resolverPlaceholdersExportacao('{{b602_tabela_dados_investigacao}}', {
       repData: {

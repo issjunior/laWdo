@@ -9,6 +9,7 @@ const metadadosCompletos: MetadadosIntegracaoGdl = {
   origemInicial: 'gdl',
   dadosSolicitacao: {
     orgao: 'ÓRGÃO TESTE',
+    cidade: 'TELÊMACO BORBA',
     responsavel: 'RESPONSÁVEL TESTE',
     autoridade: 'AUTORIDADE TESTE',
     origensDisponiveis: [

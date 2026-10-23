@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { BrowserWindow } from 'electron';
 import { ErroGeracaoPdf, gerarPdfPreparado } from '../../main/services/pdf-prontidao.service';
+import { criarOpcoesPdf } from '../../main/services/pdf-layout';
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
@@ -54,6 +55,60 @@ describe('preparação compartilhada de PDF', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it('mede o cabeçalho pronto antes de reservar sua altura nas opções de impressão', async () => {
+    vi.mocked(BrowserWindow).mockImplementation(function () {
+      const janela = criarJanela();
+      if (janelas.length === 1) janela.webContents.executeJavaScript.mockResolvedValueOnce(pronta).mockResolvedValueOnce(96);
+      janelas.push(janela);
+      return janela as unknown as BrowserWindow;
+    });
+    const cabecalho = '<p>FLS. <span class="pageNumber"></span></p>';
+    await gerarPdfPreparado('<p>Laudo</p>', criarOpcoesPdf({ top: 4, left: 3, right: 2, bottom: 2.5 }, cabecalho), cabecalho);
+    expect(janelas[1].webContents.executeJavaScript).toHaveBeenCalledTimes(2);
+    const opcoesRecebidas = janelas[0].webContents.printToPDF.mock.calls[0][0] as Electron.PrintToPDFOptions;
+    expect((opcoesRecebidas.margins?.top ?? 0) * 2.54).toBeCloseTo(4 + 2.54 + 0.3);
+    expect(opcoesRecebidas.headerTemplate).toContain('top: 4cm');
+    expect(janelas.every(janela => janela.close.mock.calls.length === 1)).toBe(true);
+  });
+
+  it.each([null, 1500])('bloqueia cabeçalho que não pode ser medido ou não cabe na folha: %s', altura => {
+    vi.mocked(BrowserWindow).mockImplementation(function () {
+      const janela = criarJanela();
+      if (janelas.length === 1) janela.webContents.executeJavaScript.mockResolvedValueOnce(pronta).mockResolvedValueOnce(altura);
+      janelas.push(janela);
+      return janela as unknown as BrowserWindow;
+    });
+    const cabecalho = '<p>Cabeçalho</p>';
+    return expect(gerarPdfPreparado('<p>Laudo</p>', criarOpcoesPdf(undefined, cabecalho), cabecalho)).rejects.toMatchObject({
+      falhaPdf: { codigo: 'CABECALHO_INDISPONIVEL', origem: 'cabecalho', tentarNovamente: false },
+    });
+  });
+
+  it('ignora cabeçalho visualmente vazio sem reservar espaço adicional', async () => {
+    vi.mocked(BrowserWindow).mockImplementation(function () {
+      const janela = criarJanela();
+      if (janelas.length === 1) janela.webContents.executeJavaScript.mockResolvedValueOnce(pronta).mockResolvedValueOnce(0);
+      janelas.push(janela);
+      return janela as unknown as BrowserWindow;
+    });
+    const cabecalho = '<p></p>';
+    await gerarPdfPreparado('<p>Laudo</p>', criarOpcoesPdf({ top: 4, left: 3, right: 2, bottom: 2.5 }, cabecalho), cabecalho);
+    expect(janelas[0].webContents.printToPDF).toHaveBeenCalledWith(expect.objectContaining({
+      displayHeaderFooter: false, headerTemplate: undefined,
+      margins: { top: 4 / 2.54, left: 3 / 2.54, right: 2 / 2.54, bottom: 2.5 / 2.54 },
+    }));
+  });
+
+  it('ajusta tabelas de balística na largura útil das margens antes de imprimir', async () => {
+    const html = '<table data-tabela-laudo="balistica"><tr><td>DELEGACIA</td></tr></table>';
+    await gerarPdfPreparado(html, criarOpcoesPdf({ top: 3.5, left: 5, right: 5, bottom: 1.5 }));
+    expect(janelas[0].webContents.executeJavaScript).toHaveBeenCalledTimes(2);
+    const script = janelas[0].webContents.executeJavaScript.mock.calls[1][0];
+    expect(script).toContain(String(11 * 96 / 2.54));
+    expect(script).toContain('data-tabela-laudo');
+    expect(janelas[0].webContents.printToPDF).toHaveBeenCalledTimes(1);
   });
 
   it('imprime assim que corpo e cabeçalho ficam prontos e limpa ambas as janelas', async () => {

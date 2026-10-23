@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CABECALHO_PRIMEIRA_PAGINA_PADRAO, CABECALHO_TODAS_PAGINAS_PADRAO } from './cabecalhos-padrao.js';
+import { CABECALHO_PRIMEIRA_PAGINA_PADRAO, CABECALHO_TODAS_PAGINAS_PADRAO, normalizarRotuloCabecalho } from './cabecalhos-padrao.js';
 
 export const CHAVE_CABECALHO_DOCUMENTO = 'cabecalho_documento';
 export const CHAVE_FECHAMENTO_LAUDO = 'fechamento_laudo';
@@ -41,5 +41,6 @@ export const FECHAMENTO_LAUDO_PADRAO: FechamentoLaudo = {
 
 export function lerApresentacaoLaudo(valor: unknown): ApresentacaoLaudo {
   const dados: unknown = typeof valor === 'string' ? JSON.parse(valor) : valor;
-  return esquemaApresentacaoLaudo.parse(dados);
+  const apresentacao = esquemaApresentacaoLaudo.parse(dados);
+  return { ...apresentacao, cabecalho: { ...apresentacao.cabecalho, todasPaginas: normalizarRotuloCabecalho(apresentacao.cabecalho.todasPaginas) } };
 }

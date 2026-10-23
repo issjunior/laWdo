@@ -2,6 +2,7 @@ import { lerApresentacaoLaudo } from '@shared/configuracoes/apresentacao-laudo';
 import { carregarApresentacaoPadrao, montarFechamentoHtml, resolverDadosPerito } from './apresentacao-laudo';
 import { buildPlaceholderMapping, resolverPlaceholdersExportacao, type ExportacaoContext } from './exportacao-placeholders';
 import type { FalhaPdf } from '@shared/types/pdf.types';
+import { normalizarRotuloCabecalho } from '@shared/configuracoes/cabecalhos-padrao';
 
 export class ErroCabecalhoPdf extends Error {
   readonly falhaPdf: FalhaPdf = {
@@ -38,7 +39,7 @@ function detectAlignment(html: string): string {
 export function buildHeaderTemplate(templateHtml: string, replacements: Record<string, string> = {}): { html: string; align: string } {
   if (!templateHtml) return { html: '', align: 'flex-start' };
 
-  let html = stripDataPlaceholderSpans(templateHtml);
+  let html = stripDataPlaceholderSpans(normalizarRotuloCabecalho(templateHtml));
 
   html = html.replace(/\{\{pagina\}\}/g, '<span class="pageNumber"></span>');
   html = html.replace(/\{\{totalPaginas\}\}/g, '<span class="totalPages"></span>');
@@ -57,6 +58,10 @@ export interface PdfHeaderConfig {
   headerTemplate: string;
   cabecalhoPrimeiraPagina: string;
   fechamentoHtml: string;
+}
+
+export function montarCabecalhoPrimeiraPagina(html: string): string {
+  return html ? `<div class="cabecalho" style="padding-bottom:24px;margin-bottom:0;">${html}</div>` : '';
 }
 
 export interface PdfHeaderOptions {

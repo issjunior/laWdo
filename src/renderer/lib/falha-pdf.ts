@@ -20,6 +20,7 @@ export function mensagemFalhaPdf(falha: FalhaPdf): string {
     case 'FONTE_INDISPONIVEL':
       return 'Uma fonte do documento ou do cabeçalho não pôde ser carregada. Revise a fonte no template e tente novamente.';
     case 'CABECALHO_INDISPONIVEL':
+      if (falha.etapa === 'recursos') return 'Não foi possível ajustar o cabeçalho à página. Revise sua altura e as margens nas configurações.';
       return 'Não foi possível ler a configuração do cabeçalho. Tente novamente; se persistir, revise o cabeçalho nas configurações.';
     case 'TEMPO_EXCEDIDO':
       return `A preparação do PDF excedeu o tempo na etapa de ${falha.etapa}. Tente novamente; se persistir, salve o laudo e reinicie o aplicativo.`;

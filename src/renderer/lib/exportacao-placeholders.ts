@@ -4,9 +4,12 @@ import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } fro
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
+import { numeroInteiroPorExtenso } from '@/lib/numero-extenso';
+import { TEXTOS_ESTOJOS_B602 } from '@shared/catalogos/b602-textos-estojos.catalogo';
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 import { normalizarCodigoPlaceholders } from '@/lib/utils';
 import { normalizarApresentacaoTabelas } from '@/lib/tabelas-apresentacao';
+import { ajustarTabelasBalistica } from '@/lib/tabelas-balistica-layout';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import { limparInteracaoCamposB601 } from '@/lib/b601-campos-projetil';
 import { criarHtmlCampoReservado } from '@shared/utils/campo-reservado';
@@ -107,6 +110,7 @@ function lerPeritoSessao(): PeritoSessaoData | null {
 }
 
 export interface ExportacaoContext {
+  larguraUtilTabelasCm?: number;
   repData: RepExportacaoData;
   solicitanteNome?: string;
   tipoExameNome?: string;
@@ -281,10 +285,10 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
           local: { bairro: valorInvestigacao('b601_local'), cidade: '', uf: '' },
           numero_bo: valorInvestigacao('b601_numero_bo'), numero_ip: valorInvestigacao('b601_numero_ip'),
           solicitante_nome: valorInvestigacao('b601_solicitante_nome'),
-        });
+        }, undefined, typeof dadosSolicitacao?.cidade === 'string' ? dadosSolicitacao.cidade : undefined);
         mapping.b601_tabela_material_enc = dados.semPecas
           ? '<p>REP declarada sem peças para exame.</p>'
-          : buildNumberedTable('TABELA 2 – MATERIAL ENCAMINHADO', ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
+          : buildNumberedTable('TABELA 2 – MATERIAL ENCAMINHADO', ['Natureza', 'Qtd', 'Tipo', 'Dito no Ofício', 'Nº do Lacre'],
             pecas.map(peca => {
               const prefixo = `b601_peca_${peca.indice}_`;
               const quantidade = escapar(peca.campos.quantidade) + ' ' + ausente(peca.campos.medida, prefixo + 'medida');
@@ -345,13 +349,14 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
         mapping['b602_numero_ip'] = String(b602.numero_ip || '');
         mapping['b602_solicitante_nome'] = String(b602.solicitante_nome || '');
 
-        mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602, ctx.solicitanteNome);
+        mapping['b602_tabela_dados_investigacao'] = buildDadosInvestigacaoTable(b602, ctx.solicitanteNome,
+          typeof dadosSolicitacao?.cidade === 'string' ? dadosSolicitacao.cidade : undefined);
 
         const material = projecaoB602.materialEncaminhado as Record<string, string>[];
         if (material && material.length > 0) {
           mapping['b602_tabela_material_enc'] = buildNumberedTable(
             'TABELA 2 – MATERIAL ENCAMINHADO',
-            ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
+            ['Natureza', 'Qtd', 'Tipo', 'Dito no Ofício', 'Nº do Lacre'],
             material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || ''])
           );
         }
@@ -410,6 +415,10 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
           mapping['b602_total_estojos'] = String(
             estojos.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
           );
+          mapping['b602_total_estojos_extenso'] = numeroInteiroPorExtenso(Number(mapping['b602_total_estojos']));
+          const textosEstojos = Number(mapping['b602_total_estojos']) === 1 ? TEXTOS_ESTOJOS_B602.singular : TEXTOS_ESTOJOS_B602.plural;
+          mapping['b602_estojos_descricao'] = textosEstojos.descricao;
+          mapping['b602_estojos_conclusao'] = textosEstojos.conclusao;
         }
         const armas = projecaoB602.armas as Record<string, string>[];
         if (armas) {
@@ -461,6 +470,13 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
     } catch { /* mantém mapping atual */ }
   }
 
+  const documentoTabelas = new DOMParser().parseFromString('', 'text/html');
+  for (const chave of Object.keys(mapping)) {
+    if (!/^b60[12]_tabela_/.test(chave)) continue;
+    documentoTabelas.body.innerHTML = mapping[chave];
+    ajustarTabelasBalistica(documentoTabelas.body, ctx.larguraUtilTabelasCm, true);
+    mapping[chave] = documentoTabelas.body.innerHTML;
+  }
   return mapping;
 }
 
@@ -562,6 +578,11 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
     const doc = parser.parseFromString(html, 'text/html');
 
     normalizarCodigoPlaceholders(doc.body, Object.keys(mapping));
+    if (/^B-?60[12]$/i.test(ctx.tipoExameCodigo || '') || Object.keys(mapping).some(chave => /^b60[12]_tabela_/.test(chave))) {
+      doc.querySelectorAll<HTMLTableElement>('table:has([data-placeholder-celula-fixa])').forEach(tabela => {
+        if (!tabela.querySelector('figure')) tabela.setAttribute('data-tabela-laudo', 'balistica');
+      });
+    }
     normalizarApresentacaoTabelas(doc.body);
     doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
     doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
@@ -620,7 +641,9 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
       resultado = resultado.replace(tagRegex, displayValue);
     });
 
-    return limparIndicadoresCondicionais(preencherBlocosPericiaisVazios(resultado));
+    doc.body.innerHTML = limparIndicadoresCondicionais(preencherBlocosPericiaisVazios(resultado));
+    ajustarTabelasBalistica(doc.body, ctx.larguraUtilTabelasCm, true);
+    return doc.body.innerHTML;
   } catch {
     let resultado = html;
     Object.entries(mapping).forEach(([chave, valor]) => {

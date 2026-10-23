@@ -94,6 +94,7 @@ function criarPeca(
 const metadados: MetadadosIntegracaoGdl = {
   origemInicial: 'gdl',
   dadosSolicitacao: {
+    cidade: 'TELÊMACO BORBA',
     orgao: 'UNIDADE POLICIAL TESTE',
     responsavel: 'RESPONSÁVEL TESTE',
     autoridade: 'AUTORIDADE TESTE',

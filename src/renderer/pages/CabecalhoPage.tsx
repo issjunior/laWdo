@@ -15,7 +15,7 @@ import { PlaceholderContextMenu, type CategoriaItem, type PlaceholderItem } from
 import { converterPlaceholdersTextuais, removerFormatacaoPlaceholders } from '@/lib/utils';
 import { CHAVES_PLACEHOLDERS_REP } from '@/lib/indice-placeholders';
 import { carregarApresentacaoPadrao } from '@/lib/apresentacao-laudo';
-import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { buildPdfHeaderConfig, montarCabecalhoPrimeiraPagina } from '@/lib/pdf-header';
 import { getMargens } from '@/lib/margens';
 import {
   CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO, FECHAMENTO_DESATIVADO, MODELO_FECHAMENTO_LAUDO,
@@ -104,7 +104,7 @@ export const CabecalhoPage: React.FC = () => {
       const { headerTemplate, cabecalhoPrimeiraPagina, fechamentoHtml } = await buildPdfHeaderConfig({
         usarCopiaLaudo: true, apresentacaoJson: { versao: 1, cabecalho, fechamento: obterFechamento(), perito }, numeroRepFallback: '321.654-2026',
       });
-      const html = (cabecalhoPrimeiraPagina ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>` : '')
+      const html = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina)
         + '<p>Pré-visualização do conteúdo do laudo.</p>' + fechamentoHtml;
       const resposta = await window.ipcAPI.template.previewPDF(html, await getMargens(), headerTemplate || undefined);
       if (!resposta.success || typeof resposta.data !== 'string') throw new Error(resposta.error || 'Não foi possível gerar a prévia.');

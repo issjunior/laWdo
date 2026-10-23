@@ -3,6 +3,34 @@ import { buildPlaceholderMapping, resolverPlaceholdersExportacao } from '../../r
 import { criarDadosB601 } from '../../shared/types/b601.types'
 
 describe('placeholders de exportação', () => {
+  describe.each(['b601', 'b602'])('cidade da unidade policial em %s', exame => {
+    it.each([undefined, '', '   ', ' TELÊMACO BORBA ', 'São João & <Cidade>'])('acrescenta somente a cidade válida na tabela: %s', cidade => {
+      const ctx = {
+        solicitanteNome: 'UNIDADE POLICIAL',
+        repData: { campos_especificos: JSON.stringify({
+          [exame]: { ...criarDadosB601(), solicitante_nome: 'UNIDADE LOCAL', local: { bairro: '', cidade: 'CURITIBA', uf: '' } },
+          integracaoGdl: { dadosSolicitacao: { orgao: 'ÓRGÃO GDL', cidade } },
+        }) },
+      }
+      const mapa = buildPlaceholderMapping(ctx)
+      const tabela = new DOMParser().parseFromString(mapa[`${exame}_tabela_dados_investigacao`], 'text/html')
+      expect(tabela.querySelector('tr:last-child td:last-child')?.textContent)
+        .toBe(cidade?.trim() ? `UNIDADE POLICIAL / ${cidade.trim()}` : 'UNIDADE POLICIAL')
+      expect(tabela.querySelector('cidade')).toBeNull()
+      expect(mapa.solicitante_nome).toBe('UNIDADE POLICIAL')
+      expect(resolverPlaceholdersExportacao('oriundo da {{solicitante_nome}}.', ctx)).toBe('oriundo da UNIDADE POLICIAL.')
+    })
+
+    it('ignora cidade com formato inválido na fronteira JSON', () => {
+      const mapa = buildPlaceholderMapping({ repData: { campos_especificos: JSON.stringify({
+        [exame]: { ...criarDadosB601(), solicitante_nome: 'UNIDADE' },
+        integracaoGdl: { dadosSolicitacao: { orgao: 'UNIDADE', cidade: { nome: 'CURITIBA' } } },
+      }) } })
+      const tabela = new DOMParser().parseFromString(mapa[`${exame}_tabela_dados_investigacao`], 'text/html')
+      expect(tabela.querySelector('tr:last-child td:last-child')?.textContent).toBe('UNIDADE')
+    })
+  })
+
   it.each([
     '<code>{{solicitante_nome}}</code>',
     '<code><span class="placeholder-tag" data-placeholder="{{solicitante_nome}}">VALOR ANTERIOR</span></code>',

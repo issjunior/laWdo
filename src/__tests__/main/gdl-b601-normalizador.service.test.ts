@@ -12,6 +12,23 @@ function criarRep(campos: Record<string, unknown>) {
 }
 
 describe('importação B601 com campos adicionais', () => {
+  it.each([converterRepB601, converterRepB602])('preserva a cidade da mesma origem do órgão na importação balística', converter => {
+    const rep = validarGdlRep({
+      codRep: 1, numero: 1, ano: 2026,
+      origens: [
+        { tipo: 'OFÍCIO REQUISITANTE', orgao: 'DELEGACIA', cidade: 'TELÊMACO BORBA' },
+        { tipo: 'IP ONLINE', orgao: 'OUTRO ÓRGÃO', cidade: 'CURITIBA' },
+      ],
+    })
+    const resultado = converter(rep, { origemInicial: 'gdl' })
+    expect(resultado.camposEspecificos.dadosSolicitacao).toMatchObject({ orgao: 'DELEGACIA', cidade: 'TELÊMACO BORBA' })
+    expect(resultado.metadadosIntegracaoGdl?.dadosSolicitacao?.cidade).toBe('TELÊMACO BORBA')
+    const semCidade = converter(validarGdlRep({ ...rep, origens: [{ tipo: 'BO', orgao: 'DELEGACIA' }] }), { origemInicial: 'gdl' })
+    expect(semCidade.metadadosIntegracaoGdl?.dadosSolicitacao?.cidade).toBeUndefined()
+    const orgaoNaRaiz = converter(validarGdlRep({ ...rep, orgao: 'ÓRGÃO NA RAIZ', origens: [{ tipo: 'BO', cidade: 'CURITIBA' }] }), { origemInicial: 'gdl' })
+    expect(orgaoNaRaiz.metadadosIntegracaoGdl?.dadosSolicitacao?.cidade).toBeUndefined()
+  })
+
   it.each(['NECRÓPSIA', '94', 94])('preenche a origem dos projéteis a partir de %s', valor => {
     const resultado = converterRepB601(criarRep({ tipoPeca: 'PROJÉTEIS', 'ORIGEM/COLETA': valor }))
     expect(resultado.camposEspecificos.pecas[0].personalizados['105:origem_coleta']).toBe('94')

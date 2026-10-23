@@ -1,13 +1,11 @@
-export interface Margins {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-}
+import { CHAVE_MARGENS_PDF, MARGENS_PADRAO_PDF } from '@shared/configuracoes/margens-pdf';
+import type { MargensExportacao } from '@shared/types/exportacao.types';
 
-export const PDF_MARGINS_KEY = 'pdf_margins';
+export type Margins = MargensExportacao;
 
-export const DEFAULT_MARGINS: Margins = { top: 2.5, right: 2.0, bottom: 2.5, left: 3.0 };
+export const PDF_MARGINS_KEY = CHAVE_MARGENS_PDF;
+
+export const DEFAULT_MARGINS = MARGENS_PADRAO_PDF;
 
 export const MARGINS_MIN = 0;
 export const MARGINS_MAX = 5;

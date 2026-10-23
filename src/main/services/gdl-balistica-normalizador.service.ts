@@ -106,8 +106,10 @@ function selecionarOrigemInicial(origens: ReferenciaOrigemGdl[]): ReferenciaOrig
 
 function extrairDadosSolicitacao(rep: GdlRepValidada): DadosSolicitacaoGdl {
   const origem = rep.origens[0]
-  const orgao = obterTextoPorAlias(origem, ['orgao', 'orgao origem', 'orgaoOrigem'])
+  const orgaoOrigem = obterTextoPorAlias(origem, ['orgao', 'orgao origem', 'orgaoOrigem'])
+  const orgao = orgaoOrigem
     || obterTextoPorAlias(rep, ['orgao', 'orgao origem', 'orgaoOrigem'])
+  const cidade = orgao ? obterTextoPorAlias(orgaoOrigem ? origem : rep, ['cidade', 'cidade origem', 'cidadeOrigem']) : ''
   const responsavel = obterTextoPorAlias(rep, [
     'responsavel', 'responsavel contato', 'nome responsavel',
   ]) || obterTextoPorAlias(origem, [
@@ -120,6 +122,7 @@ function extrairDadosSolicitacao(rep: GdlRepValidada): DadosSolicitacaoGdl {
   ])
   return {
     orgao,
+    ...(cidade ? { cidade } : {}),
     responsavel,
     autoridade,
     origensDisponiveis: extrairOrigensDisponiveis(rep),

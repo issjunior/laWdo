@@ -10,6 +10,7 @@ import type {
 } from 'docx';
 import { getLogger } from '../utils/logger.js';
 import { ErroGeracaoPdf, gerarPdfPreparado } from './pdf-prontidao.service.js';
+import { criarOpcoesPdf } from './pdf-layout.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from './pdf-tabelas.js';
 import type { FalhaPdf } from '../../shared/types/pdf.types.js';
 
@@ -17,10 +18,6 @@ const log = getLogger('exportacao');
 
 let disponibilidadeLibreOfficeEmCache: boolean | null = null;
 let verificacaoLibreOfficeEmAndamento: Promise<boolean> | null = null;
-
-const CM_TO_INCHES = 1 / 2.54;
-const MARGENS_PADRAO_PDF: MargensExportacao = { top: 2.5, right: 2, bottom: 2.5, left: 3 };
-const MARGEM_SUPERIOR_MINIMA_CABECALHO_CM = 2.5;
 
 interface ExportacaoCabecalho {
   logoBase64?: string;
@@ -69,21 +66,8 @@ async function extrairNumeroRep(laudoId: string): Promise<string> {
   return laudoId;
 }
 
-function normalizarMargensPdf(margens?: ExportarParams['margens'], possuiCabecalho: boolean = false): MargensExportacao {
-  const base = margens || MARGENS_PADRAO_PDF;
-  return {
-    top: possuiCabecalho ? Math.max(base.top, MARGEM_SUPERIOR_MINIMA_CABECALHO_CM) : base.top,
-    right: base.right,
-    bottom: base.bottom,
-    left: base.left,
-  };
-}
-
 async function gerarPDF(html: string, margens?: ExportarParams['margens'], headerTemplate?: string): Promise<Buffer> {
-    const margensEfetivas = normalizarMargensPdf(margens, Boolean(headerTemplate));
     const bodyPadding = '0 0 12px 0';
-    const leftPad = `${margensEfetivas.left}cm`;
-    const rightPad = `${margensEfetivas.right}cm`;
 
     const docHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -119,35 +103,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
 <body>${normalizarQuebrasPaginaHtml(html)}</body>
 </html>`;
 
-    const pdfMargins = {
-      top: margensEfetivas.top * CM_TO_INCHES,
-      right: margensEfetivas.right * CM_TO_INCHES,
-      bottom: margensEfetivas.bottom * CM_TO_INCHES,
-      left: margensEfetivas.left * CM_TO_INCHES,
-    };
-
-    const printOptions: Electron.PrintToPDFOptions = {
-      printBackground: true,
-      preferCSSPageSize: true,
-      margins: pdfMargins,
-    };
-
-    if (headerTemplate) {
-      const alignMatch = headerTemplate.match(/^\{\{ALIGN:([^}]+)\}\}/);
-      const align = alignMatch ? alignMatch[1] : 'flex-start';
-      const cleanTemplate = headerTemplate.replace(/^\{\{ALIGN:[^}]+\}\}/, '');
-      const textAlign = align === 'flex-end' ? 'right' : align === 'center' ? 'center' : 'left';
-
-      printOptions.displayHeaderFooter = true;
-      printOptions.headerTemplate = `<style>
-  .header-container { display: flex; flex-direction: column; align-items: stretch; width: 100%;
-    text-align: ${textAlign}; padding-left: ${leftPad}; padding-right: ${rightPad};
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px; line-height: 1.1; color: #1a1a1a; }
-  .header-container p, .header-container div { margin: 0; padding: 0; line-height: 1.1; }
-</style><div class="header-container">${cleanTemplate}</div>`;
-      printOptions.footerTemplate = '<html><head></head><body></body></html>';
-    }
+    const printOptions = criarOpcoesPdf(margens, headerTemplate);
 
     const buffer = await gerarPdfPreparado(docHtml, printOptions, headerTemplate);
     log.debug('PDF exportado com sucesso');
@@ -357,6 +313,16 @@ export async function exportarLaudo(params: ExportarParams): Promise<{ success: 
     try {
       fs.writeFileSync(arquivoTemporario, buffer);
       fs.renameSync(arquivoTemporario, filePath);
+    } catch (erro: unknown) {
+      const codigo = erro && typeof erro === 'object' && 'code' in erro ? erro.code : undefined;
+      if (codigo === 'EPERM' || codigo === 'EACCES' || codigo === 'EBUSY') {
+        log.error('Documento gerado, mas o destino bloqueou o salvamento', { formato: params.formato, codigo });
+        return {
+          success: false,
+          error: `O documento ${params.formato.toUpperCase()} foi gerado, mas não foi possível salvá-lo no destino escolhido. Feche o arquivo se estiver aberto em outro programa ou salve com outro nome ou em outra pasta. Verifique também a permissão de gravação.`,
+        };
+      }
+      throw erro;
     } finally {
       try { fs.unlinkSync(arquivoTemporario); } catch { /* arquivo já movido ou removido */ }
     }

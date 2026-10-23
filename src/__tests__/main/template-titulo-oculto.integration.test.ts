@@ -52,12 +52,17 @@ describe('persistência da ocultação de títulos', () => {
     expect(secoes[0].conteudo).toBe('<p>Texto inicial</p>');
   }
 
-  it('instala o B-602 v7 com preâmbulo oculto sem contar, preservando a versão anterior', async () => {
+  it('instala o B-602 v10 com concordância dos estojos e preâmbulo oculto, preservando a versão anterior', async () => {
     const [integrado] = await sqlite.executeQuery<{ id: string; tipo_exame_id: string }>(
-      "SELECT id, tipo_exame_id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 7",
+      "SELECT id, tipo_exame_id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 10",
     );
     expect(integrado).toBeDefined();
     const secoes = await servico.findSecoesByTemplate(integrado.id);
+    expect(secoes.find(secao => secao.chave_integrada === 'consideracoes-finais')?.conteudo).toContain('Lei nº 13.964/2019');
+    expect(secoes.find(secao => secao.chave_integrada === 'encerramento')?.conteudo).toContain('Instrução Normativa nº 001/2020-PCP');
+    expect(secoes.find(secao => secao.chave_integrada === 'dos-estojos')?.conteudo).toContain('{{b602_total_estojos_extenso}}');
+    expect(secoes.find(secao => secao.chave_integrada === 'dos-estojos')?.conteudo).toContain('{{b602_estojos_descricao}}');
+    expect(secoes.find(secao => secao.chave_integrada === 'dos-estojos')?.conteudo).toContain('{{b602_estojos_conclusao}}');
     expect(secoes[0]).toMatchObject({ chave_integrada: 'preambulo', ocultar_titulo: 1, contar_na_numeracao: 0 });
     const html = buildHtml(secoes, new Map(), {});
     const documento = new DOMParser().parseFromString(html, 'text/html');
@@ -75,7 +80,17 @@ describe('persistência da ocultação de títulos', () => {
     expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
     expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
     expect((await servico.findSecoesByTemplate('b602-legado-teste'))[0]).toMatchObject({ conteudo: '<p>Conteúdo anterior preservado</p>', ocultar_titulo: 0, contar_na_numeracao: 1 });
-    expect(await sqlite.executeQuery("SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 7")).toHaveLength(1);
+    expect(await sqlite.executeQuery("SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 10")).toHaveLength(1);
+  });
+
+  it('instala o B-601 v2 com as abreviações corrigidas', async () => {
+    const [integrado] = await sqlite.executeQuery<{ id: string }>(
+      "SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b601' AND versao_integrada = 2",
+    );
+    expect(integrado).toBeDefined();
+    const secoes = await servico.findSecoesByTemplate(integrado.id);
+    expect(secoes.find(secao => secao.chave_integrada === 'consideracoes-finais')?.conteudo).toContain('Lei nº 13.964/2019');
+    expect(secoes.find(secao => secao.chave_integrada === 'encerramento')?.conteudo).toContain('Instrução Normativa nº 001/2020-PCP');
   });
 
   it('persiste, atualiza e duplica a escolha independentemente da hierarquia', async () => {

@@ -122,7 +122,7 @@ import {
   restaurarVisualizacaoAposSalvar,
   type ModoVisualizacaoPlaceholders,
 } from '@/lib/apresentacao-placeholders';
-import { buildPdfHeaderConfig, ErroCabecalhoPdf } from '@/lib/pdf-header';
+import { buildPdfHeaderConfig, ErroCabecalhoPdf, montarCabecalhoPrimeiraPagina } from '@/lib/pdf-header';
 import { mensagemFalhaPdf, validarFalhaPdf } from '@/lib/falha-pdf';
 import type { FalhaPdf } from '@shared/types/pdf.types';
 import {
@@ -591,7 +591,11 @@ export const LaudosPage: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [erroPdf, setErroPdf] = useState<{ mensagem: string; repetir: () => void } | null>(null);
-  const mostrarFalhaPdf = useCallback((valor: unknown, repetir: () => void) => {
+  const mostrarFalhaPdf = useCallback((valor: unknown, repetir: () => void, mensagemSalvamento?: string) => {
+    if (!validarFalhaPdf(valor) && mensagemSalvamento?.trim()) {
+      setErroPdf({ mensagem: mensagemSalvamento, repetir });
+      return;
+    }
     const falha: FalhaPdf = validarFalhaPdf(valor)
       ? valor
       : { codigo: 'FALHA_PDF', etapa: 'impressao', tentarNovamente: true };
@@ -2032,9 +2036,7 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 3. Montar HTML completo
-      let fullHtml = cabecalhoPrimeiraPagina
-        ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
-        : '';
+      let fullHtml = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina);
       fullHtml += ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais)) + fechamentoHtml;
 
       // 4. Aplicar placeholders (incluindo relacionamentos)
@@ -2062,7 +2064,9 @@ export const LaudosPage: React.FC = () => {
         const byteNums = new Array(byteChars.length);
         for (let i = 0; i < byteChars.length; i++) {
           byteNums[i] = byteChars.charCodeAt(i);
+      const margensTabelas = await getMargens();
         }
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
         const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         
@@ -2130,7 +2134,7 @@ export const LaudosPage: React.FC = () => {
 
       let html = ocultarTitulosSecoesNaSaida(reindexarHtmlEstrutural(laudo.conteudo || '<p>&nbsp;</p>'));
       if (cabecalhoPrimeiraPagina) {
-        html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
+        html = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina) + html;
       }
       html += fechamentoHtml;
       html = reindexarFiguras(html);
@@ -2156,7 +2160,9 @@ export const LaudosPage: React.FC = () => {
         const byteChars = atob(result.data);
         const byteNums = new Array(byteChars.length);
         for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+      const margensTabelas = await getMargens();
         const blob = new Blob([new Uint8Array(byteNums)], { type: 'application/pdf' });
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
         if (listaPreviewBlobUrl) URL.revokeObjectURL(listaPreviewBlobUrl);
         const url = URL.createObjectURL(blob);
         setListaPreviewBlobUrl(url);
@@ -2235,7 +2241,7 @@ export const LaudosPage: React.FC = () => {
       let html = ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais));
 
       if (cabecalhoPrimeiraPagina) {
-        html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
+        html = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina) + html;
       }
 
       html += fechamentoHtml;
@@ -2256,11 +2262,13 @@ export const LaudosPage: React.FC = () => {
           margens: await getMargens(),
           cabecalhoPaginasHtml: headerTemplate || undefined,
         });
+      const margensTabelas = await getMargens();
         if (result.success) {
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
           toast.success('Documento PDF exportado com sucesso', { id: toastId });
         } else if (result.error !== 'Operação cancelada pelo usuário') {
           toast.dismiss(toastId);
-          mostrarFalhaPdf(result.falhaPdf, () => { void handleExportar('pdf'); });
+          mostrarFalhaPdf(result.falhaPdf, () => { void handleExportar('pdf'); }, result.error);
         } else {
           toast.dismiss(toastId);
         }
@@ -2365,7 +2373,9 @@ export const LaudosPage: React.FC = () => {
       } else {
         setExameCamposEspecificos(undefined);
       }
+      const margensTabelas = await getMargens();
     } catch {
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
       setExameCamposEspecificos(undefined);
       setMapaPlaceholdersResolvidos({});
     }

@@ -59,10 +59,10 @@ export function buildNumberedTable(titulo: string, headers: string[], rows: stri
 
   const titleRow = `<tr><td${atributoCelulaFixa()} colspan="${colCount}" style="${style({ ...TABLE_STYLES.th, ...TABLE_STYLES.title })};border:1px solid #000;padding:6px 10px">${titulo}</td></tr>`;
 
-  return `<table width="100%" style="${style(TABLE_STYLES.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
+  return `<table data-tabela-laudo="balistica" width="100%" style="${style(TABLE_STYLES.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
 }
 
-export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solicitanteNome?: string): string {
+export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solicitanteNome?: string, cidadeSolicitante?: string): string {
   const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean) ?? [];
   const dataOcorrencia = formatarDataBrasileira(b602.data_ocorrencia);
   const localObj = (b602.local && typeof b602.local === 'object' ? b602.local : null) as Record<string, string> | null;
@@ -71,7 +71,9 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solic
     : String(b602.local || '-');
   const numeroBo = String(b602.numero_bo || '-');
   const numeroIp = String(b602.numero_ip || '-');
-  const unidadePolicial = solicitanteNome || String(b602.solicitante_nome || '-');
+  const nomeUnidade = solicitanteNome || String(b602.solicitante_nome || '-');
+  const cidade = cidadeSolicitante?.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const unidadePolicial = cidade ? `${nomeUnidade} / ${cidade}` : nomeUnidade;
 
   const s = TABLE_STYLES;
 
@@ -93,7 +95,7 @@ export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solic
     `<tr><td${atributoCelulaFixa()} colspan="1" style="${style({ ...s.td, fontWeight: '600' })};width:25%">Unidade Policial:</td><td colspan="3" style="${style(s.td)};width:75%">${unidadePolicial}</td></tr>`,
   ];
 
-  return `<table width="100%" style="${style(s.table)}">${rows.join('')}</table>`;
+  return `<table data-tabela-laudo="balistica" width="100%" style="${style(s.table)}">${rows.join('')}</table>`;
 }
 
 export function buildArmasTabela(b602: Record<string, unknown>, _solicitanteNome?: string): string {
@@ -135,5 +137,5 @@ export function buildArmasTabela(b602: Record<string, unknown>, _solicitanteNome
     return `<tr>${cells}</tr>`;
   }).join('');
 
-  return `<table width="100%" style="${style(s.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
+  return `<table data-tabela-laudo="balistica" width="100%" style="${style(s.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
 }
