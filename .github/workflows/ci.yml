@@ -45,6 +45,9 @@ jobs:
       - name: Executar testes de release
         run: npm run test:release
 
+      - name: Executar testes unitários da ferramenta de carga
+        run: npm run test:carga:unitarios
+
       - name: Validar contrato de schema para release
         run: node scripts/release/validar-schema-release.mjs
 

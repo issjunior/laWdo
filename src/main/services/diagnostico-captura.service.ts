@@ -39,6 +39,7 @@ export interface DependenciasCapturaDiagnostico {
   obterPendenciasPersistencia?: () => number;
   obterMarcadores?: () => Record<string, string>;
   alterarSonda: (ativa: boolean, finalidade: FinalidadeCaptura) => void;
+  renomearDiretorio?: typeof rename;
 }
 
 interface CapturaAtiva {
@@ -60,6 +61,7 @@ interface CapturaAtiva {
   timerFinalizacao: NodeJS.Timeout | null;
   timerAmostragem: NodeJS.Timeout | null;
   resultado?: FinalizacaoCaptura;
+  finalizacaoEmAndamento?: Promise<FinalizacaoCaptura>;
 }
 
 interface FinalizacaoCaptura {
@@ -159,7 +161,7 @@ export class DiagnosticoCapturaService {
         this.coletarAmostraDesempenho(captura);
       }, 1_000);
     }
-    captura.timerFinalizacao = setTimeout(() => { void this.finalizarInternamente(captura, captura.finalidade === 'desempenho' ? 'concluida' : 'inconclusiva', undefined, true); }, duracaoMs);
+    captura.timerFinalizacao = setTimeout(() => { void this.finalizarInternamente(captura, captura.finalidade === 'desempenho' ? 'concluida' : 'inconclusiva', undefined, true).catch(() => undefined); }, duracaoMs);
     await eventos.registrar({ origem: 'main', categoria: 'sessao', nivel: 'info', janelaId: base.janelaId, dados: { evento: 'captura_iniciada', capturaId: captura.capturaId, finalidade: entrada.finalidade } });
     return {
       capturaId: captura.capturaId, finalidade: captura.finalidade, estado: captura.estado, janelaId: captura.janelaId, rota: captura.rota,
@@ -212,7 +214,22 @@ export class DiagnosticoCapturaService {
     return JSON.parse(conteudo);
   }
 
-  private async finalizarInternamente(captura: CapturaAtiva, classificacao: ClassificacaoCaptura, observacao: string | undefined, automatico: boolean): Promise<FinalizacaoCaptura> {
+  private finalizarInternamente(captura: CapturaAtiva, classificacao: ClassificacaoCaptura, observacao: string | undefined, automatico: boolean): Promise<FinalizacaoCaptura> {
+    if (captura.resultado) return Promise.resolve(captura.resultado);
+    if (captura.finalizacaoEmAndamento) return captura.finalizacaoEmAndamento;
+    captura.finalizacaoEmAndamento = this.gravarFinalizacao(captura, classificacao, observacao, automatico)
+      .catch(async (erro: unknown) => {
+        captura.estado = 'interrompida';
+        if (this.capturaAtiva === captura) this.capturaAtiva = null;
+        await this.dependencias.eventos()?.registrar({ origem: 'main', categoria: 'erro', nivel: 'error', janelaId: captura.janelaId,
+          dados: { evento: 'captura_finalizacao_falhou', capturaId: captura.capturaId, codigo: 'FALHA_PERSISTENCIA' },
+        }).catch(() => undefined);
+        throw erro;
+      }).finally(() => { captura.finalizacaoEmAndamento = undefined; });
+    return captura.finalizacaoEmAndamento;
+  }
+
+  private async gravarFinalizacao(captura: CapturaAtiva, classificacao: ClassificacaoCaptura, observacao: string | undefined, automatico: boolean): Promise<FinalizacaoCaptura> {
     if (captura.resultado) return captura.resultado;
     captura.estado = 'finalizada';
     if (captura.timerFinalizacao) clearTimeout(captura.timerFinalizacao);
@@ -281,7 +298,14 @@ export class DiagnosticoCapturaService {
     if (final.interface) await writeFile(path.join(temporario, 'interface-final.json'), JSON.stringify(final.interface, null, 2));
     if (captura.base.tela) await writeFile(path.join(temporario, 'tela-inicial.png'), captura.base.tela);
     if (final.tela) await writeFile(path.join(temporario, 'tela-final.png'), final.tela);
-    await rename(temporario, diretorioFinal);
+    for (let tentativa = 0; ; tentativa++) {
+      try { await (this.dependencias.renomearDiretorio ?? rename)(temporario, diretorioFinal); break; }
+      catch (erro: unknown) {
+        const transitorio = erro instanceof Error && 'code' in erro && ['EPERM', 'EACCES', 'EBUSY'].includes(String(erro.code));
+        if (!transitorio || tentativa >= 2) throw erro;
+        await new Promise(resolve => setTimeout(resolve, 100 * (tentativa + 1)));
+      }
+    }
     const contextoComparacao = captura.entrada.finalidade === 'desempenho' ? { finalidade: 'desempenho' as const, cenario: captura.entrada.cenarioDesempenho, versaoProtocolo: VERSAO_PROTOCOLO_DIAGNOSTICO, perfil: captura.perfilDesempenho } : undefined;
     const resultado = { classificacao, cursorFinal, caminho: diretorioFinal, dossieAgente, componentes, errosCaptura: erros, resumo, metricas, contextoComparacao };
     captura.resultado = resultado;

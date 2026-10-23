@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useId, useLayoutEffect, useCallback } from 'react';
 import type { EventoEditorLaudo } from '@shared/diagnostico/contratos';
 import { registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
+import { agruparAlteracoesEditorLaudo, instrumentarLeiturasEditorLaudo } from '@/lib/sincronizacao-editor-laudo';
 import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
@@ -166,6 +167,8 @@ interface TinyMceEditorProps {
   /** Modo NÃO controlado: conteúdo inicial fixo, sem sincronização automática. Ideal para editores com HTML complexo (ex: seções). */
   initialValue?: string;
   onChange: (html: string, origem?: 'usuario' | 'normalizacao-inicial') => void;
+  agruparAlteracoes?: boolean;
+  onAlteracaoPendente?: () => void;
   somenteLeitura?: boolean;
   diagnosticoLaudo?: Pick<EventoEditorLaudo, 'sessao' | 'montagem' | 'modo'>;
   height?: number;
@@ -496,6 +499,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   value,
   initialValue,
   onChange: aoAlterarConteudo,
+  agruparAlteracoes = false,
+  onAlteracaoPendente,
   somenteLeitura = false,
   diagnosticoLaudo,
   height = 300,
@@ -521,6 +526,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const idReact = useId();
   const editorIdResolvido = editorId || `tiny-editor-${idReact.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
+  const aoMarcarPendenteRef = useRef(onAlteracaoPendente);
+  aoMarcarPendenteRef.current = onAlteracaoPendente;
   const repNumeroRef = useRef(repNumero);
   const placeholderChavesRef = useRef<string[] | undefined>(placeholderChaves);
   const onSolicitarExclusaoBlocoCondicionalRef = useRef(onSolicitarExclusaoBlocoCondicional);
@@ -531,6 +538,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const onChange = useCallback((html: string, origem?: 'usuario' | 'normalizacao-inicial') => {
     aoAlterarConteudo(html, origem ?? (editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial'));
   }, [aoAlterarConteudo]);
+  const aoSincronizarRef = useRef(onChange);
+  aoSincronizarRef.current = onChange;
   const faseInicializacaoRef = useRef('aguardando_montagem');
   const [preparado, setPreparado] = useState(false);
   const [ready, setReady] = useState(false);
@@ -714,7 +723,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           ? { initialValue: stableInitialValue }
           : { value: value || '' }
         )}
-        onEditorChange={(html: string) => onChange(
+        onEditorChange={agruparAlteracoes && isUncontrolled ? undefined : (html: string) => onChange(
           html,
           editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial',
         )}
@@ -1097,6 +1106,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           setup: (editor: TinyMceEditorInstance) => {
             registrarInicializacao('editor_setup_iniciado', { tentativaInterna: tentativaInicializacao });
             faseInicializacaoRef.current = 'setup';
+            if (diagnosticoLaudoRef.current) instrumentarLeiturasEditorLaudo(editor, diagnosticoLaudoRef.current.modo === 'single');
+            if (agruparAlteracoes && isUncontrolled) agruparAlteracoesEditorLaudo(
+              editor, html => aoSincronizarRef.current(html), () => aoMarcarPendenteRef.current?.(),
+              () => editorProntoParaAlteracoesRef.current,
+            );
             for (const fase of ['PreInit', 'PostRender', 'SkinLoaded', 'BeforeSetContent', 'SetContent', 'LoadContent']) {
               editor.on(fase, () => { if (!editorProntoParaAlteracoesRef.current) faseInicializacaoRef.current = fase; });
             }

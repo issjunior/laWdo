@@ -15,27 +15,32 @@ export function removerFormatacaoPlaceholders(html: string): string {
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
-  limparInteracaoCamposB601(doc.body);
-  doc.querySelectorAll('[data-placeholder-preview="true"]').forEach(elemento => elemento.remove());
-  doc.querySelectorAll('[data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
-  doc.querySelectorAll('[data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
-  doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
+  removerFormatacaoPlaceholdersDoDom(doc.body);
+  return doc.body.innerHTML;
+}
+
+export function removerFormatacaoPlaceholdersDoDom(raiz: HTMLElement): void {
+  limparInteracaoCamposB601(raiz);
+  raiz.querySelectorAll('[data-placeholder-preview="true"]').forEach(elemento => elemento.remove());
+  raiz.querySelectorAll('[data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
+  raiz.querySelectorAll('[data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
+  raiz.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
     bloco.removeAttribute('data-cond-em-edicao');
     bloco.removeAttribute('contenteditable');
   });
-  doc.querySelectorAll('[data-acao-tabela-placeholder]').forEach(elemento => elemento.remove());
-  doc.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
+  raiz.querySelectorAll('[data-acao-tabela-placeholder]').forEach(elemento => elemento.remove());
+  raiz.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
     tabela.removeAttribute('contenteditable');
     if (tabela.style.display === 'none') tabela.style.removeProperty('display');
     tabela.querySelectorAll<HTMLElement>('[contenteditable]').forEach(celula => celula.removeAttribute('contenteditable'));
   });
-  doc.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
+  raiz.querySelectorAll<HTMLElement>('[data-tooltip-xxx="true"]').forEach(elemento => {
     elemento.removeAttribute('data-tooltip-xxx');
     elemento.removeAttribute('data-origem-xxx');
     elemento.removeAttribute('title');
     elemento.removeAttribute('aria-label');
   });
-  doc.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(placeholder => {
+  raiz.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(placeholder => {
     const chave = placeholder.getAttribute('data-placeholder');
     if (!chave) return;
     const tabelaPersonalizada = placeholder.hasAttribute('data-placeholder-tabela-personalizada-id');
@@ -48,7 +53,6 @@ export function removerFormatacaoPlaceholders(html: string): string {
     if (tabelaPersonalizada) placeholder.style.display = 'none';
     else if (possuiPrevia) placeholder.style.removeProperty('display');
   });
-  return doc.body.innerHTML;
 }
 
 function escaparRegex(valor: string): string {

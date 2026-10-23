@@ -85,6 +85,29 @@ export function renumerarFigurasNosEditores(editores: TinyMceEditorInstance[]): 
   return alterou;
 }
 
+export function observarEstruturaFiguras(editor: TinyMceEditorInstance, aoAlterar: () => void): void {
+  const raiz = editor.getBody();
+  if (!raiz) return;
+  const contemFigura = (no: Node) => no.nodeType === 1 && (
+    (no as Element).matches('.laudo-figure, figcaption')
+    || Boolean((no as Element).querySelector('.laudo-figure, figcaption'))
+  );
+  const observador = new MutationObserver(mudancas => {
+    if (mudancas.some(mudanca => {
+      const elemento = mudanca.target.nodeType === 1 ? mudanca.target as Element : mudanca.target.parentElement;
+      return Boolean(elemento?.closest('figcaption'))
+        || (mudanca.type === 'attributes' && Boolean(elemento?.closest('.laudo-figure')))
+        || Array.from(mudanca.addedNodes).some(contemFigura)
+        || Array.from(mudanca.removedNodes).some(contemFigura);
+    })) aoAlterar();
+  });
+  observador.observe(raiz, {
+    childList: true, subtree: true, characterData: true, attributes: true,
+    attributeFilter: ['src', 'data-image-id', 'data-image-original-id', 'data-dummy'],
+  });
+  editor.on('remove', () => observador.disconnect());
+}
+
 /**
  * Reindexa todas as figuras no HTML do laudo, garantindo que a numeração (Figura 01, 02...)
  * siga a ordem física de aparição no documento.

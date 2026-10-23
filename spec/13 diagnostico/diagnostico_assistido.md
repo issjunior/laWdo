@@ -130,7 +130,9 @@ Para comparar antes/depois, use `consultar_captura` com `compararComCapturaId` e
 
 ## Artefatos, segurança e limites
 
-Cada captura é criada em diretório temporário e renomeada somente ao fim:
+Cada captura é criada em diretório temporário e renomeada somente ao fim. Finalizações concorrentes compartilham a mesma Promise; chamadas posteriores reutilizam o resultado concluído. Bloqueios transitórios de rename com EPERM, EACCES ou EBUSY permitem mais duas tentativas, após 100 e 200 ms. Falha persistente libera a captura ativa, marca a captura como interrompida, registra captura_finalizacao_falhou/FALHA_PERSISTENCIA e preserva arquivos parciais. O temporizador automático trata a rejeição sem gerar Promise não observada. Os testes de diagnostico-captura.service.test.ts cobrem concorrência, retry e nova captura após falha.
+
+Artefatos:
 
 ```text
 capturas/<timestamp>-<capturaId>/
@@ -211,3 +213,7 @@ Dossiês ficam em `gpu/incidentes/<UUID>.json` no diretório da sessão, com esc
 `diagnostico-gpu-windows.ts` executa consulta PowerShell fixa, oculta e somente leitura, com timeout de 5 s. Procura Display 4101 e LiveKernelEvent 141/142/117/116 desde dois minutos antes do incidente até a consulta. Retém metadados de WATCHDOG e disponibilidade do arquivo, sem ler o dump. A correlação distingue dump contemporâneo, relatório antigo e ausência de horário de dump; horário do evento sozinho não comprova uma falha nova. Fora do Windows retorna não aplicável; falta de permissão ou timeout fica explícita.
 
 As suítes `diagnostico-gpu-bootstrap.test.ts`, `diagnostico-gpu.service.test.ts`, `diagnostico-gpu-dados.test.ts`, `diagnostico-gpu-windows.test.ts`, contratos, sessão e captura verificam o fluxo com dependências simuladas. `scripts/diagnostico/smoke-gpu.mjs` oferece smoke específico; as simulações não comprovam recuperação real de GPU/driver no Windows.
+
+## Exercício automatizado manual do editor
+
+`npm run test:carga` usa Electron real com dados fictícios isolados e capturas de desempenho em segmentos de 30 segundos. Essa ferramenta de desenvolvimento não amplia o contrato MCP nem habilita diagnóstico no aplicativo comum ou empacotado. Somente seus unitários são executados no CI. Comandos, isolamento, evidências e limites estão em [Testes de carga do editor](testes_carga_editor.md).

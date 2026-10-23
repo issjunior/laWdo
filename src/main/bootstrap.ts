@@ -3,7 +3,9 @@ import { access, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { iniciarInstanciaUnica } from './utils/instancia-unica.js';
 import { prepararDiagnosticoGpu } from './diagnostico-gpu.js';
+import { prepararIsolamentoTesteCarga } from './utils/teste-carga.js';
 
+prepararIsolamentoTesteCarga();
 prepararDiagnosticoGpu();
 
 const diretorioTemporarioSmoke = process.env.LAWDO_SMOKE_USER_DATA;

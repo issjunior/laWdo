@@ -397,7 +397,12 @@
         "src/__tests__/renderer/tiny-mce-editor-*.test.tsx",
         "src/renderer/components/editor/editor-formatacao.ts",
         "src/__tests__/renderer/editor-formatacao.test.ts",
-        "src/__tests__/renderer/tinymce-recursos.d.ts"
+        "src/__tests__/renderer/tinymce-recursos.d.ts",
+        "src/renderer/lib/sincronizacao-editor-laudo.ts",
+        "src/renderer/lib/desempenho-editor-laudo.ts",
+        "src/__tests__/renderer/sincronizacao-editor-laudo.test.ts",
+        "src/__tests__/renderer/desempenho-editor-laudo.test.ts",
+        "src/renderer/lib/conteudo-comparavel-laudo.ts"
       ]
     },
     {
@@ -631,7 +636,9 @@
         "src/renderer/components/desempenho/DesempenhoTab.tsx",
         "src/renderer/components/layout/Header.tsx",
         "src/renderer/pages/LogsPage.tsx",
-        "src/__tests__/main/captura-logs.service.test.ts"
+        "src/__tests__/main/captura-logs.service.test.ts",
+        "src/renderer/lib/desempenho-editor-laudo.ts",
+        "src/renderer/lib/sincronizacao-editor-laudo.ts"
       ]
     },
     {
@@ -993,6 +1000,20 @@
         "src/main/database/index.ts",
         "src/renderer/pages/TemplatesPage.tsx",
         "src/__tests__/main/templates-integrados.test.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/13 diagnostico/testes_carga_editor.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Carga manual do editor, isolamento fictício, cenários, métricas e unitários rápidos no CI.",
+      "globsCodigo": [
+        "scripts/carga/**",
+        "src/main/utils/teste-carga.ts",
+        "src/__tests__/main/teste-carga-isolamento.test.ts",
+        "src/main/bootstrap.ts",
+        "package.json",
+        ".github/workflows/ci.yml"
       ]
     }
   ]
