@@ -112,7 +112,7 @@ test('isolamento exige marcador e rejeita a raiz e diretórios externos', async 
     await mkdir(dados, { recursive: true });
     await assert.rejects(validarIsolamento(temporario, dados));
     await writeFile(path.join(dados, 'isolamento.json'), JSON.stringify({ finalidade: 'teste-carga', versao: 1 }));
-    assert.equal(await validarIsolamento(temporario, dados), dados);
+    assert.equal(await validarIsolamento(temporario, dados), await realpath(dados));
     await assert.rejects(validarIsolamento(temporario, raiz));
     await assert.rejects(validarIsolamento(temporario, temporario));
   } finally {
