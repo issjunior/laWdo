@@ -67,6 +67,7 @@ import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
 import { medirOperacaoEditorLaudo } from '@/lib/desempenho-editor-laudo';
+import { lerConteudoAtualEditorLaudo, sincronizacaoEditorLaudoPendente } from '@/lib/sincronizacao-editor-laudo';
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { capturaProblemaLaudoAtiva, registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
 import { atualizarNumeroFigura, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
@@ -223,6 +224,11 @@ type WindowComIntersectionObserver = Window & {
 const obterEditorTinyMce = (editorId: string): TinyMceEditorInstance | null => (
   (window as TinymceWindow).tinymce?.get(editorId) ?? null
 );
+
+const lerHtmlAtualEditor = (editorId: string, alternativa: string): string => {
+  const editor = obterEditorTinyMce(editorId);
+  return editor ? lerConteudoAtualEditorLaudo(editor) : alternativa;
+};
 
 const isTinyMceEditor = (editor: TinyMceEditorInstance | null | undefined): editor is TinyMceEditorInstance => (
   editor != null
@@ -942,14 +948,14 @@ export const LaudosPage: React.FC = () => {
   const obterSecoesAtuaisDoEditor = useCallback((): SecaoEditor[] => {
     if (editorMode === 'single') {
       const editor = obterEditorTinyMce('laudo-single-editor');
-      const latestHtml = editor ? editor.getContent() : singleEditorHtml;
+      const latestHtml = editor ? lerConteudoAtualEditorLaudo(editor) : singleEditorHtml;
       setSingleEditorHtml(latestHtml);
       return parseSingleHtmlToSecoes(latestHtml, secoes);
     }
 
     return secoes.map((secao, idx) => {
       const editor = obterEditorTinyMce(`secao-${idx}`);
-      const conteudo = editor ? editor.getContent() : secao.conteudo;
+      const conteudo = editor ? lerConteudoAtualEditorLaudo(editor) : secao.conteudo;
       return { ...secao, conteudo };
     });
   }, [editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
@@ -1031,11 +1037,11 @@ export const LaudosPage: React.FC = () => {
   const obterConteudoComparavel = useCallback((lerEditores = true) => {
     const secoesAtuais = medirOperacaoEditorLaudo('ler_conteudo_editores', () => editorMode === 'single'
       ? parseSingleHtmlToSecoes(lerEditores
-        ? obterEditorTinyMce('laudo-single-editor')?.getContent() ?? singleEditorHtml
+        ? lerHtmlAtualEditor('laudo-single-editor', singleEditorHtml)
         : singleEditorHtml, secoes)
       : lerEditores ? secoes.map((secao, indice) => ({
         ...secao,
-        conteudo: obterEditorTinyMce(`secao-${indice}`)?.getContent() ?? secao.conteudo,
+        conteudo: lerHtmlAtualEditor(`secao-${indice}`, secao.conteudo),
       })) : secoes, { modoUnico: editorMode === 'single', incremental: !lerEditores, quantidade: editorMode === 'single' ? 1 : secoes.length });
     const cache = cacheComparacaoRef.current;
     if (cache && cache.secoes.length === secoesAtuais.length && secoesAtuais.every((secao, indice) => {
@@ -1058,11 +1064,16 @@ export const LaudosPage: React.FC = () => {
     const sessao = obterSessao();
     const temporizador = window.setTimeout(() => {
       if (!sessaoAtual(sessao)) return;
+      const ids = editorMode === 'single' ? ['laudo-single-editor'] : secoes.map((_, indice) => `secao-${indice}`);
+      if (ids.some(id => {
+        const editor = obterEditorTinyMce(id);
+        return editor && sincronizacaoEditorLaudoPendente(editor);
+      })) return;
       const conteudo = obterConteudoComparavel(false);
       medirOperacaoEditorLaudo('atualizar_estado_laudo', () => atualizarConteudo(conteudo), { bytesEntrada: conteudo.length, modoUnico: editorMode === 'single' });
     }, 400);
     return () => window.clearTimeout(temporizador);
-  }, [editando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes, obterSessao, sessaoAtual, editorMode]);
+  }, [editando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes, obterSessao, sessaoAtual, editorMode, secoes]);
 
   useEffect(() => {
     cacheComparacaoRef.current = null;
@@ -3809,6 +3820,7 @@ export const LaudosPage: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
+                  aria-label={`Editar laudo da REP ${laudo.rep_numero}`}
                   onClick={async () => {
                     if (isReadonly) {
                       await handleUpdateStatus(laudo, 'Em andamento');
@@ -4118,6 +4130,8 @@ export const LaudosPage: React.FC = () => {
                         editorId="laudo-single-editor"
                         diagnosticoLaudo={{ sessao: sessaoEditor, montagem: versaoMontagemEditor, modo: editorMode }}
                         initialValue={singleEditorHtml}
+                        agruparAlteracoes
+                        onAlteracaoPendente={() => registrarAlteracao('usuario')}
                         onChange={(html: string, origem) => {
                           registrarAlteracao(origem);
                           setSingleEditorHtml(html);
@@ -4225,6 +4239,8 @@ export const LaudosPage: React.FC = () => {
                                     editorId={`secao-${idx}`}
                                     diagnosticoLaudo={{ sessao: sessaoEditor, montagem: versaoMontagemEditor, modo: editorMode }}
                                     initialValue={secao.conteudo}
+                                    agruparAlteracoes
+                                    onAlteracaoPendente={() => registrarAlteracao('usuario')}
                                     onChange={(txt, origem) => {
                                       if (origem === 'usuario' && isIlustracoes && secao.conteudo.includes('laudo-figure')
                                         && conteudoHtmlEhVazio(txt) && filhas.length === 0) {

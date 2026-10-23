@@ -1,13 +1,13 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, rename } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DiagnosticoCapturaService } from '@main/services/diagnostico-captura.service.js';
 import { DiagnosticoEventosService } from '@main/services/diagnostico-eventos.service.js';
 
 const diretorios: string[] = [];
 
-async function criarServico(obterGpu?: () => Record<string, unknown>) {
+async function criarServico(obterGpu?: () => Record<string, unknown>, renomearDiretorio?: typeof rename) {
   const diretorio = await mkdtemp(path.join(os.tmpdir(), 'lawdo-captura-'));
   diretorios.push(diretorio);
   const eventos = new DiagnosticoEventosService(path.join(diretorio, 'eventos.ndjson'));
@@ -17,6 +17,7 @@ async function criarServico(obterGpu?: () => Record<string, unknown>) {
     sessionId: () => 'f0d43c3b-5ff8-4e40-bef2-09444f6693ca',
     eventos: () => eventos,
     obterGpu,
+    renomearDiretorio,
     capturarLinhaBase: async () => ({ janelaId: 1, rota: '#/laudos', interface: { elementos: [] }, erros: [] }),
     capturarEstadoFinal: async () => ({ interface: { elementos: [] }, erros: [] }),
     alterarSonda: ativa => { sonda.push(ativa); },
@@ -29,6 +30,28 @@ afterEach(async () => {
 });
 
 describe('DiagnosticoCapturaService', () => {
+  it('repete renomeação bloqueada temporariamente e compartilha finalizações concorrentes', async () => {
+    const renomear = vi.fn(rename).mockRejectedValueOnce(Object.assign(new Error('Arquivo ocupado'), { code: 'EPERM' }));
+    const { servico } = await criarServico(undefined, renomear);
+    const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'Falha transitória de gravação.', capturarConsultasGdl: false });
+    const entrada = { capturaId: String(inicio.capturaId) };
+    const [primeira, segunda] = await Promise.all([servico.finalizar(entrada), servico.finalizar(entrada)]);
+    expect(primeira.caminho).toBe(segunda.caminho);
+    expect(renomear).toHaveBeenCalledTimes(2);
+    await expect(servico.consultar({ ...entrada, componente: 'manifesto', depoisDe: 0, limite: 50 })).resolves.toMatchObject({ estado: 'finalizada' });
+  });
+
+  it('preserva arquivos parciais e permite nova captura após falha persistente', async () => {
+    const renomear = vi.fn(rename);
+    const { servico, diretorio } = await criarServico(undefined, renomear);
+    const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'Falha persistente de gravação.', capturarConsultasGdl: false });
+    for (let indice = 0; indice < 3; indice++) renomear.mockRejectedValueOnce(Object.assign(new Error('Acesso negado'), { code: 'EPERM' }));
+    await expect(servico.finalizar({ capturaId: String(inicio.capturaId) })).rejects.toThrow('Acesso negado');
+    const pastas = await readdir(path.join(diretorio, 'capturas'));
+    expect(pastas.some(nome => nome.endsWith('.tmp'))).toBe(true);
+    const proxima = await servico.iniciar({ finalidade: 'problema', cenario: 'Captura após falha.', capturarConsultasGdl: false });
+    await expect(servico.finalizar({ capturaId: String(proxima.capturaId) })).resolves.toHaveProperty('caminho');
+  });
   it('preserva a captura durante falha gráfica e inclui contexto próprio no dossiê', async () => {
     const { servico, eventos } = await criarServico(() => ({ ativo: true, ultimoIncidenteId: 'gpu-simulada' }));
     const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'Reproduzir encerramento da GPU.', capturarConsultasGdl: false });
