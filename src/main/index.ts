@@ -1,3 +1,4 @@
+import { iniciarAtualizacaoAutomaticaGdl, encerrarAtualizacaoAutomaticaGdl } from './services/gdl-atualizacao-automatica.service.js';
 import { normalizarFalhaDiagnosticoGdl } from './services/diagnostico-eventos.service.js';
 import { conectarDiagnosticoGpu, diagnosticoGpu, encerrarDiagnosticoGpu, preparacaoGpu } from './diagnostico-gpu.js';
 import { schemaConsultarGpuEntrada } from '../shared/diagnostico/contratos.js';
@@ -696,6 +697,8 @@ app.whenReady().then(async () => {
     const isDev = process.env.NODE_ENV === 'development';
     registerIpcHandlers({ preloadPath, rendererHtmlPath, isDev });
 
+    iniciarAtualizacaoAutomaticaGdl();
+
     // Criar janela
     await createWindow();
 
@@ -792,6 +795,7 @@ app.on('will-quit', evento => {
   if (encerramentoAplicativoEmAndamento) return;
   evento.preventDefault();
   encerramentoAplicativoEmAndamento = true;
+  encerrarAtualizacaoAutomaticaGdl();
   void Promise.all([
     encerrarDiagnosticoAssistido(),
     Promise.resolve(desempenhoService.encerrar()),

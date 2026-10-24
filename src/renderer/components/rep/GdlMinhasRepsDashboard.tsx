@@ -16,7 +16,7 @@ import { GdlFalhaListaAlert, normalizarFalhaListaGdl } from '@/components/rep/Gd
 import type { FalhaListaGdlApresentavel } from '@/components/rep/GdlFalhaListaAlert';
 import { GdlStatusBadge } from '@/components/rep/GdlStatusBadge';
 import type { MinhaRepGdl, SnapshotMinhasRepsGdl, StatusMinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
-import { cacheListagemDesativadaDisponivel, VALIDADE_CACHE_LISTAGEM_MS, VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS } from '@shared/gdl/listagem';
+import { cacheListagemDesativadaDisponivel, VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS } from '@shared/gdl/listagem';
 
 const statusDisponiveis: StatusMinhaRepGdl[] = ['Aberta e Distribuída', 'Laudo em Execução', 'Concluída e Não Remetida'];
 const esquemaSnapshot = z.object({
@@ -45,7 +45,6 @@ export function GdlMinhasRepsDashboard() {
   const [agora, setAgora] = useState(Date.now());
   const [tentativaBloqueada, setTentativaBloqueada] = useState(false);
   const [carregando, setCarregando] = useState(false);
-  const [proximaAtualizacaoAutomatica, setProximaAtualizacaoAutomatica] = useState<number | null>(null);
   const consultaEmAndamento = useRef(false);
   const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
   const [destinoControleColunas, setDestinoControleColunas] = useState<HTMLDivElement | null>(null);
@@ -59,7 +58,6 @@ export function GdlMinhasRepsDashboard() {
     consultaEmAndamento.current = true;
     setCarregando(true);
     setErro(null);
-    let atualizadoEm: number | null = null;
     try {
       const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(forcar);
       if (!resposta.success) {
@@ -76,7 +74,6 @@ export function GdlMinhasRepsDashboard() {
         setErro({ codigo: 'estrutura', detalhes: 'A resposta da lista não corresponde ao formato esperado pelo laWdo.' });
         return;
       }
-      atualizadoEm = Date.parse(validacao.data.atualizadoEm);
       setSnapshot(validacao.data);
     } catch (falha: unknown) {
       window.ipcAPI.logError('gdl', 'Falha inesperada ao atualizar a lista no Dashboard', {
@@ -88,42 +85,28 @@ export function GdlMinhasRepsDashboard() {
       });
     } finally {
       consultaEmAndamento.current = false;
-      const instanteAtual = Date.now();
-      const vencimento = atualizadoEm === null ? 0 : atualizadoEm + VALIDADE_CACHE_LISTAGEM_MS;
-      setProximaAtualizacaoAutomatica(vencimento > instanteAtual ? Math.min(vencimento, instanteAtual + VALIDADE_CACHE_LISTAGEM_MS) : instanteAtual + VALIDADE_CACHE_LISTAGEM_MS);
       setCarregando(false);
     }
   }, []);
 
   useEffect(() => {
-    if (listagemHabilitada !== true || carregando || proximaAtualizacaoAutomatica === null) return;
-    const temporizador = setTimeout(() => void atualizar(true, true), Math.max(0, proximaAtualizacaoAutomatica - Date.now()));
-    return () => clearTimeout(temporizador);
-  }, [listagemHabilitada, carregando, proximaAtualizacaoAutomatica, atualizar]);
-
-  useEffect(() => {
-    const atualizarLocal = () => {
-      void window.ipcAPI.gdl.obterMinhasRepsCache().then(resposta => {
-        const validacao = esquemaSnapshot.safeParse(resposta.data);
-        if (resposta.success && validacao.success) setSnapshot(validacao.data);
-      }).catch(() => undefined);
-    };
-    window.addEventListener('focus', atualizarLocal);
-    return () => window.removeEventListener('focus', atualizarLocal);
-  }, []);
-
-  useEffect(() => {
     let ativo = true;
-    void Promise.all([window.ipcAPI.gdl.obterPreferenciaListagem(), window.ipcAPI.gdl.obterMinhasRepsCache()]).then(([preferencia, resposta]) => {
-      if (!ativo) return;
-      const habilitada = preferencia.success && preferencia.data?.habilitada === true;
-      setListagemHabilitada(habilitada);
-      const validacao = esquemaSnapshot.safeParse(resposta.data);
-      if (resposta.success && validacao.success) setSnapshot(validacao.data);
-      if (habilitada) void atualizar(false, true);
-    }).catch(() => { if (ativo) setListagemHabilitada(false); });
-    return () => { ativo = false; };
-  }, [atualizar]);
+    let revisao = 0;
+    const atualizarLocal = () => {
+      const atual = ++revisao;
+      void Promise.all([window.ipcAPI.gdl.obterPreferenciaListagem(), window.ipcAPI.gdl.obterMinhasRepsCache()]).then(([preferencia, resposta]) => {
+        if (!ativo || atual !== revisao) return;
+        setListagemHabilitada(preferencia.success && preferencia.data?.habilitada === true);
+        const validacao = esquemaSnapshot.safeParse(resposta.data);
+        setSnapshot(resposta.success && validacao.success ? validacao.data : null);
+        setAgora(Date.now());
+      }).catch(() => { if (ativo && atual === revisao) setListagemHabilitada(false); });
+    };
+    const remover = window.ipcAPI.gdl.onAvisosAlterados(atualizarLocal);
+    window.addEventListener('focus', atualizarLocal);
+    atualizarLocal();
+    return () => { ativo = false; remover(); window.removeEventListener('focus', atualizarLocal); };
+  }, []);
 
   useEffect(() => {
     if (listagemHabilitada !== false || !snapshot) return;

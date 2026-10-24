@@ -28,77 +28,39 @@ beforeEach(() => {
   obterPreferenciaListagem.mockReset().mockResolvedValue({ success: true, data: { habilitada: true } });
   obterMinhasRepsCache.mockReset().mockResolvedValue({ success: true, data: snapshot });
   atualizarMinhasRepsCache.mockReset().mockResolvedValue({ success: true, data: snapshot });
-  Object.defineProperty(window, 'ipcAPI', { value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, obterPreferenciaListagem, obterMinhasRepsCache, atualizarMinhasRepsCache } }, writable: true });
+  Object.defineProperty(window, 'ipcAPI', { value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, obterPreferenciaListagem, obterMinhasRepsCache, atualizarMinhasRepsCache, onAvisosAlterados: () => () => undefined } }, writable: true });
 });
 afterEach(() => { vi.useRealTimers(); Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true }); });
 
 describe('REPs do GDL no dashboard', () => {
 
-  it('atualiza ao vencer o cache de dez minutos e reinicia o prazo após atualização manual', async () => {
+  it('apenas lê o cache ao abrir e recebe alterações sem iniciar consultas de rede', async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
-    const instante = Date.now();
-    atualizarMinhasRepsCache.mockImplementation(async () => ({ success: true, data: {
-      ...snapshot, atualizadoEm: new Date(atualizarMinhasRepsCache.mock.calls.length === 1 ? instante - 5 * 60_000 : Date.now()).toISOString(),
-    } }));
-    await act(async () => { render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledWith(false);
-    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000 - 1); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(atualizarMinhasRepsCache).toHaveBeenLastCalledWith(true);
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
-    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Atualizar' })); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(3);
-    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000 - 1); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(3);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(4);
-  });
-
-  it('preserva a lista após falha automática e aguarda dez minutos para tentar novamente', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
-    atualizarMinhasRepsCache.mockResolvedValueOnce({ success: true, data: snapshot }).mockResolvedValue({
-      success: false, falha: { codigo: 'rede', detalhes: 'fetch failed', referencia: '85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e' },
-    });
-    await act(async () => { render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('button', { name: '123/2026' })).toBeEnabled();
-    expect(screen.getByText(/Não foi possível alcançar o GDL/)).toHaveTextContent('Exibindo a última lista salva.');
-    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000 - 1); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(3);
-  });
-
-  it('não sobrepõe consultas enquanto aguarda a resposta do GDL', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
+    let notificar: (reiniciar: boolean) => void = () => undefined;
+    const remover = vi.fn();
+    window.ipcAPI.gdl.onAvisosAlterados = callback => { notificar = callback; return remover; };
     const { unmount } = render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
     await act(async () => undefined);
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: {
+      ...snapshot, reps: [{ ...snapshot.reps[0], numero: '456' }],
+    } });
+    await act(async () => { notificar(false); });
+    expect(screen.getByRole('button', { name: '456/2026' })).toBeEnabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(20 * 60_000); });
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+    unmount();
+    expect(remover).toHaveBeenCalledOnce();
+  });
+
+  it('não sobrepõe atualizações manuais enquanto aguarda a resposta do GDL', async () => {
     atualizarMinhasRepsCache.mockReturnValue(new Promise(() => undefined));
-    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('1 REP');
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Atualizar' })).toBeDisabled();
-    await act(async () => { await vi.advanceTimersByTimeAsync(20 * 60_000); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
-    unmount();
-    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2);
-  });
-
-  it('cancela a atualização automática ao sair do dashboard', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-16T12:00:00.000Z'));
-    const { unmount } = render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
-    await act(async () => undefined);
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
-    unmount();
-    await act(async () => { await vi.advanceTimersByTimeAsync(20 * 60_000); });
-    expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
   });
 
   it('não agenda atualização automática com a listagem desativada', async () => {
@@ -118,6 +80,7 @@ describe('REPs do GDL no dashboard', () => {
     expect(screen.queryByRole('combobox', { name: 'Natureza' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Designação de')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Designação até')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
     expect(await screen.findByText('Consultando GDL: 00:00')).toBeInTheDocument();
     expect(screen.queryByText(/O GDL pode levar alguns minutos/)).not.toBeInTheDocument();
     expect(screen.getByText(/Atualizado em/).textContent).toMatch(/\d{2}:\d{2}$/);
@@ -133,7 +96,7 @@ describe('REPs do GDL no dashboard', () => {
   it('mostra o cache, permite atualizar e abre a REP selecionada no importador', async () => {
     render(<MemoryRouter><GdlMinhasRepsDashboard /><RotaAtual /></MemoryRouter>);
     expect(await screen.findByText('1 REP')).toHaveClass('bg-secondary');
-    await waitFor(() => expect(atualizarMinhasRepsCache).toHaveBeenCalledWith(false));
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
     await waitFor(() => expect(atualizarMinhasRepsCache).toHaveBeenCalledWith(true));
     fireEvent.click(screen.getByRole('button', { name: /123\/2026/ }));
@@ -147,6 +110,7 @@ describe('REPs do GDL no dashboard', () => {
     } });
     render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
     expect(await screen.findByText('1 REP')).toHaveClass('bg-secondary');
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
     expect(await screen.findByText(/Não foi possível alcançar o GDL/)).toHaveTextContent('Exibindo a última lista salva.');
     expect(screen.queryByText(/ERR_CONNECTION_REFUSED/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detalhes' }));

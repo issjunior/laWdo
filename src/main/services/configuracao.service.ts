@@ -1,3 +1,4 @@
+import { notificarContextoGdlAlterado } from './gdl-agendamento-eventos.service.js';
 import { CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO, esquemaCabecalhoLaudo, esquemaFechamentoLaudo } from '../../shared/configuracoes/apresentacao-laudo.js';
 import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { getLogger } from '../utils/logger.js';
@@ -75,7 +76,10 @@ class ConfiguracaoService {
         );
         log.info('Configuração criada', { chave });
       }
-      if (chave.startsWith('gdl_')) notificarAvisosGdlAlterados(true);
+      if (chave.startsWith('gdl_')) {
+        notificarContextoGdlAlterado();
+        notificarAvisosGdlAlterados(true);
+      }
     } catch (error) {
       log.error('Erro ao salvar configuração', { chave, error });
       throw error;

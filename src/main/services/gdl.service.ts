@@ -1,3 +1,4 @@
+import { atividadeGdlService } from './gdl-atividade.service.js';
 import { definirAmbienteConsultaGdl, destinoApiGdlPermitido, registrarRespostaGdl } from './gdl-diagnostico.service.js';
 import fs from 'fs';
 import path from 'path';
@@ -304,6 +305,7 @@ async function requisitarGdl(
   timeout: number = 15000,
 ): Promise<{ statusCode: number; data: string; redirecionado: boolean; paginaAutenticacao: boolean }> {
   if (!destinoApiGdlPermitido(url, method)) throw new Error('Operação GDL não permitida: somente consultas de leitura.');
+  await atividadeGdlService.antesDaRequisicao();
   const inicio = performance.now();
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
@@ -566,6 +568,7 @@ async function baixarArquivoGdl(
   headers: Record<string, string>,
   informarProgresso?: InformarProgressoDownloadGdl,
 ): Promise<{ statusCode: number; contentType: string; caminhoTemporario?: string }> {
+  await atividadeGdlService.antesDaRequisicao();
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
   let temporizador: NodeJS.Timeout | undefined;
@@ -783,7 +786,7 @@ async function consultarDadosNaInvestigacao(
   };
 }
 
-export async function testarConexao(ambiente: string): Promise<GdlTesteResultado> {
+async function testarConexaoInterna(ambiente: string): Promise<GdlTesteResultado> {
   const inicio = Date.now();
   const amb = await obterAmbienteEfetivo(ambiente);
   definirAmbienteConsultaGdl(amb);
@@ -857,12 +860,18 @@ export async function testarConexao(ambiente: string): Promise<GdlTesteResultado
   }
 }
 
-export async function listarMinhasReps(pagina: number): Promise<PaginaMinhasRepsGdl> {
+export const testarConexao: typeof testarConexaoInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => testarConexaoInterna(...argumentos));
+
+async function listarMinhasRepsInterna(pagina: number): Promise<PaginaMinhasRepsGdl> {
   const ambiente = await obterAmbienteEfetivo();
   const credenciais = await carregarCredenciais(ambiente);
   if (!credenciais.login || !credenciais.senha) throw new Error('Credenciais não configuradas.');
   return listarPaginaMinhasRepsGdl(credenciais, pagina, obterSessaoRedeGdl);
 }
+
+export const listarMinhasReps: typeof listarMinhasRepsInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => listarMinhasRepsInterna(...argumentos));
 
 export async function obterIdentidadeMinhasReps(): Promise<string> {
   const ambiente = await obterAmbienteEfetivo();
@@ -871,7 +880,7 @@ export async function obterIdentidadeMinhasReps(): Promise<string> {
   return createHash('sha256').update(JSON.stringify({ ambiente, credenciais })).digest('hex');
 }
 
-export async function consultarRep(numero: string, ano: string): Promise<GdlConsultaResultado> {
+async function consultarRepInterna(numero: string, ano: string): Promise<GdlConsultaResultado> {
   let ambiente: AmbienteGdl = 'producao';
   try {
     ambiente = await obterAmbienteEfetivo();
@@ -959,6 +968,9 @@ export async function consultarRep(numero: string, ano: string): Promise<GdlCons
     return { sucesso: false, dados: null, erro: mensagem };
   }
 }
+
+export const consultarRep: typeof consultarRepInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => consultarRepInterna(...argumentos));
 
 async function credenciaisConfirmadasPorRepValidada(
   ambiente: AmbienteGdl,
@@ -1067,7 +1079,7 @@ async function baixarListaFotosRep(numero: string, ano: string, informarProgress
   }
 }
 
-export async function listarImagensRepGdl(numero: string, ano: string): Promise<ArquivoRepGdl[]> {
+async function listarImagensRepGdlInterna(numero: string, ano: string): Promise<ArquivoRepGdl[]> {
   const { arquivos, caminhoZip } = await baixarListaFotosRep(numero, ano);
   try {
     const entradasZip = lerEntradasZipDoArquivo(caminhoZip);
@@ -1089,6 +1101,9 @@ export async function listarImagensRepGdl(numero: string, ano: string): Promise<
   }
 }
 
+export const listarImagensRepGdl: typeof listarImagensRepGdlInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => listarImagensRepGdlInterna(...argumentos));
+
 function limparSessoesFotosExpiradas(): void {
   const agora = Date.now()
   for (const [sessaoId, sessao] of sessoesFotosGdl) {
@@ -1098,7 +1113,7 @@ function limparSessoesFotosExpiradas(): void {
   }
 }
 
-export async function abrirSessaoImagensRepGdl(
+async function abrirSessaoImagensRepGdlInterna(
   laudoId: string,
   numero: string,
   ano: string,
@@ -1131,6 +1146,9 @@ export async function abrirSessaoImagensRepGdl(
     throw error
   }
 }
+
+export const abrirSessaoImagensRepGdl: typeof abrirSessaoImagensRepGdlInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => abrirSessaoImagensRepGdlInterna(...argumentos));
 
 export function fecharSessaoImagensRepGdl(laudoId: string, sessaoId: string): void {
   const sessao = sessoesFotosGdl.get(sessaoId)
@@ -1190,7 +1208,7 @@ export async function obterMiniaturasDaSessaoImagensRepGdl(
   return miniaturas
 }
 
-export async function capturarImagensRepGdl(
+async function capturarImagensRepGdlInterna(
   numero: string,
   ano: string,
   idsSelecao: string[],
@@ -1245,7 +1263,10 @@ export async function capturarImagensRepGdl(
   }
 }
 
-export async function capturarImagensDaSessaoGdlParaLaudo(
+export const capturarImagensRepGdl: typeof capturarImagensRepGdlInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => capturarImagensRepGdlInterna(...argumentos));
+
+async function capturarImagensDaSessaoGdlParaLaudoInterna(
   laudoId: string,
   sessaoId: string,
   idsSelecao: string[],
@@ -1289,7 +1310,10 @@ export async function capturarImagensDaSessaoGdlParaLaudo(
   return { imagens, falhas, duplicadas }
 }
 
-export async function validarCredenciais(
+export const capturarImagensDaSessaoGdlParaLaudo: typeof capturarImagensDaSessaoGdlParaLaudoInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => capturarImagensDaSessaoGdlParaLaudoInterna(...argumentos));
+
+async function validarCredenciaisInterna(
   ambiente: string,
   credenciais: GdlCredenciaisEntrada,
   numero: string,
@@ -1347,8 +1371,14 @@ export async function validarCredenciais(
   }
 }
 
+export const validarCredenciais: typeof validarCredenciaisInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => validarCredenciaisInterna(...argumentos));
 
-export async function consultarDetalhesRepAutorizada(id: number, numero: string, ano: string, validarContexto: () => Promise<void>, sinal: AbortSignal) {
+
+async function consultarDetalhesRepAutorizadaInterna(id: number, numero: string, ano: string, validarContexto: () => Promise<void>, sinal: AbortSignal) {
   const credenciais = await carregarCredenciais(await obterAmbienteEfetivo());
   return lerDetalhesRepAutorizadaGdl(credenciais, id, numero, ano, obterSessaoRedeGdl, validarContexto, sinal);
 }
+
+export const consultarDetalhesRepAutorizada: typeof consultarDetalhesRepAutorizadaInterna = (...argumentos) =>
+  atividadeGdlService.consultar(() => consultarDetalhesRepAutorizadaInterna(...argumentos));
