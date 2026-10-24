@@ -64,7 +64,7 @@ describe('preservação da apresentação por laudo', () => {
     await sqlite.executeNonQuery('INSERT INTO schema_version (version) VALUES (44)');
     await sqlite.closeDatabase();
     await banco.setupDatabase();
-    expect(await banco.getSchemaVersion()).toBe(45);
+    expect(await banco.getSchemaVersion()).toBe(banco.CURRENT_SCHEMA_VERSION);
     expect(JSON.parse((await configuracao.obter('cabecalho_documento'))!)).toEqual(CABECALHO_LAUDO_PADRAO);
     expect(JSON.parse((await configuracao.obter('fechamento_laudo'))!)).toEqual(FECHAMENTO_LAUDO_PADRAO);
     expect(await sqlite.executeQuery('SELECT id, apresentacao_json FROM laudos')).toEqual(anteriores);
@@ -86,7 +86,7 @@ describe('preservação da apresentação por laudo', () => {
     await sqlite.executeNonQuery('INSERT INTO schema_version (version) VALUES (43)');
     await sqlite.closeDatabase();
     await banco.setupDatabase();
-    expect(await banco.getSchemaVersion()).toBe(45);
+    expect(await banco.getSchemaVersion()).toBe(banco.CURRENT_SCHEMA_VERSION);
     const migrados = await sqlite.executeQuery<{ id: string; apresentacao_json: string }>('SELECT id, apresentacao_json FROM laudos');
     expect(migrados).toHaveLength(2);
     for (const laudo of migrados) expect(lerApresentacaoLaudo(laudo.apresentacao_json)).toMatchObject({ cabecalho: { habilitado: true, primeiraPagina: '<p>Cabeçalho legado {{perito_nome}}</p>' }, fechamento: { habilitado: false, conteudo: '' }, perito: { perito_nome: 'Outro nome' } });
