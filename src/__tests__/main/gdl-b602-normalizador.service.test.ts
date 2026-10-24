@@ -549,6 +549,7 @@ describe('contrato GDL B602', () => {
     expect(resultado.camposGerais.b602_envolvidos_1).toBe('OUTRO ENVOLVIDO')
     expect(resultado.camposEspecificos.dadosSolicitacao).toEqual({
       orgao: 'ÓRGÃO TESTE',
+      cidade: 'LONDRINA',
       responsavel: 'RESPONSÁVEL TESTE',
       autoridade: 'AUTORIDADE TESTE',
       origensDisponiveis: [
@@ -646,6 +647,7 @@ describe('contrato GDL B602', () => {
       origemInicial: 'gdl',
       dadosSolicitacao: {
         orgao: 'ÓRGÃO TESTE',
+        cidade: 'LONDRINA',
         responsavel: 'RESPONSÁVEL TESTE',
         autoridade: 'AUTORIDADE TESTE',
         origensDisponiveis: [

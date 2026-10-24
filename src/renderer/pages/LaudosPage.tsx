@@ -3,6 +3,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes, useSolicitarSaida } from '@/contexts/AlteracoesPendentesContext';
 import { useAtalhoSalvarLaudo } from '@/hooks/useAtalhoSalvarLaudo';
+import { useBuscaTextoLaudo } from '@/hooks/useBuscaTextoLaudo';
+import { BarraBuscaLaudo } from '@/components/laudo/editor/BarraBuscaLaudo';
+import { criarCopiaVisualizacaoPlaceholders } from '@/lib/apresentacao-placeholders';
 import { useModelosIaSessao } from '@/hooks/useModelosIaSessao';
 import {
   useGerenciadorAlteracoesLaudo,
@@ -62,6 +65,7 @@ import {
   RodapeEditorLaudo,
 } from '@/components/laudo/editor/ControlesEditorLaudo';
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
+import { AtalhosLaudoDialog } from '@/components/laudo/AtalhosLaudoDialog';
 import { CHAVES_PLACEHOLDERS_REP, extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
@@ -122,7 +126,7 @@ import {
   restaurarVisualizacaoAposSalvar,
   type ModoVisualizacaoPlaceholders,
 } from '@/lib/apresentacao-placeholders';
-import { buildPdfHeaderConfig, ErroCabecalhoPdf } from '@/lib/pdf-header';
+import { buildPdfHeaderConfig, ErroCabecalhoPdf, montarCabecalhoPrimeiraPagina } from '@/lib/pdf-header';
 import { mensagemFalhaPdf, validarFalhaPdf } from '@/lib/falha-pdf';
 import type { FalhaPdf } from '@shared/types/pdf.types';
 import {
@@ -591,7 +595,11 @@ export const LaudosPage: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [erroPdf, setErroPdf] = useState<{ mensagem: string; repetir: () => void } | null>(null);
-  const mostrarFalhaPdf = useCallback((valor: unknown, repetir: () => void) => {
+  const mostrarFalhaPdf = useCallback((valor: unknown, repetir: () => void, mensagemSalvamento?: string) => {
+    if (!validarFalhaPdf(valor) && mensagemSalvamento?.trim()) {
+      setErroPdf({ mensagem: mensagemSalvamento, repetir });
+      return;
+    }
     const falha: FalhaPdf = validarFalhaPdf(valor)
       ? valor
       : { codigo: 'FALHA_PDF', etapa: 'impressao', tentarNovamente: true };
@@ -658,6 +666,7 @@ export const LaudosPage: React.FC = () => {
   const rascunhoCampoReservadoRef = useRef('');
   const [erroCampoReservado, setErroCampoReservado] = useState<string | null>(null);
   const campoReservadoSelecionadoRef = useRef<CampoReservadoSelecionado | null>(null);
+  const rascunhoRecuoCampoReservadoRef = useRef<string | null>(null);
 
   const painelLateralAtivo: PainelLateralAtivo = iaSheetOpen
     ? 'ia'
@@ -678,6 +687,7 @@ export const LaudosPage: React.FC = () => {
   const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
   const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
   const [indicePlaceholdersOpen, setIndicePlaceholdersOpen] = useState(false);
+  const [atalhosLaudoAberto, setAtalhosLaudoAberto] = useState(false);
   const [itensIndicePlaceholders, setItensIndicePlaceholders] = useState<ItemIndicePlaceholder[]>([]);
   const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
   const exameToggles = useMemo<ExamToggle[] | undefined>(() => {
@@ -1965,6 +1975,16 @@ export const LaudosPage: React.FC = () => {
     toast.info('Painel de ilustrações movido para janela separada');
   };
 
+  const abrirPainelIlustracoes = () => {
+    setIaSheetOpen(false);
+    if (panelPoppedOut) {
+      window.ipcAPI.ilustracoes.closePanel();
+      setPanelPoppedOut(false);
+    }
+    setIlustracoesPanelOpen(true);
+    setPanelCollapsed(false);
+  };
+
   const handleToggleIlustracoes = () => {
     setIaSheetOpen(false);
     if (panelPoppedOut) {
@@ -2032,9 +2052,7 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 3. Montar HTML completo
-      let fullHtml = cabecalhoPrimeiraPagina
-        ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
-        : '';
+      let fullHtml = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina);
       fullHtml += ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais)) + fechamentoHtml;
 
       // 4. Aplicar placeholders (incluindo relacionamentos)
@@ -2046,7 +2064,9 @@ export const LaudosPage: React.FC = () => {
       });
 
       // 5. Resolver placeholders de exame (B-602, I-801) incluindo armas computados
+      const margensTabelas = await getMargens();
       const htmlResolvido = renumerarTabelasHtml(resolverPlaceholdersExportacao(htmlProcessado, {
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
         repData,
         solicitanteNome,
         tipoExameNome,
@@ -2130,7 +2150,7 @@ export const LaudosPage: React.FC = () => {
 
       let html = ocultarTitulosSecoesNaSaida(reindexarHtmlEstrutural(laudo.conteudo || '<p>&nbsp;</p>'));
       if (cabecalhoPrimeiraPagina) {
-        html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
+        html = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina) + html;
       }
       html += fechamentoHtml;
       html = reindexarFiguras(html);
@@ -2140,7 +2160,9 @@ export const LaudosPage: React.FC = () => {
         tipoExameCodigo,
         placeholdersPersonalizados: placeholders,
       });
+      const margensTabelas = await getMargens();
       html = renumerarTabelasHtml(resolverPlaceholdersExportacao(html, {
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
         repData,
         solicitanteNome,
         tipoExameNome,
@@ -2235,12 +2257,14 @@ export const LaudosPage: React.FC = () => {
       let html = ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais));
 
       if (cabecalhoPrimeiraPagina) {
-        html = `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>${html}`;
+        html = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina) + html;
       }
 
       html += fechamentoHtml;
 
+      const margensTabelas = await getMargens();
       const htmlResolvido = renumerarTabelasHtml(resolverPlaceholdersExportacao(html, {
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
         repData,
         solicitanteNome,
         tipoExameNome,
@@ -2260,7 +2284,7 @@ export const LaudosPage: React.FC = () => {
           toast.success('Documento PDF exportado com sucesso', { id: toastId });
         } else if (result.error !== 'Operação cancelada pelo usuário') {
           toast.dismiss(toastId);
-          mostrarFalhaPdf(result.falhaPdf, () => { void handleExportar('pdf'); });
+          mostrarFalhaPdf(result.falhaPdf, () => { void handleExportar('pdf'); }, result.error);
         } else {
           toast.dismiss(toastId);
         }
@@ -2349,7 +2373,9 @@ export const LaudosPage: React.FC = () => {
         }
       }
 
+      const margensTabelas = await getMargens();
       setMapaPlaceholdersResolvidos(construirMapaPlaceholdersResolvidos({
+        larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
         repData: rRep.data,
         solicitanteNome,
         tipoExameNome: laudo.tipo_exame_nome,
@@ -2467,6 +2493,37 @@ export const LaudosPage: React.FC = () => {
   [assinaturaEstruturalEditores, editorMode]);
 
   const laudoEditandoId = editando?.id;
+  const fontesBuscaLaudo = useMemo(() => {
+    const criarFonte = (html: string, indice: number) => ({
+      id: indice < 0 ? 'laudo-single-editor' : `secao-${indice}`,
+      indice,
+      criarCopia: () => criarCopiaVisualizacaoPlaceholders(html, {
+        modo: modoVisualizacaoPlaceholders,
+        valores: mapaPlaceholdersResolvidos,
+        placeholdersPersonalizados: placeholders,
+        descreverPendente: descreverPlaceholderPendente,
+      }),
+    });
+    return editorMode === 'single' ? [criarFonte(singleEditorHtml, -1)]
+      : secoes.map((secao, indice) => criarFonte(secao.conteudo, indice));
+  }, [editorMode, singleEditorHtml, secoes, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders]);
+  const buscaLaudo = useBuscaTextoLaudo({
+    laudoId: laudoEditandoId,
+    fontes: fontesBuscaLaudo,
+    obterEditor: obterEditorTinyMce,
+    expandirSecao: indice => {
+      if (indice < 0) return;
+      const indices = new Set<number>();
+      let atual = indice;
+      while (atual >= 0 && !indices.has(atual)) {
+        indices.add(atual);
+        const pai = secoes[atual]?.parentId;
+        atual = pai ? secoes.findIndex(secao => secao.id === pai) : -1;
+      }
+      setSecoesColapsadas(atuais => [...indices].every(item => atuais[item] === false) ? atuais
+        : { ...atuais, ...Object.fromEntries([...indices].map(item => [item, false])) });
+    },
+  });
 
   useEffect(() => {
     if (!laudoEditandoId) return;
@@ -2488,6 +2545,7 @@ export const LaudosPage: React.FC = () => {
 
   const solicitarPreenchimentoCampoReservado = useCallback((campo: CampoReservadoSelecionado) => {
     campoReservadoSelecionadoRef.current = campo;
+    rascunhoRecuoCampoReservadoRef.current = null;
     const valorInicial = obterHtmlCampo(campo.elemento);
     rascunhoCampoReservadoRef.current = valorInicial;
     setValorInicialCampoReservado(valorInicial);
@@ -2497,6 +2555,7 @@ export const LaudosPage: React.FC = () => {
 
   const fecharDialogoCampoReservado = useCallback(() => {
     campoReservadoSelecionadoRef.current = null;
+    rascunhoRecuoCampoReservadoRef.current = null;
     setDialogoCampoReservadoAberto(false);
     rascunhoCampoReservadoRef.current = '';
     setValorInicialCampoReservado('');
@@ -2520,6 +2579,10 @@ export const LaudosPage: React.FC = () => {
 
     editor.undoManager.transact(() => {
       preencherCampoReservado(selecionado.elemento, valor);
+      const paragrafo = selecionado.elemento.closest('p');
+      if (paragrafo && rascunhoRecuoCampoReservadoRef.current !== null) {
+        editor.dom.setStyle(paragrafo, 'text-indent', rascunhoRecuoCampoReservadoRef.current);
+      }
     });
     atualizarConteudoDoEditor(editor);
     registrarAlteracao();
@@ -4086,6 +4149,9 @@ export const LaudosPage: React.FC = () => {
 
           </CardHeader>
           <CardContent className="overflow-visible p-0 px-6 pb-6">
+            {buscaLaudo.aberta && <BarraBuscaLaudo termo={buscaLaudo.termo} atual={buscaLaudo.atual}
+              total={buscaLaudo.total} foco={buscaLaudo.foco} onTermoChange={buscaLaudo.setTermo}
+              onNavegar={buscaLaudo.navegar} onFechar={buscaLaudo.fechar} />}
             <PainelLateralRedimensionavel
               tipo={painelLateralAtivo}
               chavePersistencia={painelLateralAtivo === 'ilustracoes'
@@ -4118,6 +4184,7 @@ export const LaudosPage: React.FC = () => {
                 handleToggleIlustracoes()
               }}
               onReindexarSecoes={handleReindexarSecoes}
+              onAbrirAtalhos={() => setAtalhosLaudoAberto(true)}
               onRecolherAutomaticamente={() => setPanelCollapsed(true)}
               conteudoPainel={conteudoPainelLateral}
             >
@@ -4168,6 +4235,8 @@ export const LaudosPage: React.FC = () => {
                         onEstruturaTabelasAlterada={() => { conferirTabelasEditores(); }}
                         onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
                         onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}
+                        onFiguraRealClick={abrirPainelIlustracoes}
+                        onSolicitarBusca={buscaLaudo.abrir}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
                           setIaSheetOpen(false);
@@ -4286,6 +4355,8 @@ export const LaudosPage: React.FC = () => {
                                     condToggles={exameToggles}
                                     onSolicitarExclusaoBlocoCondicional={excluirBlocoCondicional}
                                     onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}
+                                    onFiguraRealClick={abrirPainelIlustracoes}
+                                    onSolicitarBusca={buscaLaudo.abrir}
                                     onDummyFigureClick={(imageId) => {
                                       setFiguraSubstituicaoSolicitada(imageId);
                                       setIaSheetOpen(false);
@@ -4335,6 +4406,7 @@ export const LaudosPage: React.FC = () => {
           </CardContent>
         </Card>
 
+        <AtalhosLaudoDialog aberto={atalhosLaudoAberto} onAbertoChange={setAtalhosLaudoAberto} />
         <IndicePlaceholdersDialog
           open={indicePlaceholdersOpen}
           onOpenChange={setIndicePlaceholdersOpen}
@@ -4344,23 +4416,25 @@ export const LaudosPage: React.FC = () => {
         <Dialog open={dialogoCampoReservadoAberto} onOpenChange={aberto => {
           if (!aberto) fecharDialogoCampoReservado();
         }}>
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent className="flex max-h-[90vh] w-[calc(100%-2rem)] max-w-5xl flex-col overflow-hidden">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Personalizar texto neste laudo</DialogTitle>
               <DialogDescription>
                 O valor será aplicado somente neste laudo e não altera a REP.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-2">
+            <div className="min-h-0 space-y-3 overflow-y-auto">
               <p className="text-sm font-medium">Valor da REP: {(() => {
                 const chave = campoReservadoSelecionadoRef.current?.elemento.getAttribute('data-placeholder')?.slice(2, -2);
                 const valor = chave ? mapaPlaceholdersResolvidos[chave]?.valor : '';
                 return chave ? (valor ? new DOMParser().parseFromString(valor, 'text/html').body.textContent || 'Não preenchido' : 'Não preenchido') : 'Campo sem vínculo com a REP';
               })()}</p>
-              {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorInicialCampoReservado} onChange={html => { rascunhoCampoReservadoRef.current = html; setErroCampoReservado(null); }} />}
+              {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorInicialCampoReservado} elementoOrigem={campoReservadoSelecionadoRef.current?.elemento}
+                onRecuoChange={recuo => { rascunhoRecuoCampoReservadoRef.current = recuo; }}
+                onChange={html => { rascunhoCampoReservadoRef.current = html; setErroCampoReservado(null); }} />}
               {erroCampoReservado && <p className="text-sm text-destructive">{erroCampoReservado}</p>}
             </div>
-            <DialogFooter>
+            <DialogFooter className="shrink-0">
               {campoReservadoSelecionadoRef.current?.elemento.hasAttribute('data-placeholder-personalizado-html') && campoReservadoSelecionadoRef.current.elemento.hasAttribute('data-placeholder') && <Button type="button" variant="secondary" onClick={restaurarValorDaRep}>Restaurar valor da REP</Button>}
               <Button type="button" variant="outline" onClick={fecharDialogoCampoReservado}>Cancelar</Button>
               <Button type="button" onClick={confirmarPreenchimentoCampoReservado}>Aplicar valor</Button>

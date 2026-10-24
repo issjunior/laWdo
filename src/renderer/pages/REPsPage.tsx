@@ -249,7 +249,7 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
         const material = projecaoB602.materialEncaminhado as Record<string, string>[];
         if (material?.length) {
           html += buildRepNumberedTable('MATERIAL ENCAMINHADO',
-            ['Natureza', 'Qtd', 'Tipo', 'Dito do Ofício', 'Nº do Lacre'],
+            ['Natureza', 'Qtd', 'Tipo', 'Dito no Ofício', 'Nº do Lacre'],
             material.map(m => [m.natureza || '', m.quantidade || '', m.tipo || '', m.dito_oficio || '', m.numero_lacre || '']));
         }
 

@@ -25,6 +25,18 @@ const imagemDisponivel = {
 };
 
 describe('SeletorFiguraDialog', () => {
+  it.each([{ imagens: [] }, { imagens: [imagemDisponivel] }])('oferece Buscar REP na substituição com $imagens.length imagens', ({ imagens }) => {
+    const aoBuscar = vi.fn();
+    const aoConfirmar = vi.fn();
+    render(<SeletorFiguraDialog laudoId="laudo-teste" aberto figuraAlvo={figuraOriginal}
+      imagens={imagens} imagemSelecionadaId={null} onAbertoChange={vi.fn()}
+      onSelecionar={vi.fn()} onConfirmar={aoConfirmar} onBuscarGdl={aoBuscar} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Buscar REP$/ }));
+    expect(aoBuscar).toHaveBeenCalledTimes(1);
+    expect(aoConfirmar).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Buscar na REP' })).not.toBeInTheDocument();
+  });
+
   it('oferece prévia e legenda da imagem na inserção, sem confirmar ao cancelar', () => {
     const onConfirmar = vi.fn();
     const onAbertoChange = vi.fn();

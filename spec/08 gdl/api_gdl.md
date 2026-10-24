@@ -50,7 +50,7 @@ O handler `gdl:atualizar-minhas-reps-cache` exige sessão e preferência ativa, 
 
 ## Limite atual do B-601
 
-O cadastro local B-601 usa catálogo próprio conferido na interface do GDL. Esta implementação não acrescenta adaptador de conversão automática de peças B-601 à consulta ou à atualização remota descrita acima. O reconhecimento da natureza B601 pelo catálogo geral não comprova compatibilidade dos dados personalizados. O cadastro, as obrigatoriedades e a preservação do JSON ficam em spec/02 rep/b601.md.
+A consulta/importação individual possui adaptadores ativos para B-601 e B-602 em `gdl-adaptadores.service.ts`. O B-601 usa normalizador e catálogo próprios, preserva dados não confirmados em `extrasGdl` e não reutiliza a conversão B-602. A consulta geral pode revisar/importar esses dados no formulário local; aplicar a revisão não salva automaticamente a REP. O fluxo específico de atualização seletiva de uma REP já salva (`gdl:preparar-atualizacao-rep`/`gdl:aplicar-atualizacao-rep`) continua restrito ao B-602 e rejeita B-601. Não confundir capacidade de importação com capacidade de atualização seletiva. Cadastro, obrigatoriedades, validação e preservação do JSON B-601 ficam em `spec/02 rep/b601.md`.
 
 ## Atualização automática e falhas web
 
@@ -71,3 +71,9 @@ Na consulta individual, `gdl:consultar-rep` verifica número/ano retornados e se
 `AvisosReiteracaoProvider` fica na área autenticada de `App.tsx`, remontado pela identidade do usuário local. Busca somente avisos locais na montagem, foco e evento, valida resposta com Zod e descarta respostas atrasadas por revisão/desmontagem. Evento com reinício limpa avisos antes da busca. Falha ou resposta inválida preserva o último estado aceito, salvo limpeza explícita. O conjunto é indexado por número/ano normalizados; o arquivo separa identidades GDL.
 
 `ReiterandoBadge` mostra REITERANDO com tooltip no Dashboard, seleção de REP GDL, listas/formulários de REP e laudo, prévias PDF e wizard. É indicação visual externa ao conteúdo exportado. O Dashboard usa o booleano do snapshot quando presente e recorre ao contexto quando ausente. Alterações exigem coordenação entre parser, repositório, contrato, handlers, preload, provider e consumidores. Testes existentes cobrem parsing da grade e apresentação no Dashboard; eventos/contexto e precedência persistida não têm cobertura dedicada ponta a ponta.
+
+## Cidade do órgão solicitante
+
+`gdl-balistica-normalizador.service.ts` extrai `DadosSolicitacaoGdl.cidade?` junto do órgão para os adaptadores B-601/B-602. Se o órgão veio da primeira origem, usa a cidade dessa mesma origem; somente quando o órgão vem da raiz usa a cidade da raiz. Sem órgão ou cidade reconhecida, omite o campo. Não combina órgão de uma fonte com cidade de outra e não deriva esse valor do local de ocorrência.
+
+O metadado acompanha `integracaoGdl.dadosSolicitacao` e o schema de reidratação aceita a string opcional, preservando compatibilidade com REPs antigas. A resolução dos quadros de investigação mostra **órgão / cidade** com escape HTML, sem alterar o nome do solicitante persistido. Não há nova consulta remota ao pré-visualizar/exportar. `gdl-b601-normalizador.service.test.ts`, `gdl-b602-normalizador.service.test.ts`, `integracao-gdl-b602.utils.test.ts` e `rep-b602-persistencia.integration.test.ts` protegem extração, contrato e persistência com dados simulados.

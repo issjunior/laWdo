@@ -14,6 +14,13 @@ function apresentacao(cabecalho = true, fechamento = true): ApresentacaoLaudo {
 }
 
 describe('composição do cabeçalho e fechamento', () => {
+  it('normaliza o rótulo de cópias antigas apenas na leitura sem modificar o original', () => {
+    const copia = apresentacao();
+    copia.cabecalho.todasPaginas = '<p>LAUDO nº {{numero_rep}}</p>';
+    const lida = lerApresentacaoLaudo(copia);
+    expect(lida.cabecalho.todasPaginas).toBe('<p>LAUDO Nº {{numero_rep}}</p>');
+    expect(copia.cabecalho.todasPaginas).toBe('<p>LAUDO nº {{numero_rep}}</p>');
+  });
   it.each([
     { perito_nome: 'Nome A', perito_cargo: 'Perito Oficial Criminal', perito_lotacao: 'Unidade A' },
     { perito_nome: 'Nome B', perito_cargo: 'Perita Oficial Criminal', perito_lotacao: 'Unidade B' },

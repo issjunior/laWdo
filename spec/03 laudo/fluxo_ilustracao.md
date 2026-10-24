@@ -8,13 +8,13 @@ O HTML do laudo é a fonte das figuras inseridas. A fila do Painel de Ilustraç�
 |---|---|---|
 | figura inserida | HTML (`figure.laudo-figure`) | editor, preview e exportação |
 | imagem disponível | `imagens_laudo` e arquivo local | `IlustracoesPanel` |
-| imagem arquivada | `disponivel_painel = 0` | backup; fora do painel |
+| imagem arquivada | `disponivel_painel = 0` | fora do painel; backup depende do uso no HTML salvo ou de vínculo de origem |
 
 ## Edição local por ocorrência
 
 O painel e **Substituir figura** abrem `EditorFiguraDialog` para a imagem escolhida. A prévia mostra a imagem orientada inteira; arrastar cria o retângulo de corte, e suas alças permitem mover e redimensionar. A área externa fica escurecida. O corte é limitado à imagem e convertido de percentuais da prévia para pixels da resolução original. Giros de 90°, rotação livre e espelhamento são aplicados em canvas; a rotação livre preenche as áreas vazias com branco e redefine o corte para a imagem inteira. **Selecionar imagem inteira** desfaz só o corte; **Restaurar imagem** limpa os ajustes e usa a base local, sem novo download do GDL.
 
-O resultado é uma nova ocorrência/derivação local: `imagem_origem_id` aponta para a base preservada e `ajustes_json` registra os ajustes. A v40 adiciona essas colunas. O serviço valida ID, vínculo ao mesmo laudo, data URI e JSON antes de persistir; a base não pode ser excluída enquanto houver derivação. Duas figuras que usam a mesma foto podem ter ajustes independentes. A reconciliação do painel considera IDs de ocorrência, e o backup completo inclui arquivos da base e das versões editadas porque ambos permanecem referenciados em `imagens_laudo`. O teste `imagem-editada.integration.test.ts` cobre persistência/restauração local; `editor-figura.test.ts` e `editor-figura.component.test.tsx` cobrem geometria e interação do recorte.
+O resultado é uma nova ocorrência/derivação local: `imagem_origem_id` aponta para a base preservada e `ajustes_json` registra os ajustes. A v40 adiciona essas colunas. O serviço valida ID, vínculo ao mesmo laudo, data URI e JSON antes de persistir; a base não pode ser excluída enquanto houver derivação. Duas figuras que usam a mesma foto podem ter ajustes independentes. A reconciliação do painel considera IDs de ocorrência, e o backup completo parte dos IDs utilizados no HTML salvo e inclui cada cadeia de `imagem_origem_id`, preservando a base e as derivações necessárias. Apenas existir em `imagens_laudo` ou estar arquivada não garante inclusão; imagens não utilizadas permanecem na instalação de origem. O filtro atua somente no snapshot, conforme `spec/14 backup/backup_usuario.md`. O teste `imagem-editada.integration.test.ts` cobre persistência/restauração local; `editor-figura.test.ts` e `editor-figura.component.test.tsx` cobrem geometria e interação do recorte.
 
 ## Painel e legenda assistida
 
@@ -26,7 +26,7 @@ Substituição conserva operação única de undo: atualiza `src`, `data-image-i
 
 ## Dock, janela e GDL
 
-IA e Ilustrações ocupam docks direitos mutuamente exclusivos. O dock de Ilustrações varia de 320 a 720 px e persiste a largura integrada. O trilho, divisor e painel ficam fixos durante a rolagem do documento, limitados à viewport; a lista de imagens mantém rolagem própria com `overscroll` contido. Ao abrir ou redimensionar quando não há espaço para editor (mínimo de 560 px), painel e trilho, o controlador recolhe o dock sem perder a largura salva ou desmontar o editor. As regras compartilhadas de layout ficam em `spec/04 layout/componentes_ui_base.md`.
+IA e Ilustrações ocupam docks direitos mutuamente exclusivos. O dock de Ilustrações varia de 320 a 720 px e persiste a largura integrada. O trilho e painel ficam sticky durante a rolagem do documento, com altura ajustada ao espaço visível da viewport; a lista de imagens mantém rolagem própria com `overscroll` contido. Ao abrir ou redimensionar quando não há espaço para editor (mínimo de 560 px), painel e trilho, o controlador recolhe o dock sem perder a largura salva ou desmontar o editor. As regras compartilhadas de layout ficam em `spec/04 layout/componentes_ui_base.md`.
 
 A janela destacada reutiliza o painel e persiste somente dimensões, limitadas a 90% da área útil; pode coexistir com a janela de IA. O fluxo GDL recebe apenas `laudoId`; o main resolve REP e reobtém ZIP para captura. Thumbnails são temporárias, não persistidas nem usadas como arquivo final. Mudanças em contratos exigem alinhar serviço, handler, `ALLOWED_CHANNELS`, preload, tipos, dock e janela.
 
@@ -51,3 +51,11 @@ A recuperação procura primeiro a descrição do `alt`, sem o prefixo Figura/Fi
 `ResultadoAtualizacaoFiguras` contém `restauradas`, `semDescricao`, `falhasConsulta` e `erro` opcional. Falhas individuais de consulta permitem resultado parcial e aviso. O painel integrado aguarda a Promise; o destacado envia `refreshHtml(true)` e aguarda `resultadoAtualizacao` na sincronização por até 15 segundos. Fechamento da janela rejeita a espera. O protocolo mantém uma espera local e não tem ID de correlação; timeout encerra a espera, não cancela o trabalho no editor.
 
 `figuras-ocorrencia.test.ts`, `ilustracoes-secoes.test.ts`, `seletor-figura-dialog.component.test.tsx` e `layout-editor-laudo.component.test.tsx` cobrem helpers e fluxos simulados; janela destacada e redimensionamento real exigem verificação visual.
+
+## Acesso pelo documento e seleção de fotos
+
+Clicar na imagem de uma figura real abre o dock integrado de Ilustrações, recolhe IA e reintegra o painel destacado, sem substituir a figura. Clicar na imagem de uma figura dummy mantém o pedido específico de substituição. Esses callbacks são fornecidos pelos dois modos de edição do laudo; outros consumidores do TinyMCE não ganham esse comportamento automaticamente.
+
+No seletor em modo **substituir**, **Buscar REP** fica junto de **Carregar arquivo local**, mesmo quando já há imagens na fila. Ao carregar a Lista de Fotos da REP, `GdlImagensRepModal` pré-seleciona os arquivos com `provavelImagem` e sem `status`. A seleção pode ser revista antes da captura; não representa download/persistência automática e não inclui itens com status impeditivo.
+
+`gdl-imagens-rep-modal.component.test.tsx` e `seletor-figura-dialog.component.test.tsx` cobrem seleção inicial e acesso à busca com fila preenchida. `ilustracoes-panel-rolagem.component.test.tsx` e `painel-lateral-redimensionavel.component.test.tsx` verificam a estrutura de rolagem e o trilho com acesso aos atalhos; interação real entre iframe, dock e janela destacada exige smoke manual.

@@ -2,7 +2,7 @@
 
 ## Estado canônico
 
-O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; os modelos ativos são `laudo-padrao-b602` v7 e `laudo-padrao-b601` v1; as versões anteriores permanecem registradas, mas indisponíveis para novos laudos. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
+O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; os modelos ativos são `laudo-padrao-b602` v10 e `laudo-padrao-b601` v2. O catálogo importa somente essas definições atuais, que herdam versões-fonte anteriores. Registros de versões anteriores já instalados permanecem no banco, mas indisponíveis para novos laudos; uma instalação nova não instala cada versão intermediária. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
 
 A serialização canônica e o SHA-256 cobrem os campos funcionais do template. Elementos transitórios do editor — como `data-image-id` e artefatos dummy — são ignorados no checksum para permitir adoção segura de dados legados equivalentes. A validação do catálogo rejeita chave, versão, ordens, referências de pai ou seções duplicadas inválidas antes da persistência.
 
@@ -18,7 +18,7 @@ Após criar ou migrar o banco, `setupDatabase()` sincroniza o catálogo. Cada te
 4. caso contrário instala um novo registro e suas seções;
 5. deixa versões integradas anteriores indisponíveis para novos laudos.
 
-Em desenvolvimento (`app.isPackaged === false`), uma divergência de checksum na mesma chave e versão substitui o conteúdo e as seções do registro integrado local, preservando seu ID físico. Isso permite iterar o catálogo v1 com dados fictícios. Em aplicativo empacotado, a divergência continua sendo falha: o registro local é preservado e o catálogo não o sobrescreve. Uma versão publicada deve ser imutável; alteração posterior usa nova versão e torna a anterior indisponível para novos laudos.
+Em desenvolvimento (`app.isPackaged === false`), uma divergência de checksum na mesma chave e versão substitui o conteúdo e as seções do registro integrado local, preservando seu ID físico. Isso permite iterar o catálogo em desenvolvimento com dados fictícios. Em aplicativo empacotado, a divergência continua sendo falha: o registro local é preservado e o catálogo não o sobrescreve. Uma versão publicada deve ser imutável; alteração posterior usa nova versão e torna a anterior indisponível para novos laudos.
 
 Tipo de exame inativo torna o template indisponível, sem apagá-lo. O último resultado é exposto somente para diagnóstico e aviso na tela de templates.
 
@@ -32,7 +32,7 @@ A edição comum usa `template:salvarCompleto`: o handler valida e sanitiza a fr
 
 ## Consumo pelos laudos
 
-O B-602 v7 herda a estrutura anterior e troca expressões fixas do perito no preâmbulo, na seção de armas e no encerramento por placeholders de cargo, artigo, título, designado/designada, pelo/pela e o qual/a qual. A resolução usa a forma de tratamento do perfil; prosa livre não é reescrita. A resolução de lacres de saída da v2 e as subseções posteriores continuam no modelo. Ausência de lacre permanece visível como `XXX`. A v7 é instalada para novos laudos; o HTML de laudos já criados não é reescrito. `templates-integrados.test.ts` valida a v7 e seus marcadores.
+O B-602 v10 conserva os placeholders de concordância do perito, lacres de saída, seções condicionais e repetição por armas. DOS ESTOJOS usa `b602_total_estojos_extenso`, `b602_estojos_descricao` e `b602_estojos_conclusao`; o resolvedor escolhe singular para uma unidade e plural nos demais totais. Os textos-base vivem no catálogo compartilhado `b602-textos-estojos.catalogo.ts`. A referência normativa usa `Lei nº` e `Instrução Normativa nº`. Ausência de lacre permanece `XXX`; prosa livre não recebe flexão automática. `templates-integrados.test.ts` valida os modelos ativos e seus marcadores, e `exportacao-placeholders-b602.test.ts` verifica os textos derivados.
 
 Na criação, `laudoService` exige que o template exista. Para origem integrada, recusa tipos indisponíveis e catálogo sem seções; assim não aplica o fallback de documento vazio a uma falha de sincronização. Laudos existentes mantêm seu conteúdo próprio e não são modificados pela troca de versão do template.
 
@@ -42,7 +42,7 @@ Cada seção mantém ocultar_titulo e contar_na_numeracao. As migrations 42 e 43
 
 calcularNumeracaoSecoes(), em src/shared/utils/numeracao-secoes.ts, é a fonte comum da sequência para edição, prévias, PDF, DOCX e ODT. Uma seção oculta pode consumir número; se também deixar de contar, a sequência principal avança somente na próxima seção participante. Filhos de um pai que não conta ficam sem prefixo numérico. Importação/exportação de pacotes, clonagem, persistência e reconciliação do laudo conservam as preferências.
 
-O B-602 v7 mantém o texto da v6 e oculta o preâmbulo sem consumir número. Versões anteriores continuam registradas; essa troca não reescreve laudos existentes. As verificações de títulos, numeração e template integrado cobrem a persistência e as exportações.
+O B-602 v10 mantém o preâmbulo oculto sem consumir número. Registros integrados anteriores continuam preservados quando já instalados; a troca de versão não reescreve laudos existentes. As verificações de títulos, numeração e template integrado cobrem a persistência e as exportações.
 
 ## Impacto e verificação
 
@@ -52,6 +52,6 @@ Uma alteração de contrato deve manter alinhados catálogo, serialização/vali
 
 ## Modelo B-601
 
-`b601/laudo-padrao-b601.v1.ts`, registrado em `catalogo.ts`, distribui nove seções: preâmbulo, objetivo, material apresentado, exame com subseções de projéteis, estojos e demais materiais, considerações finais e encerramento. O preâmbulo fica oculto e não conta na numeração. Os grupos usam `b601_agrupados:105`, `b601_agrupados:101` e `b601_pecas`; o modo genérico exclui tipos já atendidos pelos agrupamentos. O modelo contém placeholders de investigação, material encaminhado, tratamento do perito e lacres, além de figuras substituíveis e complementos após as descrições.
+`b601/laudo-padrao-b601.v2.ts`, registrado em `catalogo.ts` e derivado da definição v1, distribui nove seções: preâmbulo, objetivo, material apresentado, exame com subseções de projéteis, estojos e demais materiais, considerações finais e encerramento. O preâmbulo fica oculto e não conta na numeração. Os grupos usam `b601_agrupados:105`, `b601_agrupados:101` e `b601_pecas`; o modo genérico exclui tipos já atendidos pelos agrupamentos. O modelo contém placeholders de investigação, material encaminhado, tratamento do perito e lacres, além de figuras substituíveis e complementos após as descrições.
 
-Aplicam-se ao B-601 as mesmas regras de sincronização, disponibilidade e clonagem dos demais integrados. A instalação do catálogo não reescreve HTML de laudos existentes nem templates personalizados. Expansão, seletores por unidade, preservação de complementos e limites da assinatura estão em `spec/03 laudo/b601.md`.
+O B-601 v2 usa `Lei nº` nas considerações finais e `Instrução Normativa nº` no encerramento, conservando a estrutura, placeholders e complementos da definição-base. Aplicam-se ao B-601 as mesmas regras de sincronização, disponibilidade e clonagem dos demais integrados. A instalação do catálogo não reescreve HTML de laudos existentes nem templates personalizados. Expansão, seletores por unidade, preservação de complementos e limites da assinatura estão em `spec/03 laudo/b601.md`.

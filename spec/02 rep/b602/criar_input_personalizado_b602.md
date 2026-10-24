@@ -44,3 +44,9 @@ A rede GDL real e a validação em produção não são automatizadas. Fixtures 
 ## Reaproveitamento com B-601
 
 O formulário de peças e os dados de investigação usam os componentes compartilhados pecas-balistica.tsx e dados-investigacao.tsx. Tipos e opções comuns ficam em pecas-balistica.types.ts e balistica-opcoes.catalogo.ts; a coleção de marcas usa marcas-armas.catalogo.ts com vinculação por exame. O catálogo B-602 preserva os códigos, aliases, opções e regras próprios; o reaproveitamento não altera o contrato persistido b602.pecas nem instala o catálogo de 48 tipos do B-601 no B-602.
+
+## Metadados e textos derivados de estojos
+
+`DadosSolicitacaoGdl` admite `cidade?: string`, persistida nos metadados de integração e validada na reidratação. Ela identifica a cidade do órgão solicitante e não substitui `b602.local.cidade` nem cria campo obrigatório no formulário. Valores legados sem a propriedade continuam válidos. Extração e consumidores são descritos em `spec/08 gdl/api_gdl.md`.
+
+O menu e o registro de placeholders oferecem `b602_total_estojos_extenso`, `b602_estojos_descricao` e `b602_estojos_conclusao` como valores calculados. Eles vêm das quantidades da projeção de estojos e do catálogo textual compartilhado, sem duplicar dados em `b602.pecas` ou acrescentar inputs técnicos. O template integrado B-602 v10 os consome; modelos e laudos anteriores não são reescritos pela troca do catálogo. Concordância, ausência e exportação ficam em `spec/03 laudo/exportar_laudo.md`.

@@ -80,7 +80,7 @@ function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDes
         : ['Tipo', 'Constituição e formato'].includes(caracteristica)
           ? `<span data-b601-campo-projetil="${caracteristica === 'Tipo' ? 'tipo' : 'constituicao_formato'}" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${String(inicio + indice + 1).padStart(2, '0')}">${caracteristica === 'Tipo' && tiposItem.get(item.id) ? escaparDescricaoB601(tiposItem.get(item.id) || '') : reservarManual(caracteristica, `PQ${String(inicio + indice + 1).padStart(2, '0')}`)}</span>`
         : reservarManual(caracteristica, `PQ${String(inicio + indice + 1).padStart(2, '0')}`))).join('')}</tr>`).join('')
-      tabelas.push(`<table border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="${lote.length + 1}" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS PROJÉTEIS${inicio ? ' — continuação' : ''}</th></tr><tr>${cabecalho}</tr></thead><tbody>${linhas}</tbody></table>`)
+      tabelas.push(`<table data-tabela-laudo="balistica" border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="${lote.length + 1}" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS PROJÉTEIS${inicio ? ' — continuação' : ''}</th></tr><tr>${cabecalho}</tr></thead><tbody>${linhas}</tbody></table>`)
     }
   } else {
     const titulos = ['ID', 'Marca', 'Procedência', 'Calibre Nominal', 'Composição do Estojo', 'Espoleta', 'Observações']
@@ -88,7 +88,7 @@ function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDes
       const identificador = `Estojo ${String(indice + 1).padStart(2, '0')}`
       return `<tr>${celula(String(indice + 1).padStart(2, '0'))}${celula(reservarManual('Marca', identificador))}${celula(escaparDescricaoB601(item.origem) || reservarOrigem(item.item))}${titulos.slice(3).map(titulo => celula(reservarManual(titulo, identificador))).join('')}</tr>`
     }).join('')
-    tabelas.push(`<table border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="7" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS ESTOJOS</th></tr><tr>${titulos.map(titulo => celula(titulo, true)).join('')}</tr></thead><tbody>${linhas}</tbody></table>`)
+    tabelas.push(`<table data-tabela-laudo="balistica" border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="7" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS ESTOJOS</th></tr><tr>${titulos.map(titulo => celula(titulo, true)).join('')}</tr></thead><tbody>${linhas}</tbody></table>`)
   }
   const legenda = projetil ? '' : '<p>LEGENDA: NTA = Non Toxic Ammunation.</p>'
   return `<div data-b601-grupo="${tipo}" data-repeat-owner="${escaparDescricaoB601(dono)}" data-b601-assinatura="${escaparDescricaoB601(JSON.stringify(itens))}"><p style="text-indent: 35.43pt;">${introducao}</p>${tabelas.join('\n')}${legenda}</div>`

@@ -38,7 +38,7 @@ afterAll(async () => {
 });
 
 describe('cache da listagem GDL', () => {
-  it('grava somente a lista completa e reutiliza o resultado por dez minutos', async () => {
+  it('grava somente a lista completa e reutiliza o resultado por cinco minutos', async () => {
     const primeira = await atualizarMinhasRepsEmCache('usuario-a', false);
     expect(primeira.reps[0].naturezaExameComCodigo).toBe('B601 - EXAME DE CONSTATAÇÃO');
     expect(await obterMinhasRepsEmCache('usuario-a')).toEqual(primeira);
@@ -48,15 +48,15 @@ describe('cache da listagem GDL', () => {
     expect(simulacao.listar).toHaveBeenCalledTimes(2);
   });
 
-  it('reconsulta ao completar dez minutos desde a última atualização', async () => {
+  it('reconsulta ao completar cinco minutos desde a última atualização', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'));
       await atualizarMinhasRepsEmCache('usuario-prazo', false);
-      vi.setSystemTime(new Date('2026-10-01T12:09:59.000Z'));
+      vi.setSystemTime(new Date('2026-10-01T12:04:59.000Z'));
       await atualizarMinhasRepsEmCache('usuario-prazo', false);
       expect(simulacao.listar).toHaveBeenCalledTimes(1);
-      vi.setSystemTime(new Date('2026-10-01T12:10:00.000Z'));
+      vi.setSystemTime(new Date('2026-10-01T12:05:00.000Z'));
       await atualizarMinhasRepsEmCache('usuario-prazo', false);
       expect(simulacao.listar).toHaveBeenCalledTimes(2);
     } finally {

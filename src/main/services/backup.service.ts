@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { DomUtils, parseDocument } from 'htmlparser2';
 import { closeDatabase, criarBackupConsistente, executeQuery } from '../database/sqlite.js';
 import { CURRENT_SCHEMA_VERSION, getSchemaVersion } from '../database/index.js';
 import { criarArquivoBackup, type EntradaBackup, type ManifestoBackup } from './backup-arquivo.service.js';
@@ -30,6 +31,57 @@ interface CredencialLocal {
 interface SegredoPortatil {
   chave: string;
   valor: string;
+}
+
+interface ImagemBackup {
+  id: string;
+  laudo_id: string;
+  caminho_relativo: string;
+  imagem_origem_id: string | null;
+}
+
+async function filtrarImagensDoSnapshot(conexao: Awaited<ReturnType<typeof abrirBancoBackup>>): Promise<string[]> {
+  const laudos = await consultarBackup<{ id: string; conteudo: string }>(conexao, 'SELECT id, conteudo FROM laudos');
+  const imagens = await consultarBackup<ImagemBackup>(conexao,
+    'SELECT id, laudo_id, caminho_relativo, imagem_origem_id FROM imagens_laudo');
+  const porId = new Map(imagens.map(imagem => [imagem.id, imagem]));
+  const preservadas = new Set<string>();
+  for (const laudo of laudos) {
+    const documento = parseDocument(laudo.conteudo);
+    const exemplos = DomUtils.findAll(elemento => elemento.attribs['data-dummy'] === 'true', documento.children);
+    for (const exemplo of exemplos) DomUtils.removeElement(exemplo);
+    const referencias = DomUtils.findAll(elemento => 'data-image-id' in elemento.attribs, documento.children);
+    for (const referencia of referencias) {
+      let id: string | null = referencia.attribs['data-image-id'].trim();
+      const cadeia = new Set<string>();
+      while (id !== null) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error(`Referência de imagem inválida no laudo ${laudo.id}.`);
+        const imagem = porId.get(id);
+        if (!imagem || imagem.laudo_id !== laudo.id) {
+          throw new Error(`Imagem ${id} ausente ou vinculada a outro laudo (laudo ${laudo.id}).`);
+        }
+        if (cadeia.has(id)) throw new Error(`Ciclo nas imagens de origem do laudo ${laudo.id}.`);
+        if (preservadas.has(id)) break;
+        cadeia.add(id);
+        id = imagem.imagem_origem_id;
+      }
+      for (const imagemId of cadeia) preservadas.add(imagemId);
+    }
+  }
+  // A poda afeta apenas a cópia; o banco ativo e a fila de ilustrações permanecem intactos.
+  await executarBackup(conexao, 'BEGIN TRANSACTION');
+  try {
+    for (const imagem of imagens) {
+      if (!preservadas.has(imagem.id)) await executarBackup(conexao, 'DELETE FROM imagens_laudo WHERE id = ?', [imagem.id]);
+    }
+    await verificarBancoBackup(conexao);
+    await executarBackup(conexao, 'COMMIT');
+  } catch (erro) {
+    await executarBackup(conexao, 'ROLLBACK');
+    throw erro;
+  }
+  return [...new Set(imagens.filter(imagem => preservadas.has(imagem.id))
+    .map(imagem => imagem.caminho_relativo.replace(/\\/g, '/')))];
 }
 
 interface MarcadorRestauracao {
@@ -61,8 +113,7 @@ async function prepararBancoCompleto(diretorio: string): Promise<{ banco: string
     const usuarios = await consultarBackup<UsuarioOrigem>(conexao, 'SELECT id, foto_url FROM users');
     if (usuarios.length !== 1) throw new Error('O backup requer exatamente um usuário local.');
     usuario = usuarios[0];
-    caminhosImagens = (await consultarBackup<{ caminho_relativo: string }>(conexao,
-      'SELECT DISTINCT caminho_relativo FROM imagens_laudo')).map(item => item.caminho_relativo);
+    caminhosImagens = await filtrarImagensDoSnapshot(conexao);
     await executarBackup(conexao, 'UPDATE users SET username = ?, email = ?, senha_hash = ? WHERE id = ?',
       [`backup-${usuario.id}`, `backup-${usuario.id}@invalid.local`, randomUUID(), usuario.id]);
     for (const chave of CHAVES_SECRETAS) await executarBackup(conexao, 'UPDATE configuracoes SET valor = NULL WHERE chave = ?', [chave]);
@@ -72,7 +123,13 @@ async function prepararBancoCompleto(diretorio: string): Promise<{ banco: string
   const entradas: EntradaBackup[] = [{ nome: 'laudopericial.db', caminho: banco }];
   for (const caminhoImagem of caminhosImagens) {
     const absoluto = caminhoRelativoSeguro(caminhoImagem.replace(/\\/g, '/'), DIRETORIO_IMAGENS);
-    if (!(await stat(absoluto)).isFile()) throw new Error('Imagem de laudo ausente.');
+    const arquivo = await stat(absoluto).catch((erro: unknown) => {
+      if (erro && typeof erro === 'object' && 'code' in erro && erro.code === 'ENOENT') {
+        throw new Error(`Imagem necessária ao backup ausente: ${caminhoImagem}.`);
+      }
+      throw erro;
+    });
+    if (!arquivo.isFile()) throw new Error(`Imagem necessária ao backup inválida: ${caminhoImagem}.`);
     entradas.push({ nome: caminhoImagem.replace(/\\/g, '/'), caminho: absoluto });
   }
   if (usuario.foto_url) {

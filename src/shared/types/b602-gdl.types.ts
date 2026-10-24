@@ -34,6 +34,7 @@ export interface MetadadosIntegracaoGdl {
 
 export interface DadosSolicitacaoGdl {
   orgao: string
+  cidade?: string
   responsavel: string
   autoridade: string
   origensDisponiveis: ReferenciaOrigemGdl[]

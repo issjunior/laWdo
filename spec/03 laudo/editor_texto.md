@@ -10,7 +10,7 @@ Antes de montar, `removerInstanciaTinyMceAnterior()` remove instâncias TinyMCE 
 
 ## Configuração textual e visual
 
-A toolbar usa `wrap` e agrupa histórico, formatação, fonte/cores, alinhamento/listas, recuos/entrelinha, inserção e revisão. `autoresize` só entra quando `alturaAutomatica` está ativa. O menu de parágrafo aplica recuo de primeira linha apenas em `p`, com 1 cm, 1,25 cm, 1,5 cm ou remoção; a alteração ocorre em transação de undo e não alcança títulos, listas ou células.
+A toolbar usa `wrap` e agrupa histórico, formatação, fonte/cores, alinhamento/listas, recuos/entrelinha, inserção e revisão. `autoresize` só entra quando `alturaAutomatica` está ativa. O menu de parágrafo aplica recuo de primeira linha apenas em `p`, com 1 cm, 1,25 cm, 1,5 cm ou remoção; a alteração ocorre em transação de undo. O alvo é o parágrafo selecionado; títulos, itens de lista e células não são alvos diretos. Parágrafos elegíveis dentro de contêineres continuam sujeitos às proteções descritas abaixo.
 
 `pagebreak` grava o marcador canônico `data-quebra-pagina="true"`; o comentário legado `<!-- pagebreak -->` continua aceito pela normalização de exportação. A skin observa o tema sem remontar o editor. Em tela cheia, `repNumero` insere identificação fora do conteúdo editável; ela não integra o HTML salvo.
 
@@ -48,7 +48,7 @@ Em laudos com callback de inserção, a toolbar troca o comando genérico de ima
 
 editor-formatacao.ts concentra os formatos e comandos comuns. O corpo usa Arial/Helvetica/sans-serif, 14 px, com cor padrão adaptada ao tema. RemoveFormat aplica texto padrão e limpa estilos de texto selecionado e espaçamento dos blocos, mantendo conteúdo protegido de figuras, legendas, placeholders, campos reservados e controles transitórios. A seleção parcial não deve limpar texto fora do intervalo; sem seleção, a limpeza atua no bloco atual e restaura a posição do cursor. A operação participa de uma única transação de undo.
 
-O recuo de primeira linha atua somente em parágrafos selecionados não protegidos. A indicação do menu compara medidas equivalentes em pt, px, cm, mm e in; valores mistos não selecionam uma opção uniforme. O listener NodeChange é removido no descarte do menu. editor-formatacao.test.ts exercita o TinyMCE real no ambiente DOM simulado, com declarações de módulos em tinymce-recursos.d.ts; seleção e aparência no Electron continuam exigindo smoke manual.
+O recuo de primeira linha atua em parágrafos selecionados e nos parágrafos descendentes de um `.cond-bloco[data-cond-bloco]` selecionado. O bloqueio `contenteditable="false"` do próprio condicional permite esse comando de formatação; outros ancestrais não editáveis, figuras, legendas, placeholders, campos reservados, controles e blocos suprimidos continuam excluídos. Isso não libera edição do texto protegido. A indicação do menu compara medidas equivalentes em pt, px, cm, mm e in; valores mistos não selecionam uma opção uniforme. O listener NodeChange é removido no descarte do menu. editor-formatacao.test.ts exercita o TinyMCE real no ambiente DOM simulado, com declarações de módulos em tinymce-recursos.d.ts; seleção e aparência no Electron continuam exigindo smoke manual.
 
 ## Sincronização agrupada e custo de edição
 
@@ -59,3 +59,19 @@ Nos laudos, os dois modos ativam a prop opcional `agruparAlteracoes` com `initia
 A comparação reaproveita o resultado quando os campos das seções não mudaram. A normalização reutiliza o DOM já analisado ao limpar a apresentação transitória de placeholders; a numeração de figuras observa mudanças estruturais, sem varrer o documento a cada digitação. `instrumentarLeiturasEditorLaudo()` mede serialização de HTML e criação de níveis de undo, restaurando o wrapper ao remover o editor. As métricas incluem duração, tamanho e modo, sem texto do laudo.
 
 `sincronizacao-editor-laudo.test.ts` cobre agrupamento, composição, leitura imediata, descarte e edição durante salvamento; `desempenho-editor-laudo.test.ts` cobre os atalhos de processamento. A suíte manual com Electron está em [Testes de carga do editor](../13%20diagnostico/testes_carga_editor.md).
+
+## Busca no laudo e atalhos
+
+Em `LaudosPage.tsx`, Ctrl+F (ou Meta+F) abre `BarraBuscaLaudo` acima do editor, inclusive com foco dentro do iframe. O comando não é capturado quando há diálogo ou alerta modal aberto. Enter/Shift+Enter no campo percorrem resultados em ciclo; Esc fecha a busca. O botão **Atalhos do laudo** no trilho abre `AtalhosLaudoDialog`, que descreve os contextos de busca, salvamento e edição e restaura o foco de origem ao fechar. Localizar/substituir do TinyMCE continua disponível na toolbar e atua no editor em foco.
+
+`useBuscaTextoLaudo.ts` pesquisa todos os editores/seções do laudo atual. Lê o DOM quando montado e, para seções desmontadas, usa `criarCopiaVisualizacaoPlaceholders()` sobre o HTML em estado, com o modo de visualização e mapa de valores atuais. Assim, procura o texto exibido, incluindo valores resolvidos e personalizações, ou as chaves quando esse modo está ativo. Não pesquisa cabeçalhos/fechamento externos ao corpo editável. Navegar expande a seção e seus ancestrais e espera sua montagem por até 30 tentativas de 50 ms; fechar, trocar de laudo ou navegar novamente invalida a tentativa anterior.
+
+`busca-texto-laudo.ts` ignora controles transitórios, scripts, estilos e elementos explicitamente ocultos. Normaliza caixa em pt-BR e espaços, preservando acentos; encontra texto dividido por marcação inline, mas não une parágrafos, células ou outros blocos distintos. Retorna ocorrências sem sobreposição. O destaque usa CSS Highlights, com seleção nativa como fallback, sem inserir marcação no HTML. A rolagem centraliza o resultado nos contêineres do iframe e da página, descontando controles fixos/sticky.
+
+Enquanto aberta, a busca observa mutações e eventos de edição e recalcula após 200 ms de pausa; o custo acompanha o texto completo das fontes. Ao fechar, remove observadores, listeners e destaque. `busca-texto-laudo.test.ts`, `busca-texto-laudo-rolagem.test.ts` e `use-busca-texto-laudo.test.tsx` cobrem normalização, fontes desmontadas, navegação, cancelamento e rolagem; geometria e foco reais continuam sujeitos a smoke no Electron.
+
+## Personalização com tipografia e recuo
+
+`tipografia-editor-laudo.ts` centraliza Arial/Helvetica/sans-serif, 14 px e entrelinha 1,6. `EditorCampoLaudo` captura na abertura a fonte, o tamanho e a entrelinha computados da ocorrência e o recuo do parágrafo ancestral. O diálogo tem editor de 320 px, largura máxima de 5xl e conteúdo rolável, com cabeçalho e ações fixos. O menu Parágrafo usa `recuo-editor-laudo.ts`, também consumido pelo editor principal.
+
+O recuo escolhido no diálogo fica em rascunho separado do HTML inline e só é habilitado quando a ocorrência pertence a um `p`. **Aplicar valor** personaliza o campo e altera `text-indent` do parágrafo original na mesma transação de undo; **Cancelar** descarta ambos. Não ampliar a lista de tags/estilos de `normalizarHtmlCampo()` para transportar esse recuo. `editor-campo-laudo.component.test.tsx` cobre tipografia herdada, valor inicial estável e comunicação do recuo; `editor-formatacao.test.ts` cobre parágrafos de condicionais e as exclusões de proteção.

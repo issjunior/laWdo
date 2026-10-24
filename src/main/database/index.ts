@@ -1,4 +1,5 @@
 import { capturarApresentacaoLaudo } from '../services/apresentacao-laudo.service.js';
+import { CHAVE_MARGENS_PDF, MARGENS_PADRAO_PDF } from '../../shared/configuracoes/margens-pdf.js';
 import { CABECALHO_LAUDO_PADRAO, FECHAMENTO_LAUDO_PADRAO, CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO } from '../../shared/configuracoes/apresentacao-laudo.js';
 import { getLogger } from '../utils/logger.js';
 import { normalizarNomeTipoExame } from '../utils/nome-tipo-exame.js';
@@ -28,7 +29,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 45;
+export const CURRENT_SCHEMA_VERSION = 46;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -2490,6 +2491,16 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       }
     });
     log.info('Migration v45: padrões de cabeçalho e fechamento aplicados; apresentações dos laudos preservadas.');
+  }
+
+  if (fromVersion < 46) {
+    await executeNonQuery(
+      `INSERT INTO configuracoes (chave, valor, tipo, descricao) VALUES (?, ?, 'json', ?)
+       ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, tipo = excluded.tipo,
+         descricao = excluded.descricao, updated_at = CURRENT_TIMESTAMP`,
+      [CHAVE_MARGENS_PDF, JSON.stringify(MARGENS_PADRAO_PDF), 'Margens padrão para assinatura no GDL'],
+    );
+    log.info('Migration v46: margens padrão para assinatura no GDL aplicadas.');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);

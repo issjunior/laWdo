@@ -1,3 +1,4 @@
+import { notificarListaGdlAtualizada } from './gdl-agendamento-eventos.service.js';
 import { obterListaRepositorioGdl, registrarGradeGdl } from './gdl-repositorio.service.js';
 import { identificarNaturezaExame } from '../../shared/gdl/natureza-exame.js';
 import { createHash } from 'node:crypto';
@@ -51,12 +52,13 @@ async function lerSnapshot(arquivo: string): Promise<SnapshotMinhasRepsGdl | nul
 }
 
 
-async function consultarTodas(versao: number): Promise<SnapshotMinhasRepsGdl> {
+async function consultarTodas(versao: number, validar: () => Promise<void>): Promise<SnapshotMinhasRepsGdl> {
   const reps: MinhaRepGdl[] = [];
   const paginasVistas = new Set<string>();
   let listagemId: string | null = null;
   for (let pagina = 1; pagina <= 500; pagina += 1) {
     await exigirListagemRepsGdlHabilitada(versao);
+    await validar();
     const resposta = await gdlService.listarMinhasReps(pagina);
     await exigirListagemRepsGdlHabilitada(versao);
     if (resposta.paginaAtual !== pagina || (listagemId && resposta.listagemId !== listagemId)) {
@@ -84,7 +86,7 @@ export async function obterMinhasRepsEmCache(usuarioId: string): Promise<Snapsho
   return anterior ? obterListaRepositorioGdl(usuarioId, identidadeGdl) : null;
 }
 
-export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: boolean): Promise<SnapshotMinhasRepsGdl> {
+export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: boolean, validar: () => Promise<void> = async () => undefined): Promise<SnapshotMinhasRepsGdl> {
   await exigirListagemRepsGdlHabilitada();
   const versao = obterVersaoPreferenciaListagem();
   const { chave, identidadeGdl } = await contexto(usuarioId);
@@ -98,14 +100,17 @@ export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: bool
     }
     const proxima = fila.then(async () => {
       await exigirListagemRepsGdlHabilitada(versao);
-      const snapshot = await consultarTodas(versao);
+      const snapshot = await consultarTodas(versao, validar);
+      await validar();
       if ((await contexto(usuarioId)).chave !== chave) throw new Error('A configuração do GDL mudou durante a consulta.');
       await exigirListagemRepsGdlHabilitada(versao);
       await registrarGradeGdl(usuarioId, identidadeGdl, snapshot, async () => {
+        await validar();
         await exigirListagemRepsGdlHabilitada(versao);
         if ((await contexto(usuarioId)).chave !== chave) throw new Error('A configuração do GDL mudou durante a consulta.');
       });
       await exigirListagemRepsGdlHabilitada(versao);
+      notificarListaGdlAtualizada(usuarioId, identidadeGdl);
       return (await obterListaRepositorioGdl(usuarioId, identidadeGdl)) ?? snapshot;
     });
     fila = proxima.catch(() => undefined);

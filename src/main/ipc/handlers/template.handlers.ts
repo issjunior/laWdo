@@ -7,12 +7,9 @@ import type { SalvarTemplateCompletoInput, SecaoCompletaTemplateInput, RespostaS
 import { exportarPacoteTemplate, importarPacoteTemplate, lerPreviaPacoteTemplate } from '../../services/template-pacote.service.js';
 import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincronizar-templates-integrados.js';
 import { ErroGeracaoPdf, gerarPdfPreparado } from '../../services/pdf-prontidao.service.js';
+import { criarOpcoesPdf } from '../../services/pdf-layout.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from '../../services/pdf-tabelas.js';
 import { sanitizarHtmlImportacao } from '../../services/importacao/sanitizacao.js';
-
-const CM_TO_INCHES = 1 / 2.54;
-const MARGENS_PADRAO_PDF = { top: 2.5, right: 2, bottom: 2.5, left: 3 };
-const MARGEM_SUPERIOR_MINIMA_CABECALHO_CM = 2.5;
 
 const mensagemErro = (error: unknown): string =>
   error instanceof Error ? error.message : 'Erro desconhecido';
@@ -312,14 +309,7 @@ export const registerTemplateHandlers = (): void => {
       const titulo = typeof opts.titulo === 'string' && opts.titulo.trim()
         ? escaparTextoHtml(opts.titulo.trim())
         : 'Pré-visualização do Laudo';
-      const margensBase = margins || MARGENS_PADRAO_PDF;
-      const margensEfetivas = {
-        ...margensBase,
-        top: headerTemplate ? Math.max(margensBase.top, MARGEM_SUPERIOR_MINIMA_CABECALHO_CM) : margensBase.top,
-      };
       const bodyPadding = '0 0 12px 0';
-      const leftPad = `${margensEfetivas.left}cm`;
-      const rightPad = `${margensEfetivas.right}cm`;
 
       const docHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -360,49 +350,7 @@ export const registerTemplateHandlers = (): void => {
 <body>${html}</body>
 </html>`;
 
-      const pdfMargins = {
-        top: margensEfetivas.top * CM_TO_INCHES,
-        right: margensEfetivas.right * CM_TO_INCHES,
-        bottom: margensEfetivas.bottom * CM_TO_INCHES,
-        left: margensEfetivas.left * CM_TO_INCHES,
-      };
-
-      const printOptions: Electron.PrintToPDFOptions = {
-        printBackground: true,
-        preferCSSPageSize: true,
-        margins: pdfMargins,
-      };
-
-      if (headerTemplate) {
-        const alignMatch = headerTemplate.match(/^\{\{ALIGN:([^}]+)\}\}/);
-        const align = alignMatch ? alignMatch[1] : 'flex-start';
-        const cleanTemplate = headerTemplate.replace(/^\{\{ALIGN:[^}]+\}\}/, '');
-        const textAlign = align === 'flex-end' ? 'right' : align === 'center' ? 'center' : 'left';
-
-        printOptions.displayHeaderFooter = true;
-        printOptions.headerTemplate = `<style>
-  .header-container {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-    text-align: ${textAlign};
-    padding-left: ${leftPad};
-    padding-right: ${rightPad};
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
-    line-height: 1.1;
-    color: #1a1a1a;
-  }
-  .header-container p, .header-container div {
-    margin: 0;
-    padding: 0;
-    line-height: 1.1;
-  }
-</style>
-<div class="header-container">${cleanTemplate}</div>`;
-        printOptions.footerTemplate = '<html><head></head><body></body></html>';
-      }
+      const printOptions = criarOpcoesPdf(margins, headerTemplate);
 
       const buffer = await gerarPdfPreparado(docHtml, printOptions, headerTemplate);
 

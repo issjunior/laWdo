@@ -61,7 +61,7 @@ import {
   validarConfiguracaoSecaoTemplate,
 } from '@/components/template/secao-configuracao-template.utils';
 import { getMargens } from '@/lib/margens';
-import { buildPdfHeaderConfig } from '@/lib/pdf-header';
+import { buildPdfHeaderConfig, montarCabecalhoPrimeiraPagina } from '@/lib/pdf-header';
 import { limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
 
 interface TemplateItem {
@@ -1182,9 +1182,7 @@ export const TemplatesPage: React.FC = () => {
       })
       .join('\n');
 
-    let fullHtml = cabecalhoPrimeiraPagina
-      ? `<div class="cabecalho" style="padding-bottom:16px;margin-bottom:32px;">${cabecalhoPrimeiraPagina}</div>`
-      : '';
+    let fullHtml = montarCabecalhoPrimeiraPagina(cabecalhoPrimeiraPagina);
     fullHtml += (secoesHtml || '<p style="color:#999;">Nenhuma seção definida.</p>') + fechamentoHtml;
 
     let peritoNome = '';

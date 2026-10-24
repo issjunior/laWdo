@@ -274,6 +274,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 
 ### Processo de trabalho
 
+- **Ferramentas permanentes**: manter em `scripts/`, versionadas e incluídas nas validações aplicáveis. Reservar `tmp/` para scripts de conferência e artefatos locais descartáveis; essa pasta é ignorada pelo Git e pelo ESLint. Se um script temporário passar a ser necessário regularmente, promovê-lo para `scripts/`, documentar seu uso e adequá-lo às regras do projeto antes de incorporá-lo ao fluxo de desenvolvimento.
 - **Em caso de dúvida material** — esclarecer com o usuário quando uma decisão não puder ser tomada com segurança a partir do contexto e do código disponível.
 
 ---

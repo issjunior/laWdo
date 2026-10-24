@@ -1,4 +1,5 @@
 import { observarConsultaGdl } from '../../services/gdl-diagnostico.service.js';
+import { obterVersaoContextoGdl } from '../../services/gdl-agendamento-eventos.service.js';
 import { obterAvisosRepositorioGdl, registrarConsultaRepositorioGdl } from '../../services/gdl-repositorio.service.js';
 import { identificarRepGdl, completarConsultaRepGdl, obterConsultaRepConcluida, converterConsultaRepGdl, descartarConsultaRepGdl } from '../../services/gdl-consulta-local.service.js';
 import { clipboard, ipcMain, type WebContents } from 'electron';
@@ -111,7 +112,14 @@ export const registerGdlHandlers = (): void => {
     const inicio = Date.now();
     try {
       if (typeof forcar !== 'boolean') throw new Error('Opção de atualização inválida.');
-      return { success: true, data: await atualizarMinhasRepsEmCache(authSessaoService.exigir(event.sender.id), forcar) };
+      const usuarioId = authSessaoService.exigir(event.sender.id);
+      const versao = obterVersaoContextoGdl();
+      const validar = async () => {
+        if (usuarioId !== authSessaoService.exigir(event.sender.id) || versao !== obterVersaoContextoGdl()) {
+          throw new Error('A sessão ou configuração GDL mudou.');
+        }
+      };
+      return { success: true, data: await atualizarMinhasRepsEmCache(usuarioId, forcar, validar) };
     } catch (erro: unknown) {
       const falha = classificarFalhaListaRepsGdl(erro);
       const referencia = randomUUID();

@@ -1,3 +1,5 @@
+import { ajustarTabelasBalistica } from './tabelas-balistica-layout';
+
 export function normalizarApresentacaoTabelas(raiz: ParentNode): void {
   raiz.querySelectorAll<HTMLTableElement>('table:has([data-placeholder-celula-fixa]), [data-placeholder-tabela-personalizada] table, [data-placeholder-preview-tabela] table, [data-b601-grupo] table').forEach(tabela => {
     tabela.style.fontFamily = 'Arial, Helvetica, sans-serif';
@@ -5,6 +7,7 @@ export function normalizarApresentacaoTabelas(raiz: ParentNode): void {
   raiz.querySelectorAll<HTMLElement>('[data-b601-grupo]').forEach(grupo => {
     grupo.querySelectorAll<HTMLTableElement>('table').forEach(tabela => {
       tabela.style.fontSize = '12px';
+      tabela.setAttribute('data-tabela-laudo', 'balistica');
       tabela.querySelectorAll<HTMLElement>('th, td').forEach(celula => {
         celula.style.textAlign = 'center';
         celula.style.verticalAlign = 'middle';
@@ -32,4 +35,5 @@ export function normalizarApresentacaoTabelas(raiz: ParentNode): void {
       }
     });
   });
+  ajustarTabelasBalistica(raiz);
 }

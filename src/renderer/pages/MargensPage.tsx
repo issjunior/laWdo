@@ -133,6 +133,9 @@ export const MargensPage: React.FC = () => {
           <p className="text-muted-foreground">
             Configure as margens aplicadas na geração de laudos em PDF
           </p>
+          <p className="text-sm text-muted-foreground">
+            Padrão para assinatura no GDL: superior 3,5 cm, direita 2 cm, inferior 1,5 cm e esquerda 3 cm.
+          </p>
         </div>
         <Badge variant={isCustom ? 'default' : 'secondary'} className="self-start">
           {isCustom ? 'Personalizado' : 'Padrão'}

@@ -3,6 +3,7 @@ import {
   esquemaCabecalhoLaudo, esquemaFechamentoLaudo, type ApresentacaoLaudo, type FechamentoLaudo,
 } from '@shared/configuracoes/apresentacao-laudo';
 import { obterFormasPerito } from '@shared/utils/perito-tratamento';
+import { normalizarRotuloCabecalho } from '@shared/configuracoes/cabecalhos-padrao';
 import { lerUsuarioSessao } from './usuario-sessao';
 
 async function obterTextoConfiguracao(chave: string): Promise<string | null> {
@@ -24,7 +25,7 @@ export async function carregarApresentacaoPadrao(): Promise<ApresentacaoLaudo> {
   const usuario = lerUsuarioSessao();
   const formas = obterFormasPerito(usuario?.cargo || usuario?.role, usuario?.forma_tratamento);
   return {
-    versao: 1, cabecalho, fechamento,
+    versao: 1, cabecalho: { ...cabecalho, todasPaginas: normalizarRotuloCabecalho(cabecalho.todasPaginas) }, fechamento,
     perito: {
       ...formas, perito_nome: usuario?.nome ?? '', 'perito.nome': usuario?.nome ?? '', 'perito.cargo': formas.perito_cargo,
       perito_lotacao: usuario?.lotacao ?? '', 'perito.lotacao': usuario?.lotacao ?? '',

@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['src/renderer/public/tinymce/**', 'out/**', '.opencode/**'] },
+  { ignores: ['src/renderer/public/tinymce/**', 'out/**', '.opencode/**', 'tmp/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{js,mjs,cjs}'],

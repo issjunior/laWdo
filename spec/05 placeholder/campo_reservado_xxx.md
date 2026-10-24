@@ -12,7 +12,7 @@ A conversão é literal e case-insensitive; por isso também alcança ocorrênci
 
 ## Preenchimento manual no laudo
 
-O duplo clique em `XXX` âmbar ou placeholder azul abre o modal de personalização da ocorrência. O editor compacto aceita linhas e formatação básica; `normalizarHtmlCampo()` limita a saída a texto, quebras, negrito, itálico, sublinhado, sobrescrito e subscrito e rejeita valor vazio. O rascunho fica em referência, enquanto `initialValue` permanece fixo até fechar, evitando salto de cursor. Aplicar usa transação de undo e marca a edição pendente; cancelar não altera o HTML.
+O duplo clique em `XXX` âmbar ou placeholder azul abre o modal de personalização da ocorrência. O editor compacto aceita linhas e formatação básica; `normalizarHtmlCampo()` limita a saída a texto, quebras, negrito, itálico, sublinhado, sobrescrito e subscrito e rejeita valor vazio. O rascunho fica em referência, enquanto `initialValue` permanece fixo até fechar, evitando salto de cursor. O editor captura a tipografia computada da ocorrência e o recuo do `p` ancestral ao abrir. O menu Parágrafo só é habilitado quando há parágrafo de origem e mantém o recuo em rascunho separado; não acrescenta tags/estilos ao HTML inline permitido. Aplicar personaliza o valor e grava o recuo no parágrafo original em uma única transação de undo, marcando edição pendente; cancelar descarta os dois rascunhos. O diálogo é amplo, com conteúdo rolável e ações fixas.
 
 `preencherCampoReservado()` grava o HTML codificado em `data-placeholder-personalizado-html`, troca o destaque por violeta e preserva `data-placeholder` quando a ocorrência veio de chave da REP. Sem chave, grava `data-placeholder-personalizado-livre`. O modal oferece **Restaurar valor da REP** apenas para ocorrência vinculada personalizada; a ação remove a sobreposição local e reaplica o mapa atual sem consultar GDL. A alteração nunca é enviada à REP ou ao GDL.
 
@@ -37,7 +37,7 @@ A diferença entre `XXX` autoral e `XXX` derivado precisa ser preservada para qu
 
 ## Verificação
 
-`campos-reservados.test.ts` cobre personalização, restauração e rejeição de valor vazio; `editor-campo-laudo.component.test.tsx` cobre a estabilidade do valor inicial ao digitar e reabrir. A interação real de duplo clique e foco do diálogo permanece sujeita a smoke manual no TinyMCE.
+`campos-reservados.test.ts` cobre personalização, restauração e rejeição de valor vazio; `editor-campo-laudo.component.test.tsx` cobre valor inicial estável, tipografia herdada, recuo e reabertura. Os padrões de tipografia e medidas são compartilhados em `tipografia-editor-laudo.ts` e `recuo-editor-laudo.ts`, conforme `spec/03 laudo/editor_texto.md`. A interação real de duplo clique e foco do diálogo permanece sujeita a smoke manual no TinyMCE.
 
 ## Pendências estruturadas do B-601
 

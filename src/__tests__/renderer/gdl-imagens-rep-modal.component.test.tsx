@@ -61,7 +61,7 @@ describe('GdlImagensRepModal', () => {
     expect(screen.getByRole('img', { name: 'Prévia de fotografia.png' })).toHaveAttribute('src', 'data:image/jpeg;base64,AA==')
     const caixaFotografia = obterCaixaDaFoto('fotografia.png')
     expect(caixaFotografia).toBeEnabled()
-    fireEvent.click(caixaFotografia)
+    expect(caixaFotografia).toBeChecked()
     fireEvent.click(await screen.findByRole('button', { name: 'Capturar imagens (1)' }))
 
     await waitFor(() => expect(capturarImagensLaudo).toHaveBeenCalledWith('laudo-1', 'sessao-imagens-1', [idSelecao], false))
@@ -73,13 +73,15 @@ describe('GdlImagensRepModal', () => {
     render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
 
     await screen.findByText('fotografia.png')
-    fireEvent.click(screen.getByRole('button', { name: 'Selecionar todas' }))
     expect(screen.getByRole('button', { name: 'Capturar imagens (1)' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Desmarcar todas' })).toBeInTheDocument()
 
     expect(obterCaixaDaFoto('fotografia.png')).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Desmarcar todas' }))
     expect(screen.getByRole('button', { name: 'Capturar imagens (0)' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar todas' }))
+    expect(obterCaixaDaFoto('fotografia.png')).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Capturar imagens (1)' })).toBeEnabled()
   })
 
   it('filtra fotos pelo nome e permite ajustar a quantidade de colunas', async () => {
@@ -104,6 +106,8 @@ describe('GdlImagensRepModal', () => {
     fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Filtrar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
     fireEvent.click(await screen.findByRole('option', { name: 'Indisponíveis' }))
     expect(screen.getByText('foto.tiff')).toBeInTheDocument()
+    expect(obterCaixaDaFoto('foto.tiff')).toBeDisabled()
+    expect(obterCaixaDaFoto('foto.tiff')).not.toBeChecked()
     expect(screen.queryByText('fotografia.png')).not.toBeInTheDocument()
 
     fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Filtrar fotos' }), { button: 0, buttons: 1, ctrlKey: false, pointerType: 'mouse' })
@@ -133,7 +137,6 @@ describe('GdlImagensRepModal', () => {
     render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
 
     await screen.findByText('fotografia.png')
-    fireEvent.click(obterCaixaDaFoto('fotografia.png'))
     fireEvent.click(screen.getByRole('button', { name: 'Capturar imagens (1)' }))
 
     expect(await screen.findByText('Foto já incluída no laudo')).toBeInTheDocument()

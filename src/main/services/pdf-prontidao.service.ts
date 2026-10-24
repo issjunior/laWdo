@@ -4,6 +4,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FalhaPdf, EtapaFalhaPdf } from '../../shared/types/pdf.types.js';
 import { getLogger } from '../utils/logger.js';
+import { reservarEspacoCabecalho } from './pdf-layout.js';
+import { criarScriptLayoutTabelas, ESTILOS_TABELAS_PLACEHOLDER_PDF } from './pdf-tabelas.js';
 
 const log = getLogger('exportacao');
 const LIMITE_PREPARACAO_MS = 15_000;
@@ -154,16 +156,37 @@ export async function gerarPdfPreparado(
 
   try {
     const restante = () => Math.max(1, LIMITE_PREPARACAO_MS - (performance.now() - inicio));
-    const janela = await preparar(html, 'corpo', restante);
+    const janela = await preparar(`${html}<style>@page { size: A4 portrait !important; } ${ESTILOS_TABELAS_PLACEHOLDER_PDF}</style>`, 'corpo', restante);
+    if (html.includes('data-tabela-laudo="balistica"')) {
+      const larguraCm = 21 - ((opcoes.margins?.left ?? 3 / 2.54) + (opcoes.margins?.right ?? 2 / 2.54)) * 2.54;
+      await executarComLimite(janela, 'recursos', restante(), () => janela.webContents.executeJavaScript(criarScriptLayoutTabelas(larguraCm)));
+    }
+    let opcoesImpressao = opcoes;
     if (cabecalho) {
       const limpo = cabecalho.replace(/^\{\{ALIGN:[^}]+\}\}/, '');
-      const documentoCabecalho = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file: blob:; font-src data: file:; style-src 'unsafe-inline' file:; script-src 'none'"></head><body>${limpo}</body></html>`;
-      await preparar(documentoCabecalho, 'cabecalho', restante);
+      const documentoCabecalho = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file: blob:; font-src data: file:; style-src 'unsafe-inline' file:; script-src 'none'"></head><body>${opcoes.headerTemplate ?? limpo}</body></html>`;
+      const janelaCabecalho = await preparar(documentoCabecalho, 'cabecalho', restante);
+      if (opcoes.headerTemplate) {
+        const altura: unknown = await executarComLimite(janelaCabecalho, 'recursos', restante(), () =>
+          janelaCabecalho.webContents.executeJavaScript(`(() => {
+            const cabecalho = document.getElementById('lawdo-cabecalho-pdf');
+            if (!cabecalho) return null;
+            cabecalho.querySelectorAll('.pageNumber, .totalPages').forEach(elemento => { elemento.textContent = '9999'; });
+            return cabecalho.getBoundingClientRect().height;
+          })()`));
+        try {
+          opcoesImpressao = altura === 0
+            ? { ...opcoes, displayHeaderFooter: false, headerTemplate: undefined, footerTemplate: undefined }
+            : reservarEspacoCabecalho(opcoes, altura);
+        } catch {
+          throw new ErroGeracaoPdf({ codigo: 'CABECALHO_INDISPONIVEL', etapa: 'recursos', tentarNovamente: false, origem: 'cabecalho' });
+        }
+      }
     }
     etapa = 'impressao';
     const inicioImpressao = performance.now();
     const pdf = await executarComLimite(janela, 'impressao', LIMITE_IMPRESSAO_MS,
-      () => janela.webContents.printToPDF(opcoes));
+      () => janela.webContents.printToPDF(opcoesImpressao));
     log.debug('PDF gerado', {
       preparacaoMs: Math.round(inicioImpressao - inicio),
       impressaoMs: Math.round(performance.now() - inicioImpressao),

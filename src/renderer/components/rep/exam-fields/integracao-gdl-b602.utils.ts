@@ -11,6 +11,7 @@ const referenciaOrigemGdlSchema = z.object({
 
 const dadosSolicitacaoGdlSchema = z.object({
   orgao: z.string(),
+  cidade: z.string().optional(),
   responsavel: z.string(),
   autoridade: z.string(),
   origensDisponiveis: z.array(referenciaOrigemGdlSchema).optional(),

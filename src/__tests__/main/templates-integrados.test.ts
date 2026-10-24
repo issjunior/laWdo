@@ -4,14 +4,64 @@ import { laudoPadraoB602V4 } from '../../main/templates/integrados/b602/laudo-pa
 import { laudoPadraoB602V5 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v5';
 import { laudoPadraoB602V6 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v6';
 import { laudoPadraoB602V7 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v7';
+import { laudoPadraoB602V8 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v8';
+import { laudoPadraoB602V9 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v9';
+import { laudoPadraoB602V10 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v10';
+import { laudoPadraoB601V1 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v1';
+import { laudoPadraoB601V2 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v2';
 import { catalogoTemplatesIntegrados } from '../../main/templates/integrados/catalogo';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 
 describe('catálogo de templates integrados', () => {
-  it('publica a versão 7 com o título do preâmbulo oculto e fora da contagem', () => {
+  it.each([
+    { anterior: laudoPadraoB601V1, atual: laudoPadraoB601V2, versao: 2 },
+    { anterior: laudoPadraoB602V9, atual: laudoPadraoB602V10, versao: 10 },
+  ])('publica $atual.chave v$versao corrigindo apenas as abreviações de número', ({ anterior, atual, versao }) => {
+    expect(() => validarTemplateIntegrado(atual)).not.toThrow();
+    expect(atual.versao).toBe(versao);
+    expect(catalogoTemplatesIntegrados.filter(template => template.chave === atual.chave)).toEqual([atual]);
+    expect(anterior.secoes.find(secao => secao.chave === 'consideracoes-finais')?.conteudo).toContain('Lei no 13.964/2019');
+    expect(anterior.secoes.find(secao => secao.chave === 'encerramento')?.conteudo).toContain('Instrução Normativa no 001/2020-PCP');
+    expect(atual.secoes.find(secao => secao.chave === 'consideracoes-finais')?.conteudo).toContain('Lei nº 13.964/2019');
+    expect(atual.secoes.find(secao => secao.chave === 'encerramento')?.conteudo).toContain('Instrução Normativa nº 001/2020-PCP');
+    const secoesRevertidas = atual.secoes.map(secao => {
+      if (secao.chave === 'consideracoes-finais') {
+        return { ...secao, conteudo: secao.conteudo.replace('Lei nº', 'Lei no') };
+      }
+      if (secao.chave === 'encerramento') {
+        return { ...secao, conteudo: secao.conteudo.replace('Instrução Normativa nº', 'Instrução Normativa no') };
+      }
+      return secao;
+    });
+    expect({ ...atual, versao: anterior.versao, secoes: secoesRevertidas }).toEqual(anterior);
+  });
+
+  it('preserva a versão 9 com concordância calculada somente na seção de estojos', () => {
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V9)).not.toThrow();
+    expect(laudoPadraoB602V9.versao).toBe(9);
+    expect(laudoPadraoB602V9.secoes.filter(secao => secao.chave !== 'dos-estojos'))
+      .toEqual(laudoPadraoB602V8.secoes.filter(secao => secao.chave !== 'dos-estojos'));
+    const conteudo = laudoPadraoB602V9.secoes.find(secao => secao.chave === 'dos-estojos')?.conteudo || '';
+    expect(conteudo).toContain('{{b602_total_estojos_extenso}}');
+    expect(conteudo).toContain('{{b602_estojos_descricao}}');
+    expect(conteudo).toContain('{{b602_estojos_conclusao}}');
+    expect(conteudo).toContain('{{b602_tabela_estojos}}');
+    expect(conteudo.match(/data-image-id="dummy-b602-estojos-[12]"/g)).toHaveLength(2);
+    expect(laudoPadraoB602V8.secoes.find(secao => secao.chave === 'dos-estojos')?.conteudo).toContain('Os estojos percutidos e deflagrados foram retornados');
+  });
+
+  it('publica a versão 8 alterando somente o total de estojos para o novo placeholder', () => {
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V8)).not.toThrow();
+    expect(laudoPadraoB602V8.versao).toBe(8);
+    expect(laudoPadraoB602V8.secoes).toEqual(laudoPadraoB602V7.secoes.map(secao => secao.chave === 'dos-estojos'
+      ? { ...secao, conteudo: secao.conteudo.replaceAll('{{b602_total_estojos}}', '{{b602_total_estojos_extenso}}') }
+      : secao));
+    expect(laudoPadraoB602V7.secoes.find(secao => secao.chave === 'dos-estojos')?.conteudo).toContain('{{b602_total_estojos}}');
+  });
+
+  it('preserva a versão 7 com o título do preâmbulo oculto e fora da contagem', () => {
     expect(() => validarTemplateIntegrado(laudoPadraoB602V7)).not.toThrow();
-    expect(catalogoTemplatesIntegrados).toContain(laudoPadraoB602V7);
     expect(laudoPadraoB602V7.versao).toBe(7);
     expect(laudoPadraoB602V7.secoes[0]).toMatchObject({ chave: 'preambulo', ocultarTitulo: true, contarNaNumeracao: false });
     expect(laudoPadraoB602V7.secoes.map(secao => secao.conteudo)).toEqual(laudoPadraoB602V6.secoes.map(secao => secao.conteudo));

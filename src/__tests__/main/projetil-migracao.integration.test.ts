@@ -50,7 +50,7 @@ describe('migration v39 dos projéteis personalizados', () => {
           'id', 'calibre', 'tipo', 'massa_gramas', 'calibre_real_mm', 'altura_maxima_mm', 'created_at', 'updated_at',
         ]);
         expect(await sqlite.executeQuery<{ total: number }>('SELECT COUNT(*) AS total FROM projeteis_personalizados')).toEqual([{ total: 0 }]);
-        expect(await banco.getSchemaVersion()).toBe(45);
+        expect(await banco.getSchemaVersion()).toBe(banco.CURRENT_SCHEMA_VERSION);
 
         const diretorioSnapshots = path.join(diretorio, 'backups-migracoes');
         const snapshots = await fs.readdir(diretorioSnapshots);

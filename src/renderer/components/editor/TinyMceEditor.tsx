@@ -17,6 +17,10 @@ import {
   restaurarTabelaPlaceholder,
 } from '@/lib/apresentacao-placeholders';
 import { encontrarCampoReservado } from '@/lib/campos-reservados';
+import { ESTILO_TIPOGRAFIA_EDITOR_LAUDO } from '@/lib/tipografia-editor-laudo';
+import { ESTILOS_TABELAS_BALISTICA } from '@shared/utils/tabelas-balistica-layout';
+import { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
+export { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
 import { registrarSeletoresCamposB601 } from '@/lib/b601-campos-projetil';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 import { criarHtmlFigura } from '@/lib/figura-html';
@@ -190,6 +194,8 @@ interface TinyMceEditorProps {
   onEditorInit?: (editor: TinyMceEditorInstance) => void | Promise<void>;
   /** Solicita a substituição de uma figura dummy pelo fluxo de ilustrações do laudo. */
   onDummyFigureClick?: (imageId: string) => void;
+  onFiguraRealClick?: () => void;
+  onSolicitarBusca?: () => void;
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
@@ -316,13 +322,6 @@ const PLUGINS_TINYMCE = [
   'nonbreaking',
   'pagebreak',
 ];
-
-export const MEDIDAS_RECUO_PRIMEIRA_LINHA = [
-  { texto: '1,25 cm', valor: '35.43pt' },
-  { texto: '1 cm', valor: '28.35pt' },
-  { texto: '1,5 cm', valor: '42.52pt' },
-  { texto: 'Sem recuo', valor: undefined },
-] as const;
 
 const FONTES_EDITOR = [
   { texto: 'Arial', familia: 'Arial, Helvetica, sans-serif' },
@@ -514,6 +513,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   placeholderChaves,
   onEditorInit,
   onDummyFigureClick,
+  onFiguraRealClick,
+  onSolicitarBusca,
   autoConverterReservados = false,
   condToggles,
   onSolicitarExclusaoBlocoCondicional,
@@ -534,6 +535,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const onTabelaPlaceholderRestauradaRef = useRef(onTabelaPlaceholderRestaurada);
   const onEstruturaTabelasAlteradaRef = useRef(onEstruturaTabelasAlterada);
   const onCampoReservadoDuploCliqueRef = useRef(onCampoReservadoDuploClique);
+  const aoClicarFiguraRealRef = useRef(onFiguraRealClick);
+  aoClicarFiguraRealRef.current = onFiguraRealClick;
+  const aoSolicitarBuscaRef = useRef(onSolicitarBusca);
+  aoSolicitarBuscaRef.current = onSolicitarBusca;
   const editorProntoParaAlteracoesRef = useRef(false);
   const onChange = useCallback((html: string, origem?: 'usuario' | 'normalizacao-inicial') => {
     aoAlterarConteudo(html, origem ?? (editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial'));
@@ -791,11 +796,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           plugins: obterPluginsTinyMce(alturaAutomatica),
           toolbar: obterToolbarTinyMce(Boolean(condToggles?.length), Boolean(_laudoId && onSolicitarInsercaoFigura)),
           content_style: `
+            ${ESTILOS_TABELAS_BALISTICA}
+            ::highlight(laudo-busca) { background-color: Highlight; color: HighlightText; }
             body {
               --cor-texto-editor: #000000;
-              font-family: Arial, Helvetica, sans-serif;
-              font-size: 14px;
-              line-height: 1.6;
+              ${ESTILO_TIPOGRAFIA_EDITOR_LAUDO}
               padding: 12px;
             }
             p:not(table p):not(figure p) { text-align: justify; }
@@ -1375,6 +1380,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               registrarInicializacao('editor_init_evento', { tentativaInterna: tentativaInicializacao });
               const doc = editor.getDoc();
               if (!doc) return;
+              const solicitarBusca = (evento: KeyboardEvent) => {
+                if (!aoSolicitarBuscaRef.current || document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+                if (!(evento.ctrlKey || evento.metaKey) || evento.altKey || evento.shiftKey || evento.key.toLowerCase() !== 'f') return;
+                evento.preventDefault();
+                evento.stopImmediatePropagation();
+                aoSolicitarBuscaRef.current();
+              };
+              doc.addEventListener('keydown', solicitarBusca, true);
+              editor.on('remove', () => doc.removeEventListener('keydown', solicitarBusca, true));
               const body = editor.getBody();
               registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'));
 
@@ -1561,6 +1575,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               doc.addEventListener('click', (e: MouseEvent) => {
                 const target = e.target as HTMLElement;
                 if (target.tagName === 'IMG') {
+                  const figuraReal = target.closest('.laudo-figure');
+                  if (figuraReal && figuraReal.getAttribute('data-dummy') !== 'true' && aoClicarFiguraRealRef.current) {
+                    aoClicarFiguraRealRef.current();
+                    return;
+                  }
                   const figure = target.closest('.laudo-figure[data-dummy="true"]');
                   if (figure) {
                     e.preventDefault();

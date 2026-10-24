@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bot, Images, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
+import { Bot, Images, Keyboard, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +32,7 @@ interface PainelLateralRedimensionavelProps {
   onAlternarPainelIa: () => void
   onAlternarPainelIlustracoes: () => void
   onReindexarSecoes: () => void
+  onAbrirAtalhos: () => void
   onRecolherAutomaticamente?: () => void
   children: ReactNode
   conteudoPainel: ReactNode
@@ -109,6 +111,7 @@ export function PainelLateralRedimensionavel({
   onAlternarPainelIlustracoes,
   onReindexarSecoes,
   onRecolherAutomaticamente,
+  onAbrirAtalhos,
   children,
   conteudoPainel,
 }: PainelLateralRedimensionavelProps) {
@@ -232,6 +235,14 @@ export function PainelLateralRedimensionavel({
           operacaoEmAndamento={operacaoEmAndamento}
           onReindexarSecoes={onReindexarSecoes}
         />
+        <TooltipProvider delayDuration={200}><Tooltip>
+          <TooltipTrigger asChild><Button type="button" variant="ghost" size="icon"
+            className="size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200"
+            aria-label="Atalhos do laudo" aria-haspopup="dialog" onClick={onAbrirAtalhos}>
+            <Keyboard className="size-4" />
+          </Button></TooltipTrigger>
+          <TooltipContent side="left">Atalhos do laudo</TooltipContent>
+        </Tooltip></TooltipProvider>
       </aside>
     </div>
   )

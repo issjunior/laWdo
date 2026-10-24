@@ -412,6 +412,18 @@ function criarMapaTabelasPersonalizadas(body: HTMLElement): Map<string, HTMLElem
   return tabelas;
 }
 
+export function criarCopiaVisualizacaoPlaceholders(html: string, opcoes: OpcoesAplicacaoPlaceholders): HTMLElement {
+  const raiz = document.createElement('div');
+  raiz.innerHTML = html;
+  raiz.querySelectorAll('[data-placeholder-preview="true"]').forEach(previa => previa.remove());
+  const tabelasPersonalizadas = criarMapaTabelasPersonalizadas(raiz);
+  const resultado = criarContadores(tabelasPersonalizadas.size);
+  raiz.querySelectorAll<HTMLElement>('[data-placeholder]').forEach(ancora => {
+    processarAncoraPlaceholder(ancora, { body: raiz, opcoes, tabelasPersonalizadas, resultado });
+  });
+  return raiz;
+}
+
 export function aplicarVisualizacaoPlaceholders(
   editor: TinyMceEditorInstance,
   opcoes: OpcoesAplicacaoPlaceholders,

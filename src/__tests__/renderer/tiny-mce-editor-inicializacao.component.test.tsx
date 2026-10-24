@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Editor as EditorTinyMce } from 'tinymce';
 import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
@@ -6,7 +6,7 @@ import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 interface PropriedadesEditorSimulado {
   onEditorChange: (html: string) => void;
   onInit?: unknown;
-  init: { init_instance_callback: (editor: EditorTinyMce) => void };
+  init: { init_instance_callback: (editor: EditorTinyMce) => void; setup: (editor: EditorTinyMce) => void };
 }
 
 const estado = vi.hoisted(() => ({ propriedades: null as PropriedadesEditorSimulado | null }));
@@ -31,6 +31,50 @@ function criarEditor() {
 beforeEach(() => { estado.propriedades = null; });
 
 describe('inicialização do editor TinyMCE', () => {
+  it('distingue imagem real de dummy e preserva o clique na legenda', async () => {
+    const aoClicarReal = vi.fn();
+    const aoClicarDummy = vi.fn();
+    const aoAlterar = vi.fn();
+    const aoBuscar = vi.fn();
+    const { rerender } = render(<TinyMceEditor onChange={aoAlterar} onFiguraRealClick={aoClicarReal} onDummyFigureClick={aoClicarDummy} onSolicitarBusca={aoBuscar} />);
+    await waitFor(() => expect(estado.propriedades).not.toBeNull());
+    const documento = document.implementation.createHTMLDocument();
+    documento.body.innerHTML = '<figure class="laudo-figure" data-image-id="real"><img src="real.png"><figcaption>Legenda</figcaption></figure><figure class="laudo-figure" data-dummy="true" data-image-id="dummy"><img src="dummy.png"></figure><img src="outra.png">';
+    const eventos = new Map<string, Array<() => void>>();
+    const instancia = {
+      on: (nome: string, callback: () => void) => eventos.set(nome, [...(eventos.get(nome) || []), callback]),
+      off: vi.fn(), addCommand: vi.fn(),
+      ui: { registry: { addButton: vi.fn(), addMenuButton: vi.fn() } },
+      getDoc: () => documento, getBody: () => documento.body,
+      undoManager: { ignore: (acao: () => void) => acao() },
+      dom: { addStyle: vi.fn(), removeClass: vi.fn() },
+    } as unknown as EditorTinyMce;
+    act(() => { estado.propriedades!.init.setup(instancia); eventos.get('init')?.forEach(callback => callback()); });
+    const atalhoBusca = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => documento.dispatchEvent(atalhoBusca));
+    expect(atalhoBusca.defaultPrevented).toBe(true);
+    expect(aoBuscar).toHaveBeenCalledTimes(1);
+    const dialogo = document.createElement('div');
+    dialogo.setAttribute('role', 'dialog'); document.body.append(dialogo);
+    act(() => documento.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true })));
+    expect(aoBuscar).toHaveBeenCalledTimes(1);
+    dialogo.remove();
+    const clicar = (elemento: Element) => fireEvent(elemento, new MouseEvent('click', { bubbles: true }));
+    clicar(documento.querySelector('figcaption')!);
+    clicar(documento.body.lastElementChild!);
+    expect(aoClicarReal).not.toHaveBeenCalled();
+    clicar(documento.querySelector('[data-image-id="real"] img')!);
+    expect(aoClicarReal).toHaveBeenCalledTimes(1);
+    clicar(documento.querySelector('[data-image-id="dummy"] img')!);
+    expect(aoClicarDummy).toHaveBeenCalledExactlyOnceWith('dummy');
+    const aoClicarAtualizado = vi.fn();
+    rerender(<TinyMceEditor onChange={aoAlterar} onFiguraRealClick={aoClicarAtualizado} onDummyFigureClick={aoClicarDummy} />);
+    clicar(documento.querySelector('[data-image-id="real"] img')!);
+    expect(aoClicarAtualizado).toHaveBeenCalledTimes(1);
+    expect(aoAlterar).not.toHaveBeenCalled();
+    act(() => eventos.get('remove')?.forEach(callback => callback()));
+  });
+
   it('aguarda a preparação assíncrona antes de tratar mudanças como edição', async () => {
     let concluir!: () => void;
     const preparacao = new Promise<void>(resolve => { concluir = resolve; });

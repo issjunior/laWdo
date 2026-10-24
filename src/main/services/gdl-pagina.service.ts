@@ -1,3 +1,4 @@
+import { atividadeGdlService } from './gdl-atividade.service.js';
 import { interpretarDetalhesRepGdl } from './gdl-detalhes.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { session, type Session } from 'electron';
@@ -90,6 +91,7 @@ export function paginaGdlExigeLogin(html: string): boolean {
 }
 
 async function lerPagina(rede: Session, url: string, corpo?: string, sinal?: AbortSignal, seguirRedirecionamentos = true) {
+  await atividadeGdlService.antesDaRequisicao();
   const resposta = await rede.fetch(url, {
     method: corpo === undefined ? 'GET' : 'POST',
     redirect: seguirRedirecionamentos ? 'follow' : 'manual', credentials: 'include', cache: 'no-store',
