@@ -37,7 +37,10 @@ function formatarDataExtenso(iso: string | undefined): string {
   try {
     const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
     if (isNaN(data.getTime())) return iso;
-    return data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const dia = data.toLocaleDateString('pt-BR', { day: 'numeric' });
+    const mes = data.toLocaleDateString('pt-BR', { month: 'long' });
+    const ano = data.toLocaleDateString('pt-BR', { year: 'numeric' });
+    return `${dia} dias do mês de ${mes} de ${ano}`;
   } catch {
     return iso;
   }

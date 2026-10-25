@@ -201,7 +201,7 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
       else if (bloco.tipo === 'quebra-pagina') filhos.push(new Paragraph({ children: [new PageBreak()] }));
       else if (bloco.tipo === 'linha-horizontal') filhos.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } }));
       else if (bloco.tipo === 'tabela') {
-        const rows = bloco.linhas.map(linha => new TableRow({ children: linha.map(celula => new TableCell({
+        const rows = bloco.linhas.map(linha => new TableRow({ cantSplit: true, children: linha.map(celula => new TableCell({
           children: (celula.blocos?.flatMap(bloco => {
             if (bloco.tipo === 'paragrafo') return [para(bloco)];
             if (bloco.tipo === 'figura') { const tipo = normalizarTipoImagemDocx(bloco.formato); const figura = tipo ? [new Paragraph({ alignment: alinhar(bloco.alinhamento), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 180, height: bloco.alturaPx || 135 } })] })] : []; return bloco.legenda ? [...figura, para(bloco.legenda, { alignment: AlignmentType.CENTER })] : figura; }

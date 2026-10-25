@@ -26,6 +26,15 @@ const documento: DocumentoExportacao = {
 };
 
 describe('gerarDOCXCanonico', () => {
+  it('mantém cada linha dos quadros inteira ao paginar DOCX e sua conversão ODT', async () => {
+    const estrutura = parseHtmlParaEstrutura('<table><tr><th>Origem</th><th>Exame de coleta</th></tr><tr><td>LOCAL DE CRIME</td><td>REP 20/2026</td></tr></table>');
+    const arquivo = await JSZip.loadAsync(await gerarDOCXCanonico(estrutura));
+    const xml = await arquivo.file('word/document.xml')?.async('text');
+    const documentoXml = new DOMParser().parseFromString(xml ?? '', 'application/xml');
+    const linhas = Array.from(documentoXml.getElementsByTagName('w:tr'));
+    expect(linhas).toHaveLength(2);
+    expect(linhas.every(linha => linha.getElementsByTagName('w:cantSplit').length === 1)).toBe(true);
+  });
   it('grava margens explícitas de zero sem alterar a altura da linha no DOCX', async () => {
     const estrutura = parseHtmlParaEstrutura('<p style="margin-top:0pt;margin-bottom:0pt;line-height:1.7">Sem espaço adicional</p>');
     const arquivo = await JSZip.loadAsync(await gerarDOCXCanonico(estrutura));
