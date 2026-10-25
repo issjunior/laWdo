@@ -1,3 +1,5 @@
+import type { Editor } from 'tinymce';
+
 export interface ResultadoNumeracaoTabelas {
   alterado: boolean;
   alteradoPersistente: boolean;
@@ -74,4 +76,32 @@ export function renumerarTabelasHtml(html: string): string {
   const documento = new DOMParser().parseFromString(html, 'text/html');
   const resultado = renumerarTabelas(documento.body);
   return resultado.alterado ? documento.body.innerHTML : html;
+}
+
+export function conferirNumeracaoTabelasEditores(
+  editores: Array<Editor | null>,
+  capturarConteudo: boolean,
+): { alteradoPersistente: boolean; conteudos: Array<string | null> | null } {
+  let proximoNumero = 1;
+  let alteradoPersistente = false;
+  editores.forEach(editor => {
+    const body = editor?.getBody();
+    if (!editor || !body) return;
+    editor.undoManager.ignore(() => {
+      body.querySelectorAll<HTMLElement>('[data-b601-grupo]').forEach(grupo => {
+        grupo.querySelectorAll<HTMLElement>('td').forEach(celula => celula.setAttribute('contenteditable', 'true'));
+        grupo.querySelectorAll<HTMLElement>('th').forEach(celula => celula.setAttribute('contenteditable', 'false'));
+      });
+      const resultado = renumerarTabelas(body, { incluirPrevias: true, numeroInicial: proximoNumero });
+      proximoNumero = resultado.proximoNumero;
+      alteradoPersistente = resultado.alteradoPersistente || alteradoPersistente;
+    });
+  });
+
+  return {
+    alteradoPersistente,
+    conteudos: capturarConteudo || alteradoPersistente
+      ? editores.map(editor => editor?.getContent() ?? null)
+      : null,
+  };
 }
