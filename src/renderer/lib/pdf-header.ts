@@ -84,8 +84,8 @@ export async function buildPdfHeaderConfig(opts: PdfHeaderOptions = {}): Promise
     const replacements = { ...buildPlaceholderMapping(contexto), ...opts.extraReplacements, ...apresentacao.perito };
     if (opts.numeroRepFallback) replacements.numero_rep = opts.numeroRepFallback;
     const escapar = (valor: string) => valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const primeiraPagina = apresentacao.cabecalho.habilitado ? resolverDadosPerito(apresentacao.cabecalho.primeiraPagina, apresentacao.perito) : '';
-    const todasPaginas = apresentacao.cabecalho.habilitado ? resolverDadosPerito(apresentacao.cabecalho.todasPaginas, apresentacao.perito) : '';
+    const primeiraPagina = apresentacao.cabecalho.primeiraPaginaHabilitada ? resolverDadosPerito(apresentacao.cabecalho.primeiraPagina, apresentacao.perito) : '';
+    const todasPaginas = apresentacao.cabecalho.todasPaginasHabilitadas ? resolverDadosPerito(apresentacao.cabecalho.todasPaginas, apresentacao.perito) : '';
     return {
       headerTemplate: buildHeaderTemplate(todasPaginas, Object.fromEntries(Object.entries(replacements).map(([chave, valor]) => [chave, escapar(valor)]))).html,
       cabecalhoPrimeiraPagina: resolverPlaceholdersExportacao(primeiraPagina, contexto),

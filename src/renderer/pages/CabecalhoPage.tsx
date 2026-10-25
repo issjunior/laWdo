@@ -27,7 +27,7 @@ const esquemaPlaceholders = z.array(z.object({ id: z.string(), chave: z.string()
 const mensagemErro = (erro: unknown) => erro instanceof Error ? erro.message : 'Erro inesperado';
 
 export const CabecalhoPage: React.FC = () => {
-  const [cabecalho, setCabecalho] = useState<CabecalhoLaudo>({ habilitado: true, primeiraPagina: '', todasPaginas: '' });
+  const [cabecalho, setCabecalho] = useState<CabecalhoLaudo>({ primeiraPaginaHabilitada: true, todasPaginasHabilitadas: true, primeiraPagina: '', todasPaginas: '' });
   const [fechamento, setFechamento] = useState<FechamentoLaudo>({ ...FECHAMENTO_DESATIVADO });
   const [espacamento, setEspacamento] = useState('24');
   const [perito, setPerito] = useState<Record<string, string>>({});
@@ -136,12 +136,14 @@ export const CabecalhoPage: React.FC = () => {
     <Tabs defaultValue="cabecalho">
       <TabsList><TabsTrigger value="cabecalho">Cabeçalho</TabsTrigger><TabsTrigger value="fechamento">Fechamento</TabsTrigger></TabsList>
       <TabsContent value="cabecalho" forceMount className="space-y-6 data-[state=inactive]:hidden">
-        <div className="space-y-2"><div className="flex items-center gap-2"><Checkbox id="inserir-cabecalho" checked={cabecalho.habilitado} disabled={!carregado || salvando} onCheckedChange={valor => setCabecalho(atual => ({ ...atual, habilitado: valor === true }))} /><Label htmlFor="inserir-cabecalho">Inserir cabeçalho nos laudos</Label></div>
-          {!cabecalho.habilitado && <p className="text-sm text-muted-foreground">Desativado — não será incluído nos novos laudos</p>}</div>
-        <Card><CardHeader><CardTitle>Cabeçalho da Primeira Página</CardTitle><CardDescription>Conteúdo livre com imagens, tabelas, formatação e placeholders.</CardDescription></CardHeader><CardContent>
+        <Card><CardHeader><CardTitle>Cabeçalho da Primeira Página</CardTitle><CardDescription>Conteúdo livre com imagens, tabelas, formatação e placeholders.</CardDescription>
+          <div className="flex items-center gap-2"><Checkbox id="inserir-cabecalho-primeira-pagina" checked={cabecalho.primeiraPaginaHabilitada} disabled={!carregado || salvando} onCheckedChange={valor => setCabecalho(atual => ({ ...atual, primeiraPaginaHabilitada: valor === true }))} /><Label htmlFor="inserir-cabecalho-primeira-pagina">Inserir na primeira página</Label></div>
+        </CardHeader><CardContent>
           {editor('cabecalho-editor', cabecalho.primeiraPagina, html => setCabecalho(atual => ({ ...atual, primeiraPagina: html })))}
         </CardContent></Card>
-        <Card><CardHeader><CardTitle>Cabeçalho de Todas as Páginas</CardTitle><CardDescription>No PDF, use {'{{pagina}}'} e {'{{totalPaginas}}'} para o contador de folhas.</CardDescription></CardHeader><CardContent>
+        <Card><CardHeader><CardTitle>Cabeçalho de Todas as Páginas</CardTitle><CardDescription>No PDF, use {'{{pagina}}'} e {'{{totalPaginas}}'} para o contador de folhas.</CardDescription>
+          <div className="flex items-center gap-2"><Checkbox id="inserir-cabecalho-todas-paginas" checked={cabecalho.todasPaginasHabilitadas} disabled={!carregado || salvando} onCheckedChange={valor => setCabecalho(atual => ({ ...atual, todasPaginasHabilitadas: valor === true }))} /><Label htmlFor="inserir-cabecalho-todas-paginas">Inserir em todas as páginas</Label></div>
+        </CardHeader><CardContent>
           {editor('cabecalho-paginas-editor', cabecalho.todasPaginas, html => setCabecalho(atual => ({ ...atual, todasPaginas: html })))}
         </CardContent></Card>
         <div className="flex justify-end"><Button onClick={() => { void salvar('cabecalho'); }} disabled={!carregado || salvando}><Save className="mr-2 h-4 w-4" />{salvando ? 'Salvando...' : 'Salvar cabeçalho'}</Button></div>

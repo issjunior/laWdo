@@ -17,7 +17,8 @@ export async function carregarApresentacaoPadrao(): Promise<ApresentacaoLaudo> {
     obterTextoConfiguracao(CHAVE_CABECALHO_DOCUMENTO), obterTextoConfiguracao(CHAVE_FECHAMENTO_LAUDO),
   ]);
   const cabecalho = cabecalhoJson !== null ? esquemaCabecalhoLaudo.parse(JSON.parse(cabecalhoJson)) : {
-    habilitado: true,
+    primeiraPaginaHabilitada: true,
+    todasPaginasHabilitadas: true,
     primeiraPagina: await obterTextoConfiguracao('cabecalho_laudo') ?? '',
     todasPaginas: await obterTextoConfiguracao('cabecalho_paginas') ?? '',
   };

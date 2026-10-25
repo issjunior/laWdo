@@ -108,7 +108,7 @@ describe('CabecalhoPage', () => {
     expect(editorPrimeiraPagina).toHaveAttribute('data-conteudo', expect.stringContaining('placeholder-tag'))
     expect(editorTodasPaginas).toHaveAttribute('data-conteudo', expect.stringContaining('placeholder-tag'))
   })
-  it('salva a desativação sem perder conteúdo e restaura os controles ao reabrir', async () => {
+  it('salva os dois cabeçalhos independentemente sem perder conteúdo e restaura os controles ao reabrir', async () => {
     const registros = new Map<string, string>([
       ['cabecalho_documento', JSON.stringify({ habilitado: true, primeiraPagina: '<p>Cabeçalho salvo</p>', todasPaginas: '<p>Contador salvo</p>' })],
       ['fechamento_laudo', JSON.stringify({ habilitado: true, conteudo: '<p>Fechamento salvo</p>', espacamentoAntesPt: 36 })],
@@ -125,24 +125,27 @@ describe('CabecalhoPage', () => {
     window.ipcAPI.configuracao.salvar = salvar
     const primeira = render(<CabecalhoPage />)
     await screen.findByTestId('cabecalho-editor')
-    fireEvent.click(screen.getByLabelText('Inserir cabeçalho nos laudos'))
+    fireEvent.click(screen.getByLabelText('Inserir na primeira página'))
     fireEvent.click(screen.getByRole('button', { name: 'Salvar cabeçalho' }))
     await screen.findByText('Cabeçalho salvo para os novos laudos.')
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fechamento' }), { button: 0, ctrlKey: false })
     fireEvent.click(screen.getByLabelText('Inserir fechamento nos laudos'))
     fireEvent.click(screen.getByRole('button', { name: 'Salvar fechamento' }))
     await screen.findByText('Fechamento salvo para os novos laudos.')
-    expect(salvar).toHaveBeenCalledWith('cabecalho_documento', JSON.stringify({ habilitado: false, primeiraPagina: '<p>Cabeçalho salvo</p>', todasPaginas: '<p>Contador salvo</p>' }), 'json', expect.any(String))
+    expect(salvar).toHaveBeenCalledWith('cabecalho_documento', JSON.stringify({ primeiraPaginaHabilitada: false, todasPaginasHabilitadas: true, primeiraPagina: '<p>Cabeçalho salvo</p>', todasPaginas: '<p>Contador salvo</p>' }), 'json', expect.any(String))
     expect(salvar).toHaveBeenCalledWith('fechamento_laudo', JSON.stringify({ habilitado: false, conteudo: '<p>Fechamento salvo</p>', espacamentoAntesPt: 36 }), 'json', expect.any(String))
     primeira.unmount()
     render(<CabecalhoPage />)
     expect(await screen.findByTestId('cabecalho-editor')).toHaveAttribute('data-conteudo', '<p>Cabeçalho salvo</p>')
     expect(screen.getByTestId('fechamento-editor')).toHaveAttribute('data-conteudo', '<p>Fechamento salvo</p>')
-    expect(screen.getByLabelText('Inserir cabeçalho nos laudos')).not.toBeChecked()
+    expect(screen.getByLabelText('Inserir na primeira página')).not.toBeChecked()
+    expect(screen.getByLabelText('Inserir em todas as páginas')).toBeChecked()
     expect(screen.getByLabelText('Inserir fechamento nos laudos')).not.toBeChecked()
-    fireEvent.click(screen.getByLabelText('Inserir cabeçalho nos laudos'))
+    fireEvent.click(screen.getByLabelText('Inserir em todas as páginas'))
     fireEvent.click(screen.getByRole('button', { name: 'Salvar cabeçalho' }))
-    await waitFor(() => expect(registros.get('cabecalho_documento')).toContain('"habilitado":true'))
+    await waitFor(() => expect(registros.get('cabecalho_documento')).toBe(JSON.stringify({ primeiraPaginaHabilitada: false, todasPaginasHabilitadas: false, primeiraPagina: '<p>Cabeçalho salvo</p>', todasPaginas: '<p>Contador salvo</p>' })))
+    expect(screen.getByTestId('cabecalho-editor')).toHaveAttribute('data-conteudo', '<p>Cabeçalho salvo</p>')
+    expect(screen.getByTestId('cabecalho-paginas-editor')).toHaveAttribute('data-conteudo', '<p>Contador salvo</p>')
   })
 
   it.each(['cabecalho-editor', 'cabecalho-paginas-editor', 'fechamento-editor'])('preserva o HTML de %s durante a digitação e outras atualizações da página', async editorId => {

@@ -17,7 +17,7 @@ export async function capturarApresentacaoLaudo(peritoId: string, legado = false
   const fechamentoSalvo = legado ? null : await configuracaoService.obter(CHAVE_FECHAMENTO_LAUDO);
   const cabecalho = cabecalhoSalvo !== null
     ? esquemaCabecalhoLaudo.parse(JSON.parse(cabecalhoSalvo))
-    : { habilitado: true, primeiraPagina: await configuracaoService.obter('cabecalho_laudo') ?? '', todasPaginas: await configuracaoService.obter('cabecalho_paginas') ?? '' };
+    : { primeiraPaginaHabilitada: true, todasPaginasHabilitadas: true, primeiraPagina: await configuracaoService.obter('cabecalho_laudo') ?? '', todasPaginas: await configuracaoService.obter('cabecalho_paginas') ?? '' };
   const fechamento = fechamentoSalvo !== null ? esquemaFechamentoLaudo.parse(JSON.parse(fechamentoSalvo)) : { ...FECHAMENTO_DESATIVADO };
   const [registro] = await executeQuery<unknown>(
     'SELECT nome, cargo, lotacao, matricula, forma_tratamento FROM users WHERE id = ?', [peritoId],
