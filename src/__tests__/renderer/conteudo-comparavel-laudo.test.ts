@@ -56,3 +56,18 @@ describe('conteúdo comparável do laudo', () => {
     expect(normalizarConteudoComparavel(alterado)).not.toBe(normalizarConteudoComparavel(original));
   });
 });
+
+it('a atualização das referências da coleta não cria alteração pendente sem mudar o texto', () => {
+  const original = '<div data-b601-coleta="true" data-b601-referencias="antigo"><span data-b601-exame-coleta="true">20/2026</span></div>';
+  expect(normalizarConteudoComparavel(original.replace('antigo', 'atual'))).toBe(normalizarConteudoComparavel(original));
+  expect(normalizarConteudoComparavel(original.replace('20/2026', '21/2026'))).not.toBe(normalizarConteudoComparavel(original));
+});
+
+it('ignora quebras entre a âncora oculta da tabela e os blocos ao salvar antes de Atualizar REP', () => {
+  const ancora = '<span data-placeholder="{{b601_tabela_material_coleta}}" data-placeholder-tabela-personalizada-id="t1" style="display: none">{{b601_tabela_material_coleta}}</span>';
+  const tabela = '<div data-placeholder-tabela-personalizada="true" data-placeholder-tabela-personalizada-id="t1"><table><tbody><tr><td>20/2026</td></tr></tbody></table></div>';
+  const semQuebras = ancora + tabela + '<h2>Do exame</h2>';
+  const comQuebras = ancora + '\n' + tabela + '\n<h2>Do exame</h2>';
+  expect(normalizarConteudoComparavel(comQuebras)).toBe(normalizarConteudoComparavel(semQuebras));
+  expect(normalizarConteudoComparavel(comQuebras.replace('20/2026', '21/2026'))).not.toBe(normalizarConteudoComparavel(semQuebras));
+});

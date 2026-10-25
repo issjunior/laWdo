@@ -1,7 +1,7 @@
 import { DomUtils, parseDocument } from 'htmlparser2'
 import type { SecaoTemplateRow } from '../types/database.js'
 import { projetarB601ParaLaudo } from '../../shared/utils/b601-pecas-projecao.js'
-import { assinaturaDescricaoB601, ehAgrupamentoB601, gerarDescricaoAgrupadaB601 } from '../../shared/utils/b601-descricao-agrupada.js'
+import { assinaturaDescricaoB601, ehAgrupamentoB601, gerarDescricaoAgrupadaB601, gerarDescricaoColetaB601 } from '../../shared/utils/b601-descricao-agrupada.js'
 import { criarHtmlCampoReservado } from '../../shared/utils/campo-reservado.js'
 
 const escapar = (valor: string): string => valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -50,8 +50,12 @@ export function expandirSecaoB601(secao: SecaoTemplateRow, secoes: SecaoTemplate
   const final = identificarFigurasB601(complemento, `${secao.id}-complemento`)
   if (ehAgrupamentoB601(secao.repetir_para)) {
     const tipo = secao.repetir_para?.split(':')[1] === '105' ? '105' : '101'
-    const gerado = gerarDescricaoAgrupadaB601(dados, tipo, secao.id)
-    return gerado ? [gerado, final].filter(Boolean).join('\n') : ''
+    const modelo = parseDocument(descricao)
+    const fotosPorOrigem = new Map(DomUtils.findAll(item => Boolean(item.attribs['data-b601-fotos-modelo']), modelo.children)
+      .map(item => [item.attribs['data-b601-fotos-modelo'], DomUtils.getInnerHTML(item)]))
+    const gerado = secao.conteudo?.includes('data-b601-modelo-coleta="true"')
+      ? identificarFigurasB601(gerarDescricaoColetaB601(dados, tipo, secao.id, fotosPorOrigem), `${secao.id}-coleta`) : gerarDescricaoAgrupadaB601(dados, tipo, secao.id)
+    return gerado ? [gerado, final].filter(Boolean).join('\n<p>&nbsp;</p>\n') : ''
   }
   const projecao = projetarB601ParaLaudo(dados)
   const tipo = secao.repetir_para?.split(':')[1]
@@ -67,7 +71,7 @@ export function expandirSecaoB601(secao: SecaoTemplateRow, secoes: SecaoTemplate
     const conteudo = identificarFigurasB601(substituirIndice(descricao), `${secao.id}-peca-${peca.idLocal}`)
     return `<div data-b601-peca="${escapar(peca.idLocal)}" data-b601-indice="${peca.indice}"><h4 data-b601-titulo="true">${escapar(titulo)}</h4>\n${conteudo}</div>`
   })
-  return `<div data-repeat-group="b601_pecas" data-repeat-owner="${escapar(secao.id)}" data-b601-itens="${escapar(JSON.stringify(pecas.map(peca => peca.idLocal)))}">${partes.join('\n')}</div>${final}`
+  return `<div data-repeat-group="b601_pecas" data-repeat-owner="${escapar(secao.id)}" data-b601-itens="${escapar(JSON.stringify(pecas.map(peca => peca.idLocal)))}">${partes.join('\n')}</div>${final ? `<p>&nbsp;</p>${final}` : ''}`
 }
 
 export function preservarDescricaoAgrupadaB601(htmlBase: string, htmlAtual: string): string {

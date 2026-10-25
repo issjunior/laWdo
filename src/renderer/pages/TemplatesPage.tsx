@@ -1,8 +1,8 @@
 import { renumerarTabelasHtml } from '@/lib/numeracao-tabelas';
 import { criarIndicadoresSecaoHtml } from '@/lib/indicadores-secao';
 import { calcularNumeracaoSecoes } from '@shared/utils/numeracao-secoes';
-import { ehAgrupamentoB601, gerarPreviaDescricaoB601, possuiComplementoB601 } from '@shared/utils/b601-descricao-agrupada';
-import { juntarComplementoB601, lerEdicaoComplementoB601, montarEdicaoComplementoB601, separarComplementoB601 } from '@/components/template/b601-complemento.utils';
+import { ehAgrupamentoB601, possuiComplementoB601 } from '@shared/utils/b601-descricao-agrupada';
+import { atualizarFotosColetaTemplateB601, gerarPreviaColetaTemplateB601, juntarComplementoB601, lerEdicaoComplementoB601, montarEdicaoComplementoB601, obterBlocosColetaTemplateB601, separarComplementoB601 } from '@/components/template/b601-complemento.utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -493,6 +493,7 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
   };
   const temComplemento = possuiComplementoB601(secao.repetir_para);
   const partes = temComplemento ? separarComplementoB601(secao.conteudo) : { descricao: secao.conteudo, complemento: '' };
+  const blocosColeta = obterBlocosColetaTemplateB601(secao.conteudo, secao.repetir_para || '');
 
   return (
     <div
@@ -526,7 +527,16 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
           ? 'Uma coluna por projétil, em quadros de até cinco. As características são preenchidas no laudo.'
           : 'Uma linha por estojo, reunindo todos os itens. As características são preenchidas no laudo.'}</p>
         <p className="text-xs text-muted-foreground">Prévia com cinco unidades. No laudo, a quantidade e a origem vêm da REP.</p>
-        <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: gerarPreviaDescricaoB601(secao.repetir_para === 'b601_agrupados:105' ? '105' : '101') }} />
+        {blocosColeta.length ? blocosColeta.map((bloco, indiceBloco) => (
+          <div key={bloco.origem} className="space-y-3">
+            <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: bloco.descricao }} />
+            <Label>Fotografias — {bloco.origem}</Label>
+            <p className="text-xs text-muted-foreground">Edite as figuras e legendas neste quadro. Use o botão de inserir figura para adicionar espaços para imagens.</p>
+            <TinyMceEditor editorId={`template-secao-${getSecaoRef(secao)}-fotos-${indiceBloco}`} value={bloco.fotos}
+              onChange={html => updateSecao(index, 'conteudo', atualizarFotosColetaTemplateB601(secao.conteudo, bloco.origem, html))}
+              height={300} placeholder="Figuras e legendas..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
+          </div>
+        )) : <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: gerarPreviaColetaTemplateB601(secao.conteudo, secao.repetir_para || '') }} />}
         </div>
       ) : <PlaceholderContextMenu
         editorId={`template-secao-${getSecaoRef(secao)}`}
@@ -1174,7 +1184,7 @@ export const TemplatesPage: React.FC = () => {
         filhos.forEach(filho => {
           if (!filho.ocultar_titulo) partes.push(`<h3>${[numeracaoPorSecao.get(filho), filho.nome.trim()].filter(Boolean).join(' ')}</h3>`);
           partes.push(ehAgrupamentoB601(filho.repetir_para)
-            ? gerarPreviaDescricaoB601(filho.repetir_para === 'b601_agrupados:105' ? '105' : '101') + separarComplementoB601(filho.conteudo || '').complemento
+            ? gerarPreviaColetaTemplateB601(filho.conteudo || '', filho.repetir_para || '') + separarComplementoB601(filho.conteudo || '').complemento
             : filho.conteudo || '<p style="color: #999; font-style: italic;">(subseção vazia)</p>');
         });
 

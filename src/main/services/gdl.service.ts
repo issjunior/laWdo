@@ -16,6 +16,8 @@ import type { AmbienteGdl } from '../../shared/gdl/ambiente.js';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
+import { consultarReferenciasMesmoCasoGdl } from './gdl-reps-mesmo-caso.service.js';
+import type { RepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso.js';
 import type { GdlRepValidada } from './gdl.schema.js';
 import type {
   ArquivoRepGdl,
@@ -70,6 +72,7 @@ interface FiltroConsultaInvestigacao {
 }
 
 export interface GdlConsultaResultado {
+  repsMesmoCaso?: RepsMesmoCasoGdl;
   sucesso: boolean;
   dados: GdlRepValidada | null;
   ambiente?: AmbienteGdl;
@@ -910,6 +913,11 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
       const repComComplementos = parsed;
       const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, parsed);
       const naturezaExame = dadosComplementares.naturezaExame?.trim() || undefined;
+      let repsMesmoCaso: RepsMesmoCasoGdl | undefined;
+      if (naturezaExame && extrairCodigoNaturezaExame(naturezaExame) === 'B-601') {
+        try { repsMesmoCaso = await consultarReferenciasColeta(parsed, creds, ambiente); }
+        catch { log.warn('Não foi possível consultar as REPs do mesmo caso. A importação B-601 foi preservada.'); }
+      }
       const erroNaturezaExame = naturezaExame ? undefined
         : `Natureza de exame não identificada pela API: ${dadosComplementares.motivoNatureza}. Selecione o tipo localmente.`;
       const dadosComEnvolvidos = dadosComplementares.envolvidos.length > 0
@@ -931,6 +939,7 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
         dados: dadosComEnvolvidos,
         ambiente,
         naturezaExame,
+        repsMesmoCaso,
         statusRep: dadosComplementares.statusRep,
         erroNaturezaExame,
       };
@@ -1022,6 +1031,28 @@ async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise
   if (resposta.statusCode === 401 || resposta.statusCode === 403) throw new Error('Autenticação rejeitada pelo GDL. Verifique login e senha.');
   if (resposta.statusCode !== 200) throw new Error(`Erro do servidor GDL (HTTP ${resposta.statusCode}).`);
   return { rep: interpretarGdlRepJson(resposta.data), credenciais, ambiente };
+}
+
+async function consultarReferenciasColeta(rep: GdlRepValidada, credenciais: GdlCredenciais, ambiente: AmbienteGdl): Promise<RepsMesmoCasoGdl> {
+  const cpfUsuario = credenciais.cpfUsuario?.replace(/\D/g, '') || '';
+  if (!/^\d{11}$/.test(cpfUsuario)) throw new Error('Configure o CPF do usuário GDL para consultar as REPs do caso.');
+  const headers = { Authorization: buildAuthHeader(credenciais.login, credenciais.senha), 'Content-Type': 'application/json', cpfUsuario };
+  const filtros = extrairFiltrosParaConsultaInvestigacao(rep).map(filtro => filtro.numeroCaso
+    ? { numeroCaso: filtro.numeroCaso } : { numeroOrigem: filtro.numeroOrigem, anoOrigem: filtro.anoOrigem });
+  return consultarReferenciasMesmoCasoGdl(rep, ambiente, filtros, async (filtro, pagina) => {
+    const resposta = await requisitarGdl(`${credenciais.baseUrl}/repsInvestigacaoPolicial/listarReps`, 'POST', headers,
+      JSON.stringify({ ...filtro, numPagina: pagina, tamPagina: 10 }), 15000);
+    if (resposta.statusCode !== 200) throw new Error(`Não foi possível consultar as REPs do caso (HTTP ${resposta.statusCode}).`);
+    return interpretarGdlListaRepsInvestigacaoJson(resposta.data);
+  });
+}
+
+export async function consultarRepsMesmoCaso(numero: string, ano: string): Promise<RepsMesmoCasoGdl> {
+  return atividadeGdlService.consultar(async () => {
+    const { rep, credenciais, ambiente } = await consultarIdentificacaoDaRep(numero, ano);
+    if (String(rep.numero) !== numero || String(rep.ano) !== ano) throw new Error('A identificação retornada pelo GDL diverge da REP do laudo.');
+    return consultarReferenciasColeta(rep, credenciais, ambiente);
+  });
 }
 
 function repInvestigacaoCorresponde(repInvestigacao: { numeroRep: string; numeroCaso: string }, rep: GdlRepValidada): boolean {

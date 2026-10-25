@@ -19,7 +19,10 @@ import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../serv
 import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
 import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
 
+import { esquemaRepsMesmoCasoGdl, type RepsMesmoCasoGdl } from '../../../shared/gdl/reps-mesmo-caso.js';
+
 const remetentesConsultaGdl = new WeakSet<object>();
+const consultasMesmoCaso = new Map<string, Promise<RepsMesmoCasoGdl>>();
 const revisoesAtualizacaoGdl = new Map<string, { remetenteId: number; usuarioId: string; identidade: string; expiraEm: number }>();
 
 async function vincularRevisaoAtualizacaoGdl(remetenteId: number, consultaId: string, operacaoId: string): Promise<void> {
@@ -46,7 +49,7 @@ function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string }
   return numeroNormalizado ? { numero: numeroNormalizado, ano: correspondencia[2] } : null;
 }
 
-async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; ano: string }> {
+async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; ano: string; repId: string; numeroOriginal: string }> {
   if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido.');
   const laudo = await laudoService.findById(laudoId);
   if (!laudo) throw new Error('Laudo não encontrado.');
@@ -54,10 +57,44 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
   if (!rep) throw new Error('REP associada ao laudo não encontrada.');
   const identificacao = extrairNumeroEAnoDaRep(rep.numero);
   if (!identificacao) throw new Error('O número da REP deve estar no formato número/ano para consultar imagens no GDL.');
-  return identificacao;
+  return { ...identificacao, repId: laudo.rep_id, numeroOriginal: rep.numero };
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:consultar-reps-mesmo-caso', async (event, laudoId: unknown) => {
+    try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
+      const identidade = await gdlService.obterIdentidadeMinhasReps();
+      if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido.');
+      const chave = JSON.stringify([event.sender.id, usuarioId, identidade, laudoId]);
+      let consulta = consultasMesmoCaso.get(chave);
+      if (!consulta) {
+        consulta = (async () => {
+          const referencia = await resolverRepDoLaudo(laudoId);
+          const data = esquemaRepsMesmoCasoGdl.parse(await gdlService.consultarRepsMesmoCaso(referencia.numero, referencia.ano));
+          if (data.numeroRep !== referencia.numero || data.anoRep !== referencia.ano) throw new Error('A identificação retornada pelo GDL diverge da REP do laudo.');
+          const validarContexto = async () => {
+            const atual = await resolverRepDoLaudo(laudoId);
+            if (atual.repId !== referencia.repId || atual.numero !== referencia.numero || atual.ano !== referencia.ano) throw new Error('A REP vinculada ao laudo mudou. Consulte novamente.');
+            if (event.sender.isDestroyed?.() || usuarioId !== authSessaoService.exigir(event.sender.id) || identidade !== await gdlService.obterIdentidadeMinhasReps()) {
+              throw new Error('A sessão ou configuração GDL mudou. Consulte novamente.');
+            }
+          };
+          await validarContexto();
+          await repService.salvarReferenciasMesmoCaso(referencia.repId, referencia.numeroOriginal, data, validarContexto);
+          return data;
+        })();
+        consultasMesmoCaso.set(chave, consulta);
+      }
+      try {
+        return { success: true, data: await consulta };
+      } finally {
+        if (consultasMesmoCaso.get(chave) === consulta) consultasMesmoCaso.delete(chave);
+      }
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível consultar as REPs do caso.' };
+    }
+  });
   ipcMain.handle('gdl:obter-avisos-reiteracao', async event => {
     try {
       const usuarioId = authSessaoService.exigir(event.sender.id);
@@ -348,6 +385,7 @@ export const registerGdlHandlers = (): void => {
         success: true,
         data: {
           ...converterRepGdl(codigoExame, resultado.dados, {
+          repsMesmoCaso: resultado.repsMesmoCaso,
           origemInicial: 'gdl',
           ultimaConsulta: {
             ambiente: resultado.ambiente ?? 'producao',

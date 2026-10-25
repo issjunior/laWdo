@@ -124,6 +124,7 @@ interface IpcAPIRendererLegada {
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
   gdl: IpcGrupoLegado & {
+    consultarRepsMesmoCaso: (laudoId: string) => Promise<{ success: boolean; data?: import('@shared/gdl/reps-mesmo-caso').RepsMesmoCasoGdl; error?: string }>;
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
     obterAvisosReiteracao: () => Promise<{ success: boolean; data?: import('../shared/gdl/reiteracao').AvisoReiteracaoGdl[]; error?: string }>;
     onAvisosAlterados: (callback: (reiniciar: boolean) => void) => () => void;

@@ -1,3 +1,4 @@
+import { esquemaRepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso';
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ consultar: vi.fn(), executar: vi.fn(), erro: vi.fn() }))
@@ -40,3 +41,29 @@ describe('BaseService e RepService', () => {
     expect(mocks.consultar.mock.calls[1]).toEqual([expect.stringContaining('WHERE id = ?'), ['rep-1']])
   })
 })
+
+const referencias = esquemaRepsMesmoCasoGdl.parse({ ambiente: 'producao', numeroRep: '100', anoRep: '2026', numeroCaso: '42', consultadoEm: new Date().toISOString(), reps: [] });
+
+it('salva referências preservando campos e metadados, incluindo edição concorrente', async () => {
+  mocks.consultar.mockReset();
+  const registro = (campos: unknown) => [{ id: 'rep-1', numero: '100/2026', campos_especificos: JSON.stringify(campos) }];
+  mocks.consultar.mockResolvedValueOnce(registro({ b601: { pecas: [] }, integracaoGdl: { origem: 'importacao' } }))
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce(registro({ b601: { pecas: ['edicao recente'] }, integracaoGdl: { origem: 'importacao', outro: true } }))
+    .mockResolvedValueOnce([{ id: 'rep-1' }]);
+  const validar = vi.fn().mockResolvedValue(undefined);
+  await repService.salvarReferenciasMesmoCaso('rep-1', '100/2026', referencias, validar);
+  const parametros = mocks.consultar.mock.calls[3][1];
+  expect(JSON.parse(parametros[0])).toEqual({ b601: { pecas: ['edicao recente'] }, integracaoGdl: { origem: 'importacao', outro: true, repsMesmoCaso: referencias } });
+  expect(parametros.slice(1, 3)).toEqual(['rep-1', '100/2026']);
+  expect(validar).toHaveBeenCalledTimes(2);
+});
+
+it('interrompe gravação se o contexto muda ou os dados locais são inválidos', async () => {
+  mocks.consultar.mockReset();
+  mocks.consultar.mockResolvedValue([{ id: 'rep-1', numero: '100/2026', campos_especificos: '{}' }]);
+  await expect(repService.salvarReferenciasMesmoCaso('rep-1', '100/2026', referencias, async () => { throw new Error('Sessão mudou'); })).rejects.toThrow('Sessão mudou');
+  expect(mocks.consultar).toHaveBeenCalledTimes(1);
+  mocks.consultar.mockResolvedValue([{ id: 'rep-1', numero: '100/2026', campos_especificos: '[]' }]);
+  await expect(repService.salvarReferenciasMesmoCaso('rep-1', '100/2026', referencias, async () => undefined)).rejects.toThrow('dados locais');
+});

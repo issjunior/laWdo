@@ -2,6 +2,7 @@ import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { normalizarApresentacaoTabelas } from './tabelas-apresentacao';
 import { limparInteracaoCamposB601 } from './b601-campos-projetil';
+import { limparInteracaoColetaB601 } from './b601-coleta';
 
 /**
  * Utilitário para combinar classes Tailwind CSS
@@ -21,6 +22,7 @@ export function removerFormatacaoPlaceholders(html: string): string {
 
 export function removerFormatacaoPlaceholdersDoDom(raiz: HTMLElement): void {
   limparInteracaoCamposB601(raiz);
+  limparInteracaoColetaB601(raiz);
   raiz.querySelectorAll('[data-placeholder-preview="true"]').forEach(elemento => elemento.remove());
   raiz.querySelectorAll('[data-acao-suprimir-bloco="true"]').forEach(elemento => elemento.remove());
   raiz.querySelectorAll('[data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());

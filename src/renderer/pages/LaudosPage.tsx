@@ -2,9 +2,14 @@ import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useRegistrarAlteracoesPendentes, useSolicitarSaida } from '@/contexts/AlteracoesPendentesContext';
+import { useConsultaRepsColeta } from '@/hooks/useConsultaRepsColeta';
+import { obterPreferenciasAmbienteGdlEstritas } from '@/lib/gdl-ambiente';
+import type { RepsMesmoCasoGdl } from '@shared/gdl/reps-mesmo-caso';
 import { useAtalhoSalvarLaudo } from '@/hooks/useAtalhoSalvarLaudo';
 import { useBuscaTextoLaudo } from '@/hooks/useBuscaTextoLaudo';
 import { BarraBuscaLaudo } from '@/components/laudo/editor/BarraBuscaLaudo';
+import { aplicarReferenciasColetaB601, atualizarReferenciasEditorColetaB601, sincronizarCacheColetaB601 } from '@/lib/b601-coleta';
+import { MENSAGEM_FALHA_CONSULTA_GDL, possuiTabelaColetaB601 } from '@/lib/consulta-reps-coleta';
 import { criarCopiaVisualizacaoPlaceholders } from '@/lib/apresentacao-placeholders';
 import { useModelosIaSessao } from '@/hooks/useModelosIaSessao';
 import {
@@ -553,6 +558,9 @@ export const LaudosPage: React.FC = () => {
   const [secoes, setSecoes] = useState<SecaoEditor[]>([]);
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<number, boolean>>({});
   const [editorMode, setEditorMode] = useState<'multi' | 'single'>('single');
+  const consultaColetaManualRef = useRef(false);
+  const aberturaLaudoRef = useRef(0);
+  useEffect(() => () => { aberturaLaudoRef.current += 1; }, []);
   const secoesAtuaisRef = useRef(secoes);
   const editorModeAtualRef = useRef(editorMode);
   const laudoAtualRef = useRef(editando?.id);
@@ -2337,7 +2345,9 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
-  const handleEditar = useCallback(async (laudo: LaudoItem) => {
+  const handleEditar = useCallback(async (laudo: LaudoItem, consultaManual = false) => {
+    const abertura = ++aberturaLaudoRef.current;
+    consultaColetaManualRef.current = consultaManual;
     if (laudo.tipo_criacao === 'wizard') {
       navigate(`/laudos/${laudo.id}/wizard`);
       return;
@@ -2361,6 +2371,7 @@ export const LaudosPage: React.FC = () => {
 
     try {
       const rRep = await window.ipcAPI.rep.findById(laudo.rep_id);
+      if (aberturaLaudoRef.current !== abertura) return;
       if (!rRep.success || !rRep.data) throw new Error('REP indisponível');
 
       let solicitanteNome = '';
@@ -2374,8 +2385,11 @@ export const LaudosPage: React.FC = () => {
       }
 
       const margensTabelas = await getMargens();
+      const preferenciasGdl = await obterPreferenciasAmbienteGdlEstritas().catch(() => null);
+      if (aberturaLaudoRef.current !== abertura) return;
       setMapaPlaceholdersResolvidos(construirMapaPlaceholdersResolvidos({
         larguraUtilTabelasCm: 21 - margensTabelas.left - margensTabelas.right,
+        ambienteGdl: preferenciasGdl?.ambiente ?? null,
         repData: rRep.data,
         solicitanteNome,
         tipoExameNome: laudo.tipo_exame_nome,
@@ -2392,10 +2406,12 @@ export const LaudosPage: React.FC = () => {
         setExameCamposEspecificos(undefined);
       }
     } catch {
+      if (aberturaLaudoRef.current !== abertura) return;
       setExameCamposEspecificos(undefined);
       setMapaPlaceholdersResolvidos({});
     }
 
+    if (aberturaLaudoRef.current !== abertura) return;
     setModoVisualizacaoPlaceholders('dados');
     iniciarSessao(normalizarConteudoComparavel(montarHtmlEstruturalAtual(parsedSecoes)), true);
     setSecoes(parsedSecoes);
@@ -2441,6 +2457,7 @@ export const LaudosPage: React.FC = () => {
       descreverPendente: descreverPlaceholderPendente,
     });
     if (resultado.estado !== 'aplicado') throw new Error('Não foi possível preparar os campos do laudo.');
+    sincronizarCacheColetaB601(editor.getBody(), mapaPlaceholdersResolvidos.b601_tabela_material_coleta?.valor || '', editor.mode.isReadOnly());
     conferirTabelasEditoresRef.current();
     return true;
   };
@@ -2635,6 +2652,7 @@ export const LaudosPage: React.FC = () => {
     if (panelPoppedOut) {
       window.ipcAPI.ilustracoes.closePanel();
     }
+    aberturaLaudoRef.current += 1;
     setEditando(null);
     setSecoes([]);
     setSingleEditorHtml('');
@@ -2652,6 +2670,50 @@ export const LaudosPage: React.FC = () => {
       setPreviewBlobUrl('');
     }
   };
+
+  const aplicarReferenciasColeta = (referencias: RepsMesmoCasoGdl) => {
+    let alterou = false;
+    const atualizarHtml = (html: string) => {
+      const raiz = new DOMParser().parseFromString(html, 'text/html').body;
+      aplicarReferenciasColetaB601(raiz, referencias);
+      return raiz.innerHTML;
+    };
+    setMapaPlaceholdersResolvidos(mapa => {
+      const tabela = mapa.b601_tabela_material_coleta;
+      return tabela ? { ...mapa, b601_tabela_material_coleta: { ...tabela, valor: atualizarHtml(tabela.valor) } } : mapa;
+    });
+    const atualizarEditor = (id: string, html: string) => {
+      const editor = obterEditorTinyMce(id);
+      if (!editor) {
+        const atualizado = atualizarHtml(html);
+        if (normalizarConteudoComparavel(atualizado) !== normalizarConteudoComparavel(html)) alterou = true;
+        return atualizado;
+      }
+      const anterior = normalizarConteudoComparavel(editor.getContent());
+      const atualizado = atualizarReferenciasEditorColetaB601(editor, referencias);
+      if (normalizarConteudoComparavel(atualizado) !== anterior) alterou = true;
+      return atualizado;
+    };
+    if (editorModeAtualRef.current === 'single') {
+      const html = atualizarEditor('laudo-single-editor', singleHtmlAtualRef.current);
+      setSingleEditorHtml(html);
+      setSecoes(parseSingleHtmlToSecoes(html, secoesAtuaisRef.current));
+    } else {
+      setSecoes(secoesAtuaisRef.current.map((secao, indice) => ({ ...secao, conteudo: atualizarEditor(`secao-${indice}`, secao.conteudo) })));
+    }
+    if (alterou) registrarAlteracao('usuario');
+  };
+
+  useConsultaRepsColeta({
+    laudoId: editando?.id,
+    sessao: sessaoEditor,
+    habilitada: !!editando && !inicializando && (possuiTabelaColetaB601(singleEditorHtml) || secoes.some(secao => possuiTabelaColetaB601(secao.conteudo))),
+    aoAplicar: aplicarReferenciasColeta,
+    aoFalhar: erro => {
+      void window.ipcAPI.logWarning('gdl', `Falha na consulta das REPs do caso: ${erro instanceof Error ? erro.message : 'Erro inesperado'}`);
+      if (consultaColetaManualRef.current) toast.error(MENSAGEM_FALHA_CONSULTA_GDL);
+    },
+  });
 
   const handleVoltar = () => {
     solicitarSaida(finalizarVolta);
@@ -4147,6 +4209,7 @@ export const LaudosPage: React.FC = () => {
               onAbrirIndicePlaceholders={abrirIndicePlaceholders}
             />
 
+
           </CardHeader>
           <CardContent className="overflow-visible p-0 px-6 pb-6">
             {buscaLaudo.aberta && <BarraBuscaLaudo termo={buscaLaudo.termo} atual={buscaLaudo.atual}
@@ -4575,7 +4638,7 @@ export const LaudosPage: React.FC = () => {
           onConcluida={(resultado) => {
             void carregarLaudos();
             void window.ipcAPI.laudo.findById(editando.id).then(resposta => {
-              if (resposta.success && resposta.data) void handleEditar({ ...editando, ...resposta.data } as LaudoItem);
+              if (laudoAtualRef.current === editando.id && resposta.success && resposta.data) void handleEditar({ ...editando, ...resposta.data } as LaudoItem, true);
             });
             toast.success(resultado.camposAtualizados === 0 && resultado.pecasAtualizadas === 0 && resultado.laudoReconciliado
               ? 'Estrutura do laudo reconciliada com os dados locais.'

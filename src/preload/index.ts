@@ -1,5 +1,6 @@
 import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
 import type { AvisoReiteracaoGdl } from '../shared/gdl/reiteracao.js';
+import type { RepsMesmoCasoGdl } from './types.js';
 import type { SalvarTemplateCompletoInput, CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
@@ -253,6 +254,7 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
+    consultarRepsMesmoCaso: (laudoId: string) => Promise<UserResponse<RepsMesmoCasoGdl>>;
     copiarEmailSuporte: () => Promise<UserResponse<{ email: string }>>;
     obterPreferenciaListagem: () => Promise<UserResponse<{ habilitada: boolean }>>;
     definirPreferenciaListagem: (habilitada: boolean) => Promise<UserResponse<{ habilitada: boolean }>>;
@@ -572,6 +574,7 @@ const ALLOWED_CHANNELS = new Set([
   'gdl:limpar-validacao-sessao',
   'gdl:validar-credenciais',
   'gdl:consultar-rep',
+  'gdl:consultar-reps-mesmo-caso',
   'gdl:identificar-rep',
   'gdl:copiar-email-suporte',
   'gdl:completar-consulta-rep',
@@ -1483,6 +1486,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    consultarRepsMesmoCaso: (laudoId: string): Promise<UserResponse<RepsMesmoCasoGdl>> => invocarComDiagnostico('gdl:consultar-reps-mesmo-caso', laudoId),
     copiarEmailSuporte: (): Promise<UserResponse<{ email: string }>> => invocarComDiagnostico('gdl:copiar-email-suporte'),
     obterPreferenciaListagem: (): Promise<UserResponse<{ habilitada: boolean }>> => invocarComDiagnostico('gdl:obter-preferencia-listagem'),
     definirPreferenciaListagem: (habilitada: boolean): Promise<UserResponse<{ habilitada: boolean }>> => {
