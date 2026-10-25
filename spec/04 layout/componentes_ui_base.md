@@ -54,3 +54,20 @@ As combinações montadas em execução por categorias, peças e placeholders s�
 `FirstUserSetupForm.tsx` usa card de até `max-w-3xl`, cabeçalho com logo e título Primeiro acesso, e seções Dados de cadastro e Senha de acesso com campos responsivos. A orientação de restauração permanece: criar a conta local e entrar no laWdo. Persistência do último usuário e login automático estão em `spec/15 seguranca/seguranca_electron.md`.
 
 O diálogo do Header dá destaque à versão atual, disponível e que será instalada, com algarismos tabulares; o fluxo de instalação continua descrito em `spec/12 atualizacao/fluxo_atualizacao.md`. Na sidebar, a identificação Beta pertence ao item Projéteis, sem classificar todo o grupo Ferramentas como beta.
+
+## Indicador da conexão GDL
+
+`Header.tsx` monta `IndicadorConexaoGdl.tsx` antes do seletor de tema, com chave pela identidade do usuário. O botão mantém o texto GDL e um ícone em largura fixa, sem bloquear ações nem emitir notificações automáticas. Usa wrappers locais de Tooltip, Popover e Button, classes Tailwind, temas claro/escuro, nome acessível e foco visível. Como botão dentro de `barra-titulo-janela`, preserva a regra existente de `no-drag` dos controles da barra de título.
+
+| Aparência | Condição |
+|---|---|
+| Cinza, interrogação | Sem observação de rede, rede desconhecida ou observação com mais de 120 segundos. |
+| Vermelho, conexão interrompida | Evidência recente de rede indisponível. |
+| Verde, confirmação | Rede acessível recente, credenciais validadas e nenhuma atenção web conhecida; a validação pode ser anterior. |
+| Âmbar, alerta | Rede acessível recente com credenciais ausentes, pendentes ou rejeitadas, ou falha web conhecida. |
+
+Cor, formato e descrição do ícone distinguem os estados. A aparência é derivada por `aparenciaConexaoGdl`, em `src/shared/gdl/conexao.ts`; não duplicar essa regra no header. Durante checagem, mantém o estado anterior e mostra andamento no painel.
+
+Ao clicar, abre um painel compacto com ambiente, disponibilidade, credenciais da API, datas da validação/checagem e situação do acesso web. `Verificar agora` fica desabilitado enquanto verifica e checa somente rede; `Abrir API GDL` fecha o painel e navega para `/gdl-config`. O painel explica que validação anterior não garante permissão para toda operação. O serviço, IPC, ciclo de foco e limites estão em `spec/08 gdl/api_gdl.md`.
+
+`conexao-gdl.test.tsx` cobre painel, ações, estados e ciclo do monitor; `header-atualizacao.component.test.tsx` renderiza o header com roteador e API GDL simulada para preservar a cobertura dos controles de atualização.

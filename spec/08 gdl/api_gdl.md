@@ -34,6 +34,32 @@ Produção é o ambiente padrão. Homologação só pode ser selecionada quando 
 
 `gdl_homologacao_habilitada` pertence às chaves do backup de Configuração; a preferência `gdl_listagem_reps_habilitada` não pertence a essa lista. O backup Completo inclui ambas pelo banco. A preferência de listagem continua desligada por padrão mesmo quando o ambiente é Produção.
 
+## Estado da conexão no header
+
+A fonte canônica é o singleton de `src/main/services/gdl-conexao.service.ts`, configurado por `gdl.service.ts`. O estado de rede e acesso web fica em memória; a inicialização pode reaproveitar a validação de credenciais salva por ambiente em `userData/gdl/validacao-sessao.json`, desde que tenha data válida. Essa validação não tem expiração temporal própria e não comprova autenticação atual. A aparência considera separadamente a idade da observação de rede. A apresentação está em `spec/04 layout/componentes_ui_base.md`.
+
+`src/shared/gdl/conexao.ts` define o schema Zod, os intervalos e a aparência derivada. O snapshot contém ambiente, revisão, rede (desconhecida/acessível/indisponível), credenciais (ausentes/pendentes/validadas/rejeitadas), acesso web (desconhecido/disponível/atenção), datas de rede/validação e andamento da verificação. Identidade da configuração, URL e autorização ficam no main.
+
+Os canais `gdl:obter-estado-conexao` e `gdl:verificar-conexao` exigem sessão local e reconferem o usuário após a operação. O primeiro apenas lê estado; o segundo checa somente rede. O preload expõe `obterEstadoConexao`, `verificarConexao` e `onEstadoConexaoAlterado`, com cleanup do listener. O evento `gdl:estado-conexao-alterado` não transporta snapshot nem dados do Electron: leva o renderer a reler o estado autenticado. Handlers e hook validam o contrato com Zod. Payload inválido não substitui o último estado aceito e gera orientação de nova tentativa na UI. Mudanças exigem coordenação entre contrato, serviço, handlers, allowlist, `IpcAPI` e declaração legada em `src/renderer/index.tsx`.
+
+### Checagem leve e ciclo de vida
+
+A checagem usa exclusivamente `GET /unidadesMedida`, sem Authorization, com timeout de cinco segundos e `cache: no-store`. Funciona sem credenciais e com a listagem de REPs desativada; não consulta REP, não tenta login e não abre detalhes. Respostas 2xx e 4xx, exceto 408, comprovam alcance do servidor, não autorização; redirecionamentos são bloqueados. Transporte, timeout e 5xx indicam indisponibilidade. Um 401 desse endpoint não rejeita credenciais.
+
+`useConexaoGdl` lê o estado ao montar. Com documento visível e janela com foco, agenda a checagem para 60 segundos após a mais recente entre a observação de rede e a última tentativa; uma observação recente evita requisição adicional na entrada ou retorno de foco. Blur e ocultação suspendem o agendamento, e foco/visibilidade recalculam a idade e o prazo. `Verificar agora` força apenas a checagem de rede. Após mais de 120 segundos sem observação, a aparência fica desconhecida/desatualizada, inclusive sem novas respostas do main. Desmontagem remove timers, eventos e assinatura; a identidade do usuário remonta o indicador no header. Requisição já enviada pode terminar.
+
+Verificações simultâneas da mesma revisão compartilham uma Promise no main. Durante nova checagem, a aparência anterior permanece; `verificando` identifica o andamento no painel. Leituras locais e snapshots de lista não renovam evidência de rede. O transporte JSON e o download de fotos também usam `no-store` e registram respostas/falhas reais. O monitor não bloqueia consultas, não altera o agendamento de Minhas REPs e não repete operações de negócio que falharam.
+
+### Autenticação, falhas parciais e concorrência
+
+Operações autenticadas existentes alimentam a evidência da API; uma checagem de rede positiva não apaga autenticação rejeitada nem atenção web. REP inexistente e falha de parsing após resposta recebida não equivalem a queda. O 401 de consulta individual continua sujeito à confirmação por REP anteriormente validada antes de rejeitar credenciais; 403 não rejeita automaticamente a evidência do monitor. Nos fluxos individuais, 403 ainda pode limpar a validação persistida legada sem apagar a evidência positiva em memória, que nesse caso pode não ser reaproveitada na próxima abertura.
+
+`gdl-pagina.service.ts` observa o resultado das leituras web já solicitadas. Falha web gera atenção parcial, preservando rede e credenciais da API; sucesso web limpa essa atenção, mas não valida credenciais da API. Acesso web ainda desconhecido permite aparência positiva quando rede e validação da API a sustentam. A checagem periódica não autentica a sessão web nem elimina o bloqueio temporário próprio desse fluxo.
+
+O contexto usa a identidade efetiva de ambiente e credenciais. Salvar URL, login, senha ou CPF GDL pelo serviço de configuração limpa a validação do ambiente e reinicia o monitor; trocar ambiente ou habilitação de homologação também reinicia a observação. A preferência da listagem não invalida a conexão. Revisão/identidade descartam resultados de contexto anterior; sequências por rede, autenticação e web impedem que observação antiga sobrescreva uma mais recente. O renderer também descarta respostas atrasadas ou de revisão anterior.
+
+Os testes `src/__tests__/main/gdl-conexao*.test.ts`, `src/__tests__/preload/gdl-conexao.test.ts` e `src/__tests__/renderer/conexao-gdl.test.tsx` cobrem estados, timeout, autenticação, falha web, troca de contexto, compartilhamento de checagem, wrappers, cleanup, foco e expiração com respostas simuladas. Não comprovam disponibilidade nem efeitos do GDL real.
+
 ## Construção do snapshot de “Minhas REPs”
 
 `gdl-minhas-reps-cache.service.ts` associa o arquivo em `userData/gdl` ao usuário local e ao hash da identidade efetiva do GDL, que inclui ambiente e credenciais. JSON persistido é validado por Zod antes de uso. Consultas da mesma chave compartilham uma promessa; consultas de chaves diferentes entram numa fila global para não trocar a sessão/paginação web durante outra coleta. Sem `forcar`, um snapshot com menos de dez minutos evita rede quando a listagem está habilitada. Com a listagem desligada, Dashboard e modal exibem apenas snapshot com menos de 30 minutos e não iniciam atualização.

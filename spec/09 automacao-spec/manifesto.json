@@ -666,7 +666,16 @@
         "src/shared/catalogos/b602-marcas-armas.catalogo.ts",
         "src/renderer/components/rep/GdlPecasModal.tsx",
         "src/renderer/components/rep/TipoSolicitacaoSelect.tsx",
-        "src/renderer/components/rep/exam-fields/pecas-b602.utils.ts"
+        "src/renderer/components/rep/exam-fields/pecas-b602.utils.ts",
+        "src/shared/gdl/conexao.ts",
+        "src/main/services/gdl-conexao.service.ts",
+        "src/main/services/gdl-pagina.service.ts",
+        "src/main/services/gdl-agendamento-eventos.service.ts",
+        "src/renderer/hooks/useConexaoGdl.ts",
+        "src/renderer/components/layout/IndicadorConexaoGdl.tsx",
+        "src/__tests__/main/gdl-conexao*.test.ts",
+        "src/__tests__/preload/gdl-conexao.test.ts",
+        "src/__tests__/renderer/conexao-gdl.test.tsx"
       ]
     },
     {
@@ -984,7 +993,10 @@
         "src/renderer/components/ui/resizable.tsx",
         "src/renderer/styles/globals.css",
         "src/renderer/components/layout/Header.tsx",
-        "tailwind.config.js"
+        "tailwind.config.js",
+        "src/renderer/components/layout/IndicadorConexaoGdl.tsx",
+        "src/__tests__/renderer/conexao-gdl.test.tsx",
+        "src/__tests__/renderer/header-atualizacao.component.test.tsx"
       ]
     },
     {

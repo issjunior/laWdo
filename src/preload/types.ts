@@ -1,5 +1,6 @@
 import type { FalhaPdf } from '../shared/types/pdf.types.js'
 export type { RepsMesmoCasoGdl } from '../shared/gdl/reps-mesmo-caso.js';
+export type { EstadoConexaoGdl } from '../shared/gdl/conexao.js';
 import type { RespostaImportacaoTemplate } from '../shared/types/importacao-template.types.js';
 import type { RespostaSalvarTemplateCompleto } from '../shared/types/template.types.js';
 

@@ -1,6 +1,7 @@
 import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
 import type { AvisoReiteracaoGdl } from '../shared/gdl/reiteracao.js';
 import type { RepsMesmoCasoGdl } from './types.js';
+import type { EstadoConexaoGdl } from './types.js';
 import type { SalvarTemplateCompletoInput, CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
@@ -254,6 +255,9 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
+    obterEstadoConexao: () => Promise<UserResponse<EstadoConexaoGdl>>;
+    verificarConexao: () => Promise<UserResponse<EstadoConexaoGdl>>;
+    onEstadoConexaoAlterado: (callback: () => void) => () => void;
     consultarRepsMesmoCaso: (laudoId: string) => Promise<UserResponse<RepsMesmoCasoGdl>>;
     copiarEmailSuporte: () => Promise<UserResponse<{ email: string }>>;
     obterPreferenciaListagem: () => Promise<UserResponse<{ habilitada: boolean }>>;
@@ -568,6 +572,9 @@ const ALLOWED_CHANNELS = new Set([
 
   // GDL
   'gdl:obter-preferencia-listagem',
+  'gdl:obter-estado-conexao',
+  'gdl:verificar-conexao',
+  'gdl:estado-conexao-alterado',
   'gdl:definir-preferencia-listagem',
   'gdl:testar-conexao',
   'gdl:obter-validacao-sessao',
@@ -1486,6 +1493,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    obterEstadoConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:obter-estado-conexao'),
+    verificarConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:verificar-conexao'),
+    onEstadoConexaoAlterado: (callback: () => void) => {
+      const ouvinte = () => callback();
+      ipcRenderer.on('gdl:estado-conexao-alterado', ouvinte);
+      return () => ipcRenderer.removeListener('gdl:estado-conexao-alterado', ouvinte);
+    },
     consultarRepsMesmoCaso: (laudoId: string): Promise<UserResponse<RepsMesmoCasoGdl>> => invocarComDiagnostico('gdl:consultar-reps-mesmo-caso', laudoId),
     copiarEmailSuporte: (): Promise<UserResponse<{ email: string }>> => invocarComDiagnostico('gdl:copiar-email-suporte'),
     obterPreferenciaListagem: (): Promise<UserResponse<{ habilitada: boolean }>> => invocarComDiagnostico('gdl:obter-preferencia-listagem'),

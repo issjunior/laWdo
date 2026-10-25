@@ -18,10 +18,31 @@ import { repService } from '../../services/rep.service.js';
 import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
 import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
 import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
-
 import { esquemaRepsMesmoCasoGdl, type RepsMesmoCasoGdl } from '../../../shared/gdl/reps-mesmo-caso.js';
+import { esquemaEstadoConexaoGdl } from '../../../shared/gdl/conexao.js';
+import { conexaoGdlService } from '../../services/gdl-conexao.service.js';
 
 const remetentesConsultaGdl = new WeakSet<object>();
+const remetentesConexaoGdl = new Map<number, WebContents>();
+let observandoConexaoGdl = false;
+
+function observarEstadoConexaoGdl(remetente: WebContents): void {
+  if (!observandoConexaoGdl) {
+    observandoConexaoGdl = true;
+    conexaoGdlService.observar(() => {
+      for (const [id, janela] of remetentesConexaoGdl) {
+        try {
+          if (janela.isDestroyed()) { remetentesConexaoGdl.delete(id); continue; }
+          authSessaoService.exigir(id);
+          janela.send('gdl:estado-conexao-alterado');
+        } catch { remetentesConexaoGdl.delete(id); }
+      }
+    });
+  }
+  if (remetentesConexaoGdl.has(remetente.id)) return;
+  remetentesConexaoGdl.set(remetente.id, remetente);
+  remetente.once('destroyed', () => remetentesConexaoGdl.delete(remetente.id));
+}
 const consultasMesmoCaso = new Map<string, Promise<RepsMesmoCasoGdl>>();
 const revisoesAtualizacaoGdl = new Map<string, { remetenteId: number; usuarioId: string; identidade: string; expiraEm: number }>();
 
@@ -61,6 +82,19 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  for (const canal of ['gdl:obter-estado-conexao', 'gdl:verificar-conexao']) {
+    ipcMain.handle(canal, async event => {
+      try {
+        const usuarioId = authSessaoService.exigir(event.sender.id);
+        observarEstadoConexaoGdl(event.sender);
+        const estado = canal === 'gdl:verificar-conexao' ? await conexaoGdlService.verificar() : await conexaoGdlService.obterEstado();
+        if (usuarioId !== authSessaoService.exigir(event.sender.id)) throw new Error('A sessão local mudou.');
+        return { success: true, data: esquemaEstadoConexaoGdl.parse(estado) };
+      } catch {
+        return { success: false, error: 'Não foi possível verificar o estado da conexão com o GDL.' };
+      }
+    });
+  }
   ipcMain.handle('gdl:consultar-reps-mesmo-caso', async (event, laudoId: unknown) => {
     try {
       const usuarioId = authSessaoService.exigir(event.sender.id);

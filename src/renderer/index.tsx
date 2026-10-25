@@ -1,4 +1,5 @@
 import React from 'react';
+import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
 import ReactDOM from 'react-dom/client';
 import App from './App.js';
 import './styles/globals.css';
@@ -128,6 +129,9 @@ interface IpcAPIRendererLegada {
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
     obterAvisosReiteracao: () => Promise<{ success: boolean; data?: import('../shared/gdl/reiteracao').AvisoReiteracaoGdl[]; error?: string }>;
     onAvisosAlterados: (callback: (reiniciar: boolean) => void) => () => void;
+    obterEstadoConexao: () => Promise<{ success: boolean; data?: EstadoConexaoGdl; error?: string }>;
+    verificarConexao: () => Promise<{ success: boolean; data?: EstadoConexaoGdl; error?: string }>;
+    onEstadoConexaoAlterado: (callback: () => void) => () => void;
     onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
   };
   categoria: IpcGrupoLegado;

@@ -1,4 +1,6 @@
 import { atividadeGdlService } from './gdl-atividade.service.js';
+import { conexaoGdlService, type ObservacaoConexaoGdl } from './gdl-conexao.service.js';
+import { observarContextoGdl, obterVersaoContextoGdl } from './gdl-agendamento-eventos.service.js';
 import { definirAmbienteConsultaGdl, destinoApiGdlPermitido, registrarRespostaGdl } from './gdl-diagnostico.service.js';
 import fs from 'fs';
 import path from 'path';
@@ -226,12 +228,13 @@ interface SessaoFotosGdl {
 
 const sessoesFotosGdl = new Map<string, SessaoFotosGdl>()
 
-function limparValidacaoSessaoInterna(ambiente: AmbienteGdl): GdlValidacaoSessao {
+function limparValidacaoSessaoInterna(ambiente: AmbienteGdl, atualizarConexao = true): GdlValidacaoSessao {
   validacaoSessaoGdl[ambiente] = {
     ambiente: getAmbienteLabel(ambiente),
     validado: false,
   };
   persistirValidacaoSessao();
+  if (atualizarConexao) conexaoGdlService.limparAutenticacao(ambiente);
   return validacaoSessaoGdl[ambiente];
 }
 
@@ -306,9 +309,12 @@ async function requisitarGdl(
   headers: Record<string, string>,
   body?: string,
   timeout: number = 15000,
-): Promise<{ statusCode: number; data: string; redirecionado: boolean; paginaAutenticacao: boolean }> {
+  observarConexao = true,
+): Promise<{ statusCode: number; data: string; redirecionado: boolean; paginaAutenticacao: boolean; observacaoConexao: ObservacaoConexaoGdl | null }> {
   if (!destinoApiGdlPermitido(url, method)) throw new Error('Operação GDL não permitida: somente consultas de leitura.');
   await atividadeGdlService.antesDaRequisicao();
+  const observacaoConexao = observarConexao ? await conexaoGdlService.capturarRequisicao(url, headers.Authorization).catch(() => null) : null;
+  let respostaRecebida = false;
   const inicio = performance.now();
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
@@ -318,21 +324,26 @@ async function requisitarGdl(
       method,
       headers,
       redirect: 'manual',
+      cache: 'no-store',
       ...(body ? { body } : {}),
       signal: controller.signal,
     });
+    respostaRecebida = true;
+    conexaoGdlService.registrarRede(observacaoConexao, resposta.status < 500 && resposta.status !== 408);
     const data = await resposta.text();
     await registrarRespostaGdl({ etapa: 'resposta_original', operacao: new URL(url).pathname.split('/api/')[1],
       metodo: method, duracaoMs: performance.now() - inicio, statusHttp: resposta.status,
       redirecionamentoBloqueado: resposta.status >= 300 && resposta.status < 400 }, data);
     if (resposta.status >= 300 && resposta.status < 400) throw new Error('Redirecionamento da API GDL bloqueado para preservar a consulta de leitura.');
     return {
+      observacaoConexao,
       statusCode: resposta.status,
       data,
       redirecionado: resposta.redirected,
       paginaAutenticacao: /\/(?:Account\/|Login(?:\.aspx)?(?:\/|$))/i.test(new URL(resposta.url || url).pathname),
     };
   } catch (error) {
+    if (!respostaRecebida || controller.signal.aborted) conexaoGdlService.registrarRede(observacaoConexao, false);
     await registrarRespostaGdl({ etapa: 'falha_transporte', operacao: new URL(url).pathname.split('/api/')[1], metodo: method, duracaoMs: performance.now() - inicio, timeout: controller.signal.aborted });
     if (controller.signal.aborted) {
       throw new Error(`Timeout após ${timeout}ms`);
@@ -572,6 +583,8 @@ async function baixarArquivoGdl(
   informarProgresso?: InformarProgressoDownloadGdl,
 ): Promise<{ statusCode: number; contentType: string; caminhoTemporario?: string }> {
   await atividadeGdlService.antesDaRequisicao();
+  const observacaoConexao = await conexaoGdlService.capturarRequisicao(url, headers.Authorization).catch(() => null);
+  let respostaRecebida = false;
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
   let temporizador: NodeJS.Timeout | undefined;
@@ -584,8 +597,11 @@ async function baixarArquivoGdl(
     const resposta = await sessaoRede.fetch(url, {
       method: 'GET',
       headers,
+      cache: 'no-store',
       signal: controller.signal,
     });
+    respostaRecebida = true;
+    conexaoGdlService.registrarRede(observacaoConexao, resposta.status < 500 && resposta.status !== 408);
     if (!resposta.ok || !resposta.body) return { statusCode: resposta.status, contentType: resposta.headers.get('content-type') || '' };
     const contentLengthCabecalho = resposta.headers.get('content-length');
     const contentLength = contentLengthCabecalho === null ? Number.NaN : Number(contentLengthCabecalho);
@@ -641,6 +657,7 @@ async function baixarArquivoGdl(
       throw error
     }
   } catch (error) {
+    if (!respostaRecebida || controller.signal.aborted) conexaoGdlService.registrarRede(observacaoConexao, false);
     if (controller.signal.aborted) {
       throw new Error('O download da Lista de Fotos ficou 30 segundos sem receber dados do GDL. Tente novamente.');
     }
@@ -749,9 +766,10 @@ async function consultarDadosNaInvestigacao(
         numeroOrigem: filtro.numeroOrigem, anoOrigem: filtro.anoOrigem,
       }), numPagina: pagina, tamPagina: 10 });
       try {
-        const { statusCode, data } = await requisitarGdl(url, 'POST', headers, corpo, 15000);
+        const { statusCode, data, observacaoConexao } = await requisitarGdl(url, 'POST', headers, corpo, 15000);
         if (statusCode !== 200) { houveFalha = true; finalizada = true; break; }
         const resposta = interpretarGdlListaRepsInvestigacaoJson(data);
+        conexaoGdlService.registrarAutenticacao(observacaoConexao, true);
         await registrarRespostaGdl({ etapa: 'resposta_normalizada' }, undefined, resposta);
         const assinatura = JSON.stringify(resposta.dadosREPs);
         if (paginas.has(assinatura) && resposta.dadosREPs.length) { houveFalha = true; finalizada = true; break; }
@@ -796,8 +814,8 @@ async function testarConexaoInterna(ambiente: string): Promise<GdlTesteResultado
   const ambienteLabel = getAmbienteLabel(amb);
   let endpointRede = '';
   try {
-    const creds = await carregarCredenciais(amb);
-    endpointRede = `${creds.baseUrl}/unidadesMedida`;
+    const baseUrl = await carregarBaseUrl(amb);
+    endpointRede = `${baseUrl}/unidadesMedida`;
 
     const headersRede: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -884,6 +902,7 @@ export async function obterIdentidadeMinhasReps(): Promise<string> {
 }
 
 async function consultarRepInterna(numero: string, ano: string): Promise<GdlConsultaResultado> {
+  const versaoContexto = obterVersaoContextoGdl();
   let ambiente: AmbienteGdl = 'producao';
   try {
     ambiente = await obterAmbienteEfetivo();
@@ -905,10 +924,11 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
     const url = `${creds.baseUrl}/rep/obter?numero=${encodeURIComponent(numero)}&ano=${encodeURIComponent(ano)}`;
     log.debug('Consultando REP no GDL', { numero, ano });
 
-    const { statusCode, data } = await requisitarGdl(url, 'GET', headers, undefined, 15000);
+    const { statusCode, data, observacaoConexao } = await requisitarGdl(url, 'GET', headers, undefined, 15000);
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
+      conexaoGdlService.registrarAutenticacao(observacaoConexao, true);
       await registrarRespostaGdl({ etapa: 'resposta_normalizada', ambiente }, undefined, parsed);
       const repComComplementos = parsed;
       const dadosComplementares = await consultarDadosNaInvestigacao(creds.baseUrl, creds, parsed);
@@ -923,7 +943,7 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
       const dadosComEnvolvidos = dadosComplementares.envolvidos.length > 0
         ? { ...repComComplementos, envolvidos: [...repComComplementos.envolvidos, ...dadosComplementares.envolvidos] }
         : repComComplementos;
-      registrarValidacaoSessao(ambiente, numero, ano);
+      if (versaoContexto === obterVersaoContextoGdl()) registrarValidacaoSessao(ambiente, numero, ano);
       log.debug('REP consultada no GDL com sucesso', {
         numero,
         ano,
@@ -963,7 +983,10 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
         return { sucesso: false, dados: null, erro: `REP ${numero}/${ano} não encontrada no GDL.` };
       }
 
-      limparValidacaoSessaoInterna(ambiente);
+      if (versaoContexto === obterVersaoContextoGdl()) {
+        limparValidacaoSessaoInterna(ambiente, false);
+        if (statusCode === 401) conexaoGdlService.registrarAutenticacao(observacaoConexao, false);
+      }
       log.error('Autenticação GDL rejeitada', { statusCode, numero, ano, ambiente });
       return { sucesso: false, dados: null, erro: 'Autenticação rejeitada pelo GDL. Verifique login e senha.' };
     }
@@ -998,6 +1021,7 @@ async function credenciaisConfirmadasPorRepValidada(
   try {
     const url = `${credenciais.baseUrl}/rep/obter?numero=${encodeURIComponent(validacao.numeroRep.replace(/\D/g, ''))}&ano=${encodeURIComponent(validacao.anoRep)}`;
     const resposta = await requisitarGdl(url, 'GET', headers, undefined, 15000);
+    if (resposta.statusCode === 200) conexaoGdlService.registrarAutenticacao(resposta.observacaoConexao, true);
     return resposta.statusCode === 200;
   } catch (erro) {
     log.warn('Não foi possível confirmar as credenciais GDL pela REP validada', {
@@ -1030,7 +1054,9 @@ async function consultarIdentificacaoDaRep(numero: string, ano: string): Promise
   if (resposta.statusCode === 404) throw new Error(`REP ${numero}/${ano} não encontrada no GDL.`);
   if (resposta.statusCode === 401 || resposta.statusCode === 403) throw new Error('Autenticação rejeitada pelo GDL. Verifique login e senha.');
   if (resposta.statusCode !== 200) throw new Error(`Erro do servidor GDL (HTTP ${resposta.statusCode}).`);
-  return { rep: interpretarGdlRepJson(resposta.data), credenciais, ambiente };
+  const rep = interpretarGdlRepJson(resposta.data);
+  conexaoGdlService.registrarAutenticacao(resposta.observacaoConexao, true);
+  return { rep, credenciais, ambiente };
 }
 
 async function consultarReferenciasColeta(rep: GdlRepValidada, credenciais: GdlCredenciais, ambiente: AmbienteGdl): Promise<RepsMesmoCasoGdl> {
@@ -1350,6 +1376,7 @@ async function validarCredenciaisInterna(
   numero: string,
   ano: string,
 ): Promise<GdlConsultaResultado> {
+  const versaoContexto = obterVersaoContextoGdl();
   const amb = await obterAmbienteEfetivo(ambiente);
   definirAmbienteConsultaGdl(amb);
   if (ambiente === 'homologacao' && amb !== 'homologacao') {
@@ -1376,11 +1403,12 @@ async function validarCredenciaisInterna(
     const url = `${baseUrl}/rep/obter?numero=${encodeURIComponent(numeroNormalizado)}&ano=${encodeURIComponent(ano)}`;
     log.debug('Validando credenciais GDL por consulta real', { numero, ano, ambiente: amb });
 
-    const { statusCode, data } = await requisitarGdl(url, 'GET', headers, undefined, 15000);
+    const { statusCode, data, observacaoConexao } = await requisitarGdl(url, 'GET', headers, undefined, 15000);
 
     if (statusCode === 200) {
       const parsed = interpretarGdlRepJson(data);
-      registrarValidacaoSessao(amb, numero, ano);
+      conexaoGdlService.registrarAutenticacao(observacaoConexao, true);
+      if (versaoContexto === obterVersaoContextoGdl()) registrarValidacaoSessao(amb, numero, ano);
       return { sucesso: true, dados: parsed };
     }
 
@@ -1389,7 +1417,10 @@ async function validarCredenciaisInterna(
     }
 
     if (statusCode === 401 || statusCode === 403) {
-      limparValidacaoSessaoInterna(amb);
+      if (versaoContexto === obterVersaoContextoGdl()) {
+        limparValidacaoSessaoInterna(amb, false);
+        if (statusCode === 401) conexaoGdlService.registrarAutenticacao(observacaoConexao, false);
+      }
       return { sucesso: false, dados: null, erro: 'Autenticação rejeitada pelo GDL. Verifique login e senha.' };
     }
 
@@ -1413,3 +1444,30 @@ async function consultarDetalhesRepAutorizadaInterna(id: number, numero: string,
 
 export const consultarDetalhesRepAutorizada: typeof consultarDetalhesRepAutorizadaInterna = (...argumentos) =>
   atividadeGdlService.consultar(() => consultarDetalhesRepAutorizadaInterna(...argumentos));
+
+conexaoGdlService.configurar({
+  obterContexto: async () => {
+    const ambiente = await obterAmbienteEfetivo();
+    const credenciais = await carregarCredenciais(ambiente);
+    const validacao = obterValidacaoSessao(ambiente);
+    return {
+      ambiente, baseUrl: credenciais.baseUrl,
+      identidade: createHash('sha256').update(JSON.stringify({ ambiente, credenciais })).digest('hex'),
+      autorizacao: buildAuthHeader(credenciais.login, credenciais.senha),
+      credenciaisConfiguradas: Boolean(credenciais.login && credenciais.senha),
+      validadoEm: validacao.validado && validacao.dataHora && Number.isFinite(Date.parse(validacao.dataHora))
+        ? new Date(validacao.dataHora).toISOString() : null,
+    };
+  },
+  verificar: async contexto => {
+    const resposta = await requisitarGdl(`${contexto.baseUrl}/unidadesMedida`, 'GET', { 'Content-Type': 'application/json' }, undefined, 5000, false);
+    return resposta.statusCode >= 200 && resposta.statusCode < 500 && resposta.statusCode !== 408;
+  },
+});
+
+observarContextoGdl(chave => {
+  if (chave && !/^gdl_(?:ambiente|homologacao_habilitada|(?:login|senha|cpf_usuario|url)_(?:producao|homologacao))$/.test(chave)) return;
+  const ambiente = chave?.match(/^gdl_(?:login|senha|cpf_usuario|url)_(producao|homologacao)$/)?.[1];
+  if (ambiente === 'producao' || ambiente === 'homologacao') limparValidacaoSessaoInterna(ambiente);
+  conexaoGdlService.contextoAlterado();
+});
