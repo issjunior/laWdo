@@ -605,6 +605,7 @@ export const REPsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const salvandoRepRef = useRef(false);
   const [solicitantes, setSolicitantes] = useState<SolicitanteResumo[]>([]);
   const [tiposExame, setTiposExame] = useState<TipoExameResumo[]>([]);
   const [templatesVinculados, setTemplatesVinculados] = useState<TemplateResumo[]>([]);
@@ -733,6 +734,7 @@ export const REPsPage: React.FC = () => {
   const [criarLaudoTemplateId, setCriarLaudoTemplateId] = useState('');
   const [criarLaudoTemplates, setCriarLaudoTemplates] = useState<TemplateResumo[]>([]);
   const [criarLaudoSubmitting, setCriarLaudoSubmitting] = useState(false);
+  const criandoLaudoRef = useRef(false);
   const [repsComLaudo, setRepsComLaudo] = useState<Set<string>>(new Set());
 
   // Estados para o Alert Dialog de exclusão
@@ -1227,10 +1229,14 @@ export const REPsPage: React.FC = () => {
   }, [tiposExame]);
 
   const handleCriarLaudoConfirmar = async () => {
-    if (!criarLaudoRep || !criarLaudoTemplateId) return;
+    if (!criarLaudoRep || !criarLaudoTemplateId || criandoLaudoRef.current) return;
+    criandoLaudoRef.current = true;
+    let laudoCriado = false;
 
     try {
       setCriarLaudoSubmitting(true);
+      setError(null);
+      setSuccess(null);
       const peritoId = getLoggedUserId();
       if (!peritoId) {
         setError('Usuário não autenticado. Faça login novamente.');
@@ -1244,17 +1250,18 @@ export const REPsPage: React.FC = () => {
       });
 
       if (r.success) {
+        laudoCriado = true;
         await carregarREPs();
         setCriarLaudoOpen(false);
         setSuccess('Laudo criado com sucesso!');
-        setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(r.error || 'Erro ao criar laudo');
       }
     } catch (e: unknown) {
-      setError('Erro ao criar laudo: ' + mensagemErro(e, 'Erro desconhecido'));
+      setError((laudoCriado ? 'O laudo foi criado, mas houve falha ao concluir a operação: ' : 'Erro ao criar laudo: ') + mensagemErro(e, 'Erro desconhecido'));
     } finally {
       setCriarLaudoSubmitting(false);
+      criandoLaudoRef.current = false;
     }
   };
 
@@ -1338,6 +1345,8 @@ export const REPsPage: React.FC = () => {
   });
 
   const executarSalvar = async (data: REPFormData) => {
+    if (salvandoRepRef.current) return;
+    salvandoRepRef.current = true;
     try {
       setSuccess(null);
       setSubmitting(true);
@@ -1382,6 +1391,7 @@ export const REPsPage: React.FC = () => {
       setError(mensagemErro(e, 'Erro ao salvar REP'));
     } finally {
       setSubmitting(false);
+      salvandoRepRef.current = false;
     }
   };
 
@@ -1612,20 +1622,33 @@ export const REPsPage: React.FC = () => {
       cell: ({ row }) => <div className="font-medium">{row.getValue('numero')}<ReiterandoBadge centralizado numeroRep={row.original.numero} /></div>,
     },
     {
-      accessorKey: 'tipo_solicitacao',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Tipo de Solicitação" />
-      ),
-      cell: ({ row }) => row.getValue('tipo_solicitacao') || '-',
-    },
-    {
+      id: 'solicitacao',
       accessorKey: 'numero_documento',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Nº da Solicitação" />
+        <DataTableColumnHeader column={column} title="Solicitação" />
       ),
       cell: ({ row }) => (
-        <span className="block break-words">{row.getValue('numero_documento') || '-'}</span>
+        <div className="max-w-36 whitespace-normal break-words">
+          <div className="font-medium">{row.original.tipo_solicitacao || '-'}</div>
+          <div className="text-muted-foreground">{row.original.numero_documento || '-'}</div>
+        </div>
       ),
+    },
+    {
+      id: 'exame',
+      accessorFn: (rep) => tiposExame.find(tipo => tipo.id === rep.tipo_exame_id)?.codigo,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Exame" />
+      ),
+      cell: ({ row }) => {
+        const tipoExame = tiposExame.find(tipo => tipo.id === row.original.tipo_exame_id);
+        return (
+          <div className="max-w-48 whitespace-normal break-words">
+            <div className="whitespace-nowrap font-medium">{tipoExame?.codigo || '-'}</div>
+            <div className="text-muted-foreground">{tipoExame?.nome || '-'}</div>
+          </div>
+        );
+      },
     },
     {
       id: 'tem_laudo',
@@ -1706,7 +1729,7 @@ export const REPsPage: React.FC = () => {
         );
       },
     },
-  ], [handleEditar, handleDelete, repsComLaudo, handleCriarLaudo, handlePreviewRep, previewLoading]);
+  ], [handleEditar, handleDelete, repsComLaudo, handleCriarLaudo, handlePreviewRep, previewLoading, tiposExame]);
 
   // Tabela sem form
   if (!showForm) {
@@ -1722,6 +1745,7 @@ export const REPsPage: React.FC = () => {
         </div>
 
         {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
+        {success && <Alert className="mb-4"><AlertDescription>{success}</AlertDescription></Alert>}
 
         <Card>
           <CardHeader>
@@ -1782,7 +1806,7 @@ export const REPsPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Dialog open={criarLaudoOpen} onOpenChange={setCriarLaudoOpen}>
+        <Dialog open={criarLaudoOpen} onOpenChange={aberto => { if (!criandoLaudoRef.current) setCriarLaudoOpen(aberto); }}>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1797,6 +1821,7 @@ export const REPsPage: React.FC = () => {
               <div>
                 <Label htmlFor="criar-laudo-tipo-exame">Tipo de Exame</Label>
                 <Select
+                  disabled={criarLaudoSubmitting}
                   value={criarLaudoTipoExameId}
                   onValueChange={handleCriarLaudoTipoExameChange}
                 >
@@ -1813,7 +1838,7 @@ export const REPsPage: React.FC = () => {
               <div>
                 <Label htmlFor="criar-laudo-template">Template</Label>
                 <Select
-                  disabled={!criarLaudoTipoExameId || criarLaudoTemplates.length === 0}
+                  disabled={criarLaudoSubmitting || !criarLaudoTipoExameId || criarLaudoTemplates.length === 0}
                   value={criarLaudoTemplateId}
                   onValueChange={setCriarLaudoTemplateId}
                 >
