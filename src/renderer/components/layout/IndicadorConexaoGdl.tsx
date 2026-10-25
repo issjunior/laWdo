@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { CircleHelp, CircleCheck, TriangleAlert, Unplug, RefreshCw } from 'lucide-react';
 import { aparenciaConexaoGdl } from '@shared/gdl/conexao';
 import { useConexaoGdl } from '@/hooks/useConexaoGdl';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -45,10 +46,16 @@ export function IndicadorConexaoGdl() {
         <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-3" aria-label="Conexão com o GDL">
           <div>
             <h2 className="text-sm font-semibold">Conexão com o GDL</h2>
-            <p className="text-xs text-muted-foreground">{estado ? estado.ambiente === 'producao' ? 'Produção' : 'Homologação' : 'Carregando ambiente'}</p>
+            {estado ? (
+              <Badge variant={estado.ambiente === 'producao' ? 'destructive' : 'secondary'}>
+                {estado.ambiente === 'producao' ? 'Produção' : 'Homologação'}
+              </Badge>
+            ) : <p className="text-xs text-muted-foreground">Carregando ambiente</p>}
           </div>
           <dl className="space-y-2 text-xs">
-            <div><dt className="text-muted-foreground">Disponibilidade</dt><dd>{descricaoRede}</dd></div>
+            <div><dt className="text-muted-foreground">Disponibilidade</dt><dd>{estado?.rede === 'acessivel' && aparencia !== 'desconhecida'
+              ? <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Servidor acessível</Badge>
+              : descricaoRede}</dd></div>
             <div><dt className="text-muted-foreground">Credenciais da API</dt><dd>{estado ? descricoesCredenciais[estado.credenciais] : 'Ainda não verificadas'}</dd></div>
             <div><dt className="text-muted-foreground">Última validação das credenciais</dt><dd>{formatarData(estado?.credenciaisValidadasEm)}</dd></div>
             <div><dt className="text-muted-foreground">Última checagem de rede</dt><dd>{formatarData(estado?.redeVerificadaEm)}</dd></div>
@@ -64,7 +71,7 @@ export function IndicadorConexaoGdl() {
             <Button size="sm" variant="outline" disabled={verificando} onClick={() => void verificarAgora()}>
               <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${verificando ? 'animate-spin' : ''}`} aria-hidden="true" />Verificar agora
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setAberto(false); navegar('/gdl-config'); }}>Abrir API GDL</Button>
+            <Button size="sm" variant="outline" onClick={() => { setAberto(false); navegar('/gdl-config'); }}>Abrir API GDL</Button>
           </div>
         </PopoverContent>
       </Popover>

@@ -264,7 +264,6 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                 aria-label="Informações"
               >
                 <Info size={18} />
-                <span className="hidden lg:inline font-medium">Informações</span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[480px]">
@@ -533,9 +532,9 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
             onClick={onLogout} 
             className="flex items-center gap-2 rounded-md p-2 text-sm transition-colors hover:bg-destructive/20 hover:text-destructive-foreground"
             title="Logout"
+            aria-label="Logout"
           >
             <LogOut size={18} />
-            <span className="hidden lg:inline font-medium">Logout</span>
           </button>
         </div>
       </div>

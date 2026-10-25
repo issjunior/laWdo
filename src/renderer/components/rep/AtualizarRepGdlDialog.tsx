@@ -44,6 +44,19 @@ function previaAtualizacaoValida(valor: unknown): valor is PreviaAtualizacaoRepG
     ))
 }
 
+function ComparacaoValores({ valorLocal, valorGdl }: { valorLocal: string; valorGdl: string }) {
+  return <div className="grid gap-2 text-xs sm:grid-cols-2">
+    <div className="min-w-0 rounded-md bg-muted/60 p-2">
+      <span className="mb-1 block font-semibold text-muted-foreground">Antes (laWdo)</span>
+      <span className="break-words text-foreground">{valorLocal}</span>
+    </div>
+    <div className="min-w-0 rounded-md border border-primary/15 bg-primary/5 p-2">
+      <span className="mb-1 block font-semibold text-primary">Depois, se selecionado (GDL)</span>
+      <span className="break-words text-foreground">{valorGdl}</span>
+    </div>
+  </div>
+}
+
 export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }: AtualizarRepGdlDialogProps) {
   const geracaoConsulta = useRef(0)
   const [previa, setPrevia] = useState<PreviaAtualizacaoRepGdl | null>(null)
@@ -67,6 +80,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
       const dados = resposta.data
       setPrevia(dados)
       setSelecionadas(new Set(dados.diferencas.filter(diferenca => diferenca.selecionadaPorPadrao).map(diferenca => diferenca.id)))
+      setDetalhesAbertos(new Set(dados.diferencas.filter(diferenca => diferenca.categoria === 'peca' && diferenca.detalhes?.length).map(diferenca => diferenca.id)))
     }).catch(() => { if (ativa) setErro('Não foi possível consultar a REP no GDL.') }).finally(() => { if (ativa) setCarregando(false) })
     return () => { ativa = false; geracaoConsulta.current += 1; void window.ipcAPI.gdl.descartarConsultaRep?.().catch(() => undefined) }
   }, [open, repId, tentativaConsulta])
@@ -110,6 +124,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
       if (!resposta.success || !previaAtualizacaoValida(resposta.data)) throw new Error(resposta.error || 'Falha ao concluir a consulta.')
       setPrevia(resposta.data)
       setSelecionadas(new Set(resposta.data.diferencas.filter(item => item.selecionadaPorPadrao).map(item => item.id)))
+      setDetalhesAbertos(new Set(resposta.data.diferencas.filter(item => item.categoria === 'peca' && item.detalhes?.length).map(item => item.id)))
     } catch (erro: unknown) { if (geracao === geracaoConsulta.current) setErro(erro instanceof Error ? erro.message : 'Falha ao concluir a consulta.') }
     finally { if (geracao === geracaoConsulta.current) setCarregando(false) }
   }
@@ -153,45 +168,38 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
         </Alert>}
         {previa && !previa.consultaDetalhes && <div className="space-y-5">
           {previa.avisos.map(aviso => <Alert key={aviso}><AlertDescription>{aviso}</AlertDescription></Alert>)}
+          {!semDiferencas && <p className="text-sm text-muted-foreground">Marque os campos que deseja atualizar. O valor do GDL só substituirá o valor local nos itens selecionados.</p>}
           {semDiferencas ? <Alert><AlertDescription>{podeReconciliarLaudo ? 'A REP já está atualizada. Você ainda pode reconciliar a estrutura do laudo vinculado com os dados locais.' : 'A REP já está atualizada com as informações retornadas pelo GDL.'}</AlertDescription></Alert> : grupos.map(([grupo, diferencas]) => <section key={grupo} className="space-y-2"><h3 className="text-sm font-semibold">{grupo}</h3><div className="divide-y rounded-md border">{diferencas.map(diferenca => {
             const possuiDetalhes = Boolean(diferenca.detalhes?.length)
             const detalhesAbertosParaDiferenca = detalhesAbertos.has(diferenca.id)
+            const selecionada = selecionadas.has(diferenca.id)
             return <div key={diferenca.id} className="p-3">
               <div className="flex gap-3">
                 <Checkbox
                   id={`diferenca-${diferenca.id}`}
-                  checked={selecionadas.has(diferenca.id)}
+                  checked={selecionada}
                   onCheckedChange={valor => alternar(diferenca.id, valor === true)}
                 />
                 <div className="min-w-0 flex-1">
-                  <label htmlFor={`diferenca-${diferenca.id}`} className="block cursor-pointer font-medium">{diferenca.rotulo}</label>
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <label htmlFor={`diferenca-${diferenca.id}`} className="cursor-pointer font-medium">{diferenca.rotulo}</label>
+                    {!selecionada && <span className="text-xs font-medium text-muted-foreground">Não será aplicado</span>}
+                  </div>
                   {diferenca.resumo && <span className="block text-xs text-muted-foreground">{diferenca.resumo}</span>}
-                  <span className="block text-xs text-muted-foreground">Local: {diferenca.valorLocal}</span>
-                  <span className="block text-xs text-primary">GDL: {diferenca.valorGdl}</span>
+                  {diferenca.categoria === 'campo' && <div className="mt-2"><ComparacaoValores valorLocal={diferenca.valorLocal} valorGdl={diferenca.valorGdl} /></div>}
+                  {diferenca.categoria === 'peca' && !possuiDetalhes && <div className="mt-2"><ComparacaoValores valorLocal={diferenca.valorLocal} valorGdl={diferenca.valorGdl} /></div>}
                   {possuiDetalhes && <Collapsible open={detalhesAbertosParaDiferenca} onOpenChange={aberto => alternarDetalhes(diferenca.id, aberto)} className="mt-2">
                     <CollapsibleTrigger asChild>
                       <Button type="button" variant="ghost" size="sm" className="h-auto px-0 text-xs">
-                        {detalhesAbertosParaDiferenca ? 'Ocultar alterações' : 'Ver alterações'}
+                        {detalhesAbertosParaDiferenca ? 'Ocultar campos alterados' : `Ver campos alterados (${diferenca.detalhes?.length ?? 0})`}
                         <ChevronDown className="ml-1 size-3" />
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-2 overflow-hidden rounded-md border bg-background text-xs">
-                      <div className="hidden grid-cols-[minmax(8rem,auto)_minmax(0,1fr)_minmax(0,1fr)] gap-2 border-b bg-muted/50 px-3 py-2 font-medium text-muted-foreground sm:grid">
-                        <span>Campo</span>
-                        <span>Dado local</span>
-                        <span>Dados do GDL</span>
-                      </div>
                       <div className="divide-y">
-                        {diferenca.detalhes?.map(detalhe => <div key={detalhe.campo} className="grid gap-2 p-3 sm:grid-cols-[minmax(8rem,auto)_minmax(0,1fr)_minmax(0,1fr)] sm:items-start">
-                          <span className="font-medium text-foreground">{detalhe.campo}</span>
-                          <div className="rounded-md bg-muted/60 px-2 py-1.5 text-muted-foreground">
-                            <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:hidden">Dado local</span>
-                            {detalhe.valorLocal}
-                          </div>
-                          <div className="rounded-md border border-primary/15 bg-primary/5 px-2 py-1.5 text-primary">
-                            <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-primary/70 sm:hidden">Dados do GDL</span>
-                            {detalhe.valorGdl}
-                          </div>
+                        {diferenca.detalhes?.map(detalhe => <div key={detalhe.campo} className="space-y-2 p-3">
+                          <span className="block font-medium text-foreground">{detalhe.campo}</span>
+                          <ComparacaoValores valorLocal={detalhe.valorLocal} valorGdl={detalhe.valorGdl} />
                         </div>)}
                       </div>
                     </CollapsibleContent>
@@ -200,6 +208,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
               </div>
             </div>
           })}</div></section>)}
+          {previa.impactoLaudo && !semDiferencas && <Alert><AlertTitle>Impacto no laudo vinculado</AlertTitle><AlertDescription>Ao aplicar os itens selecionados, os dados exibidos no laudo poderão mudar e suas seções derivadas poderão ser reconciliadas. Esta prévia compara os dados da REP; o texto final do laudo não é exibido aqui.</AlertDescription></Alert>}
           {requerReabertura && <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"><TriangleAlert className="size-4" /><AlertDescription className="space-y-3"><p>O laudo vinculado está {previa.impactoLaudo?.status}. Para aplicar a atualização, ele voltará para Em andamento; as datas já registradas serão preservadas no histórico.</p><label className="flex items-center gap-2"><Checkbox checked={reabrirLaudo} onCheckedChange={valor => setReabrirLaudo(valor === true)} />Confirmo a reabertura do laudo.</label></AlertDescription></Alert>}
           <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)} disabled={aplicando}>Cancelar</Button><Button onClick={() => setConfirmacaoAberta(true)} disabled={!podeConfirmar || aplicando}>{aplicando ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}{podeReconciliarLaudo ? 'Reconciliar laudo' : 'Aplicar atualização'}</Button></div>
         </div>}
