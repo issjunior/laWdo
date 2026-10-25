@@ -1,3 +1,4 @@
+import { MENSAGEM_FALHA_CONSULTA_GDL } from '@/lib/consulta-reps-coleta';
 import { esquemaConsultaIdentificacaoRepGdl } from '@shared/gdl/natureza-exame';
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -41,29 +42,6 @@ function previaAtualizacaoValida(valor: unknown): valor is PreviaAtualizacaoRepG
         ))
       ))
     ))
-}
-
-function obterMensagemErroGdl(erro: string): { titulo: string; descricao: string } {
-  const erroNormalizado = erro.toUpperCase()
-
-  if (erroNormalizado.includes('ERR_NAME_NOT_RESOLVED') || erroNormalizado.includes('ENOTFOUND')) {
-    return {
-      titulo: 'Não foi possível localizar o GDL',
-      descricao: 'Conecte-se à VPN institucional e tente novamente. Se a VPN já estiver ativa, verifique a conexão de rede.',
-    }
-  }
-
-  if (erroNormalizado.includes('TIMEOUT') || erroNormalizado.includes('ECONNREFUSED') || erroNormalizado.includes('ECONNRESET')) {
-    return {
-      titulo: 'Não foi possível conectar ao GDL',
-      descricao: 'Verifique a conexão com a VPN institucional e tente novamente em alguns instantes.',
-    }
-  }
-
-  return {
-    titulo: 'Não foi possível consultar o GDL',
-    descricao: 'Verifique sua conexão e tente novamente. Se o problema continuar, entre em contato com o suporte.',
-  }
 }
 
 export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }: AtualizarRepGdlDialogProps) {
@@ -140,7 +118,10 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
   const semDiferencas = previa?.diferencas.length === 0
   const podeReconciliarLaudo = Boolean(semDiferencas && previa?.impactoLaudo)
   const podeConfirmar = !previa?.consultaDetalhes && (selecionadas.size > 0 || podeReconciliarLaudo) && (!requerReabertura || reabrirLaudo)
-  const mensagemErro = erro ? obterMensagemErroGdl(erro) : null
+  useEffect(() => {
+    if (erro) void window.ipcAPI.logWarning('gdl', `Falha na atualização manual da REP: ${erro}`);
+  }, [erro]);
+  const mensagemErro = erro ? { titulo: 'Não foi possível atualizar a REP', descricao: MENSAGEM_FALHA_CONSULTA_GDL } : null
 
   return <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -168,10 +149,6 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
             <Button variant="outline" size="sm" onClick={() => setTentativaConsulta(atual => atual + 1)} disabled={carregando || aplicando}>
               <RefreshCw className="mr-2 size-4" />Tentar novamente
             </Button>
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer">Detalhes técnicos</summary>
-              <p className="mt-1 break-all">{erro}</p>
-            </details>
           </AlertDescription>
         </Alert>}
         {previa && !previa.consultaDetalhes && <div className="space-y-5">
