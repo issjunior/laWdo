@@ -18,6 +18,7 @@ function contarOcorrenciasXxx(texto: string): number {
 
 function identificarPendenciasNoConteudo(html: string): Omit<PendenciaSecaoConclusaoLaudo, 'titulo'> {
   const documento = new DOMParser().parseFromString(html, 'text/html');
+  documento.querySelectorAll('[data-cond-suprimido="true"]').forEach(bloco => bloco.remove());
   const camposReservados = Array.from(documento.querySelectorAll<HTMLElement>('[data-reservado="true"]'))
     .filter(campo => campo.textContent?.trim().toUpperCase() === 'XXX')
     .length;

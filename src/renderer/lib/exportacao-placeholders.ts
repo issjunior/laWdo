@@ -6,6 +6,7 @@ import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import { numeroInteiroPorExtenso } from '@/lib/numero-extenso';
 import { TEXTOS_ESTOJOS_B602 } from '@shared/catalogos/b602-textos-estojos.catalogo';
+import { TEXTOS_CARTUCHOS_B602 } from '@shared/catalogos/b602-textos-cartuchos.catalogo';
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 import { normalizarCodigoPlaceholders } from '@/lib/utils';
 import { normalizarApresentacaoTabelas } from '@/lib/tabelas-apresentacao';
@@ -434,6 +435,10 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
           mapping['b602_total_cartuchos'] = String(
             cartuchos.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
           );
+          mapping['b602_total_cartuchos_extenso'] = numeroInteiroPorExtenso(Number(mapping['b602_total_cartuchos']));
+          mapping['b602_cartuchos_descricao'] = Number(mapping['b602_total_cartuchos']) === 1
+            ? TEXTOS_CARTUCHOS_B602.singular
+            : TEXTOS_CARTUCHOS_B602.plural;
         }
         if (estojos) {
           mapping['b602_total_estojos'] = String(

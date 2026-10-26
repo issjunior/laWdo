@@ -994,6 +994,8 @@ export const B602_MENU_STRUCTURE: MenuSection[] = [
       },
       { type: 'field', name: 'b602_total_material_enc', label: 'Total Material Enc.' },
       { type: 'field', name: 'b602_total_cartuchos', label: 'Total Cartuchos' },
+      { type: 'field', name: 'b602_total_cartuchos_extenso', label: 'Total de cartuchos por extenso' },
+      { type: 'field', name: 'b602_cartuchos_descricao', label: 'Descrição dos cartuchos' },
       { type: 'field', name: 'b602_total_estojos', label: 'Total Estojos' },
       { type: 'field', name: 'b602_total_estojos_extenso', label: 'Total de estojos por extenso' },
       { type: 'field', name: 'b602_estojos_descricao', label: 'Descrição dos estojos' },

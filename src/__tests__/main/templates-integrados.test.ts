@@ -7,6 +7,7 @@ import { laudoPadraoB602V7 } from '../../main/templates/integrados/b602/laudo-pa
 import { laudoPadraoB602V8 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v8';
 import { laudoPadraoB602V9 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v9';
 import { laudoPadraoB602V10 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v10';
+import { laudoPadraoB602V11 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v11';
 import { laudoPadraoB601V1 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v1';
 import { laudoPadraoB601V2 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v2';
 import { catalogoTemplatesIntegrados } from '../../main/templates/integrados/catalogo';
@@ -16,7 +17,6 @@ import { validarTemplateIntegrado } from '../../main/templates/integrados/valida
 describe('catálogo de templates integrados', () => {
   it.each([
     { anterior: laudoPadraoB601V1, atual: laudoPadraoB601V2, versao: 2 },
-    { anterior: laudoPadraoB602V9, atual: laudoPadraoB602V10, versao: 10 },
   ])('publica $atual.chave v$versao corrigindo apenas as abreviações de número', ({ anterior, atual, versao }) => {
     expect(() => validarTemplateIntegrado(atual)).not.toThrow();
     expect(atual.versao).toBe(versao);
@@ -35,6 +35,21 @@ describe('catálogo de templates integrados', () => {
       return secao;
     });
     expect({ ...atual, versao: anterior.versao, secoes: secoesRevertidas }).toEqual(anterior);
+  });
+
+  it('publica o B-602 v11 com texto calculado e duas figuras dummy em cartuchos', () => {
+    expect(() => validarTemplateIntegrado(laudoPadraoB602V11)).not.toThrow();
+    expect(laudoPadraoB602V11.versao).toBe(11);
+    expect(catalogoTemplatesIntegrados.filter(template => template.chave === laudoPadraoB602V11.chave)).toEqual([laudoPadraoB602V11]);
+    expect(laudoPadraoB602V11.secoes.filter(secao => secao.chave !== 'dos-cartuchos'))
+      .toEqual(laudoPadraoB602V10.secoes.filter(secao => secao.chave !== 'dos-cartuchos'));
+    const conteudo = laudoPadraoB602V11.secoes.find(secao => secao.chave === 'dos-cartuchos')?.conteudo || '';
+    expect(conteudo).toContain('{{b602_total_cartuchos_extenso}}');
+    expect(conteudo).toContain('{{b602_cartuchos_descricao}}');
+    expect(conteudo).toContain('{{b602_tabela_cartuchos}}');
+    expect(conteudo.match(/data-image-id="dummy-b602-cartuchos-[12]"/g)).toHaveLength(2);
+    expect(conteudo.match(/data-dummy="true"/g)).toHaveLength(2);
+    expect(laudoPadraoB602V10.secoes.find(secao => secao.chave === 'dos-cartuchos')?.conteudo).toContain('{{b602_total_cartuchos}}');
   });
 
   it('preserva a versão 9 com concordância calculada somente na seção de estojos', () => {

@@ -29,6 +29,8 @@ export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   { chave: 'b602_numero_ip',            label: 'Nº IP (B-602)',                  descricao: 'Número do Inquérito Policial',                     jsonPath: 'b602.numero_ip',             categoria_exam_codigo: 'B-602' },
   { chave: 'b602_total_material_enc',   label: 'Total Material Enc (B-602)',    descricao: 'Total de itens do Material Encaminhado',          jsonPath: 'b602.total_material_enc',    categoria_exam_codigo: 'B-602' },
   { chave: 'b602_total_cartuchos',      label: 'Total Cartuchos (B-602)',       descricao: 'Total de cartuchos',                              jsonPath: 'b602.total_cartuchos',       categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_total_cartuchos_extenso', label: 'Total de cartuchos por extenso (B-602)', descricao: 'Total de cartuchos escrito por extenso', computed: true, categoria_exam_codigo: 'B-602' },
+  { chave: 'b602_cartuchos_descricao', label: 'Descrição dos cartuchos (B-602)', descricao: 'Descrição com concordância conforme o total de cartuchos', computed: true, categoria_exam_codigo: 'B-602' },
   { chave: 'b602_total_estojos',        label: 'Total Estojos (B-602)',         descricao: 'Total de estojos',                                jsonPath: 'b602.total_estojos',         categoria_exam_codigo: 'B-602' },
   { chave: 'b602_total_estojos_extenso', label: 'Total de estojos por extenso (B-602)', descricao: 'Total de estojos escrito por extenso', computed: true, categoria_exam_codigo: 'B-602' },
   { chave: 'b602_estojos_descricao', label: 'Descrição dos estojos (B-602)', descricao: 'Descrição com concordância conforme o total de estojos', computed: true, categoria_exam_codigo: 'B-602' },
