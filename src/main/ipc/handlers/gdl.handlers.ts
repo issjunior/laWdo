@@ -15,7 +15,7 @@ import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { converterRepGdl, listarCodigosImportacaoGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
-import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
+import { estagiarImagemLaudoPorBytes, listarHashesImagensLaudo, listarResumosImagensLaudo } from '../../services/imagem-laudo.service.js';
 import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
 import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
 import { esquemaRepsMesmoCasoGdl, type RepsMesmoCasoGdl } from '../../../shared/gdl/reps-mesmo-caso.js';
@@ -444,11 +444,20 @@ export const registerGdlHandlers = (): void => {
     try {
       const { numero, ano } = await resolverRepDoLaudo(laudoId);
       if (typeof laudoId !== 'string') return { success: false, error: 'Laudo inválido.' };
+      let hashesExistentes = new Set<string>();
+      let avisoVerificacao: string | undefined;
+      try {
+        hashesExistentes = await listarHashesImagensLaudo(laudoId);
+      } catch (error) {
+        logError('Falha ao verificar fotos já incluídas no laudo', error);
+        avisoVerificacao = 'Não foi possível verificar as fotos já incluídas. A captura ainda impedirá imagens repetidas.';
+      }
+      const lista = await gdlService.abrirSessaoImagensRepGdl(laudoId, numero, ano, progresso => {
+        if (!event.sender.isDestroyed()) event.sender.send('gdl:progresso-imagens-laudo', { laudoId, ...progresso });
+      }, hashesExistentes);
       return {
         success: true,
-        data: await gdlService.abrirSessaoImagensRepGdl(laudoId, numero, ano, progresso => {
-          if (!event.sender.isDestroyed()) event.sender.send('gdl:progresso-imagens-laudo', { laudoId, ...progresso });
-        }),
+        data: { ...lista, avisoVerificacao: lista.avisoVerificacao || avisoVerificacao },
       };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao listar imagens da REP.' };
@@ -479,10 +488,16 @@ export const registerGdlHandlers = (): void => {
       }
       await resolverRepDoLaudo(laudoId);
       const existentes = await listarResumosImagensLaudo(laudoId);
+      const porHash = new Map(existentes.map(imagem => [imagem.sha256, imagem]));
       let proximaSequencia = existentes.reduce((maior, imagem) => Math.max(maior, imagem.sequencia), 0) + 1;
       const resultado = await gdlService.capturarImagensDaSessaoGdlParaLaudo(laudoId, sessaoId, idsSelecao, async imagem => {
+        const existente = porHash.get(imagem.sha256);
+        if (existente && permitirDuplicadas !== true) {
+          return { idSelecao: imagem.idSelecao, nomeArquivo: imagem.nomeArquivo,
+            imagemExistenteId: existente.id, localizacao: 'painel' as const };
+        }
         const sequencia = proximaSequencia;
-        const persistida = await salvarImagemLaudoPorBytes(laudoId, {
+        const estagiada = estagiarImagemLaudoPorBytes(laudoId, {
           id: randomUUID(),
           nomeArquivo: imagem.nomeArquivo,
           mimeType: imagem.mimeType,
@@ -490,27 +505,19 @@ export const registerGdlHandlers = (): void => {
           legenda: imagem.nomeArquivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim(),
           origem: 'gdl',
           sequencia,
-          permitirDuplicada: permitirDuplicadas === true,
         });
-        if ('localizacao' in persistida) {
-          return {
-            idSelecao: imagem.idSelecao,
-            nomeArquivo: imagem.nomeArquivo,
-            imagemExistenteId: persistida.id,
-            localizacao: persistida.localizacao,
-          };
-        }
         proximaSequencia += 1;
         return {
           idSelecao: imagem.idSelecao,
-          imagemId: persistida.id,
-          nomeArquivo: persistida.nomeArquivo,
-          mimeType: persistida.mimeType,
-          tamanho: persistida.tamanho,
-          sha256: persistida.sha256,
-          sequencia: persistida.sequencia,
+          imagemId: estagiada.id,
+          nomeArquivo: estagiada.nomeArquivo,
+          mimeType: imagem.mimeType,
+          tamanho: estagiada.tamanho,
+          sha256: estagiada.sha256,
+          sequencia,
+          thumbnailDataUri: estagiada.thumbnailDataUri,
         };
-      });
+      }, false);
       return { success: true, data: resultado };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao capturar imagens da REP.' };

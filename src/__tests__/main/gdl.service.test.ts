@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 import AdmZip from 'adm-zip'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   obterConfiguracao: vi.fn(),
   configurarVerificacaoCertificado: vi.fn(),
   registrarAviso: vi.fn(),
+  criarImagem: vi.fn(),
 }))
 
 vi.mock('electron', () => {
@@ -24,7 +26,7 @@ vi.mock('electron', () => {
       getPath: () => path.join(os.tmpdir(), 'lawdo-gdl-service-test'),
     },
     nativeImage: {
-      createFromBuffer: () => imagem,
+      createFromBuffer: (bytes: Buffer) => { mocks.criarImagem(bytes); return imagem },
     },
     session: {
       fromPartition: () => ({
@@ -76,6 +78,7 @@ import {
   validarCredenciais,
 } from '../../main/services/gdl.service'
 import { interpretarGdlRepJson } from '../../main/services/gdl.schema'
+import { VERSAO_OTIMIZACAO_FOTO_GDL } from '../../main/services/imagem-laudo.service'
 import { destinoPaginaGdlPermitido, lerDetalhesRepAutorizadaGdl, listarPaginaMinhasRepsGdl, montarFormularioLoginGdl, paginaGdlExigeLogin } from '../../main/services/gdl-pagina.service'
 
 const formularioLogin = '<form method="post" action="./Login.aspx"><input type="hidden" name="__VIEWSTATE" value="estado&amp;teste"><input type="hidden" name="__EVENTVALIDATION" value="validacao"><input name="ctl00$Content$txtUser"><input name="ctl00$Content$txtPass" type="password"><input type="submit" name="ctl00$Content$btnLogin" value="Entrar"><input type="submit" name="ctl00$Content$btn_NewPass" value="Nova senha"></form>'
@@ -90,6 +93,7 @@ zip.addFile('fotos/foto-a.png', bytesPng)
 zip.addFile('fotos/foto-b.png', bytesPng)
 zip.addFile('fotos/leia-me.txt', Buffer.from('arquivo auxiliar'))
 const bytesZip = zip.toBuffer()
+let bytesZipAtuais = bytesZip
 
 let servidor: http.Server
 let baseUrl = ''
@@ -170,7 +174,7 @@ beforeAll(async () => {
     }
     if (url.pathname.endsWith('/Rep/Controls/PictureHandler.ashx')) {
       resposta.setHeader('content-type', 'application/zip')
-      responder(resposta, statusFotos, statusFotos === 200 ? bytesZip : Buffer.alloc(0))
+      responder(resposta, statusFotos, statusFotos === 200 ? bytesZipAtuais : Buffer.alloc(0))
       return
     }
     responder(resposta, 404, '')
@@ -201,6 +205,8 @@ beforeEach(() => {
   mocks.registrarAviso.mockClear()
   statusRepPorBusca.clear()
   statusFotos = 200
+  bytesZipAtuais = bytesZip
+  mocks.criarImagem.mockClear()
   respostaRep = fixtureRep
   respostaPaginaRep = '<input id="Content_RepMain_txtDateEntry" value="11/06/2024"><textarea id="Content_RepMain_txtOpenQuestion">QUESITO &amp; TESTE</textarea>'
   respostaInvestigacao = null
@@ -500,6 +506,73 @@ describe('gdl.service', () => {
     await expect(capturarImagensDaSessaoGdlParaLaudo('laudo-teste', sessao.sessaoId, [foto.idSelecao], async () => {
       throw new Error('Não deve tentar salvar após fechar a sessão.')
     })).rejects.toThrow('A sessão temporária da Lista de Fotos expirou. Consulte novamente.')
+  })
+
+  it('oculta fotos do laudo e reutiliza os hashes do cache sem processar as imagens novamente', async () => {
+    const zipUnico = new AdmZip()
+    zipUnico.addFile('fotos/foto-a.png', bytesPng)
+    zipUnico.addFile('fotos/foto-b.png', bytesPng)
+    zipUnico.addFile(`marca-${randomUUID()}.txt`, Buffer.from('cache isolado'))
+    bytesZipAtuais = zipUnico.toBuffer()
+    const hashPersistido = createHash('sha256').update(Buffer.from('thumbnail')).digest('hex')
+
+    const semImagens = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026', undefined, new Set())
+    expect(semImagens.fotosJaIncluidas).toBe(0)
+    expect(mocks.criarImagem).not.toHaveBeenCalled()
+    fecharSessaoImagensRepGdl('laudo-teste', semImagens.sessaoId)
+
+    const primeira = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026', undefined, new Set([hashPersistido]))
+    expect(primeira.fotosJaIncluidas).toBe(2)
+    expect(primeira.arquivos.some(arquivo => arquivo.provavelImagem)).toBe(false)
+    expect(mocks.criarImagem).toHaveBeenCalledTimes(2)
+    fecharSessaoImagensRepGdl('laudo-teste', primeira.sessaoId)
+
+    mocks.criarImagem.mockClear()
+    const segunda = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026', undefined, new Set([hashPersistido]))
+    expect(segunda.fotosJaIncluidas).toBe(2)
+    expect(mocks.criarImagem).not.toHaveBeenCalled()
+    fecharSessaoImagensRepGdl('laudo-teste', segunda.sessaoId)
+
+    const aposExclusao = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026', undefined, new Set())
+    expect(aposExclusao.arquivos.filter(arquivo => arquivo.provavelImagem)).toHaveLength(2)
+    expect(mocks.criarImagem).not.toHaveBeenCalled()
+    fecharSessaoImagensRepGdl('laudo-teste', aposExclusao.sessaoId)
+
+    const hashZip = createHash('sha256').update(bytesZipAtuais).digest('hex')
+    const chaveCache = createHash('sha256').update(JSON.stringify(['producao', '190', '2026', hashZip, VERSAO_OTIMIZACAO_FOTO_GDL])).digest('hex')
+    const caminhoCache = path.join(os.tmpdir(), 'lawdo-gdl-service-test', 'gdl', 'cache-fotos', `${chaveCache}.json`)
+    fs.writeFileSync(caminhoCache, '{invalido')
+    const cacheInvalido = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026', undefined, new Set([hashPersistido]))
+    expect(cacheInvalido.fotosJaIncluidas).toBe(2)
+    expect(mocks.criarImagem).toHaveBeenCalledTimes(2)
+    fecharSessaoImagensRepGdl('laudo-teste', cacheInvalido.sessaoId)
+
+    const zipAlterado = new AdmZip()
+    zipAlterado.addFile('fotos/foto-a.png', bytesPng)
+    zipAlterado.addFile('fotos/foto-b.png', bytesPng)
+    zipAlterado.addFile(`nova-marca-${randomUUID()}.txt`, Buffer.from('ZIP alterado'))
+    bytesZipAtuais = zipAlterado.toBuffer()
+    mocks.criarImagem.mockClear()
+    const terceira = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026', undefined, new Set([hashPersistido]))
+    expect(terceira.fotosJaIncluidas).toBe(2)
+    expect(mocks.criarImagem).toHaveBeenCalledTimes(2)
+    fecharSessaoImagensRepGdl('laudo-teste', terceira.sessaoId)
+  })
+
+  it('mantém fotos visíveis quando a verificação local falha', async () => {
+    const zipUnico = new AdmZip()
+    zipUnico.addFile('fotos/foto-a.png', bytesPng)
+    zipUnico.addFile(`marca-${randomUUID()}.txt`, Buffer.from('falha isolada'))
+    bytesZipAtuais = zipUnico.toBuffer()
+    mocks.criarImagem.mockImplementationOnce(() => { throw new Error('Falha ao processar foto.') })
+    const hashPersistido = createHash('sha256').update(Buffer.from('thumbnail')).digest('hex')
+
+    const sessao = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026', undefined, new Set([hashPersistido]))
+    expect(sessao.arquivos.some(arquivo => arquivo.nomeArquivo === 'foto-a.png')).toBe(true)
+    expect(sessao.fotosJaIncluidas).toBe(0)
+    expect(sessao.avisoVerificacao).toContain('não puderam ser verificadas')
+    fecharSessaoImagensRepGdl('laudo-teste', sessao.sessaoId)
+    mocks.criarImagem.mockReset()
   })
 
   it('permite consultar outra REP em produção após a validação inicial', async () => {

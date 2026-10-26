@@ -10,17 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import type { ArquivoRepGdl, DuplicataImagemRepGdl, ImagemRepGdlAdicionadaAoLaudo, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl } from '@shared/types/gdl-arquivos.types'
+import type { ArquivoRepGdl, ImagemRepGdlAdicionadaAoLaudo, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '@shared/types/gdl-arquivos.types'
 
 interface GdlImagensRepModalProps {
   aberto: boolean
@@ -29,17 +19,14 @@ interface GdlImagensRepModalProps {
   onCapturadas: (imagens: ImagemRepGdlAdicionadaAoLaudo[], permitirDuplicadas: boolean) => void
 }
 
-interface DuplicataComMiniaturas extends DuplicataImagemRepGdl {
-  miniaturaSelecionada?: string
-  miniaturaExistente?: string
-}
-
 interface DadosSessaoImagens {
   sessaoId: string
   ambiente: 'homologacao' | 'producao'
   numeroRep: string
   anoRep: string
   arquivos: ArquivoRepGdl[]
+  fotosJaIncluidas?: number
+  avisoVerificacao?: string
 }
 
 type FiltroFotos = 'elegiveis' | 'inelegiveis'
@@ -79,6 +66,40 @@ function dadosSessaoImagensValidos(valor: unknown): valor is DadosSessaoImagens 
     && typeof dados.anoRep === 'string'
     && /^\d{4}$/.test(dados.anoRep)
     && Array.isArray(dados.arquivos)
+    && dados.arquivos.every((arquivo: unknown) => {
+      if (!arquivo || typeof arquivo !== 'object') return false
+      const item = arquivo as Record<string, unknown>
+      return typeof item.idSelecao === 'string' && /^[a-f0-9]{64}$/.test(item.idSelecao)
+        && typeof item.nomeArquivo === 'string'
+        && typeof item.provavelImagem === 'boolean'
+        && (item.status === null || typeof item.status === 'string')
+        && (item.tamanho === null || typeof item.tamanho === 'number')
+        && (item.dataUpload === null || typeof item.dataUpload === 'string')
+    })
+    && (dados.fotosJaIncluidas === undefined || (typeof dados.fotosJaIncluidas === 'number' && Number.isInteger(dados.fotosJaIncluidas) && dados.fotosJaIncluidas >= 0))
+    && (dados.avisoVerificacao === undefined || typeof dados.avisoVerificacao === 'string')
+}
+
+function resultadoCapturaValido(valor: unknown): valor is ResultadoCapturaImagensLaudoGdl {
+  if (!valor || typeof valor !== 'object') return false
+  const dados = valor as Record<string, unknown>
+  if (!Array.isArray(dados.imagens) || !Array.isArray(dados.duplicadas) || !Array.isArray(dados.falhas)) return false
+  return dados.imagens.every((imagem: unknown) => {
+    if (!imagem || typeof imagem !== 'object') return false
+    const item = imagem as Record<string, unknown>
+    return typeof item.idSelecao === 'string' && typeof item.imagemId === 'string'
+      && typeof item.nomeArquivo === 'string' && typeof item.mimeType === 'string'
+      && typeof item.tamanho === 'number' && typeof item.sha256 === 'string' && typeof item.sequencia === 'number'
+  }) && dados.duplicadas.every((duplicada: unknown) => {
+    if (!duplicada || typeof duplicada !== 'object') return false
+    const item = duplicada as Record<string, unknown>
+    return typeof item.idSelecao === 'string' && typeof item.nomeArquivo === 'string'
+      && typeof item.imagemExistenteId === 'string' && (item.localizacao === 'painel' || item.localizacao === 'laudo')
+  }) && dados.falhas.every((falha: unknown) => {
+    if (!falha || typeof falha !== 'object') return false
+    const item = falha as Record<string, unknown>
+    return typeof item.idSelecao === 'string' && typeof item.erro === 'string'
+  })
 }
 
 function miniaturaArquivoRepGdlValida(valor: unknown): valor is MiniaturaArquivoRepGdl {
@@ -132,7 +153,8 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
   const [capturando, setCapturando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [identificacaoRep, setIdentificacaoRep] = useState<Omit<DadosSessaoImagens, 'sessaoId' | 'arquivos'> | null>(null)
-  const [duplicadasPendentes, setDuplicadasPendentes] = useState<DuplicataComMiniaturas[]>([])
+  const [fotosJaIncluidas, setFotosJaIncluidas] = useState(0)
+  const [avisoVerificacao, setAvisoVerificacao] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState<FiltroFotos>('elegiveis')
   const [ordenacao, setOrdenacao] = useState<OrdenacaoFotos>('nome-crescente')
@@ -147,6 +169,9 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
     setSelecionadas(new Set())
     setSessaoId(null)
     setIdentificacaoRep(null)
+    setArquivos([])
+    setFotosJaIncluidas(0)
+    setAvisoVerificacao(null)
     setBusca('')
     setFiltro('elegiveis')
     setOrdenacao('nome-crescente')
@@ -176,6 +201,8 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
         anoRep: resultado.data.anoRep,
       })
       setArquivos(resultado.data.arquivos)
+      setFotosJaIncluidas(resultado.data.fotosJaIncluidas ?? 0)
+      setAvisoVerificacao(resultado.data.avisoVerificacao ?? null)
       setSelecionadas(new Set(resultado.data.arquivos
         .filter(arquivo => arquivo.provavelImagem && !arquivo.status)
         .map(arquivo => arquivo.idSelecao)))
@@ -313,39 +340,25 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
     setColunasGrade(atuais => PROXIMAS_COLUNAS_GRADE[atuais][variacao])
   }
 
-  const prepararDuplicadas = async (duplicadas: DuplicataImagemRepGdl[]): Promise<DuplicataComMiniaturas[]> => {
-    const miniaturasPorId = new Map<string, string>()
-    for (let indice = 0; indice < duplicadas.length; indice += 30) {
-      const ids = duplicadas.slice(indice, indice + 30).map(duplicada => duplicada.imagemExistenteId)
-      const resultado = await window.ipcAPI.ilustracoes.obterMiniaturas(laudoId, ids)
-      if (!resultado.success) continue
-      for (const miniatura of resultado.data || []) miniaturasPorId.set(miniatura.id, miniatura.thumbnailDataUri)
-    }
-    const selecionadasPorId = new Map(arquivos.map(arquivo => [arquivo.idSelecao, arquivo.thumbnailDataUri]))
-    return duplicadas.map(duplicada => ({
-      ...duplicada,
-      miniaturaSelecionada: selecionadasPorId.get(duplicada.idSelecao),
-      miniaturaExistente: miniaturasPorId.get(duplicada.imagemExistenteId),
-    }))
-  }
-
-  const capturar = async (idsSelecao = [...selecionadas], permitirDuplicadas = false) => {
+  const capturar = async () => {
+    const idsSelecao = [...selecionadas]
     if (idsSelecao.length === 0 || !sessaoId) return
     setCapturando(true)
     try {
-      const resultado = await window.ipcAPI.gdl.capturarImagensLaudo(laudoId, sessaoId, idsSelecao, permitirDuplicadas)
-      if (!resultado.success || !resultado.data) {
+      const resultado = await window.ipcAPI.gdl.capturarImagensLaudo(laudoId, sessaoId, idsSelecao, false)
+      if (!resultado.success || !resultadoCapturaValido(resultado.data)) {
         setErro(resultado.error || 'Não foi possível capturar as imagens selecionadas.')
         return
       }
-      onCapturadas(resultado.data.imagens, permitirDuplicadas)
-      if (resultado.data.duplicadas.length > 0 && !permitirDuplicadas) {
-        setDuplicadasPendentes(await prepararDuplicadas(resultado.data.duplicadas))
-        return
-      }
-      if (resultado.data.falhas.length > 0) {
-        toast.warning(`${resultado.data.imagens.length} imagem(ns) capturada(s); ${resultado.data.falhas.length} falharam.`)
-      } else {
+      const dados = resultado.data
+      if (dados.imagens.length > 0) onCapturadas(dados.imagens, false)
+      const idsProcessados = new Set([...dados.imagens.map(imagem => imagem.idSelecao), ...dados.duplicadas.map(duplicada => duplicada.idSelecao)])
+      setArquivos(atuais => atuais.filter(arquivo => !idsProcessados.has(arquivo.idSelecao)))
+      setSelecionadas(atuais => new Set([...atuais].filter(id => !idsProcessados.has(id))))
+      setFotosJaIncluidas(atual => atual + dados.duplicadas.length)
+      if (resultado.data.duplicadas.length > 0 || resultado.data.falhas.length > 0) {
+        toast.warning(`${resultado.data.imagens.length} imagem(ns) capturada(s); ${resultado.data.duplicadas.length} já incluída(s); ${resultado.data.falhas.length} falha(s).`)
+      } else if (resultado.data.imagens.length > 0) {
         toast.success(`${resultado.data.imagens.length} imagem(ns) adicionada(s) ao painel.`)
       }
       if (resultado.data.imagens.length > 0) onAbertoChange(false)
@@ -357,7 +370,6 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
   }
 
   return (
-    <>
     <Dialog open={aberto} onOpenChange={onAbertoChange}>
       <DialogContent className="flex w-[calc(100vw-2rem)] max-w-none flex-col sm:w-[min(92vw,1100px)] sm:max-w-none max-h-[85vh]">
         <DialogHeader>
@@ -366,6 +378,8 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
           </DialogTitle>
           <DialogDescription>Somente as fotos da galeria do GDL são consideradas. Vídeos e anexos são ignorados.</DialogDescription>
         </DialogHeader>
+        {avisoVerificacao && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>{avisoVerificacao} <Button variant="link" className="h-auto p-0" onClick={() => setTentativaCarregamento(atual => atual + 1)}>Tentar novamente</Button></AlertDescription></Alert>}
+        {fotosJaIncluidas > 0 && <p className="text-xs text-muted-foreground">{fotosJaIncluidas} foto(s) já incluída(s) neste laudo foram ocultada(s).</p>}
         {!carregando && !erro && arquivos.length > 0 && (
           <div className="space-y-2 rounded-md border bg-muted/30 p-2">
             <div className="grid gap-2 sm:grid-cols-[1fr_150px_190px]">
@@ -396,8 +410,8 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{Array.from({ length: 6 }, (_, indice) => <Skeleton key={indice} className="h-36 w-full" />)}</div>
           </div>}
           {erro && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"><span>{erro}</span><Button variant="outline" size="sm" onClick={() => setTentativaCarregamento(atual => atual + 1)}><RefreshCw className="mr-2 h-4 w-4" />Tentar novamente</Button></AlertDescription></Alert>}
-          {!carregando && !erro && arquivos.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">A Lista de Fotos da REP está vazia.</p>}
-          {!carregando && !erro && arquivos.length > 0 && arquivosVisiveis.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma foto encontrada com os filtros selecionados.</p>}
+          {!carregando && !erro && arquivos.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">{fotosJaIncluidas > 0 ? 'Todas as fotos disponíveis da REP já estão incluídas neste laudo.' : 'A Lista de Fotos da REP está vazia.'}</p>}
+          {!carregando && !erro && arquivos.length > 0 && arquivosVisiveis.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">{filtro === 'elegiveis' && !busca.trim() && fotosJaIncluidas > 0 && arquivos.every(arquivo => !arquivo.provavelImagem || arquivo.status) ? 'Todas as fotos disponíveis da REP já estão incluídas neste laudo.' : 'Nenhuma foto encontrada com os filtros selecionados.'}</p>}
           {!carregando && !erro && arquivosVisiveis.length > 0 && <div className={`grid grid-cols-1 gap-3 ${CLASSES_COLUNAS_GRADE[colunasGrade]}`}>{arquivosVisiveis.map(arquivo => {
             const elegivel = arquivo.provavelImagem && !arquivo.status
             return <label
@@ -430,37 +444,5 @@ export const GdlImagensRepModal: React.FC<GdlImagensRepModalProps> = ({ aberto, 
         <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Lista de Fotos pode ter até <strong>1 GB</strong> e cada foto até <strong>50 MB</strong>.</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onAbertoChange(false)} disabled={capturando}>{carregando ? 'Fechar' : 'Cancelar'}</Button><Button onClick={() => void capturar()} disabled={carregando || capturando || selecionadas.size === 0}>{capturando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Capturar imagens ({selecionadas.size})</Button></div></div>
       </DialogContent>
     </Dialog>
-    <AlertDialog open={duplicadasPendentes.length > 0} onOpenChange={aberto => { if (!aberto) setDuplicadasPendentes([]) }}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Foto já incluída no laudo</AlertDialogTitle>
-          <AlertDialogDescription>
-            {duplicadasPendentes.length === 1
-              ? 'A foto selecionada já está armazenada neste laudo.'
-              : `${duplicadasPendentes.length} fotos selecionadas já estão armazenadas neste laudo.`}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <ul className="max-h-64 space-y-3 overflow-y-auto text-sm text-muted-foreground">
-          {duplicadasPendentes.map(duplicada => (
-            <li key={duplicada.idSelecao} className="rounded-md border p-2">
-              <p><span className="font-medium text-foreground">{duplicada.nomeArquivo}</span>: já está em {duplicada.localizacao === 'painel' ? 'Painel de ilustrações' : 'Figuras inseridas no laudo'}.</p>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                <div><span className="mb-1 block">Selecionada agora</span><div className="flex h-20 items-center justify-center overflow-hidden rounded border bg-muted">{duplicada.miniaturaSelecionada ? <img src={duplicada.miniaturaSelecionada} alt="Foto selecionada agora" className="h-full w-full object-contain" /> : <ImageIcon className="h-4 w-4" />}</div></div>
-                <div><span className="mb-1 block">Já incluída</span><div className="flex h-20 items-center justify-center overflow-hidden rounded border bg-muted">{duplicada.miniaturaExistente ? <img src={duplicada.miniaturaExistente} alt="Foto já incluída" className="h-full w-full object-contain" /> : <ImageIcon className="h-4 w-4" />}</div></div>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Não adicionar repetidas</AlertDialogCancel>
-          <AlertDialogAction onClick={() => {
-            const ids = duplicadasPendentes.map(duplicada => duplicada.idSelecao)
-            setDuplicadasPendentes([])
-            void capturar(ids, true)
-          }}>Adicionar mesmo assim</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    </>
   )
 }

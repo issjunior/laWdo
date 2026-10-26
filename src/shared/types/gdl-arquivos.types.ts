@@ -36,6 +36,8 @@ export interface ListaImagensRepGdl {
   numeroRep: string
   anoRep: string
   arquivos: ArquivoRepGdl[]
+  fotosJaIncluidas?: number
+  avisoVerificacao?: string
 }
 
 export type FaseProgressoListaFotosGdl = 'consultando' | 'baixando' | 'preparando'
@@ -62,6 +64,7 @@ export interface ImagemRepGdlAdicionadaAoLaudo {
   tamanho: number
   sha256: string
   sequencia: number
+  thumbnailDataUri?: string
 }
 
 export interface ResultadoCapturaImagensLaudoGdl {
