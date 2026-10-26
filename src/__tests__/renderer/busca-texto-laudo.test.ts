@@ -51,4 +51,18 @@ describe('busca pelo texto apresentado do laudo', () => {
     expect(buscarTextoNoLaudo(raiz, modo === 'dados' ? 'cidade de TELÊMACO BORBA' : 'cidade de {{perito_lotacao}}')).toHaveLength(1);
     expect(html).toContain('>{{perito_lotacao}}</span>');
   });
+
+  it('ignora texto de bloco suprimido no editor e na cópia sem perder resultado visível', () => {
+    const html = '<p>XXX visível</p>'
+      + '<div class="cond-bloco" data-cond-suprimido="true"><p>XXX oculto</p></div>';
+    const copia = criarCopiaVisualizacaoPlaceholders(html, {
+      modo: 'dados', valores: {}, placeholdersPersonalizados: [], descreverPendente: () => 'Pendente',
+    });
+
+    for (const raiz of [criarRaiz(html), copia]) {
+      expect(buscarTextoNoLaudo(raiz, 'XXX')).toHaveLength(1);
+      expect(buscarTextoNoLaudo(raiz, 'XXX oculto')).toHaveLength(0);
+      expect(buscarTextoNoLaudo(raiz, 'XXX')[0].intervalo.toString()).toBe('XXX');
+    }
+  });
 });

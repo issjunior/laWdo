@@ -77,24 +77,6 @@ function readFileAsDataUri(file: File): Promise<string> {
   });
 }
 
-function generateThumbnail(dataUri: string, maxWidth: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ratio = maxWidth / img.width;
-      canvas.width = maxWidth;
-      canvas.height = Math.round(img.height * ratio);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Canvas indisponível')); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.75));
-    };
-    img.onerror = () => reject(new Error('Falha ao carregar imagem'));
-    img.src = dataUri;
-  });
-}
-
 export interface ImagemLaudo {
   id: string;
   url: string;
@@ -110,28 +92,14 @@ export interface ImagemLaudo {
   imagemOrigemId?: string;
 }
 
-async function criarImagemLaudo(
-  dataUri: string,
-  legenda = '',
-  origem?: 'gdl',
-  sha256?: string,
-  id: string = crypto.randomUUID(),
-  nomeArquivo = 'imagem',
-): Promise<ImagemLaudo> {
-  return {
-    id, url: dataUri, thumbnailUrl: await generateThumbnail(dataUri, 300), legenda,
-    numero_figura: 0, sequencia: 0, created_at: new Date().toISOString(), origem, sha256, nomeArquivo,
-  };
-}
-
 function sugerirLegenda(nomeArquivo: string): string {
   return nomeArquivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
 }
 
 interface IlustracoesPanelProps {
   laudoId: string;
-  onInsertImage: (imageUrl: string, imageId: string, legenda: string) => void;
-  onInsertAll?: (imagens: ImagemLaudo[]) => void;
+  onInsertImage: (imageUrl: string, imageId: string, legenda: string) => Promise<boolean> | boolean;
+  onInsertAll?: (imagens: ImagemLaudo[]) => Promise<string[]> | string[];
   onDeleteImage?: (imageId: string) => void;
   onReorder?: (imagens: ImagemLaudo[]) => void;
   onRefreshHtml: (restaurarLegendas?: boolean) => Promise<ResultadoAtualizacaoFiguras>;
@@ -146,14 +114,14 @@ interface IlustracoesPanelProps {
   onPopOut?: () => void;
   onRecolher?: () => void;
   onFechar?: () => void;
-  onReplaceImage?: (imageId: string, imagem: ImagemLaudo, indice?: number) => void;
-  onEditImage?: (indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => void;
+  onReplaceImage?: (imageId: string, imagem: ImagemLaudo, indice?: number) => Promise<boolean> | boolean;
+  onEditImage?: (indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => Promise<void> | void;
   onGerarLegenda?: (imageId: string) => Promise<string | null>;
   figuraSubstituicaoSolicitada?: string | null;
   onFiguraSubstituicaoSolicitadaConsumida?: () => void;
   insercaoNoCursorSolicitada?: number | null;
   onInsercaoNoCursorConsumida?: () => void;
-  onInserirNoCursor?: (imagem: ImagemLaudo) => boolean;
+  onInserirNoCursor?: (imagem: ImagemLaudo) => Promise<boolean> | boolean;
 }
 
 interface SortableItemProps {
@@ -520,7 +488,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       imagemOrigemId: imagemBaseEdicaoId, ajustesJson: JSON.stringify(ajustes),
     });
     if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível salvar a figura editada.');
-    onEditImage?.(indiceEdicao, { ...figura, id, url: dataUri, thumbnailUrl: dataUri, imagemOrigemId: imagemBaseEdicaoId }, imagemBaseEdicaoId, figura.id);
+    await onEditImage?.(indiceEdicao, { ...figura, id, url: '', thumbnailUrl: '', imagemOrigemId: imagemBaseEdicaoId }, imagemBaseEdicaoId, figura.id);
     await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, id);
     toast.success('Figura editada');
   };
@@ -568,6 +536,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       }
       const resultado = await window.ipcAPI.ilustracoes.listarImagens(laudoId);
       if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível carregar as imagens do laudo.');
+      const resultadoEstagio = await window.ipcAPI.ilustracoes.listarEstagio(laudoId);
+      if (!resultadoEstagio.success || !resultadoEstagio.data) throw new Error(resultadoEstagio.error || 'Não foi possível recuperar as imagens temporárias.');
       const carregadas: ImagemLaudo[] = resultado.data.map((imagem: ImagemLaudoResumo) => ({
         id: imagem.id,
         url: '',
@@ -587,9 +557,17 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       if (!miniaturas.success) throw new Error(miniaturas.error || 'Não foi possível carregar as miniaturas das imagens.');
       const miniaturasPorId = new Map((miniaturas.data || []).map(miniatura => [miniatura.id, miniatura.thumbnailDataUri]));
       if (cancelado) return;
-      setImagens(carregadas.map(imagem => ({ ...imagem, thumbnailUrl: miniaturasPorId.get(imagem.id) || imagem.thumbnailUrl })));
+      const idsPersistidos = new Set(carregadas.map(imagem => imagem.id));
+      const temporarias: ImagemLaudo[] = resultadoEstagio.data.filter(imagem => !idsPersistidos.has(imagem.id)).map(imagem => ({
+        id: imagem.id, url: '', thumbnailUrl: imagem.thumbnailDataUri,
+        legenda: imagem.legenda, numero_figura: imagem.sequencia, sequencia: imagem.sequencia,
+        created_at: new Date().toISOString(), origem: imagem.origem === 'gdl' ? 'gdl' : undefined,
+        sha256: imagem.sha256, nomeArquivo: imagem.nomeArquivo,
+      }));
+      const todas = [...carregadas.map(imagem => ({ ...imagem, thumbnailUrl: miniaturasPorId.get(imagem.id) || imagem.thumbnailUrl })), ...temporarias];
+      setImagens(todas);
       hashesGdlCapturados.current = new Set(
-        carregadas.flatMap(imagem => imagem.origem === 'gdl' && imagem.sha256 ? [imagem.sha256] : []),
+        todas.flatMap(imagem => imagem.origem === 'gdl' && imagem.sha256 ? [imagem.sha256] : []),
       );
     })().catch((error: unknown) => {
       if (cancelado) return;
@@ -630,9 +608,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     if (imagem.url) return imagem;
     const inicio = performance.now();
     const resultado = await window.ipcAPI.ilustracoes.obterImagem(laudoId, imagem.id);
-    if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível carregar a imagem.');
-    const carregada = { ...imagem, url: resultado.data.dataUri };
-    setImagens(atuais => atuais.map(item => item.id === imagem.id ? carregada : item));
+    const temporaria = resultado.success && resultado.data ? null : await window.ipcAPI.ilustracoes.obterImagemEstagio(laudoId, imagem.id);
+    const dataUri = resultado.data?.dataUri || temporaria?.data?.dataUri;
+    if (!dataUri) throw new Error(resultado.error || temporaria?.error || 'Não foi possível carregar a imagem.');
+    const carregada = { ...imagem, url: dataUri };
     registrarDesempenhoIlustracao('carregar_imagem_completa', inicio, { imagens: 1, imagensMemoria: imagens.filter(item => Boolean(item.url)).length + 1 });
     return carregada;
   };
@@ -663,19 +642,18 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     for (const file of Array.from(files)) {
       try {
         const dataUri = await readFileAsDataUri(file);
-        const novaImagem = await criarImagemLaudo(dataUri, '', undefined, undefined, undefined, file.name);
-        novaImagem.numero_figura = proximaSequencia;
-        novaImagem.sequencia = proximaSequencia;
-        const resultado = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
-          id: novaImagem.id,
+        const id = crypto.randomUUID();
+        const resultado = await window.ipcAPI.ilustracoes.estagiarImagem(laudoId, {
+          id,
           nomeArquivo: file.name,
           dataUri,
-          legenda: novaImagem.legenda,
+          legenda: '',
           origem: 'local',
           sequencia: proximaSequencia,
         });
-        if (!resultado.success) throw new Error(resultado.error || 'Não foi possível armazenar a imagem.');
-        novasImagens.push(novaImagem);
+        if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível preparar a imagem.');
+        novasImagens.push({ id, url: '', thumbnailUrl: resultado.data.thumbnailDataUri, legenda: '',
+          numero_figura: proximaSequencia, sequencia: proximaSequencia, created_at: new Date().toISOString(), nomeArquivo: file.name });
         proximaSequencia += 1;
       } catch (error) {
         toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `Erro ao carregar ${file.name}`);
@@ -693,7 +671,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       novasImagens.push({
         id: capturada.imagemId,
         url: '',
-        thumbnailUrl: MINIATURA_PENDENTE,
+        thumbnailUrl: capturada.thumbnailDataUri || MINIATURA_PENDENTE,
         legenda: sugerirLegenda(capturada.nomeArquivo),
         numero_figura: capturada.sequencia,
         sequencia: capturada.sequencia,
@@ -709,7 +687,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       return;
     }
     setImagens(prev => [...prev, ...novasImagens]);
-    void carregarMiniaturas(novasImagens.map(imagem => imagem.id));
+    void carregarMiniaturas(novasImagens.filter(imagem => imagem.thumbnailUrl === MINIATURA_PENDENTE).map(imagem => imagem.id));
     if (figuraSubstituicaoId && novasImagens[0]) {
       setImagemSubstituicaoId(novasImagens[0].id);
       setSeletorSubstituicaoAberto(true);
@@ -719,6 +697,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja excluir permanentemente esta imagem?')) return;
     const removida = imagens.find(imagem => imagem.id === id);
+    await window.ipcAPI.ilustracoes.descartarEstagio(laudoId, id);
     const resultado = await window.ipcAPI.ilustracoes.excluirImagem(laudoId, id);
     if (!resultado.success) {
       toast.error(resultado.error || 'Não foi possível excluir a imagem.');
@@ -752,28 +731,20 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       onDeleteImage?.(id);
       return;
     }
-    void window.ipcAPI.ilustracoes.disponibilizarImagem(laudoId, id).then(resultado => {
-      if (!resultado.success) {
-        toast.error(resultado.error || 'Não foi possível devolver a imagem ao painel.');
-        return;
-      }
-      onDeleteImage?.(id);
-      if (figura) setImagens(atuais => atuais.some(imagem => imagem.id === id) ? atuais : [...atuais, figura]);
-    });
+    onDeleteImage?.(id);
   };
 
   const handleInsertAll = async () => {
     const disponiveis = imagens.filter(imagem => !figurasNoEditor?.some(figura => figura.id === imagem.id));
-    if (!onInsertAll || disponiveis.length === 0) return;
-    if (disponiveis.length > MINIATURAS_POR_LOTE && !confirm(`Inserir ${disponiveis.length} imagens pode consumir muita memória no editor. Deseja continuar?`)) return;
+    if (disponiveis.length === 0) return;
     const inicio = performance.now();
     try {
-      const completas: ImagemLaudo[] = [];
-      for (const imagem of disponiveis) completas.push(await carregarImagemCompleta(imagem));
-      onInsertAll(completas);
-      void arquivarImagensInseridas(completas.map(imagem => imagem.id));
-      setImagens(atuais => atuais.filter(imagem => !completas.some(inserida => inserida.id === imagem.id)));
-      registrarDesempenhoIlustracao('inserir_todas', inicio, { imagens: completas.length, imagensMemoria: completas.length });
+      const inseridas: string[] = onInsertAll ? await onInsertAll(disponiveis) : [];
+      if (!onInsertAll) for (const imagem of disponiveis) {
+        if (await onInsertImage(imagem.url, imagem.id, imagem.legenda)) inseridas.push(imagem.id);
+      }
+      setImagens(atuais => atuais.filter(imagem => !inseridas.includes(imagem.id)));
+      registrarDesempenhoIlustracao('inserir_todas', inicio, { imagens: inseridas.length, imagensMemoria: 0 });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível preparar as imagens para inserção.');
     }
@@ -790,10 +761,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     if (indice < 0) return;
 
     const inicio = performance.now();
-    void Promise.all(imagensReais.map(carregarImagemCompleta)).then(carregadas => {
-      setImagensEmVisualizacao(carregadas);
+    void carregarImagemCompleta(imagensReais[indice]).then(carregada => {
+      setImagensEmVisualizacao(imagensReais.map((imagem, posicao) => posicao === indice
+        ? carregada : { ...imagem, url: imagem.thumbnailUrl }));
       setLightboxIndex(indice);
-      registrarDesempenhoIlustracao('abrir_carrossel', inicio, { imagens: carregadas.length, imagensMemoria: carregadas.length });
+      registrarDesempenhoIlustracao('abrir_carrossel', inicio, { imagens: 1, imagensMemoria: 1 });
     }).catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível abrir as imagens.'));
   };
 
@@ -882,7 +854,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
               <TooltipContent>Buscar imagens da REP</TooltipContent>
             </Tooltip>
 
-            {onInsertAll && filteredImagens.length > 0 ? (
+            {filteredImagens.length > 0 ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="secondary" className="h-14 min-w-0 flex-col gap-1 px-2" onClick={() => { void handleInsertAll(); }} aria-label="Inserir todas as imagens no laudo">
@@ -928,12 +900,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                       onDelete={handleDelete}
                       onUpdateLegenda={handleUpdateLegenda}
                       onInsert={img => {
-                        void carregarImagemCompleta(img).then(carregada => {
-                          onInsertImage(carregada.url, carregada.id, carregada.legenda);
-                          void arquivarImagensInseridas([carregada.id]);
-                          if (carregada.origem === 'gdl' && carregada.sha256) hashesGdlCapturados.current.delete(carregada.sha256);
+                        void Promise.resolve(onInsertImage(img.url, img.id, img.legenda)).then(inserida => {
+                          if (!inserida) return;
+                          if (img.origem === 'gdl' && img.sha256) hashesGdlCapturados.current.delete(img.sha256);
                           setImagens(prev =>
-                            prev.filter(i => i.id !== carregada.id).map((i, idx) => ({ ...i, sequencia: idx + 1, numero_figura: idx + 1 }))
+                            prev.filter(i => i.id !== img.id).map((i, idx) => ({ ...i, sequencia: idx + 1, numero_figura: idx + 1 }))
                           );
                         }).catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível preparar a imagem.'));
                       }}
@@ -1029,6 +1000,15 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         open={lightboxIndex >= 0}
         index={lightboxIndex}
         close={() => { setLightboxIndex(-1); setImagensEmVisualizacao([]); }}
+        on={{ view: ({ index }) => {
+          const imagem = imagensEmVisualizacao[index];
+          if (!imagem || imagem.url !== imagem.thumbnailUrl) return;
+          const origem = imagens.find(item => item.id === imagem.id);
+          if (!origem) return;
+          void carregarImagemCompleta(origem).then(completa => {
+            setImagensEmVisualizacao(atuais => atuais.map((item, posicao) => posicao === index ? completa : item));
+          }).catch(erro => toast.error(erro instanceof Error ? erro.message : 'Não foi possível carregar a imagem.'));
+        } }}
         slides={imagensEmVisualizacao.map(imagem => ({
           src: imagem.url,
           description: imagem.legenda || undefined,
@@ -1066,11 +1046,13 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         onCarregarArquivo={async arquivo => {
           try {
             const dataUri = await readFileAsDataUri(arquivo);
-            const imagem = await criarImagemLaudo(dataUri, '', undefined, undefined, undefined, arquivo.name);
-            const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
-              id: imagem.id, nomeArquivo: arquivo.name, dataUri, legenda: '', origem: 'local', sequencia: imagens.length + 1,
+            const id = crypto.randomUUID();
+            const resposta = await window.ipcAPI.ilustracoes.estagiarImagem(laudoId, {
+              id, nomeArquivo: arquivo.name, dataUri, legenda: '', origem: 'local', sequencia: imagens.length + 1,
             });
-            if (!resposta.success) throw new Error(resposta.error || 'Não foi possível armazenar a imagem.');
+            if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível preparar a imagem.');
+            const imagem: ImagemLaudo = { id, url: '', thumbnailUrl: resposta.data.thumbnailDataUri, legenda: '',
+              numero_figura: imagens.length + 1, sequencia: imagens.length + 1, created_at: new Date().toISOString(), nomeArquivo: arquivo.name };
             setImagens(atuais => [...atuais, imagem]);
             setImagemSubstituicaoId(imagem.id);
           } catch (erro: unknown) {
@@ -1083,23 +1065,31 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           if (!selecionada) return;
           insercaoNoCursorEmAndamentoRef.current = true;
           void (async () => {
-            const original = await carregarImagemCompleta(selecionada);
-            const id = crypto.randomUUID();
-            const dataUri = imagemEditada?.dataUri || original.url;
-            const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
-              id, nomeArquivo: `figura-inserida-${id}`, dataUri, legenda, origem: 'local',
-              sequencia: original.sequencia, imagemOrigemId: original.id,
-              ajustesJson: imagemEditada ? JSON.stringify(imagemEditada.ajustes) : undefined,
-            });
-            if (!resposta.success) throw new Error(resposta.error || 'Não foi possível salvar a figura.');
-            const inserida = onInserirNoCursor?.({ ...original, id, url: dataUri, thumbnailUrl: dataUri, legenda, imagemOrigemId: original.id });
+            let imagem = selecionada;
+            if (imagemEditada) {
+              const preparacaoOriginal = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, selecionada.id, 800, 600, window.devicePixelRatio || 1);
+              if (!preparacaoOriginal.success) throw new Error(preparacaoOriginal.error || 'Não foi possível preservar a imagem original.');
+              const id = crypto.randomUUID();
+              const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
+                id, nomeArquivo: `figura-inserida-${id}.png`, dataUri: imagemEditada.dataUri, legenda, origem: 'local',
+                sequencia: selecionada.sequencia, imagemOrigemId: selecionada.id,
+                ajustesJson: JSON.stringify(imagemEditada.ajustes),
+              });
+              if (!resposta.success) throw new Error(resposta.error || 'Não foi possível salvar a figura.');
+              imagem = { ...selecionada, id, imagemOrigemId: selecionada.id };
+            }
+            const inserida = await onInserirNoCursor?.({ ...imagem, legenda });
             if (!inserida) {
-              await window.ipcAPI.ilustracoes.excluirImagem(laudoId, id);
+              if (imagemEditada) await window.ipcAPI.ilustracoes.excluirImagem(laudoId, imagem.id);
               toast.error('A posição escolhida não está mais disponível. Selecione novamente o local no editor.');
               return;
             }
-            const arquivamento = await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, id);
+            const arquivamento = await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, imagem.id);
             if (!arquivamento.success) toast.error(arquivamento.error || 'Não foi possível atualizar o painel de imagens.');
+            if (imagemEditada) {
+              await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, selecionada.id);
+              setImagens(atuais => atuais.filter(item => item.id !== selecionada.id));
+            }
             setSeletorInsercaoAberto(false);
             setImagemSubstituicaoId(null);
           })().catch((erro: unknown) => toast.error(erro instanceof Error ? erro.message : 'Não foi possível inserir a figura.'))
@@ -1121,27 +1111,28 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           const imagem = filteredImagens.find(item => item.id === imagemSubstituicaoId);
           if (!figuraSubstituicaoId || !imagem) return;
           void (async () => {
-            const original = await carregarImagemCompleta(imagem);
-            let carregada = original;
+            let carregada = imagem;
             if (imagemEditada) {
+              const preparacaoOriginal = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, imagem.id, 800, 600, window.devicePixelRatio || 1);
+              if (!preparacaoOriginal.success) throw new Error(preparacaoOriginal.error || 'Não foi possível preservar a imagem original.');
               const id = crypto.randomUUID();
               const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
                 id, nomeArquivo: `figura-substituida-${id}.png`, dataUri: imagemEditada.dataUri,
-                legenda, origem: 'local', sequencia: original.sequencia,
-                imagemOrigemId: original.id, ajustesJson: JSON.stringify(imagemEditada.ajustes),
+                legenda, origem: 'local', sequencia: imagem.sequencia,
+                imagemOrigemId: imagem.id, ajustesJson: JSON.stringify(imagemEditada.ajustes),
               });
               if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível salvar a figura editada.');
-              carregada = { ...original, id, url: imagemEditada.dataUri, thumbnailUrl: imagemEditada.dataUri, imagemOrigemId: original.id };
-              await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, original.id);
+              carregada = { ...imagem, id, imagemOrigemId: imagem.id };
             }
-            onReplaceImage?.(figuraSubstituicaoId, carregada, figuraSubstituicaoIndice ?? undefined);
+            const substituida = await onReplaceImage?.(figuraSubstituicaoId, carregada, figuraSubstituicaoIndice ?? undefined);
+            if (!substituida) throw new Error('Não foi possível substituir a figura no editor.');
             onUpdateLegendaInEditor?.(carregada.id, legenda);
             void window.ipcAPI.ilustracoes.atualizarLegenda(laudoId, carregada.id, legenda).then(resultado => {
               if (!resultado.success) toast.error(resultado.error || 'Não foi possível salvar a legenda da figura.');
             });
-            void arquivarImagensInseridas([carregada.id]);
+            void arquivarImagensInseridas(imagemEditada ? [carregada.id, imagem.id] : [carregada.id]);
             if (carregada.origem === 'gdl' && carregada.sha256) hashesGdlCapturados.current.delete(carregada.sha256);
-            setImagens(prev => prev.filter(item => item.id !== carregada.id).map((item, indice) => ({ ...item, sequencia: indice + 1, numero_figura: indice + 1 })));
+            setImagens(prev => prev.filter(item => item.id !== imagem.id).map((item, indice) => ({ ...item, sequencia: indice + 1, numero_figura: indice + 1 })));
             setFiguraSubstituicaoId(null);
             setFiguraSubstituicaoIndice(null);
             setImagemSubstituicaoId(null);
@@ -1162,9 +1153,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
             for (const associacao of associacoes) {
               const imagem = imagensPorId.get(associacao.imagemId);
               if (!imagem) continue;
-              const carregada = await carregarImagemCompleta(imagem);
-              onReplaceImage?.(associacao.figuraId, carregada);
-              usadas.push(carregada);
+              if (await onReplaceImage?.(associacao.figuraId, imagem)) usadas.push(imagem);
             }
             if (usadas.length === 0) return;
             void arquivarImagensInseridas(usadas.map(imagem => imagem.id));

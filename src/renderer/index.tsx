@@ -7,6 +7,8 @@ import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
   ImagemLaudoResumo,
+  ImagemEstagiadaLaudo,
+  ImagemPreparadaEditor,
   MiniaturaImagemLaudo,
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
@@ -61,8 +63,15 @@ interface IpcIlustracoesLegado {
   reconciliarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ResultadoReconciliacaoImagensLaudo; error?: string }>;
   listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
   obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+  obterImagemEstagio: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
+  obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
   obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
   salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+  estagiarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo; error?: string }>;
+  listarEstagio: (laudoId: string) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo[]; error?: string }>;
+  prepararInsercao: (laudoId: string, imagemId: string, larguraCss: number, alturaCss: number, densidade: number) => Promise<{ success: boolean; data?: ImagemPreparadaEditor; error?: string }>;
+  descartarEstagio: (laudoId: string, imagemId?: string) => Promise<{ success: boolean; error?: string }>;
+  encerrarSessao: (laudoId: string) => Promise<{ success: boolean; error?: string }>;
   excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
   arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
   disponibilizarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;

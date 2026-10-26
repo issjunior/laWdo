@@ -56,6 +56,8 @@ import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
   ImagemLaudoResumo,
+  ImagemEstagiadaLaudo,
+  ImagemPreparadaEditor,
   MiniaturaImagemLaudo,
   ResultadoReconciliacaoImagensLaudo,
   ResultadoAtualizacaoFiguras,
@@ -65,6 +67,7 @@ import type { AutorizacaoReinicioAtualizacao, ProgressoAtualizacao, RespostaAtua
 import type { AmostraDesempenho, EstadoCapturaDesempenho, EventoDesempenhoEntrada } from '../shared/desempenho/contratos.js';
 import type { EstadoCapturaLogs, ResumoCapturaLogs, SondaCapturaLogs } from '../shared/captura-logs/contratos.js';
 import type { EventoEditorLaudo } from '../shared/diagnostico/contratos.js';
+import type { LaudoConteudo, LaudoResumoLista } from '../shared/types/laudo.types.js';
 
 // O preload sandboxado não pode carregar módulos locais em tempo de execução.
 function progressoIaValidoNoPreload(valor: unknown): valor is ProgressoIa {
@@ -331,9 +334,9 @@ export interface IpcAPI {
 
   // Laudos
   laudo: {
-    findAll: () => Promise<UserResponse>;
+    findAll: () => Promise<UserResponse<LaudoResumoLista[]>>;
     findAllByRepId: (repId: string) => Promise<UserResponse>;
-    findById: (id: string) => Promise<UserResponse>;
+    findById: (id: string) => Promise<UserResponse<LaudoConteudo | null>>;
     findByRepId: (repId: string) => Promise<UserResponse>;
     updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
     create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
@@ -484,8 +487,15 @@ export interface IpcAPI {
     reconciliarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ResultadoReconciliacaoImagensLaudo; error?: string }>;
     listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
     obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+    obterImagemEstagio: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
+    obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
     obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
+    estagiarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo; error?: string }>;
+    listarEstagio: (laudoId: string) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo[]; error?: string }>;
+    prepararInsercao: (laudoId: string, imagemId: string, larguraCss: number, alturaCss: number, densidade: number) => Promise<{ success: boolean; data?: ImagemPreparadaEditor; error?: string }>;
+    descartarEstagio: (laudoId: string, imagemId?: string) => Promise<{ success: boolean; error?: string }>;
+    encerrarSessao: (laudoId: string) => Promise<{ success: boolean; error?: string }>;
       excluirImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
       arquivarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
       disponibilizarImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; error?: string }>;
@@ -776,8 +786,15 @@ const ALLOWED_CHANNELS = new Set([
   'ilustracoes:reconciliar-imagens',
   'ilustracoes:listar-imagens',
   'ilustracoes:obter-imagem',
+  'ilustracoes:obter-imagem-estagio',
+  'ilustracoes:obter-imagem-impressao',
   'ilustracoes:obter-miniaturas',
   'ilustracoes:salvar-imagem',
+  'ilustracoes:estagiar-imagem',
+  'ilustracoes:listar-estagio',
+  'ilustracoes:preparar-insercao',
+  'ilustracoes:descartar-estagio',
+  'ilustracoes:encerrar-sessao',
     'ilustracoes:excluir-imagem',
     'ilustracoes:arquivar-imagem',
     'ilustracoes:disponibilizar-imagem',
@@ -1872,8 +1889,16 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     reconciliarImagens: (laudoId: string) => invocarComDiagnostico('ilustracoes:reconciliar-imagens', laudoId),
     listarImagens: (laudoId: string) => invocarComDiagnostico('ilustracoes:listar-imagens', laudoId),
     obterImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:obter-imagem', laudoId, imagemId),
+    obterImagemEstagio: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:obter-imagem-estagio', laudoId, imagemId),
+    obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => invocarComDiagnostico('ilustracoes:obter-imagem-impressao', laudoId, imagemId, larguraMaxima),
     obterMiniaturas: (laudoId: string, ids: string[]) => invocarComDiagnostico('ilustracoes:obter-miniaturas', laudoId, ids),
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => invocarComDiagnostico('ilustracoes:salvar-imagem', laudoId, imagem),
+    estagiarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => invocarComDiagnostico('ilustracoes:estagiar-imagem', laudoId, imagem),
+    listarEstagio: (laudoId: string) => invocarComDiagnostico('ilustracoes:listar-estagio', laudoId),
+    prepararInsercao: (laudoId: string, imagemId: string, larguraCss: number, alturaCss: number, densidade: number) =>
+      invocarComDiagnostico('ilustracoes:preparar-insercao', laudoId, imagemId, larguraCss, alturaCss, densidade),
+    descartarEstagio: (laudoId: string, imagemId?: string) => invocarComDiagnostico('ilustracoes:descartar-estagio', laudoId, imagemId),
+    encerrarSessao: (laudoId: string) => invocarComDiagnostico('ilustracoes:encerrar-sessao', laudoId),
     excluirImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:excluir-imagem', laudoId, imagemId),
     arquivarImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:arquivar-imagem', laudoId, imagemId),
     disponibilizarImagem: (laudoId: string, imagemId: string) => invocarComDiagnostico('ilustracoes:disponibilizar-imagem', laudoId, imagemId),

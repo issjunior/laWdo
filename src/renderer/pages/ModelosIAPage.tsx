@@ -37,7 +37,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Slider } from '@/components/ui/slider';
 import {
   Dialog,
   DialogContent,
@@ -66,7 +65,6 @@ import {
   ExternalLink,
   KeyRound,
   BookOpen,
-  Image,
   Info,
   Square,
 } from 'lucide-react';
@@ -91,28 +89,7 @@ type IAConfigForm = z.infer<typeof iaConfigSchema>;
 const GROQ_MODEL_OPTIONS = listarModelosIa('groq').map(modelo => ({ value: modelo.id, label: modelo.rotulo }));
 const GEMINI_MODEL_OPTIONS = listarModelosIa('gemini').map(modelo => ({ value: modelo.id, label: modelo.rotulo }));
 
-const OPCOES_QUALIDADE_IMAGEM = [
-  {
-    valor: 'original',
-    rotulo: 'Original',
-    detalhe: 'Arquivo sem redução',
-  },
-  {
-    valor: 'alta',
-    rotulo: 'Redução leve',
-    detalhe: 'Até 1536 px',
-  },
-  {
-    valor: 'equilibrada',
-    rotulo: 'Equilibrada',
-    detalhe: 'Até 768 px',
-  },
-  {
-    valor: 'economica',
-    rotulo: 'Econômica',
-    detalhe: 'Até 512 px',
-  },
-] as const;
+
 
 const getMensagemErro = (erro: unknown): string =>
   erro instanceof Error ? erro.message : 'Erro desconhecido';
@@ -242,7 +219,6 @@ export const ModelosIAPage: React.FC = () => {
   const [tempoTesteSegundos, setTempoTesteSegundos] = useState(0);
   const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [salvandoPrivacidade, setSalvandoPrivacidade] = useState(false);
-  const [salvandoConfiguracaoImagem, setSalvandoConfiguracaoImagem] = useState(false);
   const [configuracaoAberta, setConfiguracaoAberta] = useState(false);
   const [guiaChaveAberto, setGuiaChaveAberto] = useState(false);
   const [confirmacaoPrivacidadeAberta, setConfirmacaoPrivacidadeAberta] = useState(false);
@@ -253,7 +229,7 @@ export const ModelosIAPage: React.FC = () => {
     defaultValues: CONFIGURACAO_PROVEDOR_IA_PADRAO,
     mode: 'onBlur',
   });
-  const { estados, motivosErro, recarregarGrupo, perfil, setPerfil, privacidade, setPrivacidade, configuracaoImagem, setConfiguracaoImagem } = useConfiguracoesIa(form);
+  const { estados, motivosErro, recarregarGrupo, perfil, setPerfil, privacidade, setPrivacidade } = useConfiguracoesIa(form);
 
   const provedor = form.watch('provedor');
 
@@ -396,37 +372,11 @@ export const ModelosIAPage: React.FC = () => {
     }
   };
 
-  const salvarConfiguracaoImagem = async () => {
-    if (estados.imagem !== 'pronto') return;
-    try {
-      setSalvandoConfiguracaoImagem(true);
-      setError(null);
-      const resposta = await window.ipcAPI.configuracao.salvar(
-        'qualidade_imagem_ia',
-        JSON.stringify(configuracaoImagem),
-        'json',
-        'Qualidade da imagem enviada para descrição por IA',
-      );
-      if (!resposta.success) {
-        setError(resposta.error || 'Não foi possível salvar a qualidade da imagem.');
-        return;
-      }
-      setSuccess('Qualidade da imagem salva com sucesso!');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (erro: unknown) {
-      setError(getMensagemErro(erro));
-    } finally {
-      setSalvandoConfiguracaoImagem(false);
-    }
-  };
-
   const modelOptions = provedor === 'gemini' ? GEMINI_MODEL_OPTIONS : GROQ_MODEL_OPTIONS;
   const modelFieldName = provedor === 'gemini' ? 'modeloGemini' as const : 'modeloGroq' as const;
   const apiKeyFieldName = provedor === 'gemini' ? 'apiKeyGemini' as const : 'apiKeyGroq' as const;
   const apiKeyPlaceholder = provedor === 'gemini' ? 'AIza...' : 'gsk_...';
   const mascaramentoAtivo = deveMascararConteudoIa(privacidade);
-  const indiceQualidadeImagem = OPCOES_QUALIDADE_IMAGEM.findIndex(opcao => opcao.valor === configuracaoImagem.qualidade);
-  const qualidadeImagemSelecionada = OPCOES_QUALIDADE_IMAGEM[indiceQualidadeImagem];
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6">
@@ -532,67 +482,6 @@ export const ModelosIAPage: React.FC = () => {
                   {salvandoPrivacidade ? 'Salvando...' : 'Salvar privacidade do conteúdo'}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Eye size={18} className="text-primary" />
-                Imagem enviada para descrição
-              </CardTitle>
-              <CardDescription>Defina o equilíbrio entre fidelidade visual, consumo de tokens e uso de internet ao descrever figuras.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6 lg:grid-cols-2">
-              {estados.imagem !== 'pronto' && (
-                <div className="lg:col-span-2">
-                  <EstadoLeituraConfiguracaoIa estado={estados.imagem} motivoErro={motivosErro.imagem} nome="a qualidade da imagem" tentarNovamente={() => void recarregarGrupo('imagem')} />
-                </div>
-              )}
-              <div className="space-y-4">
-                <div className="space-y-3 rounded-lg border p-4">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-sm font-medium">Qualidade: {qualidadeImagemSelecionada.rotulo}</p>
-                    <span className="text-xs text-muted-foreground">{qualidadeImagemSelecionada.detalhe}</span>
-                  </div>
-                  <Slider
-                    aria-label="Qualidade da imagem enviada para descrição"
-                    value={[indiceQualidadeImagem]}
-                    min={0}
-                    max={OPCOES_QUALIDADE_IMAGEM.length - 1}
-                    step={1}
-                    onValueChange={valores => {
-                      const qualidade = OPCOES_QUALIDADE_IMAGEM[valores[0]]?.valor;
-                      if (qualidade) setConfiguracaoImagem({ versao: 1, qualidade });
-                    }}
-                  />
-                  <div className="grid grid-cols-4 text-[10px] text-muted-foreground">
-                    {OPCOES_QUALIDADE_IMAGEM.map(opcao => <span key={opcao.valor} className="text-center first:text-left last:text-right">{opcao.rotulo}</span>)}
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button type="button" onClick={() => void salvarConfiguracaoImagem()} disabled={salvandoConfiguracaoImagem || estados.imagem !== 'pronto'}>
-                    {salvandoConfiguracaoImagem ? 'Salvando...' : 'Salvar qualidade da imagem'}
-                  </Button>
-                </div>
-              </div>
-              <aside className="py-1" aria-label="Comparativo da proporção das imagens">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2 text-primary"><Image className="h-4 w-4" /></div>
-                  <div>
-                    <h3 className="text-sm font-semibold">Proporção da foto enviada</h3>
-                    <p className="text-xs text-muted-foreground">Da maior qualidade para a menor resolução.</p>
-                  </div>
-                </div>
-                <div className="relative mt-5 h-44 overflow-hidden">
-                  <div className="absolute left-1/2 h-full w-[22rem] -translate-x-1/2">
-                    <div className="absolute left-3 top-3 h-32 w-56 rounded-lg border-2 border-primary/70 bg-gradient-to-br from-sky-300 via-slate-300 to-slate-700 shadow-sm dark:from-sky-800 dark:via-slate-600 dark:to-slate-950"><span className="absolute left-3 top-2 text-xs font-medium text-white">Original</span></div>
-                    <div className="absolute left-24 top-8 h-28 w-48 rounded-lg border-2 border-primary/60 bg-gradient-to-br from-sky-300 via-slate-300 to-slate-700 shadow-sm dark:from-sky-800 dark:via-slate-600 dark:to-slate-950"><span className="absolute left-3 top-2 text-xs font-medium text-white">Leve</span></div>
-                    <div className="absolute left-44 top-14 h-20 w-32 rounded-lg border-2 border-primary/45 bg-gradient-to-br from-sky-300 via-slate-300 to-slate-700 shadow-sm dark:from-sky-800 dark:via-slate-600 dark:to-slate-950"><span className="absolute left-3 top-2 text-[11px] font-medium text-white">Equilibrada</span></div>
-                    <div className="absolute left-64 top-20 h-14 w-24 rounded-lg border-2 border-primary/30 bg-gradient-to-br from-sky-300 via-slate-300 to-slate-700 shadow-sm dark:from-sky-800 dark:via-slate-600 dark:to-slate-950"><span className="absolute left-2 top-1 text-[10px] font-medium text-white">Econômica</span></div>
-                  </div>
-                </div>
-                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">Cada tela representa a escolha correspondente no slider.</p>
-              </aside>
             </CardContent>
           </Card>
           <Card>

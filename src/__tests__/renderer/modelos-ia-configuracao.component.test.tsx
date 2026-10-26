@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelosIAPage } from '@/pages/ModelosIAPage';
+import { ImagensPage } from '@/pages/ImagensPage';
 
 const obter = vi.fn<(chave: string) => Promise<{ success: boolean; data?: unknown }>>();
 const salvar = vi.fn().mockResolvedValue({ success: true });
@@ -32,7 +33,6 @@ describe('configurações de IA', () => {
   it.each([
     ['perfil_resposta_ia', 'as preferências das respostas', 'Salvar preferências'],
     ['privacidade_ia', 'a privacidade', 'Salvar privacidade do conteúdo'],
-    ['qualidade_imagem_ia', 'a qualidade da imagem', 'Salvar qualidade da imagem'],
   ])('bloqueia o grupo %s quando sua leitura falha', async (chaveComFalha, nomeGrupo, nomeBotao) => {
     obter.mockImplementation(async chave => chave === chaveComFalha
       ? { success: false }
@@ -41,6 +41,17 @@ describe('configurações de IA', () => {
 
     await waitFor(() => expect(screen.getByText(`Não foi possível carregar ${nomeGrupo}`)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: nomeBotao })).toBeDisabled();
+    expect(salvar).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia a qualidade da imagem para IA na página de imagens quando a leitura falha', async () => {
+    obter.mockImplementation(async chave => chave === 'qualidade_imagem_ia'
+      ? { success: false }
+      : { success: true, data: null });
+    render(<ImagensPage />);
+    await waitFor(() => expect(screen.getByText('Não foi possível carregar todas as preferências de imagens.')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Salvar qualidade para IA' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Salvar prévia do editor' })).toBeEnabled();
     expect(salvar).not.toHaveBeenCalled();
   });
 });

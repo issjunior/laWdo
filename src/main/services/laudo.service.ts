@@ -1,10 +1,12 @@
 import { capturarApresentacaoLaudo } from './apresentacao-laudo.service.js';
+import { obterPreviaEditorImagemLaudo } from './imagem-laudo.service.js';
 import { criarRevisaoSecaoB601, preservarComplementoB601, preservarDescricaoAgrupadaB601, preservarRevisoesB601, preservarTextoPecasB601, reterDescricoesPendentesB601, revisarPecasAusentesB601, sinalizarDescricaoDesatualizadaB601 } from './b601-secoes.service.js';
 import { calcularNumeracaoSecoes } from '../../shared/utils/numeracao-secoes.js';
 import { BaseService } from './base.service.js';
 import { LaudoRow } from '../types/database.js';
+import type { LaudoResumoLista } from '../../shared/types/laudo.types.js';
 import { getLogger } from '../utils/logger.js';
-import { executeQuery, executeNonQuery } from '../database/sqlite.js';
+import { executeQuery, executeNonQuery, withTransaction } from '../database/sqlite.js';
 import { randomUUID } from 'crypto';
 import { app } from 'electron';
 import path from 'path';
@@ -20,16 +22,48 @@ import {
 
 const log = getLogger('laudo')
 
-type LaudoComRepRow = LaudoRow & {
-  rep_numero: string;
-  template_nome: string;
-  status_rep: string;
-  tipo_exame_nome?: string;
-  tipo_exame_codigo?: string;
-  data_requisicao?: string;
-  tipo_solicitacao?: string;
-  numero_documento?: string;
-};
+export async function compactarFigurasParaEditor(laudoId: string, conteudo: string): Promise<string> {
+  const padraoFigura = /<figure\b[^>]*>[\s\S]*?<\/figure>/gi
+  const partes: string[] = []
+  const previas = new Map<string, string>()
+  let cursor = 0
+  for (const correspondencia of conteudo.matchAll(padraoFigura)) {
+    const figura = correspondencia[0]
+    const inicio = correspondencia.index
+    partes.push(conteudo.slice(cursor, inicio))
+    cursor = inicio + figura.length
+    if (/\bdata-dummy\s*=\s*["']true["']/i.test(figura) || /\bdata-imagem-previa\s*=\s*["']true["']/i.test(figura)) {
+      partes.push(figura)
+      continue
+    }
+    const imagemId = figura.match(/\bdata-image-id\s*=\s*["']([^"']+)["']/i)?.[1]
+    const imagem = figura.match(/<img\b[^>]*>/i)?.[0]
+    const origem = imagem?.match(/\bsrc\s*=\s*(["'])(data:image\/(?:jpeg|png|gif|bmp|webp);base64,[^"']+)\1/i)
+    if (!imagemId || !imagem || !origem) {
+      partes.push(figura)
+      continue
+    }
+    let previa = previas.get(imagemId)
+    if (!previa) {
+      try {
+        previa = await obterPreviaEditorImagemLaudo(laudoId, imagemId)
+      } catch {
+        partes.push(figura)
+        continue
+      }
+      previas.set(imagemId, previa)
+    }
+    if (previa.length >= origem[2].length) {
+      partes.push(figura)
+      continue
+    }
+    const imagemCompacta = imagem.replace(origem[0], `src=${origem[1]}${previa}${origem[1]}`)
+    partes.push(figura.replace(imagem, imagemCompacta).replace(/<figure\b/i, '<figure data-imagem-previa="true"'))
+  }
+  if (cursor === 0) return conteudo
+  partes.push(conteudo.slice(cursor))
+  return partes.join('')
+}
 
 class LaudoService extends BaseService<LaudoRow> {
   constructor() {
@@ -81,17 +115,23 @@ class LaudoService extends BaseService<LaudoRow> {
         VALUES (?, ?, ?, ?, ?, 'Em andamento', 'template', ?, 1, ?, ?, ?)
       `;
 
-      await executeNonQuery(sql, [
-        id,
-        params.rep_id,
-        params.perito_id,
-        params.template_id,
-        conteudo || '<p>Laudo em elaboração.</p>',
-        now,
-        now,
-        now,
-        JSON.stringify(apresentacao),
-      ]);
+      await withTransaction(async () => {
+        await executeNonQuery(sql, [
+          id,
+          params.rep_id,
+          params.perito_id,
+          params.template_id,
+          conteudo || '<p>Laudo em elaboração.</p>',
+          now,
+          now,
+          now,
+          JSON.stringify(apresentacao),
+        ]);
+        await executeNonQuery(
+          "UPDATE reps SET status = 'Em Andamento', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          [params.rep_id],
+        );
+      });
 
       log.info('Laudo criado para REP', { laudoId: id, repId: params.rep_id });
 
@@ -128,11 +168,21 @@ class LaudoService extends BaseService<LaudoRow> {
     }
   }
 
-  async findAllComRep(): Promise<LaudoComRepRow[]> {
+  async findAllComRep(): Promise<LaudoResumoLista[]> {
     try {
       const sql = `
         SELECT
-          l.*,
+          l.id,
+          l.rep_id,
+          l.perito_id,
+          l.template_id,
+          l.status,
+          l.data_inicio,
+          l.data_conclusao,
+          l.data_entrega,
+          l.updated_at,
+          l.tipo_criacao,
+          l.wizard_id,
           r.numero AS rep_numero,
           r.status AS status_rep,
           r.data_requisicao,
@@ -147,7 +197,7 @@ class LaudoService extends BaseService<LaudoRow> {
         LEFT JOIN tipos_exame te ON te.id = r.tipo_exame_id
         ORDER BY l.updated_at DESC
       `;
-      return await executeQuery<LaudoComRepRow>(sql);
+      return await executeQuery<LaudoResumoLista>(sql);
     } catch (error) {
       log.error('Erro ao buscar laudos com REPs', error);
       throw error;
@@ -156,12 +206,13 @@ class LaudoService extends BaseService<LaudoRow> {
 
   async updateConteudo(id: string, conteudo: string): Promise<LaudoRow> {
     try {
+      const conteudoPersistido = await compactarFigurasParaEditor(id, conteudo);
       const sql = `
         UPDATE laudos
         SET conteudo = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `;
-      await executeNonQuery(sql, [conteudo, id]);
+      await executeNonQuery(sql, [conteudoPersistido, id]);
       const rows = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [id]);
       return rows[0];
     } catch (error) {

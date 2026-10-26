@@ -13,6 +13,7 @@ const PlaceholdersPage = lazy(() => import('@/pages/PlaceholdersPage').then(m =>
 const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then(m => ({ default: m.TemplatesPage })));
 const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default: m.LaudosPage })));
 const ModelosIAPage = lazy(() => import('@/pages/ModelosIAPage').then(m => ({ default: m.ModelosIAPage })));
+const ImagensPage = lazy(() => import('@/pages/ImagensPage').then(m => ({ default: m.ImagensPage })));
 const BackupPage = lazy(() => import('@/pages/BackupPage').then(m => ({ default: m.BackupPage })));
 const ProjeteisPage = lazy(() => import('@/pages/ProjeteisPage').then(m => ({ default: m.ProjeteisPage })));
 const LogsPage = lazy(() => import('@/pages/LogsPage').then(m => ({ default: m.LogsPage })));
@@ -121,6 +122,7 @@ const App = () => {
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/laudos" element={<LaudosPage />} />
         <Route path="/modelos-ia" element={<ModelosIAPage />} />
+        <Route path="/imagens" element={<ImagensPage />} />
         <Route path="/backup" element={<BackupPage currentUser={currentUser} />} />
         <Route path="/projeteis" element={<ProjeteisPage />} />
         <Route path="/logs" element={<LogsPage />} />

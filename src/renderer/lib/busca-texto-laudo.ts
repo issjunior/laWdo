@@ -9,7 +9,7 @@ export interface OcorrenciaTextoLaudo {
 }
 
 const BLOCOS = /^(P|DIV|LI|H[1-6]|TD|TH|TR|TABLE|FIGCAPTION|BLOCKQUOTE|SECTION|PRE|BR)$/;
-const IGNORADOS = 'script,style,button,input,select,textarea,[hidden],[aria-hidden="true"],[data-acao-tabela-placeholder],[data-acao-bloco-condicional],[data-mce-bogus="all"]';
+const IGNORADOS = 'script,style,button,input,select,textarea,[hidden],[aria-hidden="true"],[data-cond-suprimido="true"],[data-acao-tabela-placeholder],[data-acao-bloco-condicional],[data-mce-bogus="all"]';
 
 export function normalizarTermoBusca(texto: string): string {
   return texto.replace(/\s+/gu, ' ').toLocaleLowerCase('pt-BR');

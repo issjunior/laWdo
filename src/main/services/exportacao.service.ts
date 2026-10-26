@@ -1,4 +1,4 @@
-import { dialog } from 'electron';
+import { dialog, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'node:crypto';
@@ -13,6 +13,7 @@ import { ErroGeracaoPdf, gerarPdfPreparado } from './pdf-prontidao.service.js';
 import { criarOpcoesPdf } from './pdf-layout.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from './pdf-tabelas.js';
 import type { FalhaPdf } from '../../shared/types/pdf.types.js';
+import type { FiguraExportacao } from '../../shared/types/exportacao.types.js';
 
 const log = getLogger('exportacao');
 
@@ -179,6 +180,26 @@ async function verificarDisponibilidadeLibreOffice(): Promise<boolean> {
 export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalho?: ExportacaoCabecalho, margens?: MargensExportacao): Promise<Buffer> {
   const d = await import('docx');
   const { Document, Packer, Paragraph, TextRun, ExternalHyperlink, Table, TableRow, TableCell, ImageRun, Header, PageBreak, AlignmentType, UnderlineType, HeadingLevel, WidthType, BorderStyle } = d;
+  const larguraPaginaPx = Math.round((21 - (margens?.left ?? 3) - (margens?.right ?? 2)) / 2.54 * 96);
+  const criarImagemDocx = (bloco: FiguraExportacao, larguraPadrao: number) => {
+    const tipo = normalizarTipoImagemDocx(bloco.formato);
+    if (!tipo) throw new Error('Formato da figura não suportado na exportação DOCX.');
+    const dados = Buffer.from(bloco.base64, 'base64');
+    const imagem = nativeImage.createFromBuffer(dados);
+    if (imagem.isEmpty()) throw new Error('Figura inválida na exportação DOCX.');
+    const dimensoes = imagem.getSize();
+    if (!dimensoes.width || !dimensoes.height) throw new Error('Dimensões da figura inválidas na exportação DOCX.');
+    const proporcao = dimensoes.width / dimensoes.height;
+    const larguraSolicitada = bloco.larguraPx || (bloco.alturaPx ? bloco.alturaPx * proporcao : larguraPadrao);
+    const largura = Math.max(1, Math.min(Math.round(larguraSolicitada), larguraPaginaPx));
+    const altura = Math.max(1, Math.round(largura / proporcao));
+    const larguraFonte = Math.ceil(largura * 300 / 96);
+    if (dimensoes.width <= larguraFonte) return new ImageRun({ type: tipo, data: dados, transformation: { width: largura, height: altura } });
+    const reduzida = imagem.resize({ width: larguraFonte, height: Math.max(1, Math.round(larguraFonte / proporcao)), quality: 'best' });
+    const tipoSaida = tipo === 'jpg' ? 'jpg' : 'png';
+    const bytes = tipoSaida === 'jpg' ? reduzida.toJPEG(90) : reduzida.toPNG();
+    return new ImageRun({ type: tipoSaida, data: bytes, transformation: { width: largura, height: altura } });
+  };
   const alinhar = (v?: string) => v === 'center' ? AlignmentType.CENTER : v === 'right' ? AlignmentType.RIGHT : v === 'justify' ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
   const runs = (trechos: import('../../shared/types/exportacao.types.js').TrechoExportacao[]): ParagraphChild[] => trechos.flatMap<ParagraphChild>(t => {
     const e = t.estilo || {}; const opcoes = { text: t.texto, break: t.quebraLinha ? 1 : undefined, bold: e.negrito, italics: e.italico, strike: e.tachado, underline: e.sublinhado ? { type: UnderlineType.SINGLE } : undefined, superScript: e.sobrescrito, subScript: e.subscrito, font: e.fonte, size: e.tamanhoPt ? Math.round(e.tamanhoPt * 2) : undefined, color: e.cor, highlight: e.realce ? 'yellow' as const : undefined };
@@ -204,7 +225,7 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
         const rows = bloco.linhas.map(linha => new TableRow({ cantSplit: true, children: linha.map(celula => new TableCell({
           children: (celula.blocos?.flatMap(bloco => {
             if (bloco.tipo === 'paragrafo') return [para(bloco)];
-            if (bloco.tipo === 'figura') { const tipo = normalizarTipoImagemDocx(bloco.formato); const figura = tipo ? [new Paragraph({ alignment: alinhar(bloco.alinhamento), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 180, height: bloco.alturaPx || 135 } })] })] : []; return bloco.legenda ? [...figura, para(bloco.legenda, { alignment: AlignmentType.CENTER })] : figura; }
+            if (bloco.tipo === 'figura') { const figura = [new Paragraph({ alignment: alinhar(bloco.alinhamento), children: [criarImagemDocx(bloco, 180)] })]; return bloco.legenda ? [...figura, para(bloco.legenda, { alignment: AlignmentType.CENTER })] : figura; }
             if (bloco.tipo === 'linha-horizontal') return [new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' } } })];
             if (bloco.tipo === 'lista') return bloco.itens.map(item => para(item, bloco.ordenada ? { numbering: { reference: 'numerada', level: bloco.nivel } } : { bullet: { level: bloco.nivel } }));
             return [];
@@ -214,7 +235,7 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
         })) }));
         filhos.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
       }
-      else { const tipo = normalizarTipoImagemDocx(bloco.formato); if (tipo) filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [new ImageRun({ type: tipo, data: Buffer.from(bloco.base64, 'base64'), transformation: { width: bloco.larguraPx || 500, height: bloco.alturaPx || 375 } })] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
+      else { filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [criarImagemDocx(bloco, 500)] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
     }
     if (secao.fechamento) {
       const conteudo = filhos.splice(inicioFilhos);

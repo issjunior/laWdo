@@ -697,6 +697,13 @@ app.whenReady().then(async () => {
     const isDev = process.env.NODE_ENV === 'development';
     registerIpcHandlers({ preloadPath, rendererHtmlPath, isDev });
 
+    const { limparImagensTemporariasSemReferencia } = await import('./services/imagem-laudo.service.js');
+    try {
+      await limparImagensTemporariasSemReferencia();
+    } catch (erro) {
+      log.warn('Não foi possível concluir a limpeza de imagens temporárias na abertura.', { erro });
+    }
+
     iniciarAtualizacaoAutomaticaGdl();
 
     // Criar janela

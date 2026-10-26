@@ -130,6 +130,7 @@ export function useGerenciadorAlteracoesLaudo(obterContexto?: () => Pick<EventoE
   const obterSessao = useCallback(() => sessaoRef.current, []);
   const sessaoAtual = useCallback((sessao: number) => sessaoAtivaRef.current && sessaoRef.current === sessao, []);
   const estaSalvando = useCallback(() => salvamentoEmAndamentoRef.current, []);
+  const temAlteracaoPendente = useCallback(() => pendenteRef.current, []);
 
   return {
     estadoSalvamento,
@@ -148,5 +149,6 @@ export function useGerenciadorAlteracoesLaudo(obterContexto?: () => Pick<EventoE
     obterSessao,
     sessaoAtual,
     estaSalvando,
+    temAlteracaoPendente,
   };
 }
