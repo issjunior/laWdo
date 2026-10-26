@@ -33,6 +33,9 @@ import { z } from 'zod';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
+import { filtrarRepsPorAba, obterAbaInicialReps, type AbaReps } from '@/lib/filtros-listas-laudos-reps';
+import { cn } from '@/lib/utils';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -115,7 +118,6 @@ interface TipoExameResumo extends RegistroNome {
 interface TemplateResumo extends RegistroNome {
   chave_integrada?: string | null;
 }
-type LaudoResumo = { rep_id: string };
 type RegistroRep = REP & Record<string, ValorDesconhecido>;
 type CampoRep = Path<REPFormData>;
 
@@ -592,6 +594,45 @@ export const REPsPage: React.FC = () => {
     }
     return reps;
   }, [filtroDashboard, reps]);
+  const [tabFiltro, setTabFiltro] = useState<AbaReps>(() => obterAbaInicialReps(location.search));
+  useEffect(() => { setTabFiltro(obterAbaInicialReps(location.search)); }, [location.search]);
+  const contagemReps = useMemo(() => ({
+    ativas: filtrarRepsPorAba(repsFiltradasDashboard, 'ativas').length,
+    pendentes: filtrarRepsPorAba(repsFiltradasDashboard, 'pendentes').length,
+    em_andamento: filtrarRepsPorAba(repsFiltradasDashboard, 'em_andamento').length,
+    concluidas: filtrarRepsPorAba(repsFiltradasDashboard, 'concluidas').length,
+    todas: repsFiltradasDashboard.length,
+  }), [repsFiltradasDashboard]);
+  const repsFiltradas = useMemo(() => filtrarRepsPorAba(repsFiltradasDashboard, tabFiltro), [repsFiltradasDashboard, tabFiltro]);
+  const estiloAba = (valor: AbaReps) => {
+    const base = 'flex min-w-32 flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all duration-200 h-auto';
+    if (tabFiltro !== valor) return cn(base,
+      'bg-transparent border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+      'data-[state=active]:bg-transparent data-[state=active]:border-border/60 data-[state=active]:text-muted-foreground data-[state=active]:shadow-none',
+    );
+    const cores: Record<AbaReps, string> = {
+      ativas: 'bg-primary text-primary-foreground border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary',
+      pendentes: 'bg-slate-500 text-white border-slate-500 data-[state=active]:bg-slate-500 data-[state=active]:text-white data-[state=active]:border-slate-500',
+      em_andamento: 'bg-amber-500 text-white border-amber-500 data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:border-amber-500',
+      concluidas: 'bg-emerald-500 text-white border-emerald-500 data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:border-emerald-500',
+      todas: 'bg-primary text-primary-foreground border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary',
+    };
+    return cn(base, cores[valor], 'shadow-sm data-[state=active]:shadow-sm');
+  };
+  const estiloPontoAba = (valor: AbaReps) => cn(
+    'h-2.5 w-2.5 shrink-0 rounded-full',
+    tabFiltro === valor ? 'bg-white/90' : {
+      ativas: 'bg-muted-foreground/40',
+      pendentes: 'bg-slate-500',
+      em_andamento: 'bg-amber-500',
+      concluidas: 'bg-emerald-500',
+      todas: 'bg-muted-foreground/40',
+    }[valor],
+  );
+  const estiloContagemAba = (valor: AbaReps) => cn(
+    'rounded-full px-1.5 py-0.5 text-xs font-semibold leading-tight tabular-nums',
+    tabFiltro === valor ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground',
+  );
   const [showForm, setShowForm] = useState(false);
   const [editingRep, setEditingRep] = useState<REP | null>(null);
   const [pecasB602, setPecasB602] = useState<PecaB602[]>([]);
@@ -781,9 +822,9 @@ export const REPsPage: React.FC = () => {
 
         try {
           const laudosResp = await window.ipcAPI.laudo.findAll();
-          if (laudosResp.success && laudosResp.data) {
+          if (laudosResp.success && Array.isArray(laudosResp.data)) {
             const idsComLaudo = new Set<string>(
-              (laudosResp.data as LaudoResumo[]).map((l) => l.rep_id)
+              laudosResp.data.filter(laudo => typeof laudo.rep_id === 'string').map(laudo => laudo.rep_id)
             );
             setRepsComLaudo(idsComLaudo);
           }
@@ -1747,12 +1788,34 @@ export const REPsPage: React.FC = () => {
         {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
         {success && <Alert className="mb-4"><AlertDescription>{success}</AlertDescription></Alert>}
 
+        <Tabs value={tabFiltro} onValueChange={value => setTabFiltro(value as AbaReps)} className="w-full">
+          <TabsList className="mb-4 flex h-auto w-full flex-wrap gap-3 bg-transparent p-0">
+            {([
+              ['ativas', 'Ativas'],
+              ['pendentes', 'Pendentes'],
+              ['em_andamento', 'Em andamento'],
+              ['concluidas', 'Concluídas'],
+              ['todas', 'Todas'],
+            ] as const).map(([valor, titulo]) => {
+              const aba = <TabsTrigger key={valor} value={valor} className={estiloAba(valor)}>
+                {(valor !== 'ativas' && valor !== 'todas') || tabFiltro !== valor ? <span className={estiloPontoAba(valor)} /> : null}
+                {titulo}<span className={estiloContagemAba(valor)}>{contagemReps[valor]}</span>
+              </TabsTrigger>;
+              if (valor !== 'ativas') return aba;
+              return <Tooltip key={valor}>
+                <TooltipTrigger asChild>{aba}</TooltipTrigger>
+                <TooltipContent side="top">Inclui REPs com status Pendente ou Em Andamento.</TooltipContent>
+              </Tooltip>;
+            })}
+          </TabsList>
+        </Tabs>
+
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <CardTitle>Lista de REPs</CardTitle>
-                <CardDescription>{repsFiltradasDashboard.length} registro(s)</CardDescription>
+                <CardDescription>{repsFiltradas.length} registro(s)</CardDescription>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
@@ -1798,7 +1861,7 @@ export const REPsPage: React.FC = () => {
             ) : (
               <DataTable
                 columns={columnDefs}
-                data={repsFiltradasDashboard}
+                data={repsFiltradas}
                 searchColumn="numero"
                 searchPlaceholder="Buscar por REP, envolvido ou BO..."
               />

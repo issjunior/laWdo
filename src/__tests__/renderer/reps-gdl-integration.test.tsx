@@ -193,7 +193,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     const consultar = vi.fn();
     Object.defineProperty(window, 'ipcAPI', { writable: true, value: {
       ...window.ipcAPI,
-      rep: { ...window.ipcAPI.rep, findAll: vi.fn().mockResolvedValue({ success: true, data: [{ id: 'rep-1', numero: '100/2026', tipo_exame_id: 'tipo-b602' }] }) },
+      rep: { ...window.ipcAPI.rep, findAll: vi.fn().mockResolvedValue({ success: true, data: [{ id: 'rep-1', numero: '100/2026', tipo_exame_id: 'tipo-b602', status: 'Pendente' }] }) },
       laudo: { ...window.ipcAPI.laudo, create: criar },
       template: { findByTipoExame: vi.fn().mockResolvedValue({ success: true, data: [{ id: 'template-1', nome: 'Laudo Padrão B-602' }] }) },
       gdl: { ...window.ipcAPI.gdl, consultarRepsMesmoCaso: consultar },
