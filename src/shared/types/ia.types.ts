@@ -170,7 +170,7 @@ export interface ConfiguracaoImagemIa {
 
 export const CONFIGURACAO_IMAGEM_IA_PADRAO: ConfiguracaoImagemIa = {
   versao: 1,
-  qualidade: 'equilibrada',
+  qualidade: 'economica',
 };
 
 export function qualidadeImagemIaValida(valor: unknown): valor is QualidadeImagemIa {

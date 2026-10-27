@@ -30,7 +30,7 @@ export interface MiniaturaImagemLaudo {
 
 export type PerfilPreviaEditor = 'economico' | 'equilibrado' | 'nitido'
 
-export const PERFIL_PREVIA_EDITOR_PADRAO: PerfilPreviaEditor = 'equilibrado'
+export const PERFIL_PREVIA_EDITOR_PADRAO: PerfilPreviaEditor = 'economico'
 
 export const LIMITES_PREVIA_EDITOR: Record<PerfilPreviaEditor, { minimo: number; maximo: number }> = {
   economico: { minimo: 480, maximo: 640 },
