@@ -2,7 +2,7 @@
 
 ## Estado canônico
 
-O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; os modelos ativos são `laudo-padrao-b602` v10 e `laudo-padrao-b601` v2. O catálogo importa somente essas definições atuais, que herdam versões-fonte anteriores. Registros de versões anteriores já instalados permanecem no banco, mas indisponíveis para novos laudos; uma instalação nova não instala cada versão intermediária. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
+O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; os modelos ativos são `laudo-padrao-b602` v11, `laudo-padrao-b601` v2 e `laudo-padrao-b601-local-necropsia` v1. O catálogo importa somente essas definições atuais, que herdam versões-fonte anteriores. Registros de versões anteriores já instalados permanecem no banco, mas indisponíveis para novos laudos; uma instalação nova não instala cada versão intermediária. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
 
 A serialização canônica e o SHA-256 cobrem os campos funcionais do template. Elementos transitórios do editor — como `data-image-id` e artefatos dummy — são ignorados no checksum para permitir adoção segura de dados legados equivalentes. A validação do catálogo rejeita chave, versão, ordens, referências de pai ou seções duplicadas inválidas antes da persistência.
 
@@ -32,7 +32,7 @@ A edição comum usa `template:salvarCompleto`: o handler valida e sanitiza a fr
 
 ## Consumo pelos laudos
 
-O B-602 v10 conserva os placeholders de concordância do perito, lacres de saída, seções condicionais e repetição por armas. DOS ESTOJOS usa `b602_total_estojos_extenso`, `b602_estojos_descricao` e `b602_estojos_conclusao`; o resolvedor escolhe singular para uma unidade e plural nos demais totais. Os textos-base vivem no catálogo compartilhado `b602-textos-estojos.catalogo.ts`. A referência normativa usa `Lei nº` e `Instrução Normativa nº`. Ausência de lacre permanece `XXX`; prosa livre não recebe flexão automática. `templates-integrados.test.ts` valida os modelos ativos e seus marcadores, e `exportacao-placeholders-b602.test.ts` verifica os textos derivados.
+O B-602 v11 conserva os placeholders de concordância do perito, lacres de saída, seções condicionais e repetição por armas. DOS ESTOJOS usa `b602_total_estojos_extenso`, `b602_estojos_descricao` e `b602_estojos_conclusao`; o resolvedor escolhe singular para uma unidade e plural nos demais totais. Os textos-base vivem no catálogo compartilhado `b602-textos-estojos.catalogo.ts`. A referência normativa usa `Lei nº` e `Instrução Normativa nº`. Ausência de lacre permanece `XXX`; prosa livre não recebe flexão automática. `templates-integrados.test.ts` valida os modelos ativos e seus marcadores, e `exportacao-placeholders-b602.test.ts` verifica os textos derivados.
 
 Na criação, `laudoService` exige que o template exista. Para origem integrada, recusa tipos indisponíveis e catálogo sem seções; assim não aplica o fallback de documento vazio a uma falha de sincronização. Laudos existentes mantêm seu conteúdo próprio e não são modificados pela troca de versão do template.
 
@@ -42,7 +42,7 @@ Cada seção mantém ocultar_titulo e contar_na_numeracao. As migrations 42 e 43
 
 calcularNumeracaoSecoes(), em src/shared/utils/numeracao-secoes.ts, é a fonte comum da sequência para edição, prévias, PDF, DOCX e ODT. Uma seção oculta pode consumir número; se também deixar de contar, a sequência principal avança somente na próxima seção participante. Filhos de um pai que não conta ficam sem prefixo numérico. Importação/exportação de pacotes, clonagem, persistência e reconciliação do laudo conservam as preferências.
 
-O B-602 v10 mantém o preâmbulo oculto sem consumir número. Registros integrados anteriores continuam preservados quando já instalados; a troca de versão não reescreve laudos existentes. As verificações de títulos, numeração e template integrado cobrem a persistência e as exportações.
+O B-602 v11 mantém o preâmbulo oculto sem consumir número. Registros integrados anteriores continuam preservados quando já instalados; a troca de versão não reescreve laudos existentes. As verificações de títulos, numeração e template integrado cobrem a persistência e as exportações.
 
 ## Impacto e verificação
 
@@ -55,3 +55,9 @@ Uma alteração de contrato deve manter alinhados catálogo, serialização/vali
 `b601/laudo-padrao-b601.v2.ts`, registrado em `catalogo.ts` e derivado da definição v1, distribui nove seções: preâmbulo, objetivo, material apresentado, exame com subseções de projéteis, estojos e demais materiais, considerações finais e encerramento. O preâmbulo fica oculto e não conta na numeração. Os grupos usam `b601_agrupados:105`, `b601_agrupados:101` e `b601_pecas`; o modo genérico exclui tipos já atendidos pelos agrupamentos. O modelo contém placeholders de investigação, material encaminhado, tratamento do perito e lacres, além de figuras substituíveis e complementos após as descrições.
 
 O B-601 v2 usa `Lei nº` nas considerações finais e `Instrução Normativa nº` no encerramento, conservando a estrutura, placeholders e complementos da definição-base. Aplicam-se ao B-601 as mesmas regras de sincronização, disponibilidade e clonagem dos demais integrados. A instalação do catálogo não reescreve HTML de laudos existentes nem templates personalizados. Expansão, seletores por unidade, preservação de complementos e limites da assinatura estão em `spec/03 laudo/b601.md`.
+
+## Variação B-601 Local com Necropsia e cartuchos B-602
+
+laudo-padrao-b601-local-necropsia.v1.ts é um modelo integrado distinto, de chave própria, derivado do B-601 v2 e disponível para o mesmo exame. Coexiste com o B-601 padrão; não o substitui nem converte automaticamente laudos existentes. Mantém as nove seções-base, adapta o preâmbulo para vestígios de local/necropsia, usa b601_tabela_material_coleta, inclui título nas fotos das embalagens e marca os grupos de projéteis/estojos com data-b601-modelo-coleta="true". As considerações finais têm área opcional de encaminhamento BNPB/SINAB controlada no laudo. Aplicam-se sincronização, somente leitura, clonagem e imutabilidade de versão publicada já descritas.
+
+O B-602 v11 deriva do v10 e altera DOS CARTUCHOS para usar b602_total_cartuchos_extenso, b602_cartuchos_descricao, a tabela de cartuchos e suas figuras dummy. O catálogo compartilhado de textos controla concordância singular/plural; v10 permanece apenas como versão-fonte ou registro anterior instalado. templates-integrados.test.ts e exportacao-placeholders-b602.test.ts cobrem o catálogo ativo e a nova resolução. O fluxo B-601 de coleta está em b601.md.

@@ -290,7 +290,11 @@
         "src/main/ipc/handlers/rep.handlers.ts",
         "src/renderer/lib/validators/rep.schema.ts",
         "src/main/database/index.ts",
-        "src/main/types/database.ts"
+        "src/main/types/database.ts",
+        "src/main/services/rep.service.ts",
+        "src/renderer/lib/filtros-listas-laudos-reps.ts",
+        "src/__tests__/renderer/filtros-listas-laudos-reps.test.ts",
+        "src/__tests__/main/status-rep-laudo.integration.test.ts"
       ]
     },
     {
@@ -365,7 +369,12 @@
         "src/main/ipc/handlers/ilustracoes*.ts",
         "src/shared/types/imagem-laudo.types.ts",
         "src/__tests__/renderer/figuras-ocorrencia.test.ts",
-        "src/__tests__/renderer/ilustracoes-secoes.test.ts"
+        "src/__tests__/renderer/ilustracoes-secoes.test.ts",
+        "src/renderer/pages/ImagensPage.tsx",
+        "src/renderer/lib/imagens-impressao-laudo.ts",
+        "src/__tests__/main/imagem-laudo-*.integration.test.ts",
+        "src/__tests__/main/compactacao-figuras-laudo.test.ts",
+        "src/__tests__/renderer/imagens-impressao-laudo.test.ts"
       ]
     },
     {
@@ -380,7 +389,11 @@
         "src/shared/utils/quebra-pagina.ts",
         "src/renderer/pages/LaudosPage.tsx",
         "src/main/services/laudo.service.ts",
-        "src/main/services/exportacao.service.ts"
+        "src/main/services/exportacao.service.ts",
+        "src/renderer/lib/imagens-impressao-laudo.ts",
+        "src/__tests__/renderer/imagens-impressao-laudo.test.ts",
+        "src/__tests__/main/exportacao-docx-proporcao.test.ts",
+        "src/shared/catalogos/b602-textos-cartuchos.catalogo.ts"
       ]
     },
     {
@@ -402,7 +415,9 @@
         "src/renderer/lib/desempenho-editor-laudo.ts",
         "src/__tests__/renderer/sincronizacao-editor-laudo.test.ts",
         "src/__tests__/renderer/desempenho-editor-laudo.test.ts",
-        "src/renderer/lib/conteudo-comparavel-laudo.ts"
+        "src/renderer/lib/conteudo-comparavel-laudo.ts",
+        "src/renderer/lib/seletores-tabela-laudo.ts",
+        "src/renderer/lib/busca-texto-laudo.ts"
       ]
     },
     {
@@ -445,7 +460,12 @@
         "src/__tests__/renderer/alteracoes-pendentes-saida.component.test.tsx",
         "src/__tests__/renderer/conteudo-comparavel-laudo.test.ts",
         "src/__tests__/renderer/wizard-laudo-saida.component.test.tsx",
-        "src/__tests__/renderer/layout-editor-laudo.component.test.tsx"
+        "src/__tests__/renderer/layout-editor-laudo.component.test.tsx",
+        "src/shared/types/laudo.types.ts",
+        "src/renderer/lib/filtros-listas-laudos-reps.ts",
+        "src/__tests__/main/status-rep-laudo.integration.test.ts",
+        "src/renderer/lib/pendencias-conclusao-laudo.ts",
+        "src/__tests__/renderer/pendencias-conclusao-laudo.test.ts"
       ]
     },
     {
@@ -616,7 +636,8 @@
         "src/renderer/lib/ia-*.ts",
         "src/renderer/pages/LaudosPage.tsx",
         "src/renderer/pages/ModelosIAPage.tsx",
-        "src/renderer/pages/PainelIaWindow.tsx"
+        "src/renderer/pages/PainelIaWindow.tsx",
+        "src/renderer/pages/ImagensPage.tsx"
       ]
     },
     {
@@ -675,7 +696,15 @@
         "src/renderer/components/layout/IndicadorConexaoGdl.tsx",
         "src/__tests__/main/gdl-conexao*.test.ts",
         "src/__tests__/preload/gdl-conexao.test.ts",
-        "src/__tests__/renderer/conexao-gdl.test.tsx"
+        "src/__tests__/renderer/conexao-gdl.test.tsx",
+        "src/main/services/gdl-fotos-cache.service.ts",
+        "src/main/services/gdl-reps-mesmo-caso.service.ts",
+        "src/shared/gdl/reps-mesmo-caso.ts",
+        "src/shared/types/gdl-arquivos.types.ts",
+        "src/__tests__/main/gdl-reps-mesmo-caso*.test.ts",
+        "src/__tests__/main/gdl.service.test.ts",
+        "src/__tests__/renderer/gdl-imagens-rep-modal.component.test.tsx",
+        "src/renderer/components/rep/AtualizarRepGdlDialog.tsx"
       ]
     },
     {
@@ -950,7 +979,10 @@
         "src/main/ipc/handlers/rep.handlers.ts",
         "src/main/services/gdl-b601-normalizador.service.ts",
         "src/shared/gdl/b601-campos-adicionais.ts",
-        "src/__tests__/main/gdl-b601-normalizador.service.test.ts"
+        "src/__tests__/main/gdl-b601-normalizador.service.test.ts",
+        "src/main/services/rep.service.ts",
+        "src/shared/gdl/reps-mesmo-caso.ts",
+        "src/__tests__/main/base-rep.service.test.ts"
       ]
     },
     {
@@ -975,7 +1007,15 @@
         "src/shared/utils/formato-projetil.ts",
         "src/shared/utils/campo-reservado.ts",
         "src/renderer/lib/conteudo-comparavel-laudo.ts",
-        "src/renderer/lib/utils.ts"
+        "src/renderer/lib/utils.ts",
+        "src/renderer/lib/b601-coleta.ts",
+        "src/renderer/lib/consulta-reps-coleta.ts",
+        "src/renderer/hooks/useConsultaRepsColeta.ts",
+        "src/shared/gdl/reps-mesmo-caso.ts",
+        "src/__tests__/renderer/b601-coleta.test.ts",
+        "src/__tests__/shared/b601-coleta.test.ts",
+        "src/__tests__/renderer/consulta-reps-coleta.test.ts",
+        "src/__tests__/renderer/use-consulta-reps-coleta.test.tsx"
       ]
     },
     {
@@ -996,7 +1036,8 @@
         "tailwind.config.js",
         "src/renderer/components/layout/IndicadorConexaoGdl.tsx",
         "src/__tests__/renderer/conexao-gdl.test.tsx",
-        "src/__tests__/renderer/header-atualizacao.component.test.tsx"
+        "src/__tests__/renderer/header-atualizacao.component.test.tsx",
+        "src/renderer/pages/ImagensPage.tsx"
       ]
     },
     {

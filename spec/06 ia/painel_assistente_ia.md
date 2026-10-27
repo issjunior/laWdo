@@ -41,3 +41,9 @@ Testes cobrem contratos, lotes, consultas e evidências, falhas, comandos remoto
 ## Personalização textual no contexto
 
 `ia-contexto.ts` respeita personalização textual por ocorrência: decodifica e normaliza `data-placeholder-personalizado-html` antes de consultar o mapa da REP. A versão HTML mantém o fragmento permitido; a versão textual converte quebras em espaços. Atributo inválido segue o caminho normal de resolução. Assim, consultas e evidências usam o texto local personalizado. `ia-contexto.test.ts` cobre essa precedência.
+
+## Preferência da imagem enviada
+
+A qualidade de imagem é configurada na página **Imagens** (/imagens), separada da página Modelos de IA. qualidade_imagem_ia mantém JSON versão 1 com qualidade original, alta (até 1536 px), equilibrada (até 768 px) ou economica (até 512 px). A escolha controla a cópia enviada para descrição; perfil_previa_editor controla somente prévias no editor. Os originais locais e a resolução de impressão não são substituídos por essas preferências. O hook de configurações da página Modelos ainda lê o grupo imagem, mas essa página não apresenta nem salva o controle; o destino visual e a escrita são ImagensPage.tsx.
+
+Alterações devem manter alinhados ImagensPage, contrato de configuração, serviço de execução IA e lista de chaves portáteis de backup. O fluxo de arquivo/estágio está em spec/03 laudo/fluxo_ilustracao.md; modelos-ia-configuracao.component.test.tsx verifica a separação do controle da tela de modelos.
