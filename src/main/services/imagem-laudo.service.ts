@@ -2,10 +2,11 @@ import fs from 'fs'
 import path from 'path'
 import { createHash } from 'crypto'
 import { app, nativeImage } from 'electron'
+import { DomUtils, parseDocument } from 'htmlparser2'
 import { executeNonQuery, executeQuery, withTransaction } from '../database/sqlite.js'
 import { getLogger } from '../utils/logger.js'
 import { configuracaoService } from './configuracao.service.js'
-import { LIMITES_PREVIA_EDITOR, PERFIL_PREVIA_EDITOR_PADRAO, perfilPreviaEditorValido } from '../../shared/types/imagem-laudo.types.js'
+import { LIMITES_PREVIA_EDITOR, PERFIL_PREVIA_EDITOR_PADRAO, perfilPreviaEditorValido, LIMITES_FIGURA_LAUDO, PERFIL_FIGURA_LAUDO_PADRAO, perfilFiguraLaudoValido } from '../../shared/types/imagem-laudo.types.js'
 import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
@@ -68,6 +69,34 @@ function interpretarDataUri(dataUri: string): { mimeType: string; bytes: Buffer 
   const bytes = Buffer.from(correspondencia[2].replace(/\s/g, ''), 'base64')
   if (bytes.length === 0) throw new Error('A imagem está vazia.')
   return { mimeType, bytes }
+}
+
+async function obterPerfilFiguraLaudo() {
+  const valor = await configuracaoService.obter('perfil_figura_laudo')
+  return LIMITES_FIGURA_LAUDO[perfilFiguraLaudoValido(valor) ? valor : PERFIL_FIGURA_LAUDO_PADRAO]
+}
+
+function tratarFigura(bytesOriginais: Buffer, mimeOriginal: string, limite: { maiorLado: number; qualidadeJpeg: number }): { bytes: Buffer; mimeType: string } {
+  const imagem = nativeImage.createFromBuffer(bytesOriginais)
+  if (imagem.isEmpty()) throw new Error('Figura inválida para compactação.')
+  const dimensoes = imagem.getSize()
+  if (!dimensoes.width || !dimensoes.height) throw new Error('Dimensões da figura inválidas.')
+  const escala = Math.min(1, limite.maiorLado / Math.max(dimensoes.width, dimensoes.height))
+  const ajustada = escala < 1 ? imagem.resize({
+    width: Math.max(1, Math.round(dimensoes.width * escala)),
+    height: Math.max(1, Math.round(dimensoes.height * escala)),
+    quality: 'best',
+  }) : imagem
+  const preservarTransparencia = !['image/jpeg', 'image/bmp'].includes(mimeOriginal)
+    && (() => {
+      const bitmap = ajustada.toBitmap()
+      for (let indice = 3; indice < bitmap.length; indice += 4) if (bitmap[indice] < 255) return true
+      return false
+    })()
+  const mimeType = preservarTransparencia ? 'image/png' : 'image/jpeg'
+  const bytes = preservarTransparencia ? ajustada.toPNG() : ajustada.toJPEG(limite.qualidadeJpeg)
+  if (bytes.length === 0) throw new Error('Não foi possível compactar a figura.')
+  return bytes.length < bytesOriginais.length ? { bytes, mimeType } : { bytes: bytesOriginais, mimeType: mimeOriginal }
 }
 
 function caminhoAbsoluto(caminhoRelativo: string): string {
@@ -360,6 +389,55 @@ export async function limparImagensTemporariasSemReferencia(laudoIdEntrada?: str
   return removidas
 }
 
+export async function concluirImagensLaudo(laudoIdEntrada: string): Promise<string[]> {
+  const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
+  const laudo = (await executeQuery<{ conteudo: string }>('SELECT conteudo FROM laudos WHERE id = ?', [laudoId]))[0]
+  if (!laudo) throw new Error('Laudo não encontrado para conclusão.')
+  const documento = parseDocument(laudo.conteudo || '')
+  for (const exemplo of DomUtils.findAll(elemento => elemento.attribs['data-dummy'] === 'true', documento.children)) DomUtils.removeElement(exemplo)
+  const ids = new Set(DomUtils.findAll(elemento => 'data-image-id' in elemento.attribs, documento.children)
+    .map(elemento => elemento.attribs['data-image-id'].trim()))
+  const registros = await executeQuery<ImagemLaudoRow>('SELECT * FROM imagens_laudo WHERE laudo_id = ?', [laudoId])
+  const porId = new Map(registros.map(registro => [registro.id, registro]))
+  const limite = await obterPerfilFiguraLaudo()
+  const preparados: Array<{ registro: ImagemLaudoRow; caminhoRelativo: string; mimeType: string; bytes: Buffer; sha256: string }> = []
+  for (const id of ids) {
+    const registro = porId.get(id)
+    if (!registro) throw new Error(`Figura ${id} não está disponível para concluir o laudo.`)
+    const originais = fs.readFileSync(caminhoAbsoluto(registro.caminho_relativo))
+    if (createHash('sha256').update(originais).digest('hex') !== registro.sha256) throw new Error(`Figura ${id} não passou na verificação de integridade.`)
+    const tratada = tratarFigura(originais, registro.mime_type, limite)
+    const sha256 = createHash('sha256').update(tratada.bytes).digest('hex')
+    const extensao = EXTENSAO_POR_MIME[tratada.mimeType]
+    const caminho = path.join(DIRETORIO_IMAGENS, laudoId, `${sha256}.${extensao}`)
+    if (!fs.existsSync(caminho)) {
+      const temporario = `${caminho}.${process.pid}.${Date.now()}.tmp`
+      fs.writeFileSync(temporario, tratada.bytes)
+      fs.renameSync(temporario, caminho)
+    }
+    preparados.push({ registro, caminhoRelativo: path.relative(app.getPath('userData'), caminho).replace(/\\/g, '/'),
+      mimeType: tratada.mimeType, bytes: tratada.bytes, sha256 })
+  }
+  for (const item of preparados) {
+    await executeNonQuery(`UPDATE imagens_laudo SET caminho_relativo = ?, mime_type = ?, tamanho = ?, sha256 = ?,
+      imagem_origem_id = NULL, ajustes_json = NULL, disponivel_painel = 0, temporaria_sessao = 0 WHERE id = ? AND laudo_id = ?`,
+    [item.caminhoRelativo, item.mimeType, item.bytes.length, item.sha256, item.registro.id, laudoId])
+  }
+  for (const registro of registros) {
+    if (!ids.has(registro.id)) await executeNonQuery('DELETE FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [registro.id, laudoId])
+  }
+  const conteudoSemVinculos = laudo.conteudo.replace(/\sdata-image-original-id\s*=\s*(?:"[^"]*"|'[^']*')/gi, '')
+  if (conteudoSemVinculos !== laudo.conteudo) {
+    await executeNonQuery('UPDATE laudos SET conteudo = ? WHERE id = ?', [conteudoSemVinculos, laudoId])
+  }
+  return [...new Set(registros.map(registro => registro.caminho_relativo))]
+}
+
+export async function descartarArquivosConcluidos(laudoId: string, caminhos: string[]): Promise<void> {
+  descartarImagensEstagiadasLaudo(laudoId)
+  for (const caminho of caminhos) await removerArquivoSemReferencias(caminho)
+}
+
 export function descartarImagemEstagiadaLaudo(laudoIdEntrada: string, imagemIdEntrada: string): void {
   imagensEstagiadas.get(validarIdentificador(laudoIdEntrada, 'Laudo'))?.delete(validarIdentificador(imagemIdEntrada, 'Imagem'))
 }
@@ -448,18 +526,20 @@ export async function obterImagemImpressaoLaudo(
   if (!registro) throw new Error('Arquivo local da figura não encontrado para impressão.')
   const bytesOriginais = fs.readFileSync(caminhoAbsoluto(registro.caminho_relativo))
   if (createHash('sha256').update(bytesOriginais).digest('hex') !== registro.sha256) throw new Error('Arquivo local da figura não passou na verificação de integridade.')
-  const imagem = nativeImage.createFromBuffer(bytesOriginais)
+  const limite = await obterPerfilFiguraLaudo()
+  const tratada = tratarFigura(bytesOriginais, registro.mime_type, limite)
+  const imagem = nativeImage.createFromBuffer(tratada.bytes)
   if (imagem.isEmpty()) throw new Error('Arquivo local da figura inválido para impressão.')
   const dimensoes = imagem.getSize()
   if (!dimensoes.width || !dimensoes.height) throw new Error('Dimensões da figura inválidas para impressão.')
-  if (dimensoes.width <= larguraMaxima && ['image/jpeg', 'image/png', 'image/gif', 'image/bmp'].includes(registro.mime_type)) {
-    return { id: imagemId, dataUri: `data:${registro.mime_type};base64,${bytesOriginais.toString('base64')}` }
+  if (dimensoes.width <= larguraMaxima) {
+    return { id: imagemId, dataUri: `data:${tratada.mimeType};base64,${tratada.bytes.toString('base64')}` }
   }
   const largura = Math.min(dimensoes.width, larguraMaxima)
   const altura = Math.max(1, Math.round(dimensoes.height * largura / dimensoes.width))
   const ajustada = largura < dimensoes.width ? imagem.resize({ width: largura, height: altura, quality: 'best' }) : imagem
-  const formatoJpeg = registro.mime_type === 'image/jpeg'
-  const bytes = formatoJpeg ? ajustada.toJPEG(90) : ajustada.toPNG()
+  const formatoJpeg = tratada.mimeType === 'image/jpeg'
+  const bytes = formatoJpeg ? ajustada.toJPEG(limite.qualidadeJpeg) : ajustada.toPNG()
   if (bytes.length === 0) throw new Error('Não foi possível preparar a figura para impressão.')
   return { id: imagemId, dataUri: `data:image/${formatoJpeg ? 'jpeg' : 'png'};base64,${bytes.toString('base64')}` }
 }

@@ -4,6 +4,7 @@ import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
 import { withTransaction } from '../../database/sqlite.js';
+import { concluirImagensLaudo, descartarArquivosConcluidos } from '../../services/imagem-laudo.service.js';
 import {
   exportarLaudo,
   verificarLibreOffice,
@@ -243,12 +244,18 @@ export const registerLaudoHandlers = (): void => {
       if (!laudoAntes) return { success: false, error: 'Laudo não encontrado' };
 
       const statusAnterior = laudoAntes.status;
-      const laudo = await withTransaction(async () => {
+      const { laudo, caminhosAntigos } = await withTransaction(async () => {
+        const caminhosAntigos = novoStatus === 'Concluído' && statusAnterior !== 'Concluído'
+          ? await concluirImagensLaudo(laudoId) : [];
         const atualizado = await laudoService.updateStatus(laudoId, novoStatus);
         const repAtualizada = await repService.updateStatus(laudoAntes.rep_id, novoStatus === 'Em andamento' ? 'Em Andamento' : 'Concluído');
         if (!repAtualizada) throw new Error('Não foi possível atualizar o status da REP vinculada');
-        return atualizado;
+        return { laudo: atualizado, caminhosAntigos };
       });
+      if (novoStatus === 'Concluído' && statusAnterior !== 'Concluído') {
+        try { await descartarArquivosConcluidos(laudoId, caminhosAntigos); }
+        catch (error) { logError('Falha ao descartar arquivos após conclusão do laudo', { laudoId, error }); }
+      }
 
       const rep = await repService.findById(laudoAntes.rep_id);
       const repNumero = rep?.numero ?? laudoAntes.rep_id;
