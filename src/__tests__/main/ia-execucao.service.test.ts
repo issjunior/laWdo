@@ -75,7 +75,17 @@ const criarMiniatura = () => ({
 })
 
 describe('ia-execucao.service — descrição de imagem', () => {
+  let configuracaoImagemSalva: string | null = null
+
+  const prepararDescricaoImagem = () => {
+    obterImagemLaudoPorIdMock.mockResolvedValue(criarImagem())
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: 'Objeto metálico sobre uma superfície clara.' } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+  }
+
   beforeEach(() => {
+    configuracaoImagemSalva = null
     configuracaoObterMock.mockReset()
     configuracaoSalvarMock.mockReset()
     obterImagemLaudoPorIdMock.mockReset()
@@ -87,6 +97,7 @@ describe('ia-execucao.service — descrição de imagem', () => {
     obterMiniaturasImagensLaudoMock.mockResolvedValue([criarMiniatura()])
 
     configuracaoObterMock.mockImplementation(async (chave: string) => {
+      if (chave === 'qualidade_imagem_ia') return configuracaoImagemSalva
       const configuracoes: Record<string, string> = {
         provedor_ia: 'gemini',
         api_key_gemini: 'chave-teste',
@@ -115,8 +126,8 @@ describe('ia-execucao.service — descrição de imagem', () => {
     })
     expect(obterImagemLaudoPorIdMock).toHaveBeenCalledWith('laudo-1', 'imagem-1')
     expect(obterMiniaturasImagensLaudoMock).toHaveBeenCalledWith('laudo-1', ['imagem-1'], {
-      larguraMaxima: 768,
-      qualidadeJpeg: 80,
+      larguraMaxima: 512,
+      qualidadeJpeg: 70,
     })
 
     const [, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit]
@@ -134,6 +145,57 @@ describe('ia-execucao.service — descrição de imagem', () => {
     expect(String(opcoes.body)).not.toContain('{{')
     expect(String(opcoes.body)).not.toContain('fragmentos')
     expect(String(opcoes.body)).not.toContain('b602_tabela_estojos')
+  })
+
+  it.each([
+    ['ausente', null],
+    ['JSON inválido', '{invalido'],
+    ['qualidade desconhecida', JSON.stringify({ versao: 1, qualidade: 'desconhecida' })],
+  ])('envia miniatura econômica quando a configuração está %s', async (_cenario, configuracao) => {
+    configuracaoImagemSalva = configuracao
+    prepararDescricaoImagem()
+
+    const resposta = await new IaExecucaoService().descreverImagem(solicitacao)
+
+    expect(obterMiniaturasImagensLaudoMock).toHaveBeenCalledExactlyOnceWith('laudo-1', ['imagem-1'], {
+      larguraMaxima: 512,
+      qualidadeJpeg: 70,
+    })
+    expect(resposta.miniaturaDataUri).toBe('data:image/jpeg;base64,bWluaWF0dXJh')
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining('"image_url":{"url":"data:image/jpeg;base64,bWluaWF0dXJh"}'),
+    }))
+    expect(configuracaoSalvarMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['equilibrada', 768, 80],
+    ['alta', 1536, 88],
+  ] as const)('respeita a qualidade %s salva sem substituir pelo padrão econômico', async (qualidade, larguraMaxima, qualidadeJpeg) => {
+    configuracaoImagemSalva = JSON.stringify({ versao: 1, qualidade })
+    prepararDescricaoImagem()
+
+    await new IaExecucaoService().descreverImagem(solicitacao)
+
+    expect(obterMiniaturasImagensLaudoMock).toHaveBeenCalledExactlyOnceWith('laudo-1', ['imagem-1'], {
+      larguraMaxima,
+      qualidadeJpeg,
+    })
+    expect(configuracaoSalvarMock).not.toHaveBeenCalled()
+  })
+
+  it('envia os bytes originais sem gerar miniatura quando essa qualidade está salva', async () => {
+    configuracaoImagemSalva = JSON.stringify({ versao: 1, qualidade: 'original' })
+    prepararDescricaoImagem()
+
+    const resposta = await new IaExecucaoService().descreverImagem(solicitacao)
+
+    expect(obterMiniaturasImagensLaudoMock).not.toHaveBeenCalled()
+    expect(resposta.miniaturaDataUri).toBe('data:image/jpeg;base64,YWJj')
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: expect.stringContaining('"image_url":{"url":"data:image/jpeg;base64,YWJj"}'),
+    }))
+    expect(configuracaoSalvarMock).not.toHaveBeenCalled()
   })
 
   it('envia contexto resolvido no modo integral e solicita resposta JSON', async () => {

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ambiente = vi.hoisted(() => ({ diretorio: '', falharPrevia: false }));
+const ambiente = vi.hoisted(() => ({ diretorio: '', falharPrevia: false, largura: 1600, altura: 900 }));
 
 vi.mock('electron', () => {
   const criarImagem = (width: number, height: number) => ({
@@ -16,8 +16,8 @@ vi.mock('electron', () => {
   return {
     app: { getPath: () => ambiente.diretorio },
     nativeImage: {
-      createFromBuffer: () => criarImagem(1600, 900),
-      createFromPath: () => ambiente.falharPrevia ? { isEmpty: () => true } : criarImagem(1600, 900),
+      createFromBuffer: () => criarImagem(ambiente.largura, ambiente.altura),
+      createFromPath: () => ambiente.falharPrevia ? { isEmpty: () => true } : criarImagem(ambiente.largura, ambiente.altura),
     },
   };
 });
@@ -28,6 +28,8 @@ let imagens: typeof import('../../main/services/imagem-laudo.service');
 beforeEach(async () => {
   ambiente.diretorio = await mkdtemp(path.join(os.tmpdir(), 'lawdo-previa-'));
   ambiente.falharPrevia = false;
+  ambiente.largura = 1600;
+  ambiente.altura = 900;
   vi.resetModules();
   sqlite = await import('../../main/database/sqlite');
   imagens = await import('../../main/services/imagem-laudo.service');
@@ -55,6 +57,43 @@ function estagiar(id: string, mimeType: string) {
 }
 
 describe('prévia do editor e arquivo original', () => {
+  it.each([
+    ['ausente', null, 400, 2, 640, 'jpeg:640x360'],
+    ['inválido', 'desconhecido', 400, 2, 640, 'jpeg:640x360'],
+    ['econômico no limite mínimo', 'economico', 100, 1, 480, 'jpeg:480x270'],
+    ['econômico no limite máximo', 'economico', 2000, 4, 640, 'jpeg:640x360'],
+    ['equilibrado salvo', 'equilibrado', 400, 2, 800, 'jpeg:800x450'],
+    ['nítido salvo', 'nitido', 2000, 4, 1280, 'jpeg:1280x720'],
+  ] as const)('prepara a prévia com perfil %s preservando o arquivo e a configuração', async (_cenario, perfil, larguraCss, densidade, maiorLado, previaEsperada) => {
+    await sqlite.executeNonQuery('DELETE FROM configuracoes');
+    if (perfil !== null) {
+      await sqlite.executeNonQuery('INSERT INTO configuracoes VALUES (?, ?, ?)', ['perfil_previa_editor', perfil, 'string']);
+    }
+    estagiar('foto-perfil', 'image/jpeg');
+
+    const preparada = await imagens.prepararImagemEditorLaudo('laudo', 'foto-perfil', larguraCss, larguraCss * 0.75, densidade);
+
+    expect(preparada.maiorLado).toBe(maiorLado);
+    expect(Buffer.from(preparada.previaDataUri.split(',')[1], 'base64').toString()).toBe(previaEsperada);
+    const [registro] = await sqlite.executeQuery<{ caminho_relativo: string }>('SELECT caminho_relativo FROM imagens_laudo WHERE id = ?', ['foto-perfil']);
+    expect(await readFile(path.join(ambiente.diretorio, registro.caminho_relativo), 'utf8')).toBe('original-foto-perfil');
+    expect(await sqlite.executeQuery<{ valor: string }>('SELECT valor FROM configuracoes WHERE chave = ?', ['perfil_previa_editor']))
+      .toEqual(perfil === null ? [] : [{ valor: perfil }]);
+  });
+
+  it('não amplia imagem menor que o limite mínimo do perfil econômico', async () => {
+    await sqlite.executeNonQuery('DELETE FROM configuracoes');
+    ambiente.largura = 320;
+    ambiente.altura = 180;
+    estagiar('foto-pequena', 'image/jpeg');
+
+    const preparada = await imagens.prepararImagemEditorLaudo('laudo', 'foto-pequena', 1000, 750, 2);
+
+    expect(Buffer.from(preparada.previaDataUri.split(',')[1], 'base64').toString()).toBe('jpeg:320x180');
+    const original = await imagens.obterImagemLaudoPorId('laudo', 'foto-pequena');
+    expect(Buffer.from(original.dataUri.split(',')[1], 'base64').toString()).toBe('original-foto-pequena');
+  });
+
   it('limita a prévia ao espaço de exibição e conserva os bytes originais', async () => {
     estagiar('foto', 'image/jpeg');
     expect(imagens.listarImagensEstagiadasLaudo('laudo')).toMatchObject([{ id: 'foto', nomeArquivo: 'foto.jpg' }]);
