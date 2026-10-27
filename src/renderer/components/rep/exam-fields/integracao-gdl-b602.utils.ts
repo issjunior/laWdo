@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { esquemaRepsMesmoCasoGdl } from '@shared/gdl/reps-mesmo-caso'
 import { esquemaIdentificacaoNaturezaExameGdl } from '@shared/gdl/natureza-exame'
 import type { MetadadosIntegracaoGdl, PecaB602 } from '@shared/types/b602-gdl.types'
 
@@ -28,6 +29,7 @@ const dadosInvestigacaoGdlSchema = z.object({
 })
 
 const metadadosIntegracaoGdlSchema = z.object({
+  repsMesmoCaso: esquemaRepsMesmoCasoGdl.optional().catch(undefined),
   origemInicial: z.enum(['manual', 'gdl']),
   identificacaoNatureza: esquemaIdentificacaoNaturezaExameGdl.optional(),
   dataExecucaoLaudo: z.string().optional(),

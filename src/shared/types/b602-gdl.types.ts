@@ -1,5 +1,6 @@
 import type { CamposComunsPecaBalistica, PecaBalistica } from './pecas-balistica.types.js';
 import type { IdentificacaoNaturezaExameGdl } from '../gdl/natureza-exame.js';
+import type { RepsMesmoCasoGdl } from '../gdl/reps-mesmo-caso.js';
 export type OrigemPecaB602 = 'manual' | 'gdl'
 
 export interface CamposComunsPecaB602 extends CamposComunsPecaBalistica {
@@ -18,6 +19,7 @@ export interface AvisoImportacao {
 }
 
 export interface MetadadosIntegracaoGdl {
+  repsMesmoCaso?: RepsMesmoCasoGdl
   origemInicial: 'manual' | 'gdl'
   identificacaoNatureza?: IdentificacaoNaturezaExameGdl
   dataExecucaoLaudo?: string

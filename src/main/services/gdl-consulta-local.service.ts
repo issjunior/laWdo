@@ -174,6 +174,7 @@ export async function converterConsultaRepGdl(remetenteId: number, consultaId: s
   };
   const codigoAdaptador = codigoExameParaFormulario(codigo);
   const importacao = converterRepGdl(codigoAdaptador, consulta.resultado.dados, {
+    repsMesmoCaso: consulta.resultado.repsMesmoCaso,
     origemInicial: 'gdl',
     identificacaoNatureza: identificacaoEscolhida,
     ultimaConsulta: {

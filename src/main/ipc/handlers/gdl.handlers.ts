@@ -15,11 +15,35 @@ import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { converterRepGdl, listarCodigosImportacaoGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
-import { listarResumosImagensLaudo, salvarImagemLaudoPorBytes } from '../../services/imagem-laudo.service.js';
+import { estagiarImagemLaudoPorBytes, listarHashesImagensLaudo, listarResumosImagensLaudo } from '../../services/imagem-laudo.service.js';
 import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
 import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
+import { esquemaRepsMesmoCasoGdl, type RepsMesmoCasoGdl } from '../../../shared/gdl/reps-mesmo-caso.js';
+import { esquemaEstadoConexaoGdl } from '../../../shared/gdl/conexao.js';
+import { conexaoGdlService } from '../../services/gdl-conexao.service.js';
 
 const remetentesConsultaGdl = new WeakSet<object>();
+const remetentesConexaoGdl = new Map<number, WebContents>();
+let observandoConexaoGdl = false;
+
+function observarEstadoConexaoGdl(remetente: WebContents): void {
+  if (!observandoConexaoGdl) {
+    observandoConexaoGdl = true;
+    conexaoGdlService.observar(() => {
+      for (const [id, janela] of remetentesConexaoGdl) {
+        try {
+          if (janela.isDestroyed()) { remetentesConexaoGdl.delete(id); continue; }
+          authSessaoService.exigir(id);
+          janela.send('gdl:estado-conexao-alterado');
+        } catch { remetentesConexaoGdl.delete(id); }
+      }
+    });
+  }
+  if (remetentesConexaoGdl.has(remetente.id)) return;
+  remetentesConexaoGdl.set(remetente.id, remetente);
+  remetente.once('destroyed', () => remetentesConexaoGdl.delete(remetente.id));
+}
+const consultasMesmoCaso = new Map<string, Promise<RepsMesmoCasoGdl>>();
 const revisoesAtualizacaoGdl = new Map<string, { remetenteId: number; usuarioId: string; identidade: string; expiraEm: number }>();
 
 async function vincularRevisaoAtualizacaoGdl(remetenteId: number, consultaId: string, operacaoId: string): Promise<void> {
@@ -46,7 +70,7 @@ function extrairNumeroEAnoDaRep(numero: string): { numero: string; ano: string }
   return numeroNormalizado ? { numero: numeroNormalizado, ano: correspondencia[2] } : null;
 }
 
-async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; ano: string }> {
+async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; ano: string; repId: string; numeroOriginal: string }> {
   if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido.');
   const laudo = await laudoService.findById(laudoId);
   if (!laudo) throw new Error('Laudo não encontrado.');
@@ -54,10 +78,57 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
   if (!rep) throw new Error('REP associada ao laudo não encontrada.');
   const identificacao = extrairNumeroEAnoDaRep(rep.numero);
   if (!identificacao) throw new Error('O número da REP deve estar no formato número/ano para consultar imagens no GDL.');
-  return identificacao;
+  return { ...identificacao, repId: laudo.rep_id, numeroOriginal: rep.numero };
 }
 
 export const registerGdlHandlers = (): void => {
+  for (const canal of ['gdl:obter-estado-conexao', 'gdl:verificar-conexao']) {
+    ipcMain.handle(canal, async event => {
+      try {
+        const usuarioId = authSessaoService.exigir(event.sender.id);
+        observarEstadoConexaoGdl(event.sender);
+        const estado = canal === 'gdl:verificar-conexao' ? await conexaoGdlService.verificar() : await conexaoGdlService.obterEstado();
+        if (usuarioId !== authSessaoService.exigir(event.sender.id)) throw new Error('A sessão local mudou.');
+        return { success: true, data: esquemaEstadoConexaoGdl.parse(estado) };
+      } catch {
+        return { success: false, error: 'Não foi possível verificar o estado da conexão com o GDL.' };
+      }
+    });
+  }
+  ipcMain.handle('gdl:consultar-reps-mesmo-caso', async (event, laudoId: unknown) => {
+    try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
+      const identidade = await gdlService.obterIdentidadeMinhasReps();
+      if (typeof laudoId !== 'string' || !laudoId.trim()) throw new Error('Laudo inválido.');
+      const chave = JSON.stringify([event.sender.id, usuarioId, identidade, laudoId]);
+      let consulta = consultasMesmoCaso.get(chave);
+      if (!consulta) {
+        consulta = (async () => {
+          const referencia = await resolverRepDoLaudo(laudoId);
+          const data = esquemaRepsMesmoCasoGdl.parse(await gdlService.consultarRepsMesmoCaso(referencia.numero, referencia.ano));
+          if (data.numeroRep !== referencia.numero || data.anoRep !== referencia.ano) throw new Error('A identificação retornada pelo GDL diverge da REP do laudo.');
+          const validarContexto = async () => {
+            const atual = await resolverRepDoLaudo(laudoId);
+            if (atual.repId !== referencia.repId || atual.numero !== referencia.numero || atual.ano !== referencia.ano) throw new Error('A REP vinculada ao laudo mudou. Consulte novamente.');
+            if (event.sender.isDestroyed?.() || usuarioId !== authSessaoService.exigir(event.sender.id) || identidade !== await gdlService.obterIdentidadeMinhasReps()) {
+              throw new Error('A sessão ou configuração GDL mudou. Consulte novamente.');
+            }
+          };
+          await validarContexto();
+          await repService.salvarReferenciasMesmoCaso(referencia.repId, referencia.numeroOriginal, data, validarContexto);
+          return data;
+        })();
+        consultasMesmoCaso.set(chave, consulta);
+      }
+      try {
+        return { success: true, data: await consulta };
+      } finally {
+        if (consultasMesmoCaso.get(chave) === consulta) consultasMesmoCaso.delete(chave);
+      }
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível consultar as REPs do caso.' };
+    }
+  });
   ipcMain.handle('gdl:obter-avisos-reiteracao', async event => {
     try {
       const usuarioId = authSessaoService.exigir(event.sender.id);
@@ -348,6 +419,7 @@ export const registerGdlHandlers = (): void => {
         success: true,
         data: {
           ...converterRepGdl(codigoExame, resultado.dados, {
+          repsMesmoCaso: resultado.repsMesmoCaso,
           origemInicial: 'gdl',
           ultimaConsulta: {
             ambiente: resultado.ambiente ?? 'producao',
@@ -372,11 +444,20 @@ export const registerGdlHandlers = (): void => {
     try {
       const { numero, ano } = await resolverRepDoLaudo(laudoId);
       if (typeof laudoId !== 'string') return { success: false, error: 'Laudo inválido.' };
+      let hashesExistentes = new Set<string>();
+      let avisoVerificacao: string | undefined;
+      try {
+        hashesExistentes = await listarHashesImagensLaudo(laudoId);
+      } catch (error) {
+        logError('Falha ao verificar fotos já incluídas no laudo', error);
+        avisoVerificacao = 'Não foi possível verificar as fotos já incluídas. A captura ainda impedirá imagens repetidas.';
+      }
+      const lista = await gdlService.abrirSessaoImagensRepGdl(laudoId, numero, ano, progresso => {
+        if (!event.sender.isDestroyed()) event.sender.send('gdl:progresso-imagens-laudo', { laudoId, ...progresso });
+      }, hashesExistentes);
       return {
         success: true,
-        data: await gdlService.abrirSessaoImagensRepGdl(laudoId, numero, ano, progresso => {
-          if (!event.sender.isDestroyed()) event.sender.send('gdl:progresso-imagens-laudo', { laudoId, ...progresso });
-        }),
+        data: { ...lista, avisoVerificacao: lista.avisoVerificacao || avisoVerificacao },
       };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao listar imagens da REP.' };
@@ -407,10 +488,16 @@ export const registerGdlHandlers = (): void => {
       }
       await resolverRepDoLaudo(laudoId);
       const existentes = await listarResumosImagensLaudo(laudoId);
+      const porHash = new Map(existentes.map(imagem => [imagem.sha256, imagem]));
       let proximaSequencia = existentes.reduce((maior, imagem) => Math.max(maior, imagem.sequencia), 0) + 1;
       const resultado = await gdlService.capturarImagensDaSessaoGdlParaLaudo(laudoId, sessaoId, idsSelecao, async imagem => {
+        const existente = porHash.get(imagem.sha256);
+        if (existente && permitirDuplicadas !== true) {
+          return { idSelecao: imagem.idSelecao, nomeArquivo: imagem.nomeArquivo,
+            imagemExistenteId: existente.id, localizacao: 'painel' as const };
+        }
         const sequencia = proximaSequencia;
-        const persistida = await salvarImagemLaudoPorBytes(laudoId, {
+        const estagiada = estagiarImagemLaudoPorBytes(laudoId, {
           id: randomUUID(),
           nomeArquivo: imagem.nomeArquivo,
           mimeType: imagem.mimeType,
@@ -418,27 +505,19 @@ export const registerGdlHandlers = (): void => {
           legenda: imagem.nomeArquivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim(),
           origem: 'gdl',
           sequencia,
-          permitirDuplicada: permitirDuplicadas === true,
         });
-        if ('localizacao' in persistida) {
-          return {
-            idSelecao: imagem.idSelecao,
-            nomeArquivo: imagem.nomeArquivo,
-            imagemExistenteId: persistida.id,
-            localizacao: persistida.localizacao,
-          };
-        }
         proximaSequencia += 1;
         return {
           idSelecao: imagem.idSelecao,
-          imagemId: persistida.id,
-          nomeArquivo: persistida.nomeArquivo,
-          mimeType: persistida.mimeType,
-          tamanho: persistida.tamanho,
-          sha256: persistida.sha256,
-          sequencia: persistida.sequencia,
+          imagemId: estagiada.id,
+          nomeArquivo: estagiada.nomeArquivo,
+          mimeType: imagem.mimeType,
+          tamanho: estagiada.tamanho,
+          sha256: estagiada.sha256,
+          sequencia,
+          thumbnailDataUri: estagiada.thumbnailDataUri,
         };
-      });
+      }, false);
       return { success: true, data: resultado };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao capturar imagens da REP.' };

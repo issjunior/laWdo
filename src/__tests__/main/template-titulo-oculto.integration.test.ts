@@ -52,9 +52,9 @@ describe('persistência da ocultação de títulos', () => {
     expect(secoes[0].conteudo).toBe('<p>Texto inicial</p>');
   }
 
-  it('instala o B-602 v10 com concordância dos estojos e preâmbulo oculto, preservando a versão anterior', async () => {
+  it('instala o B-602 v11 com concordância e figuras dos cartuchos, preservando a versão anterior', async () => {
     const [integrado] = await sqlite.executeQuery<{ id: string; tipo_exame_id: string }>(
-      "SELECT id, tipo_exame_id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 10",
+      "SELECT id, tipo_exame_id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 11",
     );
     expect(integrado).toBeDefined();
     const secoes = await servico.findSecoesByTemplate(integrado.id);
@@ -63,6 +63,10 @@ describe('persistência da ocultação de títulos', () => {
     expect(secoes.find(secao => secao.chave_integrada === 'dos-estojos')?.conteudo).toContain('{{b602_total_estojos_extenso}}');
     expect(secoes.find(secao => secao.chave_integrada === 'dos-estojos')?.conteudo).toContain('{{b602_estojos_descricao}}');
     expect(secoes.find(secao => secao.chave_integrada === 'dos-estojos')?.conteudo).toContain('{{b602_estojos_conclusao}}');
+    const cartuchos = secoes.find(secao => secao.chave_integrada === 'dos-cartuchos')?.conteudo || '';
+    expect(cartuchos).toContain('{{b602_total_cartuchos_extenso}}');
+    expect(cartuchos).toContain('{{b602_cartuchos_descricao}}');
+    expect(cartuchos.match(/data-dummy="true"/g)).toHaveLength(2);
     expect(secoes[0]).toMatchObject({ chave_integrada: 'preambulo', ocultar_titulo: 1, contar_na_numeracao: 0 });
     const html = buildHtml(secoes, new Map(), {});
     const documento = new DOMParser().parseFromString(html, 'text/html');
@@ -80,7 +84,7 @@ describe('persistência da ocultação de títulos', () => {
     expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
     expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
     expect((await servico.findSecoesByTemplate('b602-legado-teste'))[0]).toMatchObject({ conteudo: '<p>Conteúdo anterior preservado</p>', ocultar_titulo: 0, contar_na_numeracao: 1 });
-    expect(await sqlite.executeQuery("SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 10")).toHaveLength(1);
+    expect(await sqlite.executeQuery("SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 11")).toHaveLength(1);
   });
 
   it('instala o B-601 v2 com as abreviações corrigidas', async () => {

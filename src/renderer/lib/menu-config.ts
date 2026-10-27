@@ -3,6 +3,7 @@ import {
   Brain,
   Database,
   FileText,
+  Image,
   FlaskConical,
   LayoutDashboard,
   Layers,
@@ -90,6 +91,7 @@ export const itensMenu: ItemMenu[] = [
     icon: Settings,
     items: [
       { title: 'Modelos IA', path: '/modelos-ia', icon: Brain },
+      { title: 'Imagens', path: '/imagens', icon: Image },
       { title: 'Margens do PDF', path: '/margens', icon: Ruler },
       { title: 'API GDL', path: '/gdl-config', icon: Network },
       { title: 'Backup', path: '/backup', icon: Database },

@@ -1,4 +1,5 @@
 import { atividadeGdlService } from './gdl-atividade.service.js';
+import { conexaoGdlService } from './gdl-conexao.service.js';
 import { interpretarDetalhesRepGdl } from './gdl-detalhes.service.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { session, type Session } from 'electron';
@@ -185,7 +186,7 @@ async function lerPaginaListagem(rede: Session, url: string, etapa: string, corp
   }
 }
 
-export async function listarPaginaMinhasRepsGdl(
+async function listarPaginaMinhasRepsGdlInterna(
   credenciais: CredenciaisPaginaGdl,
   pagina: number,
   prepararRede: (rede: Session) => void,
@@ -225,7 +226,7 @@ export async function listarPaginaMinhasRepsGdl(
 }
 
 
-export async function lerDetalhesRepAutorizadaGdl(
+async function lerDetalhesRepAutorizadaGdlInterna(
   credenciais: CredenciaisPaginaGdl, id: number, numero: string, ano: string,
   prepararRede: (rede: Session) => void, validarContexto: () => Promise<void>, sinal: AbortSignal,
 ) {
@@ -245,3 +246,22 @@ export async function lerDetalhesRepAutorizadaGdl(
     return interpretarDetalhesRepGdl(resposta.data, id, numero, ano);
   } finally { estado.detalhesPermitidos.delete(url); }
 }
+
+async function observarAcessoWebGdl<T>(credenciais: CredenciaisPaginaGdl, consultar: () => Promise<T>, sinal?: AbortSignal): Promise<T> {
+  const autorizacao = `Basic ${Buffer.from(`${credenciais.login}:${credenciais.senha}`).toString('base64')}`;
+  const observacao = await conexaoGdlService.capturarRequisicao(`${credenciais.baseUrl}/`, autorizacao).catch(() => null);
+  try {
+    const resultado = await consultar();
+    conexaoGdlService.registrarWeb(observacao, true);
+    return resultado;
+  } catch (erro) {
+    if (!sinal?.aborted) conexaoGdlService.registrarWeb(observacao, false);
+    throw erro;
+  }
+}
+
+export const listarPaginaMinhasRepsGdl: typeof listarPaginaMinhasRepsGdlInterna = (...argumentos) =>
+  observarAcessoWebGdl(argumentos[0], () => listarPaginaMinhasRepsGdlInterna(...argumentos));
+
+export const lerDetalhesRepAutorizadaGdl: typeof lerDetalhesRepAutorizadaGdlInterna = (...argumentos) =>
+  observarAcessoWebGdl(argumentos[0], () => lerDetalhesRepAutorizadaGdlInterna(...argumentos), argumentos[6]);

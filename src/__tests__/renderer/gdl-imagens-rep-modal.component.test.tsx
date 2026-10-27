@@ -6,6 +6,7 @@ const ipcApiOriginal = window.ipcAPI
 const listarImagensLaudo = vi.fn()
 const capturarImagensLaudo = vi.fn()
 const fecharSessaoImagensLaudo = vi.fn()
+const obterMiniaturasImagensLaudo = vi.fn()
 const idSelecao = 'a'.repeat(64)
 
 function obterCaixaDaFoto(nomeArquivo: string): HTMLElement {
@@ -24,6 +25,7 @@ describe('GdlImagensRepModal', () => {
   })
 
   beforeEach(() => {
+    obterMiniaturasImagensLaudo.mockClear()
     listarImagensLaudo.mockResolvedValue({
       success: true,
       data: {
@@ -39,10 +41,10 @@ describe('GdlImagensRepModal', () => {
     })
     capturarImagensLaudo.mockResolvedValue({
       success: true,
-      data: { imagens: [{ idSelecao, nomeArquivo: 'fotografia.png', mimeType: 'image/png', tamanho: 8, dataUri: 'data:image/png;base64,AA==', sha256: 'c'.repeat(64) }], duplicadas: [], falhas: [] },
+      data: { imagens: [{ idSelecao, imagemId: 'imagem-1', nomeArquivo: 'fotografia.png', mimeType: 'image/png', tamanho: 8, sha256: 'c'.repeat(64), sequencia: 1 }], duplicadas: [], falhas: [] },
     })
     Object.defineProperty(window, 'ipcAPI', {
-      value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, listarImagensLaudo, capturarImagensLaudo, fecharSessaoImagensLaudo } },
+      value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, listarImagensLaudo, capturarImagensLaudo, fecharSessaoImagensLaudo, obterMiniaturasImagensLaudo } },
       writable: true,
     })
   })
@@ -65,7 +67,7 @@ describe('GdlImagensRepModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Capturar imagens (1)' }))
 
     await waitFor(() => expect(capturarImagensLaudo).toHaveBeenCalledWith('laudo-1', 'sessao-imagens-1', [idSelecao], false))
-    expect(onCapturadas).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ idSelecao })]), false)
+    await waitFor(() => expect(onCapturadas).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ idSelecao })]), false))
     expect(onAbertoChange).toHaveBeenCalledWith(false)
   })
 
@@ -117,7 +119,8 @@ describe('GdlImagensRepModal', () => {
     expect(screen.getByText('fotografia.png')).toBeInTheDocument()
   })
 
-  it('mostra as fotos duplicadas antes de permitir uma nova captura', async () => {
+  it('remove da seleção a duplicata encontrada durante a captura, sem abrir outro modal', async () => {
+    const onCapturadas = vi.fn()
     const obterMiniaturas = vi.fn().mockResolvedValue({
       success: true,
       data: [{ id: 'imagem-existente-1', thumbnailDataUri: 'data:image/jpeg;base64,BB==' }],
@@ -134,13 +137,48 @@ describe('GdlImagensRepModal', () => {
       value: { ...window.ipcAPI, ilustracoes: { ...window.ipcAPI.ilustracoes, obterMiniaturas } },
       writable: true,
     })
-    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={onCapturadas} />)
 
     await screen.findByText('fotografia.png')
     fireEvent.click(screen.getByRole('button', { name: 'Capturar imagens (1)' }))
 
-    expect(await screen.findByText('Foto já incluída no laudo')).toBeInTheDocument()
-    expect(obterMiniaturas).toHaveBeenCalledWith('laudo-1', ['imagem-existente-1'])
-    expect(screen.getByRole('img', { name: 'Foto já incluída' })).toHaveAttribute('src', 'data:image/jpeg;base64,BB==')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Capturar imagens (0)' })).toBeDisabled())
+    expect(screen.queryByText('Foto já incluída no laudo')).not.toBeInTheDocument()
+    expect(obterMiniaturas).not.toHaveBeenCalled()
+    expect(capturarImagensLaudo).toHaveBeenCalledWith('laudo-1', 'sessao-imagens-1', [idSelecao], false)
+    expect(onCapturadas).not.toHaveBeenCalled()
+  })
+
+  it('oculta todas as fotos já incluídas e impede nova captura', async () => {
+    listarImagensLaudo.mockResolvedValue({
+      success: true,
+      data: {
+        sessaoId: 'sessao-imagens-1', ambiente: 'producao', numeroRep: '109026', anoRep: '2026',
+        arquivos: [], fotosJaIncluidas: 29,
+      },
+    })
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    expect(await screen.findByText('Todas as fotos disponíveis da REP já estão incluídas neste laudo.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Capturar imagens (0)' })).toBeDisabled()
+    expect(screen.queryByText('fotografia.png')).not.toBeInTheDocument()
+    expect(obterMiniaturasImagensLaudo).not.toHaveBeenCalled()
+  })
+
+  it('mantém a busca acessível quando a verificação de duplicatas falha', async () => {
+    listarImagensLaudo.mockResolvedValue({
+      success: true,
+      data: {
+        sessaoId: 'sessao-imagens-1', ambiente: 'producao', numeroRep: '109026', anoRep: '2026',
+        arquivos: [{ idSelecao, origem: 'lista_fotos', nomeArquivo: 'fotografia.png', tamanho: 1024, dataUpload: null, provavelImagem: true, status: null, thumbnailDataUri: 'data:image/jpeg;base64,AA==' }],
+        fotosJaIncluidas: 0, avisoVerificacao: 'Não foi possível verificar algumas fotos.',
+      },
+    })
+    render(<GdlImagensRepModal aberto laudoId="laudo-1" onAbertoChange={vi.fn()} onCapturadas={vi.fn()} />)
+
+    expect(await screen.findByText('fotografia.png')).toBeInTheDocument()
+    expect(screen.getByText('Não foi possível verificar algumas fotos.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Capturar imagens (1)' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
 })

@@ -29,7 +29,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 46;
+export const CURRENT_SCHEMA_VERSION = 48;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -2501,6 +2501,28 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
       [CHAVE_MARGENS_PDF, JSON.stringify(MARGENS_PADRAO_PDF), 'Margens padrão para assinatura no GDL'],
     );
     log.info('Migration v46: margens padrão para assinatura no GDL aplicadas.');
+  }
+
+  if (fromVersion < 47) {
+    await executeNonQuery(`
+      UPDATE reps
+      SET status = CASE
+        WHEN EXISTS (SELECT 1 FROM laudos l WHERE l.rep_id = reps.id AND l.status = 'Em andamento') THEN 'Em Andamento'
+        ELSE 'Concluído'
+      END,
+      updated_at = CURRENT_TIMESTAMP
+      WHERE EXISTS (SELECT 1 FROM laudos l WHERE l.rep_id = reps.id)
+        AND status <> CASE
+          WHEN EXISTS (SELECT 1 FROM laudos l WHERE l.rep_id = reps.id AND l.status = 'Em andamento') THEN 'Em Andamento'
+          ELSE 'Concluído'
+        END
+    `);
+    log.info('Migration v47: status local das REPs com laudo reconciliado.');
+  }
+
+  if (fromVersion < 48) {
+    await garantirColuna('imagens_laudo', 'temporaria_sessao', 'INTEGER NOT NULL DEFAULT 0');
+    log.info('Migration v48: identificação das novas imagens para limpeza segura.');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);

@@ -9,6 +9,8 @@ import { CHAVES_COMUNS, criarCamposComuns, montarImportacaoBalistica, normalizar
 
 export function converterRepB601(rep: GdlRepValidada, metadados?: MetadadosIntegracaoGdl): ResultadoImportacaoB601 {
   const avisos: AvisoImportacao[] = []
+  if (metadados && !metadados.repsMesmoCaso) avisos.push({ codigo: 'REPS_MESMO_CASO_INDISPONIVEIS',
+    mensagem: 'As REPs de coleta do mesmo caso não foram confirmadas. No laudo Local com Necropsia, consulte novamente ou preencha os exames manualmente.' })
   const codigos = new Set<number>()
   const pecas: PecaBalistica[] = rep.pecas.map((entrada, indice) => {
     if (!Number.isSafeInteger(entrada.codPeca) || entrada.codPeca <= 0 || codigos.has(entrada.codPeca)) {

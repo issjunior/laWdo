@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Header } from '@/components/layout/Header';
@@ -13,6 +14,14 @@ describe('Header - atualizações', () => {
     vi.clearAllMocks();
     Object.assign(window.ipcAPI, {
       getAppInfo: vi.fn().mockResolvedValue({ version: '0.1.12', name: 'laWdo', platform: 'win32', osVersion: 'Windows', arch: 'x64', memory: '8 GB', dbVersion: 1 }),
+      gdl: {
+        obterEstadoConexao: vi.fn().mockResolvedValue({ success: true, data: {
+          ambiente: 'producao', revisao: 0, rede: 'desconhecida', redeVerificadaEm: null,
+          credenciais: 'pendentes', credenciaisValidadasEm: null, web: 'desconhecida', verificando: false,
+        } }),
+        verificarConexao: vi.fn(),
+        onEstadoConexaoAlterado: vi.fn().mockReturnValue(() => undefined),
+      },
       atualizacao: {
         estado: vi.fn().mockResolvedValue({
           success: true,
@@ -42,7 +51,7 @@ describe('Header - atualizações', () => {
   });
 
   it('mostra um resumo amigável e preserva os detalhes técnicos recolhidos', async () => {
-    render(<Header currentUser={null} onLogout={vi.fn()} />);
+    render(<MemoryRouter><Header currentUser={null} onLogout={vi.fn()} /></MemoryRouter>);
 
     fireEvent.click(screen.getByRole('button', { name: 'Atualizações' }));
 
@@ -72,7 +81,7 @@ describe('Header - atualizações', () => {
       },
     });
 
-    render(<Header currentUser={null} onLogout={vi.fn()} />);
+    render(<MemoryRouter><Header currentUser={null} onLogout={vi.fn()} /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Atualizações' }));
 
     expect(await screen.findByText('Nova versão disponível')).toBeInTheDocument();

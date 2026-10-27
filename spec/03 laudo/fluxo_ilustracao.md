@@ -2,12 +2,13 @@
 
 ## Estado e responsabilidades
 
-O HTML do laudo é a fonte das figuras inseridas. A fila do Painel de Ilustrações é persistida separadamente em `imagens_laudo`: arquivo local, metadados, legenda, origem e sequência. `imagem-laudo.service.ts` valida IDs e conteúdo, calcula hash e expõe imagens como data URI; o renderer não recebe caminho local.
+O HTML do laudo é a fonte das figuras inseridas. O Painel de Ilustrações combina imagens persistidas em `imagens_laudo` (arquivo local, metadados, legenda, origem e sequência) e imagens novas em estágio na memória do main, separadas por laudo. `imagem-laudo.service.ts` valida IDs e conteúdo, calcula hash e expõe imagens como data URI; o renderer não recebe caminho local.
 
 | Estado | Fonte canônica | Consumidor principal |
 |---|---|---|
 | figura inserida | HTML (`figure.laudo-figure`) | editor, preview e exportação |
-| imagem disponível | `imagens_laudo` e arquivo local | `IlustracoesPanel` |
+| imagem disponível | registro/arquivo persistido ou estágio em memória | `IlustracoesPanel` |
+| imagem nova ainda não inserida | estágio em memória do main, com miniatura | painel integrado e destacado |
 | imagem arquivada | `disponivel_painel = 0` | fora do painel; backup depende do uso no HTML salvo ou de vínculo de origem |
 
 ## Edição local por ocorrência
@@ -18,7 +19,7 @@ O resultado é uma nova ocorrência/derivação local: `imagem_origem_id` aponta
 
 ## Painel e legenda assistida
 
-Upload e captura GDL entram na fila persistida. O painel permite inserir, excluir, reordenar, ampliar e substituir figuras. Em cada item, o botão de geração de legenda fica entre Ampliar e Substituir, pois atua sobre aquela figura. A edição da legenda é enviada com debounce; quando a fila retorna um valor persistido diferente, o campo local é sincronizado para não conservar valor obsoleto.
+Upload e captura GDL entram no estágio em memória; a inserção prepara o arquivo persistido e a prévia do editor. O painel permite inserir, excluir, reordenar, ampliar e substituir figuras. Em cada item, o botão de geração de legenda fica entre Ampliar e Substituir, pois atua sobre aquela figura. A edição da legenda é enviada com debounce; quando a fila retorna um valor persistido diferente, o campo local é sincronizado para não conservar valor obsoleto.
 
 Esse botão envia apenas `operationId`, `laudoId`, `imagemId` e `modo: 'legenda'`. O main valida vínculo, MIME, tamanho, privacidade e visão antes de carregar a imagem. A IA deve retornar uma legenda técnico-pericial em uma única linha, sem prefixo ou quebra, com no máximo 15 palavras. O texto volta ao editor de legenda para revisão humana: não é salvo, inserido nem aplicado automaticamente.
 
@@ -28,7 +29,7 @@ Substituição conserva operação única de undo: atualiza `src`, `data-image-i
 
 IA e Ilustrações ocupam docks direitos mutuamente exclusivos. O dock de Ilustrações varia de 320 a 720 px e persiste a largura integrada. O trilho e painel ficam sticky durante a rolagem do documento, com altura ajustada ao espaço visível da viewport; a lista de imagens mantém rolagem própria com `overscroll` contido. Ao abrir ou redimensionar quando não há espaço para editor (mínimo de 560 px), painel e trilho, o controlador recolhe o dock sem perder a largura salva ou desmontar o editor. As regras compartilhadas de layout ficam em `spec/04 layout/componentes_ui_base.md`.
 
-A janela destacada reutiliza o painel e persiste somente dimensões, limitadas a 90% da área útil; pode coexistir com a janela de IA. O fluxo GDL recebe apenas `laudoId`; o main resolve REP e reobtém ZIP para captura. Thumbnails são temporárias, não persistidas nem usadas como arquivo final. Mudanças em contratos exigem alinhar serviço, handler, `ALLOWED_CHANNELS`, preload, tipos, dock e janela.
+A janela destacada reutiliza o painel e persiste somente dimensões, limitadas a 90% da área útil; pode coexistir com a janela de IA. O fluxo GDL recebe laudoId; o main resolve a REP e abre uma sessão temporária com ZIP para listagem, miniaturas e captura, sem baixar o ZIP novamente a cada seleção. Miniaturas não são o arquivo final. O cache de hashes e a exclusão visual de duplicatas ficam em spec/08 gdl/api_gdl.md. Mudanças em contratos exigem alinhar serviço, handler, `ALLOWED_CHANNELS`, preload, tipos, dock e janela.
 
 ## Inserção, remoção e identidade
 
@@ -36,7 +37,7 @@ A janela destacada reutiliza o painel e persiste somente dimensões, limitadas a
 
 Antes de inserir, a página revalida instância, seção e bookmark; no editor único, o alvo precisa permanecer dentro do conteúdo de uma seção. Posição inválida não insere em outro local: o painel tenta excluir a derivação recém-criada e orienta selecionar novamente. Persistência, inserção no DOM e arquivamento são sequenciais; falha de compensação ou arquivamento não constitui rollback transacional. Após sucesso, a derivação é arquivada na fila e o HTML continua pendente até salvar o laudo.
 
-O **+** do painel e **Inserir todas** têm outro destino explícito: o final de ILUSTRAÇÕES, criando a seção quando necessário. A fila visível exclui IDs presentes no editor; inserir todas carrega imagens completas sequencialmente e pede confirmação acima de 30. Miniaturas são carregadas em lotes de 30. Edição/substituição usa o índice da ocorrência para distinguir duas figuras da mesma imagem; o ID de arquivo isolado não identifica uma ocorrência ambígua.
+O **+** do painel e **Inserir todas** têm outro destino explícito: o final de ILUSTRAÇÕES, criando a seção quando necessário. A fila visível exclui IDs presentes no editor; inserir todas prepara prévias sequencialmente, admite sucesso parcial e retorna os IDs efetivamente inseridos para atualizar a fila, com confirmação acima de 30. Miniaturas são carregadas em lotes de 30. Edição/substituição usa o índice da ocorrência para distinguir duas figuras da mesma imagem; o ID de arquivo isolado não identifica uma ocorrência ambígua.
 
 Excluir figura real pelo painel primeiro a disponibiliza novamente na fila; só depois remove seu HTML. Dummy não precisa de operação de arquivo. ILUSTRAÇÕES desaparece apenas quando vazia e sem subseções: texto, tabela ou outra mídia impedem a remoção. No editor único a remoção participa do undo; no modo por seções a exclusão da seção pode oferecer **Desfazer** no toast.
 
@@ -59,3 +60,19 @@ Clicar na imagem de uma figura real abre o dock integrado de Ilustrações, reco
 No seletor em modo **substituir**, **Buscar REP** fica junto de **Carregar arquivo local**, mesmo quando já há imagens na fila. Ao carregar a Lista de Fotos da REP, `GdlImagensRepModal` pré-seleciona os arquivos com `provavelImagem` e sem `status`. A seleção pode ser revista antes da captura; não representa download/persistência automática e não inclui itens com status impeditivo.
 
 `gdl-imagens-rep-modal.component.test.tsx` e `seletor-figura-dialog.component.test.tsx` cobrem seleção inicial e acesso à busca com fila preenchida. `ilustracoes-panel-rolagem.component.test.tsx` e `painel-lateral-redimensionavel.component.test.tsx` verificam a estrutura de rolagem e o trilho com acesso aos atalhos; interação real entre iframe, dock e janela destacada exige smoke manual.
+
+## Estágio, persistência e limpeza
+
+imagem-laudo.service.ts mantém bytes originais e miniatura de até 300 px no maior lado em memória, com limite global de 256 MiB para o estágio. Listar/obter/descartar estágio não grava em SQLite. Os canais ilustracoes:estagiar-imagem, listar-estagio, obter-imagem-estagio e descartar-estagio sustentam esse fluxo; preparar-insercao promove a imagem ao armazenamento e gera a prévia. Se falhar a geração depois da promoção, tenta excluir a imagem persistida; o estágio só é retirado após sucesso. O renderer usa resumos/miniaturas e solicita a imagem completa para ampliar ou editar.
+
+O armazenamento por bytes conserva as fotos GDL originais. A antiga redução para JPEG de 1600 px/qualidade 82 serve somente para reconhecer hashes legados no fluxo GDL. Ajustes de recorte continuam em derivações próprias, com a cadeia de origem preservada. Uma limitação atual é que atualizarLegenda/atualizarOrdem escrevem somente em SQLite: para imagem ainda apenas estagiada, a edição visível no renderer não atualiza os metadados guardados no estágio. Não presumir persistência dessas alterações antes da promoção.
+
+A migration v48 adiciona imagens_laudo.temporaria_sessao INTEGER NOT NULL DEFAULT 0. Novos registros entram com 1; os antigos permanecem 0. O marcador torna o registro elegível para limpeza, sem substituir a conferência do HTML salvo. ilustracoes:encerrar-sessao descarta o estágio e remove somente imagens marcadas sem referência no conteúdo persistido nem em sua cadeia de imagem_origem_id. A mesma limpeza roda na inicialização; erro é registrado sem impedir a abertura do aplicativo. Exclusões de registros são transacionais por laudo; arquivos são removidos depois e somente sem referências restantes. Não remove indiscriminadamente a fila legada nem trata HTML ainda não salvo como preservação. Fechar sem salvar pode remover fotos novas e derivações que só existiam no rascunho.
+
+## Prévia adaptativa e saída
+
+ImagensPage.tsx, em /imagens no menu de configurações, separa **Prévia no editor** de **Imagem enviada para descrição por IA**. perfil_previa_editor é texto validado: economico (480–640 px, padrão), equilibrado (640–960 px) ou nitido (960–1280 px), medidos no maior lado. Novas instalações sem preferência salva iniciam em Econômico; valor ausente ou inválido também usa esse padrão. Preferências válidas já salvas continuam prevalecendo, sem migration ou sobrescrita automática. prepararImagemEditorLaudo() usa o maior tamanho CSS vezes a densidade limitada a 1–4, contido no intervalo do perfil, sem ampliar a imagem original. PNG/GIF produzem prévia PNG; demais formatos, JPEG de qualidade 80. Miniaturas, prévias e arquivos de impressão têm finalidades distintas.
+
+Inserção e substituição gravam data-imagem-previa="true" no figure. Redimensionamento solicita nova prévia segundo as dimensões exibidas. Ao salvar, compactarFigurasParaEditor() substitui data URIs grandes de figuras reais identificadas por uma prévia de até 960 px somente se menor; usa cache por ID na operação. Ignora dummy e figuras já marcadas; se não obtiver recurso local mantém o HTML recebido. Compactação não transforma a prévia no original.
+
+Para PDF/DOCX/ODT, resolverImagensImpressaoLaudo() busca cada ID marcado em ilustracoes:obter-imagem-impressao, remove o marcador da cópia de saída e exige recurso válido do mesmo laudo. O main confere SHA-256 do arquivo e prepara a resolução proporcional de impressão. Não modifica HTML salvo nem substitui o arquivo local. Testes existentes: imagem-laudo-previa.integration.test.ts, imagem-laudo-limpeza.integration.test.ts, compactacao-figuras-laudo.test.ts e imagens-impressao-laudo.test.ts; colagem, arraste, resize e janela destacada ainda exigem smoke visual.

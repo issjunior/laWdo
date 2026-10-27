@@ -46,4 +46,17 @@ describe('pendências para conclusão do laudo', () => {
       { titulo: '2. Ilustrações', camposReservados: 0, figurasDummy: 1 },
     ]);
   });
+
+  it('ignora campos e figuras de blocos suprimidos sem ocultar pendências visíveis', () => {
+    const html = '<h2 data-estrutura-nivel="2">DAS ARMAS</h2>'
+      + '<p><span data-reservado="true">XXX</span></p>'
+      + '<div class="cond-bloco" data-cond-suprimido="true">'
+      + '<p><span data-reservado="true">XXX</span> e XXX</p>'
+      + '<figure class="laudo-figure" data-dummy="true"></figure></div>';
+
+    expect(identificarPendenciasConclusaoLaudo(html).secoes).toEqual([
+      { titulo: '1. DAS ARMAS', camposReservados: 1, figurasDummy: 0 },
+    ]);
+    expect(identificarPendenciasConclusaoLaudo(html.replace('<p><span data-reservado="true">XXX</span></p>', '')).secoes).toEqual([]);
+  });
 });

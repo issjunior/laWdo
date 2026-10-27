@@ -1,4 +1,4 @@
-type Ouvinte = () => void;
+type Ouvinte = (chave?: string) => void;
 type OuvinteLista = (usuarioId: string, identidade: string) => void;
 const ouvintesContexto = new Set<Ouvinte>();
 const ouvintesLista = new Set<OuvinteLista>();
@@ -13,9 +13,9 @@ export function observarContextoGdl(ouvinte: Ouvinte): () => void {
   return () => { ouvintesContexto.delete(ouvinte); };
 }
 
-export function notificarContextoGdlAlterado(): void {
+export function notificarContextoGdlAlterado(chave?: string): void {
   versaoContexto += 1;
-  for (const ouvinte of ouvintesContexto) ouvinte();
+  for (const ouvinte of ouvintesContexto) ouvinte(chave);
 }
 
 export function observarListaGdl(ouvinte: OuvinteLista): () => void {

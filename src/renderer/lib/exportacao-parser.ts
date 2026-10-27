@@ -40,7 +40,7 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
       resultado.push({ tipo: 'quebra-pagina' });
       continue;
     }
-    if (elemento.matches('.cabecalho,[data-b601-grupo],[data-b601-complemento],[data-repeat-group="b601_pecas"],[data-b601-peca],[data-b601-revisao-secao]')) {
+    if (elemento.matches('.cabecalho,[data-b601-grupo],[data-b601-complemento],[data-b601-coleta],[data-b601-sinab],[data-repeat-group="b601_pecas"],[data-b601-peca],[data-b601-revisao-secao]')) {
       resultado.push(...blocos(elemento, emTabela));
       continue;
     }

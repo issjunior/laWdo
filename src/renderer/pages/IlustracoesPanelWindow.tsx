@@ -62,15 +62,26 @@ const IlustracoesPanelWindow: React.FC = () => {
     window.ipcAPI.ilustracoes.sendAction(action, ...args);
   }, []);
 
-  const handleInsertImage = useCallback((url: string, id: string, legenda: string) => {
-    sendAction('insertImage', url, id, legenda);
-    toast.success('Imagem enviada ao editor');
-  }, [sendAction]);
+  const handleInsertImage = useCallback(async (_url: string, id: string, legenda: string) => {
+    const preparada = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, id, 800, 600, window.devicePixelRatio || 1);
+    if (!preparada.success) {
+      toast.error(preparada.error || 'Não foi possível preparar a imagem.');
+      return false;
+    }
+    sendAction('insertImage', '', id, legenda);
+    return true;
+  }, [laudoId, sendAction]);
 
-  const handleInsertAll = useCallback((imagens: ImagemLaudo[]) => {
-    sendAction('insertAll', imagens);
-    toast.success(`${imagens.length} imagens enviadas ao editor`);
-  }, [sendAction]);
+  const handleInsertAll = useCallback(async (imagens: ImagemLaudo[]) => {
+    const preparadas: ImagemLaudo[] = [];
+    for (const imagem of imagens) {
+      const resposta = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, imagem.id, 800, 600, window.devicePixelRatio || 1);
+      if (resposta.success) preparadas.push(imagem);
+      else toast.error(resposta.error || 'Não foi possível preparar a imagem.');
+    }
+    if (preparadas.length > 0) sendAction('insertAll', preparadas);
+    return preparadas.map(imagem => imagem.id);
+  }, [laudoId, sendAction]);
 
   const handleDeleteImage = useCallback((imageId: string) => {
     sendAction('deleteImage', imageId);
@@ -107,10 +118,15 @@ const IlustracoesPanelWindow: React.FC = () => {
     sendAction('scrollToFigure', imageId);
   }, [sendAction]);
 
-  const handleReplaceImage = useCallback((imageId: string, imagem: ImagemLaudo, indice?: number) => {
+  const handleReplaceImage = useCallback(async (imageId: string, imagem: ImagemLaudo, indice?: number) => {
+    const preparada = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, imagem.id, 800, 600, window.devicePixelRatio || 1);
+    if (!preparada.success) {
+      toast.error(preparada.error || 'Não foi possível preparar a imagem.');
+      return false;
+    }
     sendAction('replaceImage', imageId, imagem, indice);
-    toast.success('Figura enviada para substituição');
-  }, [sendAction]);
+    return true;
+  }, [laudoId, sendAction]);
 
   const handleEditImage = useCallback((indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => {
     sendAction('editImage', indice, imagem, imagemOrigemId, imagemAnteriorId);

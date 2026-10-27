@@ -1,10 +1,11 @@
+import { prepararApresentacaoSeletorTabela, seletorTabelaEstaAberto } from './seletores-tabela-laudo';
 import type { Editor } from 'tinymce';
-import { opcoesOrigemColeta } from '@shared/catalogos/balistica-opcoes.catalogo';
+import { opcoesCalibreNominalCartucho, opcoesMarcaCartucho, opcoesOrigemColeta } from '@shared/catalogos/balistica-opcoes.catalogo';
 import { catalogoProjeteis } from '@shared/catalogos/projeteis.catalogo';
 import { criarOpcoesFormatoProjetil, normalizarFormatoProjetil } from '@shared/utils/formato-projetil';
 import { OPCOES_TIPO_PROJETIL_B601 } from '@shared/catalogos/b601.catalogo';
 
-const seletorCampo = '[data-b601-grupo="105"] [data-b601-origem-projetil="true"], [data-b601-grupo="105"] [data-b601-campo-projetil]';
+const seletorCampo = '[data-b601-grupo="105"] [data-b601-origem-projetil="true"], [data-b601-grupo="105"] [data-b601-campo-projetil], [data-b601-grupo="101"] [data-b601-campo-estojo]';
 const seletorControle = 'select[data-b601-campo-select="true"]';
 const seletorTexto = '[data-b601-campo-texto="true"]';
 const seletorLegenda = '[data-b601-legenda-formatos="automatica"], [data-b601-legenda-tipos="automatica"]';
@@ -29,6 +30,13 @@ function carregarFormatosPersonalizados(): Promise<FormatoPersonalizado[]> {
 }
 
 function obterOpcoes(campo: HTMLElement, personalizados: readonly FormatoPersonalizado[], atual: string): { texto: string; valor: string }[] {
+  const campoEstojo = campo.getAttribute('data-b601-campo-estojo');
+  if (campoEstojo) {
+    if (campoEstojo === 'marca') return opcoesMarcaCartucho.map(opcao => ({ texto: opcao.label, valor: opcao.label }));
+    if (campoEstojo === 'calibre_nominal') return opcoesCalibreNominalCartucho.map(opcao => ({ texto: opcao.label, valor: opcao.label }));
+    return ['composicao', 'espoleta'].includes(campoEstojo)
+      ? ['Latonado', 'Niquelado'].map(valor => ({ texto: valor, valor })) : [];
+  }
   const tipo = campo.getAttribute('data-b601-campo-projetil');
   if (tipo === 'tipo') return OPCOES_TIPO_PROJETIL_B601.map(opcao => ({ texto: opcao.valor, valor: opcao.valor }));
   return tipo === 'constituicao_formato'
@@ -128,13 +136,15 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
     }
     const textoAtual = texto.textContent?.trim() || '';
     const atual = textoAtual === 'XXX' ? '' : textoAtual;
-    const identificador = campo.getAttribute('data-b601-pq') || 'projétil';
+    const identificador = campo.getAttribute('data-b601-pq') || campo.getAttribute('data-b601-identificador') || 'projétil';
     const tipo = campo.getAttribute('data-b601-campo-projetil');
+    const campoEstojo = campo.getAttribute('data-b601-campo-estojo');
+    const rotulosEstojos: Record<string, string> = { marca: 'Marca', calibre_nominal: 'Calibre Nominal', composicao: 'Composição do Estojo', espoleta: 'Espoleta' };
     const ehFormato = tipo === 'constituicao_formato';
-    const rotulo = ehFormato ? 'Constituição e formato' : tipo === 'tipo' ? 'Tipo' : 'Origem/coleta';
+    const rotulo = campoEstojo ? rotulosEstojos[campoEstojo] || campoEstojo : ehFormato ? 'Constituição e formato' : tipo === 'tipo' ? 'Tipo' : 'Origem/coleta';
     const aviso = atual ? `${rotulo} de ${identificador}`
       : texto.querySelector('[data-aviso-reservado]')?.getAttribute('data-aviso-reservado')
-        || (tipo === 'tipo' || ehFormato ? `Campo de preenchimento manual no laudo: ${rotulo} — ${identificador}` : `Campo pendente na REP: ORIGEM/COLETA — ${identificador}`);
+        || (tipo === 'tipo' || ehFormato || campoEstojo ? `Campo de preenchimento manual no laudo: ${rotulo} — ${identificador}` : `Campo pendente na REP: ORIGEM/COLETA — ${identificador}`);
     let controle = campo.querySelector<HTMLSelectElement>(seletorControle);
     if (!controle) {
       controle = raiz.ownerDocument.createElement('select');
@@ -144,7 +154,7 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
     }
     const opcoes = obterOpcoes(campo, personalizados, atual);
     if (atual && !opcoes.some(opcao => opcao.valor === atual)) opcoes.unshift({ texto: atual, valor: atual });
-    if (!atual) opcoes.unshift({ texto: 'XXX — Selecione...', valor: '' });
+    if (!atual) opcoes.unshift({ texto: tipo === 'tipo' || ehFormato || campoEstojo ? 'XXX' : 'XXX', valor: '' });
     controle.replaceChildren(...opcoes.map(opcao => {
       const elemento = raiz.ownerDocument.createElement('option');
       elemento.value = opcao.valor;
@@ -152,13 +162,7 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
       elemento.disabled = !opcao.valor;
       return elemento;
     }));
-    if (ehFormato && atual) {
-      const apresentacao = raiz.ownerDocument.createElement('option');
-      apresentacao.value = atual;
-      apresentacao.textContent = atual;
-      apresentacao.hidden = true;
-      controle.prepend(apresentacao);
-    }
+    prepararApresentacaoSeletorTabela(controle);
     controle.value = atual;
     controle.classList.toggle('campo-reservado', !atual);
     controle.setAttribute('aria-label', `${rotulo} de ${identificador}`);
@@ -222,21 +226,23 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
   };
   const preservarInteracao = (evento: MouseEvent | KeyboardEvent) => {
     const alvo = evento.target;
-    if (!(alvo instanceof janela.HTMLSelectElement) || !alvo.matches(seletorControle)) return;
+    if (!(alvo instanceof janela.Element)) return;
+    const controle = alvo.closest<HTMLSelectElement>(seletorControle);
+    if (!controle) return;
     if (evento instanceof janela.KeyboardEvent && (evento.ctrlKey || evento.metaKey)) return;
-    if (evento instanceof janela.KeyboardEvent && !evento.altKey
-      && alvo.closest('[data-b601-campo-projetil="constituicao_formato"]')
+    if (evento instanceof janela.KeyboardEvent && !evento.altKey && !seletorTabelaEstaAberto(controle)
+      && controle.closest('[data-b601-campo-projetil="constituicao_formato"]')
       && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(evento.key)) {
       evento.preventDefault();
-      // A opção oculta de apresentação não participa da navegação entre formatos.
-      const opcoes = Array.from(alvo.options).filter(opcao => !opcao.hidden && !opcao.disabled);
-      const atual = opcoes.findIndex(opcao => opcao.value === alvo.value);
+      // Preserva a navegação direta com o seletor fechado; a lista aberta usa o teclado nativo.
+      const opcoes = Array.from(controle.options).filter(opcao => !opcao.hidden && !opcao.disabled);
+      const atual = opcoes.findIndex(opcao => opcao.value === controle.value);
       const indice = evento.key === 'Home' ? 0 : evento.key === 'End' ? opcoes.length - 1
         : evento.key === 'ArrowUp' ? Math.max(0, atual - 1) : Math.min(opcoes.length - 1, atual + 1);
       const opcao = opcoes[indice];
-      if (opcao && opcao.value !== alvo.value) {
-        alvo.value = opcao.value;
-        alvo.dispatchEvent(new janela.Event('change', { bubbles: true }));
+      if (opcao && opcao.value !== controle.value) {
+        controle.value = opcao.value;
+        controle.dispatchEvent(new janela.Event('change', { bubbles: true }));
       }
     }
     evento.stopImmediatePropagation();

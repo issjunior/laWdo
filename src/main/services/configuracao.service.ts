@@ -77,7 +77,7 @@ class ConfiguracaoService {
         log.info('Configuração criada', { chave });
       }
       if (chave.startsWith('gdl_')) {
-        notificarContextoGdlAlterado();
+        notificarContextoGdlAlterado(chave);
         notificarAvisosGdlAlterados(true);
       }
     } catch (error) {

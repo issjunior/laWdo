@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { excluirTabelaPlaceholder } from '@/lib/apresentacao-placeholders';
-import { renumerarTabelas, renumerarTabelasHtml } from '@/lib/numeracao-tabelas';
+import { conferirNumeracaoTabelasEditores, renumerarTabelas, renumerarTabelasHtml } from '@/lib/numeracao-tabelas';
 
 describe('numeração de tabelas do laudo', () => {
   it('numera captions e primeiras células em sequência sem perder a marcação do título', () => {
@@ -58,5 +58,40 @@ describe('numeração de tabelas do laudo', () => {
 
     expect(documento.querySelectorAll('caption')[0].textContent).toBe('TABELA 9 – Prévia');
     expect(documento.querySelectorAll('caption')[1].textContent).toBe('TABELA 1 – Real');
+  });
+
+  it('corrige prévias sem serializar editores quando o conteúdo persistível não mudou', () => {
+    const raiz = document.createElement('div');
+    raiz.innerHTML = '<div data-placeholder-preview="true"><table><tr><td>TABELA 9 – Prévia</td></tr></table></div>';
+    const getContent = vi.fn(() => raiz.innerHTML);
+    const editor = {
+      getBody: () => raiz,
+      getContent,
+      undoManager: { ignore: (acao: () => void) => acao() },
+    } as unknown as TinyMceEditorInstance;
+
+    expect(conferirNumeracaoTabelasEditores([editor], false)).toEqual({ alteradoPersistente: false, conteudos: null });
+    expect(raiz.querySelector('td')?.textContent).toBe('TABELA 1 – Prévia');
+    expect(getContent).not.toHaveBeenCalled();
+    expect(conferirNumeracaoTabelasEditores([editor], true).conteudos).toEqual([raiz.innerHTML]);
+    expect(getContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('lê os editores após correção persistente e mantém a sequência entre seções', () => {
+    const raizes = [document.createElement('div'), document.createElement('div')];
+    raizes[0].innerHTML = '<table><tr><td>TABELA 1 – Primeira</td></tr></table>';
+    raizes[1].innerHTML = '<table><tr><td>TABELA 9 – Segunda</td></tr></table>';
+    const leituras = raizes.map(raiz => vi.fn(() => raiz.innerHTML));
+    const editores = raizes.map((raiz, indice) => ({
+      getBody: () => raiz,
+      getContent: leituras[indice],
+      undoManager: { ignore: (acao: () => void) => acao() },
+    } as unknown as TinyMceEditorInstance));
+
+    const resultado = conferirNumeracaoTabelasEditores(editores, false);
+    expect(resultado.alteradoPersistente).toBe(true);
+    expect(resultado.conteudos?.[1]).toContain('TABELA 2 – Segunda');
+    expect(leituras[0]).toHaveBeenCalledTimes(1);
+    expect(leituras[1]).toHaveBeenCalledTimes(1);
   });
 });

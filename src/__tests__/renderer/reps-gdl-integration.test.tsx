@@ -16,7 +16,9 @@ vi.mock('@/contexts/AlteracoesPendentesContext', () => ({
 }))
 
 vi.mock('@/components/data-table/data-table', () => ({
-  DataTable: () => <div data-testid="tabela-reps" />,
+  DataTable: ({ data, columns }: { data: unknown[]; columns: Array<{ id?: string; cell?: (contexto: { row: { original: unknown } }) => React.ReactNode }> }) => (
+    <div data-testid="tabela-reps">{data.map((rep, indice) => <div key={indice}>{columns.find(coluna => coluna.id === 'actions')?.cell?.({ row: { original: rep } })}</div>)}</div>
+  ),
 }))
 
 vi.mock('@/components/rep/RepStepper', () => ({
@@ -184,6 +186,28 @@ describe('integração da consulta geral GDL com REPsPage', () => {
   afterAll(() => {
     Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true })
   })
+
+  it.each(['com-tabela', 'sem-tabela'])('cria sem consultar as REPs do caso: %s', async cenario => {
+    vi.mocked(sessionStorage.getItem).mockReturnValue(JSON.stringify({ id: 'perito-1', username: 'perito', name: 'Perito', email: 'p@teste.local' }));
+    const criar = vi.fn().mockResolvedValue({ success: true, data: { id: 'laudo-novo', conteudo: cenario === 'sem-tabela' ? '<p>Outro template</p>' : '{{b601_tabela_material_coleta}}' } });
+    const consultar = vi.fn();
+    Object.defineProperty(window, 'ipcAPI', { writable: true, value: {
+      ...window.ipcAPI,
+      rep: { ...window.ipcAPI.rep, findAll: vi.fn().mockResolvedValue({ success: true, data: [{ id: 'rep-1', numero: '100/2026', tipo_exame_id: 'tipo-b602', status: 'Pendente' }] }) },
+      laudo: { ...window.ipcAPI.laudo, create: criar },
+      template: { findByTipoExame: vi.fn().mockResolvedValue({ success: true, data: [{ id: 'template-1', nome: 'Laudo Padrão B-602' }] }) },
+      gdl: { ...window.ipcAPI.gdl, consultarRepsMesmoCaso: consultar },
+    } });
+    render(<MemoryRouter><REPsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar laudo para REP 100/2026' }));
+    const botao = await screen.findByRole('button', { name: 'Criar Laudo' });
+    await waitFor(() => expect(botao).toBeEnabled());
+    fireEvent.click(botao);
+    expect(await screen.findByText('Laudo criado com sucesso!')).toBeInTheDocument();
+    expect(consultar).not.toHaveBeenCalled();
+    expect(criar).toHaveBeenCalledTimes(1);
+    vi.mocked(sessionStorage.getItem).mockReturnValue(null);
+  });
 
   it.each(['B-601', 'B-602'])('seleciona o template padrão de %s após importar e oculta somente o aviso informativo B601', async codigo => {
     const tipoId = codigo === 'B-601' ? 'tipo-b601' : 'tipo-b602';

@@ -4,11 +4,23 @@ import { CABECALHO_PRIMEIRA_PAGINA_PADRAO, CABECALHO_TODAS_PAGINAS_PADRAO, norma
 export const CHAVE_CABECALHO_DOCUMENTO = 'cabecalho_documento';
 export const CHAVE_FECHAMENTO_LAUDO = 'fechamento_laudo';
 
-export const esquemaCabecalhoLaudo = z.object({
-  habilitado: z.boolean(),
+const esquemaCabecalhoAtual = z.object({
+  primeiraPaginaHabilitada: z.boolean(),
+  todasPaginasHabilitadas: z.boolean(),
   primeiraPagina: z.string(),
   todasPaginas: z.string(),
 });
+const esquemaCabecalhoLegado = z.object({
+  habilitado: z.boolean(),
+  primeiraPagina: z.string(),
+  todasPaginas: z.string(),
+}).transform(({ habilitado, primeiraPagina, todasPaginas }) => ({
+  primeiraPaginaHabilitada: habilitado,
+  todasPaginasHabilitadas: habilitado,
+  primeiraPagina,
+  todasPaginas,
+}));
+export const esquemaCabecalhoLaudo = z.union([esquemaCabecalhoAtual, esquemaCabecalhoLegado]);
 export const esquemaFechamentoLaudo = z.object({
   habilitado: z.boolean(),
   conteudo: z.string(),
@@ -31,7 +43,8 @@ export const MODELO_FECHAMENTO_LAUDO = `<p style="text-align: center; text-inden
 <p style="text-align: center; text-indent: 0px; margin: 0px; font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.15; font-weight: bold; font-style: italic; color: #000000;">UETC <span class="placeholder-tag" contenteditable="false" data-placeholder="{{perito_lotacao}}">{{perito_lotacao}}</span> - Polícia Científica do Paraná</p>`;
 
 export const CABECALHO_LAUDO_PADRAO: CabecalhoLaudo = {
-  habilitado: true,
+  primeiraPaginaHabilitada: true,
+  todasPaginasHabilitadas: true,
   primeiraPagina: CABECALHO_PRIMEIRA_PAGINA_PADRAO,
   todasPaginas: CABECALHO_TODAS_PAGINAS_PADRAO,
 };

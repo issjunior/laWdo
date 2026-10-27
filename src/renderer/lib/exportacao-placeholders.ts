@@ -6,6 +6,7 @@ import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import { numeroInteiroPorExtenso } from '@/lib/numero-extenso';
 import { TEXTOS_ESTOJOS_B602 } from '@shared/catalogos/b602-textos-estojos.catalogo';
+import { TEXTOS_CARTUCHOS_B602 } from '@shared/catalogos/b602-textos-cartuchos.catalogo';
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
 import { normalizarCodigoPlaceholders } from '@/lib/utils';
 import { normalizarApresentacaoTabelas } from '@/lib/tabelas-apresentacao';
@@ -13,6 +14,8 @@ import { ajustarTabelasBalistica } from '@/lib/tabelas-balistica-layout';
 import { descreverPlaceholderPendente } from '@/lib/placeholder-pendente';
 import { limparInteracaoCamposB601 } from '@/lib/b601-campos-projetil';
 import { criarHtmlCampoReservado } from '@shared/utils/campo-reservado';
+import { esquemaRepsMesmoCasoGdl, sugerirRepColeta } from '@shared/gdl/reps-mesmo-caso';
+import { limparInteracaoColetaB601 } from '@/lib/b601-coleta';
 
 function numToLetra(n: number): string {
   if (n < 26) return String.fromCharCode(65 + n);
@@ -35,7 +38,10 @@ function formatarDataExtenso(iso: string | undefined): string {
   try {
     const data = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
     if (isNaN(data.getTime())) return iso;
-    return data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const dia = data.toLocaleDateString('pt-BR', { day: 'numeric' });
+    const mes = data.toLocaleDateString('pt-BR', { month: 'long' });
+    const ano = data.toLocaleDateString('pt-BR', { year: 'numeric' });
+    return `${dia} dias do mês de ${mes} de ${ano}`;
   } catch {
     return iso;
   }
@@ -111,6 +117,7 @@ function lerPeritoSessao(): PeritoSessaoData | null {
 
 export interface ExportacaoContext {
   larguraUtilTabelasCm?: number;
+  ambienteGdl?: 'producao' | 'homologacao' | null;
   repData: RepExportacaoData;
   solicitanteNome?: string;
   tipoExameNome?: string;
@@ -296,6 +303,24 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
                 ausente(peca.campos.tipo, prefixo + 'tipo'), ausente(peca.campos.identificacao, prefixo + 'identificacao'),
                 ausente(peca.campos.lacre_entrada, prefixo + 'lacre_entrada')];
             }));
+        const referencias = esquemaRepsMesmoCasoGdl.safeParse(integracaoGdl?.repsMesmoCaso);
+        const identificacaoColeta = String(repData.numero || '').match(/^([\d.\s]+)\s*[-/]\s*(\d{4})$/);
+        const snapshot = referencias.success && (ctx.ambienteGdl === undefined || referencias.data.ambiente === ctx.ambienteGdl) && identificacaoColeta
+          && referencias.data.numeroRep === identificacaoColeta[1].replace(/\D/g, '')
+          && referencias.data.anoRep === identificacaoColeta[2]
+          ? referencias.data : undefined;
+        mapping.b601_tabela_material_coleta = dados.semPecas ? '<p>REP declarada sem peças para exame.</p>'
+          : `<div data-b601-coleta="true"${snapshot ? ` data-b601-referencias="${escapar(JSON.stringify(snapshot))}"` : ''}>`
+            + buildNumberedTable('TABELA 2 – MATERIAL ENCAMINHADO A EXAME', ['Tipo', 'Qtde', 'Origem', 'Nº Exame Coleta', 'Lacre'],
+              pecas.map(peca => {
+                const origem = peca.campos.origem_coleta || '';
+                const sugestao = sugerirRepColeta(origem, snapshot);
+                return [`<span data-b601-campo-coleta="tipo">${ausente(peca.campos.tipo, `b601_peca_${peca.indice}_tipo`)}</span>`,
+                  `<span data-b601-campo-coleta="quantidade" data-b601-unidade="${escapar(peca.campos.medida)}" data-b601-quantidade-original="${escapar(`${peca.campos.quantidade} ${peca.campos.medida}`)}">${escapar(`${peca.campos.quantidade} ${peca.campos.medida}`)}</span>`,
+                  `<span data-b601-campo-coleta="origem">${origem ? escapar(origem) : criarCampoReservado()}</span>`,
+                  `<span data-b601-exame-coleta="true" data-b601-peca-id="${escapar(peca.idLocal)}" data-b601-origem="${escapar(origem)}">${sugestao ? escapar(sugestao) : criarCampoReservado()}</span>`,
+                  ausente(peca.campos.lacre_entrada, `b601_peca_${peca.indice}_lacre_entrada`)];
+              })) + '</div>';
         for (const peca of pecas) {
           for (const [campo, valor] of Object.entries(peca.campos)) mapping['b601_peca_' + peca.indice + '_' + campo] = valor;
         }
@@ -410,6 +435,10 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
           mapping['b602_total_cartuchos'] = String(
             cartuchos.reduce((sum, item) => sum + (parseInt(String(item.quantidade || '0')) || 0), 0)
           );
+          mapping['b602_total_cartuchos_extenso'] = numeroInteiroPorExtenso(Number(mapping['b602_total_cartuchos']));
+          mapping['b602_cartuchos_descricao'] = Number(mapping['b602_total_cartuchos']) === 1
+            ? TEXTOS_CARTUCHOS_B602.singular
+            : TEXTOS_CARTUCHOS_B602.plural;
         }
         if (estojos) {
           mapping['b602_total_estojos'] = String(
@@ -550,6 +579,9 @@ function removerAncorasTabelasPersonalizadas(doc: Document): void {
 export function limparIndicadoresCondicionais(html: string): string {
   const documento = new DOMParser().parseFromString(html, 'text/html');
   limparInteracaoCamposB601(documento.body);
+  limparInteracaoColetaB601(documento.body);
+  documento.querySelectorAll('[data-b601-referencias]').forEach(elemento => elemento.removeAttribute('data-b601-referencias'));
+  documento.querySelectorAll('[data-b601-sinab="opcional"]:not(:has([data-b601-sinab-texto]))').forEach(elemento => elemento.remove());
   documento.querySelectorAll('[data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
   documento.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {
     bloco.removeAttribute('data-cond-em-edicao');

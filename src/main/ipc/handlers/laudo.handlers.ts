@@ -3,6 +3,7 @@ import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
+import { withTransaction } from '../../database/sqlite.js';
 import {
   exportarLaudo,
   verificarLibreOffice,
@@ -242,7 +243,12 @@ export const registerLaudoHandlers = (): void => {
       if (!laudoAntes) return { success: false, error: 'Laudo não encontrado' };
 
       const statusAnterior = laudoAntes.status;
-      const laudo = await laudoService.updateStatus(laudoId, novoStatus);
+      const laudo = await withTransaction(async () => {
+        const atualizado = await laudoService.updateStatus(laudoId, novoStatus);
+        const repAtualizada = await repService.updateStatus(laudoAntes.rep_id, novoStatus === 'Em andamento' ? 'Em Andamento' : 'Concluído');
+        if (!repAtualizada) throw new Error('Não foi possível atualizar o status da REP vinculada');
+        return atualizado;
+      });
 
       const rep = await repService.findById(laudoAntes.rep_id);
       const repNumero = rep?.numero ?? laudoAntes.rep_id;

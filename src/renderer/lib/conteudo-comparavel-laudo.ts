@@ -7,15 +7,16 @@ export function normalizarConteudoComparavel(html: string): string {
   const documento = new DOMParser().parseFromString(html, 'text/html');
   removerFormatacaoPlaceholdersDoDom(documento.body);
   renumerarTabelas(documento.body);
-  documento.body.querySelectorAll('[data-b601-origem-projetil="true"], [data-b601-campo-projetil]').forEach(campo => {
+  documento.body.querySelectorAll('[data-b601-referencias]').forEach(tabela => tabela.removeAttribute('data-b601-referencias'));
+  documento.body.querySelectorAll('[data-b601-origem-projetil="true"], [data-b601-campo-projetil], [data-b601-campo-estojo]').forEach(campo => {
     campo.replaceWith(...Array.from(campo.childNodes));
   });
   Array.from(documento.body.childNodes).forEach(no => {
     if (no.nodeType !== Node.TEXT_NODE || no.textContent?.trim()) return;
     const anterior = no.previousSibling;
     const proximo = no.nextSibling;
-    if (anterior instanceof Element && proximo instanceof Element
-      && elementosDeBloco.has(anterior.tagName) && elementosDeBloco.has(proximo.tagName)) no.remove();
+    if ((anterior instanceof Element && elementosDeBloco.has(anterior.tagName))
+      || (proximo instanceof Element && elementosDeBloco.has(proximo.tagName))) no.remove();
   });
   documento.body.querySelectorAll<HTMLElement>('*').forEach(elemento => {
     if (elemento.hasAttribute('data-placeholder')) {

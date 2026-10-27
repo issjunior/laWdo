@@ -546,7 +546,10 @@ export function agendarVisualizacaoPlaceholders(
       return;
     }
     if (resultado.estado === 'falhou') opcoes.aoFalharDefinitivamente?.(resultado);
-    if (resultado.estado === 'aplicado') opcoes.aoAplicar?.();
+    if (resultado.estado === 'aplicado') {
+      editor.dispatch?.('PlaceholdersAplicados');
+      opcoes.aoAplicar?.();
+    }
   }, tentativa === 0 ? 0 : 150);
 
   agendamentos.set(editor, agendamento);

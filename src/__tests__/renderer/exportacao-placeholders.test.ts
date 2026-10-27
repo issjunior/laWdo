@@ -86,7 +86,7 @@ describe('placeholders de exportação', () => {
     })
 
     expect(placeholders.data_recebimento_rep).toBe('23/08/2026')
-    expect(placeholders.data_extenso_recebimento_rep).toBe('25 de agosto de 2026')
+    expect(placeholders.data_extenso_recebimento_rep).toBe('25 dias do mês de agosto de 2026')
   })
 
   it('mantém data de recebimento como fallback sem metadado GDL', () => {
@@ -94,7 +94,7 @@ describe('placeholders de exportação', () => {
       repData: { data_requisicao: '2026-08-23' },
     })
 
-    expect(placeholders.data_extenso_recebimento_rep).toBe('23 de agosto de 2026')
+    expect(placeholders.data_extenso_recebimento_rep).toBe('23 dias do mês de agosto de 2026')
   })
 
   it('inclui valores padrão de placeholders personalizados na resolução', () => {

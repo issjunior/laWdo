@@ -17,6 +17,7 @@ export const CAMPOS_PECA_PLACEHOLDERS_B601 = Array.from(new Map([
 export const PLACEHOLDERS_B601 = [
   ...[
     ['tabela_dados_investigacao', 'Tabela dos dados de investigação'], ['tabela_material_enc', 'Tabela de material encaminhado'],
+    ['tabela_material_coleta', 'Tabela de material e exames de coleta (Local com Necropsia)'],
     ['resumo_lacres_saida', 'Resumo dos lacres de saída'],
     ['envolvidos', 'Envolvidos'], ['data_ocorrencia', 'Data da ocorrência'], ['local', 'Local'],
     ['numero_bo', 'Número do BO'], ['numero_ip', 'Número do IP'], ['solicitante_nome', 'Unidade policial'],

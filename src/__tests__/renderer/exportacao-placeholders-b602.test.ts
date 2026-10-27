@@ -2,8 +2,29 @@ import { describe, expect, it } from 'vitest'
 import { buildPlaceholderMapping, construirMapaPlaceholdersResolvidos, resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders'
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders'
 import { laudoPadraoB602V9 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v9'
+import { laudoPadraoB602V11 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v11'
 
 describe('placeholders B602 canônicos', () => {
+  it.each([
+    { quantidades: ['1'], total: '1', extenso: 'um', descricao: 'cartucho, próprio para uso em armas de fogo, integralmente descrito no quadro a seguir:' },
+    { quantidades: ['1', '1'], total: '2', extenso: 'dois', descricao: 'cartuchos, próprios para uso em armas de fogo, integralmente descritos no quadro a seguir:' },
+    { quantidades: [], total: '0', extenso: 'zero', descricao: 'cartuchos, próprios para uso em armas de fogo, integralmente descritos no quadro a seguir:' },
+  ])('ajusta a descrição dos cartuchos para o total $total', ({ quantidades, total, extenso, descricao }) => {
+    const contexto = { repData: { campos_especificos: JSON.stringify({ b602: {
+      cartuchos: quantidades.map(quantidade => ({ quantidade })),
+    } }) } }
+    const conteudo = laudoPadraoB602V11.secoes.find(secao => secao.chave === 'dos-cartuchos')!.conteudo
+    const html = resolverPlaceholdersExportacao(conteudo, contexto)
+    const documento = new DOMParser().parseFromString(html, 'text/html')
+    expect(documento.querySelector('p')?.textContent).toBe(`Trata-se de ${extenso} ${descricao}`)
+    const mapa = buildPlaceholderMapping(contexto)
+    expect(mapa.b602_total_cartuchos).toBe(total)
+    expect(mapa.b602_total_cartuchos_extenso).toBe(extenso)
+    expect(construirMapaPlaceholdersResolvidos(contexto).b602_cartuchos_descricao.valor).toBe(descricao)
+    expect(CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(campo => campo.chave === 'b602_total_cartuchos_extenso')).toMatchObject({ computed: true })
+    expect(CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(campo => campo.chave === 'b602_cartuchos_descricao')).toMatchObject({ computed: true })
+  })
+
   it.each([
     { quantidades: ['1'], total: '1', inicio: 'Trata-se de um estojo proveniente', descricao: 'integralmente descrito no quadro a seguir:', conclusao: 'O estojo percutido e deflagrado foi retornado', embalagem: 'devidamente embalado,', final: 'encontra-se ineficiente ao fim a que se destina.' },
     { quantidades: ['1', '1'], total: '2', inicio: 'Trata-se de dois estojos provenientes', descricao: 'integralmente descritos no quadro a seguir:', conclusao: 'Os estojos percutidos e deflagrados foram retornados', embalagem: 'devidamente embalados,', final: 'encontram-se ineficientes ao fim a que se destinam.' },

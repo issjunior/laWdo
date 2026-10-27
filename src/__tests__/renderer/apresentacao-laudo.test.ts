@@ -4,10 +4,10 @@ import { parseHtmlParaEstrutura } from '../../renderer/lib/exportacao-parser';
 import { montarFechamentoHtml, resolverDadosPerito } from '../../renderer/lib/apresentacao-laudo';
 import { CABECALHO_LAUDO_PADRAO, FECHAMENTO_LAUDO_PADRAO, type ApresentacaoLaudo, lerApresentacaoLaudo } from '../../shared/configuracoes/apresentacao-laudo';
 
-function apresentacao(cabecalho = true, fechamento = true): ApresentacaoLaudo {
+function apresentacao(primeiraPagina = true, todasPaginas = true, fechamento = true): ApresentacaoLaudo {
   return {
     versao: 1,
-    cabecalho: { habilitado: cabecalho, primeiraPagina: '<p>{{perito_nome}} — {{numero_rep}}</p>', todasPaginas: '<p>{{perito_nome}} {{numero_rep}} {{pagina}}/{{totalPaginas}}</p>' },
+    cabecalho: { primeiraPaginaHabilitada: primeiraPagina, todasPaginasHabilitadas: todasPaginas, primeiraPagina: '<p>{{perito_nome}} — {{numero_rep}}</p>', todasPaginas: '<p>{{perito_nome}} {{numero_rep}} {{pagina}}/{{totalPaginas}}</p>' },
     fechamento: { habilitado: fechamento, conteudo: '<p style="text-align:center;"><strong>{{perito_nome}}</strong></p><p style="text-align:center;">{{perito_lotacao}}</p>', espacamentoAntesPt: 36 },
     perito: { perito_nome: 'Nome preservado', perito_lotacao: 'Unidade preservada' },
   };
@@ -44,28 +44,38 @@ describe('composição do cabeçalho e fechamento', () => {
     expect(html).not.toContain('{{perito_');
   });
 
-  it.each([[true, true], [true, false], [false, true], [false, false]])('respeita cabeçalho=%s e fechamento=%s sem consultar os padrões', async (cabecalho, fechamento) => {
+  it.each([[true, true], [true, false], [false, true], [false, false]])('respeita primeira página=%s e todas as páginas=%s sem consultar os padrões', async (primeiraPagina, todasPaginas) => {
     const obter = vi.fn();
     const original = window.ipcAPI.configuracao;
     window.ipcAPI.configuracao = { ...original, obter };
     try {
-      const resultado = await buildPdfHeaderConfig({ usarCopiaLaudo: true, apresentacaoJson: JSON.stringify(apresentacao(cabecalho, fechamento)), numeroRepFallback: '123/2026' });
-      expect(Boolean(resultado.cabecalhoPrimeiraPagina)).toBe(cabecalho);
-      expect(Boolean(resultado.headerTemplate)).toBe(cabecalho);
-      expect(Boolean(resultado.fechamentoHtml)).toBe(fechamento);
-      if (cabecalho) {
+      const resultado = await buildPdfHeaderConfig({ usarCopiaLaudo: true, apresentacaoJson: JSON.stringify(apresentacao(primeiraPagina, todasPaginas)), numeroRepFallback: '123/2026' });
+      expect(Boolean(resultado.cabecalhoPrimeiraPagina)).toBe(primeiraPagina);
+      expect(Boolean(resultado.headerTemplate)).toBe(todasPaginas);
+      expect(Boolean(resultado.fechamentoHtml)).toBe(true);
+      if (todasPaginas) {
         expect(resultado.headerTemplate).toContain('Nome preservado');
         expect(resultado.headerTemplate).toContain('123/2026');
         expect(resultado.headerTemplate).toContain('class="pageNumber"');
+      }
+      if (primeiraPagina) {
         expect(resultado.cabecalhoPrimeiraPagina).toContain('Nome preservado');
       }
-      if (fechamento) {
-        expect(resultado.fechamentoHtml).toContain('Nome preservado');
-        expect(resultado.fechamentoHtml).toContain('Unidade preservada');
-        expect(resultado.fechamentoHtml).toContain('break-inside:avoid');
-      }
+      expect(resultado.fechamentoHtml).toContain('Nome preservado');
+      expect(resultado.fechamentoHtml).toContain('Unidade preservada');
+      expect(resultado.fechamentoHtml).toContain('break-inside:avoid');
       expect(obter).not.toHaveBeenCalled();
     } finally { window.ipcAPI.configuracao = original; }
+  });
+
+  it.each([true, false])('converte a ativação única=%s dos laudos antigos sem alterar a cópia persistida', async habilitado => {
+    const copia = apresentacao();
+    const legado = { ...copia, cabecalho: { habilitado, primeiraPagina: copia.cabecalho.primeiraPagina, todasPaginas: copia.cabecalho.todasPaginas } };
+    expect(lerApresentacaoLaudo(legado).cabecalho).toMatchObject({ primeiraPaginaHabilitada: habilitado, todasPaginasHabilitadas: habilitado });
+    const resultado = await buildPdfHeaderConfig({ usarCopiaLaudo: true, apresentacaoJson: JSON.stringify(legado) });
+    expect(Boolean(resultado.cabecalhoPrimeiraPagina)).toBe(habilitado);
+    expect(Boolean(resultado.headerTemplate)).toBe(habilitado);
+    expect(legado.cabecalho).toHaveProperty('habilitado', habilitado);
   });
 
   it('preserva texto com caracteres HTML e resolve spans sem usar o usuário conectado', () => {

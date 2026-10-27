@@ -5,10 +5,18 @@ import {
   atualizarOrdemImagensLaudo,
   arquivarImagemLaudo,
   disponibilizarImagemLaudo,
+  descartarImagemEstagiadaLaudo,
+  descartarImagensEstagiadasLaudo,
+  estagiarImagemLaudoPorDataUri,
   excluirImagemLaudo,
   listarResumosImagensLaudo,
+  listarImagensEstagiadasLaudo,
+  limparImagensTemporariasSemReferencia,
   obterImagemLaudoPorId,
+  obterImagemEstagiadaLaudo,
+  obterImagemImpressaoLaudo,
   obterMiniaturasImagensLaudo,
+  prepararImagemEditorLaudo,
   reconciliarImagensLaudo,
   salvarImagemLaudo,
 } from '../../services/imagem-laudo.service.js';
@@ -68,6 +76,26 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
+  ipcMain.handle('ilustracoes:obter-imagem-estagio', async (_event, laudoId: unknown, imagemId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
+      return { success: true, data: obterImagemEstagiadaLaudo(laudoId, imagemId) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao carregar imagem temporária.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:obter-imagem-impressao', async (_event, laudoId: unknown, imagemId: unknown, larguraMaxima: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || typeof imagemId !== 'string' || typeof larguraMaxima !== 'number'
+        || !Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new Error('Imagem para impressão inválida.')
+      return { success: true, data: await executarMedido('obter_imagem_impressao',
+        () => obterImagemImpressaoLaudo(laudoId, imagemId, larguraMaxima), { imagens: 1 }) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao preparar a imagem para impressão.' }
+    }
+  })
+
   ipcMain.handle('ilustracoes:obter-miniaturas', async (_event, laudoId: unknown, ids: unknown) => {
     try {
       if (typeof laudoId !== 'string' || !Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Imagens inválidas.')
@@ -90,6 +118,63 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
       return { success: true, data: await executarMedido('salvar_imagem', () => salvarImagemLaudo(laudoId, dados as SalvarImagemLaudoEntrada), { imagens: 1, bytesEntrada: dados.dataUri.length }) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao salvar imagem do laudo.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:estagiar-imagem', async (_event, laudoId: unknown, entrada: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || !entrada || typeof entrada !== 'object' || Array.isArray(entrada)) throw new Error('Imagem inválida.')
+      const dados = entrada as Partial<SalvarImagemLaudoEntrada>
+      if (typeof dados.id !== 'string' || typeof dados.nomeArquivo !== 'string' || typeof dados.dataUri !== 'string'
+        || typeof dados.legenda !== 'string' || (dados.origem !== 'local' && dados.origem !== 'gdl') || typeof dados.sequencia !== 'number') {
+        throw new Error('Dados da imagem inválidos.')
+      }
+      return { success: true, data: estagiarImagemLaudoPorDataUri(laudoId, dados as SalvarImagemLaudoEntrada) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao preparar imagem temporária.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:listar-estagio', async (_event, laudoId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
+      return { success: true, data: listarImagensEstagiadasLaudo(laudoId) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao listar imagens temporárias.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:preparar-insercao', async (_event, laudoId: unknown, imagemId: unknown,
+    larguraCss: unknown, alturaCss: unknown, densidade: unknown) => {
+    try {
+      if (typeof laudoId !== 'string' || typeof imagemId !== 'string'
+        || typeof larguraCss !== 'number' || typeof alturaCss !== 'number' || typeof densidade !== 'number') throw new Error('Imagem inválida.')
+      return { success: true, data: await executarMedido('preparar_insercao',
+        () => prepararImagemEditorLaudo(laudoId, imagemId, larguraCss, alturaCss, densidade), { imagens: 1 }) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao preparar prévia da imagem.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:descartar-estagio', async (_event, laudoId: unknown, imagemId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
+      if (typeof imagemId === 'string') descartarImagemEstagiadaLaudo(laudoId, imagemId)
+      else descartarImagensEstagiadasLaudo(laudoId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao descartar imagem temporária.' }
+    }
+  })
+
+  ipcMain.handle('ilustracoes:encerrar-sessao', async (_event, laudoId: unknown) => {
+    try {
+      if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
+      descartarImagensEstagiadasLaudo(laudoId)
+      await limparImagensTemporariasSemReferencia(laudoId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Erro ao encerrar sessão de imagens.' }
     }
   })
 
