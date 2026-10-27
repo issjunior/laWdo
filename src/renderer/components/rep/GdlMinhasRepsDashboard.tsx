@@ -132,8 +132,8 @@ export function GdlMinhasRepsDashboard() {
       enableHiding: false,
       accessorFn: rep => `${rep.ano}/${rep.numero.padStart(12, '0')}`,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nº REP" />,
-      cell: ({ row }) => <div className="flex min-w-36 max-w-64 flex-wrap items-center gap-x-2 gap-y-1">
-        <Button variant="link" className="h-auto p-0 font-semibold" onClick={() => selecionar(row.original)}>
+      cell: ({ row }) => <div className="flex min-w-36 max-w-72 flex-wrap items-center gap-x-2 gap-y-1">
+        <Button variant="link" className="h-auto min-w-32 justify-start p-0 font-semibold" onClick={() => selecionar(row.original)}>
           {row.original.numero.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}/{row.original.ano}
         </Button>
         <ReiterandoBadge juntoNumero numeroRep={`${row.original.numero}/${row.original.ano}`} reiterando={row.original.oficioReiterando} />
