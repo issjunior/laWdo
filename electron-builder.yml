@@ -57,4 +57,7 @@ linux:
   category: Office
   maintainer: Polícia Científica do Paraná
 
+deb:
+  artifactName: '${productName}-${version}-${arch}.${ext}'
+
 publish: null
