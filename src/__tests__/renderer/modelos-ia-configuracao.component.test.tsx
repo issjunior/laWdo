@@ -8,7 +8,7 @@ const salvar = vi.fn().mockResolvedValue({ success: true });
 
 beforeEach(() => {
   obter.mockReset();
-  salvar.mockClear();
+  salvar.mockReset().mockResolvedValue({ success: true });
   obter.mockImplementation(async chave => chave === 'api_key_groq'
     ? { success: false }
     : { success: true, data: null });
@@ -124,14 +124,34 @@ describe('configurações de IA', () => {
     expect(salvar).not.toHaveBeenCalled();
   });
 
-  it('bloqueia a qualidade da imagem para IA na página de imagens quando a leitura falha', async () => {
-    obter.mockImplementation(async chave => chave === 'qualidade_imagem_ia'
+  it.each([
+    ['qualidade_imagem_ia', 'Salvar qualidade para IA', 'Salvar prévia do editor'],
+    ['perfil_figura_laudo', 'Salvar perfil do laudo', 'Salvar qualidade para IA'],
+    ['perfil_previa_editor', 'Salvar prévia do editor', 'Salvar perfil do laudo'],
+  ])('bloqueia somente o grupo %s quando a leitura falha', async (chaveComFalha, bloqueado, permitido) => {
+    obter.mockImplementation(async chave => chave === chaveComFalha
       ? { success: false }
       : { success: true, data: null });
     render(<ImagensPage />);
     await waitFor(() => expect(screen.getByText('Não foi possível carregar todas as preferências de imagens.')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Salvar qualidade para IA' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Salvar prévia do editor' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: bloqueado })).toBeDisabled();
+    expect(screen.getByRole('button', { name: permitido })).toBeEnabled();
     expect(salvar).not.toHaveBeenCalled();
+  });
+
+  it.each(['resposta', 'rejeicao'])('mostra falha de gravação %s e permite tentar novamente sem alterar os outros grupos', async falha => {
+    if (falha === 'resposta') salvar.mockResolvedValueOnce({ success: false, error: 'Sem permissão' });
+    else salvar.mockRejectedValueOnce(new Error('Sem permissão'));
+    render(<ImagensPage />);
+    const botao = screen.getByRole('button', { name: 'Salvar perfil do laudo' });
+    await waitFor(() => expect(botao).toBeEnabled());
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Perfil da figura do laudo' })).getByRole('radio', { name: /^Compacto/ }));
+    fireEvent.click(botao);
+    await screen.findByText('Sem permissão');
+    expect(botao).toBeEnabled();
+    fireEvent.click(botao);
+    await screen.findByText('Preferência salva.');
+    expect(salvar).toHaveBeenCalledTimes(2);
+    expect(salvar.mock.calls.every(([chave, valor]) => chave === 'perfil_figura_laudo' && valor === 'compacto')).toBe(true);
   });
 });

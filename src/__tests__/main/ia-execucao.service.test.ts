@@ -169,6 +169,7 @@ describe('ia-execucao.service — descrição de imagem', () => {
   })
 
   it.each([
+    ['muito_economica', 384, 60],
     ['equilibrada', 768, 80],
     ['alta', 1536, 88],
   ] as const)('respeita a qualidade %s salva sem substituir pelo padrão econômico', async (qualidade, larguraMaxima, qualidadeJpeg) => {

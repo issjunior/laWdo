@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ambiente = vi.hoisted(() => ({ diretorio: '', falharPrevia: false, largura: 1600, altura: 900 }));
 
@@ -12,7 +12,7 @@ vi.mock('electron', () => {
     resize: (opcoes: { width: number; height: number }) => criarImagem(opcoes.width, opcoes.height),
     toJPEG: () => Buffer.from(`jpeg:${width}x${height}`),
     toPNG: () => Buffer.from(`png:${width}x${height}`),
-    toBitmap: () => Buffer.alloc(width * height * 4, 255),
+    toBitmap: () => Buffer.from([0, 0, 0, 255]),
   });
   return {
     app: { getPath: () => ambiente.diretorio },
@@ -26,12 +26,11 @@ vi.mock('electron', () => {
 let sqlite: typeof import('../../main/database/sqlite');
 let imagens: typeof import('../../main/services/imagem-laudo.service');
 
-beforeEach(async () => {
+beforeAll(async () => {
   ambiente.diretorio = await mkdtemp(path.join(os.tmpdir(), 'lawdo-previa-'));
   ambiente.falharPrevia = false;
   ambiente.largura = 1600;
   ambiente.altura = 900;
-  vi.resetModules();
   sqlite = await import('../../main/database/sqlite');
   imagens = await import('../../main/services/imagem-laudo.service');
   await sqlite.executeNonQuery('CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT, tipo TEXT)');
@@ -46,7 +45,18 @@ beforeEach(async () => {
   await sqlite.executeNonQuery('CREATE TABLE laudos (id TEXT PRIMARY KEY, conteudo TEXT)');
 });
 
-afterEach(async () => {
+beforeEach(async () => {
+  ambiente.falharPrevia = false;
+  ambiente.largura = 1600;
+  ambiente.altura = 900;
+  imagens.descartarImagensEstagiadasLaudo('laudo');
+  await sqlite.executeNonQuery('DELETE FROM imagens_laudo');
+  await sqlite.executeNonQuery('DELETE FROM laudos');
+  await sqlite.executeNonQuery('DELETE FROM configuracoes');
+  await sqlite.executeNonQuery("INSERT INTO configuracoes VALUES ('perfil_previa_editor', 'equilibrado', 'string')");
+});
+
+afterAll(async () => {
   await sqlite?.closeDatabase();
   await rm(ambiente.diretorio, { recursive: true, force: true });
 });
