@@ -3923,12 +3923,11 @@ export const LaudosPage: React.FC = () => {
       const userId = precisaSenhaParaExcluir(laudoParaExcluir.status) ? getCurrentUserId() : undefined;
       const r = await window.ipcAPI.laudo.delete(laudoParaExcluir.id, userId);
       if (r.success) {
-        setSuccess(r.message || 'Laudo excluído com sucesso!');
+        toast.success(r.message || 'Laudo excluído com sucesso!');
         setDeleteDialogOpen(false);
         setLaudoParaExcluir(null);
         setSenhaExclusao('');
         carregarLaudos();
-        setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(r.error || 'Erro ao excluir laudo');
       }
