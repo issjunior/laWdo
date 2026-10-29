@@ -20,6 +20,8 @@ asar: true
 extraResources:
   - from: src/renderer/assets/icon.ico
     to: assets/icon.ico
+  - from: src/renderer/assets/logo.png
+    to: assets/icone-linux.png
 
 win:
   target:

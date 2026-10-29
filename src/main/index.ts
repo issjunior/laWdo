@@ -32,6 +32,8 @@ import { carregarConteudoJanela } from './utils/carregamento-janela.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
 import { schemaEventoEditorLaudo } from '../shared/diagnostico/contratos.js';
 import { navegacaoAplicacaoPermitida } from './security/navegacao.js';
+import { criarAtalhoDesktopLinux } from './services/atalho-linux.service.js';
+import { criarAtalhoMesaMacOS } from './services/atalho-macos.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -708,6 +710,9 @@ app.whenReady().then(async () => {
 
     // Criar janela
     await createWindow();
+
+    void criarAtalhoDesktopLinux();
+    void criarAtalhoMesaMacOS();
 
     if (process.env.LAWDO_SMOKE_JANELA !== '1') {
       const atrasoVerificacaoAtualizacao = 5_000 + Math.floor(Math.random() * 25_000);
