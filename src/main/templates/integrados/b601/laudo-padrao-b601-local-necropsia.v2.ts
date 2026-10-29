@@ -1,0 +1,90 @@
+import type { DefinicaoTemplateIntegrado } from '../tipos.js';
+import { URL_FIGURA_DUMMY } from '../../../../shared/figura/html.js';
+import { laudoPadraoB601LocalNecropsiaV1 } from './laudo-padrao-b601-local-necropsia.v1.js';
+
+// Conteúdo da cópia personalizada, com identidades locais normalizadas para o catálogo.
+export const laudoPadraoB601LocalNecropsiaV2: DefinicaoTemplateIntegrado = {
+  ...laudoPadraoB601LocalNecropsiaV1,
+  versao: 2,
+  secoes: [
+    {
+      chave: "preambulo",
+      nome: "PREÂMBULO",
+      ordem: 0,
+      conteudo: "<p style=\"text-align: center;\" align=\"center\"><span style=\"font-family: Arial, Helvetica, sans-serif; font-size: 18pt;\"><em><strong><span lang=\"pt-BR\">LAUDO DE PER&Iacute;CIA CRIMINAL</span><span lang=\"pt-BR\"><br><span style=\"font-size: 14pt;\">(EXAME </span></span><span style=\"font-size: 14pt;\"><span style=\"color: #000000;\"><span lang=\"pt-BR\">DE </span></span><span style=\"color: #000000;\"><span lang=\"pt-BR\">CONSTATA&Ccedil;&Atilde;O </span></span><span style=\"color: #000000;\"><span lang=\"pt-BR\">DE VEST&Iacute;GIOS BAL&Iacute;STICOS</span></span><span lang=\"pt-BR\">)</span></span></strong></em></span></p>\n<p style=\"text-align: right;\" align=\"right\"><span style=\"font-family: Arial, Helvetica, sans-serif;\"><span style=\"font-size: small;\"><strong>C&oacute;digo: B-601</strong></span></span></p>\n<p style=\"text-align: justify; text-indent: 35.43pt;\" align=\"right\"><span style=\"font-family: Arial, Helvetica, sans-serif;\"><span lang=\"pt-BR\">Aos <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{data_extenso_recebimento_rep}}\">{{data_extenso_recebimento_rep}}</span>, nesta cidade de&nbsp;<span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{perito_lotacao}}\">{{perito_lotacao}}</span> e n</span><span lang=\"pt-BR\">a</span><span lang=\"pt-BR\"><strong> </strong></span><span lang=\"pt-BR\"><strong>POL&Iacute;CIA CIENT&Iacute;FICA DO PARAN&Aacute;</strong></span><span lang=\"pt-BR\">,</span><span lang=\"pt-BR\">&nbsp;foi <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{perito_designado}}\">{{perito_designado}}</span> <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{perito_artigo}}\">{{perito_artigo}}</span> <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{perito_cargo}}\">{{perito_cargo}}</span> <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{perito_nome}}\">{{perito_nome}}</span></span><span lang=\"pt-BR\"><strong>, </strong></span><span lang=\"pt-BR\">para proceder ao exame d</span><span lang=\"pt-BR\">os vest&iacute;gios bal&iacute;sticos</span> <span lang=\"pt-BR\">abaixo discriminad</span><span lang=\"pt-BR\">os, recebidos nesta </span><span lang=\"pt-BR\">Unidade</span><span lang=\"pt-BR\"> em <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{data_recebimento_rep}}\">{{data_recebimento_rep}}</span>,</span><span lang=\"pt-BR\"> em complemento aos exames de local de morte e/ou necropsia em que tais vest&iacute;gios foram coletados.</span></span></p>\n<p style=\"text-align: justify; text-indent: 35.43pt;\" align=\"justify\"><span style=\"font-family: Arial, Helvetica, sans-serif;\"><span lang=\"pt-BR\">Em consequ&ecirc;ncia, <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{perito_artigo}}\">{{perito_artigo}}</span> <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{perito_titulo}}\">{{perito_titulo}}</span> procedeu ao exame solicitado, relatando-o com verdade e com todas as circunst&acirc;ncias relevantes, da forma como segue:</span></span></p>",
+      ocultarTitulo: true,
+      contarNaNumeracao: false,
+    },
+    {
+      chave: "objetivo",
+      nome: "OBJETIVO",
+      ordem: 1,
+      conteudo: "<p style=\"text-indent: 35.43pt;\" align=\"justify\"><span style=\"font-family: Arial, sans-serif;\"><span lang=\"pt-BR\">A</span><span lang=\"pt-BR\"> per&iacute;cia </span><span lang=\"pt-BR\">objetiva</span><span lang=\"pt-BR\"> o exame descritivo da totalidade do material, bem como a constata&ccedil;&atilde;o de calibre nominal, </span><span lang=\"pt-BR\">quando poss&iacute;vel</span><span lang=\"pt-BR\">, </span><span lang=\"pt-BR\">para instruir os autos da investiga&ccedil;&atilde;o policial abaixo descrita:</span></span></p>\n<p style=\"text-align: center;\"><span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{b601_tabela_dados_investigacao}}\">{{b601_tabela_dados_investigacao}}</span></p>",
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+    {
+      chave: "material-apresentado",
+      nome: "MATERIAL APRESENTADO A EXAME",
+      ordem: 2,
+      conteudo: "<p style=\"text-indent: 35.43pt; text-align: justify;\">Foi encaminhado a esta unidade da Pol&iacute;cia Cient&iacute;fica, em embalagens pl&aacute;sticas transparentes lacradas, o seguinte material:</p>\n<p style=\"text-align: center;\"><span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{b601_tabela_material_coleta}}\">{{b601_tabela_material_coleta}}</span></p>\n<table style=\"border-collapse: collapse; width: 100%;\" border=\"1\"><colgroup><col style=\"width: 50%;\"><col style=\"width: 50%;\"></colgroup>\n<thead>\n<tr>\n<th colspan=\"2\">TABELA 3 &ndash; TOMADAS FOTOGR&Aacute;FICAS DAS EMBALAGENS RECEBIDAS</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td style=\"text-align: center;\">\n<figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-material-apresentado-1\" data-dummy=\"true\">\n<figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-material-apresentado-2\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure>\n</figure>\n</td>\n<td style=\"text-align: center;\">\n<figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-material-apresentado-3\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure>\n</td>\n</tr>\n</tbody>\n</table>\n<p style=\"text-indent: 0pt; text-align: justify; font-family: Arial, Helvetica, sans-serif; font-size: 14px;\">&nbsp;</p>".replaceAll('__FIGURA_DUMMY_INTEGRADA__', URL_FIGURA_DUMMY),
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+    {
+      chave: "do-exame",
+      nome: "DO EXAME",
+      ordem: 3,
+      conteudo: "<p>&nbsp;</p>",
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+    {
+      chave: "dos-projeteis",
+      nome: "DOS PROJÉTEIS",
+      ordem: 4,
+      chavePai: "do-exame",
+      conteudo: "<div data-b601-modelo-coleta=\"true\"><div data-b601-fotos-modelo=\"LOCAL\"><table style=\"border-collapse: collapse; width: 100%;\" border=\"1\"><colgroup><col style=\"width: 50%;\"><col style=\"width: 50%;\"></colgroup>\n<thead>\n<tr>\n<th colspan=\"2\">TABELA 4 – TOMADAS FOTOGRÁFICAS (LOCAL)</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td style=\"text-align: center;\"><figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-projeteis-1\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure></td>\n<td style=\"text-align: center;\"><figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-projeteis-2\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure></td>\n</tr>\n</tbody>\n</table></div><div data-b601-fotos-modelo=\"NECRÓPSIA\"><table style=\"border-collapse: collapse; width: 100%;\" border=\"1\"><colgroup><col style=\"width: 50%;\"><col style=\"width: 50%;\"></colgroup>\n<thead>\n<tr>\n<th colspan=\"2\">TABELA 6 – TOMADAS FOTOGRÁFICAS (NECRÓPSIA)</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td style=\"text-align: center;\"><figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-projeteis-3\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure></td>\n<td style=\"text-align: center;\"><figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-projeteis-4\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure></td>\n</tr>\n</tbody>\n</table></div></div><div data-b601-complemento=\"true\"></div>".replaceAll('__FIGURA_DUMMY_INTEGRADA__', URL_FIGURA_DUMMY),
+      repetirPara: "b601_agrupados:105",
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+    {
+      chave: "dos-estojos",
+      nome: "DOS ESTOJOS",
+      ordem: 5,
+      chavePai: "do-exame",
+      conteudo: "<div data-b601-modelo-coleta=\"true\"><div data-b601-fotos-modelo=\"ESTOJOS\"><table style=\"border-collapse: collapse; width: 100%;\" border=\"1\"><colgroup><col style=\"width: 50%;\"><col style=\"width: 50%;\"></colgroup>\n<thead>\n<tr>\n<th colspan=\"2\">TABELA 8 – TOMADAS FOTOGRÁFICAS (ESTOJOS)</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td style=\"text-align: center;\"><figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-estojos-1\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure></td>\n<td style=\"text-align: center;\"><figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-estojos-2\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure></td>\n</tr>\n</tbody>\n</table></div></div><div data-b601-complemento=\"true\"></div>".replaceAll('__FIGURA_DUMMY_INTEGRADA__', URL_FIGURA_DUMMY),
+      repetirPara: "b601_agrupados:101",
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+    {
+      chave: "dos-demais-materiais",
+      nome: "DOS DEMAIS MATERIAIS",
+      ordem: 6,
+      chavePai: "do-exame",
+      conteudo: "<p><span class=\"campo-reservado\" data-reservado=\"true\">XXX</span></p><div data-b601-complemento=\"true\"><table style=\"border-collapse: collapse; width: 100%;\" border=\"1\"><colgroup><col style=\"width: 50%;\"><col style=\"width: 50%;\"></colgroup>\n<tbody>\n<tr>\n<td style=\"text-align: center;\">\n<figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-demais-materiais-1\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure>\n</td>\n<td style=\"text-align: center;\">\n<figure class=\"laudo-figure\" style=\"text-align: center; margin: 12px auto; max-width: 100%; cursor: pointer;\" data-image-id=\"dummy-b601-local-necropsia-dos-demais-materiais-2\" data-dummy=\"true\"><img style=\"max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px; padding: 4px;\" src=\"__FIGURA_DUMMY_INTEGRADA__\" alt=\"Figura XX\">\n<figcaption style=\"font-size: 13px; color: #666; font-weight: bold; margin-top: 4px;\">Figura XX</figcaption>\n</figure>\n</td>\n</tr>\n</tbody>\n</table></div>".replaceAll('__FIGURA_DUMMY_INTEGRADA__', URL_FIGURA_DUMMY),
+      repetirPara: "b601_pecas",
+      repetirTitulo: "ITEM {{b601_peca_1_numero}} — {{b601_peca_1_tipo}} — {{b601_peca_1_identificacao}}",
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+    {
+      chave: "consideracoes-finais",
+      nome: "CONSIDERAÇÕES FINAIS",
+      ordem: 7,
+      conteudo: "<div class=\"cond-bloco\" data-cond-bloco=\"b601_lacres_saida_toggle\" data-cond-instancia=\"b601-local-necropsia-lacres-saida\">\n<p style=\"text-indent: 35.43pt;\">O material descrito neste documento, ap&oacute;s examinado, foi devidamente&nbsp;identificado, embalado e lacrado com <span class=\"placeholder-tag\" contenteditable=\"false\" data-placeholder=\"{{b601_resumo_lacres_saida}}\">{{b601_resumo_lacres_saida}}</span>, conforme requerido pelos artigos&nbsp;158-A a 158-F do C&oacute;digo de Processo Penal (Lei n&ordm; 13.964/2019), e encaminhado&nbsp;para a Central de Cust&oacute;dia da Pol&iacute;cia Cient&iacute;fica do Paran&aacute;.</p>\n</div>",
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+    {
+      chave: "encerramento",
+      nome: "ENCERRAMENTO",
+      ordem: 8,
+      conteudo: "<p style=\"text-indent: 35.43pt; text-align: justify;\">Este laudo foi redigido pelo Perito que realizou o exame. E s&atilde;o essas as&nbsp;declara&ccedil;&otilde;es que em sua consci&ecirc;ncia tem o Perito a fazer. E por nada mais haver,&nbsp;deu-se por findo o exame solicitado, que de tudo se lavrou o presente Laudo,&nbsp;emitido atrav&eacute;s do <span style=\"color: #000000;\"><a style=\"color: #000000;\" href=\"https://www.policiacientifica.pr.gov.br/webservices/laudodigital\" target=\"_blank\" rel=\"noopener\">Sistema de Gest&atilde;o de Documentos e Laudos (GDL)</a> </span>conforme&nbsp;Instru&ccedil;&atilde;o Normativa n&ordm; 001/2020-PCP, visando atender &agrave;s delibera&ccedil;&otilde;es da&nbsp;Autoridade requisitante.</p>",
+      ocultarTitulo: false,
+      contarNaNumeracao: true,
+    },
+  ],
+};

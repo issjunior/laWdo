@@ -883,6 +883,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               padding: 12px;
             }
             p:not(table p):not(figure p) { text-align: justify; }
+            table > caption,
+            table > :is(thead, tbody) > tr:first-child > th[colspan]:only-child,
+            table > caption :is(p, div),
+            table > :is(thead, tbody) > tr:first-child > th[colspan]:only-child :is(p, div) {
+              text-align: center !important;
+            }
             body.dark-content {
               --cor-texto-editor: #ffffff;
               background-color: #222f3e;
@@ -1078,10 +1084,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               border-left-color: #d97706;
               background-color: rgba(245, 158, 11, 0.12);
             }
-            body.dark-content [data-b601-grupo] th {
+            body.dark-content [data-b601-grupo] th:not([data-b601-fotos-origem] th) {
               background-color: #374151 !important;
             }
-            body.dark-content [data-b601-grupo] thead tr:first-child th[colspan] {
+            body.dark-content [data-b601-grupo] thead tr:first-child th[colspan]:not([data-b601-fotos-origem] th) {
               background-color: #4b5563 !important;
             }
             .cond-bloco[data-cond-suprimido="true"] {

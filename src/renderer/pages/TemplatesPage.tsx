@@ -449,7 +449,7 @@ interface SortableSecaoTemplateItemProps {
   opcoesRepeticao: Array<{ value: string; label: string }>;
   diagnosticos: DiagnosticoSecaoTemplate[];
   inserirPlaceholder: (editorId: string, chave: string) => void;
-  updateSecao: (index: number, field: keyof SecaoForm, value: string | boolean) => void;
+  updateSecao: (index: number, field: keyof SecaoForm, value: string | boolean | ((valorAtual: string) => string)) => void;
   handleMoveSecao: (index: number, direction: 'up' | 'down') => void;
   handleRemoveSecao: (index: number) => void;
   podeSubir: boolean;
@@ -533,7 +533,7 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
             <Label>Fotografias — {bloco.origem}</Label>
             <p className="text-xs text-muted-foreground">Edite as figuras e legendas neste quadro. Use o botão de inserir figura para adicionar espaços para imagens.</p>
             <TinyMceEditor editorId={`template-secao-${getSecaoRef(secao)}-fotos-${indiceBloco}`} value={bloco.fotos}
-              onChange={html => updateSecao(index, 'conteudo', atualizarFotosColetaTemplateB601(secao.conteudo, bloco.origem, html))}
+              onChange={html => updateSecao(index, 'conteudo', conteudoAtual => atualizarFotosColetaTemplateB601(conteudoAtual, bloco.origem, html))}
               height={300} placeholder="Figuras e legendas..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
           </div>
         )) : <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: gerarPreviaColetaTemplateB601(secao.conteudo, secao.repetir_para || '') }} />}
@@ -550,7 +550,7 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
         <TinyMceEditor
           editorId={`template-secao-${getSecaoRef(secao)}`}
           value={partes.descricao}
-          onChange={html => updateSecao(index, 'conteudo', temComplemento ? juntarComplementoB601(html, partes.complemento) : html)}
+          onChange={html => updateSecao(index, 'conteudo', conteudoAtual => temComplemento ? juntarComplementoB601(html, separarComplementoB601(conteudoAtual).complemento) : html)}
           height={250}
           placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
           placeholderChaves={placeholderChaves}
@@ -566,7 +566,7 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
           <p className="text-xs text-muted-foreground">Este conteúdo aparece uma vez, ao final da subseção. Use o botão de inserir figura para adicionar espaços para imagens.</p>
           <PlaceholderContextMenu editorId={`template-secao-${getSecaoRef(secao)}-complemento`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} categoriaExameId={categoriaExameId}>
             <TinyMceEditor editorId={`template-secao-${getSecaoRef(secao)}-complemento`} value={partes.complemento}
-              onChange={html => updateSecao(index, 'conteudo', juntarComplementoB601(partes.descricao, html))}
+              onChange={html => updateSecao(index, 'conteudo', conteudoAtual => juntarComplementoB601(separarComplementoB601(conteudoAtual).descricao, html))}
               height={300} placeholder="Figuras, legendas e observações após a descrição..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
           </PlaceholderContextMenu>
         </div>
@@ -972,8 +972,15 @@ export const TemplatesPage: React.FC = () => {
     setSecoes(prev => moverSecaoHierarquica(prev, index, direction));
   };
 
-  const updateSecao = (index: number, field: keyof SecaoForm, value: string | boolean) => {
+  const updateSecao = (index: number, field: keyof SecaoForm, valor: string | boolean | ((valorAtual: string) => string)) => {
     setSecoes(prev => {
+      const secaoAtual = prev[index];
+      if (!secaoAtual) return prev;
+      const valorAtual = secaoAtual[field];
+      const value = typeof valor === 'function'
+        ? typeof valorAtual === 'string' ? valor(valorAtual) : valorAtual
+        : valor;
+      if (value === valorAtual) return prev;
       if (field === 'ocultar_titulo' || field === 'contar_na_numeracao') {
         return prev.map((secao, i) => i === index ? { ...secao, [field]: value === true } : secao);
       }

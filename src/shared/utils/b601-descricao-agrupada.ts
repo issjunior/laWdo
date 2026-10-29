@@ -138,6 +138,6 @@ export function gerarDescricaoColetaB601(dados: unknown, tipo: TipoDescricaoB601
 }
 
 function criarFotosColetaB601(id: string, origem: string, fotosPorOrigem: ReadonlyMap<string, string>): string {
-  const conteudo = fotosPorOrigem.get(origem) ?? `<table border="1" width="100%"><thead><tr><th colspan="2">TABELA 1 – TOMADAS FOTOGRÁFICAS (${escaparDescricaoB601(origem)})</th></tr></thead><tbody><tr>${[1, 2].map(numero => `<td>${criarHtmlFigura(URL_FIGURA_DUMMY, `dummy-b601-${id}-${numero}`, '', true)}</td>`).join('')}</tr></tbody></table>`
-  return `<div data-b601-complemento="true" data-b601-fotos-origem="${escaparDescricaoB601(origem)}"><p>&nbsp;</p>${conteudo}</div>`
+  const conteudo = fotosPorOrigem.get(origem) ?? `<p>&nbsp;</p><table border="1" width="100%"><thead><tr><th colspan="2">TABELA 1 – TOMADAS FOTOGRÁFICAS (${escaparDescricaoB601(origem)})</th></tr></thead><tbody><tr>${[1, 2].map(numero => `<td>${criarHtmlFigura(URL_FIGURA_DUMMY, `dummy-b601-${id}-${numero}`, '', true)}</td>`).join('')}</tr></tbody></table>`
+  return `<div data-b601-complemento="true" data-b601-fotos-origem="${escaparDescricaoB601(origem)}">${conteudo}</div>`
 }

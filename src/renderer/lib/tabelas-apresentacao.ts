@@ -12,13 +12,21 @@ export function normalizarApresentacaoTabelas(raiz: ParentNode): void {
         celula.style.textAlign = 'center';
         celula.style.verticalAlign = 'middle';
       });
-      tabela.querySelectorAll<HTMLElement>('th').forEach(celula => {
-        celula.style.backgroundColor = '#e8e8e8';
-        celula.style.color = '#000';
-      });
-      tabela.querySelectorAll<HTMLElement>('thead tr:first-child th[colspan]').forEach(titulo => {
-        titulo.style.backgroundColor = '#d9d9d9';
-      });
+      if (tabela.closest('[data-b601-fotos-origem]')) {
+        [tabela, ...tabela.querySelectorAll<HTMLElement>('thead, tbody, tfoot, tr, th, td')].forEach(elemento => {
+          elemento.style.removeProperty('background');
+          elemento.style.removeProperty('background-color');
+          elemento.removeAttribute('bgcolor');
+        });
+      } else {
+        tabela.querySelectorAll<HTMLElement>('th').forEach(celula => {
+          celula.style.backgroundColor = '#e8e8e8';
+          celula.style.color = '#000';
+        });
+        tabela.querySelectorAll<HTMLElement>('thead tr:first-child th[colspan]').forEach(titulo => {
+          titulo.style.backgroundColor = '#d9d9d9';
+        });
+      }
       if (grupo.getAttribute('data-b601-grupo') === '105') {
         tabela.querySelectorAll<HTMLElement>('thead th').forEach(celula => {
           const texto = celula.textContent?.trim() || '';

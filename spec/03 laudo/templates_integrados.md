@@ -2,7 +2,7 @@
 
 ## Estado canônico
 
-O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; os modelos ativos são `laudo-padrao-b602` v11, `laudo-padrao-b601` v2 e `laudo-padrao-b601-local-necropsia` v1. O catálogo importa somente essas definições atuais, que herdam versões-fonte anteriores. Registros de versões anteriores já instalados permanecem no banco, mas indisponíveis para novos laudos; uma instalação nova não instala cada versão intermediária. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
+O catálogo embarcado vive em `src/main/templates/integrados/`. Cada definição declara `chave` estável, `versao`, tipo de exame, seções e chaves locais de seção; os modelos ativos são `laudo-padrao-b602` v11, `laudo-padrao-b601` v2 e `laudo-padrao-b601-local-necropsia` v2. O catálogo importa somente essas definições atuais, que herdam versões-fonte anteriores. Registros de versões anteriores já instalados permanecem no banco, mas indisponíveis para novos laudos; uma instalação nova não instala cada versão intermediária. O conteúdo do catálogo é a fonte para novas instalações e atualizações, enquanto SQLite é o estado local sincronizado usado pelo restante do aplicativo.
 
 A serialização canônica e o SHA-256 cobrem os campos funcionais do template. Elementos transitórios do editor — como `data-image-id` e artefatos dummy — são ignorados no checksum para permitir adoção segura de dados legados equivalentes. A validação do catálogo rejeita chave, versão, ordens, referências de pai ou seções duplicadas inválidas antes da persistência.
 
@@ -58,6 +58,10 @@ O B-601 v2 usa `Lei nº` nas considerações finais e `Instrução Normativa nº
 
 ## Variação B-601 Local com Necropsia e cartuchos B-602
 
-laudo-padrao-b601-local-necropsia.v1.ts é um modelo integrado distinto, de chave própria, derivado do B-601 v2 e disponível para o mesmo exame. Coexiste com o B-601 padrão; não o substitui nem converte automaticamente laudos existentes. Mantém as nove seções-base, adapta o preâmbulo para vestígios de local/necropsia, usa b601_tabela_material_coleta, inclui título nas fotos das embalagens e marca os grupos de projéteis/estojos com data-b601-modelo-coleta="true". As considerações finais têm área opcional de encaminhamento BNPB/SINAB controlada no laudo. Aplicam-se sincronização, somente leitura, clonagem e imutabilidade de versão publicada já descritas.
+laudo-padrao-b601-local-necropsia.v2.ts é o modelo ativo dessa chave, derivado da variação v1. Coexiste com o B-601 padrão, mantém nove seções e b601_tabela_material_coleta e fornece conteúdo próprio de preâmbulo, objetivo, material, fotografias e textos finais. Grupos de projéteis/estojos usam data-b601-modelo-coleta="true", fotos-modelo por LOCAL, NECRÓPSIA e ESTOJOS e identidades dummy locais ao catálogo. As considerações finais da v2 contêm o condicional de lacres de saída, sem a área opcional BNPB/SINAB da versão-fonte. Não converte laudos existentes nem clones. Aplicam-se sincronização, somente leitura e imutabilidade de versão publicada; versões anteriores instaladas ficam indisponíveis para novos laudos.
 
 O B-602 v11 deriva do v10 e altera DOS CARTUCHOS para usar b602_total_cartuchos_extenso, b602_cartuchos_descricao, a tabela de cartuchos e suas figuras dummy. O catálogo compartilhado de textos controla concordância singular/plural; v10 permanece apenas como versão-fonte ou registro anterior instalado. templates-integrados.test.ts e exportacao-placeholders-b602.test.ts cobrem o catálogo ativo e a nova resolução. O fluxo B-601 de coleta está em b601.md.
+
+## Atualização de partes no editor de templates
+
+Ao editar descrição, complemento ou fotos por origem B-601, TemplatesPage recompõe cada parte a partir do conteúdo mais recente da seção com atualização funcional de estado, preservando alterações de editores irmãos. A recomposição e as tabelas fotográficas estão em spec/03 laudo/b601.md, com cobertura em template-fotos-b601.test.ts.
