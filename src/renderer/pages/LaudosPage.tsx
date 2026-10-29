@@ -77,7 +77,7 @@ import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
 import { medirOperacaoEditorLaudo } from '@/lib/desempenho-editor-laudo';
-import { lerConteudoAtualEditorLaudo, sincronizacaoEditorLaudoPendente } from '@/lib/sincronizacao-editor-laudo';
+import { prepararInicializacaoEditorLaudo, lerConteudoAtualEditorLaudo, sincronizacaoEditorLaudoPendente } from '@/lib/sincronizacao-editor-laudo';
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { capturaProblemaLaudoAtiva, registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
 import { atualizarNumeroFigura, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
@@ -1056,7 +1056,7 @@ export const LaudosPage: React.FC = () => {
   obterConteudoComparavelRef.current = obterConteudoComparavel;
 
   useEffect(() => {
-    if (!editando) return;
+    if (!editando || inicializando) return;
     const sessao = obterSessao();
     const temporizador = window.setTimeout(() => {
       if (!sessaoAtual(sessao)) return;
@@ -1065,11 +1065,11 @@ export const LaudosPage: React.FC = () => {
         const editor = obterEditorTinyMce(id);
         return editor && sincronizacaoEditorLaudoPendente(editor);
       })) return;
-      const conteudo = obterConteudoComparavel(false);
+      const conteudo = obterConteudoComparavelRef.current();
       medirOperacaoEditorLaudo('atualizar_estado_laudo', () => atualizarConteudo(conteudo), { bytesEntrada: conteudo.length, modoUnico: editorMode === 'single' });
     }, 400);
     return () => window.clearTimeout(temporizador);
-  }, [editando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes, obterSessao, sessaoAtual, editorMode, secoes]);
+  }, [editando, inicializando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes, obterSessao, sessaoAtual, editorMode, secoes]);
 
   useEffect(() => {
     cacheSecoesEditorUnicoRef.current = null;
@@ -2545,19 +2545,20 @@ export const LaudosPage: React.FC = () => {
     });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders, registrarEventoPagina]);
 
-  const prepararConteudoEditor = (editor: TinyMceEditorInstance, sessao: number): boolean => {
-    if (!sessaoAtual(sessao) || editor.removed || editor.destroyed) return false;
-    const resultado = aplicarVisualizacaoPlaceholders(editor, {
-      modo: modoVisualizacaoPlaceholders,
-      valores: mapaPlaceholdersResolvidos,
-      placeholdersPersonalizados: placeholders,
-      descreverPendente: descreverPlaceholderPendente,
-    });
-    if (resultado.estado !== 'aplicado') throw new Error('Não foi possível preparar os campos do laudo.');
-    sincronizarCacheColetaB601(editor.getBody(), mapaPlaceholdersResolvidos.b601_tabela_material_coleta?.valor || '', editor.mode.isReadOnly());
-    conferirTabelasEditoresRef.current();
-    return true;
-  };
+  const prepararConteudoEditor = (editor: TinyMceEditorInstance, sessao: number): Promise<boolean> => (
+    prepararInicializacaoEditorLaudo(editor,
+      () => sessaoAtual(sessao) && obterEditorTinyMce(editor.id) === editor, () => {
+        const resultado = aplicarVisualizacaoPlaceholders(editor, {
+          modo: modoVisualizacaoPlaceholders,
+          valores: mapaPlaceholdersResolvidos,
+          placeholdersPersonalizados: placeholders,
+          descreverPendente: descreverPlaceholderPendente,
+        });
+        if (resultado.estado !== 'aplicado') throw new Error('Não foi possível preparar os campos do laudo.');
+        sincronizarCacheColetaB601(editor.getBody(), mapaPlaceholdersResolvidos.b601_tabela_material_coleta?.valor || '', editor.mode.isReadOnly());
+        conferirTabelasEditoresRef.current();
+      })
+  );
 
   const inserirPlaceholder = useCallback((editorId: string, chave: string) => {
     const editor = obterEditorTinyMce(editorId);
@@ -4437,8 +4438,8 @@ export const LaudosPage: React.FC = () => {
                           concluirInicializacao(cacheComparacaoRef.current?.resultado || '', sessaoEditor);
                           toast.warning('O documento completo demorou a abrir. Abra uma seção para continuar a edição.');
                         }}
-                        onEditorInit={(editor) => {
-                          if (!prepararConteudoEditor(editor, sessaoEditor)) return;
+                        onEditorInit={async (editor) => {
+                          if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                           observarFigurasEditor(editor);
                           const htmlAtual = editor.getContent();
                           const secoesAtuais = parseSingleHtmlToSecoes(htmlAtual, secoes);
@@ -4565,8 +4566,8 @@ export const LaudosPage: React.FC = () => {
                                       setPanelCollapsed(false);
                                     }}
                                     placeholderChaves={placeholderChaves}
-                                    onEditorInit={(editor) => {
-                                      if (!prepararConteudoEditor(editor, sessaoEditor)) return;
+                                    onEditorInit={async (editor) => {
+                                      if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                                       observarFigurasEditor(editor);
                                       registrarEditorIa(editor);
                                       if (isIlustracoes) handleIlustracoesEditorInit(editor);

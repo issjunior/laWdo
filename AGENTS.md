@@ -81,6 +81,8 @@ Ao revisar PRs abertos, especialmente os automáticos:
 
 ## Prevenção de erros recorrentes
 
+Ao alterar inicialização, imagens, placeholders, controles ou salvamento do laudo, consulte `spec/problemas diversos/aviso_salvar_sem_edicao.md` e execute os testes de regressão correspondentes. Estabeleça a referência após a preparação assíncrona; normalize somente apresentação transitória. Preserve a detecção de edições reais e valide abertura e saída sem editar no Electron.
+
 Ao implementar ou alterar código, preserve a qualidade da tipagem e não aumente a dívida de lint existente.
 
 - Evite `any`. Quando o formato for conhecido, declare `interface` ou `type`; quando não for conhecido, use `unknown` com narrowing.

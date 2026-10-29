@@ -70,7 +70,7 @@ Textos de solicitação, exame, template e envolvido quebram linha em larguras l
 
 ## Edição incremental e leitura imediata
 
-A digitação marca a revisão da sessão imediatamente, mas publica HTML no estado após 400 ms de pausa. A comparação adiada usa o estado somente quando nenhum editor tem sincronização pendente; reaproveita a representação comparável de seções inalteradas. Salvar, verificar saída e trocar de modo leem o conteúdo atual pelo sincronizador, sem depender de o temporizador ter terminado. O contrato e os testes estão em `editor_texto.md`; as verificações de integridade no Electron permanecem manuais em `spec/13 diagnostico/testes_carga_editor.md`.
+A digitação marca a revisão da sessão imediatamente, mas publica HTML no estado após 400 ms de pausa. A comparação adiada fica suspensa na inicialização e usa a referência atual da função de leitura dos editores somente quando nenhum editor tem sincronização pendente; reaproveita a representação comparável de seções inalteradas. Salvar, verificar saída e trocar de modo leem o conteúdo atual pelo sincronizador, sem depender de o temporizador ter terminado. O contrato e os testes estão em `editor_texto.md`; as verificações de integridade no Electron permanecem manuais em `spec/13 diagnostico/testes_carga_editor.md`.
 
 ## Status local e migrations
 
