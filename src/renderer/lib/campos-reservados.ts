@@ -6,7 +6,8 @@ export function encontrarCampoReservado(alvo: EventTarget | null): HTMLElement |
   if (typeof closest !== 'function') return null;
 
   const campo = closest.call(alvo, SELETOR_CAMPO_RESERVADO) as HTMLElement | null;
-  if (campo?.closest('[data-placeholder-preview="true"], [data-placeholder-tabela-personalizada="true"]')) return null;
+  if (campo?.closest('th, [data-placeholder-celula-fixa="true"], [data-b601-campo-editavel], [data-b601-coleta-editavel], [data-mce-bogus="all"]')) return null;
+  if (campo?.hasAttribute('data-placeholder') && campo.closest('[data-placeholder-preview="true"]')) return null;
   return campo?.closest<HTMLElement>('span[data-placeholder]') || campo;
 }
 

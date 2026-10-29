@@ -74,6 +74,8 @@ Ao clicar, abre um painel compacto com ambiente, disponibilidade, credenciais da
 
 ## Preferências visuais de imagens
 
-O menu de configurações inclui **Imagens**, rota /imagens. A página usa cartões separados e radiogroups para perfil de prévia do editor e qualidade enviada para IA, com leitura e salvamento independentes por grupo; falha conhecida de leitura bloqueia o respectivo salvamento. O controle de qualidade não aparece mais em Modelos de IA. Formatos, valores e consumidores estão em spec/03 laudo/fluxo_ilustracao.md e spec/06 ia/painel_assistente_ia.md.
+O menu de configurações inclui **Imagens**, rota /imagens. A página usa cartões separados e radiogroups para figura do laudo/PDF, prévia do editor e qualidade enviada para IA, com leitura e salvamento independentes por grupo; falha conhecida de leitura bloqueia o respectivo salvamento. O controle de qualidade não aparece mais em Modelos de IA. Formatos, valores e consumidores estão em spec/03 laudo/fluxo_ilustracao.md e spec/06 ia/painel_assistente_ia.md.
+
+A página Imagens apresenta opções por grupo da maior resolução para a menor, em linhas compactas, com comparação demonstrativa em SVG ao lado e destaque da seleção. Em largura estreita, a comparação fica abaixo e reduzida. Original na IA usa contorno tracejado de tamanho variável. O desenho não estima qualidade ou MB; cada grupo mantém leitura, falha e salvamento próprios.
 
 O popover GDL destaca Produção com badge destructive e Homologação com secondary; rede acessível recente recebe badge verde. Esses badges apresentam o ambiente/estado existente, sem mudar a regra compartilhada de disponibilidade nem executar operação de negócio.

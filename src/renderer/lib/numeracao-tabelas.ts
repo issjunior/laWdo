@@ -88,10 +88,6 @@ export function conferirNumeracaoTabelasEditores(
     const body = editor?.getBody();
     if (!editor || !body) return;
     editor.undoManager.ignore(() => {
-      body.querySelectorAll<HTMLElement>('[data-b601-grupo]').forEach(grupo => {
-        grupo.querySelectorAll<HTMLElement>('td').forEach(celula => celula.setAttribute('contenteditable', 'true'));
-        grupo.querySelectorAll<HTMLElement>('th').forEach(celula => celula.setAttribute('contenteditable', 'false'));
-      });
       const resultado = renumerarTabelas(body, { incluirPrevias: true, numeroInicial: proximoNumero });
       proximoNumero = resultado.proximoNumero;
       alteradoPersistente = resultado.alteradoPersistente || alteradoPersistente;

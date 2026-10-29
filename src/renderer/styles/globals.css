@@ -1724,3 +1724,26 @@ body.dark {
   color: hsl(210 40% 96%);
 }
 
+
+/* Superfícies transitórias do conteúdo interativo do laudo. */
+.conteudo-laudo { position: relative; padding-top: 42px !important; border: 1px solid #a1a1aa; border-radius: 6px; background-color: #fafafa; }
+.conteudo-laudo[data-placeholder-preview-tabela="true"],
+.conteudo-laudo[data-placeholder-tabela-personalizada="true"] { margin: 12px 0; }
+.conteudo-laudo[data-b601-grupo] > table + table,
+.conteudo-laudo[data-b601-grupo] > table + [data-b601-complemento] > table:first-child { margin-top: 12px; }
+.conteudo-laudo-rep { border-color: #93c5fd; background-color: #eff6ff; }
+.conteudo-laudo-condicional { border-color: #c4b5fd; background-color: #f5f3ff; }
+.conteudo-laudo::before { display: none !important; }
+.conteudo-laudo-editando { outline: 2px solid #2563eb; outline-offset: 2px; }
+.conteudo-laudo-controles { position: absolute; top: 5px; right: 6px; display: flex; align-items: center; gap: 5px; font: 11px Arial, sans-serif; z-index: 5; }
+.conteudo-laudo-controles button { border: 1px solid #a1a1aa; border-radius: 4px; background: #fff; color: #18181b; padding: 3px 7px; cursor: pointer; font: inherit; }
+.conteudo-laudo-controles button:hover { background: #e4e4e7; }
+.conteudo-laudo-controles button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.conteudo-laudo-controles button:disabled { opacity: .5; cursor: not-allowed; }
+.conteudo-laudo-controles [data-acao-conteudo="excluir"] { color: #b91c1c; }
+body.dark-content .conteudo-laudo { background-color: #27272a; border-color: #71717a; }
+body.dark-content .conteudo-laudo-rep { background-color: #172554; border-color: #3b82f6; }
+body.dark-content .conteudo-laudo-condicional { background-color: #2e1065; border-color: #8b5cf6; }
+body.dark-content .conteudo-laudo-controles button { color: #fafafa; background: #27272a; }
+body.dark-content .conteudo-laudo-controles button:hover { background: #3f3f46; }
+body.dark-content .conteudo-laudo-controles [data-acao-conteudo="excluir"] { color: #fca5a5; }

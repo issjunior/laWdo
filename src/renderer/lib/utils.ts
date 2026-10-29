@@ -1,3 +1,4 @@
+import { limparConteudoInterativo } from './conteudo-interativo-limpeza';
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { normalizarApresentacaoTabelas } from './tabelas-apresentacao';
@@ -21,6 +22,7 @@ export function removerFormatacaoPlaceholders(html: string): string {
 }
 
 export function removerFormatacaoPlaceholdersDoDom(raiz: HTMLElement): void {
+  limparConteudoInterativo(raiz);
   limparInteracaoCamposB601(raiz);
   limparInteracaoColetaB601(raiz);
   raiz.querySelectorAll('[data-placeholder-preview="true"]').forEach(elemento => elemento.remove());
@@ -48,6 +50,7 @@ export function removerFormatacaoPlaceholdersDoDom(raiz: HTMLElement): void {
     const tabelaPersonalizada = placeholder.hasAttribute('data-placeholder-tabela-personalizada-id');
     const possuiPrevia = placeholder.hasAttribute('data-placeholder-preview-id');
     if (!placeholder.hasAttribute('data-placeholder-personalizado-html')) placeholder.textContent = chave;
+    placeholder.removeAttribute('contenteditable');
     placeholder.removeAttribute('data-placeholder-apresentacao');
     if (!tabelaPersonalizada) placeholder.removeAttribute('data-placeholder-preview-id');
     placeholder.classList.remove('campo-reservado');

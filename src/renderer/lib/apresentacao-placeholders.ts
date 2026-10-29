@@ -102,6 +102,7 @@ function adicionarAcaoTabela(
   raiz: HTMLElement,
   acao: 'personalizar' | 'restaurar',
 ): void {
+  if (raiz.classList.contains('conteudo-laudo')) return;
   removerAcoesTabela(raiz);
   const documento = raiz.ownerDocument;
   const controle = documento.createElement('span');
@@ -484,6 +485,7 @@ export function aplicarVisualizacaoPlaceholders(
 
   const resultadoFinal = criarResultado(resultado.falhas ? 'falhou' : 'aplicado', resultado);
   registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoFinal, 'aplicar_visualizacao_completa');
+  if (resultadoFinal.estado === 'aplicado') editor.dispatch?.('PlaceholdersAplicados');
   return resultadoFinal;
 }
 
@@ -526,6 +528,7 @@ export function aplicarVisualizacaoPlaceholder(
 
   const resultadoFinal = criarResultado(resultado.falhas ? 'falhou' : 'aplicado', resultado);
   registrarDesempenhoPlaceholders(performance.now() - inicio, resultadoFinal, 'aplicar_visualizacao_incremental', chave);
+  if (resultadoFinal.estado === 'aplicado') editor.dispatch?.('PlaceholdersAplicados');
   return resultadoFinal;
 }
 
@@ -547,7 +550,6 @@ export function agendarVisualizacaoPlaceholders(
     }
     if (resultado.estado === 'falhou') opcoes.aoFalharDefinitivamente?.(resultado);
     if (resultado.estado === 'aplicado') {
-      editor.dispatch?.('PlaceholdersAplicados');
       opcoes.aoAplicar?.();
     }
   }, tentativa === 0 ? 0 : 150);

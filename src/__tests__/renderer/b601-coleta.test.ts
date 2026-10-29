@@ -5,11 +5,12 @@ import { criarPecaColeta } from '../fixtures/b601-coleta';
 import { esquemaRepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso';
 import { buildPlaceholderMapping, resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders';
 import { aplicarReferenciasColetaB601, atualizarReferenciasEditorColetaB601, limparInteracaoColetaB601, prepararColetaB601, registrarColetaB601, sincronizarCacheColetaB601 } from '@/lib/b601-coleta';
-import { criarCopiaVisualizacaoPlaceholders, restaurarTabelaPlaceholder } from '@/lib/apresentacao-placeholders';
+import { criarCopiaVisualizacaoPlaceholders, personalizarTabelaPlaceholder, restaurarTabelaPlaceholder } from '@/lib/apresentacao-placeholders';
 import { construirMapaPlaceholdersResolvidos } from '@/lib/exportacao-placeholders';
 import { removerFormatacaoPlaceholdersDoDom } from '@/lib/utils';
 import { parseHtmlParaEstrutura } from '@/lib/exportacao-parser';
 import { laudoPadraoB601LocalNecropsiaV1 } from '../../main/templates/integrados/b601/laudo-padrao-b601-local-necropsia.v1';
+import { prepararCamposProjeteisB601, limparInteracaoCamposB601 } from '@/lib/b601-campos-projetil';
 
 const snapshot = esquemaRepsMesmoCasoGdl.parse({ ambiente: 'producao', numeroRep: '100', anoRep: '2026', numeroCaso: '42', consultadoEm: new Date().toISOString(),
   reps: [{ numero: '20', ano: '2026', codigoNatureza: 'M110' }, { numero: '21', ano: '2026', codigoNatureza: 'T002' }] });
@@ -20,6 +21,7 @@ const gdlOriginal = window.ipcAPI.gdl;
 
 function montarEditor(html: string) {
   document.body.innerHTML = html;
+  document.body.classList.add('conteudo-laudo-editando');
   const eventos = new Map<string, (() => void)[]>();
   const historico: string[] = [];
   let somenteLeitura = false;
@@ -46,9 +48,31 @@ function montarEditor(html: string) {
     leitura: () => { somenteLeitura = true; disparar('SwitchMode'); } };
 }
 
-afterEach(() => { encerramentos.splice(0).forEach(encerrar => encerrar()); document.body.innerHTML = ''; window.ipcAPI.gdl = gdlOriginal; });
+afterEach(() => { encerramentos.splice(0).forEach(encerrar => encerrar()); document.body.innerHTML = ''; document.body.classList.remove('conteudo-laudo-editando'); window.ipcAPI.gdl = gdlOriginal; });
 
 describe('coleta B-601 no editor e na exportação', () => {
+  it('mantém somente tipo por projétil como seletor no modelo de coleta, sem mudar o B601 padrão', () => {
+    const campos = '<span data-b601-origem-projetil="true">LOCAL DE CRIME</span><span data-b601-campo-projetil="tipo">Projétil</span><span data-b601-campo-projetil="constituicao_formato">CHOG</span>';
+    document.body.innerHTML = `<div data-b601-grupo="105" data-b601-modelo-coleta="true">${campos}</div><div data-b601-grupo="101" data-b601-modelo-coleta="true"><span data-b601-campo-estojo="marca">CBC</span><span data-b601-campo-estojo="calibre_nominal">9 mm</span><span data-b601-campo-estojo="composicao">Latonado</span><span data-b601-campo-estojo="espoleta">Niquelado</span></div><div data-b601-grupo="105">${campos}</div>`;
+    const original = document.body.innerHTML;
+    prepararCamposProjeteisB601(document.body);
+    expect(document.querySelectorAll('[data-b601-modelo-coleta] select')).toHaveLength(1);
+    expect(document.querySelector('[data-b601-modelo-coleta] select')?.closest('[data-b601-campo-projetil]')?.getAttribute('data-b601-campo-projetil')).toBe('tipo');
+    expect(document.querySelectorAll('[data-b601-grupo]:not([data-b601-modelo-coleta]) select')).toHaveLength(3);
+    limparInteracaoCamposB601(document.body);
+    expect(document.body.innerHTML).toBe(original);
+  });
+
+  it('remove seletores antigos da coleta sem perder os valores escolhidos', () => {
+    document.body.innerHTML = '<div data-b601-grupo="105"><span data-b601-campo-projetil="constituicao_formato">EXPO</span></div>';
+    prepararCamposProjeteisB601(document.body);
+    document.querySelector('[data-b601-grupo]')!.setAttribute('data-b601-modelo-coleta', 'true');
+    prepararCamposProjeteisB601(document.body);
+    const campo = document.querySelector('[data-b601-campo-projetil]')!;
+    expect(campo.textContent).toBe('EXPO');
+    expect(campo.querySelector('select')).toBeNull();
+    expect(campo.hasAttribute('contenteditable')).toBe(false);
+  });
   it('preserva as tabelas estruturais dentro das seções do novo modelo', () => {
     const fonte = laudoPadraoB601LocalNecropsiaV1.secoes.filter(secao => ['objetivo', 'material-apresentado'].includes(secao.chave)).map(secao => secao.conteudo).join('');
     const estrutura = parseHtmlParaEstrutura(resolverPlaceholdersExportacao(fonte, contexto));
@@ -75,7 +99,7 @@ describe('coleta B-601 no editor e na exportação', () => {
     expect(controle.textContent).not.toMatch(/REP |M110|T002/);
   });
 
-  it('materializa a tabela na escolha, preserva o texto e permite desfazer', () => {
+  it('materializa a tabela na escolha, preserva o texto e permite desfazer', async () => {
     const html = `<p><span data-placeholder="{{b601_tabela_material_coleta}}" data-placeholder-preview-id="t1">{{b601_tabela_material_coleta}}</span></p><div data-placeholder-preview="true" data-placeholder-preview-tabela="true" data-placeholder-preview-id="t1">${tabela()}</div>`;
     const sessao = montarEditor(html);
     const controle = document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')!;
@@ -88,12 +112,12 @@ describe('coleta B-601 no editor e na exportação', () => {
     expect(salvo).toContain('21/2026');
     document.body.innerHTML = salvo;
     sessao.disparar('SetContent');
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('20/2026');
+    await vi.waitFor(() => expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('20/2026'));
     sessao.undo();
     expect(document.querySelector('[data-placeholder-tabela-personalizada]')).toBeNull();
   });
 
-  it('atualiza opções por origem, preserva texto manual e permite reabrir', () => {
+  it('atualiza opções por origem, preserva texto manual e permite reabrir', async () => {
     const sessao = montarEditor(tabela() + '<p>Outra edição em andamento</p>');
     const campo = document.querySelector('[data-b601-exame-coleta] [data-b601-coleta-texto]')!;
     campo.textContent = 'Exame manual 123';
@@ -111,7 +135,7 @@ describe('coleta B-601 no editor e na exportação', () => {
     const salvo = sessao.getContent();
     document.body.innerHTML = salvo;
     sessao.disparar('SetContent');
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('Exame manual 123');
+    await vi.waitFor(() => expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('Exame manual 123'));
     expect(document.body.textContent).toContain('Outra edição em andamento');
     expect(document.querySelector('button[data-b601-coleta-controle]')).toBeNull();
   });
@@ -142,57 +166,31 @@ describe('coleta B-601 no editor e na exportação', () => {
     expect(sessao.editor.nodeChanged).toHaveBeenCalled();
   });
 
-  it('oferece seletores com os dados importados e recalcula o exame na troca de origem', () => {
+  it('mantém tipo, quantidade e origem como texto e preserva edições na reabertura', async () => {
     const sessao = montarEditor(tabela());
-    const obter = (campo: string) => document.querySelector<HTMLSelectElement>(`[data-b601-campo-coleta="${campo}"] select`)!;
-    expect(obter('tipo').value).toBe('PROJÉTEIS');
-    expect(obter('quantidade').value).toBe('1 UNIDADES');
-    expect(obter('origem').value).toBe('LOCAL DE CRIME');
-    expect(obter('tipo').textContent).toContain('ESTOJO(S)');
-    obter('tipo').value = 'ESTOJO(S)';
-    obter('tipo').dispatchEvent(new Event('change', { bubbles: true }));
-    obter('origem').value = 'NECRÓPSIA';
-    obter('origem').dispatchEvent(new Event('change', { bubbles: true }));
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('21/2026');
-    expect(document.querySelector('[data-b601-exame-coleta] select')?.textContent).not.toMatch(/REP |T002|M110/);
+    for (const [campo, valor] of [['tipo', 'PROJÉTEIS'], ['quantidade', '1 UNIDADES'], ['origem', 'LOCAL DE CRIME']]) {
+      const elemento = document.querySelector(`[data-b601-campo-coleta="${campo}"]`)!;
+      expect(elemento.textContent).toBe(valor);
+      expect(elemento.querySelector('select')).toBeNull();
+      expect(elemento.hasAttribute('contenteditable')).toBe(false);
+    }
+    const quantidade = document.querySelector('[data-b601-campo-coleta="quantidade"]')!;
+    quantidade.textContent = '12 UNIDADES';
     const salvo = sessao.getContent();
     document.body.innerHTML = salvo;
     sessao.disparar('SetContent');
-    expect(obter('tipo').value).toBe('ESTOJO(S)');
-    expect(obter('origem').value).toBe('NECRÓPSIA');
-    obter('origem').value = 'HOSPITAL';
-    obter('origem').dispatchEvent(new Event('change', { bubbles: true }));
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('XXX');
+    expect(document.querySelector('[data-b601-campo-coleta="quantidade"]')?.textContent).toBe('12 UNIDADES');
+    await vi.waitFor(() => expect(document.querySelectorAll('select')).toHaveLength(2));
+    expect(document.querySelector('[data-b601-exame-coleta] select')?.textContent).toContain('20/2026');
   });
 
-  it('valida quantidade manual e mantém a quantidade importada entre as opções', () => {
-    const sessao = montarEditor(tabela());
-    const quantidade = document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="quantidade"] select')!;
-    quantidade.value = '__manual__'; quantidade.dispatchEvent(new Event('change', { bubbles: true }));
-    const opcoes = sessao.editor.windowManager.open.mock.calls[0][0];
-    const fechar = vi.fn();
-    for (const valor of ['0', '-1', '1,5', 'abc']) opcoes.onSubmit({ getData: () => ({ valor }), close: fechar });
-    expect(fechar).not.toHaveBeenCalled();
-    opcoes.onSubmit({ getData: () => ({ valor: '12' }), close: fechar });
-    expect(fechar).toHaveBeenCalledOnce();
-    const controle = document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="quantidade"] select')!;
-    expect(controle.value).toBe('12 UNIDADES');
-    expect(controle.textContent).toContain('1 UNIDADES');
-    const salvo = sessao.getContent();
-    expect(salvo).toContain('12 UNIDADES');
-    expect(salvo).not.toContain('<select');
-  });
-
-  it('restaura a tabela inteira com os dados atuais locais da REP', () => {
+  it('restaura a tabela inteira com os dados atuais locais da REP', async () => {
     const html = `<p><span data-placeholder="{{b601_tabela_material_coleta}}" data-placeholder-preview-id="t1">{{b601_tabela_material_coleta}}</span></p><div data-placeholder-preview="true" data-placeholder-preview-tabela="true" data-placeholder-preview-id="t1">${tabela()}</div>`;
     const sessao = montarEditor(html);
-    const tipo = document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="tipo"] select')!;
-    tipo.value = 'ESTOJO(S)'; tipo.dispatchEvent(new Event('change', { bubbles: true }));
-    const quantidade = document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="quantidade"] select')!;
-    quantidade.value = '__manual__'; quantidade.dispatchEvent(new Event('change', { bubbles: true }));
-    sessao.editor.windowManager.open.mock.calls[0][0].onSubmit({ getData: () => ({ valor: '12' }), close: vi.fn() });
-    const origem = document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="origem"] select')!;
-    origem.value = 'NECRÓPSIA'; origem.dispatchEvent(new Event('change', { bubbles: true }));
+    for (const [campo, valor] of [['tipo', 'ESTOJO(S)'], ['quantidade', '12 UNIDADES'], ['origem', 'NECRÓPSIA']]) {
+      document.querySelector(`[data-b601-campo-coleta="${campo}"]`)!.textContent = valor;
+    }
+    personalizarTabelaPlaceholder(sessao.editor as unknown as Editor, document.querySelector('[data-b601-coleta]')!);
     const lacre = document.querySelector('[data-b601-exame-coleta]')!.closest('tr')!.lastElementChild!;
     lacre.textContent = 'LACRE EDITADO';
     const botao = document.querySelector<HTMLElement>('[data-acao-tabela-placeholder="restaurar"]')!;
@@ -203,16 +201,27 @@ describe('coleta B-601 no editor e na exportação', () => {
     const copia = criarCopiaVisualizacaoPlaceholders(sessao.getContent(), { modo: 'dados', valores: construirMapaPlaceholdersResolvidos(contextoAtual), placeholdersPersonalizados: [], descreverPendente: () => '' });
     document.body.innerHTML = copia.innerHTML;
     sessao.disparar('SetContent');
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="tipo"] select')?.value).toBe('PROJÉTEIS');
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="quantidade"] select')?.value).toBe('3 UNIDADES');
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-campo-coleta="origem"] select')?.value).toBe('LOCAL DE CRIME');
-    expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('99/2026');
+    expect(document.querySelector('[data-b601-campo-coleta="tipo"]')?.textContent).toBe('PROJÉTEIS');
+    expect(document.querySelector('[data-b601-campo-coleta="quantidade"]')?.textContent).toBe('3 UNIDADES');
+    expect(document.querySelector('[data-b601-campo-coleta="origem"]')?.textContent).toBe('LOCAL DE CRIME');
+    await vi.waitFor(() => expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('99/2026'));
     expect(document.body.textContent).toContain('L2');
     expect(document.body.textContent).not.toContain('LACRE EDITADO');
     expect(document.querySelector('[data-placeholder-tabela-personalizada]')).toBeNull();
   });
 
-  it('inclui e remove BNPB/SINAB por ação e não oferece controles em somente leitura', () => {
+  it('atualiza alternativas após editar a origem em texto sem substituir o exame preenchido', () => {
+    montarEditor(tabela());
+    const origem = document.querySelector('[data-b601-campo-coleta="origem"]')!;
+    origem.textContent = 'NECRÓPSIA';
+    origem.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    const exame = document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')!;
+    expect(exame.value).toBe('20/2026');
+    expect(Array.from(exame.options).map(opcao => opcao.value)).toContain('21/2026');
+    expect(document.querySelector('[data-b601-campo-coleta="origem"] select')).toBeNull();
+  });
+
+  it('inclui e remove BNPB/SINAB por ação e não oferece controles em somente leitura', async () => {
     const sessao = montarEditor(tabela() + '<div data-b601-sinab="opcional"><p>&nbsp;</p></div>');
     expect(sessao.getContent()).not.toContain('Cumpre ressaltar');
     document.querySelector<HTMLButtonElement>('[data-b601-coleta-controle="sinab"]')!.click();
@@ -220,7 +229,7 @@ describe('coleta B-601 no editor e na exportação', () => {
     document.querySelector<HTMLButtonElement>('[data-b601-coleta-controle="sinab"]')!.click();
     expect(sessao.getContent()).not.toContain('Cumpre ressaltar');
     sessao.leitura();
-    expect(document.querySelector('select,button')).toBeNull();
+    await vi.waitFor(() => expect(document.querySelector('select,button')).toBeNull());
   });
 
   it('ignora referências salvas de outro ambiente e preserva os valores locais', () => {

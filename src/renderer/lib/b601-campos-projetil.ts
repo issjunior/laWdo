@@ -1,3 +1,6 @@
+import { permiteEdicaoCampo } from './politica-edicao-conteudo';
+import { SELETOR_SELECAO_PONTUAL } from './adaptadores-conteudo-laudo';
+import { registrarPreparacaoConteudo } from './preparacao-conteudo-editor';
 import { prepararApresentacaoSeletorTabela, seletorTabelaEstaAberto } from './seletores-tabela-laudo';
 import type { Editor } from 'tinymce';
 import { opcoesCalibreNominalCartucho, opcoesMarcaCartucho, opcoesOrigemColeta } from '@shared/catalogos/balistica-opcoes.catalogo';
@@ -127,6 +130,13 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
   }
   raiz.querySelectorAll<HTMLElement>(seletorLegenda).forEach(legenda => legenda.setAttribute('contenteditable', 'false'));
   raiz.querySelectorAll<HTMLElement>(seletorCampo).forEach(campo => {
+    if (campo.closest('[data-b601-modelo-coleta="true"]')
+      && campo.getAttribute('data-b601-campo-projetil') !== 'tipo') {
+      campo.querySelectorAll(seletorControle).forEach(controle => controle.remove());
+      campo.querySelectorAll(seletorTexto).forEach(texto => texto.replaceWith(...Array.from(texto.childNodes)));
+      for (const atributo of ['contenteditable', 'tabindex', 'role', 'title', 'aria-label', 'data-b601-campo-editavel']) campo.removeAttribute(atributo);
+      return;
+    }
     let texto = campo.querySelector<HTMLElement>(seletorTexto);
     if (!texto) {
       texto = raiz.ownerDocument.createElement('span');
@@ -150,11 +160,15 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
       controle = raiz.ownerDocument.createElement('select');
       controle.setAttribute('data-b601-campo-select', 'true');
       controle.setAttribute('data-mce-bogus', 'all');
+      controle.disabled = !permiteEdicaoCampo(campo, somenteLeitura, campo.matches(SELETOR_SELECAO_PONTUAL));
       campo.append(controle);
     }
     const opcoes = obterOpcoes(campo, personalizados, atual);
     if (atual && !opcoes.some(opcao => opcao.valor === atual)) opcoes.unshift({ texto: atual, valor: atual });
     if (!atual) opcoes.unshift({ texto: tipo === 'tipo' || ehFormato || campoEstojo ? 'XXX' : 'XXX', valor: '' });
+    const assinaturaOpcoes = JSON.stringify(opcoes);
+    if (controle.getAttribute('data-opcoes') !== assinaturaOpcoes) {
+    controle.setAttribute('data-opcoes', assinaturaOpcoes);
     controle.replaceChildren(...opcoes.map(opcao => {
       const elemento = raiz.ownerDocument.createElement('option');
       elemento.value = opcao.valor;
@@ -162,6 +176,8 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
       elemento.disabled = !opcao.valor;
       return elemento;
     }));
+    }
+    controle.disabled = !permiteEdicaoCampo(campo, somenteLeitura, campo.matches(SELETOR_SELECAO_PONTUAL));
     prepararApresentacaoSeletorTabela(controle);
     controle.value = atual;
     controle.classList.toggle('campo-reservado', !atual);
@@ -206,7 +222,7 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
     const alvo = evento.target;
     if (!(alvo instanceof janela.HTMLSelectElement) || !alvo.matches(seletorControle)) return;
     const campo = alvo.closest<HTMLElement>(seletorCampo);
-    if (!campo || editor.mode.isReadOnly()) return;
+    if (!campo || editor.mode.isReadOnly() || !permiteEdicaoCampo(campo, editor.mode.isReadOnly(), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
     evento.stopImmediatePropagation();
     const texto = campo.querySelector<HTMLElement>(seletorTexto);
     const valor = alvo.value;
@@ -252,7 +268,7 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
   documento.addEventListener('mousedown', preservarInteracao, true);
   documento.addEventListener('click', preservarInteracao, true);
   documento.addEventListener('keydown', preservarInteracao, true);
-  editor.on('SetContent LoadContent Undo Redo SwitchMode', sincronizar);
+  registrarPreparacaoConteudo(editor, sincronizar);
   editor.on('PreProcess', evento => limparInteracaoCamposB601(evento.node));
   editor.on('remove', () => {
     encerrado = true;
@@ -260,6 +276,6 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
     documento.removeEventListener('mousedown', preservarInteracao, true);
     documento.removeEventListener('click', preservarInteracao, true);
     documento.removeEventListener('keydown', preservarInteracao, true);
-    editor.off('SetContent LoadContent Undo Redo SwitchMode', sincronizar);
+    editor.off('ConteudoInterativoAlterado SetContent LoadContent Undo Redo SwitchMode', sincronizar);
   });
 }

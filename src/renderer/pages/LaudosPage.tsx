@@ -1,3 +1,6 @@
+import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
+import { materializarEdicaoPontual } from '@/lib/adaptadores-conteudo-laudo';
+import { useConfirmacaoConteudo } from '@/components/editor/ConfirmacaoConteudo';
 import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -531,6 +534,7 @@ const extrairFigurasDaRaiz = (raiz: ParentNode): ImagemLaudo[] => {
 };
 
 export const LaudosPage: React.FC = () => {
+  const { confirmar: confirmarConteudo, dialogo: dialogoConteudo } = useConfirmacaoConteudo();
   const navigate = useNavigate();
   const location = useLocation();
   const { setTemporariamenteRecolhida } = useSidebar();
@@ -2659,6 +2663,8 @@ export const LaudosPage: React.FC = () => {
   }, [atualizarConteudoSecao, editorMode, secoes]);
 
   const solicitarPreenchimentoCampoReservado = useCallback((campo: CampoReservadoSelecionado) => {
+    const editor = obterEditorTinyMce(campo.editorId);
+    if (!isTinyMceEditor(editor) || !editor.getBody()?.contains(campo.elemento) || !permiteEdicaoCampo(campo.elemento, editor.mode.isReadOnly())) return;
     campoReservadoSelecionadoRef.current = campo;
     rascunhoRecuoCampoReservadoRef.current = null;
     const valorInicial = obterHtmlCampo(campo.elemento);
@@ -2686,28 +2692,37 @@ export const LaudosPage: React.FC = () => {
 
     const selecionado = campoReservadoSelecionadoRef.current;
     const editor = selecionado ? obterEditorTinyMce(selecionado.editorId) : null;
-    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento)) {
+    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento) || !permiteEdicaoCampo(selecionado.elemento, editor.mode.isReadOnly())) {
       toast.error('O campo selecionado não está mais disponível neste editor.');
       fecharDialogoCampoReservado();
       return;
     }
 
-    editor.undoManager.transact(() => {
-      preencherCampoReservado(selecionado.elemento, valor);
-      const paragrafo = selecionado.elemento.closest('p');
-      if (paragrafo && rascunhoRecuoCampoReservadoRef.current !== null) {
-        editor.dom.setStyle(paragrafo, 'text-indent', rascunhoRecuoCampoReservadoRef.current);
-      }
-    });
+    try {
+      editor.undoManager.transact(() => {
+        if (!materializarEdicaoPontual(editor, selecionado.elemento)) throw new Error('Não foi possível personalizar a tabela.');
+        preencherCampoReservado(selecionado.elemento, valor);
+        const paragrafo = selecionado.elemento.closest('p');
+        if (paragrafo && permiteEdicaoCampo(paragrafo, editor.mode.isReadOnly()) && rascunhoRecuoCampoReservadoRef.current !== null) {
+          editor.dom.setStyle(paragrafo, 'text-indent', rascunhoRecuoCampoReservadoRef.current);
+        }
+      });
+    } catch (erro: unknown) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível preencher o campo.');
+      return;
+    }
+    editor.dispatch('ConteudoInterativoAlterado');
     atualizarConteudoDoEditor(editor);
     registrarAlteracao();
     fecharDialogoCampoReservado();
   }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao]);
 
-  const restaurarValorDaRep = useCallback(() => {
+  const restaurarValorDaRep = useCallback(async () => {
+    const referenciaInicial = campoReservadoSelecionadoRef.current;
+    if (!await confirmarConteudo('Restaurar o valor atual da REP? O preenchimento local deste campo será descartado.')) return;
     const selecionado = campoReservadoSelecionadoRef.current;
     const editor = selecionado ? obterEditorTinyMce(selecionado.editorId) : null;
-    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento)) return;
+    if (selecionado !== referenciaInicial || !selecionado || !isTinyMceEditor(editor) || !permiteEdicaoCampo(selecionado.elemento, editor.mode.isReadOnly()) || !editor.getBody()?.contains(selecionado.elemento)) { toast.error('O campo selecionado não está mais disponível.'); return; }
     editor.undoManager.transact(() => {
       if (restaurarCampoReservado(selecionado.elemento)) {
         aplicarVisualizacaoPlaceholder(editor, selecionado.elemento, {
@@ -2721,7 +2736,8 @@ export const LaudosPage: React.FC = () => {
     atualizarConteudoDoEditor(editor);
     registrarAlteracao();
     fecharDialogoCampoReservado();
-  }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders]);
+    toast.success('Valor da REP restaurado no rascunho.');
+  }, [confirmarConteudo, atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders]);
 
   const localizarBlocoNoEditor = useCallback((referencia: BlocoCondicionalSelecionado) => {
     const editor = obterEditorTinyMce(referencia.editorId);
@@ -4298,6 +4314,7 @@ export const LaudosPage: React.FC = () => {
 
     return (
       <TooltipProvider>
+        {dialogoConteudo}
         <div className="flex w-full flex-col gap-4 px-4 pb-4 md:px-8 md:pb-6">
         <CabecalhoEditorLaudo
           repNumero={editando.rep_numero}
