@@ -40,6 +40,87 @@ afterEach(async () => {
 });
 
 describe('transferência portável de um laudo', () => {
+  it('transporta a cadeia da imagem editada e remapeia as figuras e seus originais na substituição', async () => {
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=', 'base64');
+    await mkdir(path.join(diretorio, 'imagens/laudos/laudo'), { recursive: true });
+    for (const [id, origem] of [['original', null], ['editada', 'original'], ['sem-uso', null]]) {
+      const relativo = `imagens/laudos/laudo/${id}.png`;
+      await writeFile(path.join(diretorio, relativo), bytes);
+      await sqlite.executeNonQuery('INSERT INTO imagens_laudo (id, laudo_id, nome_arquivo, caminho_relativo, mime_type, tamanho, sha256, imagem_origem_id, legenda) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, 'laudo', `${id}.png`, relativo, 'image/png', bytes.length, createHash('sha256').update(bytes).digest('hex'), origem, `Legenda ${id}`]);
+    }
+    await sqlite.executeNonQuery('UPDATE laudos SET conteudo = ? WHERE id = ?',
+      [`<figure data-image-id="editada" data-image-original-id="original"><img src="data:image/png;base64,${bytes.toString('base64')}"><figcaption>Legenda preservada</figcaption></figure>`, 'laudo']);
+    await servico.exportarBkpLaudo('laudo', arquivo);
+    const pacote = await servico.lerBkpLaudo(arquivo, extraido);
+    expect(pacote.imagens.map(imagem => imagem.id).sort()).toEqual(['editada', 'original']);
+    const previa = await servico.analisarConflitosBkp(pacote);
+    const id = await servico.importarBkpLaudo(pacote, extraido, 'perito', previa.identidade, true);
+    expect(id).toBe('laudo');
+    const imagens = await sqlite.executeQuery<{ id: string; imagem_origem_id: string | null; caminho_relativo: string; nome_arquivo: string }>('SELECT * FROM imagens_laudo WHERE laudo_id = ?', [id]);
+    expect(imagens).toHaveLength(2);
+    const original = imagens.find(imagem => imagem.nome_arquivo === 'original.png');
+    const editada = imagens.find(imagem => imagem.nome_arquivo === 'editada.png');
+    expect(original?.id).toBeDefined();
+    expect(editada?.id).toBeDefined();
+    expect(original?.id).not.toBe('original');
+    expect(editada?.id).not.toBe('editada');
+    expect(editada?.imagem_origem_id).toBe(original?.id);
+    const [laudo] = await sqlite.executeQuery<{ conteudo: string }>('SELECT conteudo FROM laudos WHERE id = ?', [id]);
+    expect(laudo.conteudo).toContain(`data-image-id="${editada?.id}"`);
+    expect(laudo.conteudo).toContain(`data-image-original-id="${original?.id}"`);
+    expect(laudo.conteudo).toContain('Legenda preservada');
+    for (const imagem of imagens) expect(await readFile(path.join(diretorio, imagem.caminho_relativo))).toEqual(bytes);
+    await servico.exportarBkpLaudo(id, path.join(diretorio, 'imagens-reexportadas.bkp'));
+  });
+
+  it('remapeia conflitos transitivos de placeholders sem sobrescrever valores locais', async () => {
+    await sqlite.executeNonQuery("INSERT INTO placeholders (id, chave, valor) VALUES ('intermediario', 'intermediario', '{{minha_chave}}'), ('externo', 'externo', '{{intermediario}}')");
+    await sqlite.executeNonQuery("UPDATE laudos SET conteudo = '<p>{{externo}}</p>' WHERE id = 'laudo'");
+    await servico.exportarBkpLaudo('laudo', arquivo);
+    const pacote = await servico.lerBkpLaudo(arquivo, extraido);
+    expect(pacote.placeholders.map(item => item.chave).sort()).toEqual(['externo', 'intermediario', 'minha_chave']);
+    await sqlite.executeNonQuery("UPDATE placeholders SET valor = 'Valor exclusivo do destino' WHERE chave = 'minha_chave'");
+    const locaisAntes = await sqlite.executeQuery('SELECT * FROM placeholders ORDER BY id');
+    const previa = await servico.analisarConflitosBkp(pacote);
+    const id = await servico.importarBkpLaudo(pacote, extraido, 'perito', previa.identidade, true);
+    expect(await sqlite.executeQuery("SELECT * FROM placeholders WHERE chave NOT LIKE '%_importado_%' ORDER BY id")).toEqual(locaisAntes);
+    const importados = await sqlite.executeQuery<{ chave: string; valor: string }>("SELECT chave, valor FROM placeholders WHERE chave LIKE '%_importado_%'");
+    const interno = importados.find(item => item.chave.startsWith('minha_chave_importado_'));
+    const intermediario = importados.find(item => item.chave.startsWith('intermediario_importado_'));
+    const externo = importados.find(item => item.chave.startsWith('externo_importado_'));
+    expect(importados).toHaveLength(3);
+    expect(interno?.valor).toBe('Valor de origem');
+    expect(intermediario?.valor).toBe(`{{${interno?.chave}}}`);
+    expect(externo?.valor).toBe(`{{${intermediario?.chave}}}`);
+    const [laudo] = await sqlite.executeQuery<{ conteudo: string; estrutura_incorporada_json: string }>('SELECT conteudo, estrutura_incorporada_json FROM laudos WHERE id = ?', [id]);
+    expect(laudo.conteudo).toBe(`<p>{{${externo?.chave}}}</p>`);
+    expect(estrutura.lerEstruturaIncorporada(laudo)?.template.secoes[0].conteudo).toBe(`<p>{{${interno?.chave}}}</p>`);
+    const novoArquivo = path.join(diretorio, 'reexportado.bkp');
+    await servico.exportarBkpLaudo(id, novoArquivo);
+    const reexportado = await servico.lerBkpLaudo(novoArquivo, path.join(diretorio, 'reexportado'));
+    expect(reexportado.placeholders.map(item => item.chave).sort()).toEqual(importados.map(item => item.chave).sort());
+  });
+
+  it.each([
+    ['script', '<script>executar()</script>'],
+    ['evento', '<p onclick="executar()">Texto</p>'],
+    ['URL ativa', '<a href="javascript:executar()">Texto</a>'],
+    ['CSS externo', '<p style="background:url(https://exemplo.invalid/imagem.png)">Texto</p>'],
+    ['imagem externa', '<img src="https://exemplo.invalid/imagem.png">'],
+    ['figura ausente', '<figure data-image-id="ausente">Foto</figure>'],
+  ])('recusa %s no conteúdo importado antes de permitir substituição', async (_tipo, html) => {
+    await servico.exportarBkpLaudo('laudo', arquivo);
+    const pacote = await servico.lerBkpLaudo(arquivo, extraido);
+    pacote.laudo.conteudo = html;
+    const { criarArquivoLaudo } = await import('../../main/services/laudo-bkp-arquivo.service');
+    const alterado = path.join(diretorio, 'alterado.bkp');
+    await criarArquivoLaudo(alterado, '0.1.22', [{ nome: 'laudo.json', conteudo: Buffer.from(JSON.stringify(pacote)) }]);
+    const antes = await sqlite.executeQuery('SELECT * FROM laudos');
+    await expect(servico.lerBkpLaudo(alterado, path.join(diretorio, 'alterado'))).rejects.toThrow(/não permitido|não permitida|ausente/);
+    expect(await sqlite.executeQuery('SELECT * FROM laudos')).toEqual(antes);
+  });
+
   it('importa sem cadastro do template e preserva acesso, outros cadastros, autoria local, status e datas', async () => {
     await servico.exportarBkpLaudo('laudo', arquivo);
     expect((await readFile(arquivo)).includes(Buffer.from('segredo-local'))).toBe(false);
