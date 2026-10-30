@@ -17,7 +17,7 @@ export function registrarPreparacaoConteudo(editor: Editor, executar: () => void
         [...preparar].sort((a, b) => a.prioridade - b.prioridade).forEach(item => item.executar());
       });
     };
-    const eventos = 'SetContent LoadContent Undo Redo SwitchMode PlaceholdersAplicados ConteudoInterativoAlterado';
+    const eventos = 'SetContent LoadContent Undo Redo SwitchMode DisabledStateChange PlaceholdersAplicados ConteudoInterativoAlterado';
     editor.on(eventos, agendar);
     editor.on('remove', () => {
       if (quadro !== undefined) janela?.cancelAnimationFrame(quadro);

@@ -2,7 +2,8 @@ import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
 import { registrarPreparacaoConteudo } from '@/lib/preparacao-conteudo-editor';
 import { registrarConteudoInterativo } from '@/lib/conteudo-interativo';
 import { useConfirmacaoConteudo } from './ConfirmacaoConteudo';
-import { ESTILOS_SELETORES_TABELA_LAUDO } from '@/lib/seletores-tabela-laudo';
+import { registrarSeletoresTabela, type SessaoSeletorTabela } from '@/lib/seletores-tabela-laudo';
+import { SeletorTabelaLaudo } from './SeletorTabelaLaudo';
 import React, { useRef, useState, useEffect, useId, useLayoutEffect, useCallback } from 'react';
 import type { EventoEditorLaudo } from '@shared/diagnostico/contratos';
 import { registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
@@ -20,8 +21,9 @@ import { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
 export { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
 import { registrarSeletoresCamposB601 } from '@/lib/b601-campos-projetil';
 import { registrarColetaB601 } from '@/lib/b601-coleta';
+import { registrarMenuPreenchimentoB601 } from '@/lib/menu-preenchimento-b601';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
-import { criarHtmlFigura } from '@/lib/figura-html';
+import { criarHtmlFigura, URL_FIGURA_DUMMY } from '@shared/figura/html';
 import { atualizarNumeroFigura } from '@/lib/figuras';
 import {
   aplicarRecuoPrimeiraLinha,
@@ -539,6 +541,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   ...rest
 }) => {
   const { confirmar, dialogo } = useConfirmacaoConteudo();
+  const [sessaoSeletor, definirSessaoSeletor] = useState<SessaoSeletorTabela | null>(null);
   const confirmarRef = useRef(confirmar);
   confirmarRef.current = confirmar;
   const idReact = useId();
@@ -762,6 +765,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
       {...rest}
     >
       {dialogo}
+      {sessaoSeletor && <SeletorTabelaLaudo key={sessaoSeletor.id} sessao={sessaoSeletor} />}
       {!ready && (
         <div className="absolute inset-0 z-10 flex min-h-72 items-center justify-center rounded-md border border-border bg-background">
           {falhaInicializacao ? (
@@ -947,7 +951,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             [data-b601-campo-editavel="true"] > [data-b601-campo-texto="true"] { display: none; }
             [data-b601-coleta-editavel] > [data-b601-coleta-texto] { display: none; }
             @media print {
-              [data-b601-coleta-controle] { display: none !important; }
+              [data-b601-coleta-controle], [data-seletor-tabela-acionador] { display: none !important; }
               [data-b601-coleta-editavel] > [data-b601-coleta-texto] { display: inline !important; }
             }
             @media print {
@@ -971,7 +975,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               color: #fbbf24;
               border-bottom-color: #f59e0b;
             }
-            ${ESTILOS_SELETORES_TABELA_LAUDO}
             .cond-bloco {
               display: flex;
               flex-direction: column;
@@ -1377,8 +1380,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
             editor.addCommand('insertLaudoImageDummy', () => {
               const id = crypto.randomUUID();
-              const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'><rect width='600' height='400' fill='%233a3a3a' rx='8'/><rect x='235' y='115' width='130' height='100' rx='8' fill='none' stroke='%23888' stroke-width='2.5'/><circle cx='265' cy='145' r='11' fill='none' stroke='%23888' stroke-width='2.5'/><polyline points='235,195 275,162 325,195' fill='none' stroke='%23888' stroke-width='2.5'/><text x='300' y='260' text-anchor='middle' fill='%23aaa' font-size='20' font-family='sans-serif' font-weight='500'>INSERIR IMAGEM</text><text x='300' y='290' text-anchor='middle' fill='%23777' font-size='13' font-family='sans-serif'>Clique para substituir</text></svg>`;
-              const src = `data:image/svg+xml;base64,${btoa(svg)}`;
+              const src = URL_FIGURA_DUMMY;
               const html = criarHtmlFigura(src, id, '', true) + '<br>';
               editor.insertContent(html);
             });
@@ -1499,8 +1501,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               doc.addEventListener('keydown', solicitarBusca, true);
               editor.on('remove', () => doc.removeEventListener('keydown', solicitarBusca, true));
               const body = editor.getBody();
+              registrarSeletoresTabela(editor, definirSessaoSeletor);
               registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'));
               registrarColetaB601(editor, laudoId, html => onChange(html, 'usuario'));
+              if (laudoId) registrarMenuPreenchimentoB601(editor, html => onChange(html, 'usuario'));
 
               const sincronizarAcoesBlocos = () => {
                 editor.undoManager.ignore(() => {

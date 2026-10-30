@@ -1,146 +1,242 @@
-export const ESTILOS_SELETORES_TABELA_LAUDO = `
-  select.seletor-tabela-laudo,
-  select.seletor-tabela-laudo::picker(select) { appearance: base-select; }
-  select.seletor-tabela-laudo {
-    display: block; position: relative; field-sizing: content;
-    inline-size: fit-content; max-inline-size: 100%; min-inline-size: 0;
-    block-size: auto; min-block-size: 1.8em; margin: 0 auto;
-    box-sizing: border-box; font: inherit; line-height: 1.3;
-    text-align: center; text-align-last: center;
-    white-space: normal; overflow-wrap: anywhere;
-    border: 1px solid #a1a1aa; border-radius: 4px;
-    padding: 2px .75em; cursor: pointer;
-  }
-  :where(select.seletor-tabela-laudo) { color: var(--cor-texto-editor); background-color: #fff; }
-  select.seletor-tabela-laudo > button {
-    display: block; inline-size: 100%; min-inline-size: 0;
-    margin: 0; padding: 0; border: 0; background: transparent;
-    color: inherit; font: inherit; line-height: inherit;
-    text-align: center; white-space: normal; overflow-wrap: anywhere;
-  }
-  select.seletor-tabela-laudo selectedcontent {
-    display: block; min-inline-size: 0; white-space: normal;
-    overflow-wrap: anywhere; text-align: center;
-  }
-  select.seletor-tabela-laudo::picker-icon {
-    position: absolute; font-size: .65em; inset-inline-end: .25em; inset-block-start: 50%;
-    transform: translateY(-50%); margin: 0;
-  }
-  select.seletor-tabela-laudo::picker(select) {
-    inline-size: max-content; min-inline-size: anchor-size(width);
-    inset: auto; position-area: block-end span-inline-end; position-try-fallbacks: flip-inline;
-    max-inline-size: min(32rem, var(--largura-lista-seletor, calc(100vw - 24px)));
-    max-block-size: min(20rem, var(--altura-lista-seletor, calc(100vh - 24px)));
-    box-sizing: border-box; overflow: auto; padding: 4px;
-    font: inherit; color: var(--cor-texto-editor); background-color: #fff;
-    border: 1px solid #a1a1aa; border-radius: 6px;
-  }
-  select.seletor-tabela-laudo[data-posicao-lista="acima"]::picker(select) { position-area: block-start span-inline-end; }
-  select.seletor-tabela-laudo option {
-    display: block; position: relative; min-inline-size: 0;
-    padding: .35em 1.5em; text-align: center; text-align-last: center;
-    white-space: normal; overflow-wrap: anywhere; line-height: 1.3;
-  }
-  select.seletor-tabela-laudo option::checkmark {
-    position: absolute; inset-inline-start: .3em; inset-block-start: 50%;
-    transform: translateY(-50%);
-  }
-  select.seletor-tabela-laudo.campo-reservado { padding-inline: .75em; }
-  body.dark-content :where(select.seletor-tabela-laudo),
-  body.dark-content select.seletor-tabela-laudo::picker(select) { background-color: #222f3e; color-scheme: dark; }
-`;
+import type { Editor } from 'tinymce';
+import { registrarPreparacaoConteudo } from './preparacao-conteudo-editor';
 
-const documentosObservados = new WeakSet<Document>();
+const seletorAcionador = '[data-seletor-tabela-acionador]';
+const controles = new WeakMap<HTMLButtonElement, HTMLSelectElement>();
+let fecharSeletorAtivo: (() => void) | null = null;
 
-function ajustarLimitesLista(controle: HTMLSelectElement, propriedades: CSSStyleDeclaration): void {
-  const janela = controle.ownerDocument.defaultView;
-  if (!janela) return;
-  let contexto = janela;
-  let topoCampo = controle.getBoundingClientRect().top;
-  let baseCampo = controle.getBoundingClientRect().bottom;
-  const limites = { topo: 0, base: janela.innerHeight, esquerda: 0, direita: janela.innerWidth };
-  while (contexto.frameElement) {
-    const frame = contexto.frameElement;
-    const pai = frame.ownerDocument.defaultView;
-    if (!pai) break;
-    const retangulo = frame.getBoundingClientRect();
-    const deslocamentoY = retangulo.top + frame.clientTop;
-    const deslocamentoX = retangulo.left + frame.clientLeft;
-    topoCampo += deslocamentoY;
-    baseCampo += deslocamentoY;
-    limites.topo = Math.max(0, limites.topo + deslocamentoY);
-    limites.base = Math.min(pai.innerHeight, limites.base + deslocamentoY);
-    limites.esquerda = Math.max(0, limites.esquerda + deslocamentoX);
-    limites.direita = Math.min(pai.innerWidth, limites.direita + deslocamentoX);
-    for (let ancestral = frame.parentElement; ancestral; ancestral = ancestral.parentElement) {
-      const estilo = pai.getComputedStyle(ancestral);
-      const caixa = ancestral.getBoundingClientRect();
-      if (/auto|scroll|hidden|clip/.test(estilo.overflowY)) {
-        limites.topo = Math.max(limites.topo, caixa.top + ancestral.clientTop);
-        limites.base = Math.min(limites.base, caixa.top + ancestral.clientTop + ancestral.clientHeight);
-      }
-      if (/auto|scroll|hidden|clip/.test(estilo.overflowX)) {
-        limites.esquerda = Math.max(limites.esquerda, caixa.left + ancestral.clientLeft);
-        limites.direita = Math.min(limites.direita, caixa.left + ancestral.clientLeft + ancestral.clientWidth);
-      }
-    }
-    contexto = pai;
-  }
-  const acima = Math.max(0, topoCampo - limites.topo - 8);
-  const abaixo = Math.max(0, limites.base - baseCampo - 8);
-  const abrirAcima = abaixo < Math.min(240, acima);
-  const posicao = abrirAcima ? 'acima' : 'abaixo';
-  if (controle.getAttribute('data-posicao-lista') !== posicao) controle.setAttribute('data-posicao-lista', posicao);
-  propriedades.setProperty('--altura-lista-seletor', `${Math.max(1, Math.floor(abrirAcima ? acima : abaixo))}px`);
-  propriedades.setProperty('--largura-lista-seletor', `${Math.max(1, Math.floor(limites.direita - limites.esquerda - 16))}px`);
+export function editorBloqueadoParaSeletores(editor: Editor): boolean {
+  return editor.mode.isReadOnly() || editor.options?.get('disabled') === true;
 }
 
-function observarAreaVisivel(documento: Document): void {
-  if (documentosObservados.has(documento)) return;
-  const janela = documento.defaultView;
-  if (!janela) return;
+export interface SessaoSeletorTabela {
+  id: string;
+  valor: string;
+  rotulo: string;
+  aceitaTextoLivre: boolean;
+  digitar: (texto: string) => void;
+  opcoes: { valor: string; texto: string; desabilitada: boolean }[];
+  escolher: (valor: string) => void;
+  fechar: (restaurar?: boolean) => void;
+  concluirFechamento: () => void;
+}
+
+export function limparApresentacaoSeletoresTabela(raiz: ParentNode): void {
+  raiz.querySelectorAll(seletorAcionador).forEach(botao => botao.remove());
+}
+
+export function prepararApresentacaoSeletorTabela(controle: HTMLSelectElement, textoAtual?: string): void {
+  controle.hidden = true;
+  controle.tabIndex = -1;
+  controle.setAttribute('aria-hidden', 'true');
+  controle.classList.add('seletor-tabela-ponte');
+  let botao = controle.parentElement?.querySelector<HTMLButtonElement>(seletorAcionador);
+  if (!botao) {
+    const documento = controle.ownerDocument;
+    botao = documento.createElement('button');
+    botao.type = 'button';
+    botao.className = 'seletor-tabela-acionador';
+    botao.setAttribute('data-seletor-tabela-acionador', 'true');
+    botao.setAttribute('data-mce-bogus', 'all');
+    botao.setAttribute('contenteditable', 'false');
+    botao.setAttribute('aria-haspopup', 'listbox');
+    botao.setAttribute('aria-expanded', 'false');
+    const texto = documento.createElement('span');
+    const icone = documento.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icone.setAttribute('viewBox', '0 0 24 24');
+    icone.setAttribute('aria-hidden', 'true');
+    const caminho = documento.createElementNS('http://www.w3.org/2000/svg', 'path');
+    caminho.setAttribute('d', 'm6 9 6 6 6-6');
+    icone.append(caminho);
+    botao.append(texto, icone);
+    controle.after(botao);
+  }
+  controles.set(botao, controle);
+  const texto = textoAtual || controle.selectedOptions[0]?.label || 'XXX';
+  if (botao.firstChild?.textContent !== texto) botao.firstChild!.textContent = texto;
+  botao.disabled = controle.disabled;
+  botao.title = controle.title;
+  botao.setAttribute('aria-label', `${controle.getAttribute('aria-label') || 'Selecionar'}: ${texto}`);
+  botao.classList.toggle('seletor-tabela-pendente', texto === 'XXX');
+  botao.classList.toggle('seletor-tabela-editavel', controle.hasAttribute('data-valor-livre'));
+}
+
+function copiarEstilos(documento: Document): () => void {
+  const regras: string[] = [];
+  const visitar = (lista: CSSRuleList) => {
+    for (const regra of Array.from(lista)) {
+      if (regra instanceof CSSStyleRule && regra.selectorText.includes('seletor-tabela')) regras.push(regra.cssText);
+      else if ('cssRules' in regra) visitar((regra as CSSGroupingRule).cssRules);
+    }
+  };
+  for (const folha of Array.from(document.styleSheets)) {
+    try { visitar(folha.cssRules); } catch { continue; }
+  }
   const estilo = documento.createElement('style');
-  estilo.textContent = ':root { --altura-lista-seletor: 20rem; }';
+  estilo.textContent = `:root {}\n${regras.join('\n')}`;
   documento.head.append(estilo);
   const regra = estilo.sheet?.cssRules[0];
-  if (!(regra instanceof janela.CSSStyleRule)) { estilo.remove(); return; }
-  documentosObservados.add(documento);
-  const controlador = new janela.AbortController();
-  const opcoes = { capture: true, signal: controlador.signal };
-  const atualizar = (evento: Event) => {
+  const atualizarTema = () => {
+    if (!regra || !('style' in regra)) return;
+    const origem = getComputedStyle(document.documentElement);
+    for (const nome of ['spacing', 'radius', 'card', 'foreground', 'input', 'accent', 'ring', 'muted-foreground']) {
+      (regra as CSSStyleRule).style.setProperty(`--${nome}`, origem.getPropertyValue(`--${nome}`));
+    }
+  };
+  atualizarTema();
+  const observador = new MutationObserver(atualizarTema);
+  observador.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  return () => { observador.disconnect(); estilo.remove(); };
+}
+
+export function registrarSeletoresTabela(editor: Editor, aoAbrir: (sessao: SessaoSeletorTabela | null) => void): void {
+  const documento = editor.getDoc();
+  const janela = documento.defaultView;
+  if (!janela) return;
+  const limparEstilos = copiarEstilos(documento);
+  const id = `seletor-${crypto.randomUUID()}`;
+  const estilo = document.createElement('style');
+  document.head.append(estilo);
+  const indice = estilo.sheet?.insertRule(`[data-seletor-tabela-ancora="${id}"] {}`);
+  const regra = indice === undefined ? null : estilo.sheet?.cssRules[indice];
+  if (!(regra instanceof CSSStyleRule)) { estilo.remove(); limparEstilos(); return; }
+  let encerrado = false;
+  let ativo: { controle: HTMLSelectElement; botao: HTMLButtonElement; valor: string; assinatura: string; restaurar: boolean; rascunho: string; escolhido?: string } | null = null;
+  const lerValor = (controle: HTMLSelectElement) => controle.getAttribute('data-valor-livre') ?? controle.value;
+  const lerOpcoes = (controle: HTMLSelectElement) => Array.from(controle.options, opcao => ({
+    valor: opcao.value, texto: opcao.label, desabilitada: opcao.disabled || opcao.hidden,
+  }));
+  const valido = (controle: HTMLSelectElement, botao: HTMLButtonElement) => !encerrado && !editor.removed && !editor.destroyed
+    && !editorBloqueadoParaSeletores(editor) && !controle.disabled && !botao.disabled
+    && editor.getBody().contains(controle) && editor.getBody().contains(botao) && controles.get(botao) === controle;
+  const aplicarTextoLivre = (selecao: NonNullable<typeof ativo>, texto: string) => {
+    const valor = texto.trim();
+    const { controle, botao } = selecao;
+    if (valor === selecao.valor || !valido(controle, botao) || lerValor(controle) !== selecao.valor
+      || JSON.stringify(lerOpcoes(controle)) !== selecao.assinatura) return;
+    controle.setAttribute('data-valor-livre', valor);
+    controle.value = valor;
+    controle.dispatchEvent(new janela.Event('change', { bubbles: true }));
+  };
+  const fechar = (restaurar = true, confirmarRascunho = false) => {
+    const anterior = ativo;
+    if (!anterior) return;
+    ativo = null;
+    fecharSeletorAtivo = null;
+    anterior.restaurar = restaurar;
+    if (confirmarRascunho && anterior.controle.hasAttribute('data-valor-livre')) aplicarTextoLivre(anterior, anterior.rascunho);
+    anterior.botao.setAttribute('aria-expanded', 'false');
+    anterior.botao.removeAttribute('aria-controls');
+    aoAbrir(null);
+  };
+  const abrir = (botao: HTMLButtonElement) => {
+    const controle = controles.get(botao);
+    if (!controle || !valido(controle, botao)) return;
+    fecharSeletorAtivo?.();
+    const retangulo = botao.getBoundingClientRect();
+    const frame = janela.frameElement?.getBoundingClientRect();
+    regra.style.setProperty('left', `${retangulo.left + (frame?.left || 0) + (janela.frameElement?.clientLeft || 0)}px`);
+    regra.style.setProperty('top', `${retangulo.top + (frame?.top || 0) + (janela.frameElement?.clientTop || 0)}px`);
+    regra.style.setProperty('width', `${retangulo.width}px`);
+    regra.style.setProperty('height', `${retangulo.height}px`);
+    const opcoes = lerOpcoes(controle);
+    const valor = lerValor(controle);
+    const aceitaTextoLivre = controle.hasAttribute('data-valor-livre');
+    const assinatura = JSON.stringify(opcoes);
+    const selecao: NonNullable<typeof ativo> = { controle, botao, valor, assinatura, restaurar: false, rascunho: valor };
+    ativo = selecao;
+    fecharSeletorAtivo = () => fechar(false, true);
+    botao.setAttribute('aria-expanded', 'true');
+    botao.setAttribute('aria-controls', `${id}-lista`);
+    aoAbrir({ id, valor, rotulo: controle.getAttribute('aria-label') || 'Selecionar', opcoes, aceitaTextoLivre,
+      digitar: texto => { if (ativo === selecao) selecao.rascunho = texto; },
+      fechar,
+      concluirFechamento: () => {
+        if (encerrado || !valido(controle, botao)) return;
+        if (selecao.restaurar && !fecharSeletorAtivo) botao.focus({ preventScroll: true });
+        const escolhido = selecao.escolhido;
+        delete selecao.escolhido;
+        if (escolhido === undefined || escolhido === valor) return;
+        // O diálogo de preenchimento manual só pode abrir após a desmontagem do Radix.
+        window.setTimeout(() => {
+          if (!valido(controle, botao) || lerValor(controle) !== valor || JSON.stringify(lerOpcoes(controle)) !== assinatura) return;
+          if (aceitaTextoLivre) controle.setAttribute('data-valor-livre', escolhido);
+          controle.value = escolhido;
+          controle.dispatchEvent(new janela.Event('change', { bubbles: true }));
+        }, 0);
+      },
+      escolher: escolhido => {
+        if (ativo !== selecao) return;
+        if (!valido(controle, botao)
+          || lerValor(controle) !== valor || JSON.stringify(lerOpcoes(controle)) !== assinatura
+          || (!aceitaTextoLivre && !opcoes.some(opcao => opcao.valor === escolhido && !opcao.desabilitada))) { fechar(false); return; }
+        if (aceitaTextoLivre) aplicarTextoLivre(selecao, escolhido);
+        else selecao.escolhido = escolhido;
+        fechar();
+      },
+    });
+  };
+  const ponteiro = (evento: PointerEvent) => {
     const alvo = evento.target;
-    const controle = alvo instanceof janela.Element ? alvo.closest<HTMLSelectElement>('select.seletor-tabela-laudo') : null;
-    if (controle) ajustarLimitesLista(controle, regra.style);
+    const botao = alvo instanceof janela.Element ? alvo.closest<HTMLButtonElement>(seletorAcionador) : null;
+    if (!botao) { fechar(false, true); return; }
+    if (evento.button !== 0) return;
+    evento.preventDefault();
+    evento.stopImmediatePropagation();
+    abrir(botao);
   };
-  const atualizarAberto = () => {
-    const controle = Array.from(documento.querySelectorAll<HTMLSelectElement>('select.seletor-tabela-laudo')).find(seletorTabelaEstaAberto);
-    if (controle) ajustarLimitesLista(controle, regra.style);
+  const teclado = (evento: KeyboardEvent) => {
+    const alvo = evento.target;
+    const botao = alvo instanceof janela.Element ? alvo.closest<HTMLButtonElement>(seletorAcionador) : null;
+    if (!botao || evento.ctrlKey || evento.metaKey || !['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(evento.key)) return;
+    evento.preventDefault();
+    evento.stopImmediatePropagation();
+    abrir(botao);
   };
-  documento.addEventListener('pointerdown', atualizar, opcoes);
-  documento.addEventListener('keydown', atualizar, opcoes);
-  documento.addEventListener('focusin', atualizar, opcoes);
-  let contexto = janela;
-  while (true) {
-    contexto.addEventListener('scroll', atualizarAberto, opcoes);
-    contexto.addEventListener('resize', atualizarAberto, opcoes);
-    const pai = contexto.frameElement?.ownerDocument.defaultView;
-    if (!pai) break;
-    contexto = pai;
-  }
-  janela.addEventListener('unload', () => controlador.abort(), { once: true });
-}
-
-export function prepararApresentacaoSeletorTabela(controle: HTMLSelectElement): void {
-  controle.classList.add('seletor-tabela-laudo');
-  observarAreaVisivel(controle.ownerDocument);
-  if (controle.querySelector(':scope > button')) return;
-  const botao = controle.ownerDocument.createElement('button');
-  botao.type = 'button';
-  botao.tabIndex = -1;
-  botao.append(controle.ownerDocument.createElement('selectedcontent'));
-  controle.prepend(botao);
-}
-
-export function seletorTabelaEstaAberto(controle: HTMLSelectElement): boolean {
-  try { return controle.matches(':open'); } catch { return false; }
+  const impedirClique = (evento: MouseEvent) => {
+    if (evento.target instanceof janela.Element && evento.target.closest(seletorAcionador)) {
+      evento.preventDefault();
+      evento.stopImmediatePropagation();
+    }
+  };
+  const preservarFoco = (evento: FocusEvent) => {
+    if (evento.target instanceof janela.Element && evento.target.closest(seletorAcionador)) evento.stopImmediatePropagation();
+  };
+  const conferir = () => {
+    if (ativo && (!valido(ativo.controle, ativo.botao) || lerValor(ativo.controle) !== ativo.valor
+      || JSON.stringify(lerOpcoes(ativo.controle)) !== ativo.assinatura)) fechar(false);
+  };
+  const fecharPorNavegacao = (evento: Event) => {
+    if (evento.target instanceof Element && evento.target.closest('[data-seletor-tabela-lista]')) return;
+    fechar(false, true);
+  };
+  const fecharPorEditor = () => fechar(false);
+  documento.addEventListener('pointerdown', ponteiro, true);
+  documento.addEventListener('keydown', teclado, true);
+  documento.addEventListener('click', impedirClique, true);
+  documento.addEventListener('mousedown', impedirClique, true);
+  janela.addEventListener('focusin', preservarFoco, true);
+  janela.addEventListener('scroll', fecharPorNavegacao, true);
+  window.addEventListener('scroll', fecharPorNavegacao, true);
+  window.addEventListener('resize', fecharPorNavegacao);
+  const observador = new janela.MutationObserver(conferir);
+  observador.observe(editor.getBody(), { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  registrarPreparacaoConteudo(editor, conferir, 20);
+  editor.on('SwitchMode DisabledStateChange SetContent LoadContent Undo Redo', fecharPorEditor);
+  editor.on('remove', () => {
+    encerrado = true;
+    fechar(false);
+    observador.disconnect();
+    estilo.remove();
+    limparEstilos();
+    documento.removeEventListener('pointerdown', ponteiro, true);
+    documento.removeEventListener('keydown', teclado, true);
+    documento.removeEventListener('click', impedirClique, true);
+    documento.removeEventListener('mousedown', impedirClique, true);
+    janela.removeEventListener('focusin', preservarFoco, true);
+    janela.removeEventListener('scroll', fecharPorNavegacao, true);
+    window.removeEventListener('scroll', fecharPorNavegacao, true);
+    window.removeEventListener('resize', fecharPorNavegacao);
+    editor.off('SwitchMode DisabledStateChange SetContent LoadContent Undo Redo', fecharPorEditor);
+  });
 }

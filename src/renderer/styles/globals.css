@@ -18,6 +18,131 @@ body.dark-content .indicador-secao {
   @apply border-[#3f3f46] bg-[#27272a] text-[#a1a1aa];
 }
 
+.seletor-tabela-ponte {
+  display: none !important;
+}
+
+.seletor-tabela-acionador {
+  @apply inline-flex items-center justify-between gap-2 rounded-md border border-solid border-input bg-card px-2 py-1 text-foreground;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .05);
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  font: inherit;
+  line-height: 1.35;
+  text-align: left;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.seletor-tabela-acionador > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.seletor-tabela-acionador > svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .6;
+}
+
+.seletor-tabela-acionador:hover:not(:disabled),
+.seletor-tabela-acionador[aria-expanded="true"] {
+  @apply border-ring bg-accent;
+}
+
+.seletor-tabela-acionador:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.seletor-tabela-acionador:disabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
+.seletor-tabela-pendente {
+  @apply border-dashed text-muted-foreground;
+}
+
+.seletor-tabela-ancora {
+  position: fixed !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.seletor-tabela-editavel {
+  width: min(100%, 10rem);
+}
+
+.seletor-tabela-entrada {
+  position: fixed !important;
+  z-index: 100;
+  min-width: 0;
+  padding: 2px 8px;
+  font-size: 13px;
+  border-color: hsl(var(--ring));
+  background: hsl(var(--card));
+}
+
+.seletor-tabela-lista.seletor-tabela-sugestoes {
+  width: max-content;
+  max-width: min(28rem, var(--radix-popover-content-available-width));
+  max-height: min(20rem, var(--radix-popover-content-available-height));
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.seletor-tabela-sugestao {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.seletor-tabela-sugestao[aria-selected="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.seletor-tabela-lista {
+  z-index: 100;
+  min-width: min(12rem, calc(100vw - 16px));
+  max-width: min(28rem, var(--radix-select-content-available-width));
+  max-height: min(20rem, var(--radix-select-content-available-height));
+}
+
+.seletor-tabela-lista [data-radix-select-viewport] {
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+}
+
+.seletor-tabela-opcao {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
 .laudo-identificacao-fullscreen {
   position: relative;
   z-index: 1;

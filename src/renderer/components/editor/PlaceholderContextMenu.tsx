@@ -1,5 +1,6 @@
-import React from 'react';
-import { Tag } from 'lucide-react';
+import React, { useState } from 'react';
+import { obterContextoPreenchimentoB601, type ContextoPreenchimentoB601 } from '@/lib/menu-preenchimento-b601';
+import { SearchX, Tag, TriangleAlert } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -66,6 +67,7 @@ export const PlaceholderContextMenu: React.FC<{
   onInsertPlaceholder,
   children,
 }) => {
+  const [preenchimento, definirPreenchimento] = useState<ContextoPreenchimentoB601 | null>(null);
   const categoriasCompletas = [...categorias, ...CATEGORIAS_PLACEHOLDERS_COMUNS.filter(comum => !categorias.some(cat => cat.id === comum.id))];
   const chavesComuns = new Set(PLACEHOLDERS_COMUNS.map(item => item.chave));
   const placeholdersCompletos = [
@@ -82,10 +84,36 @@ export const PlaceholderContextMenu: React.FC<{
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
+      <ContextMenuTrigger asChild onContextMenuCapture={evento => definirPreenchimento(obterContextoPreenchimentoB601(evento.target))}>
         {children}
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-64">
+      <ContextMenuContent className={preenchimento ? 'w-72' : 'w-64'} onCloseAutoFocus={evento => {
+        if (preenchimento) { evento.preventDefault(); preenchimento.restaurarFoco(); }
+      }}>
+        {preenchimento ? <>
+          <ContextMenuLabel className="flex items-center justify-between gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
+            <span>Preencher célula{preenchimento.quantidade > 1 ? 's' : ''}</span>
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{preenchimento.quantidade} selecionada{preenchimento.quantidade > 1 ? 's' : ''}</span>
+          </ContextMenuLabel>
+          <ContextMenuSeparator />
+          {([
+            { valor: 'Prejudicado', letra: 'P', icone: TriangleAlert },
+            { valor: 'Ausente', letra: 'A', icone: SearchX },
+          ] as const).map(({ valor, letra, icone: Icone }) => (
+            <ContextMenuItem key={valor} className="gap-2.5 py-2" textValue={valor}
+              aria-label={`Marcar ${preenchimento.quantidade > 1 ? 'células' : 'célula'} como ${valor}`}
+              aria-keyshortcuts={`Control+Shift+${letra}`} disabled={!preenchimento.disponivel}
+              onSelect={() => preenchimento.aplicar(valor)}>
+              <Icone className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="font-medium">{valor}</span>
+              <kbd className="ml-auto shrink-0 whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl + Shift + {letra}</kbd>
+            </ContextMenuItem>
+          ))}
+          {!preenchimento.disponivel && <>
+            <ContextMenuSeparator />
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">Preenchimento indisponível para esta seleção.</p>
+          </>}
+        </> : <>
         <ContextMenuLabel>Inserir Placeholder</ContextMenuLabel>
         <ContextMenuSeparator />
         {categoriasFiltradas
@@ -146,6 +174,7 @@ export const PlaceholderContextMenu: React.FC<{
               </ContextMenuSub>
             );
           })}
+        </>}
       </ContextMenuContent>
     </ContextMenu>
   );

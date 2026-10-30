@@ -1,4 +1,4 @@
-import { TIPOS_PECA_B601_POR_CODIGO } from '../catalogos/b601.catalogo.js'
+import { obterTipoRaiamentoB601, TIPOS_PECA_B601_POR_CODIGO } from '../catalogos/b601.catalogo.js'
 import { validarDadosB601 } from '../types/b601.types.js'
 
 export function projetarB601ParaLaudo(valor: unknown) {
@@ -22,6 +22,14 @@ export function projetarB601ParaLaudo(valor: unknown) {
         const texto = typeof bruto === 'string' ? bruto : ''
         const chave = campo.id.slice(peca.tipoCodigo.length + 1)
         campos[chave] = campo.opcoes?.find(opcao => opcao.codigo === texto)?.label ?? texto
+      }
+      if (peca.tipoCodigo === '105' && peca.origem === 'gdl') {
+        const valores = Object.entries(peca.extrasGdl).filter(([chave]) =>
+          ['tiporaiamento', 'tipoderaiamento'].includes(chave.toLocaleLowerCase('pt-BR').replace(/[^a-z]/g, '')))
+        campos.tipo_raiamento = valores.map(([, valor]) => obterTipoRaiamentoB601(valor)).find(Boolean) ?? ''
+        const calibres = Object.entries(peca.extrasGdl).filter(([chave]) =>
+          ['calibrenominal', 'calibrenominalprovavel'].includes(chave.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[^a-z]/g, '')))
+        campos.calibre_nominal_provavel = calibres.flatMap(([, valor]) => typeof valor === 'string' && valor.trim() ? [valor.trim()] : [])[0] ?? ''
       }
       return { idLocal: peca.idLocal, tipoCodigo: peca.tipoCodigo, indice: indice + 1, campos }
     }),

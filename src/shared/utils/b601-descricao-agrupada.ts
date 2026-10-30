@@ -63,7 +63,8 @@ export function gerarDescricaoAgrupadaB601(dados: unknown, tipo: TipoDescricaoB6
   const projecao = projetarB601ParaLaudo(dados)
   const blocosManuais = gerarBlocosManuaisB601(dados, tipo, dono)
   const tiposItem = new Map(projecao.pecas.map(peca => [peca.idLocal, obterTipoProjetilB601(peca.campos.tipo)]))
-  return [montarDescricao(itensDescricao(dados, tipo), tipo, dono, tiposItem), blocosManuais].filter(Boolean).join('\n')
+  const calibres = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.calibre_nominal_provavel || '']))
+  return [montarDescricao(itensDescricao(dados, tipo), tipo, dono, tiposItem, undefined, new Map(), calibres), blocosManuais].filter(Boolean).join('\n')
 }
 
 export function gerarPreviaDescricaoB601(tipo: TipoDescricaoB601, coleta = false, fotosPorOrigem: ReadonlyMap<string, string> = new Map()): string {
@@ -76,7 +77,7 @@ export function gerarPreviaDescricaoB601(tipo: TipoDescricaoB601, coleta = false
   return montarDescricao([{ id: 'previa', item: 1, quantidade: 5, origem: '' }], tipo, 'previa')
 }
 
-function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDescricaoB601, dono: string, tiposItem: ReadonlyMap<string, string> = new Map(), coleta?: { origem: string; inicio: number }): string {
+function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDescricaoB601, dono: string, tiposItem: ReadonlyMap<string, string> = new Map(), coleta?: { origem: string; inicio: number }, raiamentos: ReadonlyMap<string, string> = new Map(), calibres: ReadonlyMap<string, string> = new Map()): string {
   if (!itens.length) return ''
   const unidades = itens.flatMap(item => Array.from({ length: item.quantidade }, (_, indice) => ({ ...item, unidade: indice + 1 })))
   const projetil = tipo === '105'
@@ -93,6 +94,10 @@ function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDes
       const caracteristicas = coleta ? [...CARACTERISTICAS_PROJETEIS_B601.slice(0, 9), 'Tipo de Raiamento', ...CARACTERISTICAS_PROJETEIS_B601.slice(9)] : CARACTERISTICAS_PROJETEIS_B601
       const linhas = caracteristicas.map(caracteristica => `<tr>${celula(caracteristica, true)}${lote.map((item, indice) => celula(caracteristica === 'Origem'
         ? `<span data-b601-origem-projetil="true" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${escaparDescricaoB601(item.origem) || reservarOrigem(item.item)}</span>`
+        : caracteristica === 'Calibre nominal (provável)'
+          ? `<span data-b601-campo-projetil="calibre_nominal_provavel" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${escaparDescricaoB601(calibres.get(item.id) || '') || reservarManual(caracteristica, `PQ${numeroPq(indice)}`)}</span>`
+        : caracteristica === 'Tipo de Raiamento'
+          ? `<span data-b601-campo-projetil="tipo_raiamento" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${escaparDescricaoB601(raiamentos.get(item.id) || '') || reservarManual(caracteristica, `PQ${numeroPq(indice)}`)}</span>`
         : ['Tipo', 'Constituição e formato'].includes(caracteristica)
           ? `<span data-b601-campo-projetil="${caracteristica === 'Tipo' ? 'tipo' : 'constituicao_formato'}" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${caracteristica === 'Tipo' && tiposItem.get(item.id) ? escaparDescricaoB601(tiposItem.get(item.id) || '') : reservarManual(caracteristica, `PQ${numeroPq(indice)}`)}</span>`
         : reservarManual(caracteristica, `PQ${numeroPq(indice)}`))).join('')}</tr>`).join('')
@@ -121,6 +126,8 @@ export function gerarDescricaoColetaB601(dados: unknown, tipo: TipoDescricaoB601
   const itens = itensDescricao(dados, tipo)
   const projecao = projetarB601ParaLaudo(dados)
   const tipos = new Map(projecao.pecas.map(peca => [peca.idLocal, obterTipoProjetilB601(peca.campos.tipo)]))
+  const raiamentos = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.tipo_raiamento || '']))
+  const calibres = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.calibre_nominal_provavel || '']))
   const origens = [...new Set(itens.map(item => item.origem))].sort((a, b) => {
     const prioridade = (origem: string) => codigoColetaPorOrigem(origem) === 'M110' ? 0 : codigoColetaPorOrigem(origem) === 'T002' ? 1 : 2
     return prioridade(a) - prioridade(b)
@@ -129,7 +136,7 @@ export function gerarDescricaoColetaB601(dados: unknown, tipo: TipoDescricaoB601
   const grupos = tipo === '105' ? origens.map(origem => {
     const grupo = itens.filter(item => item.origem === origem)
     const titulo = codigoColetaPorOrigem(origem) === 'M110' ? 'LOCAL' : codigoColetaPorOrigem(origem) === 'T002' ? 'NECRÓPSIA' : origem || 'XXX'
-    const html = montarDescricao(grupo, tipo, dono, tipos, { origem: titulo, inicio }) + criarFotosColetaB601(`${dono}-${inicio}`, titulo, fotosPorOrigem)
+    const html = montarDescricao(grupo, tipo, dono, tipos, { origem: titulo, inicio }, raiamentos, calibres) + criarFotosColetaB601(`${dono}-${inicio}`, titulo, fotosPorOrigem)
     inicio += grupo.reduce((total, item) => total + item.quantidade, 0)
     return html
   }).join('\n') : itens.length ? montarDescricao(itens, tipo, dono, tipos, { origem: '', inicio: 0 }) + criarFotosColetaB601(dono, 'ESTOJOS', fotosPorOrigem) : ''
@@ -138,6 +145,6 @@ export function gerarDescricaoColetaB601(dados: unknown, tipo: TipoDescricaoB601
 }
 
 function criarFotosColetaB601(id: string, origem: string, fotosPorOrigem: ReadonlyMap<string, string>): string {
-  const conteudo = fotosPorOrigem.get(origem) ?? `<p>&nbsp;</p><table border="1" width="100%"><thead><tr><th colspan="2">TABELA 1 – TOMADAS FOTOGRÁFICAS (${escaparDescricaoB601(origem)})</th></tr></thead><tbody><tr>${[1, 2].map(numero => `<td>${criarHtmlFigura(URL_FIGURA_DUMMY, `dummy-b601-${id}-${numero}`, '', true)}</td>`).join('')}</tr></tbody></table>`
+  const conteudo = fotosPorOrigem.get(origem) ?? `<p>&nbsp;</p><table border="0" width="100%" style="border:0"><thead><tr><th colspan="2" style="border:0">TABELA 1 – TOMADAS FOTOGRÁFICAS (${escaparDescricaoB601(origem)})</th></tr></thead><tbody><tr>${[1, 2].map(numero => `<td style="border:0">${criarHtmlFigura(URL_FIGURA_DUMMY, `dummy-b601-${id}-${numero}`, '', true)}</td>`).join('')}</tr></tbody></table>`
   return `<div data-b601-complemento="true" data-b601-fotos-origem="${escaparDescricaoB601(origem)}">${conteudo}</div>`
 }

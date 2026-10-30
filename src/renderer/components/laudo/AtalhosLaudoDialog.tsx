@@ -12,6 +12,14 @@ interface GrupoAtalhos {
 
 const GRUPOS_ATALHOS: GrupoAtalhos[] = [
   {
+    titulo: 'Tabelas B601',
+    contexto: 'Clique uma vez no campo compatível da tabela de projéteis ou estojos e use o atalho. Também funciona na célula do cursor ou na seleção de células. Respeita as permissões de edição.',
+    atalhos: [
+      { teclas: [['Ctrl', 'Shift', 'P']], descricao: 'Marcar como Prejudicado a célula atual ou as células selecionadas. A seleção inteira deve permitir o preenchimento.' },
+      { teclas: [['Ctrl', 'Shift', 'A']], descricao: 'Marcar como Ausente a célula atual ou as células selecionadas. A seleção inteira deve permitir o preenchimento.' },
+    ],
+  },
+  {
     titulo: 'Busca no laudo',
     contexto: 'Localize o texto exibido em todo o laudo, incluindo os valores dos placeholders.',
     atalhos: [

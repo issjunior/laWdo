@@ -7,7 +7,7 @@ import { codigoColetaPorOrigem, esquemaRepsMesmoCasoGdl, sugerirRepColeta, forma
 import type { RepsMesmoCasoGdl } from '@shared/gdl/reps-mesmo-caso';
 import { CATALOGO_TIPOS_PECA_B601 } from '@shared/catalogos/b601.catalogo';
 import { opcoesOrigemColeta } from '@shared/catalogos/balistica-opcoes.catalogo';
-import { prepararApresentacaoSeletorTabela } from './seletores-tabela-laudo';
+import { editorBloqueadoParaSeletores, limparApresentacaoSeletoresTabela, prepararApresentacaoSeletorTabela } from './seletores-tabela-laudo';
 
 const seletorCampo = '[data-b601-exame-coleta="true"]';
 const seletorCampoEditavel = `${seletorCampo}, [data-b601-campo-coleta]`;
@@ -28,6 +28,7 @@ function lerReferencias(tabela: HTMLElement): RepsMesmoCasoGdl | undefined {
 }
 
 export function limparInteracaoColetaB601(raiz: ParentNode): void {
+  limparApresentacaoSeletoresTabela(raiz);
   raiz.querySelectorAll(seletorControle).forEach(controle => controle.remove());
   raiz.querySelectorAll<HTMLElement>(seletorCampoEditavel).forEach(campo => {
     campo.querySelectorAll(seletorTexto).forEach(texto => texto.replaceWith(...Array.from(texto.childNodes)));
@@ -64,7 +65,7 @@ export function atualizarReferenciasEditorColetaB601(editor: Editor, referencias
   editor.undoManager.transact(() => {
     aplicarReferenciasColetaB601(editor.getBody(), referencias);
   });
-  prepararColetaB601(editor.getBody(), editor.mode.isReadOnly());
+  prepararColetaB601(editor.getBody(), editorBloqueadoParaSeletores(editor));
   editor.nodeChanged();
   return editor.getContent();
 }
@@ -87,6 +88,7 @@ export function prepararColetaB601(raiz: HTMLElement, somenteLeitura = false): v
     const referencias = lerReferencias(tabela);
     tabela.querySelectorAll<HTMLElement>(seletorCampoEditavel).forEach(campo => {
       if (!campo.matches(seletorCampo)) {
+        limparApresentacaoSeletoresTabela(campo);
         campo.querySelectorAll(seletorControle).forEach(no => no.remove());
         campo.querySelectorAll(seletorTexto).forEach(no => no.replaceWith(...Array.from(no.childNodes)));
         campo.removeAttribute('contenteditable');
@@ -134,12 +136,12 @@ export function prepararColetaB601(raiz: HTMLElement, somenteLeitura = false): v
           controle.append(opcao);
         });
       }
-      prepararApresentacaoSeletorTabela(controle);
       controle.value = atual;
       controle.classList.toggle('campo-reservado', atual === 'XXX');
       campo.setAttribute('contenteditable', 'false');
       campo.setAttribute('data-b601-coleta-editavel', 'true');
       campo.append(controle);
+      prepararApresentacaoSeletorTabela(controle);
     });
   });
   raiz.querySelectorAll<HTMLElement>('[data-b601-sinab="opcional"]').forEach(bloco => {
@@ -152,10 +154,10 @@ export function registrarColetaB601(editor: Editor, _laudoId: string | undefined
   const janela = documento.defaultView;
   if (!janela) return;
   let encerrado = false;
-  const sincronizar = () => editor.undoManager.ignore(() => prepararColetaB601(editor.getBody(), editor.mode.isReadOnly()));
+  const sincronizar = () => editor.undoManager.ignore(() => prepararColetaB601(editor.getBody(), editorBloqueadoParaSeletores(editor)));
   const salvar = () => { sincronizar(); editor.nodeChanged(); aoAlterar(editor.getContent()); };
   const preencher = (campo: HTMLElement, valor: string) => {
-    if (encerrado || editor.removed || editor.destroyed || !editor.getBody().contains(campo) || !permiteEdicaoCampo(campo, editor.mode.isReadOnly(), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
+    if (encerrado || editor.removed || editor.destroyed || !editor.getBody().contains(campo) || !permiteEdicaoCampo(campo, editorBloqueadoParaSeletores(editor), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
     editor.undoManager.transact(() => {
       if (!materializarEdicaoPontual(editor, campo)) return;
       const texto = campo.querySelector(seletorTexto);
@@ -175,9 +177,9 @@ export function registrarColetaB601(editor: Editor, _laudoId: string | undefined
   };
   const alterar = (evento: Event) => {
     const alvo = evento.target;
-    if (!(alvo instanceof janela.HTMLSelectElement) || !alvo.matches(seletorControle) || editor.mode.isReadOnly()) return;
+    if (!(alvo instanceof janela.HTMLSelectElement) || !alvo.matches(seletorControle) || editorBloqueadoParaSeletores(editor)) return;
     const campo = alvo.closest<HTMLElement>(seletorCampoEditavel);
-    if (!campo || !permiteEdicaoCampo(campo, editor.mode.isReadOnly(), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
+    if (!campo || !permiteEdicaoCampo(campo, editorBloqueadoParaSeletores(editor), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
     evento.stopImmediatePropagation();
     if (alvo.value === '__manual__') {
       const atual = campo.querySelector(seletorTexto)?.textContent?.trim() || '';
@@ -212,7 +214,7 @@ export function registrarColetaB601(editor: Editor, _laudoId: string | undefined
   };
   const clicar = (evento: MouseEvent) => {
     const alvo = evento.target;
-    if (!(alvo instanceof janela.HTMLElement) || editor.mode.isReadOnly()) return;
+    if (!(alvo instanceof janela.HTMLElement) || editorBloqueadoParaSeletores(editor)) return;
     const controle = alvo.closest<HTMLElement>(seletorControle);
     if (!controle) return;
     if (controle.tagName === 'SELECT') { evento.stopImmediatePropagation(); return; }
