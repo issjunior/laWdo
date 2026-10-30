@@ -1,6 +1,9 @@
 import { laudoPadraoB601V2 } from './laudo-padrao-b601.v2.js';
 import type { DefinicaoTemplateIntegrado } from '../tipos.js';
-import { URL_FIGURA_DUMMY } from '../../../../shared/figura/html.js';
+// Preserva a apresentação da versão histórica publicada.
+const URL_FIGURA_DUMMY = 'data:image/svg+xml;base64,' + btoa(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" fill="#eee"/><rect x="220" y="110" width="160" height="110" fill="none" stroke="#888"/><text x="300" y="280" text-anchor="middle" fill="#555" font-size="22">INSERIR IMAGEM</text></svg>'
+);
 
 const prepararTabelas = (html: string): string => html.replace(/<pre\b[^>]*>\s*<code>([\s\S]*?)<\/code>\s*<\/pre>/g, '<p>$1</p>');
 

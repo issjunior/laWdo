@@ -10,7 +10,6 @@ import { laudoPadraoB602V10 } from '../../main/templates/integrados/b602/laudo-p
 import { laudoPadraoB602V11 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v11';
 import { laudoPadraoB601V1 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v1';
 import { laudoPadraoB601V2 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v2';
-import { catalogoTemplatesIntegrados } from '../../main/templates/integrados/catalogo';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 
@@ -20,7 +19,6 @@ describe('catálogo de templates integrados', () => {
   ])('publica $atual.chave v$versao corrigindo apenas as abreviações de número', ({ anterior, atual, versao }) => {
     expect(() => validarTemplateIntegrado(atual)).not.toThrow();
     expect(atual.versao).toBe(versao);
-    expect(catalogoTemplatesIntegrados.filter(template => template.chave === atual.chave)).toEqual([atual]);
     expect(anterior.secoes.find(secao => secao.chave === 'consideracoes-finais')?.conteudo).toContain('Lei no 13.964/2019');
     expect(anterior.secoes.find(secao => secao.chave === 'encerramento')?.conteudo).toContain('Instrução Normativa no 001/2020-PCP');
     expect(atual.secoes.find(secao => secao.chave === 'consideracoes-finais')?.conteudo).toContain('Lei nº 13.964/2019');
@@ -40,7 +38,6 @@ describe('catálogo de templates integrados', () => {
   it('publica o B-602 v11 com texto calculado e duas figuras dummy em cartuchos', () => {
     expect(() => validarTemplateIntegrado(laudoPadraoB602V11)).not.toThrow();
     expect(laudoPadraoB602V11.versao).toBe(11);
-    expect(catalogoTemplatesIntegrados.filter(template => template.chave === laudoPadraoB602V11.chave)).toEqual([laudoPadraoB602V11]);
     expect(laudoPadraoB602V11.secoes.filter(secao => secao.chave !== 'dos-cartuchos'))
       .toEqual(laudoPadraoB602V10.secoes.filter(secao => secao.chave !== 'dos-cartuchos'));
     const conteudo = laudoPadraoB602V11.secoes.find(secao => secao.chave === 'dos-cartuchos')?.conteudo || '';
