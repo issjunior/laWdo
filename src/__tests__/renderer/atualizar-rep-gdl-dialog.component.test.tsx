@@ -136,5 +136,5 @@ it('mostra erro amigável na atualização manual e reserva detalhes técnicos a
   render(<AtualizarRepGdlDialog open repId="rep-1" onOpenChange={vi.fn()} onConcluida={vi.fn()} />);
   expect(await screen.findByText('Não foi possível acessar o GDL. Verifique sua conexão e a VPN institucional e tente novamente.')).toBeInTheDocument();
   expect(screen.queryByText('net::ERR_NAME_NOT_RESOLVED')).not.toBeInTheDocument();
-  expect(window.ipcAPI.logWarning).toHaveBeenCalledWith('gdl', expect.stringContaining('ERR_NAME_NOT_RESOLVED'));
+  await waitFor(() => expect(window.ipcAPI.logWarning).toHaveBeenCalledWith('gdl', expect.stringContaining('ERR_NAME_NOT_RESOLVED')));
 });
