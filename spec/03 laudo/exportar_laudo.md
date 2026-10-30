@@ -88,6 +88,12 @@ O algoritmo de divisão exige tabela regular, linha inicial de título única e 
 
 Margens, A4 e reserva medida para cabeçalho repetido são compartilhados por prévia e exportação em `pdf-layout.ts`, conforme `spec/03 laudo/visualizar_pdf.md`. `tabelas-balistica-layout.test.ts`, `pdf-layout.test.ts`, `pdf-preview-layout.test.ts`, `pdf-prontidao.service.test.ts` e `exportacao-pdf-segura.test.ts` cobrem os cálculos, opções, preparação e falhas simuladas; a paginação real exige verificação visual.
 
+### Bordas de quadros fotográficos no PDF
+
+ESTILOS_TABELAS_PLACEHOLDER_PDF, em pdf-tabelas.ts, é consumido pela prévia e exportação PDF e respeita border="0" também nas células sem estilo explícito, incluindo cabeçalhos. A borda definida diretamente na célula prevalece sobre essa regra; tabelas de dados independentes conservam sua formatação. A moldura da figura e sua legenda não são a borda da tabela organizadora. O HTML dos novos quadros e os limites de aplicação a documentos existentes estão em [Padrão de elaboração](padrao/padrao_elaboracao.md#figuras-de-exemplo-e-quadros-fotográficos).
+
+templates-figuras-padrao.test.ts cobre as regras de borda no DOM simulado. Aparência e paginação reais exigem conferência do PDF; essa regra CSS de impressão não constitui garantia de equivalência dos conversores DOCX/ODT.
+
 ## Textos calculados e unidade policial
 
 O B-602 deriva `b602_total_estojos_extenso`, `b602_estojos_descricao` e `b602_estojos_conclusao` da soma das quantidades da projeção de estojos. Exatamente um usa o singular do catálogo `b602-textos-estojos.catalogo.ts`; os demais totais usam o plural. `numero-extenso.ts` aceita inteiros seguros não negativos, escreve zero e retorna vazio para números inválidos. A soma usa parseInt por quantidade, com zero quando não interpretável; não soma frações. Com projeção válida e coleção vazia, calcula zero por extenso e textos no plural, embora a seção condicional de estojos normalmente não seja exibida. Sem dados B-602 válidos, permanece o tratamento normal de ausência. São valores derivados, sem nova persistência na REP; o texto da conclusão é modelo resolvido, não resultado de nova consulta ou inferência pericial.
@@ -100,7 +106,7 @@ Depois de resolver placeholders e antes de gerar PDF ou construir o documento ca
 
 gerarDOCXCanonico() mede as dimensões reais da imagem e deriva a altura da largura final; não força proporção 4:3 nem combina largura e altura inconsistentes do HTML. Usa largura explícita, ou altura convertida pela proporção, ou largura padrão, limitada à área útil da página. Reduz o recurso a aproximadamente 300 dpi da largura exibida quando necessário. ODT herda esse resultado por converter o DOCX. exportacao-docx-proporcao.test.ts e imagens-impressao-laudo.test.ts cobrem proporção e resolução. A exportação não substitui o recurso local; a conclusão passa a armazenar a versão tratada, sem garantia de recuperar o original ao reabrir.
 
-No B-602, os cartuchos também têm total por extenso e descrição singular/plural em b602-textos-cartuchos.catalogo.ts: b602_total_cartuchos_extenso e b602_cartuchos_descricao derivam da soma das quantidades projetadas, sem nova persistência. O modelo integrado ativo v11 usa esses valores na seção DOS CARTUCHOS; os textos de estojos seguem seu catálogo próprio. Para a tabela alternativa b601_tabela_material_coleta, fontes, personalização e referências do mesmo caso estão em b601.md; controles interativos são removidos antes da saída.
+No B-602, os cartuchos também têm total por extenso e descrição singular/plural em b602-textos-cartuchos.catalogo.ts: b602_total_cartuchos_extenso e b602_cartuchos_descricao derivam da soma das quantidades projetadas, sem nova persistência. O modelo integrado usa esses valores na seção DOS CARTUCHOS; as versões ativas são registradas em [Templates integrados](templates_integrados.md); os textos de estojos seguem seu catálogo próprio. Para a tabela alternativa b601_tabela_material_coleta, fontes, personalização e referências do mesmo caso estão em b601.md; controles interativos são removidos antes da saída.
 
 ## Limpeza da superfície interativa
 
