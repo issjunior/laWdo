@@ -81,7 +81,7 @@ describe('status local da REP vinculada ao laudo', () => {
     await sqlite.closeDatabase();
 
     await banco.setupDatabase();
-    expect(await banco.getSchemaVersion()).toBe(48);
+    expect(await banco.getSchemaVersion()).toBe(banco.CURRENT_SCHEMA_VERSION);
     expect(await laudos.findById(emAndamento.id)).toMatchObject({ status: 'Em andamento' });
     expect(await statusRep('rep-andamento')).toBe('Em Andamento');
     expect(await statusRep('rep-concluida')).toBe('Concluído');

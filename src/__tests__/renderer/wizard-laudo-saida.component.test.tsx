@@ -24,11 +24,8 @@ describe('saída do assistente de laudo', () => {
         getRespostasWizard: vi.fn(async () => ({ success: true, data: {} })),
         salvarProgressoWizard,
         gerarWizard: vi.fn(),
-      },
-      rep: { findById: vi.fn(async () => ({ success: true, data: { tipo_exame_id: 'tipo-1' } })) },
-      wizard: {
-        findByTipoExame: vi.fn(async () => ({ success: true, data: [{ id: 'wizard-1' }] })),
-        getArvore: vi.fn(async () => ({ success: true, data: {
+        calcularPecasWizard: vi.fn(async () => ({ success: true, data: [] })),
+        contextoWizard: vi.fn(async () => ({ success: true, data: {
           wizard: { id: 'wizard-1', nome: 'Teste' },
           etapas: [{ id: 'etapa-1', pergunta: 'Pergunta parcial', tipo_input: 'radio', nivel: 0,
             ordem: 0, obrigatorio: false, multipla_escolha: false,
@@ -36,6 +33,7 @@ describe('saída do assistente de laudo', () => {
           }],
         } })),
       },
+      rep: { findById: vi.fn(async () => ({ success: true, data: { tipo_exame_id: 'tipo-1' } })) },
       regraWizard: { calcularPecas: vi.fn(async () => ({ success: true, data: [] })) },
     });
 

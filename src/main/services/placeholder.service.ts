@@ -95,6 +95,11 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
     super('placeholders', 'id');
   }
 
+  ehChaveSistema(chave: string): boolean {
+    return chave.startsWith('perito.') || PLACEHOLDERS_SISTEMA.some(item => item.chave === chave)
+      || CAMPOS_ESPECIFICOS_PLACEHOLDERS.some(item => item.chave === chave);
+  }
+
   async delete(id: string): Promise<boolean> {
     const row = await this.findById(id);
     if (!row) return false;

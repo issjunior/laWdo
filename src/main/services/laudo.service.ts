@@ -1,3 +1,5 @@
+import { obterSecoesDoLaudo, calcularPecasDoLaudo, lerEstruturaIncorporada } from './laudo-estrutura.service.js';
+import { esquemaRespostasIncorporadas } from '../../shared/types/laudo-bkp.types.js';
 import { capturarApresentacaoLaudo } from './apresentacao-laudo.service.js';
 import { obterPreviaEditorImagemLaudo } from './imagem-laudo.service.js';
 import { criarRevisaoSecaoB601, preservarComplementoB601, preservarDescricaoAgrupadaB601, preservarRevisoesB601, preservarTextoPecasB601, reterDescricoesPendentesB601, revisarPecasAusentesB601, sinalizarDescricaoDesatualizadaB601 } from './b601-secoes.service.js';
@@ -11,7 +13,6 @@ import { randomUUID } from 'crypto';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { regraWizardService } from './regra-wizard.service.js';
 import { templateService } from './template.service.js';
 import {
   expandirSecoesRepetiveis,
@@ -188,7 +189,7 @@ class LaudoService extends BaseService<LaudoRow> {
           r.data_requisicao,
           r.tipo_solicitacao,
           r.numero_documento,
-          t.nome AS template_nome,
+          COALESCE(t.nome, json_extract(l.estrutura_incorporada_json, '$.template.nome')) AS template_nome,
           te.nome AS tipo_exame_nome,
           te.codigo AS tipo_exame_codigo
         FROM laudos l
@@ -301,7 +302,7 @@ class LaudoService extends BaseService<LaudoRow> {
   async gerarLaudoWizard(params: {
     laudo_id: string;
     wizard_id: string;
-    template_id: string;
+    template_id: string | null;
     respostas: Record<string, string | string[]>;
     pecas_selecionadas?: string[];
   }): Promise<LaudoRow> {
@@ -309,13 +310,10 @@ class LaudoService extends BaseService<LaudoRow> {
     if (!laudo) throw new Error('Laudo não encontrado');
 
     // 1. Carregar seções do template
-    const secoes = await executeQuery<{ id: string; nome: string; conteudo?: string }>(
-      'SELECT id, nome, conteudo FROM secoes_template WHERE template_id = ? ORDER BY ordem ASC',
-      [params.template_id]
-    );
+    const secoes = await obterSecoesDoLaudo(laudo);
 
     // 2. Calcular peças
-    const pecasComSecao = await regraWizardService.calcularPecas(params.wizard_id, params.respostas);
+    const pecasComSecao = await calcularPecasDoLaudo(laudo, params.respostas, params.wizard_id);
 
     // 3. Filtrar por selecionadas
     const pecasFiltradas = params.pecas_selecionadas
@@ -346,12 +344,12 @@ class LaudoService extends BaseService<LaudoRow> {
 
     await executeNonQuery(
       `UPDATE laudos SET conteudo = ?, respostas_wizard = ?, wizard_id = ?, updated_at = ? WHERE id = ?`,
-      [conteudoFinal, respostasJson, params.wizard_id, now, laudo.id]
+      [conteudoFinal, respostasJson, laudo.estrutura_incorporada_json ? null : params.wizard_id, now, laudo.id]
     );
 
     // Sobrescrever respostas_wizard (tabela)
     await executeNonQuery('DELETE FROM respostas_wizard WHERE laudo_id = ?', [laudo.id]);
-    for (const [etapaId, valor] of Object.entries(params.respostas)) {
+    for (const [etapaId, valor] of Object.entries(laudo.estrutura_incorporada_json ? {} : params.respostas)) {
       const valorTexto = Array.isArray(valor) ? JSON.stringify(valor) : String(valor);
       await executeNonQuery(
         `INSERT INTO respostas_wizard (id, laudo_id, etapa_id, valor_texto, created_at) VALUES (?, ?, ?, ?, ?)`,
@@ -383,7 +381,7 @@ class LaudoService extends BaseService<LaudoRow> {
     await executeNonQuery('DELETE FROM respostas_wizard WHERE laudo_id = ?', [laudoId]);
 
     const now = new Date().toISOString();
-    for (const [etapaId, valor] of Object.entries(respostas)) {
+    for (const [etapaId, valor] of Object.entries(laudo.estrutura_incorporada_json ? {} : respostas)) {
       const valorTexto = Array.isArray(valor) ? JSON.stringify(valor) : String(valor);
       await executeNonQuery(
         `INSERT INTO respostas_wizard (id, laudo_id, etapa_id, valor_texto, created_at) VALUES (?, ?, ?, ?, ?)`,
@@ -393,6 +391,12 @@ class LaudoService extends BaseService<LaudoRow> {
   }
 
   async getRespostasWizard(laudoId: string): Promise<Record<string, string | string[]>> {
+    const laudo = await this.findById(laudoId);
+    if (laudo && lerEstruturaIncorporada(laudo)) {
+      const bruto: unknown = JSON.parse(laudo.respostas_wizard || '{}');
+      if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) throw new Error('Respostas do wizard inválidas.');
+      return esquemaRespostasIncorporadas.parse(Object.fromEntries(Object.entries(bruto).filter(([chave]) => !chave.startsWith('_'))));
+    }
     const rows = await executeQuery<{ etapa_id: string; valor_texto: string }>(
       'SELECT etapa_id, valor_texto FROM respostas_wizard WHERE laudo_id = ?',
       [laudoId]
@@ -420,7 +424,7 @@ class LaudoService extends BaseService<LaudoRow> {
       if (!laudo) return;
 
       // Buscar seções do template
-      const secoes = await templateService.findSecoesByTemplate(laudo.template_id);
+      const secoes = await obterSecoesDoLaudo(laudo);
 
       // Buscar campos específicos da REP
       const [rep] = await executeQuery<{ campos_especificos?: string | null }>(

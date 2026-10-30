@@ -291,6 +291,7 @@ class AtualizacaoRepGdlService {
     if ([...selecionados].some(id => !idsValidos.has(id))) throw new Error('A seleção de diferenças é inválida.')
     const novoTipo = operacao.importacao.camposGerais.tipo_exame_id;
     if (laudo && novoTipo && novoTipo !== rep.tipo_exame_id && selecionados.has('campo:tipo_exame_id')) {
+      if (!laudo.template_id) throw new Error('O laudo usa uma estrutura incorporada. Não é possível trocar seu tipo de exame nesta atualização.');
       const template = await templateService.findById(laudo.template_id);
       if (template?.tipo_exame_id && template.tipo_exame_id !== novoTipo) throw new Error('Selecione um template compatível com o novo tipo no laudo antes de aplicar a troca de tipo.');
     }

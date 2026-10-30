@@ -1,3 +1,4 @@
+import { garantirLaudoUnicoPorRep, migrarEstruturaIncorporadaLaudo } from './laudo-estrutura.migration.js';
 import { capturarApresentacaoLaudo } from '../services/apresentacao-laudo.service.js';
 import { CHAVE_MARGENS_PDF, MARGENS_PADRAO_PDF } from '../../shared/configuracoes/margens-pdf.js';
 import { CABECALHO_LAUDO_PADRAO, FECHAMENTO_LAUDO_PADRAO, CHAVE_CABECALHO_DOCUMENTO, CHAVE_FECHAMENTO_LAUDO } from '../../shared/configuracoes/apresentacao-laudo.js';
@@ -29,7 +30,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 48;
+export const CURRENT_SCHEMA_VERSION = 49;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -59,6 +60,7 @@ const COLUNAS_REPARAVEIS = [
   ['laudos', 'wizard_id', 'TEXT'],
   ['laudos', 'respostas_wizard', 'TEXT'],
   ['laudos', 'apresentacao_json', 'TEXT'],
+  ['laudos', 'estrutura_incorporada_json', 'TEXT'],
 ] as const;
 
 const COLUNAS_ESSENCIAIS = [
@@ -666,7 +668,7 @@ const precisaSnapshotAntesDaMigracao = async (): Promise<boolean> => {
     const colunas = await executeQuery<{ name: string }>(`PRAGMA table_info(${tabela})`);
     if (!colunas.some(item => item.name === coluna)) return true;
   }
-  return possuiIndiceUnicoPorColuna('laudos', 'rep_id');
+  return !await possuiIndiceUnicoPorColuna('laudos', 'rep_id');
 };
 
 const criarSnapshotAntesDaMigracao = async (): Promise<void> => {
@@ -681,36 +683,6 @@ const criarSnapshotAntesDaMigracao = async (): Promise<void> => {
   log.info('Snapshot consistente criado antes da migration.', { versaoDestino: CURRENT_SCHEMA_VERSION });
 };
 
-const reconstruirLaudosSemRestricaoUnicaRep = async (): Promise<boolean> => {
-  if (!await possuiIndiceUnicoPorColuna('laudos', 'rep_id')) return false;
-
-  await executeNonQuery('DROP TABLE IF EXISTS laudos_v34');
-  await executeNonQuery(`
-    CREATE TABLE laudos_v34 (
-      id TEXT PRIMARY KEY, rep_id TEXT NOT NULL, perito_id TEXT NOT NULL, template_id TEXT NOT NULL,
-      conteudo TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Em andamento',
-      data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP, data_conclusao DATETIME, data_entrega DATETIME,
-      versao INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, tipo_criacao TEXT NOT NULL DEFAULT 'template',
-      wizard_id TEXT, respostas_wizard TEXT,
-      FOREIGN KEY (rep_id) REFERENCES reps(id), FOREIGN KEY (perito_id) REFERENCES users(id),
-      FOREIGN KEY (template_id) REFERENCES templates(id), FOREIGN KEY (wizard_id) REFERENCES wizards(id)
-    )
-  `);
-  await executeNonQuery(`
-    INSERT INTO laudos_v34 (
-      id, rep_id, perito_id, template_id, conteudo, status, data_inicio, data_conclusao,
-      data_entrega, versao, created_at, updated_at, tipo_criacao, wizard_id, respostas_wizard
-    ) SELECT
-      id, rep_id, perito_id, template_id, conteudo, status, data_inicio, data_conclusao,
-      data_entrega, versao, created_at, updated_at, tipo_criacao, wizard_id, respostas_wizard
-    FROM laudos
-  `);
-  await executeNonQuery('DROP TABLE laudos');
-  await executeNonQuery('ALTER TABLE laudos_v34 RENAME TO laudos');
-  return true;
-};
-
 const reconciliarSchemaFisico = async (): Promise<string[]> => {
   const verificacaoFisica = await executeQuery<{ integrity_check: string }>('PRAGMA integrity_check');
   if (verificacaoFisica.some(resultado => resultado.integrity_check !== 'ok')) {
@@ -722,8 +694,9 @@ const reconciliarSchemaFisico = async (): Promise<string[]> => {
   try {
     reparosAplicados = await withTransaction(async () => {
       const integridade = await garantirIntegridadeSchema();
-      const laudosReconstruida = await reconstruirLaudosSemRestricaoUnicaRep();
-      if (laudosReconstruida) integridade.reparosAplicados.push('laudos.rep_id sem UNIQUE');
+      const unicidadeAusente = !await possuiIndiceUnicoPorColuna('laudos', 'rep_id');
+      await garantirLaudoUnicoPorRep();
+      if (unicidadeAusente) integridade.reparosAplicados.push('laudos.rep_id com UNIQUE');
       for (const indice of INDICES_OBRIGATORIOS) await executeNonQuery(indice);
       return integridade.reparosAplicados;
     });
@@ -2523,6 +2496,12 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
   if (fromVersion < 48) {
     await garantirColuna('imagens_laudo', 'temporaria_sessao', 'INTEGER NOT NULL DEFAULT 0');
     log.info('Migration v48: identificação das novas imagens para limpeza segura.');
+  }
+
+  if (fromVersion < 49) {
+    await garantirLaudoUnicoPorRep();
+    await migrarEstruturaIncorporadaLaudo();
+    log.info('Migration v49: estrutura incorporada para laudos portáveis.');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);

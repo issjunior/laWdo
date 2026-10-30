@@ -1,3 +1,4 @@
+import { ImportarBkpLaudo } from '@/components/laudo/ImportarBkpLaudo';
 import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
 import { materializarEdicaoPontual } from '@/lib/adaptadores-conteudo-laudo';
 import { useConfirmacaoConteudo } from '@/components/editor/ConfirmacaoConteudo';
@@ -2299,13 +2300,20 @@ export const LaudosPage: React.FC = () => {
     link.remove();
   };
 
-  const handleExportar = async (formato: 'pdf' | 'docx' | 'odt') => {
+  const handleExportar = async (formato: 'pdf' | 'docx' | 'odt' | 'bkp') => {
     if (!editando) return;
     let toastId: string | number | undefined;
     try {
       setExportando(true);
       setError(null);
       setErroPdf(null);
+      if (formato === 'bkp') {
+        if (estadoSalvamento !== 'salvo' && !(await handleSalvar())) return;
+        const resultado = await window.ipcAPI.laudo.exportarBkp(editando.id);
+        if (resultado.success) toast.success('BKP do laudo exportado com sucesso.');
+        else if (!resultado.canceled) toast.error(resultado.error || 'Não foi possível exportar o BKP.');
+        return;
+      }
 
       const labelFormato = formato === 'pdf' ? 'PDF' : formato === 'docx' ? 'Word (.docx)' : 'ODT (.odt)';
       toastId = toast.loading(`Exportando laudo como ${labelFormato}...`);
@@ -4831,6 +4839,7 @@ export const LaudosPage: React.FC = () => {
           <h1 className="text-2xl md:text-3xl font-bold">Laudos</h1>
           <p className="text-muted-foreground mt-1">Escreva e edite os laudos periciais usando os templates cadastrados</p>
         </div>
+        <ImportarBkpLaudo onImportado={async () => { await carregarLaudos(); await carregarPlaceholders(); }} />
       </div>
 
       <Tabs value={tabFiltro} onValueChange={value => setTabFiltro(value as AbaLaudos)} className="w-full">

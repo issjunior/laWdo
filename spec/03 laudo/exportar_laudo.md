@@ -105,3 +105,11 @@ No B-602, os cartuchos também têm total por extenso e descrição singular/plu
 ## Limpeza da superfície interativa
 
 A resolução de exportação chama limparConteudoInterativo() para retirar controles, classes de edição e contenteditable de condicionais, tabelas personalizadas e grupos B-601, inclusive sem classes transitórias. Preserva conteúdo local, vínculos e supressões para a resolução normal. Os controles **Editar/Concluir**, **Restaurar dados da REP** e **Excluir** não pertencem à saída. A limpeza é compartilhada com salvamento e comparação e deve ser idempotente.
+
+## BKP individual do laudo
+
+Além de PDF, DOCX e ODT, o menu de exportação oferece um BKP portável do laudo. Esse caminho salva alterações pendentes, captura uma estrutura autossuficiente de template e wizard e inclui somente placeholders personalizados alcançáveis pelo conteúdo, pelas seções e pelas peças, expandindo dependências entre placeholders. Chaves de sistema não são serializadas como cadastro personalizado.
+
+O contêiner começa com a assinatura `LAWDO-LAUDO-1`, seguida de manifesto e entradas com tamanho e SHA-256. A leitura rejeita assinatura, manifesto, nomes, tamanhos, hashes, entradas extras, truncamento ou JSON fora do contrato. O limite total e por arquivo é 20 GiB, há no máximo 100 mil entradas e JSONs têm limite de 64 MiB. A gravação usa arquivo temporário exclusivo e renomeação ao final; falhas removem o temporário.
+
+O HTML transportado é analisado antes da saída e após a leitura. Conteúdo ativo, atributos de evento, protocolos executáveis, URLs em estilo e imagens externas são rejeitados. Toda figura referenciada precisa existir no pacote, com bytes, tamanho e hash correspondentes. A importação remapeia IDs estruturais, referências de imagem, peças, seções, etapas, opções e placeholders para impedir colisões na instalação de destino.

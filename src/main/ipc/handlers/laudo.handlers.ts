@@ -1,3 +1,6 @@
+import { obterContextoWizardLaudo, calcularPecasDoLaudo } from '../../services/laudo-estrutura.service.js';
+import { esquemaRespostasIncorporadas } from '../../../shared/types/laudo-bkp.types.js';
+import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
@@ -16,7 +19,7 @@ type RespostasWizard = Record<string, string | string[]>;
 type GerarWizardParams = {
   laudo_id: string;
   wizard_id: string;
-  template_id: string;
+  template_id: string | null;
   respostas: RespostasWizard;
   pecas_selecionadas?: string[];
 };
@@ -25,6 +28,25 @@ type GerarWizardParams = {
  * Registra handlers IPC para operações de Laudo
  */
 export const registerLaudoHandlers = (): void => {
+  ipcMain.handle('laudo:contextoWizard', async (evento, laudoId: unknown) => {
+    try {
+      authSessaoService.exigir(evento.sender.id);
+      if (typeof laudoId !== 'string' || !laudoId) throw new Error('Laudo inválido.');
+      const laudo = await laudoService.findById(laudoId);
+      if (!laudo) throw new Error('Laudo não encontrado.');
+      return { success: true, data: await obterContextoWizardLaudo(laudo) };
+    } catch (erro) { return { success: false, error: erro instanceof Error ? erro.message : 'Erro ao carregar wizard.' }; }
+  });
+  ipcMain.handle('laudo:calcularPecasWizard', async (evento, laudoId: unknown, respostas: unknown, wizardId: unknown) => {
+    try {
+      authSessaoService.exigir(evento.sender.id);
+      if (typeof laudoId !== 'string' || !laudoId) throw new Error('Laudo inválido.');
+      const laudo = await laudoService.findById(laudoId);
+      if (!laudo) throw new Error('Laudo não encontrado.');
+      return { success: true, data: await calcularPecasDoLaudo(laudo, esquemaRespostasIncorporadas.parse(respostas), typeof wizardId === 'string' ? wizardId : undefined) };
+    } catch (erro) { return { success: false, error: erro instanceof Error ? erro.message : 'Erro ao calcular peças.' }; }
+  });
+
   /**
    * Buscar laudo por ID
    */

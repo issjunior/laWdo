@@ -44,7 +44,7 @@ interface ArvoreWizard {
 interface LaudoWizard {
   id: string;
   rep_id: string;
-  template_id: string;
+  template_id: string | null;
   wizard_id?: string;
   respostas_wizard?: string;
   rep_numero?: string;
@@ -123,17 +123,9 @@ const WizardLaudoPage: React.FC = () => {
       const l = laudoRes.data;
       setLaudo(l);
 
-      // Buscar wizards compatíveis com o tipo de exame da REP do laudo
-      const repRes = await window.ipcAPI.rep.findById(l.rep_id);
-      if (repRes.success && repRes.data?.tipo_exame_id) {
-        const wizRes = await window.ipcAPI.wizard.findByTipoExame(repRes.data.tipo_exame_id);
-        if (wizRes.success && wizRes.data?.length > 0) {
-          // Se o laudo já tem wizard_id, usar ele; senão, primeiro wizard disponível
-          const wizardId = l.wizard_id || wizRes.data[0].id;
-          const arvoreRes = await window.ipcAPI.wizard.getArvore(wizardId);
-          if (arvoreRes.success) setArvore(arvoreRes.data);
-        }
-      }
+      const contexto = await window.ipcAPI.laudo.contextoWizard(l.id);
+      if (!contexto.success) throw new Error(contexto.error || 'Não foi possível carregar o wizard.');
+      setArvore(contexto.data || null);
 
       // Carregar respostas salvas
       if (l.respostas_wizard && l.respostas_wizard !== '{}') {
@@ -181,14 +173,14 @@ const WizardLaudoPage: React.FC = () => {
     };
     collectVisible(arvore.etapas);
     setVisibleEtapas(visible);
-  }, [arvore, respostas]);
+  }, [arvore, respostas, laudoId]);
 
   // Calculate peças (debounced)
   const calcularPecas = useCallback(async () => {
     if (!arvore?.wizard?.id || Object.keys(respostas).length === 0) return;
     setPreviewLoading(true);
     try {
-      const res = await window.ipcAPI.regraWizard.calcularPecas(arvore.wizard.id, respostas);
+      const res = await window.ipcAPI.laudo.calcularPecasWizard(laudoId!, respostas, arvore.wizard.id);
       if (res.success) {
         setPecasCalculadas(res.data || []);
         setPecasSelecionadas(new Set((res.data || []).map((p: PecaCalculada) => p.peca.id)));
@@ -196,7 +188,7 @@ const WizardLaudoPage: React.FC = () => {
     } catch (erro) {
       setError(mensagemErro(erro) || 'Não foi possível calcular as peças do wizard.');
     } finally { setPreviewLoading(false); }
-  }, [arvore, respostas]);
+  }, [arvore, respostas, laudoId]);
 
   useEffect(() => {
     const timer = setTimeout(calcularPecas, 300);
