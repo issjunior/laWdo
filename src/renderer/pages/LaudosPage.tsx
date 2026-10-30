@@ -1,3 +1,4 @@
+import { normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import { ImportarBkpLaudo } from '@/components/laudo/ImportarBkpLaudo';
 import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
 import { materializarEdicaoPontual } from '@/lib/adaptadores-conteudo-laudo';
@@ -325,6 +326,8 @@ const isLaudoConteudo = (valor: unknown): valor is LaudoConteudo => (
   isRecord(valor) && isString(valor.id) && isString(valor.conteudo)
   && (valor.apresentacao_json === undefined || valor.apresentacao_json === null || isString(valor.apresentacao_json))
 );
+
+const FerramentaProjeteis = React.lazy(() => import('@/components/projeteis/FerramentaProjeteis').then(modulo => ({ default: modulo.FerramentaProjeteis })));
 
 async function buscarConteudoLaudo(id: string): Promise<LaudoConteudo> {
   const resposta = await window.ipcAPI.laudo.findById(id);
@@ -698,6 +701,10 @@ export const LaudosPage: React.FC = () => {
   const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
   const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
   const [indicePlaceholdersOpen, setIndicePlaceholdersOpen] = useState(false);
+  const [consultaProjeteis, setConsultaProjeteis] = useState<{ laudoId: string; aberto: boolean } | null>(null);
+  const botaoProjeteisRef = useRef<HTMLElement | null>(null);
+  const projeteisAberto = consultaProjeteis?.laudoId === editando?.id && consultaProjeteis?.aberto === true;
+  const permiteConsultarProjeteis = normalizarCodigoExame(editando?.tipo_exame_codigo ?? '').startsWith('B');
   const [atalhosLaudoAberto, setAtalhosLaudoAberto] = useState(false);
   const [itensIndicePlaceholders, setItensIndicePlaceholders] = useState<ItemIndicePlaceholder[]>([]);
   const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
@@ -2793,6 +2800,7 @@ export const LaudosPage: React.FC = () => {
       window.ipcAPI.ilustracoes.closePanel();
     }
     aberturaLaudoRef.current += 1;
+    setConsultaProjeteis(null);
     setEditando(null);
     cacheComparacaoRef.current = null;
     setSecoes([]);
@@ -2973,7 +2981,7 @@ export const LaudosPage: React.FC = () => {
 
   useAtalhoSalvarLaudo({
     ativo: Boolean(editando),
-    bloqueado: inicializando || salvando || carregandoPreview || exportando,
+    bloqueado: inicializando || salvando || carregandoPreview || exportando || projeteisAberto,
     onSalvar: () => void handleSalvar(),
   });
 
@@ -4415,6 +4423,10 @@ export const LaudosPage: React.FC = () => {
                 handleToggleIlustracoes()
               }}
               onReindexarSecoes={handleReindexarSecoes}
+              onAbrirProjeteis={permiteConsultarProjeteis ? () => {
+                botaoProjeteisRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                setConsultaProjeteis({ laudoId: editando.id, aberto: true });
+              } : undefined}
               onAbrirAtalhos={() => setAtalhosLaudoAberto(true)}
               onRecolherAutomaticamente={() => setPanelCollapsed(true)}
               conteudoPainel={conteudoPainelLateral}
@@ -4652,6 +4664,11 @@ export const LaudosPage: React.FC = () => {
           </CardContent>
         </Card>
 
+        {permiteConsultarProjeteis && consultaProjeteis?.laudoId === editando.id && <React.Suspense fallback={null}><FerramentaProjeteis key={editando.id} dialogo={{
+          aberto: consultaProjeteis.aberto,
+          aoAlterarAbertura: aberto => setConsultaProjeteis({ laudoId: editando.id, aberto }),
+          aoFechar: () => botaoProjeteisRef.current?.focus(),
+        }} /></React.Suspense>}
         <AtalhosLaudoDialog aberto={atalhosLaudoAberto} onAbertoChange={setAtalhosLaudoAberto} />
         <IndicePlaceholdersDialog
           open={indicePlaceholdersOpen}

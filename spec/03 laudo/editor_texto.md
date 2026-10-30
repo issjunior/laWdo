@@ -60,6 +60,12 @@ A comparação reaproveita o resultado quando os campos das seções não mudara
 
 `sincronizacao-editor-laudo.test.ts` cobre agrupamento, composição, leitura imediata, descarte e edição durante salvamento; `desempenho-editor-laudo.test.ts` cobre os atalhos de processamento. A suíte manual com Electron está em [Testes de carga do editor](../13%20diagnostico/testes_carga_editor.md).
 
+## Consulta de projéteis durante a edição
+
+O trilho de `LaudosPage.tsx` oferece **Identificação de projéteis** apenas para códigos de exame da família B, normalizados sem espaços/hífens e em maiúsculas. A ferramenta completa abre em diálogo sobre a página, mantendo a instância do TinyMCE e a sessão de alterações pendentes. Nenhum resultado é aplicado automaticamente ao documento; abrir, consultar e fechar não salva nem estabelece nova referência comparável. O atalho Ctrl+S/Meta+S do laudo fica bloqueado enquanto o modal está aberto, e o foco retorna ao botão do trilho ao fechar.
+
+A consulta fica em memória após fechar o modal e é descartada ao sair ou trocar de laudo. O componente é carregado na primeira abertura, sem substituir a árvore do editor. Responsabilidades, dimensões do modal e catálogo estão em [Identificação de projéteis](../16%20ferramentas/identificacao_projeteis.md). `projeteis-laudo.component.test.tsx` verifica o acesso condicional, a consulta preservada, foco, atalhos e identidade do editor simulado; o histórico real de desfazer e a ausência de falsa pendência continuam sujeitos a smoke no Electron.
+
 ## Busca no laudo e atalhos
 
 Em `LaudosPage.tsx`, Ctrl+F (ou Meta+F) abre `BarraBuscaLaudo` acima do editor, inclusive com foco dentro do iframe. O comando não é capturado quando há diálogo ou alerta modal aberto. Enter/Shift+Enter no campo percorrem resultados em ciclo; Esc fecha a busca. O botão **Atalhos do laudo** no trilho abre `AtalhosLaudoDialog`, que descreve os contextos de busca, salvamento e edição e restaura o foco de origem ao fechar. Localizar/substituir do TinyMCE continua disponível na toolbar e atua no editor em foco.

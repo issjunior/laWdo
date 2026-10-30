@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bot, Images, Keyboard, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
+import { Bot, Crosshair, Images, Keyboard, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -32,6 +32,7 @@ interface PainelLateralRedimensionavelProps {
   onAlternarPainelIa: () => void
   onAlternarPainelIlustracoes: () => void
   onReindexarSecoes: () => void
+  onAbrirProjeteis?: () => void
   onAbrirAtalhos: () => void
   onRecolherAutomaticamente?: () => void
   children: ReactNode
@@ -112,6 +113,7 @@ export function PainelLateralRedimensionavel({
   onReindexarSecoes,
   onRecolherAutomaticamente,
   onAbrirAtalhos,
+  onAbrirProjeteis,
   children,
   conteudoPainel,
 }: PainelLateralRedimensionavelProps) {
@@ -231,6 +233,14 @@ export function PainelLateralRedimensionavel({
           icone={Images}
           onClick={onAlternarPainelIlustracoes}
         />
+        {onAbrirProjeteis && <TooltipProvider delayDuration={200}><Tooltip>
+          <TooltipTrigger asChild><Button type="button" variant="ghost" size="icon"
+            className="size-8 rounded-lg border border-transparent"
+            aria-label="Identificação de projéteis" aria-haspopup="dialog" onClick={onAbrirProjeteis}>
+            <Crosshair className="size-4" />
+          </Button></TooltipTrigger>
+          <TooltipContent side="left">Identificação de projéteis</TooltipContent>
+        </Tooltip></TooltipProvider>}
         <BotaoFerramentasTrilho
           operacaoEmAndamento={operacaoEmAndamento}
           onReindexarSecoes={onReindexarSecoes}

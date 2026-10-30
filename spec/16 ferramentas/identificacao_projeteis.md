@@ -2,9 +2,19 @@
 
 ## Escopo e fontes de verdade
 
-A página `ProjeteisPage.tsx` compara medidas observadas com referências locais; a posição não determina o calibre por si só. O catálogo distribuído é `src/shared/catalogos/projeteis.catalogo.ts`, gerado por `scripts/projeteis/gerar-catalogo.py` a partir de transcrições versionadas em `scripts/projeteis/fontes/`: `catalogo-legado.json`, `perfis-eliane-baruch.json`, `revisao.json` e `equivalencias-revisadas.json`. A geração é manutenção, sem extração de PDF ou dependências externas no aplicativo. `--verificar` compara o resultado sem reescrevê-lo.
+O componente `src/renderer/components/projeteis/FerramentaProjeteis.tsx`, compartilhado pela página `ProjeteisPage.tsx` do sidebar e pelo modal de Laudos, compara medidas observadas com referências locais; a posição não determina o calibre por si só. O catálogo distribuído é `src/shared/catalogos/projeteis.catalogo.ts`, gerado por `scripts/projeteis/gerar-catalogo.py` a partir de transcrições versionadas em `scripts/projeteis/fontes/`: `catalogo-legado.json`, `perfis-eliane-baruch.json`, `revisao.json` e `equivalencias-revisadas.json`. A geração é manutenção, sem extração de PDF ou dependências externas no aplicativo. `--verificar` compara o resultado sem reescrevê-lo.
 
 Cadastros personalizados ficam na tabela SQLite `projeteis_personalizados`. O renderer combina catálogo distribuído e registros locais em memória; referências distribuídas são somente leitura. A ferramenta não associa resultados a REP/laudo nem envia dados ao GDL. O editor B-601 reutiliza apenas as opções de formato/sigla, inclusive tipos personalizados locais, sem importar medidas ou classificação. `src/shared/types/projetil.types.ts` define contratos, `consulta-projeteis.ts` ordena resultados e `projetil.service.ts` valida/persiste entradas pelo main.
+
+## Acesso pelo laudo e estado da consulta
+
+`LaudosPage.tsx` habilita o botão **Identificação de projéteis** no trilho direito somente quando `tipo_exame_codigo` do laudo aberto, normalizado por `normalizarCodigoExame()` para maiúsculas e sem espaços/hífens, começa com `B`. Código ausente não habilita a opção; a regra abrange toda a família, sem restringir a B-601/B-602. `PainelLateralRedimensionavel.tsx` recebe `onAbrirProjeteis` opcional e só monta o botão quando esse callback está presente.
+
+A página carrega a ferramenta com `React.lazy` na primeira abertura. O estado de abertura identifica o laudo, e a instância de `FerramentaProjeteis` permanece montada após fechar o diálogo: medidas, prioridade, perda de material, proximidade, filtro e resultados continuam em memória durante a sessão do mesmo laudo. Sair da edição ou trocar de laudo descarta a consulta. Não há persistência dessa consulta em storage/banco nem vínculo automático com peças, REP ou laudo. Cadastros personalizados continuam sendo operações explícitas do catálogo local, pelo IPC já existente.
+
+O modal oferece consulta, catálogo completo, ajuda, fontes e cadastros personalizados. Usa os diálogos locais, fecha pelo botão ou Escape e devolve o foco ao botão de origem; Escape em um diálogo interno fecha apenas esse nível. Cabeçalho e rodapé ficam fora da rolagem própria da consulta. O diálogo principal limita a largura a 1400 px e à viewport menos 2 rem; sua altura máxima é `calc(100dvh - 76px)` e o centro vertical fica em `calc(50% + 22px)`. Essa geometria reserva a barra de título de 44 px e margens de 16 px; deve acompanhar mudanças nessa altura, definida no overlay da janela e no Header. O ajuste é local ao modal principal, sem alterar o wrapper global de diálogos.
+
+Abrir, consultar e fechar não aplica resultados, salva o laudo, remonta o editor nem redefine a referência de alterações pendentes. `useAtalhoSalvarLaudo` recebe bloqueio enquanto o modal está aberto, impedindo Ctrl+S/Meta+S de salvar o documento ao consultar. A edição prévia e o histórico do editor permanecem independentes da ferramenta.
 
 ## Consulta e apresentação
 
@@ -23,6 +33,8 @@ CSV aceita cabeçalho exato `calibre;tipo;massa_gramas;calibre_real_mm;altura_ma
 As migrations 37 e 38 introduziram formatos intermediários; a 38 só migra medidas antigas quando mínimo e máximo eram iguais. A migration 39 recria a tabela com `calibre_real_mm` e `altura_maxima_mm` escalares e remove todos os cadastros personalizados preexistentes, registrando a contagem. A v39 define o formato atual da tabela de projéteis; a versão global do banco é determinada por `CURRENT_SCHEMA_VERSION` em `src/main/database/index.ts` (atualmente 48, incluindo migrations de outros domínios). Toda gravação de projétil exige ao menos uma dimensão. Essa perda na migração é comportamento atual relevante para avaliação de atualização e restauração. O backup Completo usa o banco inteiro; o backup de Configuração não inclui a tabela, conforme `spec/14 backup/backup_usuario.md`.
 
 ## Verificação e limites
+
+`projeteis-laudo.component.test.tsx` cobre a exibição por código de exame, reabertura com medidas e filtros preservados, identidade estável do componente de editor, bloqueio do atalho, descarte por chave de sessão, foco de retorno e fechamento dos diálogos de catálogo, fontes e ajuda. O teste de página usa editor simulado; geometria sob a barra de título e histórico real de desfazer ainda exigem conferência no Electron.
 
 `projeteis-catalogo.test.ts`, `consulta-projeteis.test.ts`, `projetil-validacao.service.test.ts`, `projetil-importacao.integration.test.ts`, `projetil-migracao.integration.test.ts` e `projeteis-page.component.test.tsx` cobrem catálogo, ordenação, validação, lote CSV, migration e apresentação. As referências são aproximações de documentos heterogêneos, algumas sem todas as medidas; a identificação final depende da avaliação pericial e da consulta à fonte indicada.
 
