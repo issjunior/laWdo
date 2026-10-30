@@ -237,6 +237,14 @@ shadcn/ui (New York, base Zinc, ícones Lucide) com Tailwind CSS e suporte a dar
 | `template/` | Templates de laudo |
 | `tipos-exame/` | Tipos de exame |
 
+### Padronização da elaboração de laudos
+
+Antes de alterar a área de edição de Laudos ou adicionar recursos para novas naturezas de exame, consulte [Padrão de elaboração](spec/03%20laudo/padrao/padrao_elaboracao.md) e as specs especializadas ali indicadas.
+
+- Reutilize os componentes, políticas de permissão, confirmações e ciclos de preparação, limpeza e salvamento existentes. Estenda a implementação compartilhada quando o comportamento for comum; mantenha diferenças justificadas pelo exame junto ao domínio correspondente.
+- Preserve as proteções do conteúdo, a distinção entre concluir edição local e salvar, o histórico de desfazer e a sessão do editor ao abrir ferramentas auxiliares. Apresentação transitória não deve criar falsa pendência nem integrar a saída do documento.
+- Identifique novos padrões e exceções relevantes e sugira sua documentação pelo fluxo `/spec`, respeitando a aprovação do usuário. Documente apenas o comportamento implementado; não apresente padrões futuros como estado atual.
+
 ---
 
 ## Banco de dados

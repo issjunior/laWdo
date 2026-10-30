@@ -2,6 +2,8 @@
 
 ## Escopo e regra de uso
 
+Na área de edição de Laudos, consulte também o [Padrão de elaboração](../03%20laudo/padrao/padrao_elaboracao.md), que reúne os contratos de conteúdo, ferramentas e preservação da sessão.
+
 `src/renderer/components/ui/` concentra wrappers compartilhados do design system local. Eles encapsulam primitivas Radix, shadcn e bibliotecas de layout, padronizam classes com `cn`/`cva` e evitam importações diretas quando já existe equivalente local. Estilos são compostos com Tailwind e tokens de `globals.css`; não há CSS avulso por componente.
 
 ## Grupos atuais
