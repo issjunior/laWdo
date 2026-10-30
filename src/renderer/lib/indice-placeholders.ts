@@ -76,7 +76,7 @@ const CAMPOS_REP_PADRAO: Record<string, string> = {
 
 export const CHAVES_PLACEHOLDERS_REP = Object.keys(CAMPOS_REP_PADRAO);
 
-function obterCampoFormulario(chave: string, metadados: MetadadoPlaceholderIndice[]): string {
+export function obterCampoFormulario(chave: string, metadados: MetadadoPlaceholderIndice[]): string {
   const campoEspecifico = CAMPOS_ESPECIFICOS_PLACEHOLDERS.find(campo => campo.chave === chave);
   if (campoEspecifico) return campoEspecifico.label;
 

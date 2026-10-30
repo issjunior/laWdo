@@ -78,6 +78,7 @@ import {
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
 import { AtalhosLaudoDialog } from '@/components/laudo/AtalhosLaudoDialog';
 import { CHAVES_PLACEHOLDERS_REP, extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
+import { obterContextoCampoLaudo, type ContextoCampoLaudo } from '@/lib/contexto-campo-laudo';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
@@ -676,6 +677,7 @@ export const LaudosPage: React.FC = () => {
   const [insercaoNoCursorSolicitada, setInsercaoNoCursorSolicitada] = useState<number | null>(null);
   const alvoInsercaoFiguraRef = useRef<{ editor: TinyMceEditorInstance; bookmark: BookmarkTinyMce } | null>(null);
   const [dialogoCampoReservadoAberto, setDialogoCampoReservadoAberto] = useState(false);
+  const [contextoCampoReservado, setContextoCampoReservado] = useState<ContextoCampoLaudo | null>(null);
   const [valorInicialCampoReservado, setValorInicialCampoReservado] = useState('');
   const rascunhoCampoReservadoRef = useRef('');
   const [erroCampoReservado, setErroCampoReservado] = useState<string | null>(null);
@@ -2681,15 +2683,18 @@ export const LaudosPage: React.FC = () => {
     const editor = obterEditorTinyMce(campo.editorId);
     if (!isTinyMceEditor(editor) || !editor.getBody()?.contains(campo.elemento) || !permiteEdicaoCampo(campo.elemento, editor.mode.isReadOnly())) return;
     campoReservadoSelecionadoRef.current = campo;
+    const indiceSecao = secoes.findIndex((_, indice) => campo.editorId === `secao-${indice}`);
+    setContextoCampoReservado(obterContextoCampoLaudo(campo.elemento, placeholders, secoes[indiceSecao]?.titulo));
     rascunhoRecuoCampoReservadoRef.current = null;
     const valorInicial = obterHtmlCampo(campo.elemento);
     rascunhoCampoReservadoRef.current = valorInicial;
     setValorInicialCampoReservado(valorInicial);
     setErroCampoReservado(null);
     setDialogoCampoReservadoAberto(true);
-  }, []);
+  }, [placeholders, secoes]);
 
   const fecharDialogoCampoReservado = useCallback(() => {
+    setContextoCampoReservado(null);
     campoReservadoSelecionadoRef.current = null;
     rascunhoRecuoCampoReservadoRef.current = null;
     setDialogoCampoReservadoAberto(false);
@@ -4685,16 +4690,49 @@ export const LaudosPage: React.FC = () => {
               <DialogDescription>
                 O valor será aplicado somente neste laudo e não altera a REP.
               </DialogDescription>
+              {contextoCampoReservado && (
+                <div className="space-y-2 break-words rounded-md border border-l-4 border-l-primary bg-accent p-4 text-left text-accent-foreground" role="group" aria-label="Informação em edição">
+                  <p className="text-xs font-medium">Informação em edição</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 text-lg font-bold leading-snug text-foreground">{contextoCampoReservado.nome}</p>
+                    {contextoCampoReservado.unidade && (
+                      <Badge variant="outline" className="max-w-full whitespace-normal break-words border-primary/20 bg-primary/10 text-primary">
+                        Unidade: {contextoCampoReservado.unidade}
+                      </Badge>
+                    )}
+                  </div>
+                  {contextoCampoReservado.tabela && <p className="text-sm font-medium">{contextoCampoReservado.tabela}</p>}
+                  {contextoCampoReservado.secao && <p className="text-xs text-muted-foreground">Seção: {contextoCampoReservado.secao}</p>}
+                  {contextoCampoReservado.trecho && <p className="text-sm">Trecho: {contextoCampoReservado.trecho}</p>}
+                  <Badge variant="outline" className="bg-muted/50 text-muted-foreground">
+                    {campoReservadoSelecionadoRef.current?.elemento.hasAttribute('data-placeholder') ? 'Vinculado à REP' : 'Preenchimento manual'}
+                  </Badge>
+                </div>
+              )}
             </DialogHeader>
             <div className="min-h-0 space-y-3 overflow-y-auto">
-              <p className="text-sm font-medium">Valor da REP: {(() => {
+              {(() => {
                 const chave = campoReservadoSelecionadoRef.current?.elemento.getAttribute('data-placeholder')?.slice(2, -2);
                 const valor = chave ? mapaPlaceholdersResolvidos[chave]?.valor : '';
-                return chave ? (valor ? new DOMParser().parseFromString(valor, 'text/html').body.textContent || 'Não preenchido' : 'Não preenchido') : 'Campo sem vínculo com a REP';
-              })()}</p>
-              {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorInicialCampoReservado} elementoOrigem={campoReservadoSelecionadoRef.current?.elemento}
-                onRecuoChange={recuo => { rascunhoRecuoCampoReservadoRef.current = recuo; }}
-                onChange={html => { rascunhoCampoReservadoRef.current = html; setErroCampoReservado(null); }} />}
+                const textoOriginal = valor ? new DOMParser().parseFromString(valor, 'text/html').body.textContent?.trim() : '';
+                if (!chave) return null;
+                return (
+                  <div className="space-y-2 text-left" role="group" aria-label="Origem do campo">
+                    {chave && (
+                      <div className="space-y-1 rounded-md border bg-muted/30 px-3 py-2">
+                        <p className="text-xs font-medium text-muted-foreground">Valor original da REP</p>
+                        <p className="break-words text-sm">{textoOriginal || 'Não preenchido'}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="space-y-2" role="group" aria-labelledby="rotulo-texto-campo-laudo">
+                <p id="rotulo-texto-campo-laudo" className="text-sm font-semibold">Texto neste laudo</p>
+                {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorInicialCampoReservado} elementoOrigem={campoReservadoSelecionadoRef.current?.elemento}
+                  onRecuoChange={recuo => { rascunhoRecuoCampoReservadoRef.current = recuo; }}
+                  onChange={html => { rascunhoCampoReservadoRef.current = html; setErroCampoReservado(null); }} />}
+              </div>
               {erroCampoReservado && <p className="text-sm text-destructive">{erroCampoReservado}</p>}
             </div>
             <DialogFooter className="shrink-0">
