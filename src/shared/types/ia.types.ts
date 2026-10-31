@@ -161,7 +161,7 @@ export function deveMascararConteudoIa(configuracao: ConfiguracaoPrivacidadeIa):
   return !configuracao.enviarConteudoIntegral;
 }
 
-export type QualidadeImagemIa = 'original' | 'alta' | 'equilibrada' | 'economica';
+export type QualidadeImagemIa = 'original' | 'alta' | 'equilibrada' | 'economica' | 'muito_economica';
 
 export interface ConfiguracaoImagemIa {
   versao: 1;
@@ -174,7 +174,7 @@ export const CONFIGURACAO_IMAGEM_IA_PADRAO: ConfiguracaoImagemIa = {
 };
 
 export function qualidadeImagemIaValida(valor: unknown): valor is QualidadeImagemIa {
-  return ['original', 'alta', 'equilibrada', 'economica'].includes(String(valor));
+  return ['original', 'alta', 'equilibrada', 'economica', 'muito_economica'].includes(String(valor));
 }
 
 export function configuracaoImagemIaValida(valor: unknown): valor is ConfiguracaoImagemIa {

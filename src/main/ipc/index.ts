@@ -1,3 +1,4 @@
+import { registrarLaudoBkpHandlers } from './handlers/laudo-bkp.handlers.js';
 import { ipcMain, BrowserWindow, app } from 'electron';
 import { getLogger, type LogModule } from '../utils/logger.js'
 const log = getLogger('ipc');
@@ -84,6 +85,7 @@ export const registerIpcHandlers = (options: {
   registerTemplateHandlers();
   registerImportacaoHandlers();
   registerLaudoHandlers();
+  registrarLaudoBkpHandlers();
   registerIAHandlers(options);
   registerBackupHandlers();
   registerLogSystemHandlers();

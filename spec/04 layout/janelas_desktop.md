@@ -36,3 +36,13 @@ Enquanto `AlteracoesPendentesProvider` está montado, o preload envia `janela:pr
 O renderer verifica o conteúdo atual e oferece o diálogo compartilhado de saída quando necessário. `janela:confirmar-fechamento` só é aceito da janela principal e com solicitação pendente; autoriza nova chamada a `close`. `janela:cancelar-fechamento` limpa a pendência, permitindo tentar novamente. Listeners e handlers são removidos em `closed`. As APIs ficam em `src/preload/index.ts`; a declaração legada usada pelo renderer também deve ser mantida em `src/renderer/index.tsx`.
 
 Esse protocolo protege a saída normal, não é autosave nem recuperação após crash. Não existe timeout de confirmação no main: um renderer sem resposta pode manter o fechamento bloqueado enquanto a proteção estiver ativa. Janelas destacadas não recebem essa guarda da janela principal. A regra de salvar/descartar pertence a `spec/03 laudo/laudo_ciclo_vida.md`; o handshake de atualização tem contrato próprio.
+
+## Atalhos de desktop na inicialização
+
+Após criar a janela principal, index.ts dispara criarAtalhoDesktopLinux() e criarAtalhoMesaMacOS() sem aguardar. Executam somente na plataforma correspondente, empacotada, fora de root e dos modos LAWDO_SMOKE_SCHEMA, LAWDO_SMOKE_JANELA e LAWDO_TESTE_CARGA. Validam que desktop existe e não resolve para a pasta pessoal. Falhas geram aviso no logger sistema sem impedir abertura.
+
+Linux cria laWdo.desktop para instalação comum ou laWdo-AppImage.desktop quando APPIMAGE está definido. O executável deve ser arquivo absoluto válido; a entrada escapa o caminho e usa ícone copiado de resources/assets/icone-linux.png para userData/integracao-desktop/icone.png. deb.json e appimage.json guardam versão 1 e SHA-256 do conteúdo criado: só um arquivo regular com esse hash pode ser atualizado; arquivo modificado, link ou destino sem registro são preservados. Se o atalho registrado foi apagado, não é recriado. A criação é exclusiva; a atualização revalida o arquivo aberto sem seguir symlink. Aplica modo 0755 e tenta gio metadata::trusted por até 3 s; indisponibilidade pode exigir **Permitir iniciar** no ambiente gráfico.
+
+macOS exige bundle real com estrutura .app/Contents/MacOS dentro de /Applications ou ~/Applications. Cria link simbólico laWdo.app na Mesa, preserva destino existente e registra { versao: 1, criado: true } em userData/integracao-desktop/macos.json. Depois do registro não tenta criar novamente, inclusive se o usuário apagar o link. Não é Finder alias nem atualização de links existentes.
+
+electron-builder.yml inclui logo.png como assets/icone-linux.png. atalho-linux.service.test.ts e atalho-macos.service.test.ts cobrem fluxos simulados; confiança e abertura do lançador real exigem smoke em cada plataforma.

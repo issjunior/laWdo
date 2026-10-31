@@ -145,3 +145,5 @@ export interface TipoExameUpdateData {
   nome?: string
   descricao?: string
 }
+
+export type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types.js';

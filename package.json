@@ -30,6 +30,7 @@
     "watch:preload": "tsc -p tsconfig.preload.json --watch",
     "watch:renderer": "vite build --watch",
     "test": "vitest run",
+    "test:regressao-laudo": "vitest run --config vitest.regressao-laudo.config.ts",
     "test:carga": "node scripts/carga/executar.mjs",
     "test:carga:unitarios": "node --test scripts/carga/*.test.mjs",
     "test:release": "node --test scripts/release/*.test.mjs",

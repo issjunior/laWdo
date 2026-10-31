@@ -52,9 +52,9 @@ describe('persistência da ocultação de títulos', () => {
     expect(secoes[0].conteudo).toBe('<p>Texto inicial</p>');
   }
 
-  it('instala o B-602 v11 com concordância e figuras dos cartuchos, preservando a versão anterior', async () => {
+  it('instala o B-602 v12 com concordância e figuras dos cartuchos, preservando a versão anterior', async () => {
     const [integrado] = await sqlite.executeQuery<{ id: string; tipo_exame_id: string }>(
-      "SELECT id, tipo_exame_id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 11",
+      "SELECT id, tipo_exame_id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 12",
     );
     expect(integrado).toBeDefined();
     const secoes = await servico.findSecoesByTemplate(integrado.id);
@@ -84,12 +84,12 @@ describe('persistência da ocultação de títulos', () => {
     expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
     expect((await sincronizarTemplatesIntegrados())[0].status).toBe('ja_atualizado');
     expect((await servico.findSecoesByTemplate('b602-legado-teste'))[0]).toMatchObject({ conteudo: '<p>Conteúdo anterior preservado</p>', ocultar_titulo: 0, contar_na_numeracao: 1 });
-    expect(await sqlite.executeQuery("SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 11")).toHaveLength(1);
+    expect(await sqlite.executeQuery("SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b602' AND versao_integrada = 12")).toHaveLength(1);
   });
 
-  it('instala o B-601 v2 com as abreviações corrigidas', async () => {
+  it('instala o B-601 v3 com as abreviações corrigidas', async () => {
     const [integrado] = await sqlite.executeQuery<{ id: string }>(
-      "SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b601' AND versao_integrada = 2",
+      "SELECT id FROM templates WHERE chave_integrada = 'laudo-padrao-b601' AND versao_integrada = 3",
     );
     expect(integrado).toBeDefined();
     const secoes = await servico.findSecoesByTemplate(integrado.id);

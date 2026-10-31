@@ -1,3 +1,4 @@
+import { obterIdentificacaoBkpLaudo } from '@shared/utils/nomes-documentos-rep';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
@@ -31,7 +32,7 @@ import {
 import type { EstadoSalvamentoLaudo } from '@/hooks/useGerenciadorAlteracoesLaudo';
 import { cn } from '@/lib/utils';
 
-type FormatoExportacaoLaudo = 'pdf' | 'docx' | 'odt';
+type FormatoExportacaoLaudo = 'pdf' | 'docx' | 'odt' | 'bkp';
 type ModoConteudoLaudo = 'dados' | 'chaves';
 type ModoOrganizacaoLaudo = 'single' | 'multi';
 
@@ -232,7 +233,7 @@ export function CabecalhoEditorLaudo({
                 <ChevronDown className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="min-w-56">
               <DropdownMenuItem onClick={() => onExportar('pdf')}>
                 <FileDown className="mr-2 size-4" />
                 Baixar PDF
@@ -262,6 +263,11 @@ export function CabecalhoEditorLaudo({
                 >
                   Beta
                 </Badge>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onExportar('bkp')}>
+                <Database className="mr-2 size-4" />
+                BKP do laudo {obterIdentificacaoBkpLaudo(repNumero).numeroFormatado}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

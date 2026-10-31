@@ -8,7 +8,7 @@ const salvar = vi.fn().mockResolvedValue({ success: true });
 
 beforeEach(() => {
   obter.mockReset();
-  salvar.mockClear();
+  salvar.mockReset().mockResolvedValue({ success: true });
   obter.mockImplementation(async chave => chave === 'api_key_groq'
     ? { success: false }
     : { success: true, data: null });
@@ -27,6 +27,42 @@ describe('configurações de IA', () => {
       .getByRole('radio', { name: /^Econômica/ })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText(/Limite atual: 480–640 px/)).toBeInTheDocument();
     expect(salvar).not.toHaveBeenCalled();
+    expect(within(screen.getByRole('radiogroup', { name: 'Perfil da figura do laudo' }))
+      .getByRole('radio', { name: /^Máxima economia/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('salva o perfil do laudo e a nova qualidade para IA de forma independente', async () => {
+    render(<ImagensPage />);
+    const laudo = within(screen.getByRole('radiogroup', { name: 'Perfil da figura do laudo' }));
+    const ia = within(screen.getByRole('radiogroup', { name: 'Qualidade da imagem enviada para descrição' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar perfil do laudo' })).toBeEnabled());
+    fireEvent.click(laudo.getByRole('radio', { name: /^Nítido/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar perfil do laudo' }));
+    await waitFor(() => expect(salvar).toHaveBeenCalledWith('perfil_figura_laudo', 'nitido', 'string', 'Perfil da figura do laudo e PDF'));
+    expect(ia.getByRole('radio', { name: /^Econômica/ })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(ia.getByRole('radio', { name: /^Muito econômica/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar qualidade para IA' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar qualidade para IA' }));
+    await waitFor(() => expect(salvar).toHaveBeenCalledWith('qualidade_imagem_ia', JSON.stringify({ versao: 1, qualidade: 'muito_economica' }), 'json', 'Qualidade da imagem enviada para descrição por IA'));
+  });
+
+  it('mostra uma comparação sobreposta por grupo e destaca a escolha atual', async () => {
+    render(<ImagensPage />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar perfil do laudo' })).toBeEnabled());
+    expect(screen.getAllByRole('img', { name: /Comparação proporcional dos limites de imagem/ })).toHaveLength(3);
+    const laudo = within(screen.getByRole('radiogroup', { name: 'Perfil da figura do laudo' }));
+    expect(laudo.getAllByRole('radio').map(opcao => opcao.textContent)).toEqual([
+      expect.stringContaining('Nítido'), expect.stringContaining('Equilibrado'),
+      expect.stringContaining('Compacto'), expect.stringContaining('Máxima economia'),
+    ]);
+    const nitido = laudo.getByRole('radio', { name: /^Nítido/ });
+    nitido.focus();
+    expect(nitido).toHaveFocus();
+    fireEvent.click(nitido);
+    expect(screen.getByRole('img', { name: 'Comparação proporcional dos limites de imagem. Selecionado: Nítido' })).toBeInTheDocument();
+    const ia = within(screen.getByRole('radiogroup', { name: 'Qualidade da imagem enviada para descrição' }));
+    fireEvent.click(ia.getByRole('radio', { name: /^Original/ }));
+    expect(screen.getByRole('img', { name: /Selecionado: Original, tamanho variável/ })).toBeInTheDocument();
   });
 
   it('carrega preferências válidas já salvas e conserva os dois grupos independentes', async () => {
@@ -88,14 +124,34 @@ describe('configurações de IA', () => {
     expect(salvar).not.toHaveBeenCalled();
   });
 
-  it('bloqueia a qualidade da imagem para IA na página de imagens quando a leitura falha', async () => {
-    obter.mockImplementation(async chave => chave === 'qualidade_imagem_ia'
+  it.each([
+    ['qualidade_imagem_ia', 'Salvar qualidade para IA', 'Salvar prévia do editor'],
+    ['perfil_figura_laudo', 'Salvar perfil do laudo', 'Salvar qualidade para IA'],
+    ['perfil_previa_editor', 'Salvar prévia do editor', 'Salvar perfil do laudo'],
+  ])('bloqueia somente o grupo %s quando a leitura falha', async (chaveComFalha, bloqueado, permitido) => {
+    obter.mockImplementation(async chave => chave === chaveComFalha
       ? { success: false }
       : { success: true, data: null });
     render(<ImagensPage />);
     await waitFor(() => expect(screen.getByText('Não foi possível carregar todas as preferências de imagens.')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Salvar qualidade para IA' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Salvar prévia do editor' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: bloqueado })).toBeDisabled();
+    expect(screen.getByRole('button', { name: permitido })).toBeEnabled();
     expect(salvar).not.toHaveBeenCalled();
+  });
+
+  it.each(['resposta', 'rejeicao'])('mostra falha de gravação %s e permite tentar novamente sem alterar os outros grupos', async falha => {
+    if (falha === 'resposta') salvar.mockResolvedValueOnce({ success: false, error: 'Sem permissão' });
+    else salvar.mockRejectedValueOnce(new Error('Sem permissão'));
+    render(<ImagensPage />);
+    const botao = screen.getByRole('button', { name: 'Salvar perfil do laudo' });
+    await waitFor(() => expect(botao).toBeEnabled());
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Perfil da figura do laudo' })).getByRole('radio', { name: /^Compacto/ }));
+    fireEvent.click(botao);
+    await screen.findByText('Sem permissão');
+    expect(botao).toBeEnabled();
+    fireEvent.click(botao);
+    await screen.findByText('Preferência salva.');
+    expect(salvar).toHaveBeenCalledTimes(2);
+    expect(salvar.mock.calls.every(([chave, valor]) => chave === 'perfil_figura_laudo' && valor === 'compacto')).toBe(true);
   });
 });

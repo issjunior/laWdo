@@ -71,3 +71,20 @@ it('ignora quebras entre a âncora oculta da tabela e os blocos ao salvar antes 
   expect(normalizarConteudoComparavel(comQuebras)).toBe(normalizarConteudoComparavel(semQuebras));
   expect(normalizarConteudoComparavel(comQuebras.replace('20/2026', '21/2026'))).not.toBe(normalizarConteudoComparavel(semQuebras));
 });
+
+it.each(['data-b601-grupo="105"', 'data-placeholder-tabela-personalizada="true"', 'class="cond-bloco" data-cond-bloco="exame"'])(
+  'limpa controles por identidade estável mesmo sem classes transitórias: %s', atributos => {
+    const original = `<div ${atributos}><table><tbody><tr><td>Texto</td></tr></tbody></table></div>`;
+    const apresentado = original.replace('<td>', '<td contenteditable="true">');
+    const limpo = normalizarConteudoComparavel(apresentado);
+    expect(limpo).toBe(normalizarConteudoComparavel(original));
+    expect(normalizarConteudoComparavel(limpo)).toBe(limpo);
+    expect(normalizarConteudoComparavel(apresentado.replace('Texto', 'Editado'))).not.toBe(limpo);
+  },
+);
+
+it('ignora somente a trava transitória de placeholders e mantém travas de conteúdo comum', () => {
+  const html = '<span data-placeholder="{{nome}}">{{nome}}</span>';
+  expect(normalizarConteudoComparavel(html.replace('<span ', '<span contenteditable="false" '))).toBe(normalizarConteudoComparavel(html));
+  expect(normalizarConteudoComparavel('<p contenteditable="false">Texto</p>')).not.toBe(normalizarConteudoComparavel('<p>Texto</p>'));
+});

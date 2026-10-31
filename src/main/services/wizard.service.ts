@@ -59,17 +59,21 @@ class WizardService extends BaseService<WizardRow> {
 
   private async buildArvoreEtapas(
     wizardId: string,
-    etapaPaiId: string | null = null,
-    nivel: number = 0
+    etapaId: string | null = null,
+    ancestrais: ReadonlySet<string> = new Set()
   ): Promise<ArvoreEtapa[]> {
     const etapas = await executeQuery<EtapaWizardRow>(
-      'SELECT * FROM etapas_wizard WHERE wizard_id = ? AND etapa_pai_id IS ? ORDER BY ordem ASC',
-      [wizardId, etapaPaiId]
+      etapaId === null
+        ? 'SELECT * FROM etapas_wizard WHERE wizard_id = ? AND etapa_pai_id IS NULL ORDER BY ordem ASC'
+        : 'SELECT * FROM etapas_wizard WHERE wizard_id = ? AND id = ? ORDER BY ordem ASC',
+      etapaId === null ? [wizardId] : [wizardId, etapaId]
     );
 
     const result: ArvoreEtapa[] = [];
 
     for (const etapa of etapas) {
+      if (ancestrais.has(etapa.id)) throw new Error('Referência cíclica nas etapas do wizard');
+      const caminho = new Set([...ancestrais, etapa.id]);
       const opcoes = await executeQuery<OpcaoEtapaRow>(
         'SELECT * FROM opcoes_etapa WHERE etapa_id = ? ORDER BY ordem ASC',
         [etapa.id]
@@ -86,7 +90,7 @@ class WizardService extends BaseService<WizardRow> {
         };
 
         if (opcao.etapa_filha_id) {
-          const filhas = await this.buildArvoreEtapas(wizardId, opcao.etapa_filha_id, nivel + 1);
+          const filhas = await this.buildArvoreEtapas(wizardId, opcao.etapa_filha_id, caminho);
           if (filhas.length > 0) {
             arvoreOpcao.etapa_filha = filhas[0];
           }
@@ -108,50 +112,33 @@ class WizardService extends BaseService<WizardRow> {
       });
     }
 
-    // Also check for child etapas linked via opcao_etapa.etapa_filha_id
-    // that might not be direct children of etapaPaiId
-    if (etapaPaiId === null) {
+    if (etapaId === null) {
       const todasEtapas = await executeQuery<EtapaWizardRow>(
         'SELECT * FROM etapas_wizard WHERE wizard_id = ? ORDER BY ordem ASC',
         [wizardId]
       );
       const idsNoResultado = new Set<string>();
+      const idsFilhas = new Set<string>();
       const collectIds = (items: ArvoreEtapa[]) => {
         for (const item of items) {
           idsNoResultado.add(item.id);
           for (const op of item.opcoes) {
-            if (op.etapa_filha) collectIds([op.etapa_filha]);
+            if (op.etapa_filha) {
+              idsFilhas.add(op.etapa_filha.id);
+              collectIds([op.etapa_filha]);
+            }
           }
         }
       };
       collectIds(result);
 
-      const faltando = todasEtapas.filter(e => !idsNoResultado.has(e.id));
-      if (faltando.length > 0) {
-        // Orphan etapas - attach at root
-        for (const e of faltando) {
-          const opcoes = await executeQuery<OpcaoEtapaRow>(
-            'SELECT * FROM opcoes_etapa WHERE etapa_id = ? ORDER BY ordem ASC',
-            [e.id]
-          );
-          result.push({
-            id: e.id,
-            pergunta: e.pergunta,
-            descricao_ajuda: e.descricao_ajuda,
-            tipo_input: e.tipo_input as ArvoreEtapa['tipo_input'],
-            nivel: e.nivel,
-            ordem: e.ordem,
-            obrigatorio: !!e.obrigatorio,
-            multipla_escolha: !!e.multipla_escolha,
-            opcoes: opcoes.map(o => ({
-              id: o.id,
-              label: o.label,
-              valor: o.valor,
-              ordem: o.ordem,
-            })),
-          });
-        }
+      for (const etapa of todasEtapas) {
+        if (idsNoResultado.has(etapa.id)) continue;
+        const recuperadas = await this.buildArvoreEtapas(wizardId, etapa.id);
+        result.push(...recuperadas);
+        collectIds(recuperadas);
       }
+      return result.filter(etapa => !idsFilhas.has(etapa.id));
     }
 
     return result;

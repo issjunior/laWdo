@@ -41,6 +41,7 @@ export function sincronizarAcoesBlocosCondicionais(raiz: HTMLElement | null): nu
 
   let adicionados = 0;
   raiz.querySelectorAll<HTMLElement>(SELETOR_BLOCOS_CONDICIONAIS).forEach(bloco => {
+    if (bloco.classList.contains('conteudo-laudo')) return;
     const emEdicao = bloco.getAttribute('data-cond-em-edicao') === 'true';
     let grupo = bloco.querySelector<HTMLElement>(':scope > [data-controles-bloco-condicional="true"]');
 
@@ -54,6 +55,8 @@ export function sincronizarAcoesBlocosCondicionais(raiz: HTMLElement | null): nu
       adicionados += 1;
     }
 
+    if (grupo.getAttribute('data-estado-edicao') === String(emEdicao)) return;
+    grupo.setAttribute('data-estado-edicao', String(emEdicao));
     grupo.replaceChildren();
     const controles: Array<{ acao: AcaoBlocoCondicional; texto: string; titulo: string }> = [
       {

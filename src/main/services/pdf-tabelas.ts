@@ -1,6 +1,8 @@
 import { distribuirLargurasColunas, ESTILOS_TABELAS_BALISTICA, pesoColunaTabela, planejarGruposColunas } from '../../shared/utils/tabelas-balistica-layout.js';
 
 export const ESTILOS_TABELAS_PLACEHOLDER_PDF = `
+  table[border="0"] > tr > :is(th, td),
+  table[border="0"] > :is(thead, tbody, tfoot) > tr > :is(th, td) { border: 0; }
   table:not([data-tabela-laudo="balistica"]):has([data-placeholder-celula-fixa]) {
     table-layout: fixed; width: 100% !important; max-width: 100% !important;
   }

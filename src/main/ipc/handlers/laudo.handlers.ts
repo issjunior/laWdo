@@ -1,9 +1,13 @@
+import { obterContextoWizardLaudo, calcularPecasDoLaudo } from '../../services/laudo-estrutura.service.js';
+import { esquemaRespostasIncorporadas } from '../../../shared/types/laudo-bkp.types.js';
+import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
 import { withTransaction } from '../../database/sqlite.js';
+import { concluirImagensLaudo, descartarArquivosConcluidos } from '../../services/imagem-laudo.service.js';
 import {
   exportarLaudo,
   verificarLibreOffice,
@@ -15,7 +19,7 @@ type RespostasWizard = Record<string, string | string[]>;
 type GerarWizardParams = {
   laudo_id: string;
   wizard_id: string;
-  template_id: string;
+  template_id: string | null;
   respostas: RespostasWizard;
   pecas_selecionadas?: string[];
 };
@@ -24,6 +28,25 @@ type GerarWizardParams = {
  * Registra handlers IPC para operações de Laudo
  */
 export const registerLaudoHandlers = (): void => {
+  ipcMain.handle('laudo:contextoWizard', async (evento, laudoId: unknown) => {
+    try {
+      authSessaoService.exigir(evento.sender.id);
+      if (typeof laudoId !== 'string' || !laudoId) throw new Error('Laudo inválido.');
+      const laudo = await laudoService.findById(laudoId);
+      if (!laudo) throw new Error('Laudo não encontrado.');
+      return { success: true, data: await obterContextoWizardLaudo(laudo) };
+    } catch (erro) { return { success: false, error: erro instanceof Error ? erro.message : 'Erro ao carregar wizard.' }; }
+  });
+  ipcMain.handle('laudo:calcularPecasWizard', async (evento, laudoId: unknown, respostas: unknown, wizardId: unknown) => {
+    try {
+      authSessaoService.exigir(evento.sender.id);
+      if (typeof laudoId !== 'string' || !laudoId) throw new Error('Laudo inválido.');
+      const laudo = await laudoService.findById(laudoId);
+      if (!laudo) throw new Error('Laudo não encontrado.');
+      return { success: true, data: await calcularPecasDoLaudo(laudo, esquemaRespostasIncorporadas.parse(respostas), typeof wizardId === 'string' ? wizardId : undefined) };
+    } catch (erro) { return { success: false, error: erro instanceof Error ? erro.message : 'Erro ao calcular peças.' }; }
+  });
+
   /**
    * Buscar laudo por ID
    */
@@ -243,12 +266,18 @@ export const registerLaudoHandlers = (): void => {
       if (!laudoAntes) return { success: false, error: 'Laudo não encontrado' };
 
       const statusAnterior = laudoAntes.status;
-      const laudo = await withTransaction(async () => {
+      const { laudo, caminhosAntigos } = await withTransaction(async () => {
+        const caminhosAntigos = novoStatus === 'Concluído' && statusAnterior !== 'Concluído'
+          ? await concluirImagensLaudo(laudoId) : [];
         const atualizado = await laudoService.updateStatus(laudoId, novoStatus);
         const repAtualizada = await repService.updateStatus(laudoAntes.rep_id, novoStatus === 'Em andamento' ? 'Em Andamento' : 'Concluído');
         if (!repAtualizada) throw new Error('Não foi possível atualizar o status da REP vinculada');
-        return atualizado;
+        return { laudo: atualizado, caminhosAntigos };
       });
+      if (novoStatus === 'Concluído' && statusAnterior !== 'Concluído') {
+        try { await descartarArquivosConcluidos(laudoId, caminhosAntigos); }
+        catch (error) { logError('Falha ao descartar arquivos após conclusão do laudo', { laudoId, error }); }
+      }
 
       const rep = await repService.findById(laudoAntes.rep_id);
       const repNumero = rep?.numero ?? laudoAntes.rep_id;

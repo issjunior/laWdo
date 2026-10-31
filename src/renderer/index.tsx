@@ -1,3 +1,4 @@
+import type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types';
 import React from 'react';
 import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
 import ReactDOM from 'react-dom/client';
@@ -149,7 +150,7 @@ interface IpcAPIRendererLegada {
     importarArquivo: () => Promise<RespostaImportacaoTemplate>;
     salvarCompleto: (dados: SalvarTemplateCompletoInput) => Promise<RespostaSalvarTemplateCompleto>;
   };
-  laudo: IpcGrupoLegado;
+  laudo: IpcGrupoLegado & ApiBkpLaudo;
   wizard: IpcGrupoLegado;
   categoriaPeca: IpcGrupoLegado;
   peca: IpcGrupoLegado;
@@ -361,6 +362,13 @@ const initApp = async () => {
           onEstadoAlterado: () => () => undefined,
         },
         laudo: {
+          exportarBkp: async () => ({ success: false, error: 'BKP disponível no aplicativo desktop.' }),
+          selecionarBkp: async () => ({ success: false, error: 'BKP disponível no aplicativo desktop.' }),
+          analisarBkp: async () => ({ success: false, error: 'BKP disponível no aplicativo desktop.' }),
+          importarBkp: async () => ({ success: false, error: 'BKP disponível no aplicativo desktop.' }),
+          cancelarBkp: async () => ({ success: true }),
+          contextoWizard: async () => ({ success: true, data: null }),
+          calcularPecasWizard: async () => ({ success: true, data: [] }),
           findAll: async () => ({ success: true, data: [] }),
           findByRepId: async () => ({ success: false, error: 'Mock mode' }),
           updateConteudo: async () => ({ success: false, error: 'Mock mode' }),

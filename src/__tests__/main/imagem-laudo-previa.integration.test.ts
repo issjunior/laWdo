@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ambiente = vi.hoisted(() => ({ diretorio: '', falharPrevia: false, largura: 1600, altura: 900 }));
 
@@ -12,6 +12,7 @@ vi.mock('electron', () => {
     resize: (opcoes: { width: number; height: number }) => criarImagem(opcoes.width, opcoes.height),
     toJPEG: () => Buffer.from(`jpeg:${width}x${height}`),
     toPNG: () => Buffer.from(`png:${width}x${height}`),
+    toBitmap: () => Buffer.from([0, 0, 0, 255]),
   });
   return {
     app: { getPath: () => ambiente.diretorio },
@@ -25,12 +26,11 @@ vi.mock('electron', () => {
 let sqlite: typeof import('../../main/database/sqlite');
 let imagens: typeof import('../../main/services/imagem-laudo.service');
 
-beforeEach(async () => {
+beforeAll(async () => {
   ambiente.diretorio = await mkdtemp(path.join(os.tmpdir(), 'lawdo-previa-'));
   ambiente.falharPrevia = false;
   ambiente.largura = 1600;
   ambiente.altura = 900;
-  vi.resetModules();
   sqlite = await import('../../main/database/sqlite');
   imagens = await import('../../main/services/imagem-laudo.service');
   await sqlite.executeNonQuery('CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT, tipo TEXT)');
@@ -42,9 +42,21 @@ beforeEach(async () => {
     imagem_origem_id TEXT, ajustes_json TEXT, temporaria_sessao INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`);
+  await sqlite.executeNonQuery('CREATE TABLE laudos (id TEXT PRIMARY KEY, conteudo TEXT)');
 });
 
-afterEach(async () => {
+beforeEach(async () => {
+  ambiente.falharPrevia = false;
+  ambiente.largura = 1600;
+  ambiente.altura = 900;
+  imagens.descartarImagensEstagiadasLaudo('laudo');
+  await sqlite.executeNonQuery('DELETE FROM imagens_laudo');
+  await sqlite.executeNonQuery('DELETE FROM laudos');
+  await sqlite.executeNonQuery('DELETE FROM configuracoes');
+  await sqlite.executeNonQuery("INSERT INTO configuracoes VALUES ('perfil_previa_editor', 'equilibrado', 'string')");
+});
+
+afterAll(async () => {
   await sqlite?.closeDatabase();
   await rm(ambiente.diretorio, { recursive: true, force: true });
 });
@@ -57,6 +69,27 @@ function estagiar(id: string, mimeType: string) {
 }
 
 describe('prévia do editor e arquivo original', () => {
+  it('limita a cópia do PDF e conserva apenas a figura tratada após a conclusão', async () => {
+    await sqlite.executeNonQuery('INSERT INTO configuracoes VALUES (?, ?, ?)', ['perfil_figura_laudo', 'maxima_economia', 'string']);
+    const original = Buffer.alloc(50_000, 1);
+    imagens.estagiarImagemLaudoPorBytes('laudo', { id: 'foto-usada', nomeArquivo: 'foto.jpg', mimeType: 'image/jpeg',
+      bytes: original, legenda: '', origem: 'local', sequencia: 1 });
+    imagens.estagiarImagemLaudoPorBytes('laudo', { id: 'foto-descartada', nomeArquivo: 'outra.jpg', mimeType: 'image/jpeg',
+      bytes: Buffer.alloc(50_000, 2), legenda: '', origem: 'local', sequencia: 2 });
+    await imagens.prepararImagemEditorLaudo('laudo', 'foto-usada', 400, 300, 1);
+    await imagens.prepararImagemEditorLaudo('laudo', 'foto-descartada', 400, 300, 1);
+    await sqlite.executeNonQuery('INSERT INTO laudos VALUES (?, ?)', ['laudo', '<figure data-image-id="foto-usada" data-image-original-id="foto-descartada"><img></figure>']);
+
+    const impressao = await imagens.obterImagemImpressaoLaudo('laudo', 'foto-usada', 3000);
+    expect(Buffer.from(impressao.dataUri.split(',')[1], 'base64').toString()).toBe('jpeg:1024x576');
+    const antigos = await imagens.concluirImagensLaudo('laudo');
+    await imagens.descartarArquivosConcluidos('laudo', antigos);
+
+    const registros = await sqlite.executeQuery<{ id: string; tamanho: number; imagem_origem_id: string | null }>('SELECT id, tamanho, imagem_origem_id FROM imagens_laudo');
+    expect(registros).toEqual([{ id: 'foto-usada', tamanho: 13, imagem_origem_id: null }]);
+    expect((await sqlite.executeQuery<{ conteudo: string }>('SELECT conteudo FROM laudos'))[0].conteudo).not.toContain('data-image-original-id');
+    expect((await imagens.obterImagemLaudoPorId('laudo', 'foto-usada')).dataUri).toBe(impressao.dataUri);
+  });
   it.each([
     ['ausente', null, 400, 2, 640, 'jpeg:640x360'],
     ['inválido', 'desconhecido', 400, 2, 640, 'jpeg:640x360'],

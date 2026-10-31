@@ -1,3 +1,8 @@
+import { normalizarCodigoExame } from '@shared/gdl/natureza-exame';
+import { ImportarBkpLaudo } from '@/components/laudo/ImportarBkpLaudo';
+import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
+import { materializarEdicaoPontual } from '@/lib/adaptadores-conteudo-laudo';
+import { useConfirmacaoConteudo } from '@/components/editor/ConfirmacaoConteudo';
 import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -73,11 +78,12 @@ import {
 import { IndicePlaceholdersDialog } from '@/components/laudo/IndicePlaceholdersDialog';
 import { AtalhosLaudoDialog } from '@/components/laudo/AtalhosLaudoDialog';
 import { CHAVES_PLACEHOLDERS_REP, extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
+import { obterContextoCampoLaudo, type ContextoCampoLaudo } from '@/lib/contexto-campo-laudo';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
 import { medirOperacaoEditorLaudo } from '@/lib/desempenho-editor-laudo';
-import { lerConteudoAtualEditorLaudo, sincronizacaoEditorLaudoPendente } from '@/lib/sincronizacao-editor-laudo';
+import { prepararInicializacaoEditorLaudo, lerConteudoAtualEditorLaudo, sincronizacaoEditorLaudoPendente } from '@/lib/sincronizacao-editor-laudo';
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { capturaProblemaLaudoAtiva, registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
 import { atualizarNumeroFigura, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
@@ -322,6 +328,8 @@ const isLaudoConteudo = (valor: unknown): valor is LaudoConteudo => (
   && (valor.apresentacao_json === undefined || valor.apresentacao_json === null || isString(valor.apresentacao_json))
 );
 
+const FerramentaProjeteis = React.lazy(() => import('@/components/projeteis/FerramentaProjeteis').then(modulo => ({ default: modulo.FerramentaProjeteis })));
+
 async function buscarConteudoLaudo(id: string): Promise<LaudoConteudo> {
   const resposta = await window.ipcAPI.laudo.findById(id);
   if (!resposta.success || !isLaudoConteudo(resposta.data) || resposta.data.id !== id) {
@@ -531,6 +539,7 @@ const extrairFigurasDaRaiz = (raiz: ParentNode): ImagemLaudo[] => {
 };
 
 export const LaudosPage: React.FC = () => {
+  const { confirmar: confirmarConteudo, dialogo: dialogoConteudo } = useConfirmacaoConteudo();
   const navigate = useNavigate();
   const location = useLocation();
   const { setTemporariamenteRecolhida } = useSidebar();
@@ -668,6 +677,7 @@ export const LaudosPage: React.FC = () => {
   const [insercaoNoCursorSolicitada, setInsercaoNoCursorSolicitada] = useState<number | null>(null);
   const alvoInsercaoFiguraRef = useRef<{ editor: TinyMceEditorInstance; bookmark: BookmarkTinyMce } | null>(null);
   const [dialogoCampoReservadoAberto, setDialogoCampoReservadoAberto] = useState(false);
+  const [contextoCampoReservado, setContextoCampoReservado] = useState<ContextoCampoLaudo | null>(null);
   const [valorInicialCampoReservado, setValorInicialCampoReservado] = useState('');
   const rascunhoCampoReservadoRef = useRef('');
   const [erroCampoReservado, setErroCampoReservado] = useState<string | null>(null);
@@ -693,6 +703,10 @@ export const LaudosPage: React.FC = () => {
   const [modoVisualizacaoPlaceholders, setModoVisualizacaoPlaceholders] = useState<ModoVisualizacaoPlaceholders>('dados');
   const [mapaPlaceholdersResolvidos, setMapaPlaceholdersResolvidos] = useState<MapaPlaceholdersResolvidos>({});
   const [indicePlaceholdersOpen, setIndicePlaceholdersOpen] = useState(false);
+  const [consultaProjeteis, setConsultaProjeteis] = useState<{ laudoId: string; aberto: boolean } | null>(null);
+  const botaoProjeteisRef = useRef<HTMLElement | null>(null);
+  const projeteisAberto = consultaProjeteis?.laudoId === editando?.id && consultaProjeteis?.aberto === true;
+  const permiteConsultarProjeteis = normalizarCodigoExame(editando?.tipo_exame_codigo ?? '').startsWith('B');
   const [atalhosLaudoAberto, setAtalhosLaudoAberto] = useState(false);
   const [itensIndicePlaceholders, setItensIndicePlaceholders] = useState<ItemIndicePlaceholder[]>([]);
   const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
@@ -1056,7 +1070,7 @@ export const LaudosPage: React.FC = () => {
   obterConteudoComparavelRef.current = obterConteudoComparavel;
 
   useEffect(() => {
-    if (!editando) return;
+    if (!editando || inicializando) return;
     const sessao = obterSessao();
     const temporizador = window.setTimeout(() => {
       if (!sessaoAtual(sessao)) return;
@@ -1065,11 +1079,11 @@ export const LaudosPage: React.FC = () => {
         const editor = obterEditorTinyMce(id);
         return editor && sincronizacaoEditorLaudoPendente(editor);
       })) return;
-      const conteudo = obterConteudoComparavel(false);
+      const conteudo = obterConteudoComparavelRef.current();
       medirOperacaoEditorLaudo('atualizar_estado_laudo', () => atualizarConteudo(conteudo), { bytesEntrada: conteudo.length, modoUnico: editorMode === 'single' });
     }, 400);
     return () => window.clearTimeout(temporizador);
-  }, [editando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes, obterSessao, sessaoAtual, editorMode, secoes]);
+  }, [editando, inicializando, obterConteudoComparavel, atualizarConteudo, revisaoAlteracoes, obterSessao, sessaoAtual, editorMode, secoes]);
 
   useEffect(() => {
     cacheSecoesEditorUnicoRef.current = null;
@@ -2295,13 +2309,20 @@ export const LaudosPage: React.FC = () => {
     link.remove();
   };
 
-  const handleExportar = async (formato: 'pdf' | 'docx' | 'odt') => {
+  const handleExportar = async (formato: 'pdf' | 'docx' | 'odt' | 'bkp') => {
     if (!editando) return;
     let toastId: string | number | undefined;
     try {
       setExportando(true);
       setError(null);
       setErroPdf(null);
+      if (formato === 'bkp') {
+        if (estadoSalvamento !== 'salvo' && !(await handleSalvar())) return;
+        const resultado = await window.ipcAPI.laudo.exportarBkp(editando.id);
+        if (resultado.success) toast.success('BKP do laudo exportado com sucesso.');
+        else if (!resultado.canceled) toast.error(resultado.error || 'Não foi possível exportar o BKP.');
+        return;
+      }
 
       const labelFormato = formato === 'pdf' ? 'PDF' : formato === 'docx' ? 'Word (.docx)' : 'ODT (.odt)';
       toastId = toast.loading(`Exportando laudo como ${labelFormato}...`);
@@ -2545,19 +2566,20 @@ export const LaudosPage: React.FC = () => {
     });
   }, [mapaPlaceholdersResolvidos, modoVisualizacaoPlaceholders, placeholders, registrarEventoPagina]);
 
-  const prepararConteudoEditor = (editor: TinyMceEditorInstance, sessao: number): boolean => {
-    if (!sessaoAtual(sessao) || editor.removed || editor.destroyed) return false;
-    const resultado = aplicarVisualizacaoPlaceholders(editor, {
-      modo: modoVisualizacaoPlaceholders,
-      valores: mapaPlaceholdersResolvidos,
-      placeholdersPersonalizados: placeholders,
-      descreverPendente: descreverPlaceholderPendente,
-    });
-    if (resultado.estado !== 'aplicado') throw new Error('Não foi possível preparar os campos do laudo.');
-    sincronizarCacheColetaB601(editor.getBody(), mapaPlaceholdersResolvidos.b601_tabela_material_coleta?.valor || '', editor.mode.isReadOnly());
-    conferirTabelasEditoresRef.current();
-    return true;
-  };
+  const prepararConteudoEditor = (editor: TinyMceEditorInstance, sessao: number): Promise<boolean> => (
+    prepararInicializacaoEditorLaudo(editor,
+      () => sessaoAtual(sessao) && obterEditorTinyMce(editor.id) === editor, () => {
+        const resultado = aplicarVisualizacaoPlaceholders(editor, {
+          modo: modoVisualizacaoPlaceholders,
+          valores: mapaPlaceholdersResolvidos,
+          placeholdersPersonalizados: placeholders,
+          descreverPendente: descreverPlaceholderPendente,
+        });
+        if (resultado.estado !== 'aplicado') throw new Error('Não foi possível preparar os campos do laudo.');
+        sincronizarCacheColetaB601(editor.getBody(), mapaPlaceholdersResolvidos.b601_tabela_material_coleta?.valor || '', editor.mode.isReadOnly());
+        conferirTabelasEditoresRef.current();
+      })
+  );
 
   const inserirPlaceholder = useCallback((editorId: string, chave: string) => {
     const editor = obterEditorTinyMce(editorId);
@@ -2658,16 +2680,21 @@ export const LaudosPage: React.FC = () => {
   }, [atualizarConteudoSecao, editorMode, secoes]);
 
   const solicitarPreenchimentoCampoReservado = useCallback((campo: CampoReservadoSelecionado) => {
+    const editor = obterEditorTinyMce(campo.editorId);
+    if (!isTinyMceEditor(editor) || !editor.getBody()?.contains(campo.elemento) || !permiteEdicaoCampo(campo.elemento, editor.mode.isReadOnly())) return;
     campoReservadoSelecionadoRef.current = campo;
+    const indiceSecao = secoes.findIndex((_, indice) => campo.editorId === `secao-${indice}`);
+    setContextoCampoReservado(obterContextoCampoLaudo(campo.elemento, placeholders, secoes[indiceSecao]?.titulo));
     rascunhoRecuoCampoReservadoRef.current = null;
     const valorInicial = obterHtmlCampo(campo.elemento);
     rascunhoCampoReservadoRef.current = valorInicial;
     setValorInicialCampoReservado(valorInicial);
     setErroCampoReservado(null);
     setDialogoCampoReservadoAberto(true);
-  }, []);
+  }, [placeholders, secoes]);
 
   const fecharDialogoCampoReservado = useCallback(() => {
+    setContextoCampoReservado(null);
     campoReservadoSelecionadoRef.current = null;
     rascunhoRecuoCampoReservadoRef.current = null;
     setDialogoCampoReservadoAberto(false);
@@ -2685,28 +2712,37 @@ export const LaudosPage: React.FC = () => {
 
     const selecionado = campoReservadoSelecionadoRef.current;
     const editor = selecionado ? obterEditorTinyMce(selecionado.editorId) : null;
-    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento)) {
+    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento) || !permiteEdicaoCampo(selecionado.elemento, editor.mode.isReadOnly())) {
       toast.error('O campo selecionado não está mais disponível neste editor.');
       fecharDialogoCampoReservado();
       return;
     }
 
-    editor.undoManager.transact(() => {
-      preencherCampoReservado(selecionado.elemento, valor);
-      const paragrafo = selecionado.elemento.closest('p');
-      if (paragrafo && rascunhoRecuoCampoReservadoRef.current !== null) {
-        editor.dom.setStyle(paragrafo, 'text-indent', rascunhoRecuoCampoReservadoRef.current);
-      }
-    });
+    try {
+      editor.undoManager.transact(() => {
+        if (!materializarEdicaoPontual(editor, selecionado.elemento)) throw new Error('Não foi possível personalizar a tabela.');
+        preencherCampoReservado(selecionado.elemento, valor);
+        const paragrafo = selecionado.elemento.closest('p');
+        if (paragrafo && permiteEdicaoCampo(paragrafo, editor.mode.isReadOnly()) && rascunhoRecuoCampoReservadoRef.current !== null) {
+          editor.dom.setStyle(paragrafo, 'text-indent', rascunhoRecuoCampoReservadoRef.current);
+        }
+      });
+    } catch (erro: unknown) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível preencher o campo.');
+      return;
+    }
+    editor.dispatch('ConteudoInterativoAlterado');
     atualizarConteudoDoEditor(editor);
     registrarAlteracao();
     fecharDialogoCampoReservado();
   }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao]);
 
-  const restaurarValorDaRep = useCallback(() => {
+  const restaurarValorDaRep = useCallback(async () => {
+    const referenciaInicial = campoReservadoSelecionadoRef.current;
+    if (!await confirmarConteudo('Restaurar o valor atual da REP? O preenchimento local deste campo será descartado.')) return;
     const selecionado = campoReservadoSelecionadoRef.current;
     const editor = selecionado ? obterEditorTinyMce(selecionado.editorId) : null;
-    if (!selecionado || !isTinyMceEditor(editor) || !editor.getBody()?.contains(selecionado.elemento)) return;
+    if (selecionado !== referenciaInicial || !selecionado || !isTinyMceEditor(editor) || !permiteEdicaoCampo(selecionado.elemento, editor.mode.isReadOnly()) || !editor.getBody()?.contains(selecionado.elemento)) { toast.error('O campo selecionado não está mais disponível.'); return; }
     editor.undoManager.transact(() => {
       if (restaurarCampoReservado(selecionado.elemento)) {
         aplicarVisualizacaoPlaceholder(editor, selecionado.elemento, {
@@ -2720,7 +2756,8 @@ export const LaudosPage: React.FC = () => {
     atualizarConteudoDoEditor(editor);
     registrarAlteracao();
     fecharDialogoCampoReservado();
-  }, [atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders]);
+    toast.success('Valor da REP restaurado no rascunho.');
+  }, [confirmarConteudo, atualizarConteudoDoEditor, fecharDialogoCampoReservado, registrarAlteracao, modoVisualizacaoPlaceholders, mapaPlaceholdersResolvidos, placeholders]);
 
   const localizarBlocoNoEditor = useCallback((referencia: BlocoCondicionalSelecionado) => {
     const editor = obterEditorTinyMce(referencia.editorId);
@@ -2768,6 +2805,7 @@ export const LaudosPage: React.FC = () => {
       window.ipcAPI.ilustracoes.closePanel();
     }
     aberturaLaudoRef.current += 1;
+    setConsultaProjeteis(null);
     setEditando(null);
     cacheComparacaoRef.current = null;
     setSecoes([]);
@@ -2948,7 +2986,7 @@ export const LaudosPage: React.FC = () => {
 
   useAtalhoSalvarLaudo({
     ativo: Boolean(editando),
-    bloqueado: inicializando || salvando || carregandoPreview || exportando,
+    bloqueado: inicializando || salvando || carregandoPreview || exportando || projeteisAberto,
     onSalvar: () => void handleSalvar(),
   });
 
@@ -3922,12 +3960,11 @@ export const LaudosPage: React.FC = () => {
       const userId = precisaSenhaParaExcluir(laudoParaExcluir.status) ? getCurrentUserId() : undefined;
       const r = await window.ipcAPI.laudo.delete(laudoParaExcluir.id, userId);
       if (r.success) {
-        setSuccess(r.message || 'Laudo excluído com sucesso!');
+        toast.success(r.message || 'Laudo excluído com sucesso!');
         setDeleteDialogOpen(false);
         setLaudoParaExcluir(null);
         setSenhaExclusao('');
         carregarLaudos();
-        setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(r.error || 'Erro ao excluir laudo');
       }
@@ -4298,6 +4335,7 @@ export const LaudosPage: React.FC = () => {
 
     return (
       <TooltipProvider>
+        {dialogoConteudo}
         <div className="flex w-full flex-col gap-4 px-4 pb-4 md:px-8 md:pb-6">
         <CabecalhoEditorLaudo
           repNumero={editando.rep_numero}
@@ -4390,6 +4428,10 @@ export const LaudosPage: React.FC = () => {
                 handleToggleIlustracoes()
               }}
               onReindexarSecoes={handleReindexarSecoes}
+              onAbrirProjeteis={permiteConsultarProjeteis ? () => {
+                botaoProjeteisRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                setConsultaProjeteis({ laudoId: editando.id, aberto: true });
+              } : undefined}
               onAbrirAtalhos={() => setAtalhosLaudoAberto(true)}
               onRecolherAutomaticamente={() => setPanelCollapsed(true)}
               conteudoPainel={conteudoPainelLateral}
@@ -4437,8 +4479,8 @@ export const LaudosPage: React.FC = () => {
                           concluirInicializacao(cacheComparacaoRef.current?.resultado || '', sessaoEditor);
                           toast.warning('O documento completo demorou a abrir. Abra uma seção para continuar a edição.');
                         }}
-                        onEditorInit={(editor) => {
-                          if (!prepararConteudoEditor(editor, sessaoEditor)) return;
+                        onEditorInit={async (editor) => {
+                          if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                           observarFigurasEditor(editor);
                           const htmlAtual = editor.getContent();
                           const secoesAtuais = parseSingleHtmlToSecoes(htmlAtual, secoes);
@@ -4565,8 +4607,8 @@ export const LaudosPage: React.FC = () => {
                                       setPanelCollapsed(false);
                                     }}
                                     placeholderChaves={placeholderChaves}
-                                    onEditorInit={(editor) => {
-                                      if (!prepararConteudoEditor(editor, sessaoEditor)) return;
+                                    onEditorInit={async (editor) => {
+                                      if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
                                       observarFigurasEditor(editor);
                                       registrarEditorIa(editor);
                                       if (isIlustracoes) handleIlustracoesEditorInit(editor);
@@ -4627,6 +4669,11 @@ export const LaudosPage: React.FC = () => {
           </CardContent>
         </Card>
 
+        {permiteConsultarProjeteis && consultaProjeteis?.laudoId === editando.id && <React.Suspense fallback={null}><FerramentaProjeteis key={editando.id} dialogo={{
+          aberto: consultaProjeteis.aberto,
+          aoAlterarAbertura: aberto => setConsultaProjeteis({ laudoId: editando.id, aberto }),
+          aoFechar: () => botaoProjeteisRef.current?.focus(),
+        }} /></React.Suspense>}
         <AtalhosLaudoDialog aberto={atalhosLaudoAberto} onAbertoChange={setAtalhosLaudoAberto} />
         <IndicePlaceholdersDialog
           open={indicePlaceholdersOpen}
@@ -4643,16 +4690,49 @@ export const LaudosPage: React.FC = () => {
               <DialogDescription>
                 O valor será aplicado somente neste laudo e não altera a REP.
               </DialogDescription>
+              {contextoCampoReservado && (
+                <div className="space-y-2 break-words rounded-md border border-l-4 border-l-primary bg-accent p-4 text-left text-accent-foreground" role="group" aria-label="Informação em edição">
+                  <p className="text-xs font-medium">Informação em edição</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 text-lg font-bold leading-snug text-foreground">{contextoCampoReservado.nome}</p>
+                    {contextoCampoReservado.unidade && (
+                      <Badge variant="outline" className="max-w-full whitespace-normal break-words border-primary/20 bg-primary/10 text-primary">
+                        Unidade: {contextoCampoReservado.unidade}
+                      </Badge>
+                    )}
+                  </div>
+                  {contextoCampoReservado.tabela && <p className="text-sm font-medium">{contextoCampoReservado.tabela}</p>}
+                  {contextoCampoReservado.secao && <p className="text-xs text-muted-foreground">Seção: {contextoCampoReservado.secao}</p>}
+                  {contextoCampoReservado.trecho && <p className="text-sm">Trecho: {contextoCampoReservado.trecho}</p>}
+                  <Badge variant="outline" className="bg-muted/50 text-muted-foreground">
+                    {campoReservadoSelecionadoRef.current?.elemento.hasAttribute('data-placeholder') ? 'Vinculado à REP' : 'Preenchimento manual'}
+                  </Badge>
+                </div>
+              )}
             </DialogHeader>
             <div className="min-h-0 space-y-3 overflow-y-auto">
-              <p className="text-sm font-medium">Valor da REP: {(() => {
+              {(() => {
                 const chave = campoReservadoSelecionadoRef.current?.elemento.getAttribute('data-placeholder')?.slice(2, -2);
                 const valor = chave ? mapaPlaceholdersResolvidos[chave]?.valor : '';
-                return chave ? (valor ? new DOMParser().parseFromString(valor, 'text/html').body.textContent || 'Não preenchido' : 'Não preenchido') : 'Campo sem vínculo com a REP';
-              })()}</p>
-              {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorInicialCampoReservado} elementoOrigem={campoReservadoSelecionadoRef.current?.elemento}
-                onRecuoChange={recuo => { rascunhoRecuoCampoReservadoRef.current = recuo; }}
-                onChange={html => { rascunhoCampoReservadoRef.current = html; setErroCampoReservado(null); }} />}
+                const textoOriginal = valor ? new DOMParser().parseFromString(valor, 'text/html').body.textContent?.trim() : '';
+                if (!chave) return null;
+                return (
+                  <div className="space-y-2 text-left" role="group" aria-label="Origem do campo">
+                    {chave && (
+                      <div className="space-y-1 rounded-md border bg-muted/30 px-3 py-2">
+                        <p className="text-xs font-medium text-muted-foreground">Valor original da REP</p>
+                        <p className="break-words text-sm">{textoOriginal || 'Não preenchido'}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="space-y-2" role="group" aria-labelledby="rotulo-texto-campo-laudo">
+                <p id="rotulo-texto-campo-laudo" className="text-sm font-semibold">Texto neste laudo</p>
+                {dialogoCampoReservadoAberto && <EditorCampoLaudo valor={valorInicialCampoReservado} elementoOrigem={campoReservadoSelecionadoRef.current?.elemento}
+                  onRecuoChange={recuo => { rascunhoRecuoCampoReservadoRef.current = recuo; }}
+                  onChange={html => { rascunhoCampoReservadoRef.current = html; setErroCampoReservado(null); }} />}
+              </div>
               {erroCampoReservado && <p className="text-sm text-destructive">{erroCampoReservado}</p>}
             </div>
             <DialogFooter className="shrink-0">
@@ -4814,6 +4894,7 @@ export const LaudosPage: React.FC = () => {
           <h1 className="text-2xl md:text-3xl font-bold">Laudos</h1>
           <p className="text-muted-foreground mt-1">Escreva e edite os laudos periciais usando os templates cadastrados</p>
         </div>
+        <ImportarBkpLaudo onImportado={async () => { await carregarLaudos(); await carregarPlaceholders(); }} />
       </div>
 
       <Tabs value={tabFiltro} onValueChange={value => setTabFiltro(value as AbaLaudos)} className="w-full">

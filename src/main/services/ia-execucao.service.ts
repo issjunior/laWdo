@@ -970,6 +970,7 @@ export class IaExecucaoService {
       alta: { larguraMaxima: 1_536, qualidadeJpeg: 88 },
       equilibrada: { larguraMaxima: 768, qualidadeJpeg: 80 },
       economica: { larguraMaxima: 512, qualidadeJpeg: 70 },
+      muito_economica: { larguraMaxima: 384, qualidadeJpeg: 60 },
     };
     const imagemParaEnvio = configuracaoImagem.qualidade === 'original'
       ? (() => {

@@ -15,6 +15,25 @@ function dadosComProjeteis() {
 }
 
 describe('apresentação das tabelas B601', () => {
+  it('remove fundos somente dos quadros fotográficos e preserva fotos, legendas e a tabela descritiva', () => {
+    const doc = new DOMParser().parseFromString(`<div data-b601-grupo="105">
+      <table><thead><tr><th colspan="2">Descrição</th></tr></thead><tbody><tr><td>8,5 g</td></tr></tbody></table>
+      <div data-b601-complemento="true" data-b601-fotos-origem="LOCAL"><table bgcolor="#aaa" style="background:red">
+      <thead style="background-color:gray"><tr bgcolor="#ddd"><th style="background:blue">Fotos</th></tr></thead>
+      <tbody><tr><td style="background-color:yellow"><figure data-image-id="foto"><img src="foto.png"><figcaption>Legenda</figcaption></figure></td></tr></tbody>
+      </table></div></div>`, 'text/html');
+    normalizarApresentacaoTabelas(doc.body);
+    const fotos = doc.querySelector('[data-b601-fotos-origem]')!;
+    for (const elemento of fotos.querySelectorAll<HTMLElement>('table, thead, tbody, tr, th, td')) {
+      expect(elemento.style.background).toBe(''); expect(elemento.style.backgroundColor).toBe('');
+      expect(elemento.hasAttribute('bgcolor')).toBe(false);
+    }
+    expect(doc.querySelector('th')?.style.backgroundColor).toBe('rgb(217, 217, 217)');
+    expect(doc.querySelector('td')?.textContent).toBe('8,5 g');
+    expect(fotos.querySelector('img')?.getAttribute('src')).toBe('foto.png');
+    expect(fotos.querySelector('figcaption')?.textContent).toBe('Legenda');
+    const antes = doc.body.innerHTML; normalizarApresentacaoTabelas(doc.body); expect(doc.body.innerHTML).toBe(antes);
+  });
   it('gera quadros de continuação com PQ01 a PQ06, sombreamento e fonte Arial', () => {
     const doc = new DOMParser().parseFromString(gerarDescricaoAgrupadaB601(dadosComProjeteis(), '105', 'grupo'), 'text/html')
     expect(doc.querySelectorAll('table')).toHaveLength(2)

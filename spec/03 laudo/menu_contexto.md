@@ -26,6 +26,23 @@ Os controles transitórios de editar/concluir e excluir pertencem ao editor, nã
 
 Placeholders cujo valor é uma tabela HTML continuam sendo inseridos como âncoras de placeholder. No modo de dados, o editor cria a prévia fora do `span` canônico. Somente prévias de tabela recebem o cartão âmbar e as ações de personalização/restauração; tabelas comuns inseridas pelo usuário não são afetadas. O ciclo persistente está documentado em `spec/05 placeholder/ciclo_placeholder.md`.
 
+## Preenchimento das tabelas B-601
+
+Na página Laudos, TinyMceEditor registra menu-preenchimento-b601.ts quando existe laudoId. O contexto do clique no iframe é consumido por PlaceholderContextMenu.tsx, que substitui o menu de placeholders somente nos campos compatíveis dos quadros descritivos de projéteis e estojos. Cabeçalhos, identificadores, origem/procedência vinculada à REP, fotografias e demais locais conservam o menu anterior. Templates e cabeçalhos não recebem esse preenchimento.
+
+| Ação | Atalho no editor |
+|---|---|
+| Marcar como Prejudicado | Ctrl + Shift + P |
+| Marcar como Ausente | Ctrl + Shift + A |
+
+O menu tem título Preencher célula(s), contagem das células selecionadas e opções curtas Prejudicado/Ausente, com ícones e atalhos alinhados em etiquetas de teclado. As duas opções ficam desabilitadas e o menu informa indisponibilidade quando a seleção não permite o preenchimento. A apresentação usa os componentes locais e tokens do tema.
+
+Os atalhos também aparecem no grupo Tabelas B601 de AtalhosLaudoDialog, aberto pelo menu flutuante de Laudos. Atuam no editor em foco, no modo único ou por seções, e ficam suspensos enquanto há diálogo ou confirmação na página.
+
+O clique aplica à célula apontada; se ela pertence à seleção múltipla de células, aplica à seleção inteira. Pelo teclado, um clique simples identifica a célula para os atalhos mesmo quando o conteúdo protegido não recebe o cursor do TinyMCE; selecionar o texto não é necessário. Sem referência de clique, usa a célula do foco/cursor e sua seleção. Essa referência fica apenas em memória por editor e é descartada ao clicar fora, navegar por teclado, trocar o modo ou recarregar/desfazer/refazer o conteúdo; alvos removidos não são reutilizados. Os rótulos do menu indicam quando há várias células. Uma célula incompatível ou sem permissão desabilita a operação inteira. A execução revalida presença, identidade do campo, valor capturado, modo e permissões, sem redirecionar a outro alvo se o contexto ficar obsoleto.
+
+A operação aceita apenas Prejudicado ou Ausente, substitui os valores locais em uma transação de undo e não gera alteração quando todos já contêm o valor solicitado. Campos manuais usam preencherCampoReservado; seletores com texto livre seguem seu evento de alteração, preservando identidade e controles. A elegibilidade e as exceções de proteção seguem [B-601](b601.md). O foco retorna somente ao fechar o menu, inclusive no cancelamento, com editor.focus({ scrollToSelection: false }); o atalho restaura o foco após aplicar. Abertura/fechamento não preenchem campos nem representam salvamento.
+
 ## Extensão para outros exames
 
 Um novo tipo de exame deve declarar sua `MenuSection[]`, registrá-la em `EXAM_MENU_REGISTRY` e fornecer somente os placeholders agregados ou escalares que precisam existir no catálogo. A lógica dinâmica deve permanecer nos metadados do exame e nos helpers da própria feature, sem acoplar o menu a formatos brutos do processo principal.

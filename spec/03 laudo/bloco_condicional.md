@@ -8,7 +8,7 @@
 
 ## Exclusão no editor e reconciliação
 
-Cada `.cond-bloco[data-cond-bloco]` recebe `data-cond-instancia`, fica protegido e expõe controles transitórios **Editar/Concluir** e **Excluir**. Os controles são `data-mce-bogus`, não fazem parte do HTML salvo e o alvo da ação é sempre `editorId + instanciaId`. A exclusão confirmada marca a ocorrência com `data-cond-suprimido="true"` em uma transação de undo; preview, PDF, ODT, HTML exportado e contexto de IA omitem blocos suprimidos.
+Cada .cond-bloco[data-cond-bloco] recebe data-cond-instancia, fica protegido e usa os controles comuns **Editar/Concluir**, **Restaurar dados da REP** e **Excluir**. A restauração fica desabilitada para condicionais, pois não há adaptador vinculado à REP. conteudo-interativo.ts localiza e revalida o elemento da instância atual; controles e estado de edição são transitórios. A exclusão confirmada marca data-cond-suprimido="true" em uma transação de undo; preview, PDF, ODT, HTML exportado e contexto de IA omitem blocos suprimidos. A confirmação assíncrona aborta se o conteúdo mudar ou o alvo deixar de existir. A política comum está em spec/03 laudo/editor_texto.md.
 
 A exclusão local não altera a REP nem o GDL. A recomposição não é uniforme: blocos periciais versionados por arma preservam wrapper, texto e supressão pelo par `data-arma-chave + data-bloco-pericial`; já cartuchos e estojos pertencem ao conteúdo-base da seção derivada **DOS EXAMES**. Se essa seção for reconciliada com peças projetadas, esses wrappers são reconstituídos a partir do template, inclusive quando foram apagados no editor.
 

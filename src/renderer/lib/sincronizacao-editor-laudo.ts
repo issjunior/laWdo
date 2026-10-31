@@ -69,3 +69,17 @@ export function instrumentarLeiturasEditorLaudo(editor: Editor, modoUnico: boole
   });
   editor.on('remove', () => { inicios.length = 0; restaurarDesfazer?.(); });
 }
+
+/** A referência só pode ser capturada depois que o TinyMCE estabiliza os src locais. */
+export async function prepararInicializacaoEditorLaudo(
+  editor: Editor,
+  estaAtual: () => boolean,
+  prepararConteudo: () => void,
+): Promise<boolean> {
+  if (!estaAtual() || editor.removed || editor.destroyed) return false;
+  const imagens = await editor.uploadImages();
+  if (!estaAtual() || editor.removed || editor.destroyed) return false;
+  if (imagens.some(imagem => !imagem.status)) throw new Error('Não foi possível preparar as imagens do laudo.');
+  prepararConteudo();
+  return true;
+}

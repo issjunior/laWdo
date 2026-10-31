@@ -18,7 +18,7 @@ Alterar o estado React não substitui automaticamente o DOM do editor montado. U
 
 O HTML enviado torna-se a referência salva. A página compara o conteúdo atual com essa referência antes de restaurar a visualização. Sem edição concorrente, recompõe os editores montados e chama `restaurarVisualizacaoAposSalvar()` de `apresentacao-placeholders.ts`: o helper executa `setContent()` e reaplica o modo de apresentação de placeholders. Se o usuário editou durante o IPC, a página preserva o DOM novo, não reaplica o HTML enviado e mantém a diferença pendente. **Salvar e sair** só prossegue quando não restar pendência.
 
-A referência inicial é estabelecida após a normalização de prontidão do editor, em `init_instance_callback`; eventos anteriores não contam como digitação do usuário. Mudanças nessa ordem podem produzir falsa pendência ou restaurar conteúdo antigo. O contrato completo de sessão e saída está em `spec/03 laudo/laudo_ciclo_vida.md`; a prontidão está em `spec/03 laudo/editor_texto.md`.
+A referência inicial é estabelecida após aguardar o callback assíncrono de preparação, incluindo uploadImages local e normalização de placeholders/tabelas, em `init_instance_callback`; eventos anteriores não contam como digitação do usuário. Mudanças nessa ordem podem produzir falsa pendência ou restaurar conteúdo antigo. O contrato completo de sessão e saída está em `spec/03 laudo/laudo_ciclo_vida.md`; a prontidão está em `spec/03 laudo/editor_texto.md`.
 
 ## Invariantes e verificação
 

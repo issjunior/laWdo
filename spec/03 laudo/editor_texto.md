@@ -2,6 +2,8 @@
 
 ## Fonte de verdade e contratos
 
+Os contratos comuns de elaboração e os critérios para extensão a novos exames estão em [Padrão de elaboração](padrao/padrao_elaboracao.md). Esta spec conserva os detalhes do editor.
+
 `src/renderer/components/editor/TinyMceEditor.tsx` concentra a configuração e os comandos comuns do TinyMCE usados em laudos, templates, cabeçalhos e importação. A toolbar-base é única; `condbloco` e `suprimirblocopericial` só são acrescentados quando `condToggles` fornece contexto.
 
 O componente aceita `value` no modo controlado e `initialValue` no modo não controlado. Este último captura o HTML apenas na montagem para impedir que normalizações internas reposicionem o cursor em documentos estruturados. Por isso, uma recarga externa do laudo precisa trocar a chave de montagem do editor; `criarChaveMontagemEditor()` é usada por `LaudosPage.tsx` para desmontar a instância anterior e carregar o novo HTML persistido. Não tentar atualizar `initialValue` na mesma instância.
@@ -36,7 +38,7 @@ Mudanças em recuo, quebra ou alinhamento devem ser coordenadas com `src/rendere
 
 ## Prontidão e inserção de figuras
 
-A prontidão é concluída em `init_instance_callback`, após o carregamento inicial: normaliza blocos condicionais, instala suas ações e chama `onEditorInit` antes de liberar `onChange` como alteração de usuário. Eventos anteriores usam `normalizacao-inicial`; o evento `init` isolado não estabelece a referência de conteúdo salvo. Na página de laudos, o editor único conclui a inicialização da sessão com o HTML normalizado. A comparação de pendências e a proteção contra respostas de sessões antigas ficam em `useGerenciadorAlteracoesLaudo.ts`.
+A prontidão é concluída em init_instance_callback, após normalizar blocos e instalar as interações. onEditorInit aceita void | Promise<void> e é aguardado antes de liberar edição, publicar alterações de usuário e definir data-diagnostico-pronto. Em laudos, prepararInicializacaoEditorLaudo() aguarda editor.uploadImages(), verifica o resultado de cada imagem e revalida sessão e instância antes de aplicar placeholders, cache de coleta e numeração. Só depois o editor único estabelece a referência comparável; editores por seção não substituem a referência salva da sessão. Falha mantém o editor indisponível e oferece nova tentativa; conclusão de instância removida ou sessão antiga não libera a atual. Eventos anteriores usam normalizacao-inicial. O contrato está em spec/problemas diversos/aviso_salvar_sem_edicao.md.
 
 Timeouts registram tentativa, última fase, tamanho inicial e disponibilidade do documento e das folhas de estilo, sem gravar HTML. O marcador `data-diagnostico-pronto` no iframe permite instalar sondas após a inicialização; o contrato fica em `spec/13 diagnostico/diagnostico_assistido.md`.
 
@@ -60,6 +62,12 @@ A comparação reaproveita o resultado quando os campos das seções não mudara
 
 `sincronizacao-editor-laudo.test.ts` cobre agrupamento, composição, leitura imediata, descarte e edição durante salvamento; `desempenho-editor-laudo.test.ts` cobre os atalhos de processamento. A suíte manual com Electron está em [Testes de carga do editor](../13%20diagnostico/testes_carga_editor.md).
 
+## Consulta de projéteis durante a edição
+
+O trilho de `LaudosPage.tsx` oferece **Identificação de projéteis** apenas para códigos de exame da família B, normalizados sem espaços/hífens e em maiúsculas. A ferramenta completa abre em diálogo sobre a página, mantendo a instância do TinyMCE e a sessão de alterações pendentes. Nenhum resultado é aplicado automaticamente ao documento; abrir, consultar e fechar não salva nem estabelece nova referência comparável. O atalho Ctrl+S/Meta+S do laudo fica bloqueado enquanto o modal está aberto, e o foco retorna ao botão do trilho ao fechar.
+
+A consulta fica em memória após fechar o modal e é descartada ao sair ou trocar de laudo. O componente é carregado na primeira abertura, sem substituir a árvore do editor. Responsabilidades, dimensões do modal e catálogo estão em [Identificação de projéteis](../16%20ferramentas/identificacao_projeteis.md). `projeteis-laudo.component.test.tsx` verifica o acesso condicional, a consulta preservada, foco, atalhos e identidade do editor simulado; o histórico real de desfazer e a ausência de falsa pendência continuam sujeitos a smoke no Electron.
+
 ## Busca no laudo e atalhos
 
 Em `LaudosPage.tsx`, Ctrl+F (ou Meta+F) abre `BarraBuscaLaudo` acima do editor, inclusive com foco dentro do iframe. O comando não é capturado quando há diálogo ou alerta modal aberto. Enter/Shift+Enter no campo percorrem resultados em ciclo; Esc fecha a busca. O botão **Atalhos do laudo** no trilho abre `AtalhosLaudoDialog`, que descreve os contextos de busca, salvamento e edição e restaura o foco de origem ao fechar. Localizar/substituir do TinyMCE continua disponível na toolbar e atua no editor em foco.
@@ -80,6 +88,24 @@ O recuo escolhido no diálogo fica em rascunho separado do HTML inline e só é 
 
 Com laudoId, upload, colagem, arraste e substituição de dummy passam por estágio local e prepararInsercao antes de colocar a prévia no HTML. Colagem de data URI/blob usa placeholder temporário e data-imagem-processando; ao concluir substitui o src, marca data-imagem-previa e publica a alteração. Falha remove a figura temporária e mostra erro. Imagens remotas HTTP(S) são recusadas com orientação para salvar/anexar o arquivo; não há download arbitrário de imagens de sites. Sem laudoId, os demais consumidores mantêm o fluxo genérico. Durante a preparação, a página bloqueia salvar e trocar modo.
 
-ObjectResized recalcula a prévia para o tamanho CSS e densidade atuais e só aplica a resposta se a figura ainda estiver presente com o mesmo ID. Os originais permanecem no main para recorte e impressão, conforme fluxo_ilustracao.md. No modo por seções, os editores são montados na primeira expansão; conteúdo desmontado permanece no estado e participa de busca, substituição por índice e composição do documento.
+ObjectResized recalcula a prévia para o tamanho CSS e densidade atuais e só aplica a resposta se a figura ainda estiver presente com o mesmo ID. Os originais permanecem no main durante a elaboração; a conclusão conserva somente os recursos tratados, conforme fluxo_ilustracao.md. No modo por seções, os editores são montados na primeira expansão; conteúdo desmontado permanece no estado e participa de busca, substituição por índice e composição do documento.
 
-conferirNumeracaoTabelasEditores() percorre editores montados na ordem, numera tabelas e libera td/protege th dos grupos B-601 usando undoManager.ignore. Pode dispensar captura de HTML quando não houve correção persistível. Os seletores de coleta, projétil e estojo usam seletores-tabela-laudo.ts para apresentar a escolha e posicionar o menu dentro da viewport/iframe. Seu texto canônico é separado do controle transitório e reaplicado após PlaceholdersAplicados, Undo/Redo e mudança de modo. O contrato B-601 está em b601.md; foco e abertura real desses menus dependem de smoke no Electron.
+conferirNumeracaoTabelasEditores() percorre editores montados na ordem, numera tabelas usando undoManager.ignore. A liberação das células B-601 pertence à política de conteúdo interativo, não à numeração. Pode dispensar captura de HTML quando não houve correção persistível.
+
+## Seletores de tabelas entre iframe e página
+
+seletores-tabela-laudo.ts apresenta acionadores no iframe para os seletores de coleta, projétil e estojo, mantendo o select técnico oculto e separado do texto persistível. SeletorTabelaLaudo.tsx monta a escolha fora do iframe, por portal no documento da página: Select para lista fechada e Popover com entrada para texto livre, usando os wrappers locais de UI. A geometria da âncora deriva do acionador e da posição do iframe; a lista respeita a área visível da página. As regras seletor-tabela de globals.css e os tokens de tema são copiados para os acionadores no iframe.
+
+Há somente uma sessão de seletor aberta entre as instâncias de editor. Aplicar revalida instância, presença do alvo, bloqueio, valor e opções; lista fechada aceita somente opções habilitadas. O foco retorna ao acionador quando solicitado, sem rolagem automática. Rolagem fora da lista e redimensionamento fecham a sessão, confirmando rascunho livre; troca de modo, desabilitação, substituição do conteúdo e Undo/Redo fecham sem confirmar esse rascunho. A remoção da instância descarta observadores, listeners e estilos transitórios.
+
+O texto canônico permanece independente dos controles, e a preparação reaplica a interação após os eventos coordenados abaixo. A limpeza retira acionadores e selects antes da persistência e saída. Permissões, opções e confirmação/cancelamento do texto livre estão em [B-601](b601.md); foco, seleção e geometria reais dependem de smoke no Electron.
+
+## Conteúdo protegido e preparação coordenada
+
+conteudo-interativo.ts instala uma superfície comum em tabelas resolvidas/personalizadas, condicionais e grupos descritivos B-601. adaptadores-conteudo-laudo.ts define liberação, restauração e exclusão; politica-edicao-conteudo.ts centraliza a permissão. **Editar/Concluir** controla a liberação local à instância, sem significar salvar. Cabeçalhos, células fixas e âncoras técnicas continuam protegidos; blocos internos exigem a liberação do ancestral. Campos reservados e seletores pontuais têm exceções descritas nas specs de placeholders e B-601. Somente leitura bloqueia as ações.
+
+**Restaurar dados da REP** e **Excluir** usam confirmação assíncrona; LaudosPage fornece useConfirmacaoConteudo com AlertDialog. O editor revalida identidade, presença, modo e conteúdo antes e depois da preparação assíncrona, serializa as ações e agrupa a alteração no undo. Tabelas podem ser restauradas ou excluídas com sua âncora; condicionais podem ser suprimidos, sem restauração pela REP; grupos B-601 podem ser recriados, mas não excluídos por esse controle. Erros são exibidos por toast. A confirmação cancela na desmontagem ou quando outra a substitui.
+
+registrarPreparacaoConteudo(), em preparacao-conteudo-editor.ts, agrupa SetContent, LoadContent, Undo, Redo, SwitchMode, DisabledStateChange, PlaceholdersAplicados e ConteudoInterativoAlterado em um requestAnimationFrame por editor. A superfície roda na prioridade 0, antes dos seletores na prioridade padrão 10. A remoção cancela o quadro e desregistra listeners; a preparação visual usa undoManager.ignore. Os estilos vêm de globals.css e são copiados para o iframe. limparConteudoInterativo() remove controles, classes e contenteditable transitórios antes da serialização, comparação e exportação; identidades e dados locais continuam persistidos.
+
+conteudo-interativo.test.ts cobre ações, proteção, concorrência e limpeza; inicializacao-saida-laudo.component.test.tsx cobre preparação tardia, saída e sessões obsoletas. Foco, seleção e aparência reais exigem validação no Electron.

@@ -2,6 +2,8 @@
 
 ## Escopo e regra de uso
 
+Na área de edição de Laudos, consulte também o [Padrão de elaboração](../03%20laudo/padrao/padrao_elaboracao.md), que reúne os contratos de conteúdo, ferramentas e preservação da sessão.
+
 `src/renderer/components/ui/` concentra wrappers compartilhados do design system local. Eles encapsulam primitivas Radix, shadcn e bibliotecas de layout, padronizam classes com `cn`/`cva` e evitam importações diretas quando já existe equivalente local. Estilos são compostos com Tailwind e tokens de `globals.css`; não há CSS avulso por componente.
 
 ## Grupos atuais
@@ -18,6 +20,8 @@
 ## Painéis, rolagem e sidebar
 
 O layout do laudo mantém um trilho direito permanente e mostra um único dock integrado por vez. IA usa largura de 360 a 640 px e Ilustrações de 320 a 720 px. `use-largura-painel-persistida.ts` normaliza e persiste a largura em pixels somente após interação; aberto/recolhido não é persistido.
+
+O trilho também oferece **Identificação de projéteis** quando a página fornece `onAbrirProjeteis`, somente para laudos da família B. O botão tem ícone, tooltip e nome acessível e abre um modal independente dos docks, sem substituir o editor ou mudar o painel ativo. A consulta persiste em memória durante a sessão do mesmo laudo. A geometria específica abaixo da barra de título e o ciclo desse modal pertencem à feature, descrita em [Identificação de projéteis](../16%20ferramentas/identificacao_projeteis.md); o wrapper global `dialog.tsx` conserva seu posicionamento padrão.
 
 O conteúdo do laudo usa a rolagem da página. Cada dock e o trilho ficam `sticky` no topo do conteúdo, mas a altura do painel é recalculada pelo espaço realmente visível abaixo da sua posição, em vez de usar uma altura fixa da viewport. Cabeçalhos, controles e avisos ficam fora da rolagem; somente coleções internas, como a fila de ilustrações e as mensagens da IA, rolam com `overscroll` contido. Isso impede que a expansão do editor limite a viewport do dock, sem criar uma segunda rolagem para o documento.
 
@@ -74,6 +78,8 @@ Ao clicar, abre um painel compacto com ambiente, disponibilidade, credenciais da
 
 ## Preferências visuais de imagens
 
-O menu de configurações inclui **Imagens**, rota /imagens. A página usa cartões separados e radiogroups para perfil de prévia do editor e qualidade enviada para IA, com leitura e salvamento independentes por grupo; falha conhecida de leitura bloqueia o respectivo salvamento. O controle de qualidade não aparece mais em Modelos de IA. Formatos, valores e consumidores estão em spec/03 laudo/fluxo_ilustracao.md e spec/06 ia/painel_assistente_ia.md.
+O menu de configurações inclui **Imagens**, rota /imagens. A página usa cartões separados e radiogroups para figura do laudo/PDF, prévia do editor e qualidade enviada para IA, com leitura e salvamento independentes por grupo; falha conhecida de leitura bloqueia o respectivo salvamento. O controle de qualidade não aparece mais em Modelos de IA. Formatos, valores e consumidores estão em spec/03 laudo/fluxo_ilustracao.md e spec/06 ia/painel_assistente_ia.md.
+
+A página Imagens apresenta opções por grupo da maior resolução para a menor, em linhas compactas, com comparação demonstrativa em SVG ao lado e destaque da seleção. Em largura estreita, a comparação fica abaixo e reduzida. Original na IA usa contorno tracejado de tamanho variável. O desenho não estima qualidade ou MB; cada grupo mantém leitura, falha e salvamento próprios.
 
 O popover GDL destaca Produção com badge destructive e Homologação com secondary; rede acessível recente recebe badge verde. Esses badges apresentam o ambiente/estado existente, sem mudar a regra compartilhada de disponibilidade nem executar operação de negócio.

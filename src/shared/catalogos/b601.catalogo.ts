@@ -19,6 +19,14 @@ export const OPCOES_TIPO_PROJETIL_B601 = [
   { valor: 'Camisa', nomesGdl: ['camisa', 'camisas'] },
 ] as const
 
+export const OPCOES_TIPO_RAIAMENTO_B601 = ['Convencional', 'Poligonal', 'Poligonal Aprimorado', 'Prejudicado'] as const
+
+export function obterTipoRaiamentoB601(valor: unknown): string {
+  if (typeof valor !== 'string') return ''
+  const normalizado = valor.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')
+  return OPCOES_TIPO_RAIAMENTO_B601.find(opcao => opcao.toLocaleLowerCase('pt-BR') === normalizado) ?? ''
+}
+
 export function obterTipoProjetilB601(tipoPeca: string): string {
   const nome = tipoPeca.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
   return OPCOES_TIPO_PROJETIL_B601.find(opcao => opcao.nomesGdl.some(alias => alias === nome))?.valor ?? ''

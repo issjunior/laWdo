@@ -30,6 +30,21 @@ export interface MiniaturaImagemLaudo {
 
 export type PerfilPreviaEditor = 'economico' | 'equilibrado' | 'nitido'
 
+export type PerfilFiguraLaudo = 'nitido' | 'equilibrado' | 'compacto' | 'maxima_economia'
+
+export const PERFIL_FIGURA_LAUDO_PADRAO: PerfilFiguraLaudo = 'maxima_economia'
+
+export const LIMITES_FIGURA_LAUDO: Record<PerfilFiguraLaudo, { maiorLado: number; qualidadeJpeg: number }> = {
+  nitido: { maiorLado: 2048, qualidadeJpeg: 85 },
+  equilibrado: { maiorLado: 1600, qualidadeJpeg: 78 },
+  compacto: { maiorLado: 1280, qualidadeJpeg: 70 },
+  maxima_economia: { maiorLado: 1024, qualidadeJpeg: 62 },
+}
+
+export function perfilFiguraLaudoValido(valor: unknown): valor is PerfilFiguraLaudo {
+  return valor === 'nitido' || valor === 'equilibrado' || valor === 'compacto' || valor === 'maxima_economia'
+}
+
 export const PERFIL_PREVIA_EDITOR_PADRAO: PerfilPreviaEditor = 'economico'
 
 export const LIMITES_PREVIA_EDITOR: Record<PerfilPreviaEditor, { minimo: number; maximo: number }> = {

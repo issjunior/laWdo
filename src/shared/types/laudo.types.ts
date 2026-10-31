@@ -2,7 +2,7 @@ export interface LaudoResumoLista {
   id: string;
   rep_id: string;
   perito_id: string;
-  template_id: string;
+  template_id: string | null;
   status: string;
   data_inicio: string;
   data_conclusao?: string;

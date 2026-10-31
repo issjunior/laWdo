@@ -393,7 +393,14 @@
         "src/renderer/lib/imagens-impressao-laudo.ts",
         "src/__tests__/renderer/imagens-impressao-laudo.test.ts",
         "src/__tests__/main/exportacao-docx-proporcao.test.ts",
-        "src/shared/catalogos/b602-textos-cartuchos.catalogo.ts"
+        "src/shared/catalogos/b602-textos-cartuchos.catalogo.ts",
+        "src/shared/figura/html.ts",
+        "src/main/services/pdf-tabelas.ts",
+        "src/main/services/pdf-layout.ts",
+        "src/main/services/pdf-prontidao.service.ts",
+        "src/shared/utils/tabelas-balistica-layout.ts",
+        "src/renderer/lib/tabelas-balistica-layout.ts",
+        "src/__tests__/main/templates-figuras-padrao.test.ts"
       ]
     },
     {
@@ -417,7 +424,9 @@
         "src/__tests__/renderer/desempenho-editor-laudo.test.ts",
         "src/renderer/lib/conteudo-comparavel-laudo.ts",
         "src/renderer/lib/seletores-tabela-laudo.ts",
-        "src/renderer/lib/busca-texto-laudo.ts"
+        "src/renderer/lib/busca-texto-laudo.ts",
+        "src/renderer/components/editor/SeletorTabelaLaudo.tsx",
+        "src/renderer/lib/preparacao-conteudo-editor.ts"
       ]
     },
     {
@@ -487,7 +496,8 @@
         "src/renderer/components/editor/PlaceholderContextMenu.tsx",
         "src/renderer/pages/LaudosPage.tsx",
         "src/renderer/pages/TemplatesPage.tsx",
-        "src/renderer/components/rep/exam-fields/placeholders.ts"
+        "src/renderer/components/rep/exam-fields/placeholders.ts",
+        "src/renderer/lib/menu-preenchimento-b601.ts"
       ]
     },
     {
@@ -498,7 +508,16 @@
       "globsCodigo": [
         "src/renderer/pages/LaudosPage.tsx",
         "src/renderer/lib/exportacao-placeholders.ts",
-        "src/main/services/laudo.service.ts"
+        "src/main/services/laudo.service.ts",
+        "src/main/services/exportacao.service.ts",
+        "src/main/ipc/handlers/template.handlers.ts",
+        "src/__tests__/main/pdf-preview-layout.test.ts",
+        "src/main/services/pdf-tabelas.ts",
+        "src/main/services/pdf-layout.ts",
+        "src/main/services/pdf-prontidao.service.ts",
+        "src/shared/utils/tabelas-balistica-layout.ts",
+        "src/renderer/lib/tabelas-balistica-layout.ts",
+        "src/__tests__/main/templates-figuras-padrao.test.ts"
       ]
     },
     {
@@ -1015,7 +1034,10 @@
         "src/__tests__/renderer/b601-coleta.test.ts",
         "src/__tests__/shared/b601-coleta.test.ts",
         "src/__tests__/renderer/consulta-reps-coleta.test.ts",
-        "src/__tests__/renderer/use-consulta-reps-coleta.test.tsx"
+        "src/__tests__/renderer/use-consulta-reps-coleta.test.tsx",
+        "src/renderer/lib/menu-preenchimento-b601.ts",
+        "src/__tests__/renderer/b601-campos-projetil.test.ts",
+        "src/__tests__/renderer/template-fotos-b601.test.ts"
       ]
     },
     {
@@ -1037,7 +1059,8 @@
         "src/renderer/components/layout/IndicadorConexaoGdl.tsx",
         "src/__tests__/renderer/conexao-gdl.test.tsx",
         "src/__tests__/renderer/header-atualizacao.component.test.tsx",
-        "src/renderer/pages/ImagensPage.tsx"
+        "src/renderer/pages/ImagensPage.tsx",
+        "src/renderer/components/ui/popover.tsx"
       ]
     },
     {
@@ -1052,7 +1075,9 @@
         "src/main/ipc/handlers/template.handlers.ts",
         "src/main/database/index.ts",
         "src/renderer/pages/TemplatesPage.tsx",
-        "src/__tests__/main/templates-integrados.test.ts"
+        "src/__tests__/main/templates-integrados.test.ts",
+        "src/shared/figura/html.ts",
+        "src/__tests__/main/templates-figuras-padrao.test.ts"
       ]
     },
     {
@@ -1067,6 +1092,48 @@
         "src/main/bootstrap.ts",
         "package.json",
         ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "arquivo": "spec/03 laudo/padrao/padrao_elaboracao.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Padrões comuns da elaboração de laudos: conteúdo protegido, apresentação, ferramentas e integridade da sessão.",
+      "globsCodigo": [
+        "src/renderer/pages/LaudosPage.tsx",
+        "src/renderer/components/editor/TinyMceEditor.tsx",
+        "src/renderer/components/editor/ConfirmacaoConteudo.tsx",
+        "src/renderer/components/laudo/editor/**",
+        "src/renderer/components/laudo/PainelLateralRedimensionavel.tsx",
+        "src/renderer/lib/conteudo-interativo.ts",
+        "src/renderer/lib/conteudo-interativo-limpeza.ts",
+        "src/renderer/lib/adaptadores-conteudo-laudo.ts",
+        "src/renderer/lib/politica-edicao-conteudo.ts",
+        "src/renderer/lib/preparacao-conteudo-editor.ts",
+        "src/renderer/lib/sincronizacao-editor-laudo.ts",
+        "src/renderer/lib/conteudo-comparavel-laudo.ts",
+        "src/renderer/hooks/useGerenciadorAlteracoesLaudo.ts",
+        "src/renderer/contexts/AlteracoesPendentesContext.tsx",
+        "src/renderer/styles/globals.css",
+        "src/__tests__/renderer/conteudo-protegido.test.ts",
+        "src/__tests__/renderer/conteudo-interativo.test.ts",
+        "src/__tests__/renderer/preparacao-conteudo-editor.test.ts",
+        "src/__tests__/renderer/inicializacao-saida-laudo.component.test.tsx",
+        "src/__tests__/renderer/sincronizacao-editor-laudo.test.ts",
+        "src/__tests__/renderer/layout-editor-laudo.component.test.tsx",
+        "src/__tests__/renderer/painel-lateral-redimensionavel.component.test.tsx",
+        "src/__tests__/renderer/projeteis-laudo.component.test.tsx",
+        "src/renderer/components/editor/SeletorTabelaLaudo.tsx",
+        "src/renderer/lib/menu-preenchimento-b601.ts",
+        "src/shared/figura/html.ts",
+        "src/renderer/lib/seletores-tabela-laudo.ts",
+        "src/main/templates/integrados/padronizar-figuras.ts",
+        "src/main/services/pdf-tabelas.ts",
+        "src/main/services/pdf-layout.ts",
+        "src/main/services/pdf-prontidao.service.ts",
+        "src/shared/utils/tabelas-balistica-layout.ts",
+        "src/renderer/lib/tabelas-balistica-layout.ts",
+        "src/__tests__/main/templates-figuras-padrao.test.ts"
       ]
     }
   ]

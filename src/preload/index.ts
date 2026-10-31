@@ -1,3 +1,5 @@
+import type { ApiBkpLaudo } from './types.js';
+import type { ContextoWizardLaudo, PecaIncorporadaCalculada, RespostasIncorporadas } from '../shared/types/laudo-bkp.types.js';
 import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
 import type { AvisoReiteracaoGdl } from '../shared/gdl/reiteracao.js';
 import type { RepsMesmoCasoGdl } from './types.js';
@@ -333,7 +335,9 @@ export interface IpcAPI {
   };
 
   // Laudos
-  laudo: {
+  laudo: ApiBkpLaudo & {
+    contextoWizard: (laudoId: string) => Promise<UserResponse<ContextoWizardLaudo | null>>;
+    calcularPecasWizard: (laudoId: string, respostas: RespostasIncorporadas, wizardId?: string) => Promise<UserResponse<PecaIncorporadaCalculada[]>>;
     findAll: () => Promise<UserResponse<LaudoResumoLista[]>>;
     findAllByRepId: (repId: string) => Promise<UserResponse>;
     findById: (id: string) => Promise<UserResponse<LaudoConteudo | null>>;
@@ -662,6 +666,13 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:findByRepId',
   'laudo:findAllByRepId',
   'laudo:findAll',
+  'laudo:cancelarBkp',
+  'laudo:importarBkp',
+  'laudo:analisarBkp',
+  'laudo:selecionarBkp',
+  'laudo:exportarBkp',
+  'laudo:contextoWizard',
+  'laudo:calcularPecasWizard',
   'laudo:updateConteudo',
   'laudo:create',
   'laudo:delete',
@@ -1662,6 +1673,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   laudo: {
+    exportarBkp: laudoId => invocarComDiagnostico('laudo:exportarBkp', laudoId),
+    selecionarBkp: () => invocarComDiagnostico('laudo:selecionarBkp'),
+    analisarBkp: selecaoId => invocarComDiagnostico('laudo:analisarBkp', selecaoId),
+    importarBkp: (operacaoId, confirmar) => invocarComDiagnostico('laudo:importarBkp', operacaoId, confirmar),
+    cancelarBkp: id => invocarComDiagnostico('laudo:cancelarBkp', id),
+    contextoWizard: (laudoId: string) => invocarComDiagnostico('laudo:contextoWizard', laudoId),
+    calcularPecasWizard: (laudoId: string, respostas: RespostasIncorporadas, wizardId?: string) => invocarComDiagnostico('laudo:calcularPecasWizard', laudoId, respostas, wizardId),
     findAll: () => invocarComDiagnostico('laudo:findAll'),
     findAllByRepId: (repId: string) => invocarComDiagnostico('laudo:findAllByRepId', repId),
     findById: (id: string) => invocarComDiagnostico('laudo:findById', id),

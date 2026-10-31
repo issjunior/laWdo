@@ -221,3 +221,7 @@ A própria CI executa esses testes, e o workflow de preparação dispara e conso
 | notas ou assets obrigatórios | gerador de notas, preparação, `validar-promocao.mjs` e testes de promoção |
 | canal, suspensão ou seleção da versão | `promover-release.yml`, `gerar-feed.mjs`, consumidor do feed e testes |
 | publicação do feed | jobs de promoção, environments `release` e `github-pages` e URL-base consumida pelo aplicativo |
+
+## Nome do pacote DEB
+
+electron-builder.yml define o artifactName específico do DEB como ${productName}-${version}-${arch}.${ext}, incluindo arquitetura no nome temporário. O gerador de manifesto identifica plataforma/arquitetura pela pasta `release-<versão>-<plataforma>-<arquitetura>` do artefato, e formato pela extensão; não deduz a arquitetura do nome do DEB. A agregação conserva a normalização de espaços dos nomes públicos, calcula hash e tamanho e assina o nome e a URL resultantes. O consumo e a instalação manual continuam descritos em spec/12 atualizacao/fluxo_atualizacao.md.

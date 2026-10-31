@@ -1,3 +1,4 @@
+import { limparConteudoInterativo } from './conteudo-interativo-limpeza';
 import { projetarB601ParaLaudo } from '@shared/utils/b601-pecas-projecao';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
@@ -615,6 +616,7 @@ export function resolverPlaceholdersExportacao(html: string, ctx: ExportacaoCont
         if (!tabela.querySelector('figure')) tabela.setAttribute('data-tabela-laudo', 'balistica');
       });
     }
+    limparConteudoInterativo(doc.body);
     normalizarApresentacaoTabelas(doc.body);
     doc.querySelectorAll('[data-placeholder-preview="true"], [data-cond-suprimido="true"], [data-acao-suprimir-bloco="true"], [data-controles-bloco-condicional="true"], [data-acao-bloco-condicional]').forEach(elemento => elemento.remove());
     doc.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-bloco]').forEach(bloco => {

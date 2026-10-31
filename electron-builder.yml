@@ -20,6 +20,8 @@ asar: true
 extraResources:
   - from: src/renderer/assets/icon.ico
     to: assets/icon.ico
+  - from: src/renderer/assets/logo.png
+    to: assets/icone-linux.png
 
 win:
   target:
@@ -54,5 +56,8 @@ linux:
     - deb
   category: Office
   maintainer: Polícia Científica do Paraná
+
+deb:
+  artifactName: '${productName}-${version}-${arch}.${ext}'
 
 publish: null

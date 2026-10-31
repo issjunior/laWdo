@@ -74,12 +74,14 @@ Ao revisar PRs abertos, especialmente os automáticos:
 - **Nomenclatura**: camelCase para funções/variáveis (`buscarPorId`, `criarLaudo`), PascalCase para componentes React (`LoginForm`, `TinyMceEditor`), kebab-case para serviços/handlers (`user.service.ts`, `laudo.handlers.ts`).
 - **Aliases de import**: no renderer, o Vite resolve `@` → `src/renderer/` e `@shared` → `src/shared/`. `@main` e `@preload` também estão configurados nos tsconfigs e no Vitest para tipagem e testes; não os use para importar código do main ou preload no renderer.
 - **Estilo**: minimalista. Sem comentários óbvios — adicione comentários apenas quando ajudarem a própria IA a entender o código em manutenções futuras. Sem emojis, sem explicações prolixas.
-- **CSS**: exclusivamente Tailwind utility classes + variáveis CSS definidas em `src/renderer/styles/globals.css`. Não criar arquivos CSS novos nem estilos inline.
+- **CSS da interface**: exclusivamente Tailwind utility classes + variáveis CSS definidas em `src/renderer/styles/globals.css`. Não criar arquivos CSS novos nem estilos inline na interface. O HTML persistível do laudo conserva a formatação nativa do documento, inclusive estilos inline; regras de impressão seguem as fontes compartilhadas descritas no padrão de elaboração, sem depender das classes Tailwind da página.
 - **Assets estáticos**: `src/renderer/types/assets.d.ts` declara tipos para imports de `.jpg/.jpeg/.png/.svg`. Código vendor (ex: TinyMCE em `src/renderer/public/tinymce/`) é excluído do lint via `eslint.config.js`.
 
 ---
 
 ## Prevenção de erros recorrentes
+
+Ao alterar inicialização, imagens, placeholders, controles ou salvamento do laudo, consulte `spec/problemas diversos/aviso_salvar_sem_edicao.md` e execute os testes de regressão correspondentes. Estabeleça a referência após a preparação assíncrona; normalize somente apresentação transitória. Preserve a detecção de edições reais e valide abertura e saída sem editar no Electron.
 
 Ao implementar ou alterar código, preserve a qualidade da tipagem e não aumente a dívida de lint existente.
 
@@ -234,6 +236,15 @@ shadcn/ui (New York, base Zinc, ícones Lucide) com Tailwind CSS e suporte a dar
 | `solicitantes/` | Gestão de solicitantes |
 | `template/` | Templates de laudo |
 | `tipos-exame/` | Tipos de exame |
+
+### Padronização da elaboração de laudos
+
+Antes de alterar a área de edição de Laudos ou adicionar recursos para novas naturezas de exame, consulte [Padrão de elaboração](spec/03%20laudo/padrao/padrao_elaboracao.md) e as specs especializadas ali indicadas.
+
+- Reutilize os componentes, políticas de permissão, confirmações e ciclos de preparação, limpeza e salvamento existentes. Estenda a implementação compartilhada quando o comportamento for comum; mantenha diferenças justificadas pelo exame junto ao domínio correspondente.
+- Preserve as proteções do conteúdo, a distinção entre concluir edição local e salvar, o histórico de desfazer e a sessão do editor ao abrir ferramentas auxiliares. Apresentação transitória não deve criar falsa pendência nem integrar a saída do documento.
+- Ao alterar layout ou formatação do documento, avalie em conjunto editor, HTML salvo, prévia e exportação. Preserve conteúdo e personalizações nos caminhos afetados, usando as fontes compartilhadas de formatação e impressão. Execute os testes existentes pertinentes e a conferência visual proporcional no Electron/PDF indicada no padrão de elaboração; a paginação depende do motor de saída.
+- Identifique novos padrões e exceções relevantes e sugira sua documentação pelo fluxo `/spec`, respeitando a aprovação do usuário. Documente apenas o comportamento implementado; não apresente padrões futuros como estado atual.
 
 ---
 

@@ -1,4 +1,9 @@
-import { ESTILOS_SELETORES_TABELA_LAUDO } from '@/lib/seletores-tabela-laudo';
+import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
+import { registrarPreparacaoConteudo } from '@/lib/preparacao-conteudo-editor';
+import { registrarConteudoInterativo } from '@/lib/conteudo-interativo';
+import { useConfirmacaoConteudo } from './ConfirmacaoConteudo';
+import { registrarSeletoresTabela, type SessaoSeletorTabela } from '@/lib/seletores-tabela-laudo';
+import { SeletorTabelaLaudo } from './SeletorTabelaLaudo';
 import React, { useRef, useState, useEffect, useId, useLayoutEffect, useCallback } from 'react';
 import type { EventoEditorLaudo } from '@shared/diagnostico/contratos';
 import { registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
@@ -7,16 +12,8 @@ import { Editor } from '@tinymce/tinymce-react';
 import type { Editor as TinyMceEditorInstance, RawEditorOptions, Ui } from 'tinymce';
 import { placeholderChaveEhValida } from '@/lib/utils';
 import {
-  encontrarAcaoBlocoCondicional,
   sincronizarAcoesBlocosCondicionais,
-  type AcaoBlocoCondicional,
 } from '@/lib/blocos-periciais';
-import {
-  excluirTabelaPlaceholder,
-  encontrarAcaoTabelaPlaceholder,
-  personalizarTabelaPlaceholder,
-  restaurarTabelaPlaceholder,
-} from '@/lib/apresentacao-placeholders';
 import { encontrarCampoReservado } from '@/lib/campos-reservados';
 import { ESTILO_TIPOGRAFIA_EDITOR_LAUDO } from '@/lib/tipografia-editor-laudo';
 import { ESTILOS_TABELAS_BALISTICA } from '@shared/utils/tabelas-balistica-layout';
@@ -24,8 +21,9 @@ import { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
 export { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
 import { registrarSeletoresCamposB601 } from '@/lib/b601-campos-projetil';
 import { registrarColetaB601 } from '@/lib/b601-coleta';
+import { registrarMenuPreenchimentoB601 } from '@/lib/menu-preenchimento-b601';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
-import { criarHtmlFigura } from '@/lib/figura-html';
+import { criarHtmlFigura, URL_FIGURA_DUMMY } from '@shared/figura/html';
 import { atualizarNumeroFigura } from '@/lib/figuras';
 import {
   aplicarRecuoPrimeiraLinha,
@@ -542,6 +540,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   className,
   ...rest
 }) => {
+  const { confirmar, dialogo } = useConfirmacaoConteudo();
+  const [sessaoSeletor, definirSessaoSeletor] = useState<SessaoSeletorTabela | null>(null);
+  const confirmarRef = useRef(confirmar);
+  confirmarRef.current = confirmar;
   const idReact = useId();
   const editorIdResolvido = editorId || `tiny-editor-${idReact.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
@@ -762,6 +764,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
       data-diagnostico-id={`editor.${editorIdResolvido}`}
       {...rest}
     >
+      {dialogo}
+      {sessaoSeletor && <SeletorTabelaLaudo key={sessaoSeletor.id} sessao={sessaoSeletor} />}
       {!ready && (
         <div className="absolute inset-0 z-10 flex min-h-72 items-center justify-center rounded-md border border-border bg-background">
           {falhaInicializacao ? (
@@ -883,6 +887,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               padding: 12px;
             }
             p:not(table p):not(figure p) { text-align: justify; }
+            table > caption,
+            table > :is(thead, tbody) > tr:first-child > th[colspan]:only-child,
+            table > caption :is(p, div),
+            table > :is(thead, tbody) > tr:first-child > th[colspan]:only-child :is(p, div) {
+              text-align: center !important;
+            }
             body.dark-content {
               --cor-texto-editor: #ffffff;
               background-color: #222f3e;
@@ -941,7 +951,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             [data-b601-campo-editavel="true"] > [data-b601-campo-texto="true"] { display: none; }
             [data-b601-coleta-editavel] > [data-b601-coleta-texto] { display: none; }
             @media print {
-              [data-b601-coleta-controle] { display: none !important; }
+              [data-b601-coleta-controle], [data-seletor-tabela-acionador] { display: none !important; }
               [data-b601-coleta-editavel] > [data-b601-coleta-texto] { display: inline !important; }
             }
             @media print {
@@ -965,7 +975,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               color: #fbbf24;
               border-bottom-color: #f59e0b;
             }
-            ${ESTILOS_SELETORES_TABELA_LAUDO}
             .cond-bloco {
               display: flex;
               flex-direction: column;
@@ -991,8 +1000,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               width: 100% !important;
               max-width: 100% !important;
             }
-            [data-placeholder-preview-tabela="true"],
-            [data-placeholder-tabela-personalizada="true"] {
+            [data-placeholder-preview-tabela="true"]:not(.conteudo-laudo),
+            [data-placeholder-tabela-personalizada="true"]:not(.conteudo-laudo) {
               font-family: Arial, Helvetica, sans-serif;
               position: relative;
               display: block;
@@ -1004,8 +1013,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               border-radius: 0 10px 10px 0;
               background-color: rgba(245, 158, 11, 0.08);
             }
-            [data-placeholder-preview-tabela="true"]::before,
-            [data-placeholder-tabela-personalizada="true"]::before {
+            [data-placeholder-preview-tabela="true"]:not(.conteudo-laudo)::before,
+            [data-placeholder-tabela-personalizada="true"]:not(.conteudo-laudo)::before {
               content: "Tabela do placeholder";
               display: inline-flex;
               align-items: center;
@@ -1063,13 +1072,13 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               color: #7c2d12;
               outline: none;
             }
-            body.dark-content [data-placeholder-preview-tabela="true"],
-            body.dark-content [data-placeholder-tabela-personalizada="true"] {
+            body.dark-content [data-placeholder-preview-tabela="true"]:not(.conteudo-laudo),
+            body.dark-content [data-placeholder-tabela-personalizada="true"]:not(.conteudo-laudo) {
               border-left-color: #d97706;
               background-color: rgba(245, 158, 11, 0.12);
             }
-            body.dark-content [data-placeholder-preview-tabela="true"]::before,
-            body.dark-content [data-placeholder-tabela-personalizada="true"]::before {
+            body.dark-content [data-placeholder-preview-tabela="true"]:not(.conteudo-laudo)::before,
+            body.dark-content [data-placeholder-tabela-personalizada="true"]:not(.conteudo-laudo)::before {
               border-color: rgba(251, 191, 36, 0.45);
               background-color: rgba(120, 53, 15, 0.75);
               color: #fde68a;
@@ -1078,10 +1087,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               border-left-color: #d97706;
               background-color: rgba(245, 158, 11, 0.12);
             }
-            body.dark-content [data-b601-grupo] th {
+            body.dark-content [data-b601-grupo] th:not([data-b601-fotos-origem] th) {
               background-color: #374151 !important;
             }
-            body.dark-content [data-b601-grupo] thead tr:first-child th[colspan] {
+            body.dark-content [data-b601-grupo] thead tr:first-child th[colspan]:not([data-b601-fotos-origem] th) {
               background-color: #4b5563 !important;
             }
             .cond-bloco[data-cond-suprimido="true"] {
@@ -1371,8 +1380,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
             editor.addCommand('insertLaudoImageDummy', () => {
               const id = crypto.randomUUID();
-              const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' width='100%' height='auto'><rect width='600' height='400' fill='%233a3a3a' rx='8'/><rect x='235' y='115' width='130' height='100' rx='8' fill='none' stroke='%23888' stroke-width='2.5'/><circle cx='265' cy='145' r='11' fill='none' stroke='%23888' stroke-width='2.5'/><polyline points='235,195 275,162 325,195' fill='none' stroke='%23888' stroke-width='2.5'/><text x='300' y='260' text-anchor='middle' fill='%23aaa' font-size='20' font-family='sans-serif' font-weight='500'>INSERIR IMAGEM</text><text x='300' y='290' text-anchor='middle' fill='%23777' font-size='13' font-family='sans-serif'>Clique para substituir</text></svg>`;
-              const src = `data:image/svg+xml;base64,${btoa(svg)}`;
+              const src = URL_FIGURA_DUMMY;
               const html = criarHtmlFigura(src, id, '', true) + '<br>';
               editor.insertContent(html);
             });
@@ -1393,12 +1401,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               }
             }) satisfies ComandoTinyMce<string>);
 
-            const confirmarExclusaoBlocoCondicional = (referencia: BlocoCondicionalSelecionado) => {
+            const confirmarExclusaoBlocoCondicional = async (referencia: BlocoCondicionalSelecionado) => {
               const identificacaoArma = referencia.armaIndice
                 ? ` da Arma ${String.fromCharCode(64 + referencia.armaIndice)}`
                 : '';
-              const confirmou = window.confirm(
-                `Excluir o bloco${identificacaoArma} — ${referencia.titulo}?\n\nEle desaparecerá do laudo e não será exportado. Você poderá restaurá-lo individualmente.`,
+              const confirmou = await confirmarRef.current(
+                `Excluir o bloco${identificacaoArma} — ${referencia.titulo}?\n\nEle desaparecerá do laudo e não será exportado. Use Desfazer durante a edição. Não há recuperação garantida após reabrir.`,
               );
               if (!confirmou) return false;
               onSolicitarExclusaoBlocoCondicionalRef.current?.(referencia);
@@ -1413,7 +1421,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               if (!bloco || !instanciaId) return false;
               const indiceBruto = bloco.getAttribute('data-arma-indice');
               const armaIndice = indiceBruto ? Number(indiceBruto) : undefined;
-              return confirmarExclusaoBlocoCondicional({
+              void confirmarExclusaoBlocoCondicional({
                 editorId: editor.id,
                 instanciaId,
                 titulo: bloco.querySelector('h1, h2, h3, h4, h5, h6')?.textContent?.trim()
@@ -1493,8 +1501,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               doc.addEventListener('keydown', solicitarBusca, true);
               editor.on('remove', () => doc.removeEventListener('keydown', solicitarBusca, true));
               const body = editor.getBody();
+              registrarSeletoresTabela(editor, definirSessaoSeletor);
               registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'));
               registrarColetaB601(editor, laudoId, html => onChange(html, 'usuario'));
+              if (laudoId) registrarMenuPreenchimentoB601(editor, html => onChange(html, 'usuario'));
 
               const sincronizarAcoesBlocos = () => {
                 editor.undoManager.ignore(() => {
@@ -1503,18 +1513,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   sincronizarAcoesBlocosCondicionais(raizEditor);
                 });
               };
-              const agendarSincronizacaoAcoesBlocos = () => {
-                const janelaEditor = editor.getDoc()?.defaultView;
-                janelaEditor?.requestAnimationFrame(sincronizarAcoesBlocos);
-              };
+
 
               if (normalizarBlocosCondicionais(body, condToggles) > 0) {
                 onChange(editor.getContent(), 'normalizacao-inicial');
               }
               sincronizarAcoesBlocos();
-              editor.on('SetContent LoadContent', agendarSincronizacaoAcoesBlocos);
+              registrarPreparacaoConteudo(editor, sincronizarAcoesBlocos, -10);
               editor.on('Undo Redo', () => {
-                agendarSincronizacaoAcoesBlocos();
                 onChange(editor.getContent());
               });
 
@@ -1536,110 +1542,12 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 container.dispatchEvent(newEvent);
               });
 
-              type AcaoBlocoCondicionalPendente = {
-                acao: AcaoBlocoCondicional;
-                referencia: BlocoCondicionalSelecionado;
-              };
-
-              const descreverBlocoCondicional = (bloco: HTMLElement): BlocoCondicionalSelecionado | null => {
-                const instanciaId = bloco.getAttribute('data-cond-instancia');
-                if (!instanciaId) return null;
-                const indiceBruto = bloco.getAttribute('data-arma-indice');
-                const armaIndice = indiceBruto ? Number(indiceBruto) : undefined;
-                return {
-                  editorId: editor.id,
-                  instanciaId,
-                  titulo: bloco.querySelector('h1, h2, h3, h4, h5, h6')?.textContent?.trim()
-                    || bloco.getAttribute('data-cond-bloco')
-                    || 'Bloco condicional',
-                  resumo: bloco.getAttribute('data-cond-resumo') || '',
-                  armaIndice: Number.isInteger(armaIndice) ? armaIndice : undefined,
-                };
-              };
-
-              const executarAcaoBlocoCondicional = ({ acao, referencia }: AcaoBlocoCondicionalPendente) => {
-                const bloco = Array.from(editor.getBody()?.querySelectorAll<HTMLElement>('.cond-bloco[data-cond-instancia]') || [])
-                  .find(candidato => candidato.getAttribute('data-cond-instancia') === referencia.instanciaId);
-
-                if (acao === 'excluir') {
-                  confirmarExclusaoBlocoCondicional(referencia);
-                  return;
-                }
-
-                if (!bloco) return;
-
-                editor.undoManager.ignore(() => {
-                  if (acao === 'editar') bloco.setAttribute('data-cond-em-edicao', 'true');
-                  else bloco.removeAttribute('data-cond-em-edicao');
-                  bloco.setAttribute('contenteditable', String(acao === 'editar'));
-                  sincronizarAcoesBlocosCondicionais(editor.getBody());
-                });
-              };
-
-              let acaoBlocoPendente: AcaoBlocoCondicionalPendente | null = null;
-              const registrarAcaoBlocoCondicional = (evento: PointerEvent) => {
-                const controle = encontrarAcaoBlocoCondicional(evento.target);
-                if (!controle) return;
-                const acao = controle.getAttribute('data-acao-bloco-condicional') as AcaoBlocoCondicional | null;
-                const bloco = controle.closest<HTMLElement>('.cond-bloco[data-cond-bloco]');
-                const referencia = bloco ? descreverBlocoCondicional(bloco) : null;
-                if (!acao || !referencia) return;
-                evento.preventDefault();
-                evento.stopPropagation();
-                acaoBlocoPendente = { acao, referencia };
-              };
-
-              const concluirAcaoBlocoCondicional = (evento: PointerEvent) => {
-                if (!acaoBlocoPendente) return;
-                evento.preventDefault();
-                evento.stopPropagation();
-                const acaoPendente = acaoBlocoPendente;
-                acaoBlocoPendente = null;
-                doc.defaultView?.setTimeout(() => executarAcaoBlocoCondicional(acaoPendente), 0);
-              };
-
-              const cancelarAcaoBlocoCondicional = () => {
-                acaoBlocoPendente = null;
-              };
-
-              doc.addEventListener('pointerdown', registrarAcaoBlocoCondicional, true);
-              doc.addEventListener('pointerup', concluirAcaoBlocoCondicional, true);
-              doc.addEventListener('pointercancel', cancelarAcaoBlocoCondicional, true);
-              editor.on('remove', () => {
-                doc.removeEventListener('pointerdown', registrarAcaoBlocoCondicional, true);
-                doc.removeEventListener('pointerup', concluirAcaoBlocoCondicional, true);
-                doc.removeEventListener('pointercancel', cancelarAcaoBlocoCondicional, true);
+              registrarConteudoInterativo(editor, {
+                laudoId,
+                confirmar: mensagem => confirmarRef.current(mensagem),
+                aoAlterar: html => { onChange(html, 'usuario'); onEstruturaTabelasAlteradaRef.current?.(); },
+                aoRestaurar: () => { onTabelaPlaceholderRestauradaRef.current?.(editor); onEstruturaTabelasAlteradaRef.current?.(); },
               });
-
-              const executarAcaoTabelaPlaceholder = (evento: MouseEvent) => {
-                const acao = encontrarAcaoTabelaPlaceholder(evento.target);
-                if (!acao) return;
-                evento.preventDefault();
-                evento.stopImmediatePropagation();
-                const tipo = acao.getAttribute('data-acao-tabela-placeholder');
-                if (tipo === 'excluir') {
-                  if (!window.confirm('Excluir esta tabela do laudo? O placeholder vinculado também será removido.')) return;
-                  if (excluirTabelaPlaceholder(editor, acao)) {
-                    onChange(editor.getContent());
-                    onEstruturaTabelasAlteradaRef.current?.();
-                  }
-                  return;
-                }
-                if (tipo !== 'restaurar' && tipo !== 'personalizar') return;
-                const restaurar = tipo === 'restaurar';
-                if (restaurar && !window.confirm('Restaurar os dados atuais da REP? As alterações locais desta tabela serão perdidas.')) {
-                  return;
-                }
-                const alterou = restaurar
-                  ? restaurarTabelaPlaceholder(editor, acao)
-                  : personalizarTabelaPlaceholder(editor, acao);
-                if (!alterou) return;
-                onChange(editor.getContent());
-                if (restaurar) onTabelaPlaceholderRestauradaRef.current?.(editor);
-                onEstruturaTabelasAlteradaRef.current?.();
-              };
-
-              doc.addEventListener('click', executarAcaoTabelaPlaceholder, true);
               let conferenciaPendente: ReturnType<typeof setTimeout> | null = null;
               const observarTabelas = new MutationObserver(mutacoes => {
                 const alterouEstrutura = mutacoes.some(mutacao =>
@@ -1658,7 +1566,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const bodyEditor = editor.getBody();
               if (bodyEditor) observarTabelas.observe(bodyEditor, { childList: true, subtree: true });
               editor.on('remove', () => {
-                doc.removeEventListener('click', executarAcaoTabelaPlaceholder, true);
                 observarTabelas.disconnect();
                 if (conferenciaPendente) clearTimeout(conferenciaPendente);
               });
@@ -1666,6 +1573,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const solicitarPreenchimentoCampoReservado = (evento: MouseEvent) => {
                 const campo = encontrarCampoReservado(evento.target);
                 if (!campo || !onCampoReservadoDuploCliqueRef.current) return;
+                if (!permiteEdicaoCampo(campo, editor.mode.isReadOnly())) {
+                  if (!editor.mode.isReadOnly()) editor.notificationManager.open({ type: 'info', text: 'Clique em Editar para personalizar este valor.' });
+                  return;
+                }
                 evento.preventDefault();
                 evento.stopPropagation();
                 onCampoReservadoDuploCliqueRef.current({ editorId: editor.id, elemento: campo });

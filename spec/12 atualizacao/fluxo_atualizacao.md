@@ -95,3 +95,7 @@ O processo principal continua responsável por rede, arquivos, assinatura, backu
 ## Acesso manual ao instalador
 
 O modal de Atualizações no Header também aponta para `https://issjunior.github.io/laWdo/`, a página pública de downloads gerada pelo feed. O link abre o navegador externo para instalação manual quando o usuário escolher esse caminho; não altera a validação, o estado nem o fluxo de instalação automática do `AtualizacaoService`. A apresentação da página pública fica no produtor descrito em `spec/11 github actions/workflows_github_actions.md`.
+
+## Nome do pacote DEB e publicação
+
+O produtor define o nome temporário do DEB como ${productName}-${version}-${arch}.${ext} em electron-builder.yml; a agregação normaliza espaços e inclui nome público e URL no manifesto assinado. O consumidor usa esses dados validados, sem montar o nome por convenção. DEB continua exigindo abertura manual pelo sistema. Mudanças no nome devem conservar o reconhecimento de plataforma/arquitetura no produtor e a validação de nome/URL no consumidor, conforme spec/11 github actions/workflows_github_actions.md.
