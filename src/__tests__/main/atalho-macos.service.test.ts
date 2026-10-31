@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -45,7 +45,7 @@ async function prepararAplicativo(destino: string): Promise<void> {
 beforeEach(async () => {
   vi.clearAllMocks();
   simulacoes.empacotado = true;
-  raiz = await mkdtemp(path.join(os.tmpdir(), 'lawdo-atalho-macos-'));
+  raiz = await realpath(await mkdtemp(path.join(os.tmpdir(), 'lawdo-atalho-macos-')));
   simulacoes.caminhos = {
     home: raiz,
     desktop: path.join(raiz, 'Mesa'),
