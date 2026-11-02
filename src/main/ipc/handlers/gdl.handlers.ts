@@ -5,17 +5,42 @@ import { identificarRepGdl, completarConsultaRepGdl, obterConsultaRepConcluida, 
 import { clipboard, ipcMain, type WebContents } from 'electron';
 import { EMAIL_SUPORTE_LAWDO } from '../../../shared/gdl/suporte.js';
 import { randomUUID } from 'crypto';
-import { logError } from '../../utils/logger.js';
+import { logError as registrarErroOriginal, logInfo } from '../../utils/logger.js';
 import { sanitizeInput } from '../../security/index.js';
 import * as gdlService from '../../services/gdl.service.js';
 import { obterMinhasRepsEmCache, atualizarMinhasRepsEmCache } from '../../services/gdl-minhas-reps-cache.service.js';
 import { definirListagemRepsGdlHabilitada, obterListagemRepsGdlHabilitada } from '../../services/gdl-listagem-preferencia.service.js';
-import { classificarFalhaListaRepsGdl } from '../../services/gdl-minhas-reps-erro.service.js';
+import { classificarFalhaListaRepsGdl, respostaFalhaGdl } from '../../services/gdl-minhas-reps-erro.service.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { converterRepGdl, listarCodigosImportacaoGdl } from '../../services/gdl-adaptadores.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
 import { estagiarImagemLaudoPorBytes, listarHashesImagensLaudo, listarResumosImagensLaudo } from '../../services/imagem-laudo.service.js';
+import { comContextoImagens, cancelarProcessamentoImagens } from '../../services/processador-imagens.service.js';
+
+function logError(mensagem: string, erro?: unknown): void {
+  const falha = classificarFalhaListaRepsGdl(erro);
+  if (falha.condicaoEsperada) logInfo('GDL sem acesso à rede institucional.', { codigo: falha.codigo, codigoSistema: falha.codigoSistema, etapa: falha.etapa });
+  else registrarErroOriginal(mensagem, erro);
+}
+
+const contextosFotos = new Map<number, Set<string>>();
+function registrarFotos(canal: string, executar: Parameters<typeof ipcMain.handle>[1]): void {
+  ipcMain.handle(canal, (evento, ...parametros: unknown[]) => {
+    const chave = `gdl:${evento.sender?.id ?? 'teste'}:${typeof parametros[0] === 'string' ? parametros[0] : ''}`;
+    const remetente = evento.sender;
+    if (remetente && typeof remetente.once === 'function' && !contextosFotos.has(remetente.id)) {
+      contextosFotos.set(remetente.id, new Set());
+      remetente.once('destroyed', () => {
+        for (const contexto of contextosFotos.get(remetente.id) ?? []) cancelarProcessamentoImagens(contexto);
+        contextosFotos.delete(remetente.id);
+      });
+    }
+    if (remetente) contextosFotos.get(remetente.id)?.add(chave);
+    if (canal === 'gdl:fechar-sessao-imagens-laudo') cancelarProcessamentoImagens(chave);
+    return comContextoImagens(chave, () => executar(evento, ...parametros));
+  });
+}
 import { atualizacaoRepGdlService } from '../../services/atualizacao-rep-gdl.service.js';
 import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atualizacao-rep-gdl.types.js';
 import { esquemaRepsMesmoCasoGdl, type RepsMesmoCasoGdl } from '../../../shared/gdl/reps-mesmo-caso.js';
@@ -126,7 +151,7 @@ export const registerGdlHandlers = (): void => {
         if (consultasMesmoCaso.get(chave) === consulta) consultasMesmoCaso.delete(chave);
       }
     } catch (erro: unknown) {
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível consultar as REPs do caso.' };
+      return respostaFalhaGdl(erro, 'Não foi possível consultar as REPs do caso.');
     }
   });
   ipcMain.handle('gdl:obter-avisos-reiteracao', async event => {
@@ -139,7 +164,7 @@ export const registerGdlHandlers = (): void => {
       }
       return { success: true, data: avisos };
     } catch (erro: unknown) {
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível ler os avisos locais.' };
+      return respostaFalhaGdl(erro, 'Não foi possível ler os avisos locais.');
     }
   });
   ipcMain.handle('gdl:copiar-email-suporte', async event => {
@@ -156,7 +181,7 @@ export const registerGdlHandlers = (): void => {
       authSessaoService.exigir(event.sender.id);
       return { success: true, data: { habilitada: await obterListagemRepsGdlHabilitada() } };
     } catch (erro: unknown) {
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível ler a preferência da listagem.' };
+      return respostaFalhaGdl(erro, 'Não foi possível ler a preferência da listagem.');
     }
   });
 
@@ -167,7 +192,7 @@ export const registerGdlHandlers = (): void => {
       await definirListagemRepsGdlHabilitada(habilitada);
       return { success: true, data: { habilitada } };
     } catch (erro: unknown) {
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível alterar a preferência da listagem.' };
+      return respostaFalhaGdl(erro, 'Não foi possível alterar a preferência da listagem.');
     }
   });
 
@@ -175,7 +200,7 @@ export const registerGdlHandlers = (): void => {
     try {
       return { success: true, data: await obterMinhasRepsEmCache(authSessaoService.exigir(event.sender.id)) };
     } catch (erro: unknown) {
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível ler as REPs salvas.' };
+      return respostaFalhaGdl(erro, 'Não foi possível ler as REPs salvas.');
     }
   });
 
@@ -194,7 +219,7 @@ export const registerGdlHandlers = (): void => {
     } catch (erro: unknown) {
       const falha = classificarFalhaListaRepsGdl(erro);
       const referencia = randomUUID();
-      logError('Falha ao atualizar Minhas REPs no GDL', {
+      (falha.condicaoEsperada ? logInfo : logError)('Falha ao atualizar Minhas REPs no GDL', {
         referencia,
         codigo: falha.codigo,
         etapa: falha.etapa,
@@ -210,7 +235,7 @@ export const registerGdlHandlers = (): void => {
       return {
         success: false,
         error: falha.detalhes,
-        falha: { codigo: falha.codigo, detalhes: falha.detalhes, referencia, etapa: falha.etapa, codigoSistema: falha.codigoSistema, statusHttp: falha.statusHttp, bloqueioTemporario: falha.bloqueioTemporario, tentarNovamenteEmSegundos: falha.tentarNovamenteEmSegundos },
+        falha: { condicaoEsperada: falha.condicaoEsperada, codigo: falha.codigo, detalhes: falha.detalhes, referencia, etapa: falha.etapa, codigoSistema: falha.codigoSistema, statusHttp: falha.statusHttp, bloqueioTemporario: falha.bloqueioTemporario, tentarNovamenteEmSegundos: falha.tentarNovamenteEmSegundos },
       };
     }
   });
@@ -231,7 +256,7 @@ export const registerGdlHandlers = (): void => {
       const previa = await atualizacaoRepGdlService.preparar(repId, consulta.resultado, consulta.camposVaziosConfirmados);
       await vincularRevisaoAtualizacaoGdl(event.sender.id, identificacao.consultaId, previa.operacaoId);
       return { success: true, data: { ...previa, avisos: [...new Set([...previa.avisos, ...consulta.avisos])] } };
-    } catch (erro: unknown) { return { success: false, error: erro instanceof Error ? erro.message : 'Falha ao preparar atualização.' }; }
+    } catch (erro: unknown) { return respostaFalhaGdl(erro, 'Falha ao preparar atualização.'); }
   });
   ipcMain.handle('gdl:completar-atualizacao-rep', async (event, repId: unknown, consultaId: unknown, abrirDetalhes: unknown) => {
     try {
@@ -245,7 +270,7 @@ export const registerGdlHandlers = (): void => {
       const previa = await atualizacaoRepGdlService.preparar(repId, consulta.resultado, consulta.camposVaziosConfirmados);
       await vincularRevisaoAtualizacaoGdl(event.sender.id, consultaId, previa.operacaoId);
       return { success: true, data: { ...previa, avisos: [...new Set([...previa.avisos, ...consulta.avisos])] } };
-    } catch (erro: unknown) { return { success: false, error: erro instanceof Error ? erro.message : 'Falha ao preparar atualização.' }; }
+    } catch (erro: unknown) { return respostaFalhaGdl(erro, 'Falha ao preparar atualização.'); }
   });
 
   ipcMain.handle('gdl:aplicar-atualizacao-rep', async (event, entrada: unknown) => {
@@ -259,24 +284,21 @@ export const registerGdlHandlers = (): void => {
         || revisao.expiraEm <= Date.now() || revisao.identidade !== await gdlService.obterIdentidadeMinhasReps()) throw new Error('A revisão expirou ou a sessão GDL mudou. Consulte novamente.');
       const resultado = await atualizacaoRepGdlService.aplicar(dados as AplicarAtualizacaoRepGdlEntrada);
       revisoesAtualizacaoGdl.delete(dados.operacaoId);
-      return { success: true, data: resultado };
+      return { success: true, data: resultado, ...('falha' in resultado ? { falha: resultado.falha } : {}) };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Não foi possível aplicar a atualização da REP.' };
+      return respostaFalhaGdl(error, 'Não foi possível aplicar a atualização da REP.');
     }
   });
 
   ipcMain.handle('gdl:testar-conexao', async (event, ambiente: string) => {
     try {
       const resultado = await observarConsultaGdl(event.sender.id, '', '', () => gdlService.testarConexao(ambiente || 'producao'));
-      return { success: true, data: resultado };
+      return { success: true, data: resultado, ...('falha' in resultado ? { falha: resultado.falha } : {}) };
     } catch (error) {
       const amb = ambiente || 'producao';
       const ambLabel = amb === 'producao' ? 'Produção' : 'Homologação';
       logError(`Falha ao testar conexão GDL em ambiente ${ambLabel}`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido ao testar conexão GDL',
-      };
+      return respostaFalhaGdl(error, 'Erro desconhecido ao testar conexão GDL');
     }
   });
 
@@ -284,10 +306,7 @@ export const registerGdlHandlers = (): void => {
     try {
       return { success: true, data: gdlService.obterValidacaoSessao(ambiente) };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido ao obter validação GDL',
-      };
+      return respostaFalhaGdl(error, 'Erro desconhecido ao obter validação GDL');
     }
   });
 
@@ -295,10 +314,7 @@ export const registerGdlHandlers = (): void => {
     try {
       return { success: true, data: gdlService.limparValidacaoSessao(ambiente) };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido ao limpar validação GDL',
-      };
+      return respostaFalhaGdl(error, 'Erro desconhecido ao limpar validação GDL');
     }
   });
 
@@ -320,16 +336,13 @@ export const registerGdlHandlers = (): void => {
       ));
 
       if (!resultado.sucesso) {
-        return { success: false, error: resultado.erro || 'Erro ao validar credenciais do GDL' };
+        return { success: false, error: resultado.erro || 'Erro ao validar credenciais do GDL', falha: resultado.falha };
       }
 
       return { success: true, data: resultado.dados };
     } catch (error) {
       logError(`Falha ao validar credenciais GDL com REP ${sanitizeInput(numero)}/${sanitizeInput(ano)}`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido ao validar credenciais GDL',
-      };
+      return respostaFalhaGdl(error, 'Erro desconhecido ao validar credenciais GDL');
     }
   });
 
@@ -345,7 +358,7 @@ export const registerGdlHandlers = (): void => {
       const data = await identificarRepGdl(event.sender.id, numero, ano, naturezaLista);
       return { success: true, data };
     } catch (erro: unknown) {
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível identificar o exame.' };
+      return respostaFalhaGdl(erro, 'Não foi possível identificar o exame.');
     }
   });
 
@@ -354,7 +367,7 @@ export const registerGdlHandlers = (): void => {
       authSessaoService.exigir(event.sender.id);
       if (typeof consultaId !== 'string' || typeof abrirDetalhes !== 'boolean') throw new Error('Decisão de consulta inválida.');
       return { success: true, data: await completarConsultaRepGdl(event.sender.id, consultaId, abrirDetalhes) };
-    } catch (erro: unknown) { return { success: false, error: erro instanceof Error ? erro.message : 'Falha ao consultar detalhes.' }; }
+    } catch (erro: unknown) { return respostaFalhaGdl(erro, 'Falha ao consultar detalhes.'); }
   });
   ipcMain.handle('gdl:descartar-consulta-rep', async event => {
     authSessaoService.exigir(event.sender.id);
@@ -370,7 +383,7 @@ export const registerGdlHandlers = (): void => {
       }
       return { success: true, data: await converterConsultaRepGdl(event.sender.id, consultaId, tipoExameId) };
     } catch (erro: unknown) {
-      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível converter os dados.' };
+      return respostaFalhaGdl(erro, 'Não foi possível converter os dados.');
     }
   });
 
@@ -384,7 +397,7 @@ export const registerGdlHandlers = (): void => {
 
       const resultado = await observarConsultaGdl(event.sender.id, sanitizeInput(numero), sanitizeInput(ano), () => gdlService.consultarRep(sanitizeInput(numero), sanitizeInput(ano)));
       if (!resultado.sucesso || !resultado.dados) {
-        return { success: false, error: resultado.erro || 'Erro ao consultar REP no GDL' };
+        return { success: false, error: resultado.erro || 'Erro ao consultar REP no GDL', falha: resultado.falha };
       }
       if (String(resultado.dados.numero) !== numero.replace(/\D/g, '').replace(/^0+/, '') || String(resultado.dados.ano) !== ano.trim()) {
         throw new Error('A API retornou uma REP diferente da consultada.');
@@ -433,14 +446,11 @@ export const registerGdlHandlers = (): void => {
       };
     } catch (error) {
       logError(`Falha ao consultar REP ${sanitizeInput(numero)}/${sanitizeInput(ano)} no GDL`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido ao consultar REP',
-      };
+      return respostaFalhaGdl(error, 'Erro desconhecido ao consultar REP');
     }
   });
 
-  ipcMain.handle('gdl:listar-imagens-laudo', async (event, laudoId: unknown) => {
+  registrarFotos('gdl:listar-imagens-laudo', async (event, laudoId: unknown) => {
     try {
       const { numero, ano } = await resolverRepDoLaudo(laudoId);
       if (typeof laudoId !== 'string') return { success: false, error: 'Laudo inválido.' };
@@ -460,11 +470,11 @@ export const registerGdlHandlers = (): void => {
         data: { ...lista, avisoVerificacao: lista.avisoVerificacao || avisoVerificacao },
       };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao listar imagens da REP.' };
+      return respostaFalhaGdl(error, 'Erro desconhecido ao listar imagens da REP.');
     }
   });
 
-  ipcMain.handle('gdl:obter-miniaturas-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown, idsSelecao: unknown) => {
+  registrarFotos('gdl:obter-miniaturas-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown, idsSelecao: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof sessaoId !== 'string' || !/^[a-z0-9-]{36}$/i.test(sessaoId)
         || !Array.isArray(idsSelecao) || idsSelecao.length > 30
@@ -473,11 +483,11 @@ export const registerGdlHandlers = (): void => {
       }
       return { success: true, data: await gdlService.obterMiniaturasDaSessaoImagensRepGdl(laudoId, sessaoId, idsSelecao) };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Erro ao preparar miniaturas da REP.' };
+      return respostaFalhaGdl(error, 'Erro ao preparar miniaturas da REP.');
     }
   });
 
-  ipcMain.handle('gdl:capturar-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown, idsSelecao: unknown, permitirDuplicadas: unknown) => {
+  registrarFotos('gdl:capturar-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown, idsSelecao: unknown, permitirDuplicadas: unknown) => {
     try {
       if (typeof sessaoId !== 'string' || !/^[a-z0-9-]{36}$/i.test(sessaoId) || !Array.isArray(idsSelecao) || idsSelecao.some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))) {
         return { success: false, error: 'Seleção de imagens inválida.' };
@@ -497,7 +507,7 @@ export const registerGdlHandlers = (): void => {
             imagemExistenteId: existente.id, localizacao: 'painel' as const };
         }
         const sequencia = proximaSequencia;
-        const estagiada = estagiarImagemLaudoPorBytes(laudoId, {
+        const estagiada = await estagiarImagemLaudoPorBytes(laudoId, {
           id: randomUUID(),
           nomeArquivo: imagem.nomeArquivo,
           mimeType: imagem.mimeType,
@@ -518,13 +528,13 @@ export const registerGdlHandlers = (): void => {
           thumbnailDataUri: estagiada.thumbnailDataUri,
         };
       }, false);
-      return { success: true, data: resultado };
+      return { success: true, data: resultado, ...('falha' in resultado ? { falha: resultado.falha } : {}) };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido ao capturar imagens da REP.' };
+      return respostaFalhaGdl(error, 'Erro desconhecido ao capturar imagens da REP.');
     }
   });
 
-  ipcMain.handle('gdl:fechar-sessao-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown) => {
+  registrarFotos('gdl:fechar-sessao-imagens-laudo', async (_event, laudoId: unknown, sessaoId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof sessaoId !== 'string') throw new Error('Sessão de imagens inválida.')
       gdlService.fecharSessaoImagensRepGdl(laudoId, sessaoId)

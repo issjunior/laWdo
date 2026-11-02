@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Cabecalhos = Record<string, string[]>
@@ -109,3 +110,16 @@ describe('configuração de segurança para preview PDF', () => {
     )
   })
 })
+
+
+it('mantém a CSP do HTML e do main coerente e sem unsafe-eval', () => {
+  setupSecurity();
+  const resposta = executarListener({ resourceType: 'mainFrame', url: 'file:///renderer/index.html' });
+  const cabecalho = resposta.responseHeaders?.['Content-Security-Policy']?.[0] ?? '';
+  const html = readFileSync('src/renderer/index.html', 'utf8');
+  const politica = html.match(/content="(default-src[^"\n]+)"/)?.[1] ?? '';
+  const normalizar = (texto: string) => texto.split(';').map(item => item.trim().replace(/\s+/g, ' ')).filter(Boolean).sort();
+  expect(normalizar(cabecalho)).toEqual(normalizar(politica));
+  expect(cabecalho).not.toContain('unsafe-eval');
+  expect(politica).not.toContain('unsafe-eval');
+});

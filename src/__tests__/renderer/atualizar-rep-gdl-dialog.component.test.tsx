@@ -131,10 +131,11 @@ describe('AtualizarRepGdlDialog', () => {
 })
 
 it('mostra erro amigável na atualização manual e reserva detalhes técnicos aos logs', async () => {
-  prepararAtualizacaoRep.mockResolvedValueOnce({ success: false, error: 'net::ERR_NAME_NOT_RESOLVED' });
+  prepararAtualizacaoRep.mockResolvedValueOnce({ success: false, error: 'O GDL não está acessível. É necessário estar conectado à rede da Polícia Científica do Paraná ou utilizar uma VPN autorizada com acesso a essa rede.', falha: { codigo: 'rede', codigoSistema: 'ERR_NAME_NOT_RESOLVED', etapa: 'rede_gdl', condicaoEsperada: 'acesso_rede_institucional', detalhes: 'Rede indisponível', referencia: '85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e' } });
   Object.defineProperty(window, 'ipcAPI', { writable: true, value: { ...ipcApiOriginal, gdl: { prepararAtualizacaoRep, aplicarAtualizacaoRep } } });
   render(<AtualizarRepGdlDialog open repId="rep-1" onOpenChange={vi.fn()} onConcluida={vi.fn()} />);
-  expect(await screen.findByText('Não foi possível acessar o GDL. Verifique sua conexão e a VPN institucional e tente novamente.')).toBeInTheDocument();
+  expect(await screen.findByText('O GDL não está acessível. É necessário estar conectado à rede da Polícia Científica do Paraná ou utilizar uma VPN autorizada com acesso a essa rede.')).toBeInTheDocument();
   expect(screen.queryByText('net::ERR_NAME_NOT_RESOLVED')).not.toBeInTheDocument();
-  await waitFor(() => expect(window.ipcAPI.logWarning).toHaveBeenCalledWith('gdl', expect.stringContaining('ERR_NAME_NOT_RESOLVED')));
+  expect(screen.getByRole('status')).toHaveTextContent('rede da Polícia Científica do Paraná');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });

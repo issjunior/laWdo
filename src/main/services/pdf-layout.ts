@@ -2,9 +2,9 @@ import type { MargensExportacao } from '../../shared/types/exportacao.types.js';
 import { MARGENS_PADRAO_PDF } from '../../shared/configuracoes/margens-pdf.js';
 
 const CM_POR_POLEGADA = 2.54;
-export const LARGURA_A4_CM = 21;
-export const ALTURA_A4_CM = 29.7;
-export const SEPARACAO_CABECALHO_CM = 0.3;
+const LARGURA_A4_CM = 21;
+const ALTURA_A4_CM = 29.7;
+const SEPARACAO_CABECALHO_CM = 0.3;
 export const PIXELS_POR_CM = 96 / CM_POR_POLEGADA;
 
 export function criarOpcoesPdf(margens?: MargensExportacao, cabecalho?: string): Electron.PrintToPDFOptions {

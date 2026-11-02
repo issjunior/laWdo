@@ -196,6 +196,19 @@ describe('dashboard.service', () => {
     ]);
   });
 
+  it('agrupa muitas amostras da mesma natureza preservando indicadores e a ordem das naturezas', async () => {
+    executeQueryMock.mockResolvedValueOnce([
+      { id: 'maior', codigo: 'B601', nome: 'Maior' }, { id: 'menor', codigo: 'B602', nome: 'Menor' },
+    ]).mockResolvedValueOnce([
+      ...Array.from({ length: 10_000 }, () => ({ id: 'maior', repDias: 4, laudoDias: 2 })),
+      { id: 'menor', repDias: 10, laudoDias: 8 },
+    ]);
+    const resultado = await new DashboardService().obterProducaoLaudos({});
+    expect(resultado.map(item => item.natureza.id)).toEqual(['maior', 'menor']);
+    expect(resultado[0].repAteConclusao).toEqual({ quantidade: 10_000, mediaDias: 4, medianaDias: 4 });
+    expect(resultado[1].laudoAteConclusao).toEqual({ quantidade: 1, mediaDias: 8, medianaDias: 8 });
+  });
+
   it('filtra ciclos negativos e aplica filtros de produção na consulta', async () => {
     executeQueryMock
       .mockResolvedValueOnce([{ id: 'te-1', codigo: null, nome: null }])

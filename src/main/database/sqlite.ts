@@ -1,209 +1,143 @@
-import { getLogger } from '../utils/logger.js';
-import path from 'path';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
 import { app } from 'electron';
-import fs from 'fs';
 import sqlite3 from 'sqlite3';
+import { getLogger } from '../utils/logger.js';
 import type { DatabaseRow } from '../types/database.js';
 
 const log = getLogger('database');
-
-// Configuração do banco de dados
-const DB_DIR = app.getPath('userData');
-const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
-
-// Singleton para conexão do banco de dados
-let dbInstance: sqlite3.Database | null = null;
+const diretorioBanco = app.getPath('userData');
+const caminhoBanco = path.join(diretorioBanco, 'laudopericial.db');
+let conexao: sqlite3.Database | null = null;
+let abertura: Promise<sqlite3.Database> | null = null;
+let falhaFatal: Error | null = null;
+let fila: Promise<unknown> = Promise.resolve();
+const contexto = new AsyncLocalStorage<{ ativa: boolean }>();
 
 interface BackupSQLite {
   step(paginas: number, callback: (erro: Error | null) => void): void;
   finish(callback: (erro: Error | null) => void): void;
 }
-
 interface DatabaseComBackup extends sqlite3.Database {
   backup(caminhoDestino: string): BackupSQLite;
 }
 
-/**
- * Obtém ou cria conexão com o banco de dados SQLite
- */
-const getDatabase = async (): Promise<sqlite3.Database> => {
-  if (dbInstance) {
-    return dbInstance;
+function enfileirar<T>(operacao: () => Promise<T>): Promise<T> {
+  const atual = contexto.getStore();
+  if (atual) {
+    if (!atual.ativa) return Promise.reject(new Error('O contexto da transação já foi encerrado.'));
+    return operacao();
   }
+  const resultado = fila.then(operacao);
+  fila = resultado.catch(() => undefined);
+  return resultado;
+}
 
-  try {
-    // Garantir que o diretório existe
-    if (!fs.existsSync(DB_DIR)) {
-      fs.mkdirSync(DB_DIR, { recursive: true });
-      log.debug(`Diretório de dados criado: ${DB_DIR}`);
-    }
+function executarSql(banco: sqlite3.Database, sql: string, parametros: unknown[] = []): Promise<void> {
+  return new Promise((resolve, reject) => banco.run(sql, parametros, erro => erro ? reject(erro) : resolve()));
+}
 
-    log.debug(`Conectando ao banco de dados: ${DB_PATH}`);
+function fecharConexao(banco: sqlite3.Database): Promise<void> {
+  return new Promise((resolve, reject) => banco.close(erro => erro ? reject(erro) : resolve()));
+}
 
-    // Criar nova conexão
-    const db = new sqlite3.Database(DB_PATH, (err: Error | null) => {
-      if (err) {
-        log.error('Erro ao conectar ao SQLite', err);
-        throw err;
+async function obterConexao(): Promise<sqlite3.Database> {
+  if (falhaFatal) throw falhaFatal;
+  if (conexao) return conexao;
+  if (!abertura) {
+    abertura = (async () => {
+      await mkdir(diretorioBanco, { recursive: true });
+      let parcial: sqlite3.Database | undefined;
+      try {
+        const banco = await new Promise<sqlite3.Database>((resolve, reject) => {
+          parcial = new sqlite3.Database(caminhoBanco, erro => {
+            if (erro) reject(erro);
+            else if (parcial) resolve(parcial);
+          });
+        });
+        for (const sql of ['PRAGMA foreign_keys = ON', 'PRAGMA journal_mode = WAL', 'PRAGMA synchronous = NORMAL']) {
+          await executarSql(banco, sql);
+        }
+        conexao = banco;
+        return banco;
+      } catch (erro) {
+        if (parcial) {
+          try { await fecharConexao(parcial); }
+          catch (erroFechamento) {
+            // Uma abertura recusada pelo SQLite já deixa o handle fechado.
+            if (!(erroFechamento instanceof Error) || !('code' in erroFechamento) || erroFechamento.code !== 'SQLITE_MISUSE') {
+              falhaFatal = new Error('Não foi possível liberar o banco. Reinicie o aplicativo.', { cause: erroFechamento });
+            }
+          }
+        }
+        log.error('Erro ao preparar conexão SQLite', erro);
+        throw erro;
       }
-    });
-    dbInstance = db;
-
-    // Configurar o banco de dados
-    db.serialize(() => {
-      db.run('PRAGMA foreign_keys = ON;');
-      db.run('PRAGMA journal_mode = WAL;');
-      db.run('PRAGMA synchronous = NORMAL;');
-    });
-
-    log.debug(`Conexão com SQLite estabelecida com sucesso: ${DB_PATH}`);
-
-    return db;
-  } catch (error) {
-    log.error('Erro ao conectar ao banco de dados SQLite', error);
-    throw error;
+    })().finally(() => { abertura = null; });
   }
+  return abertura;
+}
+
+export const closeDatabase = (): Promise<void> => {
+  if (contexto.getStore()) return Promise.reject(new Error('Não é possível fechar o banco dentro de uma transação.'));
+  return enfileirar(async () => {
+    if (conexao) {
+      await fecharConexao(conexao);
+      conexao = null;
+    }
+  });
 };
 
-/**
- * Fecha a conexão com o banco de dados
- */
-export const closeDatabase = async (): Promise<void> => {
-  if (dbInstance) {
-    const database = dbInstance;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        database.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
+export const executeQuery = <T = DatabaseRow>(sql: string, params: unknown[] = []): Promise<T[]> => enfileirar(async () => {
+  const banco = await obterConexao();
+  return new Promise<T[]>((resolve, reject) => banco.all<T>(sql, params, (erro, linhas) => {
+    if (erro) { log.error('Erro ao executar query', { sql, error: erro }); reject(erro); }
+    else resolve(linhas);
+  }));
+});
+
+export const executeNonQuery = (sql: string, params: unknown[] = []): Promise<void> => enfileirar(async () => {
+  const banco = await obterConexao();
+  try { await executarSql(banco, sql, params); }
+  catch (erro) { log.error('Erro ao executar non-query', { sql, error: erro }); throw erro; }
+});
+
+export const withTransaction = <T>(fn: () => Promise<T>): Promise<T> => {
+  if (contexto.getStore()) return Promise.reject(new Error('Transações aninhadas não são permitidas.'));
+  return enfileirar(async () => {
+    const banco = await obterConexao();
+    await executarSql(banco, 'BEGIN TRANSACTION');
+    const estado = { ativa: true };
+    return contexto.run(estado, async () => {
+      try {
+        const resultado = await fn();
+        await executarSql(banco, 'COMMIT');
+        return resultado;
+      } catch (erro) {
+        try { await executarSql(banco, 'ROLLBACK'); }
+        catch (erroRollback) {
+          falhaFatal = new Error('O banco está em estado incerto. Reinicie o aplicativo.', { cause: erroRollback });
+          log.error('Falha ao reverter transação', { erroOriginal: erro, erroRollback });
+        }
+        throw erro;
+      } finally { estado.ativa = false; }
+    });
+  });
+};
+
+export const criarBackupConsistente = (caminhoDestino: string): Promise<void> => {
+  if (contexto.getStore()) return Promise.reject(new Error('Não é possível iniciar backup dentro de uma transação.'));
+  return enfileirar(async () => {
+    const banco = await obterConexao() as DatabaseComBackup;
+    await new Promise<void>((resolve, reject) => {
+      const backup = banco.backup(caminhoDestino);
+      backup.step(-1, erro => {
+        backup.finish(erroFinal => {
+          if (erro || erroFinal) reject(erro || erroFinal);
+          else resolve();
         });
       });
-      if (dbInstance === database) {
-        dbInstance = null;
-      }
-      log.debug('Conexão com banco de dados fechada');
-    } catch (error) {
-      log.error('Erro ao fechar conexão com banco de dados', error);
-      throw error;
-    }
-  }
-};
-
-/**
- * Cria uma cópia consistente do banco aberto, inclusive quando estiver em WAL.
- */
-export const criarBackupConsistente = async (caminhoDestino: string): Promise<void> => {
-  const database = await getDatabase() as DatabaseComBackup;
-
-  await new Promise<void>((resolve, reject) => {
-    const backup = database.backup(caminhoDestino);
-    backup.step(-1, erroStep => {
-      if (erroStep) {
-        backup.finish(() => reject(erroStep));
-        return;
-      }
-
-      backup.finish(erroFinish => {
-        if (erroFinish) {
-          reject(erroFinish);
-          return;
-        }
-        resolve();
-      });
     });
   });
-};
-
-/**
- * Executa uma query SQL com parâmetros
- */
-export const executeQuery = async <T = DatabaseRow>(sql: string, params: unknown[] = []): Promise<T[]> => {
-  const db = await getDatabase();
-
-  return new Promise((resolve, reject) => {
-    try {
-      log.debug(`Executando query: ${sql}`, { params });
-
-      db.all<T>(sql, params, (err: Error | null, rows: T[]) => {
-        if (err) {
-          log.error('Erro ao executar query', { sql, params, error: err });
-          reject(err);
-        } else {
-          resolve(rows as T[]);
-        }
-      });
-    } catch (error) {
-      log.error('Erro ao executar query', { sql, params, error });
-      reject(error);
-    }
-  });
-};
-
-/**
- * Executa uma query que não retorna resultado (INSERT, UPDATE, DELETE)
- */
-export const executeNonQuery = async (sql: string, params: unknown[] = []): Promise<void> => {
-  const db = await getDatabase();
-
-  return new Promise((resolve, reject) => {
-    try {
-      log.debug(`Executando non-query: ${sql}`, { params });
-
-      db.run(sql, params, function (this: sqlite3.RunResult, err: Error | null) {
-        if (err) {
-          log.error('Erro ao executar non-query', { sql, params, error: err });
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    } catch (error) {
-      log.error('Erro ao executar non-query', { sql, params, error });
-      reject(error);
-    }
-  });
-};
-
-/**
- * Inicia uma transação
- */
-const beginTransaction = async (): Promise<void> => {
-  await executeNonQuery('BEGIN TRANSACTION');
-  log.debug('Transação iniciada');
-};
-
-/**
- * Comita uma transação
- */
-const commitTransaction = async (): Promise<void> => {
-  await executeNonQuery('COMMIT');
-  log.debug('Transação commitada');
-};
-
-/**
- * Reverte uma transação
- */
-const rollbackTransaction = async (): Promise<void> => {
-  await executeNonQuery('ROLLBACK');
-  log.debug('Transação revertida');
-};
-
-/**
- * Executa uma função dentro de uma transação
- */
-export const withTransaction = async <T>(fn: () => Promise<T>): Promise<T> => {
-  await beginTransaction();
-
-  try {
-    const result = await fn();
-    await commitTransaction();
-    return result;
-  } catch (error) {
-    await rollbackTransaction();
-    log.error('Erro na transação - revertendo', error);
-    throw error;
-  }
 };

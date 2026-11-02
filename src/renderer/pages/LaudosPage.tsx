@@ -2865,8 +2865,7 @@ export const LaudosPage: React.FC = () => {
     habilitada: !!editando && !inicializando && (possuiTabelaColetaB601(singleEditorHtml) || secoes.some(secao => possuiTabelaColetaB601(secao.conteudo))),
     aoAplicar: aplicarReferenciasColeta,
     aoFalhar: erro => {
-      void window.ipcAPI.logWarning('gdl', `Falha na consulta das REPs do caso: ${erro instanceof Error ? erro.message : 'Erro inesperado'}`);
-      if (consultaColetaManualRef.current) toast.error(MENSAGEM_FALHA_CONSULTA_GDL);
+      if (consultaColetaManualRef.current) toast.error(erro instanceof Error ? erro.message : MENSAGEM_FALHA_CONSULTA_GDL);
     },
   });
 

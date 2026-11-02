@@ -10,8 +10,10 @@ prepararDiagnosticoGpu();
 
 const diretorioTemporarioSmoke = process.env.LAWDO_SMOKE_USER_DATA;
 const modoSmokeJanela = process.env.LAWDO_SMOKE_JANELA === '1';
+const modoSmokeImagens = process.env.LAWDO_SMOKE_IMAGENS === '1';
+if (modoSmokeImagens && !diretorioTemporarioSmoke) throw new Error('Smoke de imagens exige perfil isolado.');
 let migracaoConcluida = true;
-if ((process.env.LAWDO_SMOKE_SCHEMA === '1' || modoSmokeJanela) && diretorioTemporarioSmoke) {
+if ((process.env.LAWDO_SMOKE_SCHEMA === '1' || modoSmokeJanela || modoSmokeImagens) && diretorioTemporarioSmoke) {
   app.setPath('userData', diretorioTemporarioSmoke);
 } else {
   const diretorioAppData = app.getPath('appData');
@@ -46,5 +48,11 @@ if ((process.env.LAWDO_SMOKE_SCHEMA === '1' || modoSmokeJanela) && diretorioTemp
   if (migracaoConcluida) app.setPath('userData', diretorioDados);
 }
 
-if (!migracaoConcluida) app.exit(1);
+if (modoSmokeImagens) {
+  void import('./services/imagens/smoke.js').then(modulo => modulo.executarSmokeImagens()).catch(erro => {
+    console.error('Falha ao iniciar smoke de imagens', erro);
+    app.exit(1);
+  });
+}
+else if (!migracaoConcluida) app.exit(1);
 else if (process.env.LAWDO_SMOKE_SCHEMA === '1' || iniciarInstanciaUnica(app)) await import('./index.js');

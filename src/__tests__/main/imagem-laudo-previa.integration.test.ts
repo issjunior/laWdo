@@ -1,3 +1,10 @@
+vi.mock('../../main/services/processador-imagens.service.js', async () => {
+  const simulado = await import('../apoio/processador-imagens-simulado');
+  return { ...simulado, processarImagem: async (entrada: import('../../main/services/imagens/contratos').TransformacaoImagem) => {
+    if (ambiente.falharPrevia && entrada.finalidade === 'previa') throw new Error('Arquivo local da figura inválido.');
+    return simulado.processarImagem(entrada);
+  } };
+});
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -72,9 +79,9 @@ describe('prévia do editor e arquivo original', () => {
   it('limita a cópia do PDF e conserva apenas a figura tratada após a conclusão', async () => {
     await sqlite.executeNonQuery('INSERT INTO configuracoes VALUES (?, ?, ?)', ['perfil_figura_laudo', 'maxima_economia', 'string']);
     const original = Buffer.alloc(50_000, 1);
-    imagens.estagiarImagemLaudoPorBytes('laudo', { id: 'foto-usada', nomeArquivo: 'foto.jpg', mimeType: 'image/jpeg',
+    await imagens.estagiarImagemLaudoPorBytes('laudo', { id: 'foto-usada', nomeArquivo: 'foto.jpg', mimeType: 'image/jpeg',
       bytes: original, legenda: '', origem: 'local', sequencia: 1 });
-    imagens.estagiarImagemLaudoPorBytes('laudo', { id: 'foto-descartada', nomeArquivo: 'outra.jpg', mimeType: 'image/jpeg',
+    await imagens.estagiarImagemLaudoPorBytes('laudo', { id: 'foto-descartada', nomeArquivo: 'outra.jpg', mimeType: 'image/jpeg',
       bytes: Buffer.alloc(50_000, 2), legenda: '', origem: 'local', sequencia: 2 });
     await imagens.prepararImagemEditorLaudo('laudo', 'foto-usada', 400, 300, 1);
     await imagens.prepararImagemEditorLaudo('laudo', 'foto-descartada', 400, 300, 1);
@@ -102,7 +109,7 @@ describe('prévia do editor e arquivo original', () => {
     if (perfil !== null) {
       await sqlite.executeNonQuery('INSERT INTO configuracoes VALUES (?, ?, ?)', ['perfil_previa_editor', perfil, 'string']);
     }
-    estagiar('foto-perfil', 'image/jpeg');
+    await estagiar('foto-perfil', 'image/jpeg');
 
     const preparada = await imagens.prepararImagemEditorLaudo('laudo', 'foto-perfil', larguraCss, larguraCss * 0.75, densidade);
 
@@ -118,7 +125,7 @@ describe('prévia do editor e arquivo original', () => {
     await sqlite.executeNonQuery('DELETE FROM configuracoes');
     ambiente.largura = 320;
     ambiente.altura = 180;
-    estagiar('foto-pequena', 'image/jpeg');
+    await estagiar('foto-pequena', 'image/jpeg');
 
     const preparada = await imagens.prepararImagemEditorLaudo('laudo', 'foto-pequena', 1000, 750, 2);
 
@@ -128,7 +135,7 @@ describe('prévia do editor e arquivo original', () => {
   });
 
   it('limita a prévia ao espaço de exibição e conserva os bytes originais', async () => {
-    estagiar('foto', 'image/jpeg');
+    await estagiar('foto', 'image/jpeg');
     expect(imagens.listarImagensEstagiadasLaudo('laudo')).toMatchObject([{ id: 'foto', nomeArquivo: 'foto.jpg' }]);
     const preparada = await imagens.prepararImagemEditorLaudo('laudo', 'foto', 400, 300, 2);
     expect(imagens.listarImagensEstagiadasLaudo('laudo')).toEqual([]);
@@ -141,7 +148,7 @@ describe('prévia do editor e arquivo original', () => {
   });
 
   it('mantém a seleção temporária quando a prévia falha e remove o arquivo recém-persistido', async () => {
-    estagiar('falha', 'image/png');
+    await estagiar('falha', 'image/png');
     ambiente.falharPrevia = true;
     await expect(imagens.prepararImagemEditorLaudo('laudo', 'falha', 400, 300, 1)).rejects.toThrow();
     expect(await sqlite.executeQuery('SELECT id FROM imagens_laudo WHERE id = ?', ['falha'])).toEqual([]);

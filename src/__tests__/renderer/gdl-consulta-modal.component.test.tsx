@@ -312,7 +312,7 @@ describe('GdlConsultaModal', () => {
         ambiente: 'Produção',
         statusCode: 0,
         autenticado: false,
-        erro: 'net::ERR_NAME_NOT_RESOLVED',
+        erro: 'O GDL não está acessível. É necessário estar conectado à rede da Polícia Científica do Paraná ou utilizar uma VPN autorizada com acesso a essa rede.',
       },
     })
     render(
@@ -327,7 +327,7 @@ describe('GdlConsultaModal', () => {
       />,
     )
 
-    expect(await screen.findByText('Não foi possível localizar o endereço do GDL. Verifique a conexão com a VPN institucional e tente novamente.')).toBeInTheDocument()
+    expect(await screen.findByText('O GDL não está acessível. É necessário estar conectado à rede da Polícia Científica do Paraná ou utilizar uma VPN autorizada com acesso a essa rede.')).toBeInTheDocument()
     expect(screen.queryByText('net::ERR_NAME_NOT_RESOLVED')).not.toBeInTheDocument()
   })
 

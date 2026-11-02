@@ -1,5 +1,8 @@
 import fs from 'fs'
 import path from 'path'
+import { readFile, mkdir, access, writeFile, rename, rm } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { processarImagem } from './processador-imagens.service.js'
 import { createHash } from 'crypto'
 import { app, nativeImage } from 'electron'
 import { DomUtils, parseDocument } from 'htmlparser2'
@@ -76,27 +79,10 @@ async function obterPerfilFiguraLaudo() {
   return LIMITES_FIGURA_LAUDO[perfilFiguraLaudoValido(valor) ? valor : PERFIL_FIGURA_LAUDO_PADRAO]
 }
 
-function tratarFigura(bytesOriginais: Buffer, mimeOriginal: string, limite: { maiorLado: number; qualidadeJpeg: number }): { bytes: Buffer; mimeType: string } {
-  const imagem = nativeImage.createFromBuffer(bytesOriginais)
-  if (imagem.isEmpty()) throw new Error('Figura inválida para compactação.')
-  const dimensoes = imagem.getSize()
-  if (!dimensoes.width || !dimensoes.height) throw new Error('Dimensões da figura inválidas.')
-  const escala = Math.min(1, limite.maiorLado / Math.max(dimensoes.width, dimensoes.height))
-  const ajustada = escala < 1 ? imagem.resize({
-    width: Math.max(1, Math.round(dimensoes.width * escala)),
-    height: Math.max(1, Math.round(dimensoes.height * escala)),
-    quality: 'best',
-  }) : imagem
-  const preservarTransparencia = !['image/jpeg', 'image/bmp'].includes(mimeOriginal)
-    && (() => {
-      const bitmap = ajustada.toBitmap()
-      for (let indice = 3; indice < bitmap.length; indice += 4) if (bitmap[indice] < 255) return true
-      return false
-    })()
-  const mimeType = preservarTransparencia ? 'image/png' : 'image/jpeg'
-  const bytes = preservarTransparencia ? ajustada.toPNG() : ajustada.toJPEG(limite.qualidadeJpeg)
-  if (bytes.length === 0) throw new Error('Não foi possível compactar a figura.')
-  return bytes.length < bytesOriginais.length ? { bytes, mimeType } : { bytes: bytesOriginais, mimeType: mimeOriginal }
+async function tratarFigura(bytesOriginais: Buffer, mimeOriginal: string, limite: { maiorLado: number; qualidadeJpeg: number }) {
+  const resultado = await processarImagem({ bytes: bytesOriginais, mimeOriginal, finalidade: 'figura', formato: 'automatico',
+    maiorLado: limite.maiorLado, qualidade: limite.qualidadeJpeg, conservarSeMaior: true })
+  return { bytes: Buffer.from(resultado.bytes), mimeType: resultado.mimeType }
 }
 
 function caminhoAbsoluto(caminhoRelativo: string): string {
@@ -230,31 +216,19 @@ export async function obterMiniaturasImagensLaudo(
     [laudoId, ...ids],
   )
   const miniaturas: MiniaturaImagemLaudo[] = []
-  for (const registro of registros) {
-    try {
-      const imagem = nativeImage.createFromPath(caminhoAbsoluto(registro.caminho_relativo))
-      if (imagem.isEmpty()) throw new Error('Arquivo de imagem inválido.')
-      const dimensoes = imagem.getSize()
-      const largura = Math.min(larguraMaxima, Math.max(1, dimensoes.width))
-      const altura = Math.max(1, Math.round(dimensoes.height * (largura / Math.max(1, dimensoes.width))))
-      const bytes = imagem.resize({ width: largura, height: altura, quality: 'good' }).toJPEG(qualidadeJpeg)
-      miniaturas.push({ id: registro.id, thumbnailDataUri: `data:image/jpeg;base64,${bytes.toString('base64')}` })
-    } catch (error) {
-      log.warn('Miniatura da imagem do laudo ausente ou ilegível', { laudoId, imagemId: registro.id, error })
-    }
-  }
-  const idsEncontrados = new Set(registros.map(registro => registro.id))
+  const porId = new Map(registros.map(registro => [registro.id, registro]))
   for (const id of ids) {
-    if (idsEncontrados.has(id)) continue
-    const estagiada = imagensEstagiadas.get(laudoId)?.get(id)
-    if (!estagiada) continue
-    const imagem = nativeImage.createFromBuffer(Buffer.from(estagiada.bytes))
-    if (imagem.isEmpty()) continue
-    const dimensoes = imagem.getSize()
-    const largura = Math.min(larguraMaxima, Math.max(1, dimensoes.width))
-    const altura = Math.max(1, Math.round(dimensoes.height * largura / Math.max(1, dimensoes.width)))
-    const bytes = imagem.resize({ width: largura, height: altura, quality: 'good' }).toJPEG(qualidadeJpeg)
-    miniaturas.push({ id, thumbnailDataUri: `data:image/jpeg;base64,${bytes.toString('base64')}` })
+    try {
+      const registro = porId.get(id)
+      const estagiada = imagensEstagiadas.get(laudoId)?.get(id)
+      if (!registro && !estagiada) continue
+      const bytes = registro ? await readFile(caminhoAbsoluto(registro.caminho_relativo)) : Buffer.from(estagiada!.bytes)
+      const resultado = await processarImagem({ bytes, mimeOriginal: registro?.mime_type ?? estagiada!.mimeType,
+        finalidade: 'miniatura', formato: 'jpeg', largura: larguraMaxima, qualidade: qualidadeJpeg })
+      miniaturas.push({ id, thumbnailDataUri: `data:${resultado.mimeType};base64,${Buffer.from(resultado.bytes).toString('base64')}` })
+    } catch (error) {
+      log.warn('Miniatura da imagem do laudo ausente ou ilegível', { laudoId, imagemId: id, error })
+    }
   }
   return miniaturas
 }
@@ -266,47 +240,28 @@ export async function obterPreviaEditorImagemLaudo(laudoIdEntrada: string, image
     'SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId],
   ))[0]
   if (!registro) throw new Error('Arquivo local da figura não encontrado.')
-  const arquivo = caminhoAbsoluto(registro.caminho_relativo)
-  const imagem = nativeImage.createFromPath(arquivo)
-  if (imagem.isEmpty()) throw new Error('Arquivo local da figura inválido.')
-  const dimensoes = imagem.getSize()
-  const maiorLado = Math.max(dimensoes.width, dimensoes.height)
-  if (maiorLado <= 0) throw new Error('Dimensões da figura inválidas.')
   if (!Number.isInteger(maiorLadoPermitido) || maiorLadoPermitido < 1 || maiorLadoPermitido > 1280) throw new Error('Resolução da prévia inválida.')
-  const escala = Math.min(1, maiorLadoPermitido / maiorLado)
-  const ajustada = escala < 1 ? imagem.resize({
-    width: Math.max(1, Math.round(dimensoes.width * escala)),
-    height: Math.max(1, Math.round(dimensoes.height * escala)),
-    quality: 'good',
-  }) : imagem
-  const manterPng = registro.mime_type === 'image/png' || registro.mime_type === 'image/gif'
-  const bytes = manterPng ? ajustada.toPNG() : ajustada.toJPEG(80)
-  if (bytes.length === 0) throw new Error('Não foi possível gerar a prévia da figura.')
-  return `data:image/${manterPng ? 'png' : 'jpeg'};base64,${bytes.toString('base64')}`
+  const bytes = await readFile(caminhoAbsoluto(registro.caminho_relativo))
+  if (createHash('sha256').update(bytes).digest('hex') !== registro.sha256) throw new Error('Arquivo local da figura não passou na verificação de integridade.')
+  const resultado = await processarImagem({ bytes, mimeOriginal: registro.mime_type, finalidade: 'previa',
+    maiorLado: maiorLadoPermitido, qualidade: 80, formato: ['image/png', 'image/gif'].includes(registro.mime_type) ? 'png' : 'jpeg' })
+  return `data:${resultado.mimeType};base64,${Buffer.from(resultado.bytes).toString('base64')}`
 }
 
-export function estagiarImagemLaudoPorBytes(laudoIdEntrada: string, entrada: SalvarImagemLaudoBytesEntrada): ImagemEstagiadaLaudo {
+export async function estagiarImagemLaudoPorBytes(laudoIdEntrada: string, entrada: SalvarImagemLaudoBytesEntrada): Promise<ImagemEstagiadaLaudo> {
   const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
   const id = validarIdentificador(entrada.id, 'Imagem')
   const mimeType = entrada.mimeType.toLowerCase()
   if (!EXTENSAO_POR_MIME[mimeType]) throw new Error('Formato de imagem não compatível.')
   const bytes = Buffer.from(entrada.bytes)
   if (bytes.length === 0) throw new Error('A imagem está vazia.')
-  const imagem = nativeImage.createFromBuffer(bytes)
-  if (imagem.isEmpty()) throw new Error('Arquivo de imagem inválido.')
+  const resultado = await processarImagem({ bytes, mimeOriginal: mimeType, finalidade: 'miniatura', maiorLado: 300,
+    qualidade: 75, formato: ['image/png', 'image/gif'].includes(mimeType) ? 'png' : 'jpeg' })
   const total = [...imagensEstagiadas.values()].flatMap(grupo => [...grupo.values()])
     .reduce((soma, item) => soma + item.bytes.byteLength, 0)
-  if (total + bytes.length > LIMITE_BYTES_ESTAGIO) throw new Error('O painel atingiu o limite de imagens temporárias. Insira ou remova algumas fotos.')
-  const dimensoes = imagem.getSize()
-  const escala = Math.min(1, 300 / Math.max(dimensoes.width, dimensoes.height))
-  const miniatura = escala < 1 ? imagem.resize({
-    width: Math.max(1, Math.round(dimensoes.width * escala)),
-    height: Math.max(1, Math.round(dimensoes.height * escala)),
-    quality: 'good',
-  }) : imagem
-  const png = mimeType === 'image/png' || mimeType === 'image/gif'
-  const miniaturaBytes = png ? miniatura.toPNG() : miniatura.toJPEG(75)
-  const thumbnailDataUri = `data:image/${png ? 'png' : 'jpeg'};base64,${miniaturaBytes.toString('base64')}`
+  const anterior = imagensEstagiadas.get(laudoId)?.get(id)?.bytes.byteLength ?? 0
+  if (total - anterior + bytes.length > LIMITE_BYTES_ESTAGIO) throw new Error('O painel atingiu o limite de imagens temporárias. Insira ou remova algumas fotos.')
+  const thumbnailDataUri = `data:${resultado.mimeType};base64,${Buffer.from(resultado.bytes).toString('base64')}`
   const grupo = imagensEstagiadas.get(laudoId) ?? new Map<string, ImagemEstagioInterna>()
   grupo.set(id, { ...entrada, id, mimeType, bytes, thumbnailDataUri })
   imagensEstagiadas.set(laudoId, grupo)
@@ -332,7 +287,7 @@ export function listarImagensEstagiadasLaudo(laudoIdEntrada: string): ImagemEsta
   }))
 }
 
-export function estagiarImagemLaudoPorDataUri(laudoId: string, entrada: SalvarImagemLaudoEntrada): ImagemEstagiadaLaudo {
+export async function estagiarImagemLaudoPorDataUri(laudoId: string, entrada: SalvarImagemLaudoEntrada): Promise<ImagemEstagiadaLaudo> {
   const { mimeType, bytes } = interpretarDataUri(entrada.dataUri)
   return estagiarImagemLaudoPorBytes(laudoId, {
     id: entrada.id,
@@ -389,7 +344,15 @@ export async function limparImagensTemporariasSemReferencia(laudoIdEntrada?: str
   return removidas
 }
 
-export async function concluirImagensLaudo(laudoIdEntrada: string): Promise<string[]> {
+async function gravarImagemAtomica(caminho: string, bytes: Buffer): Promise<void> {
+  try { await access(caminho); return } catch { /* Ainda não existe. */ }
+  await mkdir(path.dirname(caminho), { recursive: true })
+  const temporario = `${caminho}.${randomUUID()}.tmp`
+  try { await writeFile(temporario, bytes, { flag: 'wx' }); await rename(temporario, caminho) }
+  finally { await rm(temporario, { force: true }).catch(() => undefined) }
+}
+
+export async function prepararConclusaoImagensLaudo(laudoIdEntrada: string) {
   const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
   const laudo = (await executeQuery<{ conteudo: string }>('SELECT conteudo FROM laudos WHERE id = ?', [laudoId]))[0]
   if (!laudo) throw new Error('Laudo não encontrado para conclusão.')
@@ -404,21 +367,34 @@ export async function concluirImagensLaudo(laudoIdEntrada: string): Promise<stri
   for (const id of ids) {
     const registro = porId.get(id)
     if (!registro) throw new Error(`Figura ${id} não está disponível para concluir o laudo.`)
-    const originais = fs.readFileSync(caminhoAbsoluto(registro.caminho_relativo))
+    const originais = await readFile(caminhoAbsoluto(registro.caminho_relativo))
     if (createHash('sha256').update(originais).digest('hex') !== registro.sha256) throw new Error(`Figura ${id} não passou na verificação de integridade.`)
-    const tratada = tratarFigura(originais, registro.mime_type, limite)
+    const tratada = await tratarFigura(originais, registro.mime_type, limite)
     const sha256 = createHash('sha256').update(tratada.bytes).digest('hex')
     const extensao = EXTENSAO_POR_MIME[tratada.mimeType]
     const caminho = path.join(DIRETORIO_IMAGENS, laudoId, `${sha256}.${extensao}`)
-    if (!fs.existsSync(caminho)) {
-      const temporario = `${caminho}.${process.pid}.${Date.now()}.tmp`
-      fs.writeFileSync(temporario, tratada.bytes)
-      fs.renameSync(temporario, caminho)
-    }
     preparados.push({ registro, caminhoRelativo: path.relative(app.getPath('userData'), caminho).replace(/\\/g, '/'),
       mimeType: tratada.mimeType, bytes: tratada.bytes, sha256 })
   }
+  return { laudoId, conteudo: laudo.conteudo, registros, ids: [...ids], preparados }
+}
+
+export async function concluirImagensLaudo(laudoIdEntrada: string,
+  preparacao?: Awaited<ReturnType<typeof prepararConclusaoImagensLaudo>>): Promise<string[]> {
+  const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
+  const dados = preparacao ?? await prepararConclusaoImagensLaudo(laudoId)
+  if (dados.laudoId !== laudoId) throw new Error('Preparação de outro laudo.')
+  const [atual] = await executeQuery<{ conteudo: string }>('SELECT conteudo FROM laudos WHERE id = ?', [laudoId])
+  const registrosAtuais = await executeQuery<ImagemLaudoRow>('SELECT * FROM imagens_laudo WHERE laudo_id = ?', [laudoId])
+  const ordenar = (registros: ImagemLaudoRow[]) => [...registros].sort((a, b) => a.id.localeCompare(b.id))
+  if (atual?.conteudo !== dados.conteudo || JSON.stringify(ordenar(registrosAtuais)) !== JSON.stringify(ordenar(dados.registros))) {
+    throw new Error('O laudo ou suas figuras foram alterados durante a preparação. Tente novamente.')
+  }
+  const { preparados, registros } = dados
+  const ids = new Set(dados.ids)
+  const laudo = { conteudo: dados.conteudo }
   for (const item of preparados) {
+    await gravarImagemAtomica(caminhoAbsoluto(item.caminhoRelativo), item.bytes)
     await executeNonQuery(`UPDATE imagens_laudo SET caminho_relativo = ?, mime_type = ?, tamanho = ?, sha256 = ?,
       imagem_origem_id = NULL, ajustes_json = NULL, disponivel_painel = 0, temporaria_sessao = 0 WHERE id = ? AND laudo_id = ?`,
     [item.caminhoRelativo, item.mimeType, item.bytes.length, item.sha256, item.registro.id, laudoId])
@@ -436,6 +412,10 @@ export async function concluirImagensLaudo(laudoIdEntrada: string): Promise<stri
 export async function descartarArquivosConcluidos(laudoId: string, caminhos: string[]): Promise<void> {
   descartarImagensEstagiadasLaudo(laudoId)
   for (const caminho of caminhos) await removerArquivoSemReferencias(caminho)
+}
+
+export async function descartarPreparacaoImagens(preparacao: Awaited<ReturnType<typeof prepararConclusaoImagensLaudo>>): Promise<void> {
+  for (const caminho of new Set(preparacao.preparados.map(item => item.caminhoRelativo))) await removerArquivoSemReferencias(caminho)
 }
 
 export function descartarImagemEstagiadaLaudo(laudoIdEntrada: string, imagemIdEntrada: string): void {
@@ -502,7 +482,7 @@ export async function obterImagemLaudoPorId(laudoIdEntrada: string, imagemIdEntr
     throw new Error(imagemEmOutroLaudo ? 'IMAGEM_DE_OUTRO_LAUDO' : 'IMAGEM_NAO_VINCULADA')
   }
   try {
-    const bytes = fs.readFileSync(caminhoAbsoluto(registro.caminho_relativo))
+    const bytes = await readFile(caminhoAbsoluto(registro.caminho_relativo))
     return {
       ...criarResumoImagem(registro),
       tamanho: bytes.length,
@@ -524,24 +504,13 @@ export async function obterImagemImpressaoLaudo(
     'SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId],
   ))[0]
   if (!registro) throw new Error('Arquivo local da figura não encontrado para impressão.')
-  const bytesOriginais = fs.readFileSync(caminhoAbsoluto(registro.caminho_relativo))
+  const bytesOriginais = await readFile(caminhoAbsoluto(registro.caminho_relativo))
   if (createHash('sha256').update(bytesOriginais).digest('hex') !== registro.sha256) throw new Error('Arquivo local da figura não passou na verificação de integridade.')
   const limite = await obterPerfilFiguraLaudo()
-  const tratada = tratarFigura(bytesOriginais, registro.mime_type, limite)
-  const imagem = nativeImage.createFromBuffer(tratada.bytes)
-  if (imagem.isEmpty()) throw new Error('Arquivo local da figura inválido para impressão.')
-  const dimensoes = imagem.getSize()
-  if (!dimensoes.width || !dimensoes.height) throw new Error('Dimensões da figura inválidas para impressão.')
-  if (dimensoes.width <= larguraMaxima) {
-    return { id: imagemId, dataUri: `data:${tratada.mimeType};base64,${tratada.bytes.toString('base64')}` }
-  }
-  const largura = Math.min(dimensoes.width, larguraMaxima)
-  const altura = Math.max(1, Math.round(dimensoes.height * largura / dimensoes.width))
-  const ajustada = largura < dimensoes.width ? imagem.resize({ width: largura, height: altura, quality: 'best' }) : imagem
-  const formatoJpeg = tratada.mimeType === 'image/jpeg'
-  const bytes = formatoJpeg ? ajustada.toJPEG(limite.qualidadeJpeg) : ajustada.toPNG()
-  if (bytes.length === 0) throw new Error('Não foi possível preparar a figura para impressão.')
-  return { id: imagemId, dataUri: `data:image/${formatoJpeg ? 'jpeg' : 'png'};base64,${bytes.toString('base64')}` }
+  const tratada = await tratarFigura(bytesOriginais, registro.mime_type, limite)
+  const resultado = await processarImagem({ bytes: tratada.bytes, mimeOriginal: tratada.mimeType, finalidade: 'figura',
+    largura: larguraMaxima, qualidade: limite.qualidadeJpeg, formato: tratada.mimeType === 'image/jpeg' ? 'jpeg' : 'png', preservarSeCouber: true })
+  return { id: imagemId, dataUri: `data:${resultado.mimeType};base64,${Buffer.from(resultado.bytes).toString('base64')}` }
 }
 
 export async function salvarImagemLaudo(
@@ -569,12 +538,7 @@ export async function salvarImagemLaudo(
   const caminhoRelativo = path.relative(app.getPath('userData'), caminho).replace(/\\/g, '/')
   const anterior = (await executeQuery<ImagemLaudoRow>('SELECT * FROM imagens_laudo WHERE id = ?', [id]))[0]
 
-  fs.mkdirSync(diretorioLaudo, { recursive: true })
-  if (!fs.existsSync(caminho)) {
-    const temporario = `${caminho}.${process.pid}.${Date.now()}.tmp`
-    fs.writeFileSync(temporario, bytes)
-    fs.renameSync(temporario, caminho)
-  }
+  await gravarImagemAtomica(caminho, bytes)
 
   await executeNonQuery(
     `INSERT INTO imagens_laudo
@@ -631,12 +595,7 @@ export async function salvarImagemLaudoPorBytes(
     }
   }
 
-  fs.mkdirSync(diretorioLaudo, { recursive: true })
-  if (!fs.existsSync(caminho)) {
-    const temporario = `${caminho}.${process.pid}.${Date.now()}.tmp`
-    fs.writeFileSync(temporario, bytes)
-    fs.renameSync(temporario, caminho)
-  }
+  await gravarImagemAtomica(caminho, bytes)
   await executeNonQuery(
     `INSERT INTO imagens_laudo
       (id, laudo_id, nome_arquivo, caminho_relativo, mime_type, tamanho, sha256, legenda, origem, sequencia, temporaria_sessao)
@@ -666,7 +625,7 @@ async function removerArquivoSemReferencias(caminhoRelativo: string): Promise<vo
   )
   if (quantidade === 0) {
     const caminho = caminhoAbsoluto(caminhoRelativo)
-    if (fs.existsSync(caminho)) fs.unlinkSync(caminho)
+    await rm(caminho, { force: true })
   }
 }
 

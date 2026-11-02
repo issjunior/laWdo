@@ -1,3 +1,4 @@
+import * as falhasGdl from '../../main/services/gdl-minhas-reps-erro.service';
 import { esquemaRepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -22,6 +23,7 @@ beforeAll(async () => {
   const exportacoes: { registerGdlHandlers?: () => void } = {};
   const importar = createRequire(import.meta.url);
   runInNewContext(codigo, { Error, exports: exportacoes, require: (nome: string) => {
+    if (nome.endsWith('/gdl-minhas-reps-erro.service.js')) return falhasGdl;
     if (nome === 'electron') return { ipcMain: { handle: (canal: string, tratador: Tratador) => handlers.set(canal, tratador) } };
     if (nome.endsWith('/auth-sessao.service.js')) return { authSessaoService: { exigir: sessao } };
     if (nome.endsWith('/gdl.service.js')) return { obterIdentidadeMinhasReps: identidade, consultarRepsMesmoCaso: consultar };
@@ -51,16 +53,16 @@ it('deriva número/ano da REP local e retorna somente a consulta autenticada', a
 
 it('não consulta sem sessão ou com laudo inválido', async () => {
   sessao.mockImplementationOnce(() => { throw new Error('Sessão encerrada'); });
-  expect(await handlers.get('gdl:consultar-reps-mesmo-caso')?.({ sender: { id: 7 } }, 'laudo-1')).toEqual({ success: false, error: 'Sessão encerrada' });
+  expect(await handlers.get('gdl:consultar-reps-mesmo-caso')?.({ sender: { id: 7 } }, 'laudo-1')).toMatchObject({ success: false, error: 'Sessão encerrada' });
   expect(consultar).not.toHaveBeenCalled();
-  expect(await handlers.get('gdl:consultar-reps-mesmo-caso')?.({ sender: { id: 7 } }, { numero: '999/2026' })).toEqual({ success: false, error: 'Laudo inválido.' });
+  expect(await handlers.get('gdl:consultar-reps-mesmo-caso')?.({ sender: { id: 7 } }, { numero: '999/2026' })).toMatchObject({ success: false, error: 'Laudo inválido.' });
   expect(consultar).not.toHaveBeenCalled();
 });
 
 it('descarta resposta se a conexão muda durante a consulta', async () => {
   identidade.mockResolvedValueOnce('conexao-1').mockResolvedValueOnce('conexao-2');
   expect(await handlers.get('gdl:consultar-reps-mesmo-caso')?.({ sender: { id: 7 } }, 'laudo-1'))
-    .toEqual({ success: false, error: 'A sessão ou configuração GDL mudou. Consulte novamente.' });
+    .toMatchObject({ success: false, error: 'A sessão ou configuração GDL mudou. Consulte novamente.' });
 });
 
 it('persiste as referências validadas na REP local', async () => {
@@ -98,4 +100,13 @@ it('compartilha consultas simultâneas e permite nova tentativa após falha', as
   expect(await segunda).toMatchObject({ success: false, error: 'Sem rede' });
   expect(await executar()).toMatchObject({ success: true });
   expect(consultar).toHaveBeenCalledTimes(2);
+});
+
+
+it('devolve causa estruturada para indisponibilidade institucional sem descartar dados locais', async () => {
+  consultar.mockRejectedValueOnce(Object.assign(new Error('net::ERR_NAME_NOT_RESOLVED'), { code: 'ERR_NAME_NOT_RESOLVED' }));
+  expect(await handlers.get('gdl:consultar-reps-mesmo-caso')?.({ sender: { id: 7 } }, 'laudo-1')).toMatchObject({
+    success: false, falha: { codigo: 'rede', codigoSistema: 'ERR_NAME_NOT_RESOLVED', condicaoEsperada: 'acesso_rede_institucional', referencia: expect.any(String) },
+  });
+  expect(salvar).not.toHaveBeenCalled();
 });

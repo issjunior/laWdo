@@ -62,3 +62,16 @@ describe('classificação das falhas da lista de REPs do GDL', () => {
   });
 
 });
+
+
+describe('acesso à rede institucional', () => {
+  it.each(['ENOTFOUND', 'ENETUNREACH', 'ECONNREFUSED', 'ERR_TUNNEL_CONNECTION_FAILED', 'ETIMEDOUT'])('classifica %s sem resposta como esperado', code => {
+    expect(classificarFalhaListaRepsGdl(Object.assign(new Error('transporte'), { code }))).toMatchObject({ condicaoEsperada: 'acesso_rede_institucional', codigoSistema: code });
+  });
+  it.each([401, 403, 429, 503, 504, 200])('não oculta falha após HTTP %s', statusHttp => {
+    expect(classificarFalhaListaRepsGdl(Object.assign(new Error('download interrompido'), { code: 'ECONNRESET', respostaRecebida: true, statusHttp })).condicaoEsperada).toBeUndefined();
+  });
+  it.each(['ERR_CERT_AUTHORITY_INVALID', 'ERR_SSL_PROTOCOL_ERROR', 'ENOSPC'])('não oculta %s', code => {
+    expect(classificarFalhaListaRepsGdl(Object.assign(new Error('falha real'), { code })).condicaoEsperada).toBeUndefined();
+  });
+});

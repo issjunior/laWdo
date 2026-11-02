@@ -24,4 +24,4 @@ export function consultarRepsColetaLaudo(laudoId: string): Promise<RepsMesmoCaso
   return consulta;
 }
 
-export const MENSAGEM_FALHA_CONSULTA_GDL = 'Não foi possível acessar o GDL. Verifique sua conexão e a VPN institucional e tente novamente.';
+export const MENSAGEM_FALHA_CONSULTA_GDL = 'Não foi possível consultar o GDL. Tente novamente.';

@@ -1,3 +1,4 @@
+import { esperaIpcInformativa } from '@shared/desempenho/esperas-ipc';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, Download } from 'lucide-react';
 import type { AmostraDesempenho, EstadoCapturaDesempenho } from '@shared/desempenho/contratos';
@@ -69,7 +70,7 @@ export function DesempenhoTab() {
   const resumo = useMemo(() => {
     const eventosCriticos = amostras.filter(amostra => amostra.severidade === 'critico').length;
     const operacoesLentas = new Set(amostras
-      .filter(amostra => (amostra.duracaoMs ?? 0) >= 250)
+      .filter(amostra => !esperaIpcInformativa(amostra) && (amostra.duracaoMs ?? 0) >= 250)
       .map(amostra => amostra.operacao || amostra.canal || amostra.evento));
     const maiorDuracao = amostras.reduce<number | null>((maior, amostra) => {
       if (amostra.duracaoMs == null) return maior;
@@ -106,7 +107,7 @@ export function DesempenhoTab() {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">Resumo dos eventos carregados</CardTitle>
-        <CardDescription>Indicadores calculados somente a partir das amostras exibidas nesta aba.</CardDescription>
+        <CardDescription>Indicadores calculados somente a partir das amostras exibidas nesta aba. Operações lentas excluem cancelamentos, indisponibilidade esperada e espera em diálogos; a maior duração conserva o tempo total.</CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div><p className="text-2xl font-bold">{amostras.length}</p><p className="text-xs text-muted-foreground">Eventos carregados</p></div>

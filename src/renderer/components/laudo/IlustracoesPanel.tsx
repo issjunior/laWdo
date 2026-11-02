@@ -507,6 +507,14 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     onInsercaoNoCursorConsumida?.();
   }, [insercaoNoCursorSolicitada, onInsercaoNoCursorConsumida]);
   const hashesGdlCapturados = useRef(new Set<string>());
+  const geracaoMiniaturas = useRef(0);
+  const miniaturasPendentes = useRef(new Set<string>());
+  useEffect(() => {
+    const pendentes = miniaturasPendentes.current;
+    geracaoMiniaturas.current += 1;
+    pendentes.clear();
+    return () => { geracaoMiniaturas.current += 1; pendentes.clear(); };
+  }, [laudoId]);
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [imagensEmVisualizacao, setImagensEmVisualizacao] = useState<ImagemLaudo[]>([]);
@@ -581,9 +589,21 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   }, [laudoId]);
 
   const carregarMiniaturas = async (ids: string[]) => {
-    if (ids.length === 0) return;
+    const geracao = geracaoMiniaturas.current;
+    const unicos = [...new Set(ids)].filter(id => !miniaturasPendentes.current.has(`${geracao}:${id}`));
+    if (unicos.length === 0) return;
+    for (const id of unicos) miniaturasPendentes.current.add(`${geracao}:${id}`);
     const inicio = performance.now();
-    const resultado = await window.ipcAPI.ilustracoes.obterMiniaturas(laudoId, ids);
+    let resultado: Awaited<ReturnType<typeof window.ipcAPI.ilustracoes.obterMiniaturas>>;
+    try {
+      resultado = await window.ipcAPI.ilustracoes.obterMiniaturas(laudoId, unicos);
+    } catch (erro) {
+      if (geracao === geracaoMiniaturas.current) toast.error(erro instanceof Error ? erro.message : 'Não foi possível carregar as miniaturas.');
+      return;
+    } finally {
+      for (const id of unicos) miniaturasPendentes.current.delete(`${geracao}:${id}`);
+    }
+    if (geracao !== geracaoMiniaturas.current) return;
     if (!resultado.success) {
       toast.error(resultado.error || 'Não foi possível carregar as próximas miniaturas.');
       return;
@@ -593,7 +613,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       ...imagem,
       thumbnailUrl: miniaturasPorId.get(imagem.id) || imagem.thumbnailUrl,
     })));
-    registrarDesempenhoIlustracao('carregar_miniaturas', inicio, { imagens: ids.length, itensRenderizados: imagens.length });
+    registrarDesempenhoIlustracao('carregar_miniaturas', inicio, { imagens: unicos.length, itensRenderizados: imagens.length });
   };
 
   const carregarMiniaturasPendentes = async () => {

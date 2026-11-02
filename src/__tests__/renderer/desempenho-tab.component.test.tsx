@@ -14,6 +14,7 @@ describe('DesempenhoTab', () => {
           { id: '1', sessaoId: 's', timestamp: '2026-09-22T10:00:00.000Z', perfil: 'importante', severidade: 'critico', origem: 'renderer', categoria: 'editor', evento: 'aplicar', operacao: 'aplicar_editor', canal: null, duracaoMs: 800, contextoId: null, metricas: {}, metadados: {} },
           { id: '2', sessaoId: 's', timestamp: '2026-09-22T10:01:00.000Z', perfil: 'importante', severidade: 'info', origem: 'renderer', categoria: 'editor', evento: 'salvar', operacao: 'salvar_editor', canal: null, duracaoMs: 100, contextoId: null, metricas: {}, metadados: {} },
           { id: '3', sessaoId: 's', timestamp: '2026-09-22T10:02:00.000Z', perfil: 'importante', severidade: 'importante', origem: 'renderer', categoria: 'editor', evento: 'exportar', operacao: 'exportar_editor', canal: null, duracaoMs: 500, contextoId: null, metricas: {}, metadados: {} },
+          ...['cancelado', 'indisponivel', 'concluido'].map((evento, indice) => ({ id: `espera-${indice}`, sessaoId: 's', timestamp: '2026-09-22T10:03:00.000Z', perfil: 'importante', severidade: 'info', origem: 'ipc', categoria: 'canal', evento, canal: evento === 'concluido' ? 'backup:selecionar' : 'gdl:consultar-rep', duracaoMs: 30000, contextoId: null, metricas: {}, metadados: {} })),
         ] }),
         configurarPerfil: vi.fn(),
         exportarCsv: vi.fn(),
@@ -29,9 +30,9 @@ describe('DesempenhoTab', () => {
     expect(screen.getByText('Eventos críticos')).toBeInTheDocument();
     expect(screen.getByText('Operações lentas')).toBeInTheDocument();
     expect(screen.getByText('Maior duração')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('800 ms')).toBeInTheDocument();
+    expect(screen.getByText('30000 ms')).toBeInTheDocument();
   });
 });

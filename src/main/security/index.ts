@@ -29,7 +29,7 @@ export const setupSecurity = (): void => {
 
 const contentSecurityPolicy = `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:;
+    script-src 'self' 'unsafe-inline' blob:;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' data: https://fonts.gstatic.com;
     img-src 'self' data: blob:;

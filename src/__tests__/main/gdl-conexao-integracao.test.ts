@@ -1,3 +1,4 @@
+vi.mock('../../main/services/processador-imagens.service.js', async () => import('../apoio/processador-imagens-simulado'));
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -124,4 +125,25 @@ describe('observação das operações GDL existentes', () => {
       expect(simulacao.requisitar).toHaveBeenCalledTimes(1);
     } finally { vi.useRealTimers(); }
   });
+});
+
+
+it('consulta sem alcance informa a condição institucional e recupera no próximo sucesso', async () => {
+  simulacao.requisitar.mockRejectedValueOnce(Object.assign(new Error('net::ERR_NAME_NOT_RESOLVED'), { code: 'ERR_NAME_NOT_RESOLVED' }));
+  expect(await consultarRep('190', '2026')).toMatchObject({ sucesso: false, falha: { codigo: 'rede', condicaoEsperada: 'acesso_rede_institucional' } });
+  expect((await conexaoGdlService.obterEstado()).rede).toBe('indisponivel');
+  simulacao.requisitar.mockResolvedValueOnce(new Response(fixture, { status: 200 }));
+  expect((await consultarRep('190', '2026')).sucesso).toBe(true);
+  expect((await conexaoGdlService.obterEstado()).rede).toBe('acessivel');
+});
+
+it('download interrompido após cabeçalhos permanece falha real sem marcar queda da rede', async () => {
+  const resposta = new Response('[]', { status: 200 });
+  vi.spyOn(resposta, 'text').mockRejectedValue(Object.assign(new Error('interrompido'), { code: 'ECONNRESET' }));
+  simulacao.requisitar.mockResolvedValueOnce(resposta);
+  const resultado = await consultarRep('190', '2026');
+  expect(resultado.sucesso).toBe(false);
+  expect(resultado.falha?.condicaoEsperada).toBeUndefined();
+  expect(resultado.falha?.statusHttp).toBe(200);
+  expect((await conexaoGdlService.obterEstado()).rede).toBe('acessivel');
 });

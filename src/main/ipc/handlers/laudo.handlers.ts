@@ -7,7 +7,7 @@ import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
 import { withTransaction } from '../../database/sqlite.js';
-import { concluirImagensLaudo, descartarArquivosConcluidos } from '../../services/imagem-laudo.service.js';
+import { concluirImagensLaudo, prepararConclusaoImagensLaudo, descartarPreparacaoImagens, descartarArquivosConcluidos } from '../../services/imagem-laudo.service.js';
 import {
   exportarLaudo,
   verificarLibreOffice,
@@ -255,6 +255,7 @@ export const registerLaudoHandlers = (): void => {
    * Atualizar status do laudo (Em andamento → Concluído → Entregue)
    */
   ipcMain.handle('laudo:updateStatus', async (_event, laudoId: string, novoStatus: string) => {
+    let preparacao: Awaited<ReturnType<typeof prepararConclusaoImagensLaudo>> | undefined;
     try {
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
       const statusValidos = ['Em andamento', 'Concluído', 'Entregue'];
@@ -266,9 +267,13 @@ export const registerLaudoHandlers = (): void => {
       if (!laudoAntes) return { success: false, error: 'Laudo não encontrado' };
 
       const statusAnterior = laudoAntes.status;
+      preparacao = novoStatus === 'Concluído' && statusAnterior !== 'Concluído'
+        ? await prepararConclusaoImagensLaudo(laudoId) : undefined;
       const { laudo, caminhosAntigos } = await withTransaction(async () => {
+        const vigente = await laudoService.findById(laudoId);
+        if (!vigente || vigente.status !== statusAnterior) throw new Error('O status do laudo foi alterado. Consulte novamente.');
         const caminhosAntigos = novoStatus === 'Concluído' && statusAnterior !== 'Concluído'
-          ? await concluirImagensLaudo(laudoId) : [];
+          ? await concluirImagensLaudo(laudoId, preparacao) : [];
         const atualizado = await laudoService.updateStatus(laudoId, novoStatus);
         const repAtualizada = await repService.updateStatus(laudoAntes.rep_id, novoStatus === 'Em andamento' ? 'Em Andamento' : 'Concluído');
         if (!repAtualizada) throw new Error('Não foi possível atualizar o status da REP vinculada');
@@ -290,6 +295,7 @@ export const registerLaudoHandlers = (): void => {
 
       return { success: true, data: laudo, message: `Status do laudo atualizado para "${novoStatus}"` };
     } catch (error) {
+      if (preparacao) await descartarPreparacaoImagens(preparacao).catch(erroLimpeza => logError('Falha ao limpar derivados da conclusão', erroLimpeza));
       logError('Erro ao atualizar status do laudo', { laudoId, novoStatus, error });
       return {
         success: false,

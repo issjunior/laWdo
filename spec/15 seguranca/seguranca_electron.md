@@ -74,3 +74,9 @@ Mudanças nessas fronteiras exigem `type-check`, lint e testes. Alterações de 
 Depois de `user.create` retornar sucesso, `AuthPage.tsx` grava somente o nome de usuário em `localStorage.lastUsername`, antes de tentar o login automático. `LoginForm.tsx` lê essa chave para preencher o campo no próximo acesso; a senha não é persistida por esse mecanismo. A chave é preferência da instalação, separada de `sessionStorage.lawdo_auth_user` e sem valor de autenticação.
 
 Se o login automático responder sem sucesso ou sem usuário, a tela passa ao login normal com aviso de cadastro concluído. A gravação de lastUsername e o login ficam no mesmo try: exceção de storage ou IPC pode produzir mensagem de falha mesmo após a conta ter sido criada; não há rollback do cadastro. A alteração visual do primeiro acesso está em `spec/04 layout/componentes_ui_base.md`.
+
+## Isolamento de SQLite e processamento de imagens
+
+`src/main/database/sqlite.ts` mantém fila única de operações e contexto assíncrono de transação. Consultas externas aguardam commit/rollback; consultas do callback usam a mesma transação. Transação aninhada e fechamento dentro de transação são recusados. Contextos já encerrados não podem continuar acessando a conexão. Abertura e PRAGMAs são aguardados antes de publicar o singleton; erro de preparação fecha o handle parcial. Rollback que falha mantém o erro original e bloqueia o banco até reiniciar, em vez de aceitar operações em estado incerto.
+
+O auxiliar de imagens usa mensagens específicas, valida bytes/parâmetros/respostas e não expõe acesso Node ao renderer. Isolamento, sandbox e contextIsolation das janelas permanecem habilitados. Queda, resposta inválida, cancelamento e timeout têm tratamento explícito. O bootstrap aceita o smoke de imagens apenas com perfil de dados isolado indicado; esse modo manual não abre o fluxo normal nem consulta GDL.

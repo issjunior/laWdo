@@ -2,7 +2,7 @@ import path from 'node:path';
 import { realpath, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
-export const VERSAO_ROTEIRO = 1;
+export const VERSAO_ROTEIRO = 2;
 export const QUANTIDADE_IMAGENS_ADICIONAIS = 512;
 export const CENARIOS = ['digitacao', 'texto', 'figuras', 'placeholders', 'encadeamento', 'saida'];
 const CENARIOS_OPCIONAIS = ['atalho', 'resistencia'];

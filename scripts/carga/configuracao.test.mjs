@@ -157,3 +157,18 @@ test('cancelamento atua somente sobre o handle vivo informado pelo executor', ()
   encerrarProcessoCriado({ pid: 123, exitCode: null }, 'win32', executar);
   assert.deepEqual(chamadas[0].slice(0, 2), ['taskkill', ['/PID', '123', '/T', '/F']]);
 });
+
+
+test('derivados podem mudar sem aceitar corrupção dos originais ou legendas', () => {
+  const imagens = Array.from({ length: MASSAS.representativa.imagens }, (_, indice) => ({ id: `imagem-${indice}`, dataUri: 'data:image/jpeg;base64,YWJj' }));
+  const massa = gerarDocumento('representativa', imagens);
+  const referencia = inspecionarDocumento(massa.html);
+  const documento = inspecionarDocumento(massa.html);
+  documento.figuras[0].imagemHash = null;
+  documento.figuras[0].origemApresentacao = 'blob';
+  const originais = Object.fromEntries(referencia.figuras.map(figura => [figura.id, figura.imagemHash]));
+  assert.doesNotThrow(() => validarIntegridade(documento, massa.resumo, referencia, originais));
+  assert.throws(() => validarIntegridade(documento, massa.resumo, referencia, { ...originais, 'imagem-0': 'corrompido' }), /originais/);
+  documento.figuras[0].legenda = 'Figura 01: legenda alterada sem salvar';
+  assert.throws(() => validarIntegridade(documento, massa.resumo, referencia, originais), /preservadas/);
+});

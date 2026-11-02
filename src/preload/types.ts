@@ -1,3 +1,4 @@
+import type { FalhaListaRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js'
 export type { RepsMesmoCasoGdl } from '../shared/gdl/reps-mesmo-caso.js';
 export type { EstadoConexaoGdl } from '../shared/gdl/conexao.js';
@@ -5,7 +6,6 @@ import type { RespostaImportacaoTemplate } from '../shared/types/importacao-temp
 import type { RespostaSalvarTemplateCompleto } from '../shared/types/template.types.js';
 
 export type ImportarArquivoResponse = RespostaImportacaoTemplate;
-export type { CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
 
 export type SalvarTemplateCompletoResponse = RespostaSalvarTemplateCompleto;
 
@@ -92,6 +92,10 @@ export interface UserResponse<T = unknown> {
   falhaPdf?: FalhaPdf
   limiteRequisicoes?: LimiteUsoIaResposta
   total?: number
+}
+
+export interface RespostaGdl<T = unknown> extends UserResponse<T> {
+  falha?: FalhaListaRepsGdl
 }
 
 /**

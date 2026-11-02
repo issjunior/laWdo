@@ -103,12 +103,6 @@ function lerValidacaoGdl(resposta: unknown, ambienteEsperado: string): Validacao
 }
 
 const obterMensagemOrientadaErroGdl = (erro: string): string => {
-  const erroNormalizado = erro.toUpperCase();
-
-  if (erroNormalizado.includes('ERR_NAME_NOT_RESOLVED') || erroNormalizado.includes('ENOTFOUND')) {
-    return 'Não foi possível localizar o endereço do GDL. Verifique a conexão com a VPN institucional e tente novamente.';
-  }
-
   return erro;
 };
 

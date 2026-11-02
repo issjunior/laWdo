@@ -1,3 +1,4 @@
+import { MENSAGEM_ACESSO_REDE_GDL } from '@shared/gdl/acesso-institucional';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CircleHelp, CircleCheck, TriangleAlert, Unplug, RefreshCw } from 'lucide-react';
@@ -12,7 +13,7 @@ const apresentacao = {
   desconhecida: { icone: CircleHelp, classe: 'text-muted-foreground', descricao: 'Estado desconhecido ou desatualizado' },
   disponivel: { icone: CircleCheck, classe: 'text-emerald-700 dark:text-emerald-400', descricao: 'Acessível com credenciais validadas' },
   atencao: { icone: TriangleAlert, classe: 'text-amber-700 dark:text-amber-400', descricao: 'Acessível com pendências' },
-  indisponivel: { icone: Unplug, classe: 'text-destructive', descricao: 'Indisponível na última verificação' },
+  indisponivel: { icone: Unplug, classe: 'text-muted-foreground', descricao: 'Indisponível na última verificação' },
 };
 
 const descricoesCredenciais = {
@@ -28,7 +29,7 @@ export function IndicadorConexaoGdl() {
   const aparencia = aparenciaConexaoGdl(estado, agora);
   const { icone: Icone, classe, descricao } = apresentacao[aparencia];
   const descricaoRede = aparencia === 'desconhecida' ? descricao
-    : estado?.rede === 'acessivel' ? 'Servidor acessível' : 'Servidor indisponível; confira rede ou VPN';
+    : estado?.rede === 'acessivel' ? 'Servidor acessível' : MENSAGEM_ACESSO_REDE_GDL;
 
   return (
     <TooltipProvider>

@@ -6,6 +6,8 @@ import { digitarCadenciado } from './entrada.mjs';
 const esperar = ms => new Promise(resolver => setTimeout(resolver, ms));
 
 async function aguardarEditor(pagina) {
+  const secoesRecolhidas = pagina.locator('[aria-expanded="false"]').filter({ has: pagina.getByRole('heading', { name: /^SEÇÃO FICTÍCIA \d+$/ }) });
+  while (await secoesRecolhidas.count()) await secoesRecolhidas.first().click();
   await pagina.locator('iframe.tox-edit-area__iframe[data-diagnostico-pronto="true"]').first().waitFor({ timeout: 60_000 });
   await pagina.getByRole('button', { name: 'Documento único', exact: true }).waitFor();
   await pagina.waitForFunction(() => !globalThis.document.querySelector('button[aria-pressed][disabled]'), null, { timeout: 60_000 });
@@ -266,7 +268,7 @@ export function inspecionarDocumento(html) {
         for (const neto of filho.children ?? []) ler(neto, emLegenda || filho.name === 'figcaption');
       };
       ler(no);
-      figuras.push({ id: no.attribs['data-image-id'], legenda: legenda.replace(/\s+/g, ' ').trim(), imagemHash: imagem?.startsWith('data:image/') ? hash(Buffer.from(imagem.split(',')[1], 'base64')) : null });
+      figuras.push({ id: no.attribs['data-image-id'], legenda: legenda.replace(/\s+/g, ' ').trim(), origemApresentacao: imagem?.startsWith('blob:') ? 'blob' : imagem?.startsWith('data:image/') ? 'incorporada' : 'invalida', imagemHash: imagem?.startsWith('data:image/') ? hash(Buffer.from(imagem.split(',')[1], 'base64')) : null });
     }
     for (const filho of no.children ?? []) percorrer(filho);
   };
@@ -274,7 +276,7 @@ export function inspecionarDocumento(html) {
   return { texto, tabelas, celulas, valoresCelulas, hashCelulas: hash(JSON.stringify(valoresCelulas)), chavesPlaceholders, figuras };
 }
 
-export function validarIntegridade(documento, massa, referencia) {
+export function validarIntegridade(documento, massa, referencia, originais) {
   let posicaoAnterior = -1;
   for (const marcador of massa.marcadores) {
     const ocorrencias = [...documento.texto.matchAll(new RegExp(marcador + '(?![0-9A-Za-z_])', 'g'))];
@@ -300,12 +302,14 @@ export function validarIntegridade(documento, massa, referencia) {
   documento.figuras.forEach((figura, indice) => {
     const prefixo = `Figura ${String(indice + 1).padStart(2, '0')}`;
     assert.ok(figura.legenda === prefixo || figura.legenda.startsWith(`${prefixo}:`), 'Numeração de figuras incorreta.');
-    assert.ok(figura.imagemHash, 'Imagem sem bytes incorporados válidos.');
+    assert.ok(figura.imagemHash || (originais && figura.origemApresentacao === 'blob'), 'Imagem sem bytes incorporados válidos ou blob conferido.');
     const esperado = massa.imagensOriginais?.find(imagem => imagem.id === figura.id)?.sha256;
-    assert.ok(esperado ? figura.imagemHash === esperado : massa.imagensAdicionais?.some(imagem => imagem.sha256 === figura.imagemHash), 'Bytes de imagem diferentes da massa fictícia esperada.');
+    const hashOriginal = originais ? originais[figura.id] : figura.imagemHash;
+    assert.ok(hashOriginal && (esperado ? hashOriginal === esperado : massa.imagensAdicionais?.some(imagem => imagem.sha256 === hashOriginal)), 'Bytes originais diferentes da massa fictícia esperada.');
   });
   if (referencia) {
-    assert.deepEqual(documento.figuras, referencia.figuras, 'Figuras, imagens, ordem ou legendas não foram preservadas no salvamento.');
+    const figurasComparaveis = figuras => originais ? figuras.map(({ id, legenda }) => ({ id, legenda })) : figuras;
+    assert.deepEqual(figurasComparaveis(documento.figuras), figurasComparaveis(referencia.figuras), 'Figuras, imagens, ordem ou legendas não foram preservadas no salvamento.');
     assert.equal(documento.hashCelulas, referencia.hashCelulas, 'Conteúdo ou ordem das células alterados no salvamento.');
     for (const marcador of ['CARGA_SALVAR_IMEDIATO', 'CARGA_CANCELAR_SAIDA', 'CARGA_DIGITACAO_0', 'CARGA_DIGITACAO_1', 'CARGA_DIGITACAO_2', 'CARGA_APOS_PAUSA', 'CARGA_CELULA', 'BLOCO_VOLUMOSO_FICTICIO']) {
       assert.equal(documento.texto.split(marcador).length, referencia.texto.split(marcador).length, `Edição perdida ou duplicada: ${marcador}`);

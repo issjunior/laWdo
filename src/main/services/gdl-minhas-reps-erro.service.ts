@@ -1,5 +1,7 @@
 import { codigosSistemaFalhaGdl, etapasFalhaListaRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import type { CodigoFalhaListaRepsGdl, CodigoSistemaFalhaGdl, EtapaFalhaListaRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import { acessoInstitucionalIndisponivel, MENSAGEM_ACESSO_REDE_GDL } from '../../shared/gdl/acesso-institucional.js';
+import { randomUUID } from 'node:crypto';
 
 interface ClassificacaoFalhaListaRepsGdl {
   codigo: CodigoFalhaListaRepsGdl;
@@ -10,6 +12,23 @@ interface ClassificacaoFalhaListaRepsGdl {
   bloqueioTemporario?: boolean;
   tentarNovamenteEmSegundos?: number;
   tipoErro: string;
+  condicaoEsperada?: 'acesso_rede_institucional';
+}
+
+export function contextualizarTransporteGdl(erro: unknown, respostaRecebida: boolean, timeout = false, statusHttp?: number): Error {
+  const causa = erro instanceof Error ? erro : new Error('Falha de transporte GDL.');
+  const codigo = obterPropriedadeTexto(erro, 'code');
+  return Object.assign(new Error(timeout ? 'O GDL não respondeu dentro do prazo.' : causa.message, { cause: causa }), {
+    respostaRecebida, statusHttp, ...(timeout ? { code: 'ETIMEDOUT' } : codigo ? { code: codigo } : {}),
+  });
+}
+
+export function respostaFalhaGdl(erro: unknown, fallback = 'Não foi possível consultar o GDL.') {
+  const classificacao = classificarFalhaListaRepsGdl(erro);
+  const { tipoErro: _tipo, ...falha } = classificacao;
+  void _tipo;
+  return { success: false as const, error: classificacao.condicaoEsperada ? MENSAGEM_ACESSO_REDE_GDL : erro instanceof Error ? erro.message : fallback,
+    falha: { ...falha, referencia: randomUUID() } };
 }
 
 function obterPropriedadeTexto(erro: unknown, propriedade: string): string | undefined {
@@ -110,5 +129,8 @@ export function classificarFalhaListaRepsGdl(erro: unknown): ClassificacaoFalhaL
     ? `Falha inesperada (${tipoErro}${codigoSistema ? `, ${codigoSistema}` : ''}).`
     : codigo === 'cache_local' ? `Falha ao salvar a lista neste computador (${codigoSistema}).`
       : limparDetalhes(mensagem || `Falha em ${etapa}${codigoSistema ? ` (${codigoSistema})` : ''}.`);
-  return { codigo, etapa, detalhes, codigoSistema, tipoErro, statusHttp, bloqueioTemporario: tentarNovamenteEmSegundos ? true : undefined, tentarNovamenteEmSegundos };
+  const respostaRecebida = causas.some(item => item && typeof item === 'object' && 'respostaRecebida' in item && item.respostaRecebida === true);
+  const condicaoEsperada = acessoInstitucionalIndisponivel({ codigoSistema, statusHttp, respostaRecebida }) ? 'acesso_rede_institucional' as const : undefined;
+  return { codigo, etapa, detalhes: condicaoEsperada ? MENSAGEM_ACESSO_REDE_GDL : detalhes, codigoSistema, tipoErro, statusHttp,
+    condicaoEsperada, bloqueioTemporario: tentarNovamenteEmSegundos ? true : undefined, tentarNovamenteEmSegundos };
 }
