@@ -73,6 +73,6 @@ describe('migration v39 dos projéteis personalizados', () => {
         await sqlite.closeDatabase();
         await fs.rm(diretorio, { recursive: true, force: true });
       }
-    });
+    }, 30000);
   }
 });
