@@ -48,9 +48,11 @@
     "prune": "ts-prune -p tsconfig.renderer.json",
     "prune:all": "ts-prune -p tsconfig.renderer.json && ts-prune -p tsconfig.main.json && ts-prune -p tsconfig.preload.json",
     "dead-code:check": "npm run prune:all",
-    "knip": "knip",
+    "knip": "node scripts/check-knip.mjs",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "test:saude": "node --test scripts/saude/*.test.mjs",
+    "smoke:imagens": "node scripts/saude/smoke-imagens.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -96,6 +98,7 @@
     "react-router": "^8.4.0",
     "recharts": "^2.15.4",
     "sanitize-html": "2.18.1",
+    "sharp": "0.35.5",
     "sonner": "^2.0.8",
     "sqlite3": "^6.0.1",
     "tailwind-merge": "^3.7.0",
@@ -118,22 +121,24 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^4.1.12",
     "@vitest/ui": "^4.1.12",
+    "app-builder-lib": "^26.18.0",
     "concurrently": "^10.0.6",
+    "domhandler": "^5.0.3",
     "electron": "^44.9.1",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
     "jsdom": "^30.1.1",
     "jszip": "^3.10.2",
-    "knip": "^6.39.0",
+    "knip": "^6.44.1",
     "playwright": "^1.64.1",
     "prettier": "^3.9.9",
     "tailwindcss": "^4.3.3",
     "ts-prune": "^0.10.3",
     "typescript": "^5.3.0",
-    "typescript-eslint": "^8.71.0",
+    "typescript-eslint": "^8.72.1",
     "vite": "^8.3.3",
     "vitest": "^4.1.12"
   },
@@ -154,6 +159,7 @@
     "sqlite3@6.0.1": true,
     "bcrypt@6.0.0": true,
     "electron-winstaller@5.4.0": true,
-    "fsevents@2.3.3": false
+    "fsevents@2.3.3": false,
+    "sharp@0.35.5": true
   }
 }

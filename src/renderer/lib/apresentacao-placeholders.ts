@@ -142,14 +142,6 @@ function configurarPreviaTabela(tabela: HTMLElement, contadores?: ContadoresTabe
   return possuiTabela;
 }
 
-export function encontrarAcaoTabelaPlaceholder(alvo: EventTarget | null): HTMLElement | null {
-  if (alvo === null || typeof alvo !== 'object' || !('closest' in alvo)) return null;
-  const closest = (alvo as { closest?: unknown }).closest;
-  return typeof closest === 'function'
-    ? (closest.call(alvo, SELETOR_ACAO_TABELA) as HTMLElement | null)
-    : null;
-}
-
 export function personalizarTabelaPlaceholder(
   editor: TinyMceEditorInstance,
   acao: HTMLElement,

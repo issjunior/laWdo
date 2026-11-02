@@ -1,3 +1,4 @@
+import { esperaIpcInformativa } from '../../shared/desempenho/esperas-ipc.js';
 import { createHash, randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
@@ -12,7 +13,7 @@ const LIMITE_FILA = 1_000;
 const TAMANHO_LOTE = 100;
 const INTERVALO_GRAVACAO_MS = 1_000;
 const CHAVE_PERFIL = 'desempenho_perfil_captura';
-const METADADOS_PERMITIDOS = new Set(['modoUnico', 'placeholders', 'previasCriadas', 'previasRemovidas', 'tabelas', 'linhas', 'celulas', 'tabelasPersonalizadas', 'incremental', 'tentativas', 'imagens', 'imagensMemoria', 'itensRenderizados', 'bytesEntrada', 'bytesSaida', 'arquivosRelidos', 'sucesso', 'falhou', 'quantidade', 'tabelaB602', 'fallback']);
+const METADADOS_PERMITIDOS = new Set(['modoUnico', 'placeholders', 'previasCriadas', 'previasRemovidas', 'tabelas', 'linhas', 'celulas', 'tabelasPersonalizadas', 'incremental', 'tentativas', 'imagens', 'imagensMemoria', 'itensRenderizados', 'bytesEntrada', 'bytesSaida', 'arquivosRelidos', 'sucesso', 'falhou', 'cancelado', 'indisponivel', 'interacaoUsuario', 'quantidade', 'tabelaB602', 'fallback']);
 const PADRAO_IDENTIFICADOR = /^[a-z0-9:_-]{1,100}$/i;
 
 function diretorioLogs(): string { return path.join(app.getPath('userData'), 'logs'); }
@@ -20,6 +21,7 @@ function caminhoLog(): string { return path.join(diretorioLogs(), 'performance.l
 function perfilPersistivel(valor: unknown): valor is 'importante' | 'critico' { return valor === 'importante' || valor === 'critico'; }
 function identificadorSeguro(valor: string | undefined): string | null { return valor && PADRAO_IDENTIFICADOR.test(valor) ? valor : null; }
 function severidadePara(entrada: EventoDesempenhoEntrada): SeveridadeDesempenho {
+  if (esperaIpcInformativa(entrada)) return 'info';
   if (entrada.evento === 'renderer_sem_resposta' || entrada.evento === 'renderer_encerrado' || (entrada.duracaoMs ?? 0) >= 2_000) return 'critico';
   if (entrada.origem === 'ipc' && entrada.evento === 'falhou') return 'importante';
   if ((entrada.duracaoMs ?? 0) >= 250 || (entrada.metricas?.atrasoEventLoopMs ?? 0) >= 200 || (entrada.metricas?.longTaskMaximaMs ?? 0) >= 200) return 'importante';
@@ -79,7 +81,7 @@ export class DesempenhoService {
     const perfilAtivo = this.sessao?.ativa ? 'detalhado' : this.perfil;
     const severidade = severidadePara(entrada);
     if (perfilAtivo === 'critico' && severidade !== 'critico') return;
-    if (perfilAtivo === 'importante' && severidade === 'info' && entrada.categoria !== 'amostra' && entrada.evento !== 'resumo_ipc') return;
+    if (perfilAtivo === 'importante' && severidade === 'info' && entrada.categoria !== 'amostra' && entrada.evento !== 'resumo_ipc' && !esperaIpcInformativa(entrada)) return;
     this.enfileirar({ id: randomUUID(), sessaoId: this.sessao?.id ?? this.idSessaoPadrao(), timestamp: new Date().toISOString(), perfil: perfilAtivo, severidade, origem: entrada.origem, categoria: entrada.categoria.slice(0, 80), evento: entrada.evento.slice(0, 100), operacao: identificadorSeguro(entrada.operacao), canal: identificadorSeguro(entrada.canal), duracaoMs: Number.isFinite(entrada.duracaoMs) ? Math.max(0, entrada.duracaoMs ?? 0) : null, contextoId: entrada.contextoId ? createHash('sha256').update(`${this.saltSessao}:${entrada.contextoId}`).digest('hex').slice(0, 20) : null, metricas: metricasSeguras(entrada.metricas), metadados: metadadosSeguros(entrada.metadados), resumoIpc: resumoIpcSeguro(entrada.resumoIpc) });
     await capturaLogsService.registrarDesempenho(entrada);
   }

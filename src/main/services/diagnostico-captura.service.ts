@@ -114,7 +114,7 @@ function classificarSinais(eventos: EventoDiagnostico[]): Array<Record<string, u
       tipo: 'mudanca_layout_proxima_rolagem', confianca: 'media', eventosSuporte: [...layout.map(evento => evento.sequencia), atual.sequencia],
       descricao: 'Uma alteração estrutural, imagem ou mudança de dimensão ocorreu próxima à rolagem.',
     });
-    const erroOuIpc = janelaTemporal.filter(evento => evento.nivel === 'error' || (evento.categoria === 'ipc' && typeof evento.dados.duracaoMs === 'number' && evento.dados.duracaoMs > 500));
+    const erroOuIpc = janelaTemporal.filter(evento => evento.nivel === 'error' || (evento.categoria === 'ipc' && !['cancelado', 'indisponivel'].includes(String(evento.dados.resultadoFuncional)) && evento.dados.interacaoUsuario !== true && typeof evento.dados.duracaoMs === 'number' && evento.dados.duracaoMs > 500));
     if (erroOuIpc.length) sinais.push({
       tipo: 'erro_ou_ipc_correlacionado', confianca: 'baixa', eventosSuporte: [...erroOuIpc.map(evento => evento.sequencia), atual.sequencia],
       descricao: 'Erro do renderer/console ou IPC lento ocorreu próximo à rolagem.',
@@ -136,6 +136,7 @@ function sumarizar(eventos: EventoDiagnostico[], sinais: Array<Record<string, un
 export class DiagnosticoCapturaService {
   private capturaAtiva: CapturaAtiva | null = null;
   private readonly concluidas = new Map<string, FinalizacaoCaptura>();
+  private readonly encerradas = new Map<string, Record<string, unknown>>();
 
   constructor(private readonly dependencias: DependenciasCapturaDiagnostico) {}
 
@@ -173,7 +174,11 @@ export class DiagnosticoCapturaService {
 
   status(capturaId?: string): Record<string, unknown> {
     const captura = capturaId ? (this.capturaAtiva?.capturaId === capturaId ? this.capturaAtiva : null) : this.capturaAtiva;
-    if (!captura) throw new Error('CAPTURA_NAO_ENCONTRADA');
+    if (!captura) {
+      const encerrada = capturaId ? this.encerradas.get(capturaId) : [...this.encerradas.values()].at(-1);
+      if (!encerrada) throw new Error('CAPTURA_NAO_ENCONTRADA');
+      return { ...encerrada };
+    }
     const eventos = this.dependencias.eventos();
     const cursorAtual = eventos?.ultimoCursor ?? captura.cursorInicial;
     const intervalo = eventos?.consultar({ depoisDe: captura.cursorInicial, limite: Math.max(1, cursorAtual - captura.cursorInicial + 1) }).eventos ?? [];
@@ -220,6 +225,11 @@ export class DiagnosticoCapturaService {
     captura.finalizacaoEmAndamento = this.gravarFinalizacao(captura, classificacao, observacao, automatico)
       .catch(async (erro: unknown) => {
         captura.estado = 'interrompida';
+        this.encerradas.set(captura.capturaId, {
+          capturaId: captura.capturaId, finalidade: captura.finalidade, estado: 'interrompida', classificacao: 'interrompido',
+          iniciadaEm: captura.iniciadaEm, finalizadoEm: new Date().toISOString(),
+          errosCaptura: [{ componente: 'persistencia', codigo: 'FALHA_PERSISTENCIA', mensagem: 'Não foi possível finalizar a captura; artefatos parciais foram preservados.' }],
+        });
         if (this.capturaAtiva === captura) this.capturaAtiva = null;
         await this.dependencias.eventos()?.registrar({ origem: 'main', categoria: 'erro', nivel: 'error', janelaId: captura.janelaId,
           dados: { evento: 'captura_finalizacao_falhou', capturaId: captura.capturaId, codigo: 'FALHA_PERSISTENCIA' },
@@ -249,7 +259,7 @@ export class DiagnosticoCapturaService {
     if (captura.finalidade === 'desempenho') this.coletarAmostraDesempenho(captura);
     const sinais = captura.finalidade === 'problema' ? classificarSinais(eventos) : [];
     const resumo = sumarizar(eventos, sinais);
-    const ipcs = todosEventos.flatMap(evento => evento.categoria === 'ipc' && typeof evento.dados.canal === 'string' && typeof evento.dados.duracaoMs === 'number'
+    const ipcs = todosEventos.flatMap(evento => evento.categoria === 'ipc' && !['cancelado', 'indisponivel'].includes(String(evento.dados.resultadoFuncional)) && evento.dados.interacaoUsuario !== true && typeof evento.dados.canal === 'string' && typeof evento.dados.duracaoMs === 'number'
       ? [{ canal: evento.dados.canal, duracaoMs: evento.dados.duracaoMs, falha: normalizarFalhaDiagnosticoGdl(evento.dados.falha) }]
       : []);
     const metricas = resumirDesempenho(captura.amostras, captura.degradacao, ipcs);
@@ -311,6 +321,9 @@ export class DiagnosticoCapturaService {
     captura.resultado = resultado;
     captura.estado = estadoFinal;
     this.concluidas.set(captura.capturaId, resultado);
+    this.encerradas.set(captura.capturaId, { capturaId: captura.capturaId, finalidade: captura.finalidade,
+      estado: estadoFinal, classificacao, causaInterrupcao: estadoFinal === 'interrompida' ? 'Captura interrompida antes da conclusão.' : undefined, iniciadaEm: captura.iniciadaEm, finalizadoEm: manifesto.finalizadoEm,
+      cursorFinal, resumo, errosCaptura: erros, orientacao: 'Use consultar_captura para acessar os componentes.' });
     this.capturaAtiva = null;
     await eventosServico?.registrar({ origem: 'main', categoria: 'sessao', nivel: 'info', janelaId: captura.janelaId, dados: { evento: 'captura_finalizada', capturaId: captura.capturaId, finalidade: captura.finalidade } });
     return resultado;

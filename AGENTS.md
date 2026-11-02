@@ -195,6 +195,8 @@ Cada feature deve ter responsabilidade única e clara, com seus próprios servi�
 
 ## Integração GDL — leitura com exceção temporária da listagem
 
+O GDL exige acesso à rede da Polícia Científica do Paraná, diretamente ou por VPN autorizada. Falhas reconhecidas de alcance antes de receber resposta HTTP são uma condição operacional esperada (`condicaoEsperada: acesso_rede_institucional`), com registro informativo, sem alerta automático de erro. Não detectar instalações de VPN nem afirmar que ela está desligada. Preservar erros HTTP, TLS, autenticação, configuração, formato e persistência como falhas reais. Os testes usam respostas simuladas e não exigem rede institucional, VPN ou REPs reais.
+
 O laWdo usa o GDL como fonte de consulta para agilizar o preenchimento do laudo. A integração não é bidirecional e não administra intencionalmente o ciclo de vida da REP. A única exceção temporária é a listagem de “Minhas REPs”, quando ativada expressamente na página API GDL: o fluxo atual abre detalhes e pode marcar REPs como “Laudo em Execução” no GDL. A preferência é local à instalação, começa desativada e bloqueia a atualização também no processo principal quando desligada. Essa exceção não se estende à consulta/importação individual nem autoriza novas operações de alteração de status. Quando houver endpoint de listagem comprovadamente sem esse efeito, revisar a consulta automática de detalhes e remover a exceção.
 
 - Nunca criar, editar, sobrescrever ou excluir REP, peça, foto, anexo ou qualquer registro no GDL.

@@ -85,4 +85,14 @@ describe('DesempenhoService', () => {
     expect(csv).toContain('operacao,canal');
     expect(csv).toContain('metricas_renderer');
   });
+it('conserva duração total de esperas informativas sem severidade de gargalo', async () => {
+  const servico = await criarServico();
+  for (const [evento, canal] of [['cancelado', 'laudo:selecionarBkp'], ['indisponivel', 'gdl:consultarRep'], ['concluido', 'backup:selecionar']]) {
+    await servico.registrar({ origem: 'ipc', categoria: 'canal', evento, canal, duracaoMs: 30_000 });
+  }
+  const amostras = await servico.listar();
+  expect(amostras).toHaveLength(3);
+  expect(amostras.every(item => item.severidade === 'info' && item.duracaoMs === 30_000)).toBe(true);
+});
+
 });

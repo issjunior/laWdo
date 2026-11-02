@@ -17,7 +17,7 @@ export class ErroGeracaoPdf extends Error {
   }
 }
 
-export function falhaPdfDesconhecida(etapa: EtapaFalhaPdf): FalhaPdf {
+function falhaPdfDesconhecida(etapa: EtapaFalhaPdf): FalhaPdf {
   return { codigo: 'FALHA_PDF', etapa, tentarNovamente: true };
 }
 

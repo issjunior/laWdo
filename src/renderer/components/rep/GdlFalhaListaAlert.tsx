@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { z } from 'zod';
-import { AlertTriangle } from 'lucide-react';
+import { acessoInstitucionalIndisponivel, MENSAGEM_ACESSO_REDE_GDL } from '@shared/gdl/acesso-institucional';
+import { AlertTriangle, Info } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { codigosFalhaListaRepsGdl, etapasFalhaListaRepsGdl, codigosSistemaFalhaGdl } from '@shared/types/gdl-minhas-reps.types';
@@ -8,6 +9,7 @@ import type { CodigoFalhaListaRepsGdl, FalhaListaRepsGdl } from '@shared/types/g
 
 const esquemaFalha = z.object({
   falha: z.object({
+    condicaoEsperada: z.literal('acesso_rede_institucional').optional(),
     codigo: z.enum(codigosFalhaListaRepsGdl),
     detalhes: z.string().min(1).max(240),
     referencia: z.string().uuid(),
@@ -59,7 +61,12 @@ const orientacoes: Record<CodigoFalhaListaRepsGdl, string> = {
 
 export function normalizarFalhaListaGdl(resposta: unknown): FalhaListaGdlApresentavel {
   const validacao = esquemaFalha.safeParse(resposta);
-  return validacao.success ? validacao.data.falha : {
+  if (validacao.success) {
+    const falha = validacao.data.falha;
+    if (!['rede', 'tempo_esgotado'].includes(falha.codigo) || !acessoInstitucionalIndisponivel(falha)) delete falha.condicaoEsperada;
+    return falha;
+  }
+  return {
     codigo: 'inesperado',
     detalhes: 'A resposta de erro não trouxe detalhes suficientes. Consulte o log do aplicativo.',
   };
@@ -74,14 +81,16 @@ interface GdlFalhaListaAlertProps {
 
 export function GdlFalhaListaAlert({ falha, listaSalva, onTentarNovamente, onConfigurarCredenciais }: GdlFalhaListaAlertProps) {
   const [detalhesAbertos, setDetalhesAbertos] = useState(false);
+  const esperada = falha.condicaoEsperada === 'acesso_rede_institucional';
+  const Icone = esperada ? Info : AlertTriangle;
   const configurarCredenciais = falha.codigo === 'credenciais' || falha.codigo === 'autenticacao' || falha.codigo === 'desativada';
 
   return (
-    <Alert className="shrink-0 border-amber-400/50 bg-amber-50 dark:bg-amber-950/30">
+    <Alert role={esperada ? "status" : "alert"} className={esperada ? "shrink-0 bg-muted/40" : "shrink-0 border-amber-400/50 bg-amber-50 dark:bg-amber-950/30"}>
       <AlertDescription className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <p role="alert" className="min-w-0 flex-[1_1_20rem]">{mensagens[falha.codigo]} {listaSalva ? 'Exibindo a última lista salva.' : 'Nenhuma lista salva disponível.'}{falha.bloqueioTemporario && falha.tentarNovamenteEmSegundos ? ` Nova tentativa disponível em até ${falha.tentarNovamenteEmSegundos} s.` : ''}</p>
+          <Icone className="h-4 w-4 shrink-0" />
+          <p className="min-w-0 flex-[1_1_20rem]">{esperada ? MENSAGEM_ACESSO_REDE_GDL : mensagens[falha.codigo]} {listaSalva ? 'Exibindo a última lista salva.' : 'Nenhuma lista salva disponível.'}{falha.bloqueioTemporario && falha.tentarNovamenteEmSegundos ? ` Nova tentativa disponível em até ${falha.tentarNovamenteEmSegundos} s.` : ''}</p>
           <div className="flex shrink-0 flex-wrap gap-2">
             {falha.codigo !== 'desativada' && <Button variant="outline" size="sm" onClick={onTentarNovamente}>Tentar novamente</Button>}
             {configurarCredenciais && <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>{falha.codigo === 'desativada' ? 'Abrir API GDL' : 'Configurar GDL'}</Button>}
@@ -91,7 +100,7 @@ export function GdlFalhaListaAlert({ falha, listaSalva, onTentarNovamente, onCon
           </div>
         </div>
         {detalhesAbertos && <div className="max-w-full overflow-x-auto whitespace-nowrap rounded-md border bg-background p-2 text-xs text-muted-foreground">
-          {orientacoes[falha.codigo]}
+          <span>{esperada ? MENSAGEM_ACESSO_REDE_GDL : orientacoes[falha.codigo]}</span><span> Código: {falha.codigo}{falha.codigoSistema ? ` (${falha.codigoSistema})` : ''}. {falha.referencia ? `Referência: ${falha.referencia}` : ''}</span>
         </div>}
       </AlertDescription>
     </Alert>

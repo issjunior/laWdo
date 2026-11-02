@@ -1,3 +1,4 @@
+vi.mock('../../main/services/processador-imagens.service.js', async () => import('../apoio/processador-imagens-simulado'));
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

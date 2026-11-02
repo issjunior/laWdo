@@ -13,6 +13,7 @@ const electronSimulado = ({
 });
 
 interface ApiTeste {
+  laudo: { selecionarBkp(): Promise<unknown> };
   gdl: { copiarEmailSuporte(): Promise<unknown>; atualizarMinhasRepsCache(forcar: boolean): Promise<unknown> };
   configuracao: { obter(chave: string): Promise<unknown> };
 }
@@ -133,6 +134,46 @@ describe('classificação do resultado IPC no preload', () => {
     electronSimulado.invocar.mockResolvedValue({ success: false, falha: { codigo: 'externo', etapa: 'segredo', codigoSistema: 'segredo' } });
     await ipcAPI.gdl.atualizarMinhasRepsCache(true);
     expect(eventosDiagnosticos()[1]).not.toHaveProperty('falha');
+  });
+
+it('preserva cancelamento explícito sem classificá-lo como falha', async () => {
+  const resposta = { success: false, canceled: true };
+  electronSimulado.invocar.mockResolvedValue(resposta);
+  expect(await ipcAPI.laudo.selecionarBkp()).toBe(resposta);
+  expect(eventosDiagnosticos().at(-1)).toMatchObject({ fase: 'cancelado', resultadoFuncional: 'cancelado' });
+});
+
+it.each([
+  { success: false, error: 'Operação cancelada' },
+  { success: false, canceled: 'true' },
+  { success: false, canceled: true, error: 'Falha real' },
+])('não infere cancelamento por texto ou contrato inválido: %s', async resposta => {
+  electronSimulado.invocar.mockResolvedValue(resposta);
+  await ipcAPI.laudo.selecionarBkp();
+  expect(eventosDiagnosticos().at(-1)).toMatchObject({ resultadoFuncional: 'falha' });
+});
+
+it('aceita a condição institucional somente com metadados técnicos GDL válidos', async () => {
+  electronSimulado.invocar.mockResolvedValue({ success: false, falha: {
+    codigo: 'rede', etapa: 'rede_gdl', codigoSistema: 'ENOTFOUND', referencia: 'f0d43c3b-5ff8-4e40-bef2-09444f6693ca', condicaoEsperada: 'acesso_rede_institucional',
+  } });
+  await ipcAPI.gdl.atualizarMinhasRepsCache(false);
+  expect(eventosDiagnosticos().at(-1)).toMatchObject({ fase: 'indisponivel', resultadoFuncional: 'indisponivel' });
+});
+
+  it('mantém HTTP 503 como falha mesmo quando a consulta de conectividade usa envelope positivo', async () => {
+    electronSimulado.invocar.mockResolvedValue({ success: true, data: { sucesso: false }, falha: {
+      codigo: 'servidor', etapa: 'rede_gdl', statusHttp: 503, referencia: 'f0d43c3b-5ff8-4e40-bef2-09444f6693ca',
+    } });
+    await ipcAPI.gdl.atualizarMinhasRepsCache(false);
+    expect(eventosDiagnosticos().at(-1)).toMatchObject({ resultadoFuncional: 'falha' });
+  });
+
+  it('mantém o catálogo de diálogos do preload alinhado ao compartilhado', async () => {
+    const { CANAIS_COM_INTERACAO_USUARIO } = await import('../../shared/diagnostico/canais');
+    const fonte = await readFile(path.resolve('src/preload/index.ts'), 'utf8');
+    const catalogo = fonte.match(/const interacaoUsuario = (\[[^;]+\]).includes\(canal\)/)?.[1];
+    expect(catalogo?.match(/'([^']+)'/g)?.map(item => item.slice(1, -1))).toEqual([...CANAIS_COM_INTERACAO_USUARIO]);
   });
 
 });

@@ -1,3 +1,4 @@
+vi.mock('../../main/services/processador-imagens.service.js', async () => import('../apoio/processador-imagens-simulado'));
 import { describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
 import { gerarDOCXCanonico } from '../../main/services/exportacao.service.js';

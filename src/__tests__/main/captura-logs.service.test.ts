@@ -107,4 +107,17 @@ describe('CapturaLogsService', () => {
     await servico.limpar();
     expect(await servico.listar()).toHaveLength(0);
   });
+  it('não transforma cancelamento, indisponibilidade ou diálogo em achado de lentidão', async () => {
+    const servico = await criarServico();
+    const estado = await servico.iniciar(['desempenho']);
+    for (const [evento, canal] of [['cancelado', 'laudo:selecionarBkp'], ['indisponivel', 'gdl:consultar-rep'], ['concluido', 'backup:selecionar']]) {
+      await servico.registrarDesempenho({ origem: 'ipc', categoria: 'canal', evento, canal, duracaoMs: 30000 });
+    }
+    await servico.parar();
+    const captura = await servico.ler(estado.ativa!.id);
+    expect(captura?.resumo.achados).toEqual([]);
+    expect(captura?.eventos.filter(evento => evento.sonda === 'desempenho')).toHaveLength(3);
+    expect(captura?.eventos.filter(evento => evento.sonda === 'desempenho').every(evento => evento.nivel === 'info' && evento.dados.duracaoMs === 30000)).toBe(true);
+  });
+
 });

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { connect } from 'node:net';
+import { solicitarDiagnostico, type RespostaPipeDiagnosticoCliente } from './services/diagnostico-cliente.service.js';
 import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -23,7 +23,7 @@ import {
 } from '../shared/diagnostico/contratos.js';
 
 interface SessaoDescoberta { sessionId: string; pipe: string; token: string }
-interface RespostaPipe { requestId: string; ok: boolean; dados?: unknown; erro?: { codigo: string; mensagem: string } }
+type RespostaPipe = RespostaPipeDiagnosticoCliente;
 
 const workspace = process.argv[2];
 if (!workspace) throw new Error('O caminho absoluto do workspace é obrigatório.');
@@ -42,23 +42,7 @@ async function obterSessao(): Promise<SessaoDescoberta | null> {
 async function encaminhar(operacao: string, payload: unknown): Promise<{ sessao: SessaoDescoberta | null; resposta: RespostaPipe | null }> {
   const sessao = await obterSessao();
   if (!sessao) return { sessao: null, resposta: null };
-  const requestId = randomUUID();
-  return new Promise((resolve) => {
-    const socket = connect(sessao.pipe);
-    let acumulado = '';
-    const timeout = setTimeout(() => { socket.destroy(); resolve({ sessao, resposta: null }); }, 5_000);
-    socket.setEncoding('utf8');
-    socket.once('connect', () => socket.write(`${JSON.stringify({ token: sessao.token, requestId, operacao, payload })}\n`));
-    socket.on('data', conteudo => {
-      acumulado += conteudo;
-      const linha = acumulado.split('\n')[0];
-      if (!linha) return;
-      clearTimeout(timeout);
-      socket.end();
-      try { resolve({ sessao, resposta: JSON.parse(linha) as RespostaPipe }); } catch { resolve({ sessao, resposta: null }); }
-    });
-    socket.once('error', () => { clearTimeout(timeout); resolve({ sessao, resposta: null }); });
-  });
+  return { sessao, resposta: await solicitarDiagnostico(sessao.pipe, sessao.token, operacao, payload) };
 }
 
 function registrarFerramenta(nome: string, schema: z.ZodType, descricao: string, imagem = false): void {

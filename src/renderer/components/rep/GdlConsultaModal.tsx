@@ -741,13 +741,6 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     if (preTeste.ok) {
       return `GDL acessível na rede \u2014 ${preTeste.ambiente} (${preTeste.latencia}ms)`;
     }
-    const erroRede = preTeste.erro?.toUpperCase() || '';
-    if (erroRede.includes('ERR_NAME_NOT_RESOLVED') || erroRede.includes('ENOTFOUND')) {
-      return 'Não foi possível localizar o endereço do GDL. Verifique a conexão com a VPN institucional e tente novamente.';
-    }
-    if (erroRede.includes('TIMEOUT') || erroRede.includes('ECONNREFUSED')) {
-      return `Sem conexão com o servidor GDL (${ambienteLabel}). Verifique a VPN.`;
-    }
     return preTeste.erro || `Erro de conexão com o GDL (${ambienteLabel}).`;
   };
 

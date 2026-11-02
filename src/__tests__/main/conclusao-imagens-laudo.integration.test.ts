@@ -1,3 +1,12 @@
+vi.mock('../../main/services/processador-imagens.service.js', async () => import('../apoio/processador-imagens-simulado'));
+vi.mock('node:fs/promises', async importar => {
+  const original = await importar<typeof import('node:fs/promises')>();
+  const gravar = (...args: Parameters<typeof original.writeFile>) => {
+    if (ambiente.falharEscrita) { ambiente.falharEscrita = false; return Promise.reject(new Error('Sem espaço')); }
+    return original.writeFile(...args);
+  };
+  return { ...original, writeFile: gravar, default: { ...original, writeFile: gravar } };
+});
 import fs from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -7,7 +16,7 @@ import { ipcMain } from 'electron';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ambiente = vi.hoisted(() => ({ diretorio: '', largura: 4000, altura: 2000, transparente: false,
-  invalida: false, vazia: false, maior: false, codificar: vi.fn(), redimensionar: vi.fn() }));
+  invalida: false, vazia: false, maior: false, falharEscrita: false, codificar: vi.fn(), redimensionar: vi.fn() }));
 
 vi.mock('electron', () => {
   const criarImagem = (width: number, height: number) => ({
@@ -129,7 +138,7 @@ describe('compressão, integridade e conclusão das figuras', () => {
     const foto = await adicionar();
     const descartada = await adicionar('descartada');
     await sqlite.executeNonQuery('UPDATE imagens_laudo SET imagem_origem_id = ? WHERE id = ?', [descartada.id, foto.id]);
-    imagens.estagiarImagemLaudoPorBytes(laudoId, { id: `${laudoId}-estagiada`, nomeArquivo: 'pendente.jpg', mimeType: 'image/jpeg',
+    await imagens.estagiarImagemLaudoPorBytes(laudoId, { id: `${laudoId}-estagiada`, nomeArquivo: 'pendente.jpg', mimeType: 'image/jpeg',
       bytes: Buffer.alloc(64), legenda: '', origem: 'local', sequencia: 3 });
     await conteudo(`<figure data-image-id="${foto.id}" data-image-original-id='${descartada.id}'><img><figcaption>Legenda</figcaption></figure><img data-image-id="${foto.id}"><figure data-dummy="true"><img data-image-id="inexistente"></figure>`);
     const descarteReal = imagens.descartarArquivosConcluidos;
@@ -165,6 +174,16 @@ describe('compressão, integridade e conclusão das figuras', () => {
     expect(await readFile(path.join(ambiente.diretorio, foto.relativo))).toEqual(foto.bytes);
   });
 
+  it('recusa uma preparação se o documento mudar antes de iniciar a transação', async () => {
+    const foto = await adicionar();
+    await conteudo(`<figure data-image-id="${foto.id}"><img></figure>`);
+    const preparacao = await imagens.prepararConclusaoImagensLaudo(laudoId);
+    await conteudo('<p>Documento atualizado pelo usuário</p>');
+    await expect(sqlite.withTransaction(() => imagens.concluirImagensLaudo(laudoId, preparacao))).rejects.toThrow('alterados durante a preparação');
+    expect(await readFile(path.join(ambiente.diretorio, foto.relativo))).toEqual(foto.bytes);
+    expect((await registros())[0].sha256).toBe(hash(foto.bytes));
+  });
+
   it.each([
     ['ausente', /não está disponível/], ['hash', /verificação de integridade/], ['escrita', /Sem espaço/],
     ['rep', /REP vinculada/], ['invalida', /Figura inválida/], ['vazia', /Não foi possível compactar/],
@@ -173,7 +192,7 @@ describe('compressão, integridade e conclusão das figuras', () => {
     const foto = await adicionar();
     await conteudo(`<figure data-image-id="${foto.id}" data-image-original-id="origem"><img></figure>${falha === 'ausente' ? '<img data-image-id="ausente">' : ''}`);
     if (falha === 'hash') await sqlite.executeNonQuery("UPDATE imagens_laudo SET sha256 = 'divergente' WHERE id = ?", [foto.id]);
-    if (falha === 'escrita') vi.spyOn(fs, 'writeFileSync').mockImplementationOnce(() => { throw new Error('Sem espaço'); });
+    if (falha === 'escrita') ambiente.falharEscrita = true;
     if (falha === 'rep') vi.spyOn(reps, 'updateStatus').mockResolvedValueOnce(null);
     if (falha === 'arquivo') await rm(path.join(ambiente.diretorio, foto.relativo));
     ambiente.invalida = falha === 'invalida'; ambiente.vazia = falha === 'vazia';

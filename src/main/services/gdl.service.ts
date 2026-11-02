@@ -1,3 +1,4 @@
+import { classificarFalhaListaRepsGdl, contextualizarTransporteGdl } from './gdl-minhas-reps-erro.service.js';
 import { atividadeGdlService } from './gdl-atividade.service.js';
 import { conexaoGdlService, type ObservacaoConexaoGdl } from './gdl-conexao.service.js';
 import { observarContextoGdl, obterVersaoContextoGdl } from './gdl-agendamento-eventos.service.js';
@@ -6,10 +7,12 @@ import fs from 'fs';
 import path from 'path';
 import { createHash, randomUUID } from 'crypto';
 import { Buffer } from 'node:buffer';
-import { inflateRawSync } from 'node:zlib';
+import { inflateRaw } from 'node:zlib';
+import { promisify } from 'node:util';
+import { open, stat } from 'node:fs/promises';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { app, nativeImage, session } from 'electron';
+import { app, session } from 'electron';
 import type { Session } from 'electron';
 import { listarPaginaMinhasRepsGdl, lerDetalhesRepAutorizadaGdl } from './gdl-pagina.service.js';
 import type { PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.types.js';
@@ -17,6 +20,7 @@ import { CHAVE_HOMOLOGACAO_GDL_HABILITADA, resolverAmbienteGdl } from '../../sha
 import type { AmbienteGdl } from '../../shared/gdl/ambiente.js';
 import { getLogger } from '../utils/logger.js';
 import { configuracaoService } from './configuracao.service.js';
+import { processarImagem } from './processador-imagens.service.js';
 import { abrirCacheFotosGdl, type CacheFotosGdl } from './gdl-fotos-cache.service.js';
 import { otimizarFotoGdl, VERSAO_OTIMIZACAO_FOTO_GDL } from './imagem-laudo.service.js';
 import { interpretarGdlListaRepsInvestigacaoJson, interpretarGdlRepJson } from './gdl.schema.js';
@@ -44,13 +48,14 @@ interface GdlCredenciais {
   cpfUsuario?: string;
 }
 
-export interface GdlCredenciaisEntrada {
+interface GdlCredenciaisEntrada {
   login: string;
   senha: string;
   cpfUsuario?: string;
 }
 
-export interface GdlTesteResultado {
+interface GdlTesteResultado {
+  falha?: import('../../shared/types/gdl-minhas-reps.types.js').FalhaListaRepsGdl;
   sucesso: boolean;
   latencia: number;
   statusCode: number;
@@ -76,6 +81,7 @@ interface FiltroConsultaInvestigacao {
 }
 
 export interface GdlConsultaResultado {
+  falha?: import('../../shared/types/gdl-minhas-reps.types.js').FalhaListaRepsGdl;
   repsMesmoCaso?: RepsMesmoCasoGdl;
   sucesso: boolean;
   dados: GdlRepValidada | null;
@@ -318,6 +324,7 @@ async function requisitarGdl(
   await atividadeGdlService.antesDaRequisicao();
   const observacaoConexao = observarConexao ? await conexaoGdlService.capturarRequisicao(url, headers.Authorization).catch(() => null) : null;
   let respostaRecebida = false;
+  let statusHttpRecebido: number | undefined;
   const inicio = performance.now();
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
@@ -332,6 +339,7 @@ async function requisitarGdl(
       signal: controller.signal,
     });
     respostaRecebida = true;
+    statusHttpRecebido = resposta.status;
     conexaoGdlService.registrarRede(observacaoConexao, resposta.status < 500 && resposta.status !== 408);
     const data = await resposta.text();
     await registrarRespostaGdl({ etapa: 'resposta_original', operacao: new URL(url).pathname.split('/api/')[1],
@@ -346,12 +354,9 @@ async function requisitarGdl(
       paginaAutenticacao: /\/(?:Account\/|Login(?:\.aspx)?(?:\/|$))/i.test(new URL(resposta.url || url).pathname),
     };
   } catch (error) {
-    if (!respostaRecebida || controller.signal.aborted) conexaoGdlService.registrarRede(observacaoConexao, false);
+    if (!respostaRecebida) conexaoGdlService.registrarRede(observacaoConexao, false);
     await registrarRespostaGdl({ etapa: 'falha_transporte', operacao: new URL(url).pathname.split('/api/')[1], metodo: method, duracaoMs: performance.now() - inicio, timeout: controller.signal.aborted });
-    if (controller.signal.aborted) {
-      throw new Error(`Timeout após ${timeout}ms`);
-    }
-    throw error;
+    throw contextualizarTransporteGdl(error, respostaRecebida, controller.signal.aborted, statusHttpRecebido);
   } finally {
     clearTimeout(temporizador);
   }
@@ -412,21 +417,11 @@ function paraArquivoPublico(arquivo: ArquivoRepInterno): ArquivoRepGdl {
   };
 }
 
-function gerarThumbnailImagem(bytes: Buffer): string | undefined {
-  const imagem = nativeImage.createFromBuffer(bytes);
-  if (imagem.isEmpty()) return undefined;
-
-  const tamanho = imagem.getSize();
-  if (!tamanho.width || !tamanho.height) return undefined;
-  const escala = Math.min(1, 320 / Math.max(tamanho.width, tamanho.height));
-  const redimensionada = escala === 1
-    ? imagem
-    : imagem.resize({
-      width: Math.max(1, Math.round(tamanho.width * escala)),
-      height: Math.max(1, Math.round(tamanho.height * escala)),
-      quality: 'best',
-    });
-  return `data:image/jpeg;base64,${redimensionada.toJPEG(72).toString('base64')}`;
+async function gerarThumbnailImagem(bytes: Buffer): Promise<string | undefined> {
+  const mimeOriginal = detectarMimeImagem(bytes)
+  if (!mimeOriginal) return undefined
+  const resultado = await processarImagem({ bytes, mimeOriginal, finalidade: 'miniatura', maiorLado: 320, qualidade: 72, formato: 'jpeg' })
+  return `data:${resultado.mimeType};base64,${Buffer.from(resultado.bytes).toString('base64')}`
 }
 
 export function listarFotosDoArquivoZip(bytesZip: Buffer, codRep: number): ArquivoRepInterno[] {
@@ -461,24 +456,32 @@ function criarArquivosDaListaFotos(entradas: EntradaZipFoto[], codRep: number): 
   });
 }
 
-function lerDoArquivo(caminho: string, posicao: number, tamanho: number): Buffer {
-  const descritor = fs.openSync(caminho, 'r')
+async function lerDoArquivo(caminho: string, posicao: number, tamanho: number): Promise<Buffer> {
+  const descritor = await open(caminho, 'r')
   try {
+    const tamanhoArquivo = (await descritor.stat()).size
+    if (!Number.isSafeInteger(posicao) || !Number.isSafeInteger(tamanho) || posicao < 0 || tamanho < 0
+      || tamanho > LIMITE_BYTES_ZIP_GDL || posicao > tamanhoArquivo - tamanho) throw new Error('O índice do arquivo da Lista de Fotos está incompleto ou fora dos limites.')
     const bytes = Buffer.allocUnsafe(tamanho)
-    const lidos = fs.readSync(descritor, bytes, 0, tamanho, posicao)
-    return lidos === tamanho ? bytes : bytes.subarray(0, lidos)
+    let lidos = 0
+    while (lidos < tamanho) {
+      const leitura = await descritor.read(bytes, lidos, tamanho - lidos, posicao + lidos)
+      if (!leitura.bytesRead) throw new Error('O conteúdo do arquivo ZIP está incompleto.')
+      lidos += leitura.bytesRead
+    }
+    return bytes
   } finally {
-    fs.closeSync(descritor)
+    await descritor.close()
   }
 }
 
-function lerEntradasZipDoArquivo(caminho: string): EntradaZipFoto[] {
-  const tamanhoArquivo = fs.statSync(caminho).size
-  if (tamanhoArquivo < 4 || !lerDoArquivo(caminho, 0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
+async function lerEntradasZipDoArquivo(caminho: string): Promise<EntradaZipFoto[]> {
+  const tamanhoArquivo = (await stat(caminho)).size
+  if (tamanhoArquivo > LIMITE_BYTES_ZIP_GDL || tamanhoArquivo < 4 || !(await lerDoArquivo(caminho, 0, 4)).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
     throw new Error('O GDL não retornou um arquivo ZIP válido para a Lista de Fotos.')
   }
   const inicioCauda = Math.max(0, tamanhoArquivo - 65557)
-  const cauda = lerDoArquivo(caminho, inicioCauda, tamanhoArquivo - inicioCauda)
+  const cauda = await lerDoArquivo(caminho, inicioCauda, tamanhoArquivo - inicioCauda)
   let deslocamentoEocd = -1
   for (let indice = cauda.length - 22; indice >= 0; indice -= 1) {
     if (cauda.readUInt32LE(indice) === 0x06054b50) {
@@ -496,7 +499,10 @@ function lerEntradasZipDoArquivo(caminho: string): EntradaZipFoto[] {
   const tamanhoDiretorio = cauda.readUInt32LE(deslocamentoEocd + 12)
   const deslocamentoDiretorio = cauda.readUInt32LE(deslocamentoEocd + 16)
   if (tamanhoDiretorio === 0xffffffff || deslocamentoDiretorio === 0xffffffff) throw new Error('Índice ZIP64 não compatível para a Lista de Fotos.')
-  const diretorio = lerDoArquivo(caminho, deslocamentoDiretorio, tamanhoDiretorio)
+  if (tamanhoDiretorio > quantidade * (46 + 3 * 65535) || deslocamentoDiretorio + tamanhoDiretorio > inicioCauda + deslocamentoEocd) {
+    throw new Error('O índice do arquivo ZIP está fora dos limites.')
+  }
+  const diretorio = await lerDoArquivo(caminho, deslocamentoDiretorio, tamanhoDiretorio)
   if (diretorio.length !== tamanhoDiretorio) throw new Error('O índice do arquivo da Lista de Fotos está incompleto.')
   let cursor = 0
   const entradas: EntradaZipFoto[] = []
@@ -588,6 +594,7 @@ async function baixarArquivoGdl(
   await atividadeGdlService.antesDaRequisicao();
   const observacaoConexao = await conexaoGdlService.capturarRequisicao(url, headers.Authorization).catch(() => null);
   let respostaRecebida = false;
+  let statusHttpRecebido: number | undefined;
   const sessaoRede = obterSessaoRedeGdl();
   const controller = new AbortController();
   let temporizador: NodeJS.Timeout | undefined;
@@ -604,6 +611,7 @@ async function baixarArquivoGdl(
       signal: controller.signal,
     });
     respostaRecebida = true;
+    statusHttpRecebido = resposta.status;
     conexaoGdlService.registrarRede(observacaoConexao, resposta.status < 500 && resposta.status !== 408);
     if (!resposta.ok || !resposta.body) return { statusCode: resposta.status, contentType: resposta.headers.get('content-type') || '' };
     const contentLengthCabecalho = resposta.headers.get('content-length');
@@ -662,27 +670,27 @@ async function baixarArquivoGdl(
       throw error
     }
   } catch (error) {
-    if (!respostaRecebida || controller.signal.aborted) conexaoGdlService.registrarRede(observacaoConexao, false);
-    if (controller.signal.aborted) {
-      throw new Error('O download da Lista de Fotos ficou 30 segundos sem receber dados do GDL. Tente novamente.');
-    }
-    throw error;
+    if (!respostaRecebida) conexaoGdlService.registrarRede(observacaoConexao, false);
+    throw contextualizarTransporteGdl(error, respostaRecebida, controller.signal.aborted, statusHttpRecebido);
   } finally {
     if (temporizador) clearTimeout(temporizador);
   }
 }
 
-function extrairEntradaZipDoArquivo(caminho: string, entrada: EntradaZipFoto): Buffer {
+async function extrairEntradaZipDoArquivo(caminho: string, entrada: EntradaZipFoto): Promise<Buffer> {
+  if (entrada.criptografada || ![0, 8].includes(entrada.metodoCompactacao)) throw new Error('Compactação da foto incompatível.')
+  if (!Number.isSafeInteger(entrada.tamanho) || entrada.tamanho < 0 || !Number.isSafeInteger(entrada.tamanhoCompactado)
+    || entrada.tamanhoCompactado < 0 || entrada.tamanhoCompactado > LIMITE_BYTES_FOTO_GDL + 1024 * 1024) throw new Error('Tamanho da foto inválido.')
   if (entrada.tamanho > LIMITE_BYTES_FOTO_GDL) throw new Error('A foto ultrapassa o limite de 50 MB para captura.')
   if (entrada.tamanhoCompactado > 0 && entrada.tamanho / entrada.tamanhoCompactado > LIMITE_RAZAO_DESCOMPRESSAO_GDL) {
     throw new Error('A taxa de descompressão da foto não é segura para captura.')
   }
-  const cabecalho = lerDoArquivo(caminho, entrada.deslocamentoCabecalhoLocal, 30)
+  const cabecalho = await lerDoArquivo(caminho, entrada.deslocamentoCabecalhoLocal, 30)
   if (cabecalho.length !== 30 || cabecalho.readUInt32LE(0) !== 0x04034b50) throw new Error('O conteúdo da foto está corrompido no arquivo retornado pelo GDL.')
   const inicioDados = entrada.deslocamentoCabecalhoLocal + 30 + cabecalho.readUInt16LE(26) + cabecalho.readUInt16LE(28)
-  const compactado = lerDoArquivo(caminho, inicioDados, entrada.tamanhoCompactado)
+  const compactado = await lerDoArquivo(caminho, inicioDados, entrada.tamanhoCompactado)
   if (compactado.length !== entrada.tamanhoCompactado) throw new Error('O conteúdo da foto está incompleto no arquivo retornado pelo GDL.')
-  const dados = entrada.metodoCompactacao === 0 ? compactado : inflateRawSync(compactado)
+  const dados = entrada.metodoCompactacao === 0 ? compactado : await promisify(inflateRaw)(compactado, { maxOutputLength: Math.max(1, entrada.tamanho) })
   if (dados.length !== entrada.tamanho) throw new Error('O tamanho da foto diverge do índice retornado pelo GDL.')
   return dados
 }
@@ -845,6 +853,7 @@ async function testarConexaoInterna(ambiente: string): Promise<GdlTesteResultado
         ambiente: ambienteLabel,
         endpointTestado: endpointRede,
         erro: rede.erro || 'Falha no teste de rede com o GDL.',
+        falha: { ...classificarFalhaListaRepsGdl(Object.assign(new Error(rede.erro), { statusHttp: rede.statusCode })), referencia: randomUUID() },
         rede,
       };
     }
@@ -866,7 +875,8 @@ async function testarConexaoInterna(ambiente: string): Promise<GdlTesteResultado
   } catch (err) {
     const latencia = Date.now() - inicio;
     const mensagem = err instanceof Error ? err.message : String(err);
-    log.error(`Falha no teste de conexão GDL em ambiente ${ambienteLabel}`, { erro: mensagem, latencia, endpoint: endpointRede });
+    const classificacao = classificarFalhaListaRepsGdl(err);
+    log[classificacao.condicaoEsperada ? 'info' : 'error'](`Falha no teste de conexão GDL em ambiente ${ambienteLabel}`, { erro: mensagem, latencia, endpoint: endpointRede });
     return {
       sucesso: false,
       latencia,
@@ -874,13 +884,14 @@ async function testarConexaoInterna(ambiente: string): Promise<GdlTesteResultado
       autenticado: false,
       ambiente: ambienteLabel,
       endpointTestado: endpointRede,
-      erro: mensagem,
+      erro: classificacao.condicaoEsperada ? classificacao.detalhes : mensagem,
+      falha: { ...classificacao, referencia: randomUUID() },
       rede: {
         sucesso: false,
         latencia,
         statusCode: 0,
         endpointTestado: endpointRede,
-        erro: mensagem,
+        erro: classificacao.condicaoEsperada ? classificacao.detalhes : mensagem,
       },
     };
   }
@@ -941,7 +952,7 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
       let repsMesmoCaso: RepsMesmoCasoGdl | undefined;
       if (naturezaExame && extrairCodigoNaturezaExame(naturezaExame) === 'B-601') {
         try { repsMesmoCaso = await consultarReferenciasColeta(parsed, creds, ambiente); }
-        catch { log.warn('Não foi possível consultar as REPs do mesmo caso. A importação B-601 foi preservada.'); }
+        catch (erro) { const falha = classificarFalhaListaRepsGdl(erro); log[falha.condicaoEsperada ? 'info' : 'warn']('Não foi possível consultar as REPs do mesmo caso. A importação B-601 foi preservada.', { codigo: falha.codigo, condicaoEsperada: falha.condicaoEsperada }); }
       }
       const erroNaturezaExame = naturezaExame ? undefined
         : `Natureza de exame não identificada pela API: ${dadosComplementares.motivoNatureza}. Selecione o tipo localmente.`;
@@ -1001,8 +1012,10 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
   } catch (err) {
     const mensagem = err instanceof Error ? err.message : String(err);
     const ambLabel = getAmbienteLabel(ambiente);
-    log.error(`Falha ao consultar REP ${numero}/${ano} no GDL (${ambLabel})`, { erro: mensagem, numero, ano });
-    return { sucesso: false, dados: null, erro: mensagem };
+    const classificacao = classificarFalhaListaRepsGdl(err);
+    log[classificacao.condicaoEsperada ? 'info' : 'error'](`Falha ao consultar REP ${numero}/${ano} no GDL (${ambLabel})`, { erro: mensagem, numero, ano });
+    const falha = classificarFalhaListaRepsGdl(err);
+    return { sucesso: false, dados: null, erro: falha.condicaoEsperada ? falha.detalhes : mensagem, falha: { ...falha, referencia: randomUUID() } };
   }
 }
 
@@ -1132,7 +1145,7 @@ async function baixarListaFotosRep(numero: string, ano: string, informarProgress
   })
   try {
     return {
-      arquivos: criarArquivosDaListaFotos(lerEntradasZipDoArquivo(resposta.caminhoTemporario), rep.codRep),
+      arquivos: criarArquivosDaListaFotos(await lerEntradasZipDoArquivo(resposta.caminhoTemporario), rep.codRep),
       caminhoZip: resposta.caminhoTemporario,
       ambiente,
       hashZip: resposta.hashZip,
@@ -1146,20 +1159,22 @@ async function baixarListaFotosRep(numero: string, ano: string, informarProgress
 async function listarImagensRepGdlInterna(numero: string, ano: string): Promise<ArquivoRepGdl[]> {
   const { arquivos, caminhoZip } = await baixarListaFotosRep(numero, ano);
   try {
-    const entradasZip = lerEntradasZipDoArquivo(caminhoZip);
-    return arquivos.map((arquivo, indice) => {
+    const entradasZip = await lerEntradasZipDoArquivo(caminhoZip);
+    const resultados: ArquivoRepGdl[] = [];
+    for (const [indice, arquivo] of arquivos.entries()) {
       const publico = paraArquivoPublico(arquivo);
-      if (indice >= 30 || !arquivo.provavelImagem || arquivo.status) return publico;
+      if (indice >= 30 || !arquivo.provavelImagem || arquivo.status) { resultados.push(publico); continue; }
       try {
         const entrada = entradasZip[arquivo.indiceEntradaZip];
-        if (!entrada) return publico;
-        const bytes = extrairEntradaZipDoArquivo(caminhoZip, entrada);
-        if (!detectarMimeImagem(bytes)) return publico;
-        return { ...publico, thumbnailDataUri: gerarThumbnailImagem(bytes) };
+        if (!entrada) { resultados.push(publico); continue; }
+        const bytes = await extrairEntradaZipDoArquivo(caminhoZip, entrada);
+        if (!detectarMimeImagem(bytes)) { resultados.push(publico); continue; }
+        resultados.push({ ...publico, thumbnailDataUri: await gerarThumbnailImagem(bytes) });
       } catch {
-        return publico;
+        resultados.push(publico);
       }
-    });
+    }
+    return resultados;
   } finally {
     if (fs.existsSync(caminhoZip)) fs.unlinkSync(caminhoZip)
   }
@@ -1187,7 +1202,7 @@ async function abrirSessaoImagensRepGdlInterna(
   limparSessoesFotosExpiradas()
   const { arquivos, caminhoZip, ambiente, hashZip } = await baixarListaFotosRep(numero, ano, informarProgresso)
   try {
-    const entradasZip = lerEntradasZipDoArquivo(caminhoZip)
+    const entradasZip = await lerEntradasZipDoArquivo(caminhoZip)
     const cacheFotos = abrirCacheFotosGdl(ambiente, numero, ano, hashZip, VERSAO_OTIMIZACAO_FOTO_GDL)
     const elegiveis = arquivos.filter(arquivo => arquivo.provavelImagem && !arquivo.status)
     const idsJaIncluidos = new Set<string>()
@@ -1198,11 +1213,13 @@ async function abrirSessaoImagensRepGdlInterna(
       for (let indice = 0; indice < elegiveis.length; indice += 1) {
         const arquivo = elegiveis[indice]
         try {
+          let bytesExtraidos: Buffer | undefined
           let hash = cacheFotos.hashes.get(arquivo.idSelecao)
           if (!hash) {
             const entrada = entradasZip[arquivo.indiceEntradaZip]
             if (!entrada) throw new Error('Entrada não encontrada no ZIP.')
-            const bytes = extrairEntradaZipDoArquivo(caminhoZip, entrada)
+            const bytes = await extrairEntradaZipDoArquivo(caminhoZip, entrada)
+            bytesExtraidos = bytes
             if (!detectarMimeImagem(bytes)) throw new Error('Formato de foto incompatível.')
             hash = createHash('sha256').update(bytes).digest('hex')
             cacheFotos.hashes.set(arquivo.idSelecao, hash)
@@ -1212,8 +1229,14 @@ async function abrirSessaoImagensRepGdlInterna(
           else {
             const entrada = entradasZip[arquivo.indiceEntradaZip]
             if (!entrada) throw new Error('Entrada não encontrada no ZIP.')
-            const bytes = extrairEntradaZipDoArquivo(caminhoZip, entrada)
-            const hashLegado = createHash('sha256').update(otimizarFotoGdl(bytes).bytes).digest('hex')
+            const chaveLegada = createHash('sha256').update(`legado:${arquivo.idSelecao}`).digest('hex')
+            let hashLegado = cacheFotos.hashes.get(chaveLegada)
+            if (!hashLegado) {
+              const bytes = bytesExtraidos ?? await extrairEntradaZipDoArquivo(caminhoZip, entrada)
+              hashLegado = createHash('sha256').update(otimizarFotoGdl(bytes).bytes).digest('hex')
+              cacheFotos.hashes.set(chaveLegada, hashLegado)
+              calculados += 1
+            }
             if (hashesExistentes.has(hashLegado)) {
               idsJaIncluidos.add(arquivo.idSelecao)
               cacheFotos.hashes.set(arquivo.idSelecao, hashLegado)
@@ -1310,9 +1333,9 @@ export async function obterMiniaturasDaSessaoImagensRepGdl(
       try {
         const entrada = sessao.entradasZip[arquivo.indiceEntradaZip]
         if (!entrada) continue
-        const bytes = extrairEntradaZipDoArquivo(sessao.caminhoZip, entrada)
+        const bytes = await extrairEntradaZipDoArquivo(sessao.caminhoZip, entrada)
         if (!detectarMimeImagem(bytes)) continue
-        const thumbnailDataUri = gerarThumbnailImagem(bytes)
+        const thumbnailDataUri = await gerarThumbnailImagem(bytes)
         if (!thumbnailDataUri) continue
         sessao.miniaturas.set(idSelecao, thumbnailDataUri)
         miniaturas.push({ idSelecao, thumbnailDataUri })
@@ -1339,7 +1362,7 @@ async function capturarImagensRepGdlInterna(
   const { arquivos, caminhoZip } = await baixarListaFotosRep(numero, ano);
   try {
     const porId = new Map(arquivos.map(arquivo => [arquivo.idSelecao, arquivo]));
-    const entradasZip = lerEntradasZipDoArquivo(caminhoZip);
+    const entradasZip = await lerEntradasZipDoArquivo(caminhoZip);
     const imagens: ImagemRepGdlCapturada[] = [];
     const falhas: ResultadoCapturaImagensRepGdl['falhas'] = [];
     const hashesCapturados = new Set<string>();
@@ -1353,7 +1376,7 @@ async function capturarImagensRepGdlInterna(
     try {
       const entrada = entradasZip[arquivo.indiceEntradaZip];
       if (!entrada) throw new Error('A foto não foi encontrada no arquivo retornado pelo GDL.');
-      const bytes = extrairEntradaZipDoArquivo(caminhoZip, entrada);
+      const bytes = await extrairEntradaZipDoArquivo(caminhoZip, entrada);
       if (bytes.length === 0) throw new Error('O GDL retornou um arquivo vazio.');
 
       const mimeType = detectarMimeImagem(bytes);
@@ -1411,7 +1434,7 @@ async function capturarImagensDaSessaoGdlParaLaudoInterna(
     try {
       const entrada = sessao.entradasZip[arquivo.indiceEntradaZip]
       if (!entrada) throw new Error('A foto não foi encontrada no arquivo retornado pelo GDL.')
-      const bytes = extrairEntradaZipDoArquivo(sessao.caminhoZip, entrada)
+      const bytes = await extrairEntradaZipDoArquivo(sessao.caminhoZip, entrada)
       if (bytes.length === 0) throw new Error('O GDL retornou um arquivo vazio.')
       const mimeType = detectarMimeImagem(bytes)
       if (!mimeType) throw new Error('O conteúdo baixado não é uma imagem compatível.')
@@ -1496,8 +1519,10 @@ async function validarCredenciaisInterna(
   } catch (err) {
     const mensagem = err instanceof Error ? err.message : String(err);
     const ambLabel = getAmbienteLabel(amb);
-    log.error(`Falha ao validar credenciais GDL com REP ${numero}/${ano} (${ambLabel})`, { erro: mensagem, numero, ano });
-    return { sucesso: false, dados: null, erro: mensagem };
+    const classificacao = classificarFalhaListaRepsGdl(err);
+    log[classificacao.condicaoEsperada ? 'info' : 'error'](`Falha ao validar credenciais GDL com REP ${numero}/${ano} (${ambLabel})`, { erro: mensagem, numero, ano });
+    const falha = classificarFalhaListaRepsGdl(err);
+    return { sucesso: false, dados: null, erro: falha.condicaoEsperada ? falha.detalhes : mensagem, falha: { ...falha, referencia: randomUUID() } };
   }
 }
 

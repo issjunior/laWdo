@@ -1,3 +1,4 @@
+import { esperaIpcInformativa } from '../../shared/desempenho/esperas-ipc.js';
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -92,6 +93,7 @@ function estatisticaMetrica(metrica: string, valores: number[]): EstatisticaMetr
 
 function dadosNumericos(eventos: EventoCapturaLogs[], metrica: string): number[] {
   return eventos.flatMap(evento => {
+    if (metrica === 'duracaoMs' && evento.dados.esperaInformativa === true) return [];
     const valor = evento.dados[metrica];
     return typeof valor === 'number' && Number.isFinite(valor) ? [valor] : [];
   });
@@ -132,7 +134,7 @@ function achadosCaptura(eventos: EventoCapturaLogs[], cobertura: CoberturaSondaC
     achados.push({ tipo: eventosErro.length > 1 ? 'erros_repetidos' : 'erro_detectado', codigo: chave, nivel, ocorrencias: eventosErro.length, dados: { codigoEvento: eventosErro[0].codigo } });
   });
   const operacoes = new Map<string, number[]>();
-  eventos.filter(evento => evento.sonda === 'desempenho' && typeof evento.dados.duracaoMs === 'number').forEach(evento => {
+  eventos.filter(evento => evento.sonda === 'desempenho' && evento.dados.esperaInformativa !== true && typeof evento.dados.duracaoMs === 'number').forEach(evento => {
     const codigo = typeof evento.dados.operacao === 'string' ? evento.dados.operacao : evento.codigo;
     operacoes.set(codigo, [...(operacoes.get(codigo) ?? []), evento.dados.duracaoMs as number]);
   });
@@ -273,7 +275,8 @@ export class CapturaLogsService {
   async registrarDesempenho(entrada: EventoDesempenhoEntrada): Promise<void> {
     if (!this.sondaAtiva('desempenho')) return;
     const metricas = entrada.metricas ?? {};
-    await this.registrar('desempenho', codigoSeguro(entrada.evento) ?? 'evento_desempenho', entrada.duracaoMs && entrada.duracaoMs >= 2_000 ? 'critico' : entrada.duracaoMs && entrada.duracaoMs >= 250 ? 'aviso' : 'info', {
+    await this.registrar('desempenho', codigoSeguro(entrada.evento) ?? 'evento_desempenho', esperaIpcInformativa(entrada) ? 'info' : entrada.duracaoMs && entrada.duracaoMs >= 2_000 ? 'critico' : entrada.duracaoMs && entrada.duracaoMs >= 250 ? 'aviso' : 'info', {
+      esperaInformativa: esperaIpcInformativa(entrada),
       origem: codigoSeguro(entrada.origem),
       categoria: codigoSeguro(entrada.categoria),
       operacao: entrada.operacao ? codigoSeguro(entrada.operacao) : null,

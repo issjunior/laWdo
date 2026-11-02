@@ -47,6 +47,7 @@ describe('DiagnosticoCapturaService', () => {
     const inicio = await servico.iniciar({ finalidade: 'problema', cenario: 'Falha persistente de gravação.', capturarConsultasGdl: false });
     for (let indice = 0; indice < 3; indice++) renomear.mockRejectedValueOnce(Object.assign(new Error('Acesso negado'), { code: 'EPERM' }));
     await expect(servico.finalizar({ capturaId: String(inicio.capturaId) })).rejects.toThrow('Acesso negado');
+    expect(servico.status(String(inicio.capturaId))).toMatchObject({ estado: 'interrompida' });
     const pastas = await readdir(path.join(diretorio, 'capturas'));
     expect(pastas.some(nome => nome.endsWith('.tmp'))).toBe(true);
     const proxima = await servico.iniciar({ finalidade: 'problema', cenario: 'Captura após falha.', capturarConsultasGdl: false });
@@ -72,12 +73,19 @@ describe('DiagnosticoCapturaService', () => {
     const fim = await servico.finalizar({ capturaId, resultadoUsuario: 'reproduzido' });
     expect(fim).toMatchObject({ classificacao: 'reproduzido', estado: 'finalizada' });
     await expect(servico.finalizar({ capturaId, resultadoUsuario: 'reproduzido' })).resolves.toMatchObject({ caminho: fim.caminho });
+    expect(servico.status(capturaId)).toMatchObject({ estado: 'finalizada', classificacao: 'reproduzido' });
+    expect(servico.status()).toMatchObject({ capturaId });
+    expect(() => servico.status('desconhecida')).toThrow('CAPTURA_NAO_ENCONTRADA');
     expect(sonda).toEqual([true, false]);
     expect((await readdir(path.join(diretorio, 'capturas')))).toHaveLength(1);
     const captura = path.join(diretorio, 'capturas', (await readdir(path.join(diretorio, 'capturas')))[0]!);
     await expect(readFile(path.join(captura, 'contexto-execucao.json'), 'utf8')).resolves.toContain('versaoProtocolo');
     await expect(readFile(path.join(captura, 'marcadores-interface.json'), 'utf8')).resolves.toContain('marcadores');
     await expect(readFile(path.join(captura, 'resumo.md'), 'utf8')).resolves.toContain('Classificação: reproduzido');
+    const proxima = await servico.iniciar({ finalidade: 'problema', cenario: 'Outra reprodução.', capturarConsultasGdl: false });
+    expect(servico.status()).toMatchObject({ capturaId: proxima.capturaId, estado: 'coletando' });
+    expect(servico.status(capturaId)).toMatchObject({ estado: 'finalizada' });
+    await servico.finalizar({ capturaId: String(proxima.capturaId) });
   });
 
   it('não permite duas capturas ativas na mesma sessão', async () => {
@@ -161,4 +169,18 @@ it.each([['rede', 'conectividade'], ['tempo_esgotado', 'conectividade'], ['auten
   expect(dossie).toMatchObject({ classesCausa: [classe], anomalias: expect.arrayContaining([expect.objectContaining({ codigo, duracaoMs: 2000 })]) });
   const metricas = await servico.consultar({ capturaId: String(inicio.capturaId), componente: 'metricas_resumo', depoisDe: 0, limite: 50 });
   expect(metricas).toMatchObject({ ipcsLentos: [{ canal: 'gdl:atualizar-minhas-reps-cache', ocorrencias: 1, duracaoP95Ms: 2000 }] });
+});
+
+
+it('retém esperas e desfechos informativos sem anomalias ou IPC lento', async () => {
+  const { servico, eventos } = await criarServico();
+  const inicio = await servico.iniciar({ finalidade: 'desempenho', duracaoSegundos: 30, cenarioDesempenho: 'geral' });
+  for (const dados of [
+    { canal: 'laudo:selecionarBkp', resultadoFuncional: 'cancelado', interacaoUsuario: true },
+    { canal: 'gdl:consultarRep', resultadoFuncional: 'indisponivel', falha: { codigo: 'rede', condicaoEsperada: 'acesso_rede_institucional' } },
+    { canal: 'backup:selecionar', resultadoFuncional: 'sucesso', interacaoUsuario: true },
+  ]) await eventos.registrar({ origem: 'preload', categoria: 'ipc', nivel: 'info', dados: { ...dados, duracaoMs: 30_000 } });
+  await servico.finalizar({ capturaId: String(inicio.capturaId) });
+  await expect(servico.consultar({ capturaId: String(inicio.capturaId), componente: 'metricas_resumo', depoisDe: 0, limite: 50 })).resolves.toMatchObject({ ipcsLentos: [] });
+  await expect(servico.consultar({ capturaId: String(inicio.capturaId), componente: 'dossie', depoisDe: 0, limite: 50 })).resolves.toMatchObject({ anomalias: [] });
 });

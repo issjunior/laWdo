@@ -104,19 +104,24 @@ describe('REPs do GDL no dashboard', () => {
     expect(screen.getByTestId('rota-atual')).toHaveTextContent('"numero":"123"');
   });
 
-  it('preserva a lista salva e avisa quando a rede ou VPN falha', async () => {
+  it('preserva a lista salva e informa o requisito da rede institucional', async () => {
     atualizarMinhasRepsCache.mockResolvedValue({ success: false, falha: {
-      codigo: 'rede', detalhes: 'fetch failed (ERR_CONNECTION_REFUSED)', referencia: '85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e',
+      codigo: 'rede', condicaoEsperada: 'acesso_rede_institucional', codigoSistema: 'ERR_CONNECTION_REFUSED', etapa: 'rede_gdl', detalhes: 'Servidor inacessível', referencia: '85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e',
     } });
     render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
     expect(await screen.findByText('1 REP')).toHaveClass('bg-secondary');
     fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
-    expect(await screen.findByText(/Não foi possível alcançar o GDL/)).toHaveTextContent('Exibindo a última lista salva.');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Exibindo a última lista salva.'));
     expect(screen.queryByText(/ERR_CONNECTION_REFUSED/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detalhes' }));
-    expect(screen.getByText('Verifique a conexão e conecte a VPN, se necessária, antes de tentar novamente.')).toBeInTheDocument();
-    expect(screen.queryByText(/ERR_CONNECTION_REFUSED/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e/)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('rede da Polícia Científica do Paraná');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText(/ERR_CONNECTION_REFUSED/)).toHaveTextContent('85be1fb5-d3c6-48fb-9cf0-f32b8b2dd97e');
+    atualizarMinhasRepsCache.mockResolvedValue({ success: true, data: snapshot });
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /123\/2026/ })).toBeEnabled();
+
     expect(screen.getByRole('button', { name: /123\/2026/ })).toBeEnabled();
   });
 

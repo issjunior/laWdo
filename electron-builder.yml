@@ -16,6 +16,9 @@ files:
   - '!**/._*'
 
 asar: true
+asarUnpack:
+  - '**/node_modules/sharp/**/*'
+  - '**/node_modules/@img/**/*'
 
 extraResources:
   - from: src/renderer/assets/icon.ico

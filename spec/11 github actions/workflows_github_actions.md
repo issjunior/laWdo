@@ -225,3 +225,7 @@ A própria CI executa esses testes, e o workflow de preparação dispara e conso
 ## Nome do pacote DEB
 
 electron-builder.yml define o artifactName específico do DEB como ${productName}-${version}-${arch}.${ext}, incluindo arquitetura no nome temporário. O gerador de manifesto identifica plataforma/arquitetura pela pasta `release-<versão>-<plataforma>-<arquitetura>` do artefato, e formato pela extensão; não deduz a arquitetura do nome do DEB. A agregação conserva a normalização de espaços dos nomes públicos, calcula hash e tamanho e assina o nome e a URL resultantes. O consumo e a instalação manual continuam descritos em spec/12 atualizacao/fluxo_atualizacao.md.
+
+## Dependência nativa de processamento de imagens
+
+Sharp 0.35.5 está em produção e tem lifecycle explicitamente autorizado em `package.json`. `electron-builder.yml` usa asarUnpack para sharp e @img. Electron-builder e app-builder-lib estão alinhados em 26.18.0; a segunda é dependência direta de desenvolvimento dos testes de empacotamento. A inclusão dos binários exige `pack` e smoke no executável Windows. O smoke manual `npm run smoke:imagens -- --executavel dist/win-unpacked/laWdo.exe` usa perfil isolado e cobre transformação real, cancelamento e recuperação do auxiliar; não foi incorporado à CI nem ao dev normal. Esta mudança não altera manifesto, assinatura ou protocolo de atualização.

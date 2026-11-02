@@ -4,7 +4,11 @@
     "src/preload/index.ts",
     "src/main/diagnostico-mcp.ts",
     "src/renderer/index.html",
-    "scripts/*.mjs"
+    "scripts/*.mjs",
+    "src/main/services/imagens/auxiliar.ts",
+    "scripts/carga/preparar.mjs",
+    "scripts/diagnostico/smoke-gpu.mjs",
+    "scripts/saude/*.test.mjs"
   ],
   "project": [
     "src/main/**/*.ts",

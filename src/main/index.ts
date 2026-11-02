@@ -1,3 +1,4 @@
+import { CANAIS_COM_INTERACAO_USUARIO } from '../shared/diagnostico/canais.js';
 import { iniciarAtualizacaoAutomaticaGdl, encerrarAtualizacaoAutomaticaGdl } from './services/gdl-atualizacao-automatica.service.js';
 import { normalizarFalhaDiagnosticoGdl } from './services/diagnostico-eventos.service.js';
 import { conectarDiagnosticoGpu, diagnosticoGpu, encerrarDiagnosticoGpu, preparacaoGpu } from './diagnostico-gpu.js';
@@ -433,9 +434,9 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const canal = typeof entrada.canal === 'string' ? entrada.canal : 'desconhecido';
     const correlacaoId = typeof entrada.correlacaoId === 'string' ? entrada.correlacaoId : undefined;
     const duracaoMs = typeof entrada.duracaoMs === 'number' ? entrada.duracaoMs : undefined;
-    const resultadoFuncional = entrada.resultadoFuncional === 'sucesso' || entrada.resultadoFuncional === 'falha' || entrada.resultadoFuncional === 'indeterminado'
+    const resultadoFuncional = entrada.resultadoFuncional === 'sucesso' || entrada.resultadoFuncional === 'falha' || entrada.resultadoFuncional === 'indeterminado' || entrada.resultadoFuncional === 'cancelado' || entrada.resultadoFuncional === 'indisponivel'
       ? entrada.resultadoFuncional : undefined;
-    const falha = canal.startsWith('gdl:') && resultadoFuncional === 'falha' ? normalizarFalhaDiagnosticoGdl(entrada.falha) : undefined;
+    const falha = canal.startsWith('gdl:') && (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') ? normalizarFalhaDiagnosticoGdl(entrada.falha) : undefined;
     const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
@@ -448,7 +449,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, ...(falha ? { falha } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {
@@ -810,6 +811,7 @@ app.on('will-quit', evento => {
   encerrarAtualizacaoAutomaticaGdl();
   void Promise.all([
     encerrarDiagnosticoAssistido(),
+    import('./services/processador-imagens.service.js').then(modulo => modulo.encerrarProcessadorImagens()),
     Promise.resolve(desempenhoService.encerrar()),
     Promise.resolve(capturaLogsService.encerrar()),
     closeDatabase().catch(error => log.error('Erro ao fechar banco de dados no encerramento', error)),

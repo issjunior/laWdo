@@ -1,3 +1,4 @@
+import { contextualizarTransporteGdl } from './gdl-minhas-reps-erro.service.js';
 import { atividadeGdlService } from './gdl-atividade.service.js';
 import { conexaoGdlService } from './gdl-conexao.service.js';
 import { interpretarDetalhesRepGdl } from './gdl-detalhes.service.js';
@@ -99,11 +100,17 @@ async function lerPagina(rede: Session, url: string, corpo?: string, sinal?: Abo
     signal: sinal ? AbortSignal.any([sinal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     headers: corpo === undefined ? { Accept: 'text/html' } : { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
     ...(corpo === undefined ? {} : { body: corpo }),
+  }).catch((erro: unknown) => {
+    const timeout = !sinal?.aborted && erro instanceof Error && ['TimeoutError', 'AbortError'].includes(erro.name);
+    throw contextualizarTransporteGdl(erro, false, timeout);
   });
+  try {
   const charset = resposta.headers.get('content-type')?.match(/charset\s*=\s*["']?([^;\s"']+)/i)?.[1] ?? 'utf-8';
   const data = new TextDecoder(charset).decode(await resposta.arrayBuffer());
   return { statusCode: resposta.status, data, redirecionado: resposta.redirected,
     paginaAutenticacao: Boolean(resposta.url && /\/Account\/Login\.aspx/i.test(new URL(resposta.url).pathname)) || paginaGdlExigeLogin(data) };
+  } catch (erro) { throw contextualizarTransporteGdl(erro, true, false, resposta.status); }
+
 }
 
 async function obterSessaoAutenticadaGdl(credenciais: CredenciaisPaginaGdl, prepararRede: (rede: Session) => void, finalidade: 'lista' | 'detalhes' = 'lista') {
@@ -148,7 +155,7 @@ async function obterSessaoAutenticadaGdl(credenciais: CredenciaisPaginaGdl, prep
         } catch (erro: unknown) {
           const falhaOriginal = new ErroAutenticacaoWebGdl(`Não foi possível autenticar a sessão web do GDL (${etapa}). A consulta pela API foi preservada.`, etapa, erro, statusHttp);
           const falha = classificarFalhaListaRepsGdl(falhaOriginal);
-          log.warn('Falha na autenticação web de leitura do GDL.', {
+          log[falha.condicaoEsperada ? 'info' : 'warn']('Falha na autenticação web de leitura do GDL.', {
             etapa, duracaoMs: Math.round(performance.now() - inicio), codigo: falha.codigo,
             codigoSistema: falha.codigoSistema, statusHttp: falha.statusHttp,
           });

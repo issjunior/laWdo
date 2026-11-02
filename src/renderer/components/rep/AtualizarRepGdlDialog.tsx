@@ -1,3 +1,4 @@
+import { normalizarFalhaListaGdl } from './GdlFalhaListaAlert';
 import { MENSAGEM_FALHA_CONSULTA_GDL } from '@/lib/consulta-reps-coleta';
 import { esquemaConsultaIdentificacaoRepGdl } from '@shared/gdl/natureza-exame';
 import { useEffect, useMemo, useState, useRef } from 'react'
@@ -62,6 +63,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
   const [previa, setPrevia] = useState<PreviaAtualizacaoRepGdl | null>(null)
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [erro, setErro] = useState<string | null>(null)
+  const [indisponivel, setIndisponivel] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [aplicando, setAplicando] = useState(false)
   const [confirmacaoAberta, setConfirmacaoAberta] = useState(false)
@@ -73,10 +75,10 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
     if (!open || !repId) return
     const geracao = ++geracaoConsulta.current
     let ativa = true
-    setPrevia(null); setErro(null); setReabrirLaudo(false); setDetalhesAbertos(new Set()); setCarregando(true)
+    setPrevia(null); setErro(null); setIndisponivel(false); setReabrirLaudo(false); setDetalhesAbertos(new Set()); setCarregando(true)
     void window.ipcAPI.gdl.prepararAtualizacaoRep(repId).then(resposta => {
       if (!ativa || geracao !== geracaoConsulta.current) return
-      if (!resposta.success || !previaAtualizacaoValida(resposta.data)) { setErro(resposta.error || 'Não foi possível consultar a REP no GDL.'); return }
+      if (!resposta.success || !previaAtualizacaoValida(resposta.data)) { setIndisponivel(normalizarFalhaListaGdl(resposta).condicaoEsperada === 'acesso_rede_institucional'); setErro(resposta.error || 'Não foi possível consultar a REP no GDL.'); return }
       const dados = resposta.data
       setPrevia(dados)
       setSelecionadas(new Set(dados.diferencas.filter(diferenca => diferenca.selecionadaPorPadrao).map(diferenca => diferenca.id)))
@@ -121,7 +123,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
     try {
       const resposta = await window.ipcAPI.gdl.completarAtualizacaoRep(repId, previa.consultaDetalhes.consultaId, abrir)
       if (geracao !== geracaoConsulta.current) return
-      if (!resposta.success || !previaAtualizacaoValida(resposta.data)) throw new Error(resposta.error || 'Falha ao concluir a consulta.')
+      if (!resposta.success || !previaAtualizacaoValida(resposta.data)) { setIndisponivel(normalizarFalhaListaGdl(resposta).condicaoEsperada === 'acesso_rede_institucional'); setErro(resposta.error || 'Falha ao concluir a consulta.'); return }
       setPrevia(resposta.data)
       setSelecionadas(new Set(resposta.data.diferencas.filter(item => item.selecionadaPorPadrao).map(item => item.id)))
       setDetalhesAbertos(new Set(resposta.data.diferencas.filter(item => item.categoria === 'peca' && item.detalhes?.length).map(item => item.id)))
@@ -133,10 +135,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
   const semDiferencas = previa?.diferencas.length === 0
   const podeReconciliarLaudo = Boolean(semDiferencas && previa?.impactoLaudo)
   const podeConfirmar = !previa?.consultaDetalhes && (selecionadas.size > 0 || podeReconciliarLaudo) && (!requerReabertura || reabrirLaudo)
-  useEffect(() => {
-    if (erro) void window.ipcAPI.logWarning('gdl', `Falha na atualização manual da REP: ${erro}`);
-  }, [erro]);
-  const mensagemErro = erro ? { titulo: 'Não foi possível atualizar a REP', descricao: MENSAGEM_FALHA_CONSULTA_GDL } : null
+  const mensagemErro = erro ? { titulo: 'Não foi possível atualizar a REP', descricao: erro || MENSAGEM_FALHA_CONSULTA_GDL } : null
 
   return <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -156,7 +155,7 @@ export function AtualizarRepGdlDialog({ open, repId, onOpenChange, onConcluida }
           </AlertDescription>
         </Alert>}
         {carregando && <div className="flex items-center gap-2 py-8 text-muted-foreground"><Loader2 className="size-4 animate-spin" />Consultando o GDL...</div>}
-        {mensagemErro && <Alert variant="destructive">
+        {mensagemErro && <Alert variant={indisponivel ? "default" : "destructive"} role={indisponivel ? "status" : "alert"}>
           <WifiOff className="size-4" />
           <AlertTitle>{mensagemErro.titulo}</AlertTitle>
           <AlertDescription className="space-y-3">

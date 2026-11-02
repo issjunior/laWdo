@@ -59,6 +59,7 @@ export const codigosSistemaFalhaGdl = [
 export type CodigoSistemaFalhaGdl = typeof codigosSistemaFalhaGdl[number];
 
 export interface FalhaListaRepsGdl {
+  condicaoEsperada?: 'acesso_rede_institucional';
   codigo: CodigoFalhaListaRepsGdl;
   detalhes: string;
   referencia: string;

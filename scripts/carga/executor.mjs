@@ -182,13 +182,23 @@ async function executarCaso(nome, modo, repeticao, origem, massa, resistencia = 
     }
     caso.metricas = resumirMetricasRenderer(caso.acoes.flatMap(acao => acao.metricas?.amostras ?? [{ indisponivel: true }]));
     // A leitura de integridade fica fora dos intervalos medidos das ações.
+    await pagina.waitForFunction(() => [...globalThis.document.querySelectorAll('iframe.tox-edit-area__iframe')].every(iframe => [...(iframe.contentDocument?.querySelectorAll('.laudo-figure img') ?? [])].every(imagem => imagem.complete && imagem.naturalWidth > 0)));
     const htmlAtual = await pagina.evaluate(() => [...globalThis.document.querySelectorAll('iframe.tox-edit-area__iframe')].map(iframe => iframe.contentDocument?.body.innerHTML ?? '').join('\n'));
     const referencia = inspecionarDocumento(htmlAtual);
-    validarIntegridade(referencia, massa);
+    const obterOriginais = async documento => {
+      const respostas = await pagina.evaluate(async ids => Promise.all(ids.map(id => globalThis.window.ipcAPI.ilustracoes.obterImagem('carga-laudo', id))), documento.figuras.map(figura => figura.id));
+      return Object.fromEntries(respostas.map((resposta, indice) => {
+        if (!resposta.success || !resposta.data?.dataUri?.startsWith('data:image/')) throw new Error('Imagem original indisponível na conferência.');
+        return [documento.figuras[indice].id, hash(Buffer.from(resposta.data.dataUri.split(',')[1], 'base64'))];
+      }));
+    };
+
+    validarIntegridade(referencia, massa, undefined, await obterOriginais(referencia));
     await salvar(pagina);
     const persistido = await pagina.evaluate(() => globalThis.window.ipcAPI.laudo.findById('carga-laudo'));
     if (!persistido.success || typeof persistido.data?.conteudo !== 'string') throw new Error('Não foi possível ler o laudo salvo.');
-    validarIntegridade(inspecionarDocumento(persistido.data.conteudo), massa, referencia);
+    const documentoPersistido = inspecionarDocumento(persistido.data.conteudo);
+    validarIntegridade(documentoPersistido, massa, referencia, await obterOriginais(documentoPersistido));
     caso.integridade = { verificada: true, figuras: referencia.figuras.map(figura => ({ ...figura })), tabelas: referencia.tabelas, celulas: referencia.celulas, hashCelulas: referencia.hashCelulas, placeholders: referencia.chavesPlaceholders.length };
     caso.estado = 'concluido';
   } catch (erro) {

@@ -24,6 +24,26 @@ import { laudoService } from '../../services/laudo.service.js';
 import type { SalvarImagemLaudoEntrada } from '../../../shared/types/imagem-laudo.types.js';
 import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
 import { desempenhoService } from '../../services/desempenho.service.js';
+import { comContextoImagens, cancelarProcessamentoImagens } from '../../services/processador-imagens.service.js';
+
+const contextosRemetentes = new Map<number, Set<string>>();
+function registrar(canal: string, executar: Parameters<typeof ipcMain.handle>[1]): void {
+  ipcMain.handle(canal, (evento, ...parametros: unknown[]) => {
+    const laudo = typeof parametros[0] === 'string' ? parametros[0] : '';
+    const remetente = evento.sender;
+    const chave = `${remetente?.id ?? 'teste'}:${laudo}`;
+    if (remetente && !contextosRemetentes.has(remetente.id)) {
+      contextosRemetentes.set(remetente.id, new Set());
+      remetente.once('destroyed', () => {
+        for (const contexto of contextosRemetentes.get(remetente.id) ?? []) cancelarProcessamentoImagens(contexto);
+        contextosRemetentes.delete(remetente.id);
+      });
+    }
+    if (remetente) contextosRemetentes.get(remetente.id)?.add(chave);
+    if (canal === 'ilustracoes:encerrar-sessao') cancelarProcessamentoImagens(chave);
+    return comContextoImagens(chave, () => executar(evento, ...parametros));
+  });
+}
 
 interface IlustracoesHandlerOptions {
   preloadPath: string;
@@ -47,7 +67,7 @@ async function executarMedido<T>(operacao: string, acao: () => Promise<T>, metad
 export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions): void {
   const { preloadPath, rendererHtmlPath, isDev } = options;
 
-  ipcMain.handle('ilustracoes:reconciliar-imagens', async (_event, laudoId: unknown) => {
+  registrar('ilustracoes:reconciliar-imagens', async (_event, laudoId: unknown) => {
     try {
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
       const laudo = await laudoService.findById(laudoId)
@@ -58,7 +78,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:listar-imagens', async (_event, laudoId: unknown) => {
+  registrar('ilustracoes:listar-imagens', async (_event, laudoId: unknown) => {
     try {
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
       return { success: true, data: await executarMedido('listar_imagens', () => listarResumosImagensLaudo(laudoId)) }
@@ -67,7 +87,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:obter-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
+  registrar('ilustracoes:obter-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
       return { success: true, data: await executarMedido('obter_imagem', () => obterImagemLaudoPorId(laudoId, imagemId), { imagens: 1 }) }
@@ -76,7 +96,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:obter-imagem-estagio', async (_event, laudoId: unknown, imagemId: unknown) => {
+  registrar('ilustracoes:obter-imagem-estagio', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
       return { success: true, data: obterImagemEstagiadaLaudo(laudoId, imagemId) }
@@ -85,7 +105,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:obter-imagem-impressao', async (_event, laudoId: unknown, imagemId: unknown, larguraMaxima: unknown) => {
+  registrar('ilustracoes:obter-imagem-impressao', async (_event, laudoId: unknown, imagemId: unknown, larguraMaxima: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string' || typeof larguraMaxima !== 'number'
         || !Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new Error('Imagem para impressão inválida.')
@@ -96,7 +116,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:obter-miniaturas', async (_event, laudoId: unknown, ids: unknown) => {
+  registrar('ilustracoes:obter-miniaturas', async (_event, laudoId: unknown, ids: unknown) => {
     try {
       if (typeof laudoId !== 'string' || !Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Imagens inválidas.')
       return { success: true, data: await executarMedido('obter_miniaturas', () => obterMiniaturasImagensLaudo(laudoId, ids), { imagens: ids.length }) }
@@ -105,7 +125,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:salvar-imagem', async (_event, laudoId: unknown, entrada: unknown) => {
+  registrar('ilustracoes:salvar-imagem', async (_event, laudoId: unknown, entrada: unknown) => {
     try {
       if (typeof laudoId !== 'string' || !entrada || typeof entrada !== 'object' || Array.isArray(entrada)) throw new Error('Imagem inválida.')
       const dados = entrada as Partial<SalvarImagemLaudoEntrada>
@@ -121,7 +141,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:estagiar-imagem', async (_event, laudoId: unknown, entrada: unknown) => {
+  registrar('ilustracoes:estagiar-imagem', async (_event, laudoId: unknown, entrada: unknown) => {
     try {
       if (typeof laudoId !== 'string' || !entrada || typeof entrada !== 'object' || Array.isArray(entrada)) throw new Error('Imagem inválida.')
       const dados = entrada as Partial<SalvarImagemLaudoEntrada>
@@ -129,13 +149,13 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         || typeof dados.legenda !== 'string' || (dados.origem !== 'local' && dados.origem !== 'gdl') || typeof dados.sequencia !== 'number') {
         throw new Error('Dados da imagem inválidos.')
       }
-      return { success: true, data: estagiarImagemLaudoPorDataUri(laudoId, dados as SalvarImagemLaudoEntrada) }
+      return { success: true, data: await estagiarImagemLaudoPorDataUri(laudoId, dados as SalvarImagemLaudoEntrada) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Erro ao preparar imagem temporária.' }
     }
   })
 
-  ipcMain.handle('ilustracoes:listar-estagio', async (_event, laudoId: unknown) => {
+  registrar('ilustracoes:listar-estagio', async (_event, laudoId: unknown) => {
     try {
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
       return { success: true, data: listarImagensEstagiadasLaudo(laudoId) }
@@ -144,7 +164,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:preparar-insercao', async (_event, laudoId: unknown, imagemId: unknown,
+  registrar('ilustracoes:preparar-insercao', async (_event, laudoId: unknown, imagemId: unknown,
     larguraCss: unknown, alturaCss: unknown, densidade: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string'
@@ -156,7 +176,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:descartar-estagio', async (_event, laudoId: unknown, imagemId: unknown) => {
+  registrar('ilustracoes:descartar-estagio', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
       if (typeof imagemId === 'string') descartarImagemEstagiadaLaudo(laudoId, imagemId)
@@ -167,7 +187,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:encerrar-sessao', async (_event, laudoId: unknown) => {
+  registrar('ilustracoes:encerrar-sessao', async (_event, laudoId: unknown) => {
     try {
       if (typeof laudoId !== 'string') throw new Error('Laudo inválido.')
       descartarImagensEstagiadasLaudo(laudoId)
@@ -178,7 +198,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:excluir-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
+  registrar('ilustracoes:excluir-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
       await executarMedido('excluir_imagem', () => excluirImagemLaudo(laudoId, imagemId), { imagens: 1 })
@@ -188,7 +208,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:arquivar-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
+  registrar('ilustracoes:arquivar-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
       await arquivarImagemLaudo(laudoId, imagemId)
@@ -198,7 +218,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:disponibilizar-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
+  registrar('ilustracoes:disponibilizar-imagem', async (_event, laudoId: unknown, imagemId: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string') throw new Error('Imagem inválida.')
       await disponibilizarImagemLaudo(laudoId, imagemId)
@@ -208,7 +228,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:atualizar-legenda', async (_event, laudoId: unknown, imagemId: unknown, legenda: unknown) => {
+  registrar('ilustracoes:atualizar-legenda', async (_event, laudoId: unknown, imagemId: unknown, legenda: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string' || typeof legenda !== 'string') throw new Error('Legenda inválida.')
       await atualizarLegendaImagemLaudo(laudoId, imagemId, legenda)
@@ -218,7 +238,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   })
 
-  ipcMain.handle('ilustracoes:atualizar-ordem', async (_event, laudoId: unknown, ordem: unknown) => {
+  registrar('ilustracoes:atualizar-ordem', async (_event, laudoId: unknown, ordem: unknown) => {
     try {
       if (typeof laudoId !== 'string' || !Array.isArray(ordem) || ordem.some(item => (
         !item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.sequencia !== 'number'

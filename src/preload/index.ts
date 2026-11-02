@@ -34,6 +34,7 @@ import type {
   UserUpdateData,
   UserProfileUpdateData,
   UserResponse,
+  RespostaGdl,
   PaginatedUserResponse,
   UserAvatarResponse,
   SolicitanteFilters,
@@ -51,7 +52,7 @@ import type {
   DashboardResumo,
 } from '../types/dashboard.js';
 import type { ResultadoImportacaoGdl } from '../shared/types/gdl-importacao.types.js';
-import type { FalhaListaRepsGdl, SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
+import type { SnapshotMinhasRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { AplicarAtualizacaoRepGdlEntrada, PreviaAtualizacaoRepGdl, ResultadoAtualizacaoRepGdl } from '../shared/types/atualizacao-rep-gdl.types.js';
 import type { ListaImagensRepGdl, MiniaturaArquivoRepGdl, ProgressoListaFotosGdl, ResultadoCapturaImagensLaudoGdl } from '../shared/types/gdl-arquivos.types.js';
 import type {
@@ -260,34 +261,34 @@ export interface IpcAPI {
 
   // GDL
   gdl: {
-    obterEstadoConexao: () => Promise<UserResponse<EstadoConexaoGdl>>;
-    verificarConexao: () => Promise<UserResponse<EstadoConexaoGdl>>;
+    obterEstadoConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
+    verificarConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
     onEstadoConexaoAlterado: (callback: () => void) => () => void;
-    consultarRepsMesmoCaso: (laudoId: string) => Promise<UserResponse<RepsMesmoCasoGdl>>;
-    copiarEmailSuporte: () => Promise<UserResponse<{ email: string }>>;
-    obterPreferenciaListagem: () => Promise<UserResponse<{ habilitada: boolean }>>;
-    definirPreferenciaListagem: (habilitada: boolean) => Promise<UserResponse<{ habilitada: boolean }>>;
-    obterAvisosReiteracao: () => Promise<UserResponse<AvisoReiteracaoGdl[]>>;
+    consultarRepsMesmoCaso: (laudoId: string) => Promise<RespostaGdl<RepsMesmoCasoGdl>>;
+    copiarEmailSuporte: () => Promise<RespostaGdl<{ email: string }>>;
+    obterPreferenciaListagem: () => Promise<RespostaGdl<{ habilitada: boolean }>>;
+    definirPreferenciaListagem: (habilitada: boolean) => Promise<RespostaGdl<{ habilitada: boolean }>>;
+    obterAvisosReiteracao: () => Promise<RespostaGdl<AvisoReiteracaoGdl[]>>;
     onAvisosAlterados: (callback: (reiniciar: boolean) => void) => () => void;
-    obterMinhasRepsCache: () => Promise<UserResponse<SnapshotMinhasRepsGdl | null>>;
-    atualizarMinhasRepsCache: (forcar: boolean) => Promise<UserResponse<SnapshotMinhasRepsGdl> & { falha?: FalhaListaRepsGdl }>;
-    testarConexao: (ambiente?: string) => Promise<UserResponse>;
-    obterValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
-    limparValidacaoSessao: (ambiente?: string) => Promise<UserResponse>;
-    validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<UserResponse>;
-    identificarRep: (numero: string, ano: string, naturezaLista?: string) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
-    completarConsultaRep: (consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<ConsultaIdentificacaoRepGdl>>;
-    descartarConsultaRep: () => Promise<UserResponse>;
-    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<UserResponse<ResultadoImportacaoGdl>>;
-    consultarRep: (numero: string, ano: string) => Promise<UserResponse<ResultadoImportacaoGdl>>;
-    completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
-    prepararAtualizacaoRep: (repId: string) => Promise<UserResponse<PreviaAtualizacaoRepGdl>>;
-    aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<UserResponse<ResultadoAtualizacaoRepGdl>>;
-    listarImagensLaudo: (laudoId: string) => Promise<UserResponse<ListaImagensRepGdl>>;
-    obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<UserResponse<MiniaturaArquivoRepGdl[]>>;
+    obterMinhasRepsCache: () => Promise<RespostaGdl<SnapshotMinhasRepsGdl | null>>;
+    atualizarMinhasRepsCache: (forcar: boolean) => Promise<RespostaGdl<SnapshotMinhasRepsGdl>>;
+    testarConexao: (ambiente?: string) => Promise<RespostaGdl>;
+    obterValidacaoSessao: (ambiente?: string) => Promise<RespostaGdl>;
+    limparValidacaoSessao: (ambiente?: string) => Promise<RespostaGdl>;
+    validarCredenciais: (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario?: string }, numero: string, ano: string) => Promise<RespostaGdl>;
+    identificarRep: (numero: string, ano: string, naturezaLista?: string) => Promise<RespostaGdl<ConsultaIdentificacaoRepGdl>>;
+    completarConsultaRep: (consultaId: string, abrirDetalhes: boolean) => Promise<RespostaGdl<ConsultaIdentificacaoRepGdl>>;
+    descartarConsultaRep: () => Promise<RespostaGdl>;
+    converterConsultaRep: (consultaId: string, tipoExameId: string) => Promise<RespostaGdl<ResultadoImportacaoGdl>>;
+    consultarRep: (numero: string, ano: string) => Promise<RespostaGdl<ResultadoImportacaoGdl>>;
+    completarAtualizacaoRep: (repId: string, consultaId: string, abrirDetalhes: boolean) => Promise<RespostaGdl<PreviaAtualizacaoRepGdl>>;
+    prepararAtualizacaoRep: (repId: string) => Promise<RespostaGdl<PreviaAtualizacaoRepGdl>>;
+    aplicarAtualizacaoRep: (entrada: AplicarAtualizacaoRepGdlEntrada) => Promise<RespostaGdl<ResultadoAtualizacaoRepGdl>>;
+    listarImagensLaudo: (laudoId: string) => Promise<RespostaGdl<ListaImagensRepGdl>>;
+    obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<RespostaGdl<MiniaturaArquivoRepGdl[]>>;
     onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
-    capturarImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[], permitirDuplicadas?: boolean) => Promise<UserResponse<ResultadoCapturaImagensLaudoGdl>>;
-    fecharSessaoImagensLaudo: (laudoId: string, sessaoId: string) => Promise<UserResponse>;
+    capturarImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[], permitirDuplicadas?: boolean) => Promise<RespostaGdl<ResultadoCapturaImagensLaudoGdl>>;
+    fecharSessaoImagensLaudo: (laudoId: string, sessaoId: string) => Promise<RespostaGdl>;
   };
 
   // Placeholder para outras APIs que serão implementadas
@@ -870,7 +871,7 @@ function descarregarResumoIpc(): void {
   if (resumoIpc.length) ipcRenderer.send('desempenho:registrar', { origem: 'ipc', categoria: 'canal', evento: 'resumo_ipc', resumoIpc });
 }
 
-type ResultadoFuncionalIpc = 'sucesso' | 'falha' | 'indeterminado';
+type ResultadoFuncionalIpc = 'sucesso' | 'falha' | 'indeterminado' | 'cancelado' | 'indisponivel';
 type DesfechoIpc = ResultadoFuncionalIpc | 'rejeicao_transporte';
 
 // O preload sandboxed mantém as listas locais: imports de execução além de Electron não estão disponíveis.
@@ -907,21 +908,34 @@ function normalizarFalhaDiagnosticoGdl(valor: unknown) {
   const referencia = 'referencia' in valor && typeof valor.referencia === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(valor.referencia) ? valor.referencia : undefined;
   const tentarNovamenteEmSegundos = 'tentarNovamenteEmSegundos' in valor && typeof valor.tentarNovamenteEmSegundos === 'number' && Number.isInteger(valor.tentarNovamenteEmSegundos) && valor.tentarNovamenteEmSegundos >= 1 && valor.tentarNovamenteEmSegundos <= 60 ? valor.tentarNovamenteEmSegundos : undefined;
   const bloqueioTemporario = 'bloqueioTemporario' in valor && valor.bloqueioTemporario === true && tentarNovamenteEmSegundos !== undefined ? true : undefined;
-  return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos };
+  const condicaoEsperada = 'condicaoEsperada' in valor && valor.condicaoEsperada === 'acesso_rede_institucional'
+    && referencia !== undefined && etapa !== undefined && (!('statusHttp' in valor) || valor.statusHttp === undefined || statusHttp !== undefined)
+    && ['rede', 'tempo_esgotado'].includes(codigo) && codigoSistema && statusHttp === undefined
+    && !/^(?:EACCES|EPERM|ENOSPC|EROFS|EMFILE|ERR_CERT_|ERR_SSL_)/.test(codigoSistema) ? 'acesso_rede_institucional' as const : undefined;
+  return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos, condicaoEsperada };
 }
 
-function classificarResultadoFuncionalIpc(resposta: unknown): ResultadoFuncionalIpc {
+function classificarResultadoFuncionalIpc(canal: string, resposta: unknown): ResultadoFuncionalIpc {
   if (resposta === null || typeof resposta !== 'object' || Array.isArray(resposta) || !Object.prototype.hasOwnProperty.call(resposta, 'success')) return 'indeterminado';
   if (!('success' in resposta) || typeof resposta.success !== 'boolean') return 'indeterminado';
+  if ((('canceled' in resposta && resposta.canceled === true)
+    || (canal === 'template:importarArquivo' && resposta.success === false && 'cancelado' in resposta && resposta.cancelado === true)) && !('error' in resposta && resposta.error)) return 'cancelado';
+  if (canal.startsWith('gdl:') && 'falha' in resposta) {
+    const falha = normalizarFalhaDiagnosticoGdl(resposta.falha);
+    if (falha?.condicaoEsperada) return 'indisponivel';
+    if (falha?.referencia && falha.etapa) return 'falha';
+  }
   return resposta.success ? 'sucesso' : 'falha';
 }
 
 function registrarIpcDesempenho(canal: string, duracaoMs: number, desfecho: DesfechoIpc, entrada: unknown[], resposta?: unknown): void {
   const bytesEntrada = Array.from(entrada as unknown[]).reduce<number>((total, item) => total + tamanhoAproximado(item), 0);
   const sucesso = desfecho === 'sucesso' ? true : desfecho === 'indeterminado' ? null : false;
-  const falhou = desfecho === 'indeterminado' ? null : desfecho !== 'sucesso';
-  const evento: EventoDesempenhoEntrada = { origem: 'ipc', categoria: 'canal', evento: desfecho === 'sucesso' ? 'concluido' : desfecho === 'indeterminado' ? 'indeterminado' : 'falhou', canal, duracaoMs, metadados: { sucesso, falhou, bytesEntrada, bytesSaida: tamanhoAproximado(resposta) } };
-  if (falhou || duracaoMs >= 2_000) { ipcRenderer.send('desempenho:registrar', evento); return; }
+  const falhou = desfecho === 'indeterminado' ? null : desfecho === 'falha' || desfecho === 'rejeicao_transporte';
+  const esperado = desfecho === 'cancelado' || desfecho === 'indisponivel';
+  const interacaoUsuario = ['backup:criar', 'backup:selecionar', 'captura-logs:exportar', 'desempenho:exportar-csv', 'template:importarArquivo', 'laudo:exportarBkp', 'laudo:selecionarBkp', 'template:exportarPacote', 'template:selecionarPacote'].includes(canal);
+  const evento: EventoDesempenhoEntrada = { origem: 'ipc', categoria: 'canal', evento: esperado ? desfecho : desfecho === 'sucesso' ? 'concluido' : desfecho === 'indeterminado' ? 'indeterminado' : 'falhou', canal, duracaoMs, metadados: { sucesso, falhou, cancelado: desfecho === 'cancelado', indisponivel: desfecho === 'indisponivel', interacaoUsuario, bytesEntrada, bytesSaida: tamanhoAproximado(resposta) } };
+  if (esperado || interacaoUsuario || falhou || duracaoMs >= 2_000) { ipcRenderer.send('desempenho:registrar', evento); return; }
   if (perfilDesempenhoAtual === 'detalhado') {
     eventosIpcDetalhados.push(evento);
     if (eventosIpcDetalhados.length >= 100) descarregarIpcDetalhado(); else agendarIpcDetalhado();
@@ -1160,10 +1174,10 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
   return (ipcRenderer.invoke(channel, ...args) as Promise<T>).then(
     resposta => {
       if (!canaisDiagnosticoInternos.has(channel)) {
-        const resultadoFuncional = classificarResultadoFuncionalIpc(resposta);
+        const resultadoFuncional = classificarResultadoFuncionalIpc(channel, resposta);
         const duracaoMs = performance.now() - inicio;
-        const fase = resultadoFuncional === 'sucesso' ? 'sucesso' : resultadoFuncional === 'falha' ? 'falha_funcional' : 'resposta_indeterminada';
-        const falha = resultadoFuncional === 'falha' && channel.startsWith('gdl:') && resposta && typeof resposta === 'object' && 'falha' in resposta
+        const fase = resultadoFuncional === 'sucesso' ? 'sucesso' : resultadoFuncional === 'falha' ? 'falha_funcional' : resultadoFuncional === 'cancelado' || resultadoFuncional === 'indisponivel' ? resultadoFuncional : 'resposta_indeterminada';
+        const falha = (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') && channel.startsWith('gdl:') && resposta && typeof resposta === 'object' && 'falha' in resposta
           ? normalizarFalhaDiagnosticoGdl(resposta.falha) : undefined;
         registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs, ...(falha ? { falha } : {}) });
         registrarIpcDesempenho(channel, duracaoMs, resultadoFuncional, args, resposta);

@@ -1,3 +1,4 @@
+vi.mock('../../main/services/processador-imagens.service.js', async () => import('../apoio/processador-imagens-simulado'));
 import { classificarFalhaListaRepsGdl } from '../../main/services/gdl-minhas-reps-erro.service';
 import fs from 'node:fs'
 import http from 'node:http'
@@ -414,6 +415,30 @@ describe('gdl.service', () => {
     respostaRep = 'não-json'
     await expect(validarCredenciais('producao', { login: 'u', senha: 's' }, '109.026', '2026'))
       .resolves.toMatchObject({ sucesso: false, erro: 'O GDL retornou JSON inválido.' })
+  })
+
+  it('rejeita índice ZIP fora do arquivo antes de alocar a leitura', async () => {
+    bytesZipAtuais = Buffer.from(bytesZip)
+    const fim = bytesZipAtuais.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+    bytesZipAtuais.writeUInt32LE(0xfffffff0, fim + 16)
+    await expect(abrirSessaoImagensRepGdl('laudo-teste', '190', '2026')).rejects.toThrow(/limites|incompleto/)
+  })
+
+  it('limita a expansão real de uma foto com tamanho declarado falso e preserva outra foto válida', async () => {
+    const adulterado = new AdmZip()
+    adulterado.addFile('fotos/foto-adulterada.png', Buffer.concat([bytesPng, Buffer.alloc(4096, 1)]))
+    adulterado.addFile('fotos/foto-valida.png', bytesPng)
+    bytesZipAtuais = adulterado.toBuffer()
+    const central = bytesZipAtuais.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]))
+    bytesZipAtuais.writeUInt32LE(8, central + 24)
+    const sessao = await abrirSessaoImagensRepGdl('laudo-teste', '190', '2026')
+    const captura = await capturarImagensDaSessaoGdlParaLaudo('laudo-teste', sessao.sessaoId,
+      sessao.arquivos.map(arquivo => arquivo.idSelecao), async dados => ({ idSelecao: dados.idSelecao, imagemId: 'valida', sha256: dados.sha256,
+        nomeArquivo: dados.nomeArquivo, mimeType: dados.mimeType, tamanho: dados.bytes.length, sequencia: 1 }))
+    expect(captura.falhas).toHaveLength(1)
+    expect(captura.imagens).toHaveLength(1)
+    fecharSessaoImagensRepGdl('laudo-teste', sessao.sessaoId)
+    await expect(capturarImagensDaSessaoGdlParaLaudo('laudo-teste', sessao.sessaoId, [sessao.arquivos[0].idSelecao], vi.fn())).rejects.toThrow('expirou')
   })
 
   it('lista e captura imagens do ZIP, recusando duplicadas e entradas incompatíveis', async () => {

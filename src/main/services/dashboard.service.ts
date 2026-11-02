@@ -204,7 +204,11 @@ export class DashboardService {
       ),
     ]);
     const grupos = new Map<string, LinhaProducao[]>();
-    for (const linha of linhas) grupos.set(linha.id, [...(grupos.get(linha.id) ?? []), linha]);
+    for (const linha of linhas) {
+      const grupo = grupos.get(linha.id);
+      if (grupo) grupo.push(linha);
+      else grupos.set(linha.id, [linha]);
+    }
     return naturezas.map(natureza => {
       const grupo = grupos.get(natureza.id) ?? [];
       return {

@@ -114,6 +114,33 @@ describe('rolagem do painel de ilustrações', () => {
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
 
+  it('não duplica pedidos do próximo lote e ignora a resposta após trocar de laudo', async () => {
+    const imagens = Array.from({ length: 31 }, (_, indice) => ({
+      id: `painel-${indice}`, nomeArquivo: `foto-${indice}.jpg`, legenda: `Foto ${indice}`, sequencia: indice + 1,
+      createdAt: '2026-11-02T00:00:00.000Z', origem: 'local', sha256: `hash-${indice}`,
+    }));
+    Object.defineProperty(window, 'ipcAPI', { value: { ...window.ipcAPI,
+      ilustracoes: { ...window.ipcAPI.ilustracoes,
+        reconciliarImagens: vi.fn().mockResolvedValue({ success: true, data: {} }),
+        listarEstagio: vi.fn().mockResolvedValue({ success: true, data: [] }),
+      } }, writable: true });
+    listarImagens.mockImplementation((laudo: string) => Promise.resolve({ success: true, data: laudo === 'laudo-1' ? imagens : [imagens[30]] }));
+    let liberar!: (valor: { success: boolean; data: Array<{ id: string; thumbnailDataUri: string }> }) => void;
+    const pendente = new Promise<{ success: boolean; data: Array<{ id: string; thumbnailDataUri: string }> }>(resolve => { liberar = resolve; });
+    obterMiniaturas.mockResolvedValueOnce({ success: true, data: imagens.slice(0, 30).map(imagem => ({ id: imagem.id, thumbnailDataUri: figura.thumbnailUrl })) })
+      .mockReturnValueOnce(pendente)
+      .mockResolvedValueOnce({ success: true, data: [{ id: imagens[30].id, thumbnailDataUri: 'data:image/png;base64,AQ==' }] });
+    const propriedades = { onInsertImage: vi.fn(), onRefreshHtml: vi.fn() };
+    const { rerender, container } = render(<IlustracoesPanel {...propriedades} laudoId="laudo-1" />);
+    const carregar = await screen.findByRole('button', { name: 'Carregar próximas miniaturas' });
+    fireEvent.click(carregar); fireEvent.click(carregar);
+    expect(obterMiniaturas).toHaveBeenCalledTimes(2);
+    rerender(<IlustracoesPanel {...propriedades} laudoId="laudo-2" />);
+    await waitFor(() => expect(container.querySelector('img[src="data:image/png;base64,AQ=="]')).not.toBeNull());
+    await act(async () => { liberar({ success: true, data: [{ id: imagens[30].id, thumbnailDataUri: figura.thumbnailUrl }] }); await pendente; });
+    expect(container.querySelector('img[src="data:image/png;base64,AQ=="]')).not.toBeNull();
+  })
+
   it('padroniza o selo visual de figuras de exemplo', () => {
     render(
       <IlustracoesPanel

@@ -1,3 +1,4 @@
+import { acessoInstitucionalIndisponivel } from '../../shared/gdl/acesso-institucional.js';
 import { codigosFalhaListaRepsGdl, etapasFalhaListaRepsGdl, codigosSistemaFalhaGdl } from '../../shared/types/gdl-minhas-reps.types.js';
 import { appendFile, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -50,7 +51,11 @@ export function normalizarFalhaDiagnosticoGdl(valor: unknown) {
   const referencia = 'referencia' in valor && typeof valor.referencia === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(valor.referencia) ? valor.referencia : undefined;
   const tentarNovamenteEmSegundos = 'tentarNovamenteEmSegundos' in valor && typeof valor.tentarNovamenteEmSegundos === 'number' && Number.isInteger(valor.tentarNovamenteEmSegundos) && valor.tentarNovamenteEmSegundos >= 1 && valor.tentarNovamenteEmSegundos <= 60 ? valor.tentarNovamenteEmSegundos : undefined;
   const bloqueioTemporario = 'bloqueioTemporario' in valor && valor.bloqueioTemporario === true && tentarNovamenteEmSegundos !== undefined ? true : undefined;
-  return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos };
+  const condicaoEsperada = 'condicaoEsperada' in valor && valor.condicaoEsperada === 'acesso_rede_institucional'
+    && referencia !== undefined && etapa !== undefined && (!('statusHttp' in valor) || valor.statusHttp === undefined || statusHttp !== undefined)
+    && ['rede', 'tempo_esgotado'].includes(codigo) && acessoInstitucionalIndisponivel({ codigoSistema, statusHttp })
+    ? 'acesso_rede_institucional' as const : undefined;
+  return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos, condicaoEsperada };
 }
 
 export class DiagnosticoEventosService {

@@ -2,9 +2,8 @@ const SELETOR_BLOCOS_PERICIAIS = '.cond-bloco[data-bloco-pericial]';
 const SELETOR_ACAO_SUPRESSAO = ':scope > [data-acao-suprimir-bloco="true"]';
 const SELETOR_ACAO_SUPRESSAO_GLOBAL = '[data-acao-suprimir-bloco="true"]';
 const SELETOR_BLOCOS_CONDICIONAIS = '.cond-bloco[data-cond-bloco]';
-const SELETOR_ACAO_BLOCO_CONDICIONAL = '[data-acao-bloco-condicional]';
+type AcaoBlocoCondicional = 'editar' | 'concluir' | 'excluir';
 
-export type AcaoBlocoCondicional = 'editar' | 'concluir' | 'excluir';
 
 interface ElementoComClosest {
   closest(seletor: string): Element | null;
@@ -24,12 +23,6 @@ function temClosest(alvo: EventTarget | null): alvo is EventTarget & ElementoCom
 export function encontrarAcaoSupressaoBloco(alvo: EventTarget | null): HTMLElement | null {
   if (!temClosest(alvo)) return null;
   return alvo.closest(SELETOR_ACAO_SUPRESSAO_GLOBAL) as HTMLElement | null;
-}
-
-/** Resolve um controle transitório de qualquer bloco condicional no iframe do TinyMCE. */
-export function encontrarAcaoBlocoCondicional(alvo: EventTarget | null): HTMLElement | null {
-  if (!temClosest(alvo)) return null;
-  return alvo.closest(SELETOR_ACAO_BLOCO_CONDICIONAL) as HTMLElement | null;
 }
 
 /**
