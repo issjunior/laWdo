@@ -1,5 +1,6 @@
 import { acessoInstitucionalIndisponivel } from '../../shared/gdl/acesso-institucional.js';
 import { codigosFalhaListaRepsGdl, etapasFalhaListaRepsGdl, codigosSistemaFalhaGdl } from '../../shared/types/gdl-minhas-reps.types.js';
+import { codigoFalhaImagemImpressaoValido } from '../../shared/types/imagem-laudo.types.js';
 import { appendFile, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -56,6 +57,11 @@ export function normalizarFalhaDiagnosticoGdl(valor: unknown) {
     && ['rede', 'tempo_esgotado'].includes(codigo) && acessoInstitucionalIndisponivel({ codigoSistema, statusHttp })
     ? 'acesso_rede_institucional' as const : undefined;
   return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos, condicaoEsperada };
+}
+
+export function normalizarFalhaDiagnosticoImagem(valor: unknown) {
+  if (!valor || typeof valor !== 'object' || !('codigo' in valor)) return undefined;
+  return codigoFalhaImagemImpressaoValido(valor.codigo) ? { codigo: valor.codigo } : undefined;
 }
 
 export class DiagnosticoEventosService {

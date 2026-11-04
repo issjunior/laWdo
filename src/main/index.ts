@@ -1,6 +1,6 @@
 import { CANAIS_COM_INTERACAO_USUARIO } from '../shared/diagnostico/canais.js';
 import { iniciarAtualizacaoAutomaticaGdl, encerrarAtualizacaoAutomaticaGdl } from './services/gdl-atualizacao-automatica.service.js';
-import { normalizarFalhaDiagnosticoGdl } from './services/diagnostico-eventos.service.js';
+import { normalizarFalhaDiagnosticoGdl, normalizarFalhaDiagnosticoImagem } from './services/diagnostico-eventos.service.js';
 import { conectarDiagnosticoGpu, diagnosticoGpu, encerrarDiagnosticoGpu, preparacaoGpu } from './diagnostico-gpu.js';
 import { schemaConsultarGpuEntrada } from '../shared/diagnostico/contratos.js';
 import { configurarObservadorGdl } from './services/gdl-diagnostico.service.js';
@@ -437,6 +437,8 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const resultadoFuncional = entrada.resultadoFuncional === 'sucesso' || entrada.resultadoFuncional === 'falha' || entrada.resultadoFuncional === 'indeterminado' || entrada.resultadoFuncional === 'cancelado' || entrada.resultadoFuncional === 'indisponivel'
       ? entrada.resultadoFuncional : undefined;
     const falha = canal.startsWith('gdl:') && (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') ? normalizarFalhaDiagnosticoGdl(entrada.falha) : undefined;
+    const falhaImagem = canal === 'ilustracoes:obter-imagem-impressao' && resultadoFuncional === 'falha'
+      ? normalizarFalhaDiagnosticoImagem(entrada.falhaImagem) : undefined;
     const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
@@ -449,7 +451,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {

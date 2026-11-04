@@ -8,6 +8,7 @@ import type { SalvarTemplateCompletoInput, CriarSecaoTemplateInput, AtualizarSec
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
+import type { FalhaImagemImpressao } from '../shared/types/imagem-laudo.types.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -493,7 +494,7 @@ export interface IpcAPI {
     listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
     obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
     obterImagemEstagio: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
-    obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
+    obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string; falhaImagem?: FalhaImagemImpressao }>;
     obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
     estagiarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo; error?: string }>;
@@ -915,6 +916,15 @@ function normalizarFalhaDiagnosticoGdl(valor: unknown) {
   return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos, condicaoEsperada };
 }
 
+function normalizarFalhaDiagnosticoImagem(valor: unknown) {
+  if (!valor || typeof valor !== 'object' || !('codigo' in valor)) return undefined;
+  const codigos = ['ENTRADA_INVALIDA', 'CONSULTA_FALHOU', 'REGISTRO_AUSENTE', 'ARQUIVO_AUSENTE',
+    'LEITURA_FALHOU', 'INTEGRIDADE_FALHOU', 'PROCESSAMENTO_FALHOU', 'COMUNICACAO_FALHOU',
+    'RESPOSTA_INVALIDA', 'INDETERMINADA'] as const;
+  const codigo = codigos.find(item => item === valor.codigo);
+  return codigo ? { codigo } : undefined;
+}
+
 function classificarResultadoFuncionalIpc(canal: string, resposta: unknown): ResultadoFuncionalIpc {
   if (resposta === null || typeof resposta !== 'object' || Array.isArray(resposta) || !Object.prototype.hasOwnProperty.call(resposta, 'success')) return 'indeterminado';
   if (!('success' in resposta) || typeof resposta.success !== 'boolean') return 'indeterminado';
@@ -1179,7 +1189,11 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
         const fase = resultadoFuncional === 'sucesso' ? 'sucesso' : resultadoFuncional === 'falha' ? 'falha_funcional' : resultadoFuncional === 'cancelado' || resultadoFuncional === 'indisponivel' ? resultadoFuncional : 'resposta_indeterminada';
         const falha = (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') && channel.startsWith('gdl:') && resposta && typeof resposta === 'object' && 'falha' in resposta
           ? normalizarFalhaDiagnosticoGdl(resposta.falha) : undefined;
-        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs, ...(falha ? { falha } : {}) });
+        const falhaImagem = resultadoFuncional === 'falha' && channel === 'ilustracoes:obter-imagem-impressao'
+          && resposta && typeof resposta === 'object' && 'falhaImagem' in resposta
+          ? normalizarFalhaDiagnosticoImagem(resposta.falhaImagem) : undefined;
+        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs,
+          ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}) });
         registrarIpcDesempenho(channel, duracaoMs, resultadoFuncional, args, resposta);
       }
       return resposta;

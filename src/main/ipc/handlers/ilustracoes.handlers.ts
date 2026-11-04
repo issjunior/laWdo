@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import {
+  ErroImagemImpressao,
   atualizarLegendaImagemLaudo,
   atualizarOrdemImagensLaudo,
   arquivarImagemLaudo,
@@ -108,11 +109,13 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
   registrar('ilustracoes:obter-imagem-impressao', async (_event, laudoId: unknown, imagemId: unknown, larguraMaxima: unknown) => {
     try {
       if (typeof laudoId !== 'string' || typeof imagemId !== 'string' || typeof larguraMaxima !== 'number'
-        || !Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new Error('Imagem para impressão inválida.')
+        || !Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new ErroImagemImpressao('ENTRADA_INVALIDA')
       return { success: true, data: await executarMedido('obter_imagem_impressao',
         () => obterImagemImpressaoLaudo(laudoId, imagemId, larguraMaxima), { imagens: 1 }) }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Erro ao preparar a imagem para impressão.' }
+      const codigo = error instanceof ErroImagemImpressao ? error.codigo : 'INDETERMINADA'
+      logError('Falha ao preparar imagem para impressão', { codigo })
+      return { success: false, error: 'Não foi possível preparar a imagem para impressão.', falhaImagem: { codigo } }
     }
   })
 

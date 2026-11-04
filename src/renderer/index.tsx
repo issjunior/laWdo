@@ -10,6 +10,7 @@ import type {
   ImagemLaudoResumo,
   ImagemEstagiadaLaudo,
   ImagemPreparadaEditor,
+  FalhaImagemImpressao,
   MiniaturaImagemLaudo,
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
@@ -65,7 +66,7 @@ interface IpcIlustracoesLegado {
   listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
   obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
   obterImagemEstagio: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
-  obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
+  obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string; falhaImagem?: FalhaImagemImpressao }>;
   obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
   salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
   estagiarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo; error?: string }>;

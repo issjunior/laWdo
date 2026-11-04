@@ -19,6 +19,21 @@ export interface ResultadoAtualizacaoFiguras {
   erro?: string
 }
 
+export type CodigoFalhaImagemImpressao = 'ENTRADA_INVALIDA' | 'CONSULTA_FALHOU' | 'REGISTRO_AUSENTE'
+  | 'ARQUIVO_AUSENTE' | 'LEITURA_FALHOU' | 'INTEGRIDADE_FALHOU' | 'PROCESSAMENTO_FALHOU'
+  | 'COMUNICACAO_FALHOU' | 'RESPOSTA_INVALIDA' | 'INDETERMINADA'
+
+export interface FalhaImagemImpressao {
+  codigo: CodigoFalhaImagemImpressao
+}
+
+export function codigoFalhaImagemImpressaoValido(valor: unknown): valor is CodigoFalhaImagemImpressao {
+  return valor === 'ENTRADA_INVALIDA' || valor === 'CONSULTA_FALHOU' || valor === 'REGISTRO_AUSENTE'
+    || valor === 'ARQUIVO_AUSENTE' || valor === 'LEITURA_FALHOU' || valor === 'INTEGRIDADE_FALHOU'
+    || valor === 'PROCESSAMENTO_FALHOU' || valor === 'COMUNICACAO_FALHOU'
+    || valor === 'RESPOSTA_INVALIDA' || valor === 'INDETERMINADA'
+}
+
 export interface ImagemLaudoPersistida extends ImagemLaudoResumo {
   dataUri: string
 }

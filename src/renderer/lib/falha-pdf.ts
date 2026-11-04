@@ -1,4 +1,5 @@
 import type { FalhaPdf } from '@shared/types/pdf.types';
+import { codigoFalhaImagemImpressaoValido } from '@shared/types/imagem-laudo.types';
 
 export function validarFalhaPdf(valor: unknown): valor is FalhaPdf {
   if (!valor || typeof valor !== 'object') return false;
@@ -7,7 +8,8 @@ export function validarFalhaPdf(valor: unknown): valor is FalhaPdf {
     && ['carregamento', 'recursos', 'impressao'].includes(String(falha.etapa))
     && typeof falha.tentarNovamente === 'boolean'
     && (falha.posicaoImagem === undefined || (Number.isInteger(falha.posicaoImagem) && Number(falha.posicaoImagem) > 0))
-    && (falha.origem === undefined || falha.origem === 'corpo' || falha.origem === 'cabecalho');
+    && (falha.origem === undefined || falha.origem === 'corpo' || falha.origem === 'cabecalho')
+    && (falha.motivoImagem === undefined || codigoFalhaImagemImpressaoValido(falha.motivoImagem));
 }
 
 export function mensagemFalhaPdf(falha: FalhaPdf): string {
@@ -15,6 +17,19 @@ export function mensagemFalhaPdf(falha: FalhaPdf): string {
     case 'IMAGEM_INDISPONIVEL': {
       const local = falha.origem === 'cabecalho' ? 'do cabeçalho' : 'do laudo';
       const posicao = falha.posicaoImagem ? ` na posição ${falha.posicaoImagem}` : '';
+      const motivos: Partial<Record<NonNullable<FalhaPdf['motivoImagem']>, string>> = {
+        ENTRADA_INVALIDA: 'A referência da figura no laudo está incompleta.',
+        CONSULTA_FALHOU: 'Não foi possível consultar o registro local da figura.',
+        REGISTRO_AUSENTE: 'O registro local da figura não foi encontrado.',
+        ARQUIVO_AUSENTE: 'O arquivo local da figura não foi encontrado.',
+        LEITURA_FALHOU: 'Não foi possível ler o arquivo local da figura.',
+        INTEGRIDADE_FALHOU: 'O arquivo local da figura falhou na verificação de integridade.',
+        PROCESSAMENTO_FALHOU: 'Não foi possível processar a figura para impressão.',
+        COMUNICACAO_FALHOU: 'A comunicação com o armazenamento local da figura falhou.',
+        RESPOSTA_INVALIDA: 'O armazenamento local retornou dados inválidos para a figura.',
+        INDETERMINADA: 'Não foi possível determinar a causa da falha da figura.',
+      };
+      if (falha.motivoImagem) return `Imagem ${local}${posicao}: ${motivos[falha.motivoImagem]} Revise ou substitua a imagem e tente novamente.`;
       return `Uma imagem ${local}${posicao} não pôde ser carregada. Revise ou substitua a imagem e tente novamente.`;
     }
     case 'FONTE_INDISPONIVEL':

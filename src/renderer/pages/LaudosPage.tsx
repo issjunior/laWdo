@@ -86,7 +86,7 @@ import { medirOperacaoEditorLaudo } from '@/lib/desempenho-editor-laudo';
 import { prepararInicializacaoEditorLaudo, lerConteudoAtualEditorLaudo, sincronizacaoEditorLaudoPendente } from '@/lib/sincronizacao-editor-laudo';
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { capturaProblemaLaudoAtiva, registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
-import { atualizarNumeroFigura, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
+import { atualizarNumeroFigura, corrigirMolduraVaziaLocalNecropsia, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
 import type { ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
 import type { LaudoConteudo, LaudoResumoLista } from '@shared/types/laudo.types';
 import {
@@ -163,7 +163,7 @@ import {
 import { toast } from 'sonner';
 import { obterNomeArquivoLaudo } from '@shared/utils/nomes-documentos-rep';
 import { criarHtmlFigura } from '@/lib/figura-html';
-import { resolverImagensImpressaoLaudo } from '@/lib/imagens-impressao-laudo';
+import { ErroPreparacaoImagemPdf, resolverImagensImpressaoLaudo } from '@/lib/imagens-impressao-laudo';
 import { conteudoHtmlEhVazio, removerIlustracoesVazias } from '@/lib/ilustracoes-secoes';
 
 function buildFigureHtml(url: string, id: string, legenda: string, previa = false): string {
@@ -2195,7 +2195,7 @@ export const LaudosPage: React.FC = () => {
         mostrarFalhaPdf(result.falhaPdf, () => { void handlePreview(); });
       }
     } catch (e: unknown) {
-      mostrarFalhaPdf(e instanceof ErroCabecalhoPdf ? e.falhaPdf : undefined, () => { void handlePreview(); });
+      mostrarFalhaPdf(e instanceof ErroCabecalhoPdf || e instanceof ErroPreparacaoImagemPdf ? e.falhaPdf : undefined, () => { void handlePreview(); });
     } finally {
       setCarregandoPreview(false);
     }
@@ -2293,7 +2293,7 @@ export const LaudosPage: React.FC = () => {
         mostrarFalhaPdf(result.falhaPdf, () => { void handleListaPreview(laudo); });
       }
     } catch (e: unknown) {
-      mostrarFalhaPdf(e instanceof ErroCabecalhoPdf ? e.falhaPdf : undefined, () => { void handleListaPreview(laudo); });
+      mostrarFalhaPdf(e instanceof ErroCabecalhoPdf || e instanceof ErroPreparacaoImagemPdf ? e.falhaPdf : undefined, () => { void handleListaPreview(laudo); });
     } finally {
       setListaPreviewLoading(false);
     }
@@ -2441,7 +2441,7 @@ export const LaudosPage: React.FC = () => {
     } catch (e: unknown) {
       if (formato === 'pdf') {
         toast.dismiss(toastId);
-        mostrarFalhaPdf(e instanceof ErroCabecalhoPdf ? e.falhaPdf : undefined, () => { void handleExportar('pdf'); });
+        mostrarFalhaPdf(e instanceof ErroCabecalhoPdf || e instanceof ErroPreparacaoImagemPdf ? e.falhaPdf : undefined, () => { void handleExportar('pdf'); });
       } else {
         toast.error('Erro ao exportar: ' + obterMensagemErro(e, 'Erro inesperado'), { id: toastId });
       }
@@ -2468,9 +2468,12 @@ export const LaudosPage: React.FC = () => {
       if (aberturaLaudoRef.current === abertura) setAbrindoLaudoId(null);
     }
     if (aberturaLaudoRef.current !== abertura) return;
+    const conteudoOriginal = laudoCompleto.conteudo || '';
+    const conteudoCorrigido = corrigirMolduraVaziaLocalNecropsia(conteudoOriginal);
+    const conteudoInicial = conteudoCorrigido === conteudoOriginal ? conteudoOriginal : reindexarFiguras(conteudoCorrigido);
     const parsedSecoes = removerIlustracoesVazias(parsearSecoesEstruturais(
       reindexarHtmlEstrutural(
-        limparIndicadoresCondicionais(converterPlaceholdersTextuais(laudoCompleto.conteudo || '', placeholderChaves))
+        limparIndicadoresCondicionais(converterPlaceholdersTextuais(conteudoInicial, placeholderChaves))
       )
     ).map(secao => ({
       ...secao,

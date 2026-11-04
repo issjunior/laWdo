@@ -9,6 +9,7 @@ import { DomUtils, parseDocument } from 'htmlparser2'
 import { executeNonQuery, executeQuery, withTransaction } from '../database/sqlite.js'
 import { getLogger } from '../utils/logger.js'
 import { configuracaoService } from './configuracao.service.js'
+import type { CodigoFalhaImagemImpressao } from '../../shared/types/imagem-laudo.types.js'
 import { LIMITES_PREVIA_EDITOR, PERFIL_PREVIA_EDITOR_PADRAO, perfilPreviaEditorValido, LIMITES_FIGURA_LAUDO, PERFIL_FIGURA_LAUDO_PADRAO, perfilFiguraLaudoValido } from '../../shared/types/imagem-laudo.types.js'
 import type {
   AtualizarOrdemImagemLaudoEntrada,
@@ -24,6 +25,12 @@ import type {
 } from '../../shared/types/imagem-laudo.types.js'
 
 const log = getLogger('database')
+
+export class ErroImagemImpressao extends Error {
+  constructor(readonly codigo: CodigoFalhaImagemImpressao) {
+    super(codigo)
+  }
+}
 const DIRETORIO_IMAGENS = path.join(app.getPath('userData'), 'imagens', 'laudos')
 
 interface ImagemLaudoRow {
@@ -497,19 +504,40 @@ export async function obterImagemLaudoPorId(laudoIdEntrada: string, imagemIdEntr
 export async function obterImagemImpressaoLaudo(
   laudoIdEntrada: string, imagemIdEntrada: string, larguraMaxima: number,
 ): Promise<{ id: string; dataUri: string }> {
-  const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
-  const imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
-  if (!Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new Error('Resolução de impressão inválida.')
-  const registro = (await executeQuery<ImagemLaudoRow>(
-    'SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId],
-  ))[0]
-  if (!registro) throw new Error('Arquivo local da figura não encontrado para impressão.')
-  const bytesOriginais = await readFile(caminhoAbsoluto(registro.caminho_relativo))
-  if (createHash('sha256').update(bytesOriginais).digest('hex') !== registro.sha256) throw new Error('Arquivo local da figura não passou na verificação de integridade.')
-  const limite = await obterPerfilFiguraLaudo()
-  const tratada = await tratarFigura(bytesOriginais, registro.mime_type, limite)
-  const resultado = await processarImagem({ bytes: tratada.bytes, mimeOriginal: tratada.mimeType, finalidade: 'figura',
-    largura: larguraMaxima, qualidade: limite.qualidadeJpeg, formato: tratada.mimeType === 'image/jpeg' ? 'jpeg' : 'png', preservarSeCouber: true })
+  let laudoId: string
+  let imagemId: string
+  try {
+    laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
+    imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
+  } catch {
+    throw new ErroImagemImpressao('ENTRADA_INVALIDA')
+  }
+  if (!Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new ErroImagemImpressao('ENTRADA_INVALIDA')
+  let registro: ImagemLaudoRow | undefined
+  try {
+    registro = (await executeQuery<ImagemLaudoRow>(
+      'SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId],
+    ))[0]
+  } catch {
+    throw new ErroImagemImpressao('CONSULTA_FALHOU')
+  }
+  if (!registro) throw new ErroImagemImpressao('REGISTRO_AUSENTE')
+  let bytesOriginais: Buffer
+  try {
+    bytesOriginais = await readFile(caminhoAbsoluto(registro.caminho_relativo))
+  } catch (erro) {
+    throw new ErroImagemImpressao(erro instanceof Error && 'code' in erro && erro.code === 'ENOENT' ? 'ARQUIVO_AUSENTE' : 'LEITURA_FALHOU')
+  }
+  if (createHash('sha256').update(bytesOriginais).digest('hex') !== registro.sha256) throw new ErroImagemImpressao('INTEGRIDADE_FALHOU')
+  let resultado: Awaited<ReturnType<typeof processarImagem>>
+  try {
+    const limite = await obterPerfilFiguraLaudo()
+    const tratada = await tratarFigura(bytesOriginais, registro.mime_type, limite)
+    resultado = await processarImagem({ bytes: tratada.bytes, mimeOriginal: tratada.mimeType, finalidade: 'figura',
+      largura: larguraMaxima, qualidade: limite.qualidadeJpeg, formato: tratada.mimeType === 'image/jpeg' ? 'jpeg' : 'png', preservarSeCouber: true })
+  } catch {
+    throw new ErroImagemImpressao('PROCESSAMENTO_FALHOU')
+  }
   return { id: imagemId, dataUri: `data:${resultado.mimeType};base64,${Buffer.from(resultado.bytes).toString('base64')}` }
 }
 

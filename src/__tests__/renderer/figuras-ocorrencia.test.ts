@@ -1,9 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
-import { atualizarNumeroFigura, legendaFiguraAusente, localizarFiguraPorIndice, reindexarFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '../../renderer/lib/figuras';
+import { atualizarNumeroFigura, corrigirMolduraVaziaLocalNecropsia, legendaFiguraAusente, localizarFiguraPorIndice, reindexarFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '../../renderer/lib/figuras';
 import { criarHtmlFigura } from '../../renderer/lib/figura-html';
 
 describe('ocorrências de figuras', () => {
+  it('corrige a moldura herdada sem perder a foto substituída ou duplicá-la no painel', () => {
+    const html = '<table><tr><td><figure class="laudo-figure" data-image-id="dummy-b601-local-necropsia-material-apresentado-1" data-dummy="true">'
+      + '<figure class="laudo-figure" data-image-id="foto-real"><img src="foto.png"><figcaption>Figura 02: Embalagem</figcaption></figure>'
+      + '</figure></td><td><figure class="laudo-figure" data-image-id="outra-foto"><img src="outra.png">'
+      + '<figcaption>Figura 03: Lacre</figcaption></figure></td></tr></table>';
+    const corrigido = reindexarFiguras(corrigirMolduraVaziaLocalNecropsia(html));
+    const documento = new DOMParser().parseFromString(corrigido, 'text/html');
+    const figuras = Array.from(documento.querySelectorAll('figure.laudo-figure'));
+    expect(figuras).toHaveLength(2);
+    expect(figuras.map(figura => figura.getAttribute('data-image-id'))).toEqual(['foto-real', 'outra-foto']);
+    expect(figuras.map(figura => figura.querySelector('figcaption')?.textContent)).toEqual(['Figura 01: Embalagem', 'Figura 02: Lacre']);
+    expect(figuras[0].querySelector('img')?.getAttribute('src')).toBe('foto.png');
+    expect(corrigirMolduraVaziaLocalNecropsia(corrigido)).toBe(corrigido);
+  });
+
+  it('preserva figuras fora da moldura vazia reconhecida', () => {
+    const html = '<figure class="laudo-figure" data-image-id="outra-moldura" data-dummy="true">'
+      + '<figure class="laudo-figure"><img src="foto.png"><figcaption>Figura 01</figcaption></figure></figure>';
+    expect(corrigirMolduraVaziaLocalNecropsia(html)).toBe(html);
+  });
+
   it('localiza a segunda ocorrência mesmo quando ambas usam o mesmo arquivo', () => {
     const primeiro = document.createElement('div');
     primeiro.innerHTML = '<figure class="laudo-figure" data-image-id="foto"><img></figure>';

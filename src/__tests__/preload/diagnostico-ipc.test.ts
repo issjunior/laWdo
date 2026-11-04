@@ -14,6 +14,7 @@ const electronSimulado = ({
 
 interface ApiTeste {
   laudo: { selecionarBkp(): Promise<unknown> };
+  ilustracoes: { obterImagemImpressao(laudoId: string, imagemId: string, larguraMaxima: number): Promise<unknown> };
   gdl: { copiarEmailSuporte(): Promise<unknown>; atualizarMinhasRepsCache(forcar: boolean): Promise<unknown> };
   configuracao: { obter(chave: string): Promise<unknown> };
 }
@@ -90,6 +91,16 @@ describe('classificação do resultado IPC no preload', () => {
     expect(electronSimulado.enviar).toHaveBeenCalledWith('desempenho:registrar', expect.objectContaining({
       evento: 'falhou', metadados: expect.objectContaining({ sucesso: false, falhou: true }),
     }));
+  });
+
+  it('registra somente o motivo conhecido da falha de imagem para impressão', async () => {
+    electronSimulado.invocar.mockResolvedValue({ success: false, error: 'caminho privado',
+      falhaImagem: { codigo: 'ARQUIVO_AUSENTE', caminho: 'caminho privado', imagemId: 'foto privada' } });
+    await ipcAPI.ilustracoes.obterImagemImpressao('laudo', 'foto', 800);
+    const eventos = eventosDiagnosticos();
+    expect(eventos[1]).toMatchObject({ fase: 'falha_funcional', canal: 'ilustracoes:obter-imagem-impressao',
+      falhaImagem: { codigo: 'ARQUIVO_AUSENTE' }, correlacaoId: eventos[0]?.correlacaoId });
+    expect(JSON.stringify(eventos)).not.toMatch(/caminho privado|foto privada/);
   });
 
   it.each([null, 'pong', { success: 'false' }, { data: 1 }])('classifica resposta sem envelope válido como indeterminada: %s', async resposta => {

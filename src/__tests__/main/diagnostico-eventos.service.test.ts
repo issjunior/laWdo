@@ -2,7 +2,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DiagnosticoEventosService, sanitizarDadosDiagnostico, normalizarFalhaDiagnosticoGdl } from '@main/services/diagnostico-eventos.service.js';
+import { DiagnosticoEventosService, sanitizarDadosDiagnostico, normalizarFalhaDiagnosticoGdl, normalizarFalhaDiagnosticoImagem } from '@main/services/diagnostico-eventos.service.js';
 
 const diretorios: string[] = [];
 
@@ -45,6 +45,11 @@ describe('DiagnosticoEventosService', () => {
     expect(normalizarFalhaDiagnosticoGdl({ codigo: 'rede', codigoSistema: 'ECONNREFUSED', etapa: 'carregar_formulario', detalhes: 'segredo', url: 'https://segredo', statusHttp: 503, bloqueioTemporario: true, tentarNovamenteEmSegundos: 5 })).toMatchObject({ codigo: 'rede', codigoSistema: 'ECONNREFUSED', etapa: 'carregar_formulario', statusHttp: 503, bloqueioTemporario: true, tentarNovamenteEmSegundos: 5 });
     expect(JSON.stringify(normalizarFalhaDiagnosticoGdl({ codigo: 'rede', etapa: 'segredo', codigoSistema: 'segredo', referencia: 'segredo', statusHttp: -1, tentarNovamenteEmSegundos: 999 }))).not.toContain('segredo');
     expect(normalizarFalhaDiagnosticoGdl({ codigo: 'segredo' })).toBeUndefined();
+  });
+
+  it('preserva somente o código conhecido da falha da imagem no diagnóstico', () => {
+    expect(normalizarFalhaDiagnosticoImagem({ codigo: 'ARQUIVO_AUSENTE', imagemId: 'privado', caminho: 'privado' })).toEqual({ codigo: 'ARQUIVO_AUSENTE' });
+    expect(normalizarFalhaDiagnosticoImagem({ codigo: 'desconhecido', caminho: 'privado' })).toBeUndefined();
   });
 
 });

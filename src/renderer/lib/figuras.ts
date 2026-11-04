@@ -4,6 +4,22 @@
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 
 const PREFIXO_FIGURA = /^\s*Fig(?:ura|\.)\s*(?:\d+|XX)\s*:?\s*/i;
+const ID_MOLDURA_VAZIA_LOCAL_NECROPSIA = 'dummy-b601-local-necropsia-material-apresentado-1';
+
+export function corrigirMolduraVaziaLocalNecropsia(html: string): string {
+  if (!html.includes(ID_MOLDURA_VAZIA_LOCAL_NECROPSIA)) return html;
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  const moldura = Array.from(documento.querySelectorAll<HTMLElement>('figure.laudo-figure[data-dummy="true"]'))
+    .find(figura => figura.getAttribute('data-image-id') === ID_MOLDURA_VAZIA_LOCAL_NECROPSIA);
+  if (!moldura) return html;
+  const filhos = Array.from(moldura.childNodes).filter(no => no.nodeType !== Node.TEXT_NODE || Boolean(no.textContent?.trim()));
+  if (filhos.length !== 1 || !(filhos[0] instanceof HTMLElement)) return html;
+  const figura = filhos[0];
+  if (!figura.matches('figure.laudo-figure') || !Array.from(figura.children).some(filho => filho.tagName === 'IMG')
+    || !Array.from(figura.children).some(filho => filho.tagName === 'FIGCAPTION')) return html;
+  moldura.replaceWith(figura);
+  return documento.body.innerHTML;
+}
 
 export function extrairDescricaoFigura(texto: string): string {
   return texto.replace(PREFIXO_FIGURA, '').trim();
