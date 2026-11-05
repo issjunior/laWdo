@@ -12,6 +12,7 @@ export function editorBloqueadoParaSeletores(editor: Editor): boolean {
 export interface SessaoSeletorTabela {
   id: string;
   valor: string;
+  textoApresentado?: string;
   rotulo: string;
   aceitaTextoLivre: boolean;
   digitar: (texto: string) => void;
@@ -148,7 +149,7 @@ export function registrarSeletoresTabela(editor: Editor, aoAbrir: (sessao: Sessa
     fecharSeletorAtivo = () => fechar(false, true);
     botao.setAttribute('aria-expanded', 'true');
     botao.setAttribute('aria-controls', `${id}-lista`);
-    aoAbrir({ id, valor, rotulo: controle.getAttribute('aria-label') || 'Selecionar', opcoes, aceitaTextoLivre,
+    aoAbrir({ id, valor, textoApresentado: valor ? botao.firstChild?.textContent ?? valor : '', rotulo: controle.getAttribute('aria-label') || 'Selecionar', opcoes, aceitaTextoLivre,
       digitar: texto => { if (ativo === selecao) selecao.rascunho = texto; },
       fechar,
       concluirFechamento: () => {
@@ -170,7 +171,7 @@ export function registrarSeletoresTabela(editor: Editor, aoAbrir: (sessao: Sessa
         if (!valido(controle, botao)
           || lerValor(controle) !== valor || JSON.stringify(lerOpcoes(controle)) !== assinatura
           || (!aceitaTextoLivre && !opcoes.some(opcao => opcao.valor === escolhido && !opcao.desabilitada))) { fechar(false); return; }
-        if (aceitaTextoLivre) aplicarTextoLivre(selecao, escolhido);
+        if (aceitaTextoLivre && escolhido !== '__manual__') aplicarTextoLivre(selecao, escolhido);
         else selecao.escolhido = escolhido;
         fechar();
       },

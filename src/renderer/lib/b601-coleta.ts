@@ -7,6 +7,8 @@ import { codigoColetaPorOrigem, esquemaRepsMesmoCasoGdl, sugerirRepColeta, forma
 import type { RepsMesmoCasoGdl } from '@shared/gdl/reps-mesmo-caso';
 import { CATALOGO_TIPOS_PECA_B601 } from '@shared/catalogos/b601.catalogo';
 import { opcoesOrigemColeta } from '@shared/catalogos/balistica-opcoes.catalogo';
+import { normalizarOpcoesTabelaB601 } from '@shared/catalogos/b601-tabelas.catalogo';
+import { criarHtmlCampoReservado } from '@shared/utils/campo-reservado';
 import { editorBloqueadoParaSeletores, limparApresentacaoSeletoresTabela, prepararApresentacaoSeletorTabela } from './seletores-tabela-laudo';
 
 const seletorCampo = '[data-b601-exame-coleta="true"]';
@@ -125,23 +127,29 @@ export function prepararColetaB601(raiz: HTMLElement, somenteLeitura = false): v
           .forEach(rep => valores.set(formatarReferenciaColeta(rep), formatarReferenciaColeta(rep)));
       }
       valores.set('__manual__', 'Preencher manualmente');
-      const assinatura = JSON.stringify([...valores]);
+      const opcoes = normalizarOpcoesTabelaB601([...valores].map(([valor, texto]) => ({ valor, texto })), tipo);
+      if (atual === 'XXX') opcoes.unshift({ texto: 'XXX', valor: 'XXX' });
+      const assinatura = JSON.stringify(opcoes);
       if (controle.getAttribute('data-opcoes') !== assinatura) {
         controle.setAttribute('data-opcoes', assinatura);
         controle.replaceChildren();
-        valores.forEach((rotulo, valor) => {
+        opcoes.forEach(({ texto: rotulo, valor }) => {
           const opcao = raiz.ownerDocument.createElement('option');
           opcao.value = valor;
           opcao.textContent = rotulo;
+          opcao.disabled = valor === 'XXX';
+          opcao.hidden = valor === 'XXX';
           controle.append(opcao);
         });
       }
       controle.value = atual;
+      controle.setAttribute('data-valor-livre', atual === 'XXX' ? '' : atual);
       controle.classList.toggle('campo-reservado', atual === 'XXX');
       campo.setAttribute('contenteditable', 'false');
       campo.setAttribute('data-b601-coleta-editavel', 'true');
       campo.append(controle);
-      prepararApresentacaoSeletorTabela(controle);
+      const textoApresentado = normalizarOpcoesTabelaB601([{ valor: atual, texto: atual }], tipo)[0]?.texto;
+      prepararApresentacaoSeletorTabela(controle, textoApresentado || 'XXX');
     });
   });
   raiz.querySelectorAll<HTMLElement>('[data-b601-sinab="opcional"]').forEach(bloco => {
@@ -158,10 +166,14 @@ export function registrarColetaB601(editor: Editor, _laudoId: string | undefined
   const salvar = () => { sincronizar(); editor.nodeChanged(); aoAlterar(editor.getContent()); };
   const preencher = (campo: HTMLElement, valor: string) => {
     if (encerrado || editor.removed || editor.destroyed || !editor.getBody().contains(campo) || !permiteEdicaoCampo(campo, editorBloqueadoParaSeletores(editor), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
+    valor = valor.trim() === 'XXX' ? '' : valor.trim();
     editor.undoManager.transact(() => {
       if (!materializarEdicaoPontual(editor, campo)) return;
       const texto = campo.querySelector(seletorTexto);
-      if (texto) texto.textContent = valor.trim() || 'XXX';
+      if (texto) {
+        if (valor) texto.textContent = valor;
+        else texto.innerHTML = criarHtmlCampoReservado('Campo de preenchimento manual no laudo: Nº Exame Coleta');
+      }
       if (campo.getAttribute('data-b601-campo-coleta') === 'origem') {
         const exame = campo.closest('tr')?.querySelector<HTMLElement>(seletorCampo);
         if (exame) {
@@ -181,7 +193,8 @@ export function registrarColetaB601(editor: Editor, _laudoId: string | undefined
     const campo = alvo.closest<HTMLElement>(seletorCampoEditavel);
     if (!campo || !permiteEdicaoCampo(campo, editorBloqueadoParaSeletores(editor), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
     evento.stopImmediatePropagation();
-    if (alvo.value === '__manual__') {
+    const escolhido = alvo.value || alvo.getAttribute('data-valor-livre') || '';
+    if (escolhido === '__manual__') {
       const atual = campo.querySelector(seletorTexto)?.textContent?.trim() || '';
       sincronizar();
       const tipo = campo.getAttribute('data-b601-campo-coleta') || 'exame';
@@ -210,7 +223,7 @@ export function registrarColetaB601(editor: Editor, _laudoId: string | undefined
           preencher(campo, valor);
           api.close();
         } });
-    } else if (Array.from(alvo.options).some(opcao => opcao.value === alvo.value)) preencher(campo, alvo.value);
+    } else preencher(campo, escolhido);
   };
   const clicar = (evento: MouseEvent) => {
     const alvo = evento.target;

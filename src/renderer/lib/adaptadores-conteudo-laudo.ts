@@ -1,8 +1,9 @@
+import { VERSAO_CAMPOS_TABELA_B601 } from '@shared/catalogos/b601-tabelas.catalogo';
 import type { Editor } from 'tinymce';
 import { personalizarTabelaPlaceholder, restaurarTabelaPlaceholder, excluirTabelaPlaceholder } from './apresentacao-placeholders';
 import { gerarDescricaoAgrupadaB601, gerarDescricaoColetaB601 } from '@shared/utils/b601-descricao-agrupada';
 
-export const SELETOR_SELECAO_PONTUAL = '[data-b601-exame-coleta="true"], [data-b601-modelo-coleta="true"] [data-b601-campo-projetil="tipo"], [data-b601-modelo-coleta="true"] [data-b601-campo-projetil="tipo_raiamento"], [data-b601-campo-projetil="calibre_nominal_provavel"]';
+export const SELETOR_SELECAO_PONTUAL = `[data-b601-campos-versao="${VERSAO_CAMPOS_TABELA_B601}"] [data-b601-campo], [data-b601-exame-coleta="true"], [data-b601-modelo-coleta="true"] [data-b601-campo-projetil="tipo"], [data-b601-modelo-coleta="true"] [data-b601-campo-projetil="tipo_raiamento"], [data-b601-campo-projetil="calibre_nominal_provavel"]`;
 
 interface AdaptadorConteudo {
   seletor: string;

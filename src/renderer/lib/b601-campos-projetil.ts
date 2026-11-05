@@ -1,3 +1,4 @@
+import { normalizarOpcoesTabelaB601, obterCampoTabelaB601, obterOpcoesCampoTabelaB601, VALOR_MANUAL_TABELA_B601, VERSAO_CAMPOS_TABELA_B601 } from '@shared/catalogos/b601-tabelas.catalogo';
 import { permiteEdicaoCampo } from './politica-edicao-conteudo';
 import { SELETOR_SELECAO_PONTUAL } from './adaptadores-conteudo-laudo';
 import { registrarPreparacaoConteudo } from './preparacao-conteudo-editor';
@@ -34,7 +35,17 @@ function carregarFormatosPersonalizados(): Promise<FormatoPersonalizado[]> {
   return carregamentoPersonalizados;
 }
 
+function obterDefinicaoCampo(campo: HTMLElement) {
+  const grupo = campo.closest('[data-b601-grupo]');
+  if (campo.getAttribute('data-b601-campo-projetil') === 'aderencias') return obterCampoTabelaB601('105', 'aderencias');
+  if (grupo?.getAttribute('data-b601-campos-versao') !== VERSAO_CAMPOS_TABELA_B601) return undefined;
+  const definicao = obterCampoTabelaB601(grupo.getAttribute('data-b601-grupo'), campo.getAttribute('data-b601-campo'));
+  return definicao?.fonte ? definicao : undefined;
+}
+
 function obterOpcoes(campo: HTMLElement, personalizados: readonly FormatoPersonalizado[], atual: string): { texto: string; valor: string }[] {
+  const definicao = obterDefinicaoCampo(campo);
+  if (definicao) return obterOpcoesCampoTabelaB601(definicao, personalizados, atual);
   const campoEstojo = campo.getAttribute('data-b601-campo-estojo');
   if (campoEstojo) {
     if (campoEstojo === 'marca') return opcoesMarcaCartucho.map(opcao => ({ texto: opcao.label, valor: opcao.label }));
@@ -64,28 +75,25 @@ function obterOpcoes(campo: HTMLElement, personalizados: readonly FormatoPersona
 function atualizarLegendaFormatos(grupo: HTMLElement, personalizados: readonly FormatoPersonalizado[]): void {
   const siglas = [...siglasPadrao, ...personalizados.flatMap(item => item.sigla ? [item.sigla] : [])];
   const opcoes = criarOpcoesFormatoProjetil(siglas, personalizados.map(item => item.tipo));
-  const entradas = new Map<string, string>();
-  grupo.querySelectorAll<HTMLElement>('[data-b601-campo-projetil="constituicao_formato"]').forEach(campo => {
-    const valor = (campo.querySelector(seletorTexto) || campo).textContent?.trim() || '';
-    const opcao = opcoes.find(item => normalizarFormatoProjetil(item.valor) === normalizarFormatoProjetil(valor));
-    if (opcao && siglas.includes(opcao.valor)) entradas.set(opcao.valor, opcao.descricao);
-  });
   const legendaAntiga = 'LEGENDA: CHOG = Chumbo Ogival; ETOG = Encamisado Total Ogival; EXPO = Expansivo Ponta Oca.';
+  grupo.querySelectorAll(seletorLegenda).forEach(legenda => legenda.remove());
   Array.from(grupo.children).filter(elemento => elemento.tagName === 'P' && elemento.textContent?.trim() === legendaAntiga)
     .forEach(elemento => elemento.remove());
-  let legenda = grupo.querySelector<HTMLElement>(':scope > [data-b601-legenda-formatos="automatica"], :scope > [data-b601-legenda-tipos="automatica"]');
-  if (!entradas.size) {
-    legenda?.remove();
-    return;
-  }
-  if (!legenda) {
-    legenda = grupo.ownerDocument.createElement('p');
-    grupo.append(legenda);
-  }
-  legenda.removeAttribute('data-b601-legenda-tipos');
-  legenda.setAttribute('data-b601-legenda-formatos', 'automatica');
-  legenda.textContent = `LEGENDA: ${Array.from(entradas, ([sigla, descricao]) => `${sigla} = ${descricao}`).join('; ')}.`;
-  legenda.setAttribute('contenteditable', 'false');
+  grupo.querySelectorAll<HTMLTableElement>('table').forEach(tabela => {
+    const entradas = new Map<string, string>();
+    tabela.querySelectorAll<HTMLElement>('[data-b601-campo-projetil="constituicao_formato"]').forEach(campo => {
+      if (campo.closest('table') !== tabela) return;
+      const valor = (campo.querySelector(seletorTexto) || campo).textContent?.trim() || '';
+      const opcao = opcoes.find(item => normalizarFormatoProjetil(item.valor) === normalizarFormatoProjetil(valor));
+      if (opcao && siglas.includes(opcao.valor)) entradas.set(opcao.valor, opcao.descricao);
+    });
+    if (!entradas.size) return;
+    const legenda = grupo.ownerDocument.createElement('p');
+    legenda.setAttribute('data-b601-legenda-formatos', 'automatica');
+    legenda.textContent = `LEGENDA: ${Array.from(entradas, ([sigla, descricao]) => `${sigla} = ${descricao}`).join('; ')}.`;
+    legenda.setAttribute('contenteditable', 'false');
+    tabela.after(legenda);
+  });
 }
 
 function lerUnidades(grupo: HTMLElement): { pecaId: string; unidade: number }[] {
@@ -112,16 +120,18 @@ function lerUnidades(grupo: HTMLElement): { pecaId: string; unidade: number }[] 
 
 export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = false, personalizados: readonly FormatoPersonalizado[] = []): void {
   raiz.querySelectorAll<HTMLElement>('[data-b601-grupo="105"]').forEach(grupo => {
+    const versionado = grupo.hasAttribute('data-b601-campos-versao');
     const unidades = lerUnidades(grupo);
     grupo.querySelectorAll<HTMLTableElement>('table').forEach(tabela => {
       const cabecalhos = Array.from(tabela.querySelectorAll<HTMLElement>('thead tr:last-child th')).slice(1);
       const linhas = Array.from(tabela.querySelectorAll<HTMLTableRowElement>('tbody tr'))
-        .filter(candidata => ['Origem', 'Tipo', 'Constituição e formato', 'Calibre nominal (provável)'].includes(candidata.firstElementChild?.textContent?.trim() || '')
+        .filter(candidata => ['Origem', 'Tipo', 'Constituição e formato', 'Calibre nominal (provável)', 'Aderências'].includes(candidata.firstElementChild?.textContent?.trim() || '')
           || /^tipo(?: de)? raiamento$/i.test(candidata.firstElementChild?.textContent?.trim().replace(/\s+/g, ' ') || ''));
       linhas.forEach(linha => {
+        if (versionado && linha.firstElementChild?.textContent?.trim() !== 'Aderências') return;
         if (linha.children.length !== cabecalhos.length + 1) return;
         const rotulo = linha.firstElementChild?.textContent?.trim();
-        const tipo = rotulo === 'Calibre nominal (provável)' ? 'calibre_nominal_provavel'
+        const tipo = rotulo === 'Aderências' ? 'aderencias' : rotulo === 'Calibre nominal (provável)' ? 'calibre_nominal_provavel'
           : /^tipo(?: de)? raiamento$/i.test(rotulo?.replace(/\s+/g, ' ') || '') ? 'tipo_raiamento'
           : rotulo === 'Tipo' ? 'tipo' : rotulo === 'Constituição e formato' ? 'constituicao_formato' : 'origem';
         Array.from(linha.children).slice(1).forEach((celula, indice) => {
@@ -135,6 +145,7 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
           if (!pq || !unidade) return;
           const campo = raiz.ownerDocument.createElement('span');
           campo.setAttribute('data-b601-campo-projetil', tipo);
+          if (versionado) campo.setAttribute('data-b601-campo', tipo);
           campo.setAttribute('data-b601-peca-id', unidade.pecaId);
           campo.setAttribute('data-b601-unidade', String(unidade.unidade));
           campo.setAttribute('data-b601-pq', pq[1]);
@@ -150,7 +161,8 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
   }
   raiz.querySelectorAll<HTMLElement>(seletorLegenda).forEach(legenda => legenda.setAttribute('contenteditable', 'false'));
   raiz.querySelectorAll<HTMLElement>(seletorCampo).forEach(campo => {
-    if (campo.closest('[data-b601-modelo-coleta="true"]')
+    const definicao = obterDefinicaoCampo(campo);
+    if (!definicao && campo.closest('[data-b601-modelo-coleta="true"]')
       && !['tipo', 'tipo_raiamento', 'calibre_nominal_provavel'].includes(campo.getAttribute('data-b601-campo-projetil') || '')) {
       limparApresentacaoSeletoresTabela(campo);
       campo.querySelectorAll(seletorControle).forEach(controle => controle.remove());
@@ -173,7 +185,7 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
     const rotulosEstojos: Record<string, string> = { marca: 'Marca', calibre_nominal: 'Calibre Nominal', composicao: 'Composição do Estojo', espoleta: 'Espoleta' };
     const ehFormato = tipo === 'constituicao_formato';
     const ehCalibre = tipo === 'calibre_nominal_provavel';
-    const rotulo = campoEstojo ? rotulosEstojos[campoEstojo] || campoEstojo : ehFormato ? 'Constituição e formato' : ehCalibre ? 'Calibre nominal (provável)' : tipo === 'tipo_raiamento' ? 'Tipo de Raiamento' : tipo === 'tipo' ? 'Tipo' : 'Origem/coleta';
+    const rotulo = definicao?.rotulo || (campoEstojo ? rotulosEstojos[campoEstojo] || campoEstojo : ehFormato ? 'Constituição e formato' : ehCalibre ? 'Calibre nominal (provável)' : tipo === 'tipo_raiamento' ? 'Tipo de Raiamento' : tipo === 'tipo' ? 'Tipo' : 'Origem/coleta');
     const aviso = atual ? `${rotulo} de ${identificador}`
       : texto.querySelector('[data-aviso-reservado]')?.getAttribute('data-aviso-reservado')
         || (tipo === 'tipo' || tipo === 'tipo_raiamento' || ehCalibre || ehFormato || campoEstojo ? `Campo de preenchimento manual no laudo: ${rotulo} — ${identificador}` : `Campo pendente na REP: ORIGEM/COLETA — ${identificador}`);
@@ -185,11 +197,8 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
       controle.disabled = !permiteEdicaoCampo(campo, somenteLeitura, campo.matches(SELETOR_SELECAO_PONTUAL));
       campo.append(controle);
     }
-    const opcoes = obterOpcoes(campo, personalizados, atual);
-    if (tipo !== 'tipo_raiamento' && !ehCalibre) {
-      if (atual && !opcoes.some(opcao => opcao.valor === atual)) opcoes.unshift({ texto: atual, valor: atual });
-      if (!atual) opcoes.unshift({ texto: 'XXX', valor: '' });
-    }
+    const chave = definicao?.chave || campoEstojo || tipo || 'origem';
+    const opcoes = normalizarOpcoesTabelaB601(obterOpcoes(campo, personalizados, atual), chave);
     const assinaturaOpcoes = JSON.stringify(opcoes);
     if (controle.getAttribute('data-opcoes') !== assinaturaOpcoes) {
     controle.setAttribute('data-opcoes', assinaturaOpcoes);
@@ -207,8 +216,9 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
     controle.classList.toggle('campo-reservado', !atual);
     controle.setAttribute('aria-label', `${rotulo} de ${identificador}`);
     controle.setAttribute('title', aviso);
-    if (ehCalibre) controle.setAttribute('data-valor-livre', atual);
-    prepararApresentacaoSeletorTabela(controle, tipo === 'tipo_raiamento' || ehCalibre ? atual : undefined);
+    controle.setAttribute('data-valor-livre', atual);
+    const textoApresentado = normalizarOpcoesTabelaB601([{ valor: atual, texto: atual }], chave)[0]?.texto;
+    prepararApresentacaoSeletorTabela(controle, textoApresentado || 'XXX');
     campo.setAttribute('data-b601-campo-editavel', 'true');
     campo.setAttribute('contenteditable', 'false');
     for (const atributo of ['tabindex', 'role', 'title', 'aria-label']) campo.removeAttribute(atributo);
@@ -252,23 +262,48 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
     if (!campo || editorBloqueadoParaSeletores(editor) || !permiteEdicaoCampo(campo, editorBloqueadoParaSeletores(editor), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
     evento.stopImmediatePropagation();
     const texto = campo.querySelector<HTMLElement>(seletorTexto);
-    const ehCalibre = campo.getAttribute('data-b601-campo-projetil') === 'calibre_nominal_provavel';
-    const valor = ehCalibre ? (alvo.getAttribute('data-valor-livre') || '').trim() : alvo.value;
-    if (!texto || (!ehCalibre && (!valor || !obterOpcoes(campo, personalizados, texto.textContent?.trim() || '').some(opcao => opcao.valor === valor)))) return;
-    if (valor === (texto.textContent?.trim() === 'XXX' ? '' : texto.textContent?.trim())) {
+    const definicao = obterDefinicaoCampo(campo);
+    const atual = texto?.textContent?.trim() || '';
+    const valor = (alvo.value || alvo.getAttribute('data-valor-livre') || '').trim();
+    const podeAplicar = () => !encerrado && !editor.removed && !editor.destroyed && editor.getBody().contains(campo)
+      && campo.querySelector(seletorTexto) === texto && (texto?.textContent?.trim() || '') === atual
+      && permiteEdicaoCampo(campo, editorBloqueadoParaSeletores(editor), campo.matches(SELETOR_SELECAO_PONTUAL));
+    const aplicar = (novo: string) => {
+      if (novo === 'XXX') novo = '';
+      if (!texto || !podeAplicar()) return;
+      if (novo === (atual === 'XXX' ? '' : atual)) { sincronizar(); return; }
+      editor.undoManager.transact(() => {
+        if (!novo) texto.innerHTML = criarHtmlCampoReservado(`Campo de preenchimento manual no laudo: ${definicao?.rotulo || 'Calibre nominal (provável)'} — ${campo.getAttribute('data-b601-pq') || campo.getAttribute('data-b601-identificador') || 'projétil'}`);
+        else texto.textContent = novo;
+        const grupo = campo.closest<HTMLElement>('[data-b601-grupo="105"]');
+        if (grupo && campo.getAttribute('data-b601-campo-projetil') === 'constituicao_formato') atualizarLegendaFormatos(grupo, personalizados);
+      });
       sincronizar();
+      editor.nodeChanged();
+      aoAlterar(editor.getContent());
+    };
+    if (definicao && valor === VALOR_MANUAL_TABELA_B601) {
+      sincronizar();
+      editor.windowManager.open({ title: definicao.rotulo,
+        body: { type: 'panel', items: [{ type: 'input', name: 'valor', label: definicao.rotulo }] },
+        initialData: { valor: atual === 'XXX' ? '' : atual },
+        buttons: [{ type: 'cancel', text: 'Cancelar' }, { type: 'submit', text: 'Aplicar', primary: true }],
+        onClose: () => {
+          if (!encerrado && editor.getBody().contains(campo) && !editorBloqueadoParaSeletores(editor)) {
+            campo.querySelector<HTMLButtonElement>('[data-seletor-tabela-acionador]')?.focus({ preventScroll: true });
+          }
+        },
+        onSubmit: api => {
+          const novo = api.getData().valor.trim();
+          if (novo === VALOR_MANUAL_TABELA_B601) return;
+          aplicar(novo);
+          api.close();
+        },
+      });
       return;
     }
-    editor.undoManager.transact(() => {
-      if (ehCalibre && !valor) {
-        texto.innerHTML = criarHtmlCampoReservado(`Campo de preenchimento manual no laudo: Calibre nominal (provável) — ${campo.getAttribute('data-b601-pq') || 'projétil'}`);
-      } else texto.textContent = valor;
-      const grupo = campo.closest<HTMLElement>('[data-b601-grupo="105"]');
-      if (grupo && campo.getAttribute('data-b601-campo-projetil') === 'constituicao_formato') atualizarLegendaFormatos(grupo, personalizados);
-    });
-    sincronizar();
-    editor.nodeChanged();
-    aoAlterar(editor.getContent());
+    if (!texto) return;
+    aplicar(valor);
   };
   const preservarInteracao = (evento: MouseEvent | KeyboardEvent) => {
     const alvo = evento.target;

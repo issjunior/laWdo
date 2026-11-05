@@ -36,7 +36,7 @@ describe('template B-601 Local com Necropsia', () => {
     expect(unidades[6].getAttribute('data-b601-peca-id')).toBe('necro');
     expect(documento.querySelectorAll('figure')).toHaveLength(8);
     expect(documento.body.textContent).toContain('Tipo de Raiamento');
-    expect(gerarDescricaoAgrupadaB601(dados, '105', 'antigo')).not.toContain('Tipo de Raiamento');
+    expect(gerarDescricaoAgrupadaB601(dados, '105', 'padrao')).toContain('Tipo de Raiamento');
   });
 
   it('preserva medidas sem contagem e separa origem/procedência dos estojos', () => {
